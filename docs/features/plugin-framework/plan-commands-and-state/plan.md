@@ -50,8 +50,8 @@ Every change is in wigley-ai-gui. No change crosses into wigley-ai-marketplace.
 `wigley:make` re-runs each command before the first dispatch. `<gui>` is `/Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui`.
 
 - The docs written ahead are in the tree: `grep -c 'Commands and state (Waves 2 and 3)' <gui>/docs/features/plugin-framework/design.md` gives 2.
-- `plan-slash-completion` is closed, since it edits `list-picker.ts`, `page-keys.ts` and `renderer.ts`: `test ! -d <gui>/docs/features/agent-chat/plan-slash-completion`. At plan time the folder exists (final verification open). If it is still there, stop and tell the user.
-- Branch `slash-completion-fixes` has merged or gone: `git -C <gui> merge-base --is-ancestor slash-completion-fixes main` exits 0, or `git -C <gui> rev-parse --verify slash-completion-fixes` fails. At plan time it is 2 commits ahead of `main` and touches `page-keys.ts` and the part harness.
+- `plan-slash-completion` is closed, since it edits `list-picker.ts`, `page-keys.ts` and `renderer.ts`: `test ! -d <gui>/docs/features/agent-chat/plan-slash-completion`. Closed at the rebase before landing.
+- Branch `slash-completion-fixes` has merged or gone: `git -C <gui> merge-base --is-ancestor slash-completion-fixes main` exits 0, or `git -C <gui> rev-parse --verify slash-completion-fixes` fails. Gone at the rebase before landing.
 - `plan-delivery-state` is closed, since it adds a required `delivery` member to the user `ChatEntry` that task 12's slot carries: `test ! -d <gui>/docs/features/agent-chat/plan-delivery-state`. At plan time it has not started. If it is still there, stop and tell the user.
 - `<gui>` is up to date with origin: `git -C <gui> fetch origin && git -C <gui> status -sb`.
 - No user layout exists in the user config folder: `find ~/.config/wigley-ai-gui/layouts -name layout.js` prints nothing (measured at plan time, re-verify). A layout found here is named in the report when a contract it uses changes.
@@ -247,7 +247,7 @@ keys: { bind(bind: RuntimeBind): Disposable; /* main: app and intercept binds; p
 
 `KeyBind` and the `keymap.json` entry format gain `arg?: CommandArg`.
 
-Core keys API (task 08), on `PageApi.keys`: `keysFor(command, scope?, where?, arg?)`, `anchor(element, command, options?)` with `AnchorOptions.arg?: CommandArg`, `onWhereChanged(listener: (where: 'page' | 'box') => void): Disposable`, moved from `KeysPageExports` with the signatures in `src/plugins/keys/contract.ts`.
+Core keys API (task 08), on `PageApi.keys`: `keysFor(command, scope?, where?, arg?)`, `anchor(element, command, options?)` with `AnchorOptions.arg?: CommandArg`, moved from `KeysPageExports` with the signatures in `src/plugins/keys/contract.ts`. New in task 08: `where(): 'page' | 'box'` and `onWhereChanged(listener: (where: 'page' | 'box') => void): Disposable`.
 
 Page services (task 09), on `PageServices`: `picker: ListPickerService` (`src/contracts/list-picker.ts`, `create(options?: ListPickerOptions): ListPicker`), `chooseFolder(): Promise<string | null>`, `openExternal(url: string): Promise<void>`. The record `Platform` (task 01) replaces today's string under the same member names, with the OS string as `platform.os`.
 

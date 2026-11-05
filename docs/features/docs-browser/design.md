@@ -67,8 +67,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   sets its key scope each time the tab becomes the visible one, and a hidden view keeps no scope.
 - Keys: `Option+Shift+o` / `Option+Shift+i` (`<A-S-o>`, `<A-S-i>`) move to the next / previous session;
   `Option+o` / `Option+i` (`<A-o>`, `<A-i>`) move to the next / previous tab inside the selected session. Cmd+W,
-  `Space ;` and `<Leader>;` close the selected session's sidebar entry, asking first when a round is open, as they
-  closed its tab before.
+  `Space ;` and `<Leader>;` close the selected session's sidebar entry, as they closed its tab before; an open
+  round is cancelled with it, with no confirmation.
 - A new round in Sessions mode selects its session and its Form tab, as today. A round arriving while Docs mode shows
   leaves Docs in place: a toast names the session and the key (`Space k s`), and the sidebar row gets its Needs you label.
   Sessions decides this (it owns activation and reads which mode shows); forms stays unaware of modes.

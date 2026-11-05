@@ -89,12 +89,13 @@ export function fakeListPickerService(): ListPickerService & { scopes: string[];
 |---|---|---|---|---|
 | `plugins/settings/page/settings-view.ts:357` | `picker` | no | overlay, `deps.addOverlay` | `create()` |
 | `plugins/backlog/page/backlog-view.ts:321` | `picker` | no | overlay, `deps.addOverlay` | `create()` |
-| `plugins/docs/page/docs-dialogs.ts:464` | `picker` | no | overlay, through `dialogs.elements` and `docs-view.ts:596` | `create()` |
+| `plugins/docs/page/docs-dialogs.ts:464` | `picker` | no | overlay, through `dialogs.elements` and `docs-view.ts:596` | `create()` once in `plugins/docs/page/start.ts`, and decision 10 |
 | `plugins/sessions/page/start.ts:673` | `picker` | no | overlay | `create()` |
 | `plugins/notes/page/popup.ts:591` | `picker` | yes | `dialog.element` | `create({ filter: true, parent: dialog.element })` |
 | `plugins/chat/page/picker.ts:102` | `picker` or `resume`, read at each push | yes | overlay | `create({ scope: () => scope, filter: true })` |
 
 2. Those three options cover every site. A site still sets its request's `title`, `items`, `label`, `drawRow`, `chosen` and the rest on `open`, as today.
+2a. A site calls `create` once per part start. Five sites do so already: settings, backlog, sessions, notes and chat each build their view once in `start`. Docs does not: `createView` in `docs/page/start.ts` runs for the machine view and for each session's docs, so decision 10 moves its call. `create`'s overlay entry and its close registration last until the part stops, so a call per view leaves one list in the overlay for each closed view.
 
 ### The service
 
@@ -107,7 +108,7 @@ export function fakeListPickerService(): ListPickerService & { scopes: string[];
    - with no `parent`, through `areas.overlay.contribute`, filed in the part's registrations;
    - with a `parent`, by `parent.append`.
 5. `create` files one registration that calls `picker.close()`, so a part's stop closes an open list and hears no cancel.
-6. A scope name the manifest does not declare throws `Plugin "<id>" declares no scope "<name>"`. For a string, it throws at `create`. For a function, it throws at the push. `PageServices` is not generic on the manifest, so this replaces the compile check `pushScope` had. Each site's scope is declared at plan time (measured at plan time, re-verify).
+6. A scope name the manifest does not declare throws `Plugin "<id>" declares no scope "<name>"`. For a string, it throws at `create`. For a function, `create` calls it once and checks that first value, so a bad name throws at the call for both forms. A later value of the function is checked at the push. That throw comes before `open` changes any state, because `open` pushes first (`shared/page/list-picker.ts:274`), so no list stays half open. `PageServices` is not generic on the manifest, so this replaces the compile check `pushScope` had. Each site's scope is declared at plan time (measured at plan time, re-verify).
 7. The `ListPicker` a plugin gets is the same object `createListPicker` returns. It adds no method.
 8. `src/contracts` imports nothing outside it. The moved types are DOM types and types of its own. `shared/page/list-picker.ts` imports them from `contracts/list-picker.ts`, and keeps `ListPickerDeps` and `createListPicker`. Importers of the moved types change their import.
 
@@ -118,7 +119,12 @@ export function fakeListPickerService(): ListPickerService & { scopes: string[];
    - `matcher` stays where a filter or another view still reads it. Otherwise it goes.
    - `pushScope` stays where other scopes use it.
    - Each view's deps gain `picker: ListPickerService`, and each `start.ts` passes `services.picker`.
-10. Docs: `dialogs.elements` loses `picker.element`. `elements` holds `[box.element, confirm.element]`. The picker contributes at `create`, which runs before those two contribute, so it stays under them.
+10. Docs shares one list across its views. Today each view has its own, and `docs-view.ts:1046` removes it with the view.
+    - `plugins/docs/page/start.ts` calls `services.picker.create()` once, before the first `createView`. `createView` passes each view a handle.
+    - `plugins/docs/page/docs-dialogs.ts` exports `createDocsPicker(list: ListPicker): { forView(viewId: string): ListPicker }`. Each handle passes every member through to the one list, with two changes: `open` records the handle's `viewId`, and `close` does nothing unless that `viewId` opened the open request.
+    - `DocsViewDeps` and `DocsDialogsDeps` take `picker: ListPicker`, the handle, and not `ListPickerService`. This is the one exception to decision 9's last line.
+    - The rule for `close` keeps today's behaviour. `closeOverlaysBesides` and a view's `dispose` close only their own request. They do not close the list another view has open. `dialogs.close` still closes its own request (`docs-dialogs.ts:705`).
+    - `dialogs.elements` loses `picker.element`. `elements` holds `[box.element, confirm.element]`. The list contributes at `create`, before any view's box and confirm, so it stays under them.
 
 ### What chat's wrapper keeps
 
@@ -149,6 +155,7 @@ export function fakeListPickerService(): ListPickerService & { scopes: string[];
     - the `EXTERNAL_SCHEME` import in `plugins/docs/main/start.ts`
 20. `EXTERNAL_SCHEME` stays in `plugins/docs/links.ts`, which `resolveLink` reads. `doc-view.ts:545` calls `deps.openExternal(target.url)`, with the same log line and toast.
 21. What the user sees does not change. `resolveLink` gives an `external` target only for an http or https href, so the deleted docs message `Only http and https links open outside the app` cannot reach the toast from this path.
+    Two copies of the scheme rule stay, for two jobs. `plugins/docs/links.ts` classifies a href. `shared/external-links.ts` enforces the rule at the gate. A later edit to the scheme list changes both.
 
 ### Harness
 
@@ -164,7 +171,11 @@ GIVEN notes opens its list THEN the list is inside the popup's dialog, and its f
 
 GIVEN an open list WHEN its part stops THEN the list closes, the scope pops, and `cancelled` does not run.
 
-GIVEN `create({ scope: 'nope' })` WHEN the manifest declares no such scope THEN it throws at the call.
+GIVEN `create({ scope: 'nope' })` or `create({ scope: () => 'nope' })` WHEN the manifest declares no such scope THEN it throws at the call.
+
+GIVEN two docs views WHEN the part has started both THEN the overlay holds one list, and closing a view leaves none behind.
+
+GIVEN one docs view has the list open WHEN another view closes THEN the list stays open.
 
 GIVEN a page plugin calls `services.chooseFolder()` WHEN the user dismisses the dialog THEN it resolves null, and chat's start prompt returns to its folder step.
 
@@ -177,20 +188,25 @@ GIVEN a link in a doc WHEN the user follows it THEN it opens in the default app,
 - Rows added to `renderer/plugins/page-api.test.ts`:
   - `picker_Create_PushesTheQualifiedScopeAndPlacesInOverlay`, with the `parent` case in one table. Catches a list placed twice, or the short scope pushed unqualified.
   - `picker_ScopeFunction_ReadAtEachPush`. Catches chat's `resume` scope frozen at `create`.
-  - `picker_UndeclaredScope_Throws`.
+  - `picker_UndeclaredScope_ThrowsAtCreate`, one table with the string and function forms. Catches a throw in the middle of a key press.
+  - `picker_ScopeFunctionLaterBadValue_ThrowsAtThePushAndLeavesItClosed`. Catches a list left half open.
   - `picker_PartStops_ClosesWithNoCancel`.
   - `picker_FilterOption_UsesThePluginsEditor`.
   - `chooseFolder_And_openExternal_ReachTheBridge`, one table.
-- Row added to `preload/preload.test.ts`: the two new members, with a rejection carrying main's text, as `savePasted`'s row does.
+- Rows added to `preload/preload.test.ts`. The file has no `invoke` row today: `savePasted` has none. Add `invoke` to its fake `ipcRenderer`, which rejects as Electron does: `Error invoking remote method '<channel>': Error: <text>`.
+  - `chooseFolder_And_openExternal_MainRejects_CarryMainsText`, one table. Catches a rejection the user reads with Electron's prefix.
+  - `openExternal_FileUrl_RejectsWithTheGateText`. The fake `invoke` calls `gateExternalLinks` as main does. Catches the Behaviour's text going wrong on its way to the page, and a page-side copy of the text.
 - `plugins/chat/page/start-prompt.test.ts:311-346`: the three `chooseFolder_*` rows read the fake `deps.chooseFolder`, and no longer assert `run.invoked`. The cases stay.
-- `plugins/docs/page/doc-view.test.ts`: if a row asserts the external link through the channel, move it to `deps.openExternal`. If none does, add `followLink_ExternalTarget_CallsOpenExternalAndLogs`. Catches a link that stops opening.
+- `plugins/docs/page/doc-view.test.ts`: add `followLink_ExternalTarget_CallsOpenExternalAndLogs`. No row asserts the external link today. Catches a link that stops opening.
 - `plugins/docs/page/docs-dialogs.test.ts:74` and the backlog, notes and sessions tests read `picker.element` through the fake service. Their assertions stay.
+- Row added to `plugins/docs/page/docs-dialogs.test.ts`: `forView_OtherViewCloses_ListStaysOpen`, with the opening view's own close as a second case. Catches a closing session's view closing the list the user has open in another view.
+- Row added to `plugins/docs/page/start.test.ts`: `start_TwoViews_CreatesOnePicker`. Catches a list per view, which stays in the overlay after its view closes.
 
 Runtime checks go to [16 — Final verification](16-final-verification.md).
 
 ## Done when
 
-- The type check and `scripts/check-layers.mts` pass.
+- `npm run typecheck` and `npm run lint` pass.
 - `grep -rn 'createListPicker(' src/plugins` prints nothing.
 - `grep -rn "'chooseFolder'\|'openExternal'" src/plugins` prints nothing.
 - `grep -n 'chooseFolder\|openExternal' src/plugins/chat/contract.ts src/plugins/docs/contract.ts` prints nothing.

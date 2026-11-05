@@ -30,6 +30,7 @@ Pinned values: a menu item's text is `${labelOf(bind.command)} (${bind.accelerat
 Decisions:
 
 - **`labelOf` is a function.** `buildMenu` runs at install and again at each `setKeymap`, so it reads the label when it builds. Task 07 adds runtime commands to the served config, and this read sees them.
+- **The menu rebuilds only on a keymap change.** `main.ts` calls `setKeymap` only when the served keymap's JSON changes. A runtime command gets a menu item only through a bind, and a new bind changes the keymap, so the rebuild reads its label. A label that changes with no keymap change shows at the next rebuild. Accept this, and keep the one rebuild trigger.
 - **`buildMenu(binds, commands, labelOf)`** holds the only change to the item. `accelerator` and `click` do not change.
 - **The call in `src/main/main.ts:932`** passes `(id) => served().commands[id]?.label ?? id`. This is the same fallback as `src/renderer/plugins/page-api.ts:139`. `served` is defined at line 913, above that call.
 - **The accelerator text stays in the item,** since the follow-up changes only the id to the label. Electron also draws the accelerator at the item's right, so the text shows it twice, as it does today. Labels keep their manifest case: `settings`, with no capital.

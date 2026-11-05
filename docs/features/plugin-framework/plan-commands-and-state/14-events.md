@@ -47,7 +47,6 @@ export interface BacklogMainEvents extends EventShape {
   followupCreated: { homeRoot: string; title: string };
   followupEdited: { homeRoot: string; title: string };
   followupDeleted: { homeRoot: string; title: string };
-  followupApplied: { homeRoot: string; edit: FollowupEdit['type'] };
 }
 ```
 
@@ -89,7 +88,8 @@ Decisions:
 | Chat turn started and finished | events `turnStarted`, `turnFinished` | moments; the running state is in `chat.session` |
 | Chat control changed | slot, no event | `chat.controls`, task 12; a reader hears its notice |
 | Docs opened, saved, created, trashed, renamed | events | moments |
-| Backlog created, edited, deleted, applied | events | moments; `changed` stays for its page |
+| Backlog created, edited, deleted | events | moments; `changed` stays for its page |
+| Backlog applied | no event | the user's answer: "applied" is only `FollowupEditResult`'s `type`, an edit that landed, and it has no action of its own |
 | Workflow flow and stage | slot, no event | task 13; no moment was named for a stage change |
 | Agents roster | slot, no event | task 13 |
 | Usage snapshot | slot, no event | task 13 |
@@ -108,7 +108,8 @@ Decisions:
 **Chat emit sites**, in `chat-sessions.ts`:
 - `messageSent`: in `deliver`, right after `process.send(message)` returns `entryId`. Every write goes through `deliver` (`writeRowNow`, `deliverWritten`), so this is the one site. A queued message fires when it is written, not when it queues. A throwing `send` fires nothing.
 - `turnStarted` and `turnFinished` with `how: 'idle'`: in `updateActivity`, on its `turnStarted` and `turnFinished` booleans, when `isReplayed` is false. Fire them whatever else `announceTurnFinished`'s condition says: a stopped turn and a turn in the background still crossed idle. `updateActivity` has three callers (lines 1125, 1182 and 2653, measured at plan time, re-verify), and only line 1182 passes `replay.isReplaying`. Check the other two for a path a replay reaches, and pass the flag there.
-- `turnFinished` with `how: 'rested'`: in `showRestingIdle`, when the activity was not idle before it and no replay runs. That path sets idle without `updateActivity`.
+- The emit in `updateActivity` sits after the `activity` slot write and `updateActiveTime`, and before `announceTurnFinished`. A listener that reads `chat.session` then finds the new `activity` and a current `activeTime`.
+- `turnFinished` with `how: 'rested'`: in `showRestingIdle`, when the activity was not idle before it and no replay runs. That path sets idle without `updateActivity`. The emit sits after the `activity` slot write and `updateActiveTime`, for the same reason.
 - The preview emits none of them: it runs no turn.
 
 **Docs emit sites**, in `docs/main/start.ts`, after the awaited call and in the plain consts all paths share (`writeDoc`, `writeBytes`, `trashDoc`), so the `DocsMainExports` paths emit too. `DocFiles` stays unaware.
@@ -123,9 +124,9 @@ Decisions:
 - `create` fires `followupCreated` with `draft.title`.
 - `edit` fires `followupEdited` with `draft.title`. `setTags` fires `followupEdited` with `title`.
 - `delete` fires `followupDeleted` with `title`.
-- `followupApplied` then fires for every landed edit with `edit.type`. "Applied" has no action of its own in the tree: it is `FollowupEditResult`'s `type: 'applied'`, an edit that landed. This reading is flagged to the user in the plan's report. It lets a plugin hear one event for any follow-up change.
 - `commit` emits nothing: it changes no follow-up, and the list does not name it.
 - `channel.send('changed')` stays as it is at all its sites. It is the page's channel, and a file watch has no item to name.
+- `applyEdit` sends no `changed`. A page edit reaches the page through the file watch (`watchFile`, `backlog/main/start.ts:421`, measured at plan time, re-verify). Only `fileNote` sends `changed` after its edit lands (line 780).
 
 **Notes emit sites**, in `note-sender.ts`. `NoteSenderDeps` gains `emit: PluginEvents<NotesMainEvents>['emit']`, as `ChatSessionsDeps` has. The sender is the site because `drive-actions.ts` and the channel handlers both reach it.
 - `noteFiled`: `toFollowup` when the result is `sent`, with its `request`.
@@ -135,9 +136,11 @@ Decisions:
 **Sessions.**
 - `tabAdded`: in `sessions/page/start.ts`'s `addTab` export (line 123, measured at plan time, re-verify), after `view.tabs.add` returns, with `tab.id`.
 - `sessions.activity`: the key is the session id. The value is the list of `{ sourceId, activity }` in last-set order. A list rather than a record because "the latest set winning a tie" depends on that order.
-- `createRowActivities` takes the writer in place of its `bySession` map, and keeps `set` and `top` with their signatures. A session with no sources is `delete`d, not an empty list.
+- `createRowActivities` takes the `KeyedSlotWriter<RowActivitySource[]>` as its one parameter, in place of its `bySession` map. It keeps `set`, `top` and `forget` with their signatures. A session with no sources is `delete`d, not an empty list.
+- `forget(sessionId)` deletes the session's key. `sessions-view.ts` still calls it when a row is removed.
 - `set` still returns whether the row's shown activity changed, so `drawSidebar` runs as often as today.
-- The value is page-owned, so it stays in main across a page load. The contract says every page load starts with none. So at the sessions part's start, after `publish`, delete every key the writer's `all()` holds. Each source sets its activity again on the new page, as it does today.
+- `createRowActivities` is called in `sessions-view.ts` (line 206, measured at plan time, re-verify). `sessions/page/start.ts` publishes the slot and passes the writer to the view through a new `activities` member on the view's deps, so the factory runs after `publish`.
+- The value is page-owned, so it stays in main across a page load. The contract says every page load starts with none. So at the sessions part's start, after `publish` and before the view mounts, delete every key the writer's `all()` holds. Each source sets its activity again on the new page, as it does today.
 
 **Visual.** `visualOpened`: at the end of `overlay.open` in `visual-overlay.ts`, through a new `opened(count: number, index: number)` on `VisualOverlayDeps`. Carry the counts only: the sources are whole documents.
 
@@ -147,7 +150,8 @@ GIVEN a message queued during a turn WHEN the turn ends and main writes it THEN 
 GIVEN a replay at startup WHEN its turns cross idle THEN neither turn event fires.
 GIVEN a running turn whose process exits WHEN the session rests THEN `chat.turnFinished` fires with `how: 'rested'`.
 GIVEN a write that finds the file changed on disk WHEN `writeDoc` resolves THEN `docs.docSaved` does not fire.
-GIVEN a follow-up deleted WHEN the edit lands THEN `backlog.followupDeleted` fires, `backlog.followupApplied` fires, and the page still gets `changed`.
+GIVEN a follow-up deleted WHEN the edit lands THEN `backlog.followupDeleted` fires and no other backlog event fires.
+GIVEN a note filed as a new follow-up WHEN the edit lands THEN `backlog.followupCreated` fires and the page gets `changed`.
 GIVEN a refused edit WHEN `applyEdit` returns THEN no backlog event fires.
 GIVEN an activity set by a source WHEN the page reloads THEN `sessions.activity` holds no old key.
 GIVEN two sources with one rank WHEN the second sets THEN the row shows the second, and the slot's list ends with it.
@@ -156,7 +160,7 @@ Tests, each at the seam that owns the emit:
 
 `chat-sessions.test.ts`:
 - `messageSent_RowQueuedThenWritten_FiresAtWrite` — table: idle send, queued then written, send now, throwing write (no event). Catches an emit moved to `send` or to `queueRow`.
-- `turnEvents_ActivityCrossesIdle_FireOncePerCrossing` — table: start and idle; waiting then idle (one finish); replay (none); rest (`how: 'rested'`); stop all (fires). Catches a copy of `announceTurnFinished`'s condition, and a rest with no finish.
+- `turnEvents_ActivityCrossesIdle_FireOncePerCrossing` — table: start and idle; waiting then idle (one finish); replay (none); rest (`how: 'rested'`); stop all (fires). The listener reads `chat.session` on each event and asserts the new `activity` and a current `activeTime`. Catches a copy of `announceTurnFinished`'s condition, a rest with no finish, and an emit before the slot write.
 
 `docs/main/start.test.ts`:
 - `docEvents_CallLands_FireOnlyThen` — table: written, changed on disk (none), bytes, create, rename, trash with targets, trash with none (none), rejected guard (none). Catches an emit before the await, and `changedOnDisk` counted as saved.
@@ -165,13 +169,14 @@ Tests, each at the seam that owns the emit:
 - `docOpened_DocOpens_FiresOnlyThen` — a missing doc fires none. Catches an emit on `openChanged`.
 
 `backlog/main/start.test.ts`:
-- `followupEvents_EditLands_FireWithApplied` — table per `FollowupEdit` type, with `setTags` as edited; `missing`, `titleTaken` and `refused` fire none; `fileNote` create fires created. Each row asserts `changed` still sent. Catches `changed` removed, and a refused edit fired.
+- `followupEvents_EditLands_FireByType` — table per `FollowupEdit` type, with `setTags` as edited; `missing`, `titleTaken` and `refused` fire none; `fileNote` create fires created. Each landed row asserts one event. Only the `fileNote` rows assert `changed`, because `applyEdit` sends none. Catches a refused edit fired, a second event on one edit, and `changed` removed from `fileNote`.
 
 `note-sender.test.ts`:
 - Add rows to the existing send tests: `sent` fires its event, `refused` fires none. Catches an emit before the result.
 
 `row-activities.test.ts`:
 - Its existing tie and removal cases run over a real slot store's writer, and assert the list order. Add `rowActivities_NoSourcesLeft_HoldsNoKey`.
+- Add `rowActivities_Forget_HoldsNoKey` — catches a removed row's key left in the slot.
 
 `sessions/page/start.test.ts`:
 - `addTab_TabAdded_FiresTabAdded` — catches an emit outside the export.

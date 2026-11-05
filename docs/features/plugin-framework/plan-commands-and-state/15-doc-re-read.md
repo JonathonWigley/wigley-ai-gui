@@ -10,6 +10,8 @@ Files:
 - modify `docs/features/plugin-framework/design.md`
 - modify `docs/features/intent-alignment/master-plan.md`
 - modify `docs/features/followups.md`
+- modify `docs/features/ui-design/design.md` (line 159 names the Platform record as a follow-up, measured at plan time, re-verify)
+- modify any other file the title grep below finds
 
 Consumes: every task's landed code, 01 to 14. Read the Run log's Contract changes and Rulings first: they name what moved from the plan.
 
@@ -54,6 +56,10 @@ Check every plugin entry that moved, for `dependsOn` and `reads` claims, and the
 
 Check that § Wave 2's line on `Events for every state change`, "Its AGENTS.md rule step moves to the Wave 3 checkpoint", stays true: the checkpoint at § Wave 3 holds the rule. Leave that checkpoint unticked.
 
+**Plan-folder pointers.** `wigley:make` deletes `plan-commands-and-state/` when this run closes, so a pointer to it goes untrue. `plan-command-consumers/` stays until its own run closes. Reword these two lines (line numbers measured at plan time, re-verify):
+- `docs/features/intent-alignment/master-plan.md` line 31: Waves 0 and 2 have landed and their plan folder is gone. `docs/features/plugin-framework/plan-command-consumers/` holds Wave 3.
+- `docs/features/plugin-framework/design.md` line 166: the same two facts.
+
 **Follow-ups.** Remove these items from `docs/features/followups.md` whole (line numbers measured at plan time, re-verify):
 
 | Item | Line |
@@ -70,14 +76,15 @@ Check that § Wave 2's line on `Events for every state change`, "Its AGENTS.md r
 | Forms self-test platform from services | grep the title |
 
 - `Every click runs a command` (line 57) stays: Wave 3 lands it.
-- Before removing an item, read it for anything no task landed. Move each such part to the follow-up that owns its area, or to a new item. Known parts: the Events item names `control changed` and a stage event, which task 14 settled as slots. They need no carry-forward. Its standing-rule sentence is in the master plan's Wave 3 checkpoint. The registry item may name reload behaviour that belongs to `PluginHost stop and reload` or `Page state survives a page reload`.
-- Then grep each removed title across `docs/` and `AGENTS.md`. Fix every pointer to a removed item. A plan folder's own lines stay.
+- Before removing an item, read it for anything no task landed. Move each such part to the follow-up that owns its area, or to a new item. Known parts: the Events item names `control changed` and a stage event, which task 14 settled as slots, and backlog `applied`, which the user dropped. They need no carry-forward. Its standing-rule sentence is in the master plan's Wave 3 checkpoint. The registry item may name reload behaviour that belongs to `PluginHost stop and reload` or `Page state survives a page reload`.
+- Then grep each removed title across `docs/` and `AGENTS.md`. Fix every pointer to a removed item, and add each file you change to the commit's pathspec. A line inside a plan folder stays.
 
 **Stale doc found in passing.** Fix a stale line you meet in these files, and name it in the Proof.
 
 GIVEN the re-read is done WHEN `grep -n "landing with" AGENTS.md` runs THEN it prints nothing.
 GIVEN the master plan WHEN Wave 0 and Wave 2 are read THEN the nine named boxes are ticked and nothing else moved.
-GIVEN `followups.md` WHEN the nine titles are grepped THEN none is an item, and `Every click runs a command` still is.
+GIVEN `followups.md` WHEN the ten titles are grepped THEN none is an item, and `Every click runs a command` still is.
+GIVEN `docs/` and `AGENTS.md` WHEN `plan-commands-and-state` is grepped outside the `plan-*` folders THEN it prints nothing.
 GIVEN the AGENTS.md tree WHEN each folder added under `src/` is looked up THEN it has an entry.
 
 Tests: none. A doc change picks no test (`wigley:writing-tests` § Picking tests for a gate).

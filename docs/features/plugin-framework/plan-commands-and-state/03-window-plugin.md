@@ -23,6 +23,7 @@ Files:
 - modify `src/plugins/forms/main/selftest-script.ts`
 - modify `src/plugins/forms/main/start.ts`
 - test `src/main/window.test.ts`
+- test `src/plugins/keymap.test.ts`
 - test `src/shared/plugin-part-harness.test-support.ts`
 
 Consumes:
@@ -61,6 +62,7 @@ Decisions:
 - **List position.**
   - In `mainParts` and `builtInManifests`, `window` goes last. No plugin depends on it, and its command does not run before the keys are installed.
   - `installWindowKeybindings` in `main.ts` runs after `startMainParts`, so `requireMainCommandsRegistered` still finds the command.
+  - The position gets no test, since another position breaks nothing.
 - **`BuiltInMainCommand` in `src/plugins/keymap.ts` loses `'window.summon'`.** The manifest now gives the type.
 - **`coreCommands` loses the entry.** `commandInfos` throws on a command declared twice.
 - **`main.ts`** loses the import at line 137 and the call at line 854. It keeps `const commands`.
@@ -92,12 +94,14 @@ Tests:
 
 - `src/plugins/window/main/start.test.ts`, `summon_WindowComesForward_LogsTheChord`: `startMainPart` with a fake `window` whose `summon` returns `true`. Run the part's `summon` handler with `'Alt+Space'`. Assert one `summon` call and the logged line `Alt+Space summoned the window`. Catches: the command running nothing, or its log text changing.
 - `src/plugins/window/main/start.test.ts`, `summon_WindowDestroyed_LogsNothing`: the fake returns `false`. Assert no line. Catches: a line saying the window came forward when it did not.
+- `src/main/window.test.ts`, add a file-level `beforeEach` that calls `mockReset` on `electron.app.show` and `electron.app.focus`. All rows share these mocks, and the `beforeEach` of `windowService` resets only the dialog. Catches: a live row's `app.show` call failing a later row's "not called" assertion.
 - `src/main/window.test.ts`: move `summon_DestroyedWindow_DoesNothing` from `describe('registerWindowCommands')` into the `windowService` tests. It calls `windowService(window).summon()` and asserts `false`, `shown` empty and `electron.app.show` not called. Remove the `describe('registerWindowCommands')` block and its imports.
-- `src/main/window.test.ts`, add `summon_LiveWindow_ShowsAndStealsFocus`: assert `app.show`, `window.show`, then `app.focus` with `{ steal: true }`, and the result `true`. Catches: summon falling back to `show`, which leaves a hidden app behind the frontmost app.
+- `src/main/window.test.ts`, add `summon_LiveWindow_ShowsAndStealsFocus`: `shown` holds only window calls, so in this row `mockImplementation` makes `app.show` push `'app.show'` and `app.focus` push `'app.focus'` to `shown`. Assert `shown` equals `['app.show', 'show', 'app.focus']`, `app.focus` received `{ steal: true }`, and the result is `true`. Catches: summon falling back to `show`, or a changed order, either of which leaves a hidden app behind the frontmost app.
 - `src/main/window.test.ts`, add `summon_Offscreen_LogsAndStaysBack`: assert `false`, no `app.show` and the line `window not summoned in <runName>`. Catches: a self-test taking the user's foreground.
 - `src/shared/plugin-part-harness.test-support.ts:~696`: the fake `window` gains `summon: () => false`.
+- `src/plugins/keymap.test.ts`, add `defaultKeymap_WindowDisabled_DropsTheSummonBind`. This file already merges the real keymap: `mergeKeymap(defaultKeymap, manifests, {})`. Assert that `merged.global` names `window.summon`. Then assert that `withoutPluginBinds(merged, commandInfos(coreCommands, manifests), ['window'], 'main').global` does not name it. Catches: the bind staying in the served keymap with no handler after the user disables the plugin. `withoutPluginBinds`'s own tests use fixture manifests, and the compile proves only that the bind names a command.
 
-The `manifests_DefaultDisabled_BreaksNoDependency` and `manifests_SettingInfo_DeclaresEveryLeafSetting` rows in `src/plugins/manifests.test.ts` already cover the new manifest. Add no row. The compile checks that the global bind names a command the new manifest declares.
+The `manifests_DefaultDisabled_BreaksNoDependency` and `manifests_SettingInfo_DeclaresEveryLeafSetting` rows in `src/plugins/manifests.test.ts` already cover the new manifest. Add no row to that file. The compile checks that the global bind names a command the new manifest declares.
 
 The forms self-test move has no new test. The filtered self-test for `forms` covers it, and runtime checks collect in [Final verification](16-final-verification.md).
 

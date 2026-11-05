@@ -24,7 +24,7 @@ Land Wave 3 of the intent-alignment master plan on the signatures `plan-commands
 1. Every click that changes anything runs a command.
 2. Workflow stage actions as commands.
 3. Sessions queries and row decorations, and Sessions stops knowing forms.
-4. The user's work and place survive a page reload in every plugin.
+4. The user's work and place survive a page reload in chat, forms, primer, docs, notes, backlog and settings.
 5. The standing rule in the AGENTS.md Intent.
 
 ## Architecture
@@ -68,15 +68,17 @@ The commit `Document the settled design for commands and state (Waves 0, 2, 3)` 
  click ─► kit.button(parent, label, commandId, { arg })  or  kit.command(id, arg)
        ─► commands.run ─► intercept chain ─► handler(context with arg) ─► onDidRun
 
- Settings / help / palette ─► served commands, minus any with a declared arg and no bind;
-                              one row per bound arg
+ Settings / help ─► served commands, minus any with a declared arg and no bind;
+                    Settings: one row per bound arg; help and which-key: one merged line
 
  page state: plugin ─► api.state.publish(page slot key) ─► written on each change
              next page load ─► writer.get() restores drafts, focus, view, selection
              forms, primer, notes autosave to main ─► flushed on pagehide
 
- close: page asks tab beforeClose (chat's confirm, docs' unsaved edits)
+ close: page asks tab beforeClose (chat's confirm, docs' unsaved edits, a form being sent)
         ─► main's addCloseGuard (forms' and primer's open round) refuses with a reason ─► sessions toasts it
+ close key on an open round: tab closesAtOnce ─► beforeClose(true) skips chat's confirm
+        ─► main cancels the round and closes the row in one step ─► chat ends the process on sessions.closed
 ```
 
 ### Decisions
@@ -85,9 +87,10 @@ From the interview rounds of 2026-11-04 (the user took every recommendation). Th
 
 - Every click that changes anything runs a command, cursor moves and section collapses included. Drags, focus guards and `stopPropagation` stay out.
 - `kit.button` takes a command id and an optional argument, and takes no function. `kit.run` goes: its actions become commands.
-- A command with a declared `arg` lists in Settings, help and the palette only when a key binds it, once per bound argument.
+- A command with a declared `arg` lists in Settings and help only when a key binds it. Settings shows one row per bound argument. Help and which-key keep one merged line.
 - A page reload keeps the user's work and place in chat, forms, primer, docs (unsaved edits included), notes, backlog and settings.
 - Main's guard refuses with a reason, and holds forms' and primer's open round alone. A tab's `beforeClose` stays for what the page knows or must ask.
+- The close key on an open round cancels the round and closes the session at once, with no confirmation (the user's answer of the last round, which replaces the page's close prompt).
 - Decided by the agent and shown to the user:
   - `setStatus` gives way to a row part with the same look. `setBadge` is not added.
   - `rows` and `sessions` are the slots task 11 of `plan-commands-and-state` landed.
@@ -109,7 +112,7 @@ Every task uses these names exactly. This plan consumes the names in `plan-comma
 
 `plugin-framework` page reload slots (task 08): each plugin's page slot is a `SlotKey<…, 'page', '<id>'>`, or a `KeyedSlotKey` where the place is per session or per form, named `<id>PlaceSlot`, declared in that plugin's `contract.ts`.
 
-Close guard (task 07): `addCloseGuard(mayClose: (sessionId: string) => string | null): Disposable`: a string refuses, and it is the toast sessions shows.
+Close guard (task 07): `addCloseGuard(mayClose: (sessionId: string) => string | null, cancelHold?: (sessionId: string) => void): Disposable`: a string refuses, and it is the toast sessions shows. `cancelHold` ends what holds the session when the user's close key asks. Tab seams: `SessionTabView.closesAtOnce?(): boolean` and `beforeClose(atOnce: boolean): boolean`.
 
 A click on one item and a key on the focused item run two commands: the key's has no `arg`, the click's names the item. Shared list-picker row clicks are task 01's (`picker.chooseRow`, `picker.cancel`).
 

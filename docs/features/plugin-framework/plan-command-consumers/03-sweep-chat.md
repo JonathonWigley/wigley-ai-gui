@@ -22,7 +22,7 @@ All paths are under `src/plugins/chat/`, except `card.ts`.
 - Modify `manifest.ts`, `contract.ts`.
 - Modify `page/chat-commands.ts`, `page/chat-view.ts`, `page/chat-kit.ts`, `page/entry-list.ts`, `page/side-sections.ts`, `page/start.ts`.
 - Modify `src/shared/page/ui/card.ts`.
-- Test `page/chat-commands.test.ts`, `page/chat-kit.test.ts`, `page/entry-list.test.ts`, `page/side-sections.test.ts`, `page/chat-view.test.ts`.
+- Test `page/chat-commands.test.ts`, `page/chat-kit.test.ts`, `page/entry-list.test.ts`, `page/side-sections.test.ts`, `page/chat-view.test.ts`, `page/start.test.ts`.
 
 `page/composer-kit.ts`, `layouts/layout.d.ts` and `layouts/default/layout.js` do not change: their callbacks and part names stay.
 
@@ -34,11 +34,14 @@ From `plan-commands-and-state` task 07, on `PageApi`, in `src/contracts/commands
 - `export interface CommandKey<A, Id extends string = string> { readonly id: Id; readonly argType?: A; }`
 - `CommandDecl` gains `arg?: CommandArgShape`.
 - `PageCommandContext<A = undefined>` is `{ editor?: TextEditor; arg: A }`. A handler is `(context) => void | Promise<void>`.
-- `commands: { run(id: CommandId): Promise<void>; run<A>(key: CommandKey<A>, arg: A): Promise<void>; … }`. An unknown id or a bad arg throws at the call.
+- `commands: { run(id: CommandId): Promise<void>; run<A>(key: CommandKey<A>, arg: A): Promise<void>; … }`. An unknown id or a bad arg throws at the call. It is not a rejected promise. A handler's throw or rejection is logged as `command <id> failed: <error text>`, and the promise resolves.
+- `src/shared/command-args.ts`: `checkCommandArg(id: CommandId, shape: CommandArgShape | undefined, arg: unknown): string | null`, the error text or null.
 
 From `plan-commands-and-state` task 12: chat entries sit in a keyed list slot, whole entries by id. This task reads a session's entries through `session.state.entries`, the member `chat-commands.ts` reads at plan time. Task 12 may change how the state fills. Use the member that task left.
 
-From task 01 of this plan, on `BaseKit`: a command with a declared `arg` lists in Settings, help and the palette only when a key binds it, once per bound argument. So the commands below add no visible row.
+From task 01 of this plan, on `BaseKit`: a command with a declared `arg` lists in Settings and help only when a key binds it. So the commands below add no visible row.
+
+From task 01 of this plan, in `src/shared/page/layout-host/base-kit.ts`: `keyRunner(commands: Pick<PageApi['commands'], 'run'>, log: PluginLog): <A>(key: CommandKey<A>, arg: A) => void`. It catches a throw at the call and logs `command <id> failed: <error text>`.
 
 Members the tree holds: `ChatTabs.session(sessionId: string): ChatSession | undefined`, `PermissionActions.allow(session, entry)` and `deny(session, entry)`, `pullBackQueued(deps, session, queuedId)`, `Attachments.removeAt(index: number): void`, `ImageViewer.open(images, index)`, `Expanders` in `page/chat-kit.ts`.
 
@@ -66,7 +69,7 @@ In `contract.ts`, one typed key per command, named as below, each a typed object
 
 Members:
 
-- `runKey<A>(key: CommandKey<A>, arg: A): void` on `ChatViewDeps` in `page/chat-view.ts`. `page/start.ts` wires it to `void api.commands.run(key, arg)`.
+- `runKey<A>(key: CommandKey<A>, arg: A): void` on `ChatViewDeps` in `page/chat-view.ts`. `page/start.ts` wires it to `keyRunner(api.commands, services.log)`, so a click whose run throws leaves a log line.
 - `runClicked(runId: string): void` and `stopClicked(stopId: string): void` on `EntryListDeps` in `page/entry-list.ts`.
 - `toggleRun(runId: string): ToggleResult`, `toggleExpander(entryId: string, place: number): ToggleResult` and `moveFocusTo(stopId: string): boolean` on `EntryList` in `page/entry-list.ts`. The `ChatSession.entries` `Pick` in `page/chat-view.ts` gains these three.
 - `expanderClicked(entryId: string, place: number): void` on `KitDeps`, and `openImages(entryId: string, index: number): void` in place of `openImages(images, index)`, in `page/chat-kit.ts`.
@@ -104,7 +107,7 @@ Members:
 | `toggleRun` | Calls `session.entries.toggleRun(runId)`. No log, as the click logs none today. |
 | `toggleExpander` | Calls `session.entries.toggleExpander(entryId, place)`. No log. |
 | `pullBackMessage` | Calls `pullBackQueued(deps, session, queuedId)`. Main refuses a row already sent, as today. |
-| `toggleSection` | Calls `sideSections.toggleSection(arg)`. Finds the part in `deps.parts.parts()`. A gone part logs `no section <id>`. The log line `section <title> collapsed|expanded` stays. |
+| `toggleSection` | Calls `sideSections.toggleSection(arg)`, and does nothing else. See Section head for the lookup and the log lines. |
 | `openImage` | See Thumbnail. |
 | `moveFocus` | Calls `session.entries.moveFocusTo(stopId)`. No log. |
 
@@ -133,6 +136,10 @@ Members:
 
 **Section head.** `sectionHead` keeps its `mousedown` guard, `tabIndex = -1` and `type = 'button'`. Only its `toggle` callback changes: it calls `deps.toggleClicked(frame.part.id)`.
 
+- `SideSections.toggleSection(partId)` owns the lookup. It finds the part in `deps.parts.parts()`. A gone part logs `no section <id>` and changes nothing.
+- A found part goes to `toggleCollapsed(part)`. That function stays where it is, in the scope of `createSideSections`. It already reaches `uiState`, the log and every open tab.
+- The log line `section <title> collapsed|expanded` stays in `toggleCollapsed`.
+
 **Sites re-checked, no change.** These already run commands: `composer-kit.ts:497` Send, `:561` and `:575` chips, `dialog-kits.ts:64` dialog actions, `sign-in-dialog.ts:76` Copy. Picker row clicks go through `src/shared/page/list-picker.ts`, which this task does not touch.
 
 **No key.** `src/plugins/keymap.ts` and `docs/keymap.md` do not change.
@@ -155,6 +162,8 @@ GIVEN an entry with two expanders WHEN the user clicks the second head THEN only
 
 GIVEN Settings WHEN the user opens the keymap section THEN no row names a command of this task.
 
+GIVEN a click whose command run throws WHEN the click lands THEN the log reads `command <id> failed: <error text>` and the page keeps working.
+
 Runtime checks that a test cannot settle collect in [Final verification](11-final-verification.md).
 
 ## Tests
@@ -164,6 +173,7 @@ Runtime checks that a test cannot settle collect in [Final verification](11-fina
 - `chat-commands.test.ts`, new `denyEntry_NewerOfTwoPending_OpensTheReasonBoxForIt`. Break: the handler picks `oldestPendingPermission`.
 - `chat-commands.test.ts`, new `clickCommand_TargetGone_LogsAndActsOnNothing`, a table: unknown session, answered permission, entry not `permission`, entry not `user`, no image at the index. Break: a stale arg throws, or answers an entry already answered.
 - `chat-commands.test.ts`, new `openImage_UserEntry_OpensItsImagesAtTheIndex`. Break: the handler opens at 0, as `toggleEntry` does.
+- `chat-commands.test.ts`, new `clickCommands_Manifest_DeclareTheirArgAndNoBind`, a table of the nine commands, built with a helper `row<A>(key: CommandKey<A>, shape, valid: A, invalid: unknown)`. Each row asserts three things: `chatManifest.commands[short].arg` equals the shape in Produces, `checkCommandArg` passes `valid` and refuses `invalid`, and no bind in `defaultKeymap` names the id. Break: a missing `arg` adds an unbound row to Settings, or a shape that differs from the key's type throws on the first real click.
 - `chat-kit.test.ts`, new `images_ThumbnailClick_PassesEntryIdAndIndex`. Break: the click passes a wrong index in the map.
 - `chat-kit.test.ts`, new `collapsibleRow_HeadClick_RunsExpanderClickedAndOpensNothing`. Break: the head toggles itself as well, so one click toggles twice once the command lands.
 - `chat-kit.test.ts`, row added to `collapsibleRow_RegistersWithExpanders`: `toggle(place)` opens that expander, and a place no expander holds gives `'nothing'`.
@@ -171,7 +181,11 @@ Runtime checks that a test cannot settle collect in [Final verification](11-fina
 - `entry-list.test.ts`, new `moveFocusTo_StopNotInOrder_LeavesTheFocus`. Break: the `order` check goes with the listener's rewrite, and a click on padding moves the cursor.
 - `entry-list.test.ts`, new `toggleExpander_EntryWithNoSlot_GivesNothing`. Break: the non-null slot read that `toggleFocused` uses throws on a stale arg.
 - `side-sections.test.ts`: the fake deps wire `toggleClicked` to `toggleSection`, so `a head's click collapses the section in both tabs…` (line 193) keeps its assertions. New row: a part id no section holds logs `no section <id>`.
-- `chat-view.test.ts`, new `clickSites_RunTheirCommandWithTheirArg`, a table: Allow once, Deny, thumbnail, image remove, activity line, expander head, pending row, list click, each with its key and arg recorded by a fake `runKey`. Break: a site is wired to the private function again.
+- `side-sections.test.ts`, the new row also asserts that a part id no section holds leaves `collapsed-sections` as it was. Break: the handler toggles a part it did not find.
+- `chat-view.test.ts`, new `clickSites_RunTheirCommandWithTheirArg`, a table over the eight sites `chat-view.ts` wires, each with its key and arg recorded by a fake `runKey`. Break: a site is wired to the private function again.
+  - The test captures deps and clicks no DOM. `vi.mock` of `./entry-list` and `./composer-kit`, through `importOriginal`, records what `createEntryList` and `createComposerSurface` receive, then calls the real function. `chat-kit.test.ts` and `entry-list.test.ts` own the clicks.
+  - Rows call these captured members: Allow once `kit.allow`, Deny `kit.deny`, thumbnail `kit.openImages`, expander head `kit.expanderClicked`, activity line `runClicked`, list click `stopClicked`, pending row `pullBack`, image remove `removeImage` on `createComposerSurface`'s second argument.
+- `start.test.ts`, new `sectionHead_Click_RunsToggleSectionAndCollapsesThePart`. It opens a tab on the part harness, with the `sessions` fake keeping the tab's element, and clicks a section head through the real `commands.run`. It asserts `section <title> collapsed` in the harness logs. Break: `toggleClicked` or the `toggleSection` handler is wired wrong, or the arg fails the declared shape. `side-sections.test.ts` wires its fake straight to `toggleSection`, so it cannot catch this.
 
 The existing `allowOrCopy`, `denyPermission`, `toggleEntry` and `removeImage` tests stay unchanged. They pin what a key does.
 

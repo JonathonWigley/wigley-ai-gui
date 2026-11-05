@@ -26,7 +26,8 @@ Create:
 - `src/main/alerts/mac-alerts.ts`
 - `src/main/alerts/mac-alerts.test.ts`
 - `src/main/alerts/windows-alerts.ts`
-- `src/main/alerts/windows-alerts.test.ts` (from `electron-alerts.test.ts`, which this task deletes)
+- `src/main/alerts/windows-alerts.test.ts` (takes the Windows rows of `electron-alerts.test.ts`)
+- `src/config/settings.test.ts`
 
 Modify, core:
 
@@ -79,6 +80,7 @@ Modify, docs:
 
 Test:
 
+- `src/main/alerts/electron-alerts.test.ts`
 - `src/shared/plugin-part-harness.test-support.ts`
 - `src/plugins/manifests.test.ts`
 - `src/plugins/sessions/main/relay/endpoint.test.ts`
@@ -195,6 +197,7 @@ export function createPlainAlerts(log: Log): Alerts;  // Linux: notifications, n
 - **`channelPath` stays in the plugin's call.** The record cannot hold the channel. The home folder and the app id are the plugin's inputs, and main does not know the home folder when it builds the record.
 - **Each process reads `process.platform` once.** Main reads it in its composition root. The session host is its own Node process, and it reads it once in `session-host.ts` through `osPlatform`. An extra argument from main is not worth it, since a host outlives the app that started it.
 - **The forms self-test read does not move in this task.** `src/plugins/forms/main/start.ts` must change to pass the OS, and task 02 changes that file in this wave. Task 03 does this move, after 01.
+- **`platform` stays below `modeServices` in `main.ts`.** Line 318 runs `liveServices()` while the module loads, and that call only returns the `forWindow` closure. `forWindow` runs at line 878, after the module loads, so its read of the module-level `platform` finds the const. Read `platform` for `alertsFor` inside `forWindow` only. A read that runs during module load, above the `platform` line, throws a temporal-dead-zone error, and no test covers this wiring.
 
 ## Moves
 
@@ -202,9 +205,10 @@ export function createPlainAlerts(log: Log): Alerts;  // Linux: notifications, n
 
 | Line now | After |
 |---|---|
-| 324 | `platformFor(osPlatform(process.platform), { username: os.userInfo().username, env: process.env, execPath: process.execPath, cwd: process.cwd(), isDev: appInstance.isDev })`, moved above `createNodeFiles` at 319 |
+| 324 | `platformFor(osPlatform(process.platform), { username: os.userInfo().username, env: process.env, execPath: process.execPath, cwd: process.cwd(), isDev: appInstance.isDev })`, moved between `modeServices` at 318 and `createNodeFiles` at 319 |
+| 323 | the comment above `platform` names the record: `The platform record main runs on, as the served config and every plugin's services hold it.` |
 | 319 | `createNodeFiles({ trashItem: modeServices.trashItem, os: platform.os })` |
-| 245 | a new local `alertsFor(platform.os, window, log)` that picks `createMacAlerts`, `createWindowsAlerts` or `createPlainAlerts` |
+| 245 | `alertsFor(platform.os, window, log)`, called inside `forWindow`. `alertsFor` is a new function at module level in `main.ts`. It picks `createMacAlerts`, `createWindowsAlerts` or `createPlainAlerts` |
 | 325, 452, 528, 534, 784, 1057 | read `platform.os` |
 | 572 | `defaults: defaultSettingsFor(platform.programs)` |
 | 586, 873 | pass the record, as they do now |
@@ -232,6 +236,8 @@ Other files:
 - `src/plugins/keys/page/start.ts:46`: destructure `keys` and `services`, and set `const platform = api.platform.os`.
 - `src/renderer/renderer.ts:129,144,206`: read `config.platform.os`.
 - `src/shared/plugin-part-harness.test-support.ts:689,1040`: `fakePlatform('macos')`.
+- `src/config/settings.ts:15`: the comment names `defaultSettingsFor` in place of `defaultSettings`.
+- `src/shared/os-platform.ts`: the comment names `OsName` in place of `Platform`, since the return type changes.
 
 Docs:
 
@@ -272,10 +278,15 @@ Create:
 - `src/shared/platform.test.ts`, `launchCommand` rows: move the `describe('launchCommand')` block of `endpoint.test.ts` here unchanged. Its rows own the rule. Add `platformFor_Inputs_LaunchIsLaunchCommand`: `relay.launch` equals `launchCommand` of the same inputs, and `relay.username` equals `inputs.username`. Catches: a factory that drops an input.
 - `src/main/alerts/mac-alerts.test.ts`, `announce_NotificationUnsupported_BouncesTheDock`: with `Notification.isSupported` false, `dock.bounce` runs with `'informational'`. Catches: attention lost in the split.
 - `src/main/alerts/mac-alerts.test.ts`, `setOpenCount_TwoSources_BadgesTheSum`: counts 2 and 3 from two sources give `setBadgeCount(5)`. Catches: the badge showing one source.
-- `src/main/alerts/windows-alerts.test.ts`: move `destroyedWindow_AnswersWithoutThrowing` and `liveWindow_UsesTheWindow` from `electron-alerts.test.ts`. Remove the `process.platform` stub. Delete `electron-alerts.test.ts`.
+- `src/main/alerts/windows-alerts.test.ts`: move `destroyedWindow_AnswersWithoutThrowing` and `liveWindow_UsesTheWindow` from `electron-alerts.test.ts`. Remove the `process.platform` stub.
+- `src/config/settings.test.ts`, `defaultSettingsFor_Programs_SetsClaudeCommand`: `defaultSettingsFor({ claude: '/x/claude' }).claude.command` is `'/x/claude'`. Catches: a `defaultSettingsFor` that keeps the literal. `programs.claude` has the same value on all three OSes, so only a different value shows this break.
 
 Change rows:
 
+- `src/main/alerts/electron-alerts.test.ts`: the file stays, and it holds the rows of `electron-alerts.ts` only. Its `electron` mock has `app.dock.bounce` and `app.setBadgeCount` spies, and a `Notification` whose `isSupported` each row sets and whose `failed` listener a row can fire.
+  - `createPlainAlerts_NotificationUnsupported_CallsNothing`: `announce` does not throw, and no spy runs. Catches: a Linux run that bounces or badges through a wrongly wired variant.
+  - `createPlainAlerts_SetOpenCount_DrawsNothing`: `setOpenCount('forms', 2)` does not throw, and no spy runs. Catches: the same break on the count path.
+  - `createElectronAlerts_NotificationFails_LogsAndDrawsAttention`: fire `failed` on a shown notification, with a fake `AttentionAndBadge`. Assert one `drawAttention` call and the `notification failed` log line. Catches: the shared `failed` path losing its attention call in the split.
 - `src/plugins/sessions/main/start.test.ts`: the row that reads `endpoint.json` (near line 524) also asserts `launch` equals `platform.relay.launch`. Catches: `openRelay` going back to `process.env` and `process.execPath`. Set `platform` at line 246 to `fakePlatform(osPlatform(process.platform))`, and pass `platform.os` and `platform.relay.username` to the test's `channelPath` calls.
 - `src/main/config/config-store.test.ts:152,244`: serve `fakePlatform('windows')`, and assert `config.platform` equals it. Catches: the store serving a partial record.
 - `src/plugins/unity-pool/main/start.test.ts:16`: the parameter is an `OsName`, and the harness gets `fakePlatform(os)`. Its table rows stay.
@@ -291,6 +302,7 @@ No test covers the `main.ts` lifecycle wiring, since `main.ts` runs only in the 
 - `npm run typecheck` and `npm run lint` pass.
 - `grep -rn 'process\.platform' src --include='*.ts' | grep -v '\.test\.'` prints exactly three lines: one in `src/main/main.ts`, one in `src/session-host/session-host.ts`, and `src/plugins/forms/main/selftest-script.ts:63`, which task 03 removes.
 - `grep -n 'os\.userInfo\|process\.env\|process\.execPath\|process\.cwd' src/plugins/sessions/main/start.ts` prints nothing.
+- `grep -rn '\bdefaultSettings\b' src` prints nothing. This also catches a stale comment.
 - The test gate runs the tests above.
 
 ## Commit

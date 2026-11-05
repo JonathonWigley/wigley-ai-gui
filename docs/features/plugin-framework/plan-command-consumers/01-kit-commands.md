@@ -37,20 +37,19 @@ Unity-pool, the one layout that calls `kit.button`:
 
 Listing rule:
 
-- modify `src/shared/command-args.ts`
-- create test `src/shared/command-args.test.ts`
-- modify `src/shared/key-hints.ts`; test `src/shared/key-hints.test.ts`
-- modify `src/plugins/keys/page/help-sections.ts`; test `src/plugins/keys/page/help-sections.test.ts`
-- modify `src/plugins/keys/page/which-key.ts`; test `src/plugins/keys/page/which-key.test.ts`
-- modify `src/plugins/settings/page/keymap-rows.ts`, `src/plugins/settings/page/keymap-view.ts`, `src/plugins/settings/page/row-filter.ts`; test `src/plugins/settings/page/keymap-rows.test.ts`
+- modify `src/shared/command-args.ts`; test `src/shared/command-args.test.ts`
+- test only: `src/plugins/keys/page/help-sections.test.ts`, `src/plugins/keys/page/which-key.test.ts`. `src/shared/key-hints.ts`, `help-sections.ts` and `which-key.ts` do not change (Decisions).
+- modify `src/plugins/settings/page/keymap-rows.ts`, `src/plugins/settings/page/keymap-view.ts`, `src/plugins/settings/page/row-filter.ts`; test `src/plugins/settings/page/keymap-rows.test.ts`, `src/plugins/settings/page/row-filter.test.ts`
 
 Shared picker:
 
-- modify `src/shared/page/list-picker.ts`; test `src/shared/page/list-picker.test.ts`
+- modify `src/contracts/list-picker.ts` (`ListPicker`)
+- modify `src/shared/page/list-picker.ts`; test `src/shared/page/list-picker.test.ts`. The test's two `createListPicker` literals gain `owner` and `run`.
+- modify `src/shared/page/fake-list-picker-service.test-support.ts`
 - modify `src/contracts/commands.ts`, `src/config/keymap.ts`
 - create `src/renderer/picker-commands.ts`; test `src/renderer/picker-commands.test.ts`
 - modify `src/renderer/renderer.ts`
-- modify the file that implements `ListPickerService` (`src/contracts/list-picker.ts` declares it, `plan-commands-and-state` task 09; find the implementation with `grep -rln "createListPicker(" src/renderer src/shared`)
+- modify `src/renderer/plugins/page-api.ts`, which implements `ListPickerService`; test `src/renderer/plugins/page-api.test.ts`
 
 `src/shared/page/confirm-prompt.ts` does not change (Decisions).
 
@@ -67,8 +66,17 @@ Every item comes from `plan-commands-and-state`, which is closed by the time thi
 - `src/shared/command-args.ts`: `checkCommandArg(id: CommandId, shape: CommandArgShape | undefined, arg: unknown): string | null`, the error text or null.
 - `PageApi.commands`: `run(id: CommandId): Promise<void>` and `run<A>(key: CommandKey<A>, arg: A): Promise<void>`. `register(short: string, decl: CommandDecl, handler: CommandHandler): Disposable`.
 - `KeyBind` and the `keymap.json` entry gain `arg?: CommandArg`.
-- `PageServices.picker: ListPickerService`, "the shared list picker plus scope and layer wiring". This service builds every `ListPickerDeps`. Chat's session-bound wrapper stays chat's and sits on the service.
-- Tree: `ListPicker`, `ListPickerDeps` and `createListPicker` in `src/shared/page/list-picker.ts`. `coreCommands` in `src/config/keymap.ts`. `textButton` in `src/shared/page/ui/button.ts`.
+- `CommandRouter.run(command: CommandId | CommandKey<unknown>, arg: unknown, extras?: Omit<Context, 'arg'>): Promise<void>`, in `src/shared/command-router.ts`. It throws at the call for an unknown id and for a bad arg. `renderer.ts` and `page-api.ts` hold the page's router.
+- `CommandRegistry.register(id: CommandId, handler: CommandHandler<Context>, owner: string): Disposable`. The core's own commands use owner `core`.
+- `commandTarget(id: CommandId, arg: unknown): string`, in `src/shared/command-args.ts`: the id with no arg, else the id, one space and the arg as JSON. A record's fields print sorted by name.
+- Settings, from that plan's task 07:
+  - `CommandRow` has `arg?: CommandArg`.
+  - `keymapRows` gives a command with a declared `arg` one row per distinct bound arg, default and user lines together, in first-seen order, and no row when no key binds it. The rows hold the bare label.
+  - `commandRow`'s key in `keymap-view.ts` is `commandTarget(row.command.id, row.arg)`. `addBind` writes `row.arg` into the new bind.
+  - `keymap-rows.test.ts` has `keymapRows_ArgCommand_OneRowPerBoundArgAndNoneWhenUnbound`.
+- `PageServices.picker: ListPickerService`, `create(options?: ListPickerOptions): ListPicker`. `src/renderer/plugins/page-api.ts` builds it per plugin, and builds every `ListPickerDeps` in `create`. `create` files one registration that calls `picker.close()`. Chat's session-bound wrapper stays chat's and sits on the service.
+- `ListPicker` in `src/contracts/list-picker.ts`. `ListPickerDeps` and `createListPicker` in `src/shared/page/list-picker.ts`. `fakeListPickerService()` in `src/shared/page/fake-list-picker-service.test-support.ts`, a real `createListPicker` over a fake matcher.
+- Tree: `coreCommands` in `src/config/keymap.ts`. `textButton` in `src/shared/page/ui/button.ts`. `LiveConfig` (`live` in `renderer.ts`).
 
 ## Produces
 
@@ -92,6 +100,7 @@ export function kitCommandsOf(api: {
   keys: Pick<PageApi['keys'], 'command'>;
   commands: Pick<PageApi['commands'], 'run'>;
 }): KitCommands;
+export function keyRunner(commands: Pick<PageApi['commands'], 'run'>, log: PluginLog): <A>(key: CommandKey<A>, arg: A) => void;
 ```
 
 `kit.d.ts` text for each member, verbatim:
@@ -103,21 +112,15 @@ Listing, in `src/shared/command-args.ts`:
 
 ```ts
 export function commandArgLabel(arg: CommandArg): string;
-export function sameCommandArg(a: CommandArg | undefined, b: CommandArg | undefined): boolean;
 ```
 
-Listing, in `src/shared/key-hints.ts`: `BoundKeys` gains `arg?: CommandArg`, and:
+Settings, in `src/plugins/settings/page/keymap-rows.ts`: `CommandRow` gains `label: string`. `arg` is already there.
 
-```ts
-export function boundCommandLabel(label: CommandLabel, command: CommandId, arg?: CommandArg): string;
-```
+Shared picker:
 
-Settings, in `src/plugins/settings/page/keymap-rows.ts`: `CommandRow` gains `arg: CommandArg | undefined` and `label: string`.
-
-Shared picker, in `src/shared/page/list-picker.ts`:
-
-- `ListPickerDeps` gains `owner: string` (the owning plugin's id) and `run(command: CommandId, arg: CommandArg): void`.
-- `ListPicker` gains `chooseAt(index: number): void`.
+- `ListPickerDeps`, in `src/shared/page/list-picker.ts`, gains `owner: string` (the owning plugin's id) and `run(command: CommandId, arg: CommandArg): void`.
+- `ListPicker`, in `src/contracts/list-picker.ts`, gains `chooseAt(index: number): void`.
+- `PageApiDeps`, in `src/renderer/plugins/page-api.ts`, gains `pickerCommands: PickerCommands`.
 
 Core commands, in `src/contracts/commands.ts` and `src/config/keymap.ts`:
 
@@ -141,9 +144,9 @@ export interface PickerCommands {
 export function registerPickerCommands(commands: Pick<CommandRegistry<PageCommandContext>, 'register'>): PickerCommands;
 ```
 
-`renderer.ts` calls it beside the core's own pane commands.
+`renderer.ts` calls it beside the core's own pane commands, before `startPlugins`, with owner `core` on both handlers. It passes the result to `createPageApi` as `pickerCommands`.
 
-Unity-pool commands, in `src/plugins/unity-pool/manifest.ts`, with their `CommandKey`s in `contract.ts`:
+Unity-pool commands, in `src/plugins/unity-pool/manifest.ts`, each `runsIn: 'page'`, with their `CommandKey`s in `contract.ts`:
 
 | Command | `arg` | Label | Group | Site |
 |---|---|---|---|---|
@@ -162,29 +165,32 @@ No added command takes a key.
 - `button` takes no function. A function passed to it fails `exists` and throws at build.
 - `command` and `button` take a qualified id only, as `command` does today.
 - `kitCommandsOf` runs `api.commands.run(id)` when `arg` is undefined, and `api.commands.run({ id }, arg)` otherwise. It reads `exists` and `argShape` from `api.keys.command(id)`. It voids the promise: a handler failure is logged by the command core.
+- `keyRunner` is for a click that runs a typed `CommandKey`, as tasks 03 and 05 do. It calls `commands.run(key, arg)` in a `try` and voids the promise, which never rejects. It logs a throw at the call as `command <id> failed: <error text>`.
+- The shell's `commands` literal in `renderer.ts` does not use `kitCommandsOf`, because the shell has no `PageApi`:
+  - `exists` stays `commands.has(id)`.
+  - `argShape` reads `live.current().commands[id]?.arg`.
+  - `run` calls `router.run(id, arg, {})` and voids the promise. The router makes the arg check, so a bad `modes.show` arg throws at the call.
 - No kit overrides `button` or `command`, and no `layout.d.ts` redeclares them (measured at plan time, re-verify). Every wrapper takes the change through its `...base` spread.
 
-**Unity-pool moves here, not in task 05.** `layouts/default/layout.js` is the only `kit.button` caller, and it passes a function. Task 01 changes that signature, so task 01 moves the caller, or the panel breaks through Wave 1. `pool-view-model.ts`'s `cloneAction` returns `command` and `arg`. The `run` member of `panelInput`'s `actions` goes. The handlers call today's `runAction(arg.pool, 'hold' | 'release', arg.clone)`. The holder `select` stays with task 05.
+**Unity-pool moves here, not in task 05.** `layouts/default/layout.js` is the only `kit.button` caller, and it passes a function. Task 01 changes that signature, so task 01 moves the caller, or the panel breaks through Wave 1.
 
-**Listing rule.** A command with a declared `arg` lists only while a bind names it, once per bound arg.
+- `pool-view-model.ts`'s `cloneAction` returns `command` and `arg`. The `run` member of `panelInput`'s `actions` goes. The holder `select` stays with task 05.
+- The handlers go in the `commands` object that `start.ts` returns (`commands: {}` today, line 407, measured at plan time). That closure holds `runAction`. Each handler calls `runAction(arg.pool, 'hold' | 'release', arg.clone)`.
+- A run while that clone's action is pending does nothing and logs nothing. `runAction` already returns early when `running` is true (`start.ts:307`), so a key or a later palette run needs no new guard.
 
-- Settings:
-  - `keymapRows` skips a command with `arg` and no bind line.
-  - It draws one row per distinct `arg` among its lines, in the order the lines first name each `arg`. A line in any state counts, so a default the user unbound keeps its row and the user can restore it.
-  - A command with no `arg` keeps its one row, bound or not.
-  - An accelerator bind names no `arg`, so it only ever lists on a row with no `arg`.
-- Settings editing:
-  - A row's key is `<command id>` with no `arg`, and `<command id>:<commandArgLabel(arg)>` with one.
-  - `addBind` carries `row.arg` into the bind it makes.
+**Listing rule.** A command with a declared `arg` lists only while a bind names it. Settings lists it once per bound arg. Help and which-key keep one merged line.
+
+- Settings is a delta on what `plan-commands-and-state` task 07 landed (Consumes). Do not rebuild its rows, its row key or its `addBind`. This task adds:
+  - `CommandRow.label`: `command.label` with no `arg`, and `<command.label>: <commandArgLabel(arg)>` with one.
+  - `keyRowInput` and `matchesCommand` in `row-filter.ts` read `row.label` in place of `row.command.label`.
   - `replacedBy` removes repeats of one command from its result, since one command now holds many rows.
-  - `keyRowInput` and `row-filter.ts` read `row.label`.
-- Help and which-key:
-  - They list binds, so they already skip an unbound command. They change only in the label.
-  - `helpSections` and `editorHints` pass `bind.arg` into `mergeHints`.
-  - which-key's candidates carry `arg`, and `entry` labels through `boundCommandLabel`.
+- A row's identity is `commandTarget`. No other key or comparison of args exists.
+- A default line in any state counts as bound, so a default the user unbound keeps its row and the user can restore it. A command with no `arg` keeps its one row, bound or not.
+- The label suffix is the one change the user sees in Settings. Task 07 lands the nine `forms.choose` rows with the same label. The suffix tells them apart, which is the point of one row per number.
+- Help and which-key do not change, by the user's answer of 2026-11-05. They list binds, so they already skip an unbound command. `mergeHints` groups by the bare label, so forms' digits still print `1–9 pick the numbered choice`, as `plan-commands-and-state` task 07 promises. `commandArgLabel` reaches Settings only.
 - The command palette is Wave 4, out of scope.
 
-**Arg label.** A row labels its arg as `<label>: <arg>`:
+**Arg label.** A Settings row labels its arg as `<label>: <arg>`:
 
 | `arg` | `commandArgLabel` | Row |
 |---|---|---|
@@ -192,9 +198,7 @@ No added command takes a key.
 | `'chat'` | `chat` | `<label>: chat` |
 | `{ pool: 'p', clone: 2 }` | `clone 2, pool p` | `<label>: clone 2, pool p` |
 
-A record lists `field value`, fields sorted by name, joined with `, `. `sameCommandArg` compares the same canonical form, so field order never makes two rows.
-
-`mergeHints` merges by label, as today. Two keys on one command and one `arg` still merge. Different args no longer merge. The effect on forms' digits is in the plan run's report as a question for the user; this document follows `plan.md` § Decisions, once per bound argument.
+A record lists `field value`, fields sorted by name, joined with `, `.
 
 **How a shared module with no plugin runs a command.**
 
@@ -207,7 +211,11 @@ A record lists `field value`, fields sorted by name, joined with `, `. `sameComm
 
 **Picker wiring.**
 
-- `ListPickerService` fills `owner` with the asking plugin's id and `run` with the page's command run. It calls `track` for each picker it builds, and disposes the tracking with the picker's owner. One plugin holds one picker: six `createListPicker` calls in six plugins, measured at plan time, re-verify.
+- `renderer.ts` passes the `registerPickerCommands` result into `createPageApi` as `pickerCommands`.
+- `services.picker.create` in `page-api.ts` fills `owner` with `manifest.id`. It fills `run` with a call to the page's router, which takes a bare `CommandId`, and voids the promise. It adds no `{ id }` wrapper.
+- `create` calls `pickerCommands.track(manifest.id, picker)` and files the result in the part's registrations, beside the `picker.close()` registration. A part's stop therefore frees the owner before a restart.
+- One plugin holds one picker, and `create` runs once per part start: six `createListPicker` calls in six plugins, each at mount, measured at plan time, re-verify. A second `create` in one part start throws `picker owner <owner> is taken` at the call, so the part fails at start and never on a click.
+- `fakeListPickerService()` fills `owner` with `fake`. Its `run` calls `chooseAt(arg.index)` on the picker it built for `picker.chooseRow`, and `cancel()` for `picker.cancel`. A site's test that clicks a row therefore still reaches `chosen`.
 - Row click, built-in row and `drawRow` row alike: `deps.run('picker.chooseRow', { owner: deps.owner, index })`.
 - Backdrop click: `deps.run('picker.cancel', deps.owner)`.
 - `chooseAt(index)` sets `state.cursor` to `index`, then runs `choose`. An `index` not among the visible rows does nothing and logs `picker row <index> is not shown`.
@@ -222,7 +230,9 @@ A record lists `field value`, fields sorted by name, joined with `, `. `sameComm
 - GIVEN `kit.command('forms.choose')` on a command declaring `arg: 'number'` WHEN the part builds THEN it throws the `checkCommandArg` text.
 - GIVEN a command with `arg` and no bind WHEN Settings draws THEN it has no row, and help and which-key list nothing for it.
 - GIVEN `forms.choose` bound on `1` and `2` WHEN Settings draws THEN it has two rows, labelled `pick the numbered choice or action (again clears): 1` and `…: 2`.
+- GIVEN `forms.choose` bound on `1` through `9` WHEN help or which-key draws THEN each shows one line, `1–9` and the bare label.
 - GIVEN the user adds a bind on the row for arg `2` WHEN the bind saves THEN the user keymap entry carries `arg: 2`.
+- GIVEN clone 2's Hold is pending WHEN `unity-pool.hold` runs again on clone 2 THEN nothing happens.
 - GIVEN an open picker WHEN the user clicks the row at item index 3 THEN `picker.chooseRow` runs with the picker's owner and index 3, the cursor moves to 3, and `chosen` gets item 3.
 - GIVEN an open picker WHEN the user clicks the backdrop THEN `picker.cancel` runs with the owner, and `cancelled` runs.
 
@@ -232,22 +242,26 @@ Runtime checks collect in [Final verification](11-final-verification.md). This t
 
 - `base-kit.test.ts`: `button_Click_RunsCommandWithItsArg`. Catches a button that drops `arg`.
 - `base-kit.test.ts`: rows added to `commandRunner_UnknownId_ThrowsAtCreationAndRunsOnlyOnCall` for a bad `arg`, a missing declared `arg`, and an `arg` on a command with none. Catches a layout mistake surfacing only on a click.
+- `base-kit.test.ts`: `keyRunner_RunThrows_LogsAndDoesNotThrow`. Catches a stale arg throwing out of the DOM listener, where the click dies with no log line.
 - `base-kit.test.ts`: `kitCommandsOf_ArgGiven_RunsThroughCommandKey`. Catches a helper that drops `arg` on the way to `commands.run`.
 - `layout-contracts.test.ts`: `every owner contract type-checks beside kit.d.ts` runs on the new text. Catches a `layout.d.ts` that clashes with the new `button`.
-- `command-args.test.ts`: `commandArgLabel_EachShape_PrintsPinnedText`, a table with the three rows above. `sameCommandArg_RecordFieldOrder_Same`. Catches a duplicate row from field order.
-- `key-hints.test.ts`: change `spells the leader and merges the digit binds` so its digits carry no `arg` and still merge, and add `mergeHints_DifferentArgs_KeepOneRowEach` plus a row for two keys on one `arg`. Catches an arg dropped from a help row, and a repeat of one arg.
-- `help-sections.test.ts`: `helpSections_BindWithArg_LabelsTheArg`. Catches help reading the bare label.
-- `which-key.test.ts`: `whichKeyModel_BindWithArg_LabelsTheArg`. Catches which-key reading the bare label.
-- `keymap-rows.test.ts`: narrow `keymapRows_EveryCommandHasARow` to commands with no `arg`, and add `keymapRows_ArgCommand_OneRowPerBoundArgAndNoneUnbound` and `replacedBy_ArgCommand_NamesItOnce`. Catches an unbound click command in Settings, and a repeated command in the replaced list.
+- `command-args.test.ts`: `commandArgLabel_EachShape_PrintsPinnedText`, a table with the three rows above and a record given in the other field order. Catches a label that depends on field order.
+- `help-sections.test.ts`: `helpSections_DigitBindsWithArgs_PrintOneRangeLine`. Catches an arg suffix reaching help and splitting `1–9` into nine rows.
+- `which-key.test.ts`: `whichKeyModel_DigitBindsWithArgs_PrintOneRangeLine`. Catches the same split in which-key.
+- `keymap-rows.test.ts`: narrow `keymapRows_EveryCommandHasARow` to commands with no `arg`, because plugins now declare unbound click commands. It still catches a no-arg command losing its row.
+- `keymap-rows.test.ts`: extend `keymapRows_ArgCommand_OneRowPerBoundArgAndNoneWhenUnbound`, the test task 07 landed, with rows for the label `<label>: 1`, for a record arg with its fields in the other order, and for an unbound default keeping its row. Catches a row with the bare label, a duplicate row from field order, and a default the user cannot restore.
+- `keymap-rows.test.ts`: `replacedBy_ArgCommand_NamesItOnce`. Catches a repeated command in the replaced list.
+- `row-filter.test.ts`: `matchesCommand_ArgRow_MatchesItsLabel`. Catches a filter that reads the bare label and misses a row's arg.
 - `list-picker.test.ts`: rows added to `drawRow_DrawsEachVisibleItemAndKeepsCursorAndClick` that assert `run` gets `picker.chooseRow` with owner and index, on both built-in and `drawRow` rows. `backdropClick_RunsPickerCancelWithOwner`. `chooseAt_HiddenIndex_DoesNothing`. Catches a click that skips the command, or chooses a filtered-out row.
 - `picker-commands.test.ts`: `chooseRow_TwoOwners_ReachesTheOwnersPicker`. `track_SecondPickerForOwner_Throws`. Catches a click reaching another plugin's picker.
-- `unity-pool/page/start.test.ts`: `hold_RunsActionOnTheArgsPoolAndClone`, with a row for `release`. Catches the Hold button losing its target in the move.
+- `page-api.test.ts`: `picker_RowClick_RunsChooseRowWithThePluginAsOwner`. `picker_PartRestarts_OwnerIsFreeAgain`. Catches a picker built with no owner, and a restart that throws `is taken`.
+- `unity-pool/page/start.test.ts`: `hold_RunsActionOnTheArgsPoolAndClone`, with a row for `release` and a row for a second run while `running`. Catches the Hold button losing its target in the move, and a second action sent to main.
 
-A test that clicks a picker row wires `run` to a fake that calls `chooseAt` or `cancel`, or runs through the part harness's real registry.
+The shell's literal has no unit test, because `renderer.ts` has no test file. `shell-chrome.test.ts` keeps a fake `commands`.
 
 ## Done when
 
-The tree compiles. The layer check passes. `grep -rn "onClick" src/shared/page/layout-host/kit.d.ts` finds nothing on `button`. The test gate runs the tests above.
+The tree compiles. The layer check passes. `grep -rn "onClick" src/shared/page/layout-host/kit.d.ts` finds nothing on `button`. `grep -rn "commandArgLabel" src/plugins/keys src/shared/key-hints.ts` finds nothing. The test gate runs the tests above.
 
 ## Commit
 

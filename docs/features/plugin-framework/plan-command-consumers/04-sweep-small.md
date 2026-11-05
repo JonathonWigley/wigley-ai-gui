@@ -35,7 +35,7 @@ Shell:
 
 Sessions:
 
-- modify `src/plugins/sessions/manifest.ts`, `src/plugins/sessions/contract.ts`, `src/plugins/sessions/page/start.ts`, `src/plugins/sessions/page/sessions-view.ts`, `src/plugins/sessions/page/sidebar-view.ts`, `src/plugins/sessions/page/session-tabs-view.ts`
+- modify `src/plugins/sessions/manifest.ts`, `src/plugins/sessions/contract.ts`, `src/plugins/sessions/page/start.ts`, `src/plugins/sessions/page/sessions-view.ts`, `src/plugins/sessions/page/sidebar-view.ts`, `src/plugins/sessions/page/session-tabs-view.ts`, `src/plugins/sessions/page/sessions-view-fakes.ts`
 - test `src/plugins/sessions/page/start.test.ts`, `src/plugins/sessions/page/sessions-view.test.ts`, `src/plugins/sessions/page/session-tabs-view.test.ts`, `src/plugins/sessions/page/layout/sessions-parts.test.ts`
 
 Keys: no file changes (Decisions).
@@ -95,6 +95,8 @@ Each command takes no key, and each declares an `arg`, so none lists in Settings
 
 **Keys: no change.** A re-check of the site table found both sites already run a command. `help-view.ts`'s Close calls `close`, and `keys/page/start.ts:101` passes `() => api.commands.run(closeHelpCommand)` as `close`. `layouts/default/layout.js:55` passes `kit.command('keys.toggleHelp')`. The task keeps the plugin's name in its title, since the site table lists it.
 
+`KeysKit.iconButton(parent, icon, label, onClick: () => void)` in `keys/layouts/layout.d.ts` still takes a function. It stays out of scope: `plan.md`'s signature change is on `kit.button`, and the default layout's only `iconButton` already gets a command runner.
+
 **Shell activity item.**
 
 - Each mode has a show command in its plugin: `docs.showMode`, `sessions.showMode`, `backlog.showMode`, `settings.showMode`, `gallery.showMode`, five `modes.add` calls and five commands, measured at plan time, re-verify.
@@ -107,9 +109,10 @@ Each command takes no key, and each declares an `arg`, so none lists in Settings
 **Sessions.**
 
 - `sessions.selectRow`'s handler holds what the `activate` dep of `mountSessionsView` does at `start.ts:344` today: `exports.activate(sessionId)`, then `mode.picked()`. The dep runs the command.
-- `sessions.selectTab`'s handler calls `view.tabs.select(sessionId, tab)`. `session-tabs-view.ts:265`'s closure runs the command, through a new dep `selectTab(sessionId: string, tabId: string): void` on the tabs view. `view.tabs.select` stays for `start.ts:645`.
-- `sessions.favoriteProjectAt`'s handler calls what `SidebarEvents.toggleFavorite` does at `sessions-view.ts:182`. The `SidebarEvents` member stays and now runs the command, through a new `sessions-view.ts` dep `runFavorite(project: string): void`.
+- `sessions.selectTab`'s handler calls `view.tabs.select(sessionId, tab)`. `session-tabs-view.ts:265`'s closure runs the command, through a new dep `selectTab(sessionId: string, tabId: string): void` on the tabs view. `view.tabs.select` stays for `start.ts:645`. The `showed <tab> tab` log line stays in `start.ts:645`'s key path, so a click logs no such line, as today.
+- `sessions.favoriteProjectAt`'s handler calls `view.toggleFavorite(project)`, the call the key's handler makes at `start.ts:840`. The `SidebarEvents` member stays and now runs the command, through a new `sessions-view.ts` dep `runFavorite(project: string): void`.
 - `sessions.favoriteProject` stays for the key: it acts on the focused pane's session's project.
+- **The layout preview's guard stays in `SidebarEvents`, before any command runs.** `SidebarEvents.activate` at `sessions-view.ts:174` runs the `activate` dep only when `preview === null`, and otherwise re-selects in the preview. `SidebarEvents.toggleFavorite` at `:182` runs `runFavorite` only when `preview === null`, and otherwise does nothing and logs nothing. A click in the preview therefore runs no command, activates no real session and favorites no real project. `view.toggleFavorite` keeps its own `projects ignored` guard for keys.
 - `sessions-parts.ts:182`'s `() => undefined` stays. The real click listener is `sidebar-view.ts:155`, and the toggle's look is the part's job.
 - `sessions-parts.ts:299`'s pane controls already run commands.
 
@@ -130,6 +133,7 @@ Each command takes no key, and each declares an `arg`, so none lists in Settings
 - GIVEN a session row WHEN the user clicks it THEN `sessions.selectRow` runs with its id, the session activates, and the side bar's overlay closes.
 - GIVEN a tab WHEN the user clicks it THEN `sessions.selectTab` runs with its session and tab id.
 - GIVEN a project group WHEN the user clicks its star THEN `sessions.favoriteProjectAt` runs with the project key.
+- GIVEN the layout preview shows WHEN the user clicks a row THEN no command runs and the preview's selection moves. WHEN the user clicks a star THEN no command runs and the favorites do not change.
 - GIVEN any added command WHEN Settings draws THEN it has no row.
 
 Runtime checks collect in [Final verification](11-final-verification.md). This task adds none here.
@@ -139,10 +143,13 @@ Runtime checks collect in [Final verification](11-final-verification.md). This t
 - `agent-strip.test.ts`: `click_OnBox_RunsToggleBoxAtWithSessionAndKey`, and `toggleBoxAt_OpensAndReveals`. Catches a click that skips the command, or a move that drops `revealBox`.
 - `visual/page/start.test.ts`: `expandClick_RunsVisualExpandAndOpensOverlayOnSource`. Catches an expand that skips the command or opens the wrong source. `html-fence.test.ts` keeps its fake `expand` and does not change.
 - `shell-chrome.test.ts`: change `activityItem_Click_ShowsItsMode` to `activityItem_Click_RunsModesShowWithItsId`, asserting the fake's `run`. Add `showMode_UnknownId_DoesNothing` and `showMode_KnownId_ShowsThroughTheHandle`. Catches a click calling the handle directly, and a mode id left unqualified.
-- `sessions-view.test.ts`: `sidebarRow_Click_RunsSelectRow` and `favoriteToggle_Click_RunsFavoriteProjectAt`, each with a row in the same table. Catches a click left on the private path.
+- `sessions-view.test.ts`: `sidebarRow_Click_RunsSelectRow` and `favoriteToggle_Click_RunsFavoriteProjectAt`, each with a row in the same table. Catches a click left on the private path. The fake `runFavorite` calls `view.toggleFavorite`, so the existing star rows keep asserting the save.
+- `sessions-view.test.ts`: `sidebarClick_PreviewShown_RunsNoCommand`, rows for a row click and a star click. Catches a preview click activating a real session or favoriting a real project.
 - `session-tabs-view.test.ts`: `tab_Click_RunsSelectTab`. Catches a tab arg with the wrong record fields.
 - `sessions-parts.test.ts`: existing favorite tests stand.
 - `sessions/page/start.test.ts`: `selectRow_Handler_ActivatesAndClosesTheOverlay`. Catches the overlay staying open once the closure moves.
+- `sessions/page/start.test.ts`: `selectTab_Handler_SelectsTheTabAndLogsNoShowedLine`. Catches a handler that drops the select, or a click that gains the key's `showed <tab> tab` line.
+- `sessions/page/start.test.ts`: `favoriteProjectAt_Handler_TogglesTheNamedProject`, and a row for the same handler under the preview that logs `projects ignored`. Catches a handler that acts on the focused pane's project, or saves under the preview.
 
 ## Done when
 

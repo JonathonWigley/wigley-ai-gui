@@ -46,8 +46,9 @@ export type JsonSafe<T> = unknown extends T
 // `unknown` for a JSON value, `never` otherwise: a publish parameter intersects it.
 export type JsonSlot<V> = [V] extends [JsonSafe<V>] ? unknown : never;
 
-// What a layout reads. `get` with no key is the slot's whole value; `on` passes the
-// change as `(value)`, `(key, value)` or `(key, change)`, by the slot's kind.
+// What a layout reads. By the slot's kind, `get()` is the value or the `[key, value]`
+// entries in first-set order, and `on` passes `(value)`, `(key, value)` or `(key, change)`.
+// § The store holds the full rule.
 export interface LayoutSlotReader {
   get(key?: string): unknown;
   on(listener: (...args: unknown[]) => void): Disposable;
@@ -93,8 +94,8 @@ export interface SlotStore {
   onWrite(listener: (change: SlotChange) => void): Disposable;
 }
 export function createSlotStore(log: Log): SlotStore;
-// One plugin's view: `publish` throws for a key not under `pluginId`; each writer and each `on` goes through `track`.
-export function pluginState(store: SlotStore, pluginId: string, track: <T extends Disposable>(handle: T) => T): PluginState<PluginManifest, ProcessName>;
+// One plugin's view: `publish` throws for a key not under `pluginId` or of another process; each writer and each `on` goes through `track`.
+export function pluginState(store: SlotStore, pluginId: string, process: ProcessName, track: <T extends Disposable>(handle: T) => T): PluginState<PluginManifest, ProcessName>;
 export function layoutState(store: SlotStore, pluginId: string, track: <T extends Disposable>(handle: T) => T): LayoutState;
 ```
 
@@ -118,7 +119,7 @@ export function createPageState(
 ): Promise<SlotStore>;
 ```
 
-Part harness: `PartHarness` gains `readonly state: SlotStore`. `MainPartHarnessOptions` and `PagePartHarnessOptions` gain `state?: SlotStore`. A test seeds a slot with a store it passes in, and writes a slot while the part runs through `harness.state.publish(key).set(value)`.
+Part harness: `PartHarness` gains `readonly state: SlotStore`. `MainPartHarnessOptions` and `PagePartHarnessOptions` gain `state?: SlotStore`. A test seeds a slot with a store it passes in, and writes a slot while the part runs through `harness.state.publish(key).set(value)`. `harness.state.publish` takes a claim that nothing releases, and `counts()` does not hold it. So a test calls `publish` once per key and keeps the writer. For a key the part under test publishes, the test calls `dispose()` on the seeding writer before the part starts. The value stays. Otherwise the part's `publish` throws `Slot "<id>" is held by a live part`.
 
 `scripts/layer-rules.mts`: `export function readReads(file: string, source: string): { main: string[]; page: string[] }`, and `PluginFolder.reads: { main: readonly string[]; page: readonly string[] }`.
 
@@ -163,7 +164,9 @@ Listen first. A push sent between the snapshot and the listener is otherwise los
 - So a page load releases every page claim with no message to main. Main never holds a claim on a page slot.
 - `publish` on a key with a live claim throws `Slot "<id>" is held by a live part`.
 - Disposing a writer releases only its own claim. A second dispose, or a dispose after another writer took the key, changes nothing.
-- `pluginState.publish` throws `Slot "<id>" is not under plugin "<pluginId>"` when `key.id` does not start with `<pluginId>.`. Parts whose `start` takes `any` skip the compile check, so this runtime check earns its place. `store.publish` has no such check. Task 06's core writes use it.
+- `pluginState.publish` throws `Slot "<id>" is not under plugin "<pluginId>"` when `key.id` does not start with `<pluginId>.`. Parts whose `start` takes `any` skip the compile check, so this runtime check earns its place.
+- `pluginState.publish` throws `Slot "<id>" is a <key.process> slot, published from <process>` when `key.process` differs from the `process` it was given. The same parts skip the `P` type parameter. Without this check, main could hold a claim on a page slot, and `applyPageWrite` would then refuse every page write to it.
+- `store.publish` has neither check. Task 06's core writes and the harness's seeding writers use it.
 
 **What stop leaves.**
 
@@ -186,7 +189,19 @@ Listen first. A push sent between the snapshot and the listener is otherwise los
 - The store keeps the caller's reference and does not clone. A value is not changed after `set`.
 - `put`, `replace` and `delete` make a new array. An array a reader holds does not change under it.
 - `all()` returns a new map on each call.
-- `readById(id, owner)`: `get()` is the raw value. `get(key)` is the record's member, or `undefined` for an absent key or a slot that is not a record. `on` passes `(value)`, `(key, value)` or `(key, change)` by the `SlotChange` kind.
+- `readById(id, owner)` follows this table. This is the one home of the rule. Task 10 and the comment in `kit.d.ts` follow it.
+
+  | Slot | `get()` | `get(key)` | `on` passes |
+  |---|---|---|---|
+  | value | the value | `undefined` | `(value)` |
+  | keyed | a new `[key, value][]` in first-set order | the entry, or `undefined` for an absent key | `(key, value)` |
+  | list | a new `[key, items][]` in first-set order | the items, or `[]` for an absent key | `(key, change)` |
+  | no slot for this id | `undefined` | `undefined` | the first write's arguments, by its kind |
+
+- `get()` returns an array and not a `Map`, because a layout reads this as `kit.d.ts` text and gets no compile error. It does not return a plain object, because a plain object sorts an all-digit key first.
+- `get(key)` on a list slot returns `[]`, so a layout calls `.map` with no guard.
+- `readById` holds only an id. So the kind comes from the slot. `publish`, `load` and `applyRemote` each create the slot. `publish` on an absent slot is no change: no listener runs, no `onWrite` runs and `seq` stays. `snapshot` holds the created slot. An id with no slot reads `undefined`, because the store knows no kind for it.
+- The store holds listeners by slot id, apart from the slots. A listener added before the slot exists hears the first write, from a writer or from `applyRemote`. Creating the slot does not drop a listener.
 - A listener's throw is caught at `on`. It logs under `listenerOwner` as `<id> listener failed: <error>`, and the other listeners run. This is the text `pluginEvents` writes. `createListeners` alone leaves the tell, so wrap each listener as `pluginEvents` does.
 - `applyRemote` tells the listeners and does not run `onWrite`. `load` does neither, and runs before any listener exists.
 
@@ -195,13 +210,13 @@ Listen first. A push sent between the snapshot and the listener is otherwise los
 - Create the holder after `createMainWindow` and before main parts start.
 - `push` sends through `hasQuitStarted ? null : livePage(window)` on `BRIDGE_CHANNELS.stateChanged`. This is the gate `createPluginChannels` takes. With no page, `seq` still moves and the next snapshot holds the change.
 - Add `ipcMain.handle(stateSnapshot)` and `ipcMain.on(stateWrite)` beside `serveUiState`'s pattern.
-- `MainApiDeps` gains `state: SlotStore`, and `createMainApi` sets `state: pluginState(deps.state, manifest.id, (handle) => registrations.track(handle))`.
+- `MainApiDeps` gains `state: SlotStore`, and `createMainApi` sets `state: pluginState(deps.state, manifest.id, 'main', (handle) => registrations.track(handle))`.
 
 **Page wiring in `renderer.ts`.**
 
 - Call `createPageState(bridge, log)` directly after the `createPageUiState` call, under the same reason as its comment "Read before the plugins start". The store then exists before `startPlugins`.
 - `PageApiDeps` gains `state: SlotStore`.
-- `createPageApi` sets `state: { ...pluginState(...), forLayouts: layoutState(deps.state, manifest.id, track) }`, with `track` as on main.
+- `createPageApi` sets `state: { ...pluginState(deps.state, manifest.id, 'page', track), forLayouts: layoutState(deps.state, manifest.id, track) }`, with `track` as on main.
 
 **Preload.** `onStateChange` keeps one `ipcRenderer` listener however many registrations it holds, as `onMessage` does.
 
@@ -213,12 +228,12 @@ Listen first. A push sent between the snapshot and the listener is otherwise los
 - `requireKnownNames` also checks `reads`: `<id>: reads names <other>, which is no plugin folder`.
 - `readReads` reuses `dependsOnLists`. Its error is `<file>: reads must be an object literal with main and page arrays of string literals`.
 - `check-layers.mts` fills `reads` in `readPluginFolder`.
-- `src/main/state`, `src/renderer/state` and `src/shared/state` need no new layer entry: each falls in its parent's layer. `node scripts/check-layers.mts` proves it.
+- `src/main/state`, `src/renderer/state` and `src/shared/state` need no new layer entry: each falls in its parent's layer. The layer check in `npm run lint` proves it.
 
 **Harness.**
 
 - `createWorld` holds one real `createSlotStore`, or the passed `state`. It logs to `world.logs`.
-- `commonApi` adds `state: pluginState(world.state, manifest.id, register)`, so `counts()` counts each writer and each `on`.
+- `commonApi` gains a `process` parameter, `'main'` from the main harness and `'page'` from the page harness. It adds `state: pluginState(world.state, manifest.id, process, register)`, so `counts()` counts each writer and each `on`.
 - The store outlives `stop` and `restart`. Real provider parts in `parts` share it.
 - The page fake also sets `forLayouts`. `providerManifest` gains `reads`.
 
@@ -248,8 +263,10 @@ Tests (each names the break it catches):
 - `write_ListenerWritesAgain_OnWriteSeesWritesInOrder` — catches `onWrite` running after the listeners, which reverses the order across the bridge.
 - `applyRemote_TellsListenersAndNotOnWrite` — catches an echo loop.
 - `snapshot_ThroughStructuredCloneAndLoad_ReadsEveryKind` — value, keyed and list rows through typed readers, with keyed keys `b`, `12345678`, `a` read back in that order from `all()`. Catches a shape only one side understands, and a snapshot that reorders rows.
-- `readById_ByKind_GetAndOnArguments` — rows `(value)`, `(key, value)`, `(key, change)`, and `get('constructor')` on a keyed slot reading `undefined`. Catches a layout that gets another shape than the contract states.
+- `readById_ByKind_GetAndOnArguments` — rows `(value)`, `(key, value)`, `(key, change)`, and `get('constructor')` on a keyed slot reading `undefined`. `get()` rows: the value; keyed entries with keys `b`, `12345678`, `a` in that order; list `[key, items]` pairs in first-set order. `get('absent')` rows: keyed `undefined`, list `[]`, and a list slot published with no write `[]`. An id with no slot reads `undefined` for `get()` and `get('k')`. Catches a layout that gets another shape than the table in § The store states, such as a `Map` or a reordered object.
+- `readById_On_BeforeFirstWrite_HearsFirstWrite` — value, keyed and list rows, each through a writer and through `applyRemote`. Catches listeners held on the slot, which lose the subscription with no error.
 - `pluginState_KeyUnderAnotherPlugin_Throws` — text `Slot "q.v" is not under plugin "p"`. Catches a part that skipped the types through `any`.
+- `pluginState_KeyOfOtherProcess_Throws` — rows for a page key under a main view and a main key under a page view. Text `Slot "p.v" is a page slot, published from main`. Catches a claim in the wrong process, which makes `applyPageWrite` refuse the owner's writes.
 
 `src/shared/state/slot-store.test-d.ts`:
 
@@ -284,7 +301,7 @@ Rows in existing tests:
 
 Runtime checks: [Final verification](16-final-verification.md).
 
-Done when: `npm run typecheck` passes; `node scripts/check-layers.mts` passes on all 21 manifests (measured at plan time, re-verify); the test gate runs the tests above.
+Done when: `npm run typecheck` passes; `npm run lint` passes on all 21 manifests (measured at plan time, re-verify); the test gate runs the tests above.
 
 Commit: one commit for the group.
 

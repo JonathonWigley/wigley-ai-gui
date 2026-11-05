@@ -12,6 +12,7 @@ Files:
 - create `src/main/state/window-focus-slot.ts` · test `src/main/state/window-focus-slot.test.ts`
 - modify `src/contracts/plugin.ts`
 - modify `src/renderer/renderer.ts`, `src/main/main.ts`
+- test `src/renderer/config-push.test.ts`
 - modify `src/renderer/plugins/page-api.ts` · test `src/renderer/plugins/page-api.test.ts`
 - modify `src/shared/define-plugin.ts` · test `src/shared/define-plugin.test.ts`
 - modify `src/shared/plugin-part-harness.test-support.ts` · test `src/shared/plugin-part-harness.test.ts`
@@ -27,7 +28,7 @@ Consumes:
 - `PluginState.read` on `PageApi.state` and `MainApi.state` ← 05
 - `harness.state` ← 05
 - `createPageState` in `src/renderer/renderer.ts`, and `createSlotHolder`'s `store` in `src/main/main.ts` ← 05
-- `QualifiedEvents`, `Modes` in `src/contracts/plugin.ts`, `ViewScope` in `src/contracts/keymap.ts`, `ScopeStack.current` and `ScopeStack.onChange` in `src/renderer/key-scope.ts`, `qualify` in `src/shared/plugin-manifests.ts` (tree)
+- `Theme.name` in `src/contracts/theme.ts`, `QualifiedEvents`, `Modes` in `src/contracts/plugin.ts`, `ViewScope` in `src/contracts/keymap.ts`, `ScopeStack.current` and `ScopeStack.onChange` in `src/renderer/key-scope.ts`, `qualify` in `src/shared/plugin-manifests.ts` (tree)
 
 Produces:
 
@@ -86,14 +87,16 @@ Decisions:
 - Call `startPageCoreSlots` in `renderer.ts` after `createScopeStack` and `createModes`, and before `startPlugins`.
 - It writes these before it returns: `core.mode` as `''`, `core.scope` as `scope.current()`, `core.theme` as `deps.theme`.
 - `''` means no mode shows yet. `modes.shown()` throws in that state, so no real id is available. State this in the comment on `coreModeSlot`.
-- `deps.theme` is `settings.theme`, the theme name in `src/contracts/settings.ts`.
+- `deps.theme` is `config.theme.name`, for the reason in § Later writes on the page.
 
 **Later writes on the page.**
 
 - `scope.onChange` sets `core.scope`. `modes.onChanged` sets `core.mode`.
 - `Modes.onChanged` stays on the core's own registry for this one listener, with `createModes` and `src/renderer/shell/modes.test.ts` unchanged.
 - `themeApplied(name)` sets `core.theme` only when `name` differs from the slot, because each config push re-applies the theme.
-- Call `themeApplied(next.settings.theme)` in `renderer.ts`'s `applyPush`, directly after `applyStartedPush`. Do not call it in the `applier.apply` that `createConfigPush` takes: that method's `settings` type is `Pick<Settings, 'transparency' | 'fonts'>` and holds no name. `createConfigPush` applies the theme on every push, a refused keymap included, so the slot always matches. A theme file edit under one name writes nothing. `visualFrames.themeApplied` stays as it is.
+- Call `themeApplied(theme.name)` in `renderer.ts`'s `applier.apply`, the wrapper `createConfigPush` takes, after `themeApplier.apply(theme, applied)` and `shell.reloadBarOpenWidths()`. `applyPush` makes no call.
+- `createConfigPush` runs `applier.apply` before `live.replace`. So the slot changes in the same step as the CSS, and a part's settings listener reads the new name. `createConfigPush` applies the theme on every push, a refused keymap included, so the slot always matches. A theme file edit under one name writes nothing. `visualFrames.themeApplied` stays as it is.
+- The slot holds `Theme.name` and not `settings.theme`. The two are equal when the theme resolves, because `resolveTheme` finds a theme by the `name` member of its file and not by its file name. They differ when the theme named in `settings.json` fails to resolve: `themeSlice` in `src/main/config/config-store.ts` keeps the last good theme, and `settings.theme` holds the failed name. `Theme.name` then names the theme on screen.
 
 **Main.**
 
@@ -124,15 +127,19 @@ Decisions:
 
 - The deps named `onScopeChanged` in `src/plugins/chat/page/chat-view.ts` and `src/plugins/keys/page/unplaced-log.ts`, and their tests, keep their names and shape. They are each view's own seam.
 - Update the comments in `src/contracts/plugin.ts` that describe `keys.onScopeChanged` and `modes.onChanged`. Point them at `coreScopeSlot` and `coreModeSlot`.
-- The harness writes no core slot by itself, as its old members ran no listener. A part test writes through `harness.state.publish(coreScopeSlot).set(value)`. `world.scope` and `keys.scope()` stay separate.
+- The harness writes no core slot by itself, as its old members ran no listener. A part test writes through `harness.state.publish(coreScopeSlot)`, once, and calls `set(value)` on the writer it keeps (task 05 § Part harness). A part only reads `core.*`, so this claim blocks no part. `world.scope` and `keys.scope()` stay separate.
 
-**Timing.** A scope change now reaches listeners through the slot, inside the same synchronous `scope.onChange` call. It also sends one `stateWrite`. No visible change follows.
+**Timing.** A scope change now reaches listeners through the slot, inside the same synchronous `scope.onChange` call. It also sends one `stateWrite`.
+
+**The accepted change for a listener that throws.** Today `modes.onChanged` and `scopeStack.onChange` use a bare `createListeners` tell. A throw leaves the tell, skips the later listeners and reaches the code that switched the mode or changed the scope. After this task, the core's one listener writes the slot, and the store catches each listener's throw. It logs `<id> listener failed: <error>` under the listening plugin, and the other listeners run (task 05). The core registers its listener before any part starts, so the slot is written before any part hears the change. This task adds no other code for this.
 
 GIVEN a reload with old `core.*` values in the snapshot WHEN a page part reads them in its `start` THEN it reads `''` for the mode, the current scope and the current theme name.
 
 GIVEN a part listening on `coreScopeSlot` WHEN a pushed scope pops THEN it hears the new scope in the same call, as it did through `keys.onScopeChanged`.
 
 GIVEN a config push with the same theme name WHEN the page applies it THEN `core.theme` stays and no `stateWrite` goes.
+
+GIVEN a config push with a new theme name WHEN a part's settings listener reads `core.theme` THEN it reads the new name.
 
 GIVEN a manifest with id `core` WHEN `definePlugin` runs THEN it throws.
 
@@ -142,6 +149,7 @@ Tests (each names the break it catches):
   - `startPageCoreSlots_SnapshotHoldsOldValues_WritesCurrentOnes` — a store loaded with old `core.*` values reads `''`, the current scope and the theme. Catches a part reading the last page's mode.
   - `scopeChange_WritesScopeSlot` with a row for a mode change — catches a lost subscription.
   - `themeApplied_SameName_WritesNothing` with a new-name row, counted through `onWrite` — catches a write on each config push.
+- `src/renderer/config-push.test.ts`: `push_NewTheme_AppliesThemeBeforeLiveReplace` — records the order of the two calls. Catches a push that tells the settings listeners first, so that a listener reads the old `core.theme`.
 - `src/main/state/window-focus-slot.test.ts`: `startWindowFocusSlot_WritesNowThenEachChange` — rows for the first value, focus and blur. Catches a slot that is empty until the first focus change.
 - `src/shared/define-plugin.test.ts`: a row beside `an id holding a dot throws naming the id`, with text `Plugin id "core" is reserved for the core`. Catches a plugin that takes the core's namespace.
 - `src/shared/state/slot-store.test-d.ts`: rows with the real keys. `api.state.read(coreModeSlot).get()` is `string | undefined`. `api.state.publish(coreModeSlot)` carries `@ts-expect-error`. Catches a core key typed so that plugins can publish it.
@@ -152,7 +160,7 @@ Tests (each names the break it catches):
 
 Runtime checks: [Final verification](16-final-verification.md).
 
-Done when: `npm run typecheck` passes; `grep -rnE 'keys\.onScopeChanged|api\.modes\.onChanged' src` prints nothing; `node scripts/check-layers.mts` passes; the test gate runs the tests above.
+Done when: `npm run typecheck` passes; `grep -rnE 'keys\.onScopeChanged|api\.modes\.onChanged' src` prints nothing; `npm run lint` passes; the test gate runs the tests above.
 
 Commit: one commit for the group.
 

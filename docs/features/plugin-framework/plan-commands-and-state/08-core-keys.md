@@ -18,6 +18,7 @@ All paths are under `src/` unless a line says otherwise.
 **Create**
 
 - `renderer/box-focus.ts` · test `renderer/box-focus.test.ts`
+- `renderer/anchor-wiring.ts` · test `renderer/anchor-wiring.test.ts`
 
 **Modify, core**
 
@@ -73,7 +74,7 @@ export interface KeyHints {
 ```ts
 where(): HintWhere;
 onWhereChanged(listener: (where: HintWhere) => void): Disposable;
-// Hides or shows every anchored hint. The handle's dispose shows them again.
+// Hides or shows every anchored hint. The latest handle's dispose shows them again. An older handle's dispose does nothing.
 setHintsShown(shown: boolean): Disposable;
 // The placement check's source: command targets anchored in `scope` or with no scope during this page load.
 placedIn(scope: ViewScope): ReadonlySet<string>;
@@ -89,7 +90,17 @@ export interface BoxFocus {
 export function createBoxFocus(document: Document, editors: Pick<EditorHost, 'contains'>): BoxFocus;
 ```
 
-`renderer/key-anchors.ts`: `createAnchors(deps: AnchorDeps): Anchors`, as moved. `AnchorDeps` loses `showHints()`. `Anchors` gains `setShown(shown: boolean): void`.
+`renderer/key-anchors.ts`: `createAnchors(deps: AnchorDeps): Anchors`, as moved. `AnchorDeps` loses `showHints()`. `Anchors` gains `setShown(shown: boolean): void` and `reveal(): void`.
+
+`renderer/anchor-wiring.ts`:
+
+```ts
+export function wireAnchors(deps: {
+  live: Pick<LiveConfig, 'onChanged'>;
+  scopeStack: { onChange(listener: () => void): Disposable };
+  anchors: Pick<Anchors, 'redraw' | 'applyVisibility'>;
+}): void;
+```
 
 `renderer/editor-binds.ts`:
 
@@ -119,21 +130,28 @@ export function runEditorBind(
 ### showHints
 
 4. The keys plugin keeps the `showHints` setting. The core does not read it, because a core read of `pluginSettings.keys` is the same reach by id that this task removes.
-5. The core holds a boolean, default true. The keys plugin calls `keys.setHintsShown(api.settings().showHints)` as it starts, and again in its `onSettingsChanged` listener. It keeps one handle: it disposes the old handle after each new call.
-6. `setHintsShown` calls `Anchors.setShown`, which runs `applyVisibility`. The handle is filed in the part's registrations. Its dispose sets the value to true.
+5. The core holds a boolean, default true. The keys plugin calls `keys.setHintsShown(api.settings().showHints)` as it starts, and again in its `onSettingsChanged` listener. It keeps one handle: it disposes the old handle after each new call. Decision 6 makes that order safe.
+6. `setHintsShown` calls `Anchors.setShown`, which runs `applyVisibility`. The handle is filed in the part's registrations. The latest handle wins:
+   - The core remembers the handle of the last call.
+   - The dispose of that handle sets the value to true.
+   - The dispose of an older handle does nothing. So "new call, then dispose old" keeps the new value.
 7. With the keys plugin disabled or stopped, hints show. This is the item's goal: the chrome's hints do not vanish with `keys`.
+7a. No hint shows until the parts have started, so `showHints` off gives no flash at page load.
+    - `createAnchors` holds every anchor hidden until `reveal()`. The hidden test becomes: not revealed, or not shown, or out of scope.
+    - Before `reveal`, an anchor still draws its keys and still records its placement.
+    - `renderer.ts` calls `anchors.reveal()` right after `startPlugins` returns, at the place of today's `setKeys` block. The chrome's hints therefore appear at the same moment as today.
 
 ### Core wiring in renderer.ts
 
 8. Create `scopeStack` and `createAnchors` before `mountShell`, right after `live`. Move line 179 up. `createAnchors` reads:
-   - `keysFor`: `promptKeysFor(live.current().keymap, command, scope, platform, where, arg)`, with the `platform` value the page API hands plugins
+   - `keysFor`: `promptKeysFor(live.current().keymap, command, scope, live.current().platform.os, where, arg)`, read at each call. Anchors use `promptKeysFor`, as they do today, because a prompt skips vim's own keys.
    - `label`: `live.current().commands[id]?.label ?? id`
    - `scope`: `scopeStack.current()`
-   - `platform`: that same value
-9. Redraw and visibility wiring moves here from `plugins/keys/page/start.ts`. On a keymap change, compared as JSON as `onChangedPart` does, call `anchors.redraw()`. On `scopeStack.onChange`, call `anchors.applyVisibility()`.
+   - `platform`: `live.current().platform.os`, the OS string task 01 gives every key-hint function
+9. Redraw and visibility wiring moves from `plugins/keys/page/start.ts` to `wireAnchors` in `renderer/anchor-wiring.ts`, and `renderer.ts` calls it once, right after `createAnchors`. On `live.onChanged`, when the keymap differs as JSON from the previous one, it calls `anchors.redraw()`. On `scopeStack.onChange`, it calls `anchors.applyVisibility()`.
 10. Pass `{ anchor, keysFor, onKeymapChanged }` to `mountShell` and `mountShellChrome` at their creation. Delete `KEYS_PLUGIN_ID`, `shellRegistrations`, `keysExports` and the two `setKeys` calls (`renderer.ts:68-69, 309-317`).
 11. `renderer/shell/shell.ts`: delete `createForwardingAnchor`. The side bar handle's prompt anchors through `keys.anchor` directly. `NO_ANCHOR` stays for the divider no key moves.
-12. `renderer/shell/shell-chrome.ts`: `keys` is fixed at mount. Its first draw has the hints. Delete the redraw that `setKeys` ran.
+12. `renderer/shell/shell-chrome.ts`: `keys` is fixed at mount. Its first draw writes the hints, and they show at `reveal` (decision 7a). Delete the redraw that `setKeys` ran.
 13. `base-kit.ts` does not change here. `BaseKitDeps['keys']` already fits `KeyHints`. Task 10 makes `recordAnchor` required.
 
 ### Pending keys and the miss policy
@@ -148,10 +166,13 @@ export function runEditorBind(
 18. `createBoxFocus` listens on `focusin` and `focusout` on `document`.
     - On `focusin`, the next value is `box` when `editors.contains(event.target)`.
     - On `focusout`, the next value is `box` when `event.relatedTarget` is in an editor, so moving from box to box tells nothing.
-    - It tells listeners only when the value changes.
+    - `focusout` with a null `relatedTarget` while `document.hasFocus()` is false is a window blur, and no focus move. It is ignored. In a focused window, a null `relatedTarget` gives `page`.
+    - The cached value is the last value told. At each event, the listener computes the next value, compares it with the cached value, updates the cache, and tells listeners only when the two differ.
+    - The next value comes from the event and not from `document.activeElement`, because the active element is not final during `focusout`.
+    - A silent move (decision 19) tells nothing, since no event fires. A later `focusout` to the page also tells nothing, since listeners still hold `page`. The next `focusin` on the box tells `box`.
 19. `where()` reads `document.activeElement` live and does not return the cached value. A `focus()` call in an unfocused window moves the active element and fires no event, and `feedKeys` must see the move after a command runs. `editorHasFocus` in `page-keys.ts` becomes `boxFocus.where() === 'box'`.
 20. `page-keys.ts` keeps its own `focusin` listener that drops pending keys. It keeps that listener because the drop must fire on every entry to an editor, also from box to box.
-21. `where()` is an addition to the plan's API, because a late reader needs the current value. `api.keys.where` and `onWhereChanged` are not slots: the plan pins `onWhereChanged`. `keys/page/start.ts:181` `focusedBeforeHelp` is a focus restore and does not change.
+21. `api.keys.where` and `api.keys.onWhereChanged` are new. Neither exists in the tree, and `KeysPageExports` holds neither. `docs/features/followups.md:100` asks for `onWhereChanged`, and no plugin in this plan consumes either. `where()` is an addition to the plan's API, because a late reader needs the current value. They are not slots: the plan pins `onWhereChanged`. `keys/page/start.ts:181` `focusedBeforeHelp` is a focus restore and does not change.
 
 ### Keys plugin
 
@@ -161,7 +182,7 @@ export function runEditorBind(
     - `closeHint` anchors with `keys.anchor`.
     - `startUnplacedLog` reads `placedIn: keys.placedIn`.
     - `keys.onKeymapChanged` keeps only `help.setSections`.
-    - Delete the two `applyVisibility` lines.
+    - Delete the two `applyVisibility` lines: the scope line as task 06 left it, and the `onSettingsChanged` line.
 23. Update the header comment to say the core holds the anchors.
 
 ### Start order
@@ -187,13 +208,13 @@ export function runEditorBind(
 
 ### Page API and harness
 
-30. `page-api.ts`: `anchor` is `registrations.track(deps.anchors.anchor(...))`. `keysFor` calls the shared function over `config.current().keymap`. `onWhereChanged` and `setHintsShown` are tracked too.
+30. `page-api.ts`: `anchor` is `registrations.track(deps.anchors.anchor(...))`. `keysFor` calls the shared `keysFor` (not `promptKeysFor`): `keysFor(config.current().keymap, command, scope, config.current().platform.os, where, arg)`, read at each call. This is the function `KeysPageExports.keysFor` calls today. `onWhereChanged` and `setHintsShown` are tracked too.
 31. `PageApiDeps` gains `anchors: Anchors` and `boxFocus: BoxFocus`.
 32. Harness: the fake `keys` gains:
-    - `keysFor`, the shared function over `world.keymap`;
+    - `keysFor`, the shared `keysFor` over `world.keymap`;
     - `anchor`, which records `{ element, command, options }` in `world.anchors` and returns a tracked handle;
     - `where`, which reads `world.where`, and `onWhereChanged`;
-    - `setHintsShown`, which sets `world.hintsShown`;
+    - `setHintsShown`, which sets `world.hintsShown`, with decision 6's latest-handle rule;
     - `placedIn`, which reads `world.anchors`.
 
 ### Followup wording
@@ -202,9 +223,11 @@ export function runEditorBind(
 
 ## Behaviour
 
-GIVEN the keys plugin disabled WHEN the shell chrome draws THEN its hints show, from its first draw.
+GIVEN the keys plugin disabled WHEN the page parts have started THEN the shell chrome's hints show.
 
-GIVEN `showHints` off WHEN the setting is read at the keys plugin's start THEN every anchor is hidden, the chrome's included.
+GIVEN `showHints` off WHEN the page loads THEN no anchor shows at any moment, the chrome's included.
+
+GIVEN `showHints` turns off WHEN the keys plugin disposes its old handle THEN hints stay hidden.
 
 GIVEN `showHints` off and the keys plugin stopped WHEN the handle is disposed THEN hints show.
 
@@ -213,6 +236,8 @@ GIVEN a rebind WHEN the keymap changes THEN every anchor draws its new keys, wit
 GIVEN focus moves from the page into a box THEN `onWhereChanged` hears `box` once.
 
 GIVEN focus moves from one box to another THEN `onWhereChanged` hears nothing.
+
+GIVEN focus is in a box WHEN the window loses focus THEN `onWhereChanged` hears nothing.
 
 GIVEN a command that focuses a box in an unfocused window WHEN keys remain to replay THEN they are typed into the box, since `where()` reads the active element live.
 
@@ -226,17 +251,26 @@ GIVEN the app starts WHEN page parts start THEN they start in the same order as 
   - `onChanged_PageToBoxAndBack_TellsOncePerChange`.
   - `onChanged_BoxToBox_TellsNothing`. Catches a flicker through `page` on each box move.
   - `where_FocusMovedWithNoEvent_ReadsTheActiveElement`. Catches a cached value breaking key replay.
+  - `onChanged_SilentMoveThenFocusoutThenFocusin_TellsBoxOnce`. Catches a change compared with a stale value, which tells listeners a change they cannot place.
+  - `onChanged_WindowBlur_TellsNothing`. Catches a window blur read as a move to the page.
+- `renderer/anchor-wiring.test.ts`:
+  - `keymapChanged_JsonDiffers_Redraws`, with an equal keymap as a second case. Catches anchors that keep their old keys after a rebind, and a redraw on each push.
+  - `scopeChanged_AppliesVisibility`. Catches a dropped subscription, which the compiler cannot see.
 - Rows added to `renderer/key-anchors.test.ts`:
   - `setShown_False_HidesEveryAnchor`.
   - `setShown_True_ShowsAnchorsInScopeOnly`. Catches a true value that overrides the scope rule.
+  - `anchor_BeforeReveal_DrawsKeysAndStaysHidden`. Catches the flash when `showHints` is off.
+  - `reveal_ShownFalse_StaysHidden`. Catches `reveal` overriding the setting.
 - Rows added to `renderer/editor-binds.test.ts`:
   - `runEditorBind_BindInForce_RunsAndReturnsTrue`.
   - `runEditorBind_NormalModeMiss_LogsAndReturnsFalse`.
   - `runEditorBind_InsertModeMiss_ReturnsFalseAndLogsNothing`. Catches Enter logging a miss on each new line.
 - Row added to `renderer/page-keys.test.ts`: `setBinds_FirstCall_KeysStartFiring`. Catches an engine that needs binds at creation.
 - Rows in `renderer/pending-keys.test.ts` that call `reportPage` fire the fake page source's `onPendingKeys` instead. The cases stay.
-- Row added to `renderer/plugins/page-api.test.ts`: `setHintsShown_PartStops_ShowsHintsAgain`.
-- Row added to `plugins/keys/page/start.test.ts`: `start_ShowHintsOff_CallsSetHintsShownFalse`, with the settings-change case in one table. Delete rows that read `exports`.
+- Rows added to `renderer/plugins/page-api.test.ts`:
+  - `setHintsShown_PartStops_ShowsHintsAgain`.
+  - `setHintsShown_OldHandleDisposedAfterNewCall_KeepsTheNewValue`. Catches a `showHints` change to off that ends with hints shown.
+- Row added to `plugins/keys/page/start.test.ts`: `start_ShowHintsOff_CallsSetHintsShownFalse`, with the settings-change case in one table. Delete rows that read `exports`. Delete `start_ScopeSlotChanges_AppliesAnchorVisibility`, which task 06 added: `anchor-wiring.test.ts` holds that behaviour now.
 - Rows in `renderer/shell/shell.test.ts:937` and `renderer/shell/shell-chrome.test.ts:196`: rewrite to pass `keys` at mount. Keep the assertion that only a registered command anchors. Delete the case of a second `setKeys`.
 - New row in the existing `plugins` order test, or a new `plugins/page.test.ts` if none owns it: `pageParts_DependencyOrder_KeysStartsFirst`. Catches the title bar order moving.
 
@@ -244,7 +278,7 @@ Runtime checks go to [16 — Final verification](16-final-verification.md).
 
 ## Done when
 
-- The type check and `scripts/check-layers.mts` pass.
+- `npm run typecheck` and `npm run lint` pass.
 - `grep -rnE 'KEYS_PLUGIN_ID|keysPageKey|KeysPageExports|keys/contract' src` prints nothing.
 - `grep -n "'keys'" src/plugins/*/manifest.ts` prints only `src/plugins/keys/manifest.ts`.
 - `grep -n 'setKeys\|NO_KEYS\|createForwardingAnchor' src/renderer/shell/shell.ts src/renderer/shell/shell-chrome.ts` prints nothing.

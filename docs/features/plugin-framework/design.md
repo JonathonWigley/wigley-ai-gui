@@ -73,7 +73,7 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
 - A session gets a tab when it first sends a round; the tab stays, showing the session idle between rounds, until
   the session disconnects or the user closes it.
 - A tab is labelled by its project folder, numbered when two sessions share one (`wigley-ai-gui 2`); while a round is open the tab reads `<label> · <round heading> <answered>/<total>`.
-- Cmd+W, `Space ;` and `<Leader>;` (in a box) close the session tab, opening the cancel-round confirmation first when a round is open.
+- Cmd+W, `Space ;` and `<Leader>;` (in a box) close the session tab. With a round open they cancel the round and close the session at once, with no confirmation, and the session's own process ends with the row.
 
 ## Keymap (plan A2)
 
@@ -117,7 +117,7 @@ keys into an element a view names, and the plugin's `showHints` setting (`"keys"
   A count-prefixed sequence (`3 Space`) gets no panel.
 - `Space ?` (`<Leader>?` in a box) opens the full help overlay; bare `?` is freed. Help lays the `help` scope
   (`keys.help`, Esc closes) over the page's scope with `api.keys.pushScope`, and closes itself when the scope under it
-  changes (the `PushedScope`'s `onBaseChanged`), so a prompt such as Cmd+W's cancel shows at once.
+  changes (the `PushedScope`'s `onBaseChanged`), so a prompt such as chat's end-session confirm shows at once.
 - Key scope is a stack in the page core: `setScope` sets a plugin's base scope, `pushScope` lays a scope over it until
   the handle's `pop`, so a modal view never fights the plugin under it. Each scope in a manifest carries a title, which
   help shows over its keys. Esc while a sequence waits cancels it and runs nothing.
@@ -197,13 +197,19 @@ folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/`
   guards do not. A partial sweep would make the standing rule false from the day it lands.
 - **`kit.button` takes a command and an optional argument.** A layout wanting something else writes its own listener by
   hand, knowingly. No layout in the user config folder relied on a closure when this was settled.
-- **A command that needs an argument lists only when a key binds it.** Settings, help and the palette show one row per
-  bound argument, because a row id means nothing in a list. `keymap.json` can still bind any of them.
+- **A command that needs an argument lists only when a key binds it.** Settings shows one row per bound
+  argument, because a row id means nothing in a list. Help and which-key keep one merged line, such as `1–9 pick the
+  numbered choice`. `keymap.json` can still bind any of them.
 - **A page reload keeps the user's work and place in every plugin:** chat, forms, primer, docs with its unsaved edits,
   notes, backlog and settings. Page slots write on each change. The 400 ms autosaves that go to main flush on `pagehide`.
 - **The two close seams each have one job.** Main's `addCloseGuard` refuses and returns the reason sessions shows as a
   toast, and it alone holds forms' and primer's open round. A tab's `beforeClose` stays for what the page knows or must
-  ask (chat's confirm, docs' unsaved edits). One seam only was rejected: a guard in main cannot wait on a dialog, and a
-  guard only on the page would break the rule that main decides.
+  ask (chat's confirm, docs' unsaved edits, a form being sent). One seam only was rejected: a guard in main cannot wait
+  on a dialog, and a guard only on the page would break the rule that main decides.
+- **The user's close key on an open round is one instant act.** Cmd+W, `Space ;` and `<Leader>;` cancel the round and
+  close the session with no confirmation, chat's busy confirm included, because the user wants the session gone at once.
+  Main does the cancel and the close in one step, so no second pass can ask again. Docs' unsaved edits and a form already
+  being sent still hold the session, since the first loses work and the second has already left. Another plugin's
+  `closeSession` call never cancels: main refuses it with the guard's reason.
 - **Row decoration is the row part.** Row parts and activities landed after the follow-up asked for `setBadge`, so
   `setStatus` gives way to a row part and `setBadge` is not added.

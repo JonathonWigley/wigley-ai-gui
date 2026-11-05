@@ -11,7 +11,7 @@ Files:
 - modify `src/shared/page/layout-host/base-kit.ts` · test `src/shared/page/layout-host/base-kit.test.ts`
 - create `src/shared/page/layout-host/fake-layout-state.test-support.ts`
 - modify `src/renderer/renderer.ts`
-- modify `src/plugins/forms/page/layout/card-kit.ts`, `src/plugins/forms/page/layout/layout-cards.ts`, `src/plugins/forms/page/kinds/item-format.ts`, `src/plugins/forms/page/round-view.ts`, and each forms test `tsc` names for a missing `recordAnchor` or `state`
+- modify `src/plugins/forms/page/layout/card-kit.ts`, `src/plugins/forms/page/layout/layout-cards.ts` · test `src/plugins/forms/page/layout/layout-cards.test.ts`, `src/plugins/forms/page/layout/layout-panes.ts`, `src/plugins/forms/page/kinds/item-format.ts`, `src/plugins/forms/page/forms-view.ts`, `src/plugins/forms/page/round-view.ts`, and each forms test `tsc` names for a missing `recordAnchor` or `state`
 - modify each page file that builds kit services (the list is in Decisions)
 - modify `AGENTS.md` line "owner's kit extends" in § Architecture, to name `state` among the shared kit members
 
@@ -29,6 +29,7 @@ Produces:
 
 ```ts
 export interface KitSlotReader {
+  // A comment here states task 05's `readById` table for a layout author.
   get(key?: string): unknown;
   on(listener: (...args: unknown[]) => void): void;
 }
@@ -55,27 +56,33 @@ Decisions:
 
 **Why `recordAnchor` becomes required.** `createRecorder` disposes what it holds when an attempt fails and when the part is disposed. An optional recorder would leave a slot subscription live past its draw, with no compile error.
 
-What must change for `recordAnchor`, and what need not (measured at plan time, re-verify):
+What must change for `recordAnchor` and `state`, and what need not (measured at plan time, re-verify):
 
 | Site | Today | Change |
 |---|---|---|
 | `base-kit.ts`, `BaseKitDeps` | `recordAnchor?` | required; rewrite the comment that begins "`recordAnchor`, the drawing attempt's", and drop its "left out, recording them is the `keys`' job" |
 | `base-kit.ts`, `keyHint` | `deps.recordAnchor?.(anchor)` | `deps.recordAnchor(anchor)` |
 | `forms/page/layout/card-kit.ts`, `baseKitDepsFor` | sets no `recordAnchor`; its `Pick` lacks it | adds `'recordAnchor'` and `'state'` to the `Pick`; passes both |
-| `forms/page/kinds/item-format.ts`, `MountingDeps` | `recordMount` only | gains `recordAnchor(anchor: Disposable): void` and `state: LayoutState` |
-| `forms/page/layout/layout-cards.ts`, the wrapper that sets `recordMount` and `keys.anchor` on `rollback` | no `recordAnchor` | adds `recordAnchor: (anchor) => rollback.recordAnchor(anchor)` |
-| `forms/page/round-view.ts`, the head's `baseKitDepsFor` call | no `recordAnchor` | adds `recordAnchor: (anchor) => headAnchors.push(anchor)` |
-| `forms/page/round-view.ts`, the two `recordMount: (mount) => anchors.push(mount)` deps objects | no `recordAnchor` | each adds `recordAnchor: (anchor) => anchors.push(anchor)` |
+| `forms/page/kinds/item-format.ts`, `CardDeps` | `recordMount` only | gains `recordAnchor(anchor: Disposable): void` and `state: LayoutState` |
+| `forms/page/layout/layout-panes.ts`, `PaneDeps` | `recordMount` only | gains `recordAnchor(anchor: Disposable): void` and `state: LayoutState` |
+| `forms/page/layout/layout-cards.ts`, the private `MountingDeps` | `recordMount` only | gains `recordAnchor(anchor: Disposable): void` only: `recordingDeps` spreads the rest of `deps`, `state` included |
+| `forms/page/layout/layout-cards.ts`, `recordingDeps` | `recordMount` calls `deps.recordMount`, then `rollback.recordAnchor` | adds `recordAnchor`, which calls `deps.recordAnchor`, then `rollback.recordAnchor` |
+| `forms/page/start.ts`, the `mountFormsView` call | no `state` | adds `state: api.state.forLayouts` |
+| `forms/page/forms-view.ts`, `FormsViewDeps` and the deps object it passes to `createRoundView` | no `state` | `FormsViewDeps` gains `state: LayoutState`; the object adds `state: deps.state` |
+| `forms/page/round-view.ts`, `RoundViewDeps` | no `state` | gains `state: LayoutState` |
+| `forms/page/round-view.ts`, the head's `baseKitDepsFor` call | no `recordAnchor`; `...deps` carries `state` | adds `recordAnchor: (anchor) => headAnchors.push(anchor)` |
+| `forms/page/round-view.ts`, `paneDeps` and `cardDeps` | no `recordAnchor`, no `state` | each adds `recordAnchor: (anchor) => anchors.push(anchor)` and `state: deps.state` |
 | `base-kit.test.ts`, the shared deps fake and the `createBaseKit({…})` literal in `draws markdown through one recorded mount` | none | adds a recorder |
-| Forms tests that set `recordMount` (3 lines, measured at plan time, re-verify) | none | each adds a recorder |
-| `base-kit.ts`, `ownerBaseKitDeps` | passes it | none |
-| `renderer/shell/shell-chrome.ts` | passes it | none |
+| Forms tests that set `recordMount` (3 lines, measured at plan time, re-verify) | none | each adds a recorder and `state: noLayoutState` |
+| `forms-view.test.ts` and `round-view.test.ts`, the deps literals | no `state` | each adds `state: noLayoutState` |
+| `base-kit.ts`, `ownerBaseKitDeps` | passes `recordAnchor`; builds its fields one by one | adds `state: services.state` |
+| `renderer/shell/shell-chrome.ts` | passes `recordAnchor`; `...services` carries `state` | none |
 | `chat/page/chat-kit.ts` | passes `anchors.push` | none |
 | `chat/page/row-clock.ts`, `row-clock.test.ts` | pass `() => undefined` | none: that kit reads only `duration` and makes no subscription |
 
-**Forms records a key anchor twice.** Forms' recording `keys` records each anchor, and `keyHint` now also calls `recordAnchor`. So one anchor sits in the list twice. This is harmless: the dispose in `src/plugins/keys/page/anchors.ts` returns at once when `live.delete` finds nothing. Keep forms' recording `keys`, because `scopedAnchor` and the round view's direct `keys.anchor` calls depend on it. Do not de-duplicate.
+**Forms records a key anchor twice.** Forms' recording `keys` records each anchor, and `keyHint` now also calls `recordAnchor`. So one anchor sits in the list twice. This is harmless: the dispose in `src/plugins/keys/page/anchors.ts` returns at once when `live.delete` finds nothing. Keep forms' recording `keys`, because `scopedAnchor` and the round view's direct `keys.anchor` calls depend on it. Do not de-duplicate. `recordingDeps` also files a slot handle twice. This is harmless too: `Registrations.track` makes a second dispose do nothing.
 
-**Where the state comes from.** Each services object gains `state: api.state.forLayouts`. The shell chrome has no plugin, so `renderer.ts` sets `state: layoutState(store, 'shell', (handle) => handle)` in `mountShellChrome`'s `services`. The recorder is its only disposer, and the shell draws for the page load.
+**Where the state comes from.** Each services object gains `state: api.state.forLayouts`. The shell chrome has no plugin, so `renderer.ts` sets `state: layoutState(store, 'shell', (handle) => handle)` in `mountShellChrome`'s `services`. The recorder is its only disposer, and the shell draws for the page load. Forms takes `state` at `mountFormsView` and carries it down to `CardDeps` and `PaneDeps`, by the rows in the table above. No forms file holds it in a closure.
 
 Sites that set `platform: api.platform` for kit services (measured at plan time, re-verify; `tsc` names any other through the required member):
 
@@ -102,13 +109,15 @@ Views that rebuild `OwnerKitServices` from their own deps pass `state` on:
 - `src/plugins/settings/page/settings-view.ts` (`SettingsViewDeps` gains `state`)
 - `src/plugins/backlog/page/backlog-view.ts` (the same)
 
+Forms' route is in the table above.
+
 Test fakes use `noLayoutState`, including `src/plugins/docs/page/docs-page-fakes.ts`.
 
 **What a layout may read.**
 
 - `read` takes any id, because the plan's signature is a string and a layout has no manifest.
-- An id no owner has written reads `undefined`, with no throw. The layout starts listening anyway and hears a later first write.
-- A keyed slot's `get(key)` is the entry. A list slot's `get(key)` is its array, or `undefined` for an absent key. `get()` is the whole record. This is task 05's `readById`.
+- An id with no slot reads `undefined`, with no throw. The layout starts listening anyway and hears a later first write.
+- What `get` returns and what `on` passes are in the `readById` table in task 05 § The store.
 
 **Redraw stays with the layout.** The kit does not redraw on a change. A part "redraws into its wrapper itself", as `draw-part.ts` leaves it, so the listener's body is the layout's. A listener that throws logs `<id> listener failed: <error>` under the owning plugin (task 05).
 
@@ -120,7 +129,7 @@ GIVEN a layout that calls `kit.state.read('p.v').on(listener)` in a draw WHEN th
 
 GIVEN a part drawn with a subscription WHEN the part is disposed THEN `listener` hears no later change.
 
-GIVEN a slot no owner has written WHEN a layout calls `get()` THEN it reads `undefined` and nothing throws.
+GIVEN an id with no slot WHEN a layout calls `get()` THEN it reads `undefined` and nothing throws.
 
 Tests (each names the break it catches):
 
@@ -128,6 +137,7 @@ Tests (each names the break it catches):
   - `stateRead_On_RecordsTheSubscription` — a recording `recordAnchor` holds one handle, and disposing it stops the listener. Catches a subscription that outlives the draw.
   - `stateRead_Get_ReadsThroughDeps` — rows for no key and a key. Catches a kit that drops the key argument.
 - `src/plugins/forms/page/layout/card-kit.test.ts`: `baseKitDepsFor_RecordsSubscriptionThroughDeps` — catches forms' `recordAnchor` left unwired, which the types alone do not prove reaches the rollback.
+- `src/plugins/forms/page/layout/layout-cards.test.ts`: `recordingDeps_RecordAnchor_RecordsInDepsAndRollback` — catches a wrapper that files a subscription in one list, which leaves the listener live after a round rebuild or a failed attempt.
 
 The recorder in `draw-part.ts` holds any `Disposable`, and `draw-part.test.ts` already passes it one that is no anchor. No row goes there.
 
@@ -135,7 +145,7 @@ The recorder in `draw-part.ts` holds any `Disposable`, and `draw-part.test.ts` a
 
 Runtime checks: [Final verification](16-final-verification.md).
 
-Done when: `npm run typecheck` passes; `grep -n 'recordAnchor?' src/shared/page/layout-host/base-kit.ts` prints nothing; `node scripts/check-layers.mts` passes; the test gate runs the tests above.
+Done when: `npm run typecheck` passes; `grep -n 'recordAnchor?' src/shared/page/layout-host/base-kit.ts` prints nothing; `npm run lint` passes; the test gate runs the tests above.
 
 Commit: one commit for the group.
 

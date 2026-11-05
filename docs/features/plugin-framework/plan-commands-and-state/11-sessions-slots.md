@@ -14,7 +14,7 @@ Paths are relative to `src/plugins/` unless they start with `src/` or `docs/` or
 - Modify the manifests: `agent-strip/manifest.ts`, `agent-skills/manifest.ts`, `agents/manifest.ts`, `notes/manifest.ts`.
 - Modify the docs: `AGENTS.md` (the "An event" and "A session tab" entries).
 - Create the test: `sessions/contract.test.ts`.
-- Test: `sessions/main/session-list.test.ts`, `sessions/main/start.test.ts`, `sessions/page/start.test.ts`, `agent-form-drive.test.ts`, `chat/main/start.test.ts`, `src/shared/state/slot-store.test.ts`. Also every test `grep -rlE "sessions\.(activeChanged|sessionAdded|sessionRemoved|sessionHostChanged|selected)|selectedSessionId" src/plugins --include='*.test.ts'` names: 19 files (measured at plan time, re-verify).
+- Test: `sessions/main/session-list.test.ts`, `sessions/main/start.test.ts`, `sessions/page/start.test.ts`, `agent-form-drive.test.ts`, `chat/main/start.test.ts`, `src/shared/state/slot-store.test.ts`, `src/main/state/slot-holder.test.ts`. Also every test `grep -rlE "sessions\.(activeChanged|sessionAdded|sessionRemoved|sessionHostChanged|selected)|selectedSessionId" src/plugins --include='*.test.ts'` names: 19 files (measured at plan time, re-verify).
 
 **Consumes:**
 
@@ -23,6 +23,7 @@ Paths are relative to `src/plugins/` unless they start with `src/` or `docs/` or
 - `createSlotStore` in `src/shared/state/slot-store.ts` ← 05.
 - The event `pageReady` of `CoreEvents`, heard as `core.pageReady` ← 06.
 - `harness.state`, the part harness's `SlotStore` ← 05. A test writes rows through `harness.state.publish`.
+- The page bus runs the listeners of one event in subscription order (`src/shared/event-bus.ts`, pinned by `event-bus.test.ts:11`). A listener added during an emit hears only later emits.
 - The push gate in `src/main/main.ts` ← 05: the holder's `push` sends through `hasQuitStarted ? null : livePage(window)`, the expression `createPluginChannels` takes.
 - These guarantees of the store ← 05:
   - `onWrite` runs before the listeners and inside the write, so a main write pushes in the same synchronous call. The order against `api.channel.send` is then the call order.
@@ -127,7 +128,8 @@ In `session-list.ts`:
 
 - The `rows` array, `selectedSessionId` and `sentSelectedSessionId` go. `sendState` goes. The list reads through the writers.
 - A row value is never changed in place. Each change writes a new object.
-- The list writes a selection only when it differs from `selection.get()`. It writes `null` at creation when the slot holds nothing.
+- The list writes a selection only when it differs from `selection.get()`.
+- At creation, the list deletes every key `rows` holds, then writes `null` to `selection`. A slot outlives its owner's stop, and a harness restart reaches this line. A leftover selection that names no row would read on the page as a mid-operation state that never ends. The same rule as above applies: a slot that already holds `null` gets no write.
 - `removeRow` takes the neighbour from `[...rows.all().keys()]` before the delete: the right neighbour, else the left.
 - `state()` stays, built from the writers. `sessions/main/selftest-script.ts:224` and the tests read it. `selftest-script.ts` does not change.
 - The list's own `isStopped` stays. It guards lookups landing after `stop`, which would otherwise log `written after stop`.
@@ -138,9 +140,14 @@ The page's steps:
 
 1. At the start of the part, publish `sessionsActiveSlot` and set it to `null`. A page load must not show the old page's focus to a later reader. Subscribe to the rows and selection slots here too, so sessions' listener runs before every dependent's.
 2. Each notice calls `apply` with `{ rows: [...rows.all().values()], selectedSessionId: selection.get() ?? null }`. A notice returns at once while `hasRestored` is false.
-3. On `core.pageReady`, call the same `apply`. That is the first state, read from the store. Sessions' first apply and every reader's catch-up then run after all page parts started, as today's first `state` reply did.
-4. A state whose selection names no row is mid-operation: main deleted the selected row and its selection write follows. For such a state, `apply` renders, closes the panes and drops the tabs. It remembers the removed ids and `wasSplit`, and it skips `placeSelection` and the tail. The next `apply` passes the remembered values to `selectionAction` and clears them. `selectionAction` does not change. Without this step a split would place the neighbour instead of telling main the focused pane, and a single pane would publish `null` and set the `idle` scope between the two notices.
-5. The tail of `apply` (`publishFocused` and `checkVisible`) runs in `queueMicrotask`. This keeps today's order for a reader: every row notice reaches every reader before the `sessions.active` write the row caused. A sync write would reach the active listeners before the rows listeners of plugins that started later.
+3. On `core.pageReady`, call the same `apply`. That is the first state, read from the store. Sessions' first apply and every reader's catch-up then run after all page parts started, as today's first `state` reply did. Register this listener in the synchronous start of the part. Parts start in `dependencyOrder`, and sessions comes before every reader, so the bus runs sessions' apply before each reader's catch-up. A reader that only `reads` sessions keeps this order through its place in `builtInManifests`.
+4. A state is mid-operation when its selection is a non-null id that no row holds: main deleted the selected row and its selection write follows. More than one notice can land before that write: `rows.delete(id)`, then a `rows.set(neighbour)` that clears a mark, then `selection.set(neighbour)`.
+   - For each mid-operation state, `apply` renders, closes the panes and drops the tabs. It skips `placeSelection` and the tail.
+   - Each mid-operation state adds to three remembered values. `removed` is the union of each state's `changes.removed`. `wasSplit` is true when any of these states saw a split: after the first state the panes are closed, so a later state's own reading is false. `hasClosedPane` is true when any of these states had `closing.length > 0`.
+   - The next state that is not mid-operation adds its own three values. It passes `removed` and `wasSplit` to `selectionAction` and `hasClosedPane` to `checkVisible`. Then it clears all three.
+   - `selectionAction` does not change.
+   - Without this step a split would place the neighbour instead of telling main the focused pane, a single pane would publish `null` and set the `idle` scope between the notices, and a closed pane's "shown again" tell would be lost.
+5. The tail of `apply` (`publishFocused` and `checkVisible`) runs in `queueMicrotask`. This keeps today's order for a reader: every row notice reaches every reader before the `sessions.active` write the row caused. A sync write would reach the active listeners before the rows listeners of plugins that started later. Only this tail is deferred: `panesChanged` at `sessions/page/start.ts:355`, a pane change outside `apply` guarded by `isApplying`, still calls `publishFocused` and `checkVisible` synchronously. A `get()` of `sessions.active` between an `apply` and its microtask returns the previous focus. This is accepted, though today's `selectedSessionId()` reads the live pane.
 6. `published` goes. A `hasPublished` boolean replaces its `undefined` first-state mark. `publishFocused` reads the last value through the writer and passes `undefined` to `isRoundToast` before the first publish.
 
 The order pinned, today against after:
@@ -166,25 +173,33 @@ GIVEN a selecting `open` WHEN it runs THEN the writes are `rows.set(id)`, then `
 GIVEN the selected row of two closes WHEN the user closes it THEN the writes are `rows.delete(id)`, any `rows.set(neighbour)` clearing its mark, `selection.set(neighbour)`, then `closed` is emitted.
 GIVEN a split with the selected session in one pane WHEN that row's delete notice and then the selection notice land THEN main is told the focused pane's session and no session is placed.
 GIVEN one pane showing the selected session WHEN those two notices land THEN `sessions.active` goes straight to the neighbour, never `null`, and the scope is never `idle`.
+GIVEN a close that also clears the neighbour's mark WHEN the delete, neighbour and selection notices land in that order THEN the result is the same as for the two notices, and a pane closed by the first notice still makes the visible tab's `shown` run again.
+GIVEN a pane change outside `apply` WHEN `panesChanged` returns THEN `sessions.active` already holds the focused pane's session.
 GIVEN a reader that started after sessions WHEN a row arrives that focus follows THEN the reader's rows notice runs before its `sessions.active` notice.
 GIVEN rows written before `core.pageReady` WHEN it fires THEN sessions applies once and each `followRows` `added` runs once per row.
+GIVEN a reader whose part started after sessions WHEN `core.pageReady` fires THEN the reader's `added` handler finds the row already drawn by sessions.
 GIVEN a page reload with `sessions.active` holding the old focus WHEN sessions starts THEN a later reader reads `null`.
 GIVEN a title change on a row WHEN its notice lands THEN no `added` and no `hostChanged` runs, and docs adds no second tab.
 GIVEN a quit has started WHEN sessions' dispose ends the rows THEN the holder's rows are empty and the page gets no push.
+GIVEN a slot still holding rows and a selection from an earlier stop WHEN `createSessionList` runs THEN every key is deleted, and then the selection is `null`.
 
 **Tests:**
 
 - `sessions/contract.test.ts`, new, `followRows` as one table: a row present at the call gives `added` in order; a new row gives `added`; a title change gives nothing; a host change gives `hostChanged`; a delete gives `removed`; a delete and set gives `removed` then `added`; after `dispose` nothing. Catches a reader adding a second Docs tab on a title notice, or missing a row present at start.
 - `sessions/main/session-list.test.ts`, the order tests at `:483` and `:1032` (measured at plan time, re-verify): the fake records `rows set`, `rows delete` and `selection`. Add one table, `every operation writes rows, then selection, then emits`, with rows for open, activate with a mark, close selected, end selected, `setHostSessionId` and `setTitle`. Catches a selection arriving before its row, which would place a row the page lacks.
 - `sessions/main/session-list.test.ts`, add a row: `activate` records `activated` before its writes. Catches a toast on an activated round.
+- `sessions/main/session-list.test.ts`, add `create_ClearsLeftovers`, as a table. Rows and a selection held: the writes are the deletes, then `selection` `null`. Slot holding `null`: no selection write. Slot unwritten: `selection` `null`. Catches a leftover selection that the page reads as a mid-operation state with no end.
 - `sessions/page/start.test.ts`: the tests at `:63` and `:82` (a state read landing around stop) go, with what they guard. Add these:
-  - `selectedRowRemoved_WaitsForTheSelectionNotice`, as a table. Split: main told the focused pane, nothing placed. Single pane: `sessions.active` goes from the old session to the neighbour with no `null`, no `idle` scope.
+  - `selectedRowRemoved_WaitsForTheSelectionNotice`, as a table. Split: main told the focused pane, nothing placed. Single pane: `sessions.active` goes from the old session to the neighbour with no `null`, no `idle` scope. Each of these two also runs with a neighbour `rows.set` notice between the delete and the selection notices, with the same result. Add a row for a split whose focused pane keeps its tab, with that notice between: the tab's `shown` runs again. These rows catch a second mid-operation `apply` that overwrites the remembered values.
   - `rowNotice_ReachesLaterReadersBeforeActive`, with a reader subscribed after the part starts. Catches a sync tail.
+  - `paneChange_WritesActiveSynchronously`: a pane change outside `apply`, then a read with no `await`. Catches a `publishFocused` that defers on every path.
   - `pageReady_AppliesOnceFromTheStore`, with a rows write before it fired.
+  - `pageReady_SessionsAppliesBeforeAReaderAdded`: the part starts, then a reader registers a `core.pageReady` listener that calls `followRows`. Its `added` handler asserts that the row's element is drawn. It does not rely on `addTab`, because `session-tabs-view.ts` creates a tab frame on demand, so `addTab` succeeds in either order. Catches sessions' listener registered after a reader's, for example behind an `await`.
   - `start_SetsActiveToNull`, with the slot holding an old value. Catches a stale focus after a reload.
 - `sessions/main/start.test.ts`:
   - `:323`, the table of a project lookup: running writes a row, disposed writes none.
   - Add `dispose_EmptiesTheRowsThroughTheWriter`: after dispose `rows.all()` is empty, selection is `null` and `send` recorded nothing.
+- `src/main/state/slot-holder.test.ts`, add `mainWrite_QuitGatedPush_KeepsValueAndMovesSeq`: `push` is built as `main.ts` builds it, from a quit flag and a null target. With the flag set, a write sends nothing, `store` holds the value and `snapshot().seq` moved. Catches a gated write that loses the value, which the next snapshot needs. The expression in `main.ts` has no unit seam: the `grep -c` in Done when pins it.
 - `chat/main/start.test.ts`: a selection write reaches `chat.selected`, undefined as `null`. The `titleChanged` test at `:730` stays.
 - `agent-form-drive.test.ts` and each test the Files grep names: write rows and the active value through the harness store instead of `harness.emit('sessions.…')`, or use the new deps. No new behaviour.
 

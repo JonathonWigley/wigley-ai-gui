@@ -72,7 +72,7 @@ Edges:
 
 | Plugin, process | Edge today | After | Why |
 |---|---|---|---|
-| agents main | `dependsOn` `chat` | `reads.main: ['chat']` | It hears `chat.agentEvent` and imports only contract values. No `api.dependency(chatMainKey)`. |
+| agents main | `dependsOn` `chat` | `reads.main: ['chat']` | It hears `chat.agentEvent` and imports only contract values. No `api.dependency(chatMainKey)`. The stop cascade changes on purpose: see Stop order. |
 | agents main | `dependsOn` `sessions` | stays | The preview calls its exports. |
 | agents page | `reads` `sessions`, from 11 | removed | `forget` went. |
 | agent-lines, agent-skills, agent-strip page | `dependsOn` `agents` | stays | `dependsOn` keeps the config check: a plugin those views depend on cannot be disabled while they run (`AGENTS.md` § A disabled plugin). With `reads` the user could disable `agents` and get empty views with no config problem. The export goes, the edge does not. |
@@ -89,6 +89,10 @@ Task 11 moves the page edges that sessions' events caused. That table is in [11]
 Start order: `dependencyOrder` unions both `dependsOn` lists and takes the first ready manifest in list order. `builtInManifests` lists `chat` before `agents`, so the order stays `keys, sessions, chat, forms, primer, auto-compact, agents, agent-lines, agent-strip, agent-skills, docs, gallery, settings, backlog, notes, usage, usage-tab-line, workflow, unity-pool, visual` with and without these moves (computed at plan time on the 20 plugins then listed, re-verify with the `window` plugin of task 03 in the list). Agents' `chat.agentEvent` listener keeps its place too, after auto-compact's. Self-test scripts run in part start order, so their order stays. Agents has no script of its own.
 
 To verify, print `dependencyOrder(builtInManifests)` on the task's base commit and on its result, and compare. A difference stops the task and goes in the report.
+
+Stop order changes on purpose. `stopOrder` in `src/shared/plugin-host.ts` walks `dependsOn` alone, so after this move a stop of `chat` in main no longer stops `agents`. No main part depends on `agents`, so no other part moves. This is accepted: no production code calls `stop(pluginId)` on a host (measured at plan time, re-verify with `grep -rn '\.stop(' src/main src/renderer`), and the live restart is Wave 4. `stopAll` reverses start order, so it does not change.
+
+To verify, walk `dependsOn.main` over `builtInManifests` as `stopOrder` does, because that function is private. Print each plugin's stop set on the base commit and on the result, and compare. The one expected difference is that `chat`'s set loses `agents`. Any other difference stops the task and goes in the report.
 
 Usage:
 
@@ -120,6 +124,7 @@ Unity-pool:
 GIVEN a subagent start WHEN agents folds it THEN `agents.rosters` holds the row's merged roster and a reader's `on` runs with that id.
 GIVEN a row's last item ended, or the row closed WHEN agents handles it THEN the key is gone and `rosters.get(id) ?? EMPTY_ROSTER` gives three empty lists.
 GIVEN agents starts with `chat` in `reads` WHEN `chat.agentEvent` fires THEN the fold runs as before and `dependencyOrder(builtInManifests)` is unchanged.
+GIVEN the moved edge WHEN each main stop set is compared with the base commit THEN only `chat`'s set differs, and it loses `agents`.
 GIVEN a run with no profile WHEN usage's page reaches `core.pageReady` THEN it draws the zero line.
 GIVEN a fold that changes only `held` WHEN it applies THEN no write happens and no reader runs.
 GIVEN `flows.json` holds a flow and the slot is empty WHEN that session opens THEN the slot holds the file's flow, its running state cleared.
@@ -142,7 +147,7 @@ GIVEN any of these owners writes during a quit WHEN the write runs THEN the valu
 - `workflow/main/flow-store.test.ts`, add one table:
   - `open_RestoresFromTheFile`, with an empty slot.
   - A leftover slot key at creation is deleted.
-  - `drop` deletes the key and keeps the saved entry when `forgetFlows` did not run.
+  - `drop` deletes the slot key and the saved entry, and rewrites the file without that entry. This catches a stale flow that a reopen restores after `sessions.ended`.
   - `all` keeps `open` order.
   Catches a restart that reads the slot, or a stale flow outliving a stop.
 - `workflow/main/start.test.ts`: `:179`'s `sent` array reads per-flow slot notices. `:434` and `:752` still assert `flows.json`. `:899`, `harness.invoke('flows')`, reads the slot after `ready`. Add `oneFlowChange_NotifiesOneKey`. Catches a return to the whole-array push.
@@ -157,6 +162,7 @@ The runtime checks collect in [Final verification](16-final-verification.md).
 - It compiles and the layer check passes.
 - The test gate runs the tests above, filtered to agents, agent-lines, agent-skills, agent-strip, usage, workflow and unity-pool.
 - `dependencyOrder(builtInManifests)` matches its base-commit output.
+- The main stop sets match their base-commit output, except that `chat`'s set loses `agents`.
 - `grep -rnE "rosterChanged|onRosterChanged|agentsPageKey|sendFlows|changedSinceRead|hasSnapshot|setWhileReading" src` prints nothing.
 - Each self-test `expect` line that names one of these moved.
 - A doc under `docs/features` that describes a removed member of today's code is fixed. A followup's history stays.

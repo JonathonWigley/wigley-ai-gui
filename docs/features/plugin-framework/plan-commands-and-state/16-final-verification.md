@@ -19,11 +19,15 @@ Decisions:
 - This task lists only what `wigley:writing-tests` § What earns a live run instead admits: a thing that exists only with the running system, tagged **expected** or **low-confidence** with its reason. Whatever a task's test pins is left off.
 - The whole self-test does not run unless the user asks for it in the current turn: a whole run takes half an hour or more. A filtered run skips the end-of-run placement check, and the Proof says so.
 
-**Filtered self-test.** Run once, for the plugins this plan touched that hold a script:
+**Filtered self-test.** Run once, for these fourteen plugins:
 
-`npm run selftest -- --plugin forms,keys,chat,docs,sessions,agents,agent-lines,agent-strip,agent-skills,usage,workflow,unity-pool,notes,backlog,visual`
+`npm run selftest -- --plugin forms,primer,settings,chat,docs,sessions,agent-lines,agent-strip,agent-skills,usage,workflow,unity-pool,notes,backlog`
 
-Leave `window` out: task 03 gives it no script, and a filter naming a plugin with no script fails before any step. Tag: **low-confidence**. The tests of these tasks run against fakes, and these scripts are the one place the real Bridge, real start order and real page load meet. A failing `expect` whose log line moved is a fix in the owning task, not a change to the expectation alone.
+A filter naming a plugin with no script fails before any step. So first run `find src/plugins -name selftest-script.ts`, and check that it lists each of the fourteen. Drop a name it does not list, and say so in the Proof.
+
+Leave `window`, `keys`, `agents` and `visual` out: they hold no script (task 03 gives `window` none). Drive checks 8 and 9 reach `keys`, and check 6 reaches `agents`. `visual` has no live check: tasks 10 and 14 change only its deps and an event, and their tests pin them.
+
+Tag: **low-confidence**. The tests of these tasks run against fakes, and these scripts are the one place the real Bridge, real start order and real page load meet. A failing `expect` whose log line moved is a fix in the owning task, not a change to the expectation alone.
 
 **Drive checks.**
 
@@ -43,6 +47,7 @@ Leave `window` out: task 03 gives it no script, and a filter naming a plugin wit
 | 12 | The app menu's labels read: `eval` or a log line that lists the template, whichever `npm run drive -- help` offers. | expected | Task 04: labels by label. A native menu cannot be seen offscreen; the eye check is on the user's list below. |
 | 13 | The app starts on this Mac with `platform.os` read: the drive start itself, and a `query` on one OS-marked element. | expected | Task 01: the record is chosen in the composition root, which no unit test runs. |
 | 14 | With rows open, quit the app and restart on the same home. Panes and recency restore. The log shows no plugin message to the page after the first quit task. | low-confidence | Task 11's rows slot and task 05's push share the quit gate in `main.ts`. No unit test reaches that gate. |
+| 15 | Change `theme` in settings. A slot read of `core.theme` (`eval` with `kit.state.read`, or a log line) gives the new name. Then pick a theme that fails to resolve: it keeps the name of the theme on screen. | low-confidence | Task 06 writes it in the `renderer.ts` applier wrapper, which has no unit seam. |
 
 Each check names its evidence in the Proof. A check a fixture cannot reach, such as check 4 with no long transcript action, is reported as not reached with its reason. Do not skip it in silence.
 
@@ -52,6 +57,7 @@ Each check names its evidence in the Proof. A check a fixture cannot reach, such
 2. A dead key in a box: type Option+n then n in the chat box. It composes `ñ`, and no command runs. (Task 08 moved box focus.)
 3. IME composition in the chat box: compose with Japanese input. Enter ends the composition, and it does not send. (Task 08.)
 4. Folder dialog: start a session through "Choose folder" in chat's start prompt. The native dialog opens, and the chosen folder lands in the row. (Task 09's `services.chooseFolder`.)
+5. External link: follow an `https` link in a doc. The system browser opens it. (Task 09's `services.openExternal`, which an offscreen run cannot see.)
 5. App menu: open each menu. Labels read as words, not command ids. (Task 04.)
 
 GIVEN the filtered self-test and the drive checks have run WHEN the Proof is written THEN it holds each check's result, tag and evidence.

@@ -47,7 +47,7 @@ GIVEN `trackedTimers` WHEN `set` runs with 2 ** 31 ms THEN the inner timers rece
 
 Tests:
 
-- `src/shared/tracked-timers.test.ts`, add `it('caps a delay past the 32-bit limit at the longest delay a timer takes')`. The file's `fakeTimers` records each `ms`. Assert the two delays above. Catches: a long deadline firing at once, which is the bug the clamp exists for.
+- `src/shared/tracked-timers.test.ts`, add `it('caps a delay past the 32-bit limit at the longest delay a timer takes')`. The file's `fakeTimers` stores only the run today, so it gains a `delays: number[]` that `set(run, ms)` pushes to, and it returns `delays`. Assert the two delays above from `delays`. Catches: a long deadline firing at once, which is the bug the clamp exists for.
 - `src/shared/agent-forms/form-service.test.ts`, the `it.each([0, -5, 2_147_484])` block at line 279: remove the row `2_147_484` and its comment. Add `it('waits the longest timer delay for a host deadline past the 32-bit limit')`, with the second behaviour above. Catches: the host's long deadline falling back to the default, or firing at once.
 - `src/shared/agent-forms/form-service.test.ts`, add `it('runs its deadline through the timers it is given')`. Pass a hand-driven `Timers` to `createAgentFormService`. Assert one `set` with `DEFAULT_DEADLINE_SECONDS * 1000`. Fire it and assert the call returns its draft. Do not advance the fake clock. Catches: a global `setTimeout` call coming back, which `vi.useFakeTimers` alone cannot show.
 - `src/shared/agent-forms/form-service.test.ts`, add `it('leaves no timer pending once a call settles')`: submit a form, then assert `vi.getTimerCount()` is 0. Catches: a clear with the wrong handle after the move to numeric handles.

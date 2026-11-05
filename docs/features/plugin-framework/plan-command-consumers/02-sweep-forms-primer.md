@@ -48,7 +48,7 @@ From task 01:
 - `command(qualifiedId: string, arg?: CommandArg): () => void`
 - A command with a declared `arg` lists only while a key binds it.
 
-From the tree: `railPickAction`, `pickRailItem`, `jumpedToLine` and `jumpMoved` in `src/plugins/forms/page/view-model.ts`. `reviewRowsByRailPosition(round)`, private in `layout-panes.ts` at line 232 (measured at plan time). `changeAnswer`, `boxIn`, `focusBoxItem` in `forms-commands.ts`. The `selectTask` and `selectItem` actions in `src/plugins/primer/page/primer-state.ts`.
+From the tree: `railPickAction`, `pickRailItem`, `jumpedToLine` and `jumpMoved` in `src/plugins/forms/page/view-model.ts`. `reviewRowsByRailPosition(round)`, private in `layout-panes.ts` at line 232 (measured at plan time). `changeAnswer`, `boxIn`, `focusBoxItem` in `forms-commands.ts`. `railItems` and `answerableItems`, which `view-model.ts` and `layout-panes.ts` read today. The `selectTask` and `selectItem` actions, `taskRows` and `selectedEntry` in `src/plugins/primer/page/primer-state.ts`. `toggleInclude(deps)`, private in `primer-commands.ts`.
 
 ## Produces
 
@@ -104,24 +104,39 @@ Primer's `includeMark` at `primer-kit.ts:200` acts on the selected item, as the 
 
 **`forms.chooseAt` logs as `forms.choose` does.** Both use one `describeChoice(number)`.
 
+**A stale arg logs and does nothing.** A round can change between a draw and a click. Today's kit throws only at build, and a click must never throw.
+
+- With no active round, every forms arg handler does nothing and logs nothing.
+- A rail position outside `railItems(round.round)` logs `no rail item at <position>` and does nothing. This covers every `forms.*At` command, `forms.focusItem` and `forms.pickRailItem`.
+- The handler makes this check before it dispatches. The `focusItem` reducer ignores a bad position and keeps today's focus, so with no check the answer lands on the item already focused.
+- `forms.reviewJumpAt` logs `no review row <row>` and does nothing when `row` is outside `answerableItems(round.round)`. Otherwise it dispatches `reviewJump` with `row`, and adds no log line, as the click does today.
+- `forms.chooseAt`'s `number` out of range keeps the `forms.choose` result: `form-state` returns the same state.
+
+**`forms.focusItem`'s handler** dispatches `focusItem` with its position, and nothing else.
+
 **`kit.run` and `runLayoutAction` go.**
 
 - Remove `runLayoutAction`, `layoutActions` and `Kit.run`. No layout in the tree calls `kit.run` (measured at plan time, re-verify with `grep -rn "kit.run" src/plugins/forms/layouts`), and no user layout exists (`plan.md` § Preconditions).
-- Each `kit.run` site in `card-kit.ts` uses the runner `kit.command(id, arg)`, obtained while the card builds. A `pick` closure that takes a number at click time calls `kit.command(chooseAt, { item: position, number })()`.
+- Each `kit.run` site in `card-kit.ts` uses the runner `kit.command(id, arg)`, obtained while the card builds.
+- `kit.command` checks at the call and throws, so no click calls it. A `pick` closure takes a number at click time, so each `buildChoiceList` caller (`card-kit.ts:591,732`) builds one `forms.chooseAt` runner per drawn choice number while the card builds. `pick` looks up its number's runner and calls it. The group pick at `card-kit.ts:758` has its number at build and holds one runner.
 - Clear at `card-kit.ts:642-646` runs `forms.clearChoiceAt` alone. Its two dispatches go.
 - `CardDeps.toggleDontAsk` and `round-view.ts:349` go. `CardDeps.dispatch` goes when no caller remains; check with grep.
 
-**The rail handler reads state.** `forms.pickRailItem(position)` calls `pickRailItem` with `store.get().view`, the active round's rail item at `position`, and the `reviewRowsByRailPosition` entry at `position`. `round-view.ts:312` defines `shownView` as the same `view`. All three come from the store at run time, so an arg holds one number. With no active round the handler does nothing. `reviewRowsByRailPosition` moves to `view-model.ts`, exported, so `forms-commands.ts` reads it without importing a layout file. `layout-panes.ts` removes its closure over `reviewRowAt` at the entry. `reviewRowAt` stays for what else reads it.
+**The rail handler reads state.** `forms.pickRailItem(position)` calls `pickRailItem` with `store.get().view`, the active round's rail item at `position`, and the `reviewRowsByRailPosition` entry at `position`. `round-view.ts:312` defines `shownView` as the same `view`. All three come from the store at run time, so an arg holds one number. `reviewRowsByRailPosition` moves to `view-model.ts`, exported, so `forms-commands.ts` reads it without importing a layout file. `layout-panes.ts` removes its closure over `reviewRowAt` at the entry. `reviewRowAt` stays for what else reads it.
 
 **The rail's rule stays in `railPickAction`.** Focus in the forms view, jump in the review, nothing under the confirm or with no round.
 
 **What already runs a command stays:** `layout-panes.ts:429` `appendReviewButton`, `round-view.ts:434` Review, `primer-review.ts:115`, `primer-view.ts:768`, and the confirm prompts' buttons.
 
-**Number hints.** `kinds/card-parts.ts:150` anchors each choice's hint through `numberedCommand('choose', number)`. `plan-commands-and-state` owns that conversion. This task leaves whatever it landed.
+**Number hints.** `plan-commands-and-state` task 07 converted `kinds/card-parts.ts`'s `appendPickKeys` to `anchor(keys, formsCommand('choose'), { arg: number })`. This task leaves it as landed.
 
-**`PrimerKitDeps`.** Primer's kit uses the `run` its deps hold or gains `run: (command, arg) => void`. Remove `dispatch` from its deps when grep shows no caller left. `primer.toggleIncludeAt` dispatches `selectItem` then `toggleInclude`, the order the row's mark runs today.
+**`PrimerKitDeps`.** Primer's kit uses the `run` its deps hold or gains `run: (command, arg) => void`. Remove `dispatch` from its deps when grep shows no caller left.
 
-**Primer handlers.** Primer's rows have no focused-box case, so these handlers dispatch directly.
+**Primer handlers.** Primer's rows have no focused-box case, so `primer.selectTask` and `primer.selectItem` dispatch directly.
+
+- `primer.toggleIncludeAt` dispatches `selectItem`, then calls `toggleInclude(deps)`, the order the row's mark runs today. A click therefore logs the line the key logs, `included item N on task T`, by the same rule as the forms `At` commands.
+- A stale arg logs and does nothing, as in forms. `primer.selectTask` logs `no task row <row>`, for a `row` outside `taskRows`. `primer.selectItem` and `primer.toggleIncludeAt` log `no item <item>`, for an `item` outside the selected entry's items. With no shown primer they do nothing and log nothing.
+- `primer.toggleIncludeAt` makes this check before it dispatches. The `selectItem` reducer ignores a bad item and keeps today's selection, so with no check the include flips on the item already selected.
 
 **Sweep.** What the user sees does not change. A click adds a log line, the one the key logs. Self-test `expect` lines stand, since a line is only added; a line a test expects absent moves with the change.
 
@@ -136,19 +151,24 @@ Primer's `includeMark` at `primer-kit.ts:200` acts on the selected item, as the 
 - GIVEN the Don't ask click turns the answer on THEN the reason box takes focus.
 - GIVEN the primer tasks column WHEN the user clicks row position 1 THEN `primer.selectTask` runs with `1`.
 - GIVEN the items column WHEN the user clicks the mark on the row at position 1 THEN `primer.toggleIncludeAt` runs with `2`, item 2 is selected, and its include flips.
+- GIVEN a round with 4 rail items WHEN `forms.chooseAt` runs with `{ item: 7, number: 1 }` THEN the log reads `no rail item at 7`, and focus and answers do not change.
+- GIVEN the review view with 3 rows WHEN `forms.reviewJumpAt` runs with `5` THEN the log reads `no review row 5`, and the cursor does not move.
+- GIVEN a primer task with 2 items WHEN `primer.toggleIncludeAt` runs with `3` THEN the log reads `no item 3`, and no include flips.
 - GIVEN any added command WHEN Settings draws THEN it has no row.
 
 Runtime checks collect in [Final verification](11-final-verification.md). This task adds none here.
 
 ## Tests
 
-- `forms-commands.test.ts`: `atCommands_BoxFocusedOnOtherItem_ActOnTheNamedItem`, one table with a row per `forms.*At` command. Catches a click answer landing on the box's item.
+- `forms-commands.test.ts`: `atCommands_BoxFocusedOnOtherItem_ActOnTheNamedItem`, one table with a row per `forms.*At` command and a row for `forms.focusItem`. Catches a click answer landing on the box's item, and a `focusItem` handler that does more than focus.
+- `forms-commands.test.ts`: `argCommands_StaleArg_LogAndChangeNothing`, one table with a row per `forms.*At` command, `forms.focusItem`, `forms.pickRailItem` and `forms.reviewJumpAt`, plus a no-round row. Catches a stale click answering the focused item, since the reducer ignores a bad position.
 - `forms-commands.test.ts`: `chooseAt_HeldNumber_ClearsAndLogsAsChooseDoes`. Catches two copies of the choice rule drifting.
 - `forms-commands.test.ts`: `toggleDontAskAt_TurnsOn_FocusesReasonBox`. Catches the reason box losing focus in the move off `kit.run`.
 - `forms-commands.test.ts`: `pickRailItem_EachView_FollowsRailPickAction`, rows for forms, review with a row, review notice and confirm. Catches the handler reading a stale review row. The `railPickAction` test keeps the rule.
-- `card-kit.test.ts`: delete `kitRun_UnknownActionType_LogsAndDispatchesNothing`, since its seam goes. Add `cardControls_Click_RunTheirAtCommandWithPosition`, a table for choice, group pick, Clear, Accept, Not applicable and Don't ask. Catches a control running the key's command, or the wrong position.
+- `card-kit.test.ts`: delete `kitRun_UnknownActionType_LogsAndDispatchesNothing`, since its seam goes. Add `cardControls_Click_RunTheirAtCommandWithPosition`, a table for choice, group pick, Clear, Accept, Not applicable and Don't ask. Catches a control running the key's command, or the wrong position. Add `choiceList_CardBuilds_ObtainsEachRunnerBeforeAnyClick`, asserting the fake `KitCommands.exists` sees one call per drawn number at build and none at click. Catches a runner built in the click, where its check would throw inside a click handler.
 - `layout-panes.test.ts`: `railEntry_Click_RunsPickRailItem` and `reviewPick_Click_RunsReviewJumpAt`. Catches a dropped arg, or a dispatch left behind.
-- `primer-commands.test.ts`: `selectCommands_ArgNamesTheRow`, a table for `selectTask`, `selectItem` and `toggleIncludeAt`. Catches an off-by-one between position and 1-based item.
+- `primer-commands.test.ts`: `selectCommands_ArgNamesTheRow`, a table for `selectTask`, `selectItem` and `toggleIncludeAt`. The `toggleIncludeAt` row asserts the log `included item N on task T`. Catches an off-by-one between position and 1-based item, and a click that dispatches `toggleInclude` and skips the key's log line.
+- `primer-commands.test.ts`: `selectCommands_StaleArg_LogAndChangeNothing`, a table for the same three. Catches an include flipping on the item already selected.
 - `primer-view.test.ts`: `tasksAndItems_Click_RunTheirCommands`, with a row for `includeMark` running `primer.toggleInclude`. Catches a click left on a dispatch.
 
 ## Done when
