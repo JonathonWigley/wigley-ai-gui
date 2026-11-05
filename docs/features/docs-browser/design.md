@@ -105,7 +105,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - The tree shows the last `index.json` at once; a full `build` (12.7 s, 629 entries, 4 MB measured 2026-10-19) runs
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
-- **Tree**: two roots by the entry's `owner` (plan C). **Mine**, expanded with its child nodes: Global, then
+- **Tree**: this is the All pages view; Docs mode's sidebar opens on the wiki and `Space v w` switches between the two (`../docs-wiki/design.md`), and a session's Docs tab holds this tree alone. Two roots by the entry's `owner` (plan C). **Mine**, expanded with its child nodes: Global, then
   Plugins (installed-only plugins no clone carries), then one node per repo. A repo
   holds its docs by kind, then one node per plugin of a marketplace clone (its docs by kind, the install's `plugin`
   entry among them, then an **Installed only** node for its installed files the clone lacks), then its feature home,
@@ -161,7 +161,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   directly in `~/.claude` hears no transcript write under `~/.claude/projects`. The rendered view reloads by itself; while editing, a banner says the
   file changed, and `:w` asks reload-or-overwrite.
 - **Links**: a relative link to a file opens it in the browser, an http or https link opens in the default browser (any other scheme is refused), a
-  `#heading` link scrolls. Links are real anchors: Tab moves between them, Enter follows. Forms keep literal links.
+  `#heading` link moves within the doc; the wiki adds section links, `wiki:` and `wigley:` links and the doc's history (`../docs-wiki/design.md` § Links, § Keys). Links are real anchors: Tab moves between them, Enter follows. Forms keep literal links.
   Images show their alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
   move; `l` opens a doc, expands a collapsed group or steps into an expanded one; Enter opens a doc and focuses
@@ -170,6 +170,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
   `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` (the core's `panes.focusRight` / `panes.focusLeft`) move focus between tree and doc while the tree shows (the doc pane's `‹ tree ⌥H` edge prompt hides with the tree, and the empty doc's hint names `Esc tree`); `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
+  The wiki adds `e`, `Ctrl+h`, `Ctrl+l`, `Ctrl+o`, `Ctrl+i`, `gh` and `l` on the doc (`../docs-wiki/design.md` § Keys), and `s` refuses on a wiki row.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
   editor too while editing, `i` edit, Esc (`docs.backToTree`) focuses the tree, showing it first when hidden; Esc in the editor's normal mode closes
   the editor as `:q` does.

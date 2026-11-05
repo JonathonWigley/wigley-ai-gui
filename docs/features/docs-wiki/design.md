@@ -33,16 +33,19 @@ pipeline, no stages, and no fixed shelf names. Every shelf comes from a file the
   markdown link under them is a page. The link text is the page's title. Anything else in the file
   renders on the Main page and stays out of the sidebar.
 - Link targets are a path (`~/` or relative to `Main.md`), a skill (`wigley:<name>`), or a `wiki:`
-  link. A link the index does not list shows dimmed and refuses with a toast.
+  link. A link the index does not list shows dimmed and refuses with the toast `Not in the docs index: <title>`.
+  A `wiki:` or `wigley:` link in a rendered body opens its target as its sidebar row does.
 - `wiki:kind/<kind>` opens a generated list page of the user's own docs of that kind, grouped by
   repo, and its sidebar row shows the count. `wiki:owner/third-party` does the same for third-party
-  docs. `wiki:all` switches the sidebar to All pages. They are links in the file, so the user can
+  docs. A list page groups by repo, and the third-party list by plugin, with `Global` holding a doc that
+  has none. `wiki:all` switches the sidebar to All pages. They are links in the file, so the user can
   move or drop any of them.
 - The index walks `~/wigley-agents/wiki/` and lists its files with the `reference` kind. A file at
   the folder's top level would index as instructions.
 - All pages is the existing tree, unchanged: stars, create, rename and trash stay there. The tree's
   create, rename and trash keys also act on the sidebar's page rows. The Starred group stays in All
   pages, since the Main page is the curated list.
+- Only the machine view, Docs mode, holds the wiki. `s` on a wiki row toasts `Stars stay in All pages`.
 - Docs mode opens on the Main page at each app start. Leaving and returning keeps the page shown, as
   every mode does. With no `Main.md`, the page shows an empty state that offers to create it.
 
@@ -51,8 +54,12 @@ pipeline, no stages, and no fixed shelf names. Every shelf comes from a file the
 - The title comes first, with the filename under it. The Claude and Codex load chips, the plugin
   source statuses and the Loaded time stay under the title.
 - A right column holds On this page (the doc's headings) and Linked from. It belongs to the docs
-  page, since the shell's right bar spans every mode. It hides when the window is too narrow for it,
-  before the article gives up any width.
+  page, since the shell's right bar spans every mode. It hides when the page's container is narrower
+  than 950px, before the article gives up any width.
+- Back and forward arrows sit in the page's top row (`div.docs-history`), each hiding at its end of the history. The Main
+  page's `main` hint sits between them.
+- A heading's `edit` control shows on hover and on focus. It takes no Tab, since `kit.button` sets
+  `tabindex="-1"`: `e` is the key.
 - A read-only doc, a hook or a plugin entry draws as today, with no section editing.
 - A generated list page and the Main page draw through the same page frame.
 - Everything new draws through the docs layout, so the user restyles or moves any of it, Recent
@@ -69,6 +76,8 @@ pipeline, no stages, and no fixed shelf names. Every shelf comes from a file the
   act as they do in the whole-file editor.
 - A disk change during a section edit takes the existing flow: the banner, then reload or overwrite
   at `:w`. There is one conflict flow.
+- `e` above the first heading opens the whole-file editor. A doc that is not markdown has no
+  sections, and `e` toasts that.
 - `i` keeps opening the whole file.
 
 ## Links
@@ -82,6 +91,7 @@ because a `§` target has no end delimiter and runs into prose.
 - A bare file name resolves only when one target is clear. It stays plain text otherwise, since
   `AGENTS.md` exists in many repos. No link is a guess.
 - Linked from is a reverse lookup over the loaded entries, in the page. Clones of one repo show once.
+  A link inside a follow-up file has no entry of its own, so it never appears under Linked from.
 - Links refresh on each index build, so they can lag a save until the next build.
 
 ## Search
@@ -93,21 +103,24 @@ holds none.
 ## Recent changes
 
 The Main page ends with the latest commits touching the pages `Main.md` links to, one row per commit,
-newest first. The history comes from a new `Git` log call, since the app runs `git` only through that
-adapter.
+newest first. `docs.recentChangesLimit` caps the rows and defaults to 10. The history comes from the
+`Git` log call, since the app runs `git` only through that adapter.
 
 ## Session Docs tabs
 
 A session's Docs tab keeps its tree of the docs that session loaded, because that is the tab's purpose.
 It gains the new article page, section editing, links and back and forward through the shared view.
-Its right column usually stays folded, since the tab is narrow.
+It holds no wiki: `Space v w` toasts `A session's Docs tab keeps its own tree`, and `gh` shows the
+Main page in Docs mode. Its right column usually stays folded, since the tab is narrow.
 
 ## Keys
 
 - `e` edits the section the view is in.
 - `Ctrl+h` and `Ctrl+l` move to the previous and next section, the app's keys for previous and next unit.
-- `Ctrl+o` and `Ctrl+i` go back and forward, as vim's jump list does. Each docs view has its own history.
-- `gh` opens the Main page.
+- `Ctrl+o` and `Ctrl+i` go back and forward, as vim's jump list does, while the page has focus. Each docs view has its own history.
+- `gh` opens the Main page, from the docs tree or the page.
+- `l` and `Enter` on the page open the cursor row of a list page, and otherwise follow the focused link or press the
+  focused button.
 - `Space v w` switches the sidebar between the wiki and All pages, and a control at its top does the
   same by mouse.
 
