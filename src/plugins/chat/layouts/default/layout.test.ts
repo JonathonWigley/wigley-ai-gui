@@ -1351,7 +1351,7 @@ describe('default chat layout surfaces', () => {
       ],
     },
   ])(
-    'statusLine_Default_RepoBranchChipsPartsRunningSend ($case)',
+    'statusLine_Default_RepoBranchChipsPartsRunning ($case)',
     ({ input, line }) => {
       const { kit } = fakeSurfaceKit();
 
@@ -1361,7 +1361,6 @@ describe('default chat layout surfaces', () => {
       expect(describeChildren(root)).toEqual(line);
       expect(describeChildren(root.children[line.length - 1])).toEqual([
         'running',
-        'send',
       ]);
     },
   );

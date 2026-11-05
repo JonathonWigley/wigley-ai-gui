@@ -155,8 +155,11 @@ export interface EditorCompletions {
   accepted(word: string): void;
 }
 
+// `hidesModeLine` leaves out the `--INSERT--` line under the box, for a box whose
+// cursor shape alone shows the vim mode; the `:` prompt and `/` search still draw there.
 export interface EditorOptions {
   completions?: EditorCompletions;
+  hidesModeLine?: boolean;
 }
 
 export interface EditorHost {

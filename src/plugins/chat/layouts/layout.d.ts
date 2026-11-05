@@ -366,7 +366,7 @@ export interface StatusLineKit extends BaseKit {
   // slot. Call it once: a status line that leaves it out gets the slot at the end of its element. A second call throws
   // `status line placed status parts twice`, so the line draws with `default`.
   statusParts(parent: HTMLElement): HTMLElement;
-  // A running dot, the interrupt keys and the send-now keys; hidden, keeping its space, while not working.
+  // The interrupt keys and the send-now keys; hidden, keeping their space, while not working.
   running(parent: HTMLElement): HTMLElement;
   // Send with its keys.
   sendButton(parent: HTMLElement): HTMLButtonElement;

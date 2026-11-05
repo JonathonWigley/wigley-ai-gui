@@ -771,7 +771,7 @@ function boxExtensions(
     : [];
   return [
     escapeCancelsUnfinishedInput(),
-    vim({ status: true }),
+    vim({ status: options?.hidesModeLine !== true }),
     completion,
     minimalSetup,
     EditorView.lineWrapping,

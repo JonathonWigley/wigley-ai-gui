@@ -23,7 +23,6 @@ import { chip } from '../../../shared/page/ui/chip';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
-import { statusDot } from '../../../shared/page/ui/status-dot';
 import type {
   ChatComposerPart,
   ChatStatusPart,
@@ -141,8 +140,8 @@ interface DockPart {
 // The status line's parts holding keys, each anchored once in `chat.chat`:
 // the type hint (`i` and `a`, then `.chat-cursor-keys`, the page keys that read
 // the entries: `J`, `K`, `V` and `y`, with no labels), the
-// running indicator (dot and interrupt keys), Send, and a key span per pick
-// command, which the first chip running it holds.
+// running keys (interrupt and send now), Send, which only a user layout places,
+// and a key span per pick command, which the first chip running it holds.
 interface StatusLineParts {
   typeHint: HTMLElement;
   running: HTMLElement;
@@ -493,7 +492,7 @@ function createStatusLineParts(
   const interruptKey = element('span', 'chat-running-key');
   const sendNowKey = element('span', 'chat-running-key');
   const running = element('span', 'chat-running');
-  running.append(statusDot('running'), interruptKey, sendNowKey);
+  running.append(interruptKey, sendNowKey);
   const sendKey = element('span', 'chat-send-key');
   const send = textButton('Send', () => deps.run(chatCommand('send')), {
     variant: 'ghost',

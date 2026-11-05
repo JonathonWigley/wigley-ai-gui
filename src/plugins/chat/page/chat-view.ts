@@ -840,6 +840,7 @@ function createTab(
     },
     {
       completions: boxCompletions(tab, deps),
+      hidesModeLine: true,
     },
   );
   const dropDeps = chatDropDepsOf(tab, tab.box, () => view.isHeld(tab), deps);

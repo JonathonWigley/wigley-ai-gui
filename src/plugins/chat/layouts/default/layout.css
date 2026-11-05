@@ -250,8 +250,8 @@
 }
 
 /* The composer: other plugins' parts, the activity line, the attached
-   images' strip, then the message box over its bar (mode, type hint, control
-   chips, running indicator, send). */
+   images' strip, then the message box over its bar (type hint, control chips,
+   running keys). */
 .ui-floating.chat-composer {
   border-radius: var(--wg-radius-xl);
   bottom: var(--wg-space-3);

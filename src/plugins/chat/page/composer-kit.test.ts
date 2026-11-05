@@ -408,7 +408,16 @@ describe('composer surface parts', () => {
   ])(
     'statusLine_InputChange_RebuildsOnlyWhatItDraws ($case)',
     ({ next, isRebuilt }) => {
-      const { deps, ran } = surfaceDeps(null);
+      const { deps, ran } = surfaceDeps({
+        statusLine(parent, _input, kit) {
+          const line = rootIn(parent);
+          line.classList.add('chat-status-line');
+          kit.typeHint(line);
+          kit.statusParts(line);
+          kit.sendButton(line);
+          return { element: line };
+        },
+      });
       const surface = createComposerSurface(deps, {
         sessionId: 'row-1',
         box: asHtml(boxWithEditor()),
@@ -421,7 +430,7 @@ describe('composer surface parts', () => {
         ),
       );
       const pressed = panel.querySelector('.chat-status-line');
-      const send = panel.querySelector('.chat-status-end')?.children.at(-1);
+      const send = pressed?.children.at(-1);
 
       surface.drawStatusLine({ ...composerInput(false), ...next });
       send?.click();

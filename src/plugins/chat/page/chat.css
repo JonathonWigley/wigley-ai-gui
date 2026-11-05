@@ -387,8 +387,8 @@
   visibility: hidden;
 }
 
-/* The running indicator sits at the line's end before send, and keeps its
-   space while idle, so a turn starting or ending moves no chip. */
+/* The running keys sit at the line's end, and keep their space while idle, so
+   a turn starting or ending moves no chip. */
 .chat-running {
   align-items: center;
   display: inline-flex;
