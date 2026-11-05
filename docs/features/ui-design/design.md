@@ -234,4 +234,4 @@ Each stays its own entry in `docs/features/followups.md`:
   LayoutService, `api.layouts` and the page host landed later (`docs/features/layouts/design.md`).
 - Native window vibrancy and mica, behind a window adapter.
 - Per-tool-call duration on chat tool cards.
-- The full `Platform` record, the runtime plugin loader, and unloading every registration.
+- The runtime plugin loader, and unloading every registration. (The `Platform` record has landed.)

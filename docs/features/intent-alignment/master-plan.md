@@ -28,8 +28,8 @@ item per feature session.
 
 When an item lands, tick its box here and remove it from `followups.md`, in the same commit.
 
-Plans: `docs/features/plugin-framework/plan-commands-and-state/` holds Waves 0 and 2, and
-`plan-command-consumers/` beside it holds Wave 3. The settled design is `plugin-framework/design.md` § Commands and
+Plans: Waves 0 and 2 have landed and their plan folder is gone.
+`docs/features/plugin-framework/plan-command-consumers/` holds Wave 3. The settled design is `plugin-framework/design.md` § Commands and
 state.
 
 ## Order
@@ -58,10 +58,10 @@ The critical path is Wave 1 → the state registry → PluginHost reload → the
 
 Start any time; all ∥.
 
-- [ ] Platform record [ready]
-- [ ] Forms takes the timers service [ready]
-- [ ] Window plugin [ready]
-- [ ] Menu labels by label [ready]
+- [x] Platform record [ready]
+- [x] Forms takes the timers service [ready]
+- [x] Window plugin [ready]
+- [x] Menu labels by label [ready]
 
 ## Wave 1: foundation sweeps
 
@@ -77,12 +77,12 @@ Gate: every registration returns a handle, and every dependency is typed.
 
 ## Wave 2: commands, state, events
 
-1. [ ] Plugin state registry [plan]. It lands first: the runtime command catalog is a core slot.
+1. [x] Plugin state registry [plan]. It lands first: the runtime command catalog is a core slot.
 2. All ∥:
-   - [ ] Runtime command API [plan]. It gives commands an argument (row, index, href); Wave 3 needs it.
-   - [ ] keysFor and box focus in the core keys API [plan]
-   - [ ] Core picker and folder services [plan]
-3. [ ] Events for every state change [plan], after the registry, so backlog, workflow, agents and usage are converted
+   - [x] Runtime command API [plan]. It gives commands an argument (row, index, href); Wave 3 needs it.
+   - [x] keysFor and box focus in the core keys API [plan]
+   - [x] Core picker and folder services [plan]
+3. [x] Events for every state change [plan], after the registry, so backlog, workflow, agents and usage are converted
    once. Its AGENTS.md rule step moves to the Wave 3 checkpoint.
 
 ## Wave 3: consumers
@@ -111,7 +111,7 @@ Checkpoint, after the items above:
 ## Lane H: harness seams
 
 Start after Wave 1 step 2: both edit the same dependency call sites. The chat pass edits chat files that Wave 2's
-conversion of chat to slots and its chat events also edit: run the pass before or after that task, not during it.
+conversion of chat to slots and its chat events also edited; that conversion has landed.
 
 1. [ ] AgentHarnessRegistry [ready]
 2. [ ] AgentHarness grows what a second harness needs [ready]

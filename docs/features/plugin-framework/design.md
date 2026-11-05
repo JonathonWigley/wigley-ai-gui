@@ -162,8 +162,8 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
 
 ## Commands and state (Waves 2 and 3)
 
-Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Plan
-folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/` (Wave 3).
+Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Waves 0
+and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds Wave 3.
 
 - **One argument per command.** A manifest declares it as a number, a string or a small record of those. Plugin code
   runs an argument command through a typed `CommandKey` from `contract.ts`, and a `keymap.json` bind carries an `arg`
@@ -178,7 +178,7 @@ folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/`
 - **A slot holds a value a late reader wants.** Its change notice replaces any matching event. An event marks a moment
   (turn finished, doc saved). Publishing both for every change was rejected: two paths carry one change.
 - **All slots live in main's memory, page-owned ones included.** The page takes a snapshot before its parts start and a
-  sequence number orders every later change, which replaces twelve hand-written race rules. Each process-held store was
+  sequence number orders every later change, which replaces the hand-written race rules chat, sessions, agents, usage, workflow and unity-pool kept for it. Each process-held store was
   rejected because Wave 3 would then need a second store for reloads. Writing every slot to disk was rejected because
   chat entries would duplicate the transcript. Durable data stays in plugin data and `uiState`.
 - **Slot values are JSON.** Processes, resolvers, timers and watches stay in the owner's closure, and the owner rebuilds
@@ -188,7 +188,8 @@ folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/`
   nobody has measured, and they can come later behind the same slot.
 - **A slot outlives its owner's stop.** The next start publishes the same key, reads the last value and rebuilds from it.
   A key another live part holds throws, and a page load releases the previous page's claims. A disabled or never-started
-  owner reads undefined. Clearing a slot for a plugin switched off live falls to Wave 4.
+  owner reads undefined. `sessions.activity` is the one slot that clears itself at a page start, since each source sets its
+  activity again. Clearing a slot for a plugin switched off live falls to Wave 4.
 - **Soft reads.** A manifest's `reads` list allows a slot read, or hearing an event, with the contract import and no
   start order. `dependsOn` stays for exports and for needing the other plugin started first.
 - **Forms' and primer's rounds stay on their channels.** Their owners' state is mostly live `ask_round` calls, so a slot

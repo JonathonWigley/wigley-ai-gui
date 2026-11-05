@@ -1,6 +1,6 @@
 # 14 — Events for every moment
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 12 · Depends on: 12, 13
 Plan: [plan.md](plan.md)
@@ -195,3 +195,5 @@ Done when: compiles and lints; each `contract.ts` holds the names above; `grep -
 Commit: one commit for the group.
 
 ## Proof
+
+Commit a86e3e9e · proof: Report read; the emit sites present; typecheck and lint clean. · concerns: messageSent fires right after process.send, before the entry arrives in chat.entries; a row restored mid-turn fires turnFinished with no turnStarted; restAfterFailedAttach rests with the replay on and fires nothing; a part restart clears sessions.activity until the next set, unreachable until Wave 4; each setActivity writes across the bridge even on a repeat; a setActivity after stop logs written after stop; the harness fake mode's show() now runs shown(), which all page-part tests pass under.
