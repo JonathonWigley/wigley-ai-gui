@@ -14,6 +14,7 @@ import { notesMainPart } from './notes/main/start';
 import { primerMainPart } from './primer/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
+import { unityPoolMainPart } from './unity-pool/main/start';
 import { usageMainPart } from './usage/main/start';
 import { visualMainPart } from './visual/main/start';
 import { workflowMainPart } from './workflow/main/start';
@@ -36,6 +37,7 @@ export const mainParts: readonly MainPart[] = [
   notesMainPart,
   usageMainPart,
   workflowMainPart,
+  unityPoolMainPart,
   visualMainPart,
   keysMainPart,
   galleryMainPart,

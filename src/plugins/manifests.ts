@@ -14,6 +14,7 @@ import { notesManifest } from './notes/manifest';
 import { primerManifest } from './primer/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
+import { unityPoolManifest } from './unity-pool/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
@@ -43,6 +44,7 @@ export const builtInManifests = [
   usageManifest,
   usageTabLineManifest,
   workflowManifest,
+  unityPoolManifest,
   visualManifest,
 ] as const;
 

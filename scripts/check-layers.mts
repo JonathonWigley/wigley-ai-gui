@@ -623,6 +623,19 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  'src/plugins/unity-pool': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  'src/plugins/unity-pool/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/plugins/unity-pool',
+    ],
+    packages: [],
+  },
   'src/plugins/usage': {
     layers: ['src/contracts', 'src/shared'],
     packages: [],
@@ -984,6 +997,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/gallery/main',
       'src/plugins/keys',
       'src/plugins/keys/main',
+      'src/plugins/unity-pool',
+      'src/plugins/unity-pool/main',
       'src/plugins/usage',
       'src/plugins/usage/main',
       'src/plugins/visual',
@@ -1012,6 +1027,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/primer',
       'src/plugins/sessions',
       'src/plugins/settings',
+      'src/plugins/unity-pool',
       'src/plugins/usage',
       'src/plugins/usage-tab-line',
       'src/plugins/visual',
