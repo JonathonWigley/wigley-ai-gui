@@ -31,6 +31,14 @@ export function folderItems(
   return [...recentItems, { kind: 'choose', label: CHOOSE_FOLDER_LABEL }];
 }
 
+// The folder step's row name: a recent folder's own name; the choose-folder
+// line's label.
+export function folderName(item: FolderItem, paths: Paths): string {
+  return item.kind === 'recent'
+    ? paths.base(item.folder.projectDir)
+    : item.label;
+}
+
 // The index in `profiles` to pre-select for `projectDir`; 0 when no recent
 // folder that is the same path names a profile in `profiles`.
 export function preselectedProfile(

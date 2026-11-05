@@ -31,6 +31,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       channel: api.channel,
       editor: services.editor,
       markdown: services.markdown,
+      matcher: services.fuzzy,
       paths: services.paths,
       homeDir: services.homeDir,
       uiState: services.uiState,

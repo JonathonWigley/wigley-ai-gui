@@ -22,6 +22,7 @@ import type { SignInDialog } from './sign-in-dialog';
 import {
   displayPath,
   type FolderItem,
+  folderName,
   folderItems,
   preselectedProfile,
   profileLabel,
@@ -139,6 +140,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       title: 'Folder',
       items: folderItems(context.recent, deps.homeDir, deps.paths),
       label: (item) => item.label,
+      name: (item) => folderName(item, deps.paths),
       rowInput: folderRowInput,
       selected: 0,
       picked: (item) =>

@@ -141,6 +141,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       ...partDeps,
       overlay: api.areas.overlay,
       editor: services.editor,
+      matcher: services.fuzzy,
       pushScope: (scope) => api.keys.pushScope(scope),
     });
     const viewer = createImageViewer({

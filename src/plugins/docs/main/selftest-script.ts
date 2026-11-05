@@ -27,6 +27,11 @@ const STYLE_RELOADED = '# Style\n\nWrite short lines.\nChanged on disk.\n';
 const STYLE_CHANGED_WHILE_EDITING =
   '# Style\n\nWrite short lines.\nChanged while editing.\n';
 
+// Filters only one rule's path matches: `neat` and `style` alone fuzzily match
+// other docs' paths too.
+const NEAT_RULE_FILTER = 'rulesneat';
+const STYLE_RULE_FILTER = 'rulesstyle';
+
 // A filter matching nothing, with no break in it, wider than the session
 // split's narrowest tree pane.
 const UNMATCHED_FILTER = 'zqzq'.repeat(10);
@@ -312,8 +317,8 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   ];
   const treeFilter: SelfTestStep[] = [
     {
-      keys: ['/', ...'neat', 'Enter'],
-      expect: '[docs] filtered the tree: neat',
+      keys: ['/', ...NEAT_RULE_FILTER, 'Enter'],
+      expect: `[docs] filtered the tree: ${NEAT_RULE_FILTER}`,
     },
     { keys: ['g', 'g'], expect: '[docs] selected Mine' },
     {
@@ -601,8 +606,8 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: "Both views' pane scope is tree, so only closing the session view's kind picker on Docs mode's show frees j for Docs mode's tree.",
     },
     {
-      keys: ['/', ...'neat', 'Enter'],
-      expect: '[docs] filtered the tree: neat',
+      keys: ['/', ...NEAT_RULE_FILTER, 'Enter'],
+      expect: `[docs] filtered the tree: ${NEAT_RULE_FILTER}`,
     },
     {
       keys: ['j', 'j', 'j', 'j', 'r'],
@@ -617,8 +622,8 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   ];
   const starsAcrossViews: SelfTestStep[] = [
     {
-      keys: ['/', ...'style', 'Enter'],
-      expect: '[docs] filtered the tree: style',
+      keys: ['/', ...STYLE_RULE_FILTER, 'Enter'],
+      expect: `[docs] filtered the tree: ${STYLE_RULE_FILTER}`,
     },
     { keys: ['g', 'g'], expect: '[docs] selected Mine' },
     {

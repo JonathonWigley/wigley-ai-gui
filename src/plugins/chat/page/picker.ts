@@ -1,4 +1,5 @@
 import type { EditorHost } from '../../../contracts/editor';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
@@ -27,6 +28,9 @@ export interface PickerRequest<T> {
   items: readonly T[];
   // The line drawn and filtered on.
   label(item: T): string;
+  // The row's name when its label also holds a path: a filter's match on it
+  // outranks any match on a label.
+  name?(item: T): string;
   // The item index highlighted on open; 0 when left out or out of range.
   selected?: number;
   // True when the list acts on the shown Chat tab's session, so
@@ -87,6 +91,7 @@ export interface PickerDeps extends SurfaceKitDeps {
   pushScope(scope: ChatScopeName): PushedScope;
   layouts: ChatLayouts;
   log: PluginLog;
+  matcher: FuzzyMatcher;
 }
 
 type PickerScope = NonNullable<PickerRequest<unknown>['scope']>;
@@ -97,6 +102,7 @@ export function createPicker(deps: PickerDeps): Picker {
   const list = createListPicker({
     pushScope: () => deps.pushScope(scope),
     log: deps.log,
+    matcher: deps.matcher,
     filterEditor: deps.editor,
   });
   deps.overlay.contribute(list.element);
@@ -149,6 +155,7 @@ export function createPicker(deps: PickerDeps): Picker {
         title: next.title,
         items: next.items,
         label: next.label,
+        name: next.name,
         selected: next.selected,
         headerEnd: headers[nextScope],
         cursorEnd:

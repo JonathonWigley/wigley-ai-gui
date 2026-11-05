@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -47,6 +48,7 @@ function dialogsOver(layouts: () => ShownLayouts<Layout>) {
     paths: posixPaths,
     toast: () => undefined,
     log: () => undefined,
+    matcher: fakeFuzzyMatcher,
     parts,
     pushScope: fakePushedScope,
     entries: () => [],

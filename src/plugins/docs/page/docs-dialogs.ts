@@ -1,3 +1,4 @@
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -412,6 +413,7 @@ export interface DocsDialogsDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  matcher: FuzzyMatcher;
   // Draws the dialogs' bodies and the list picker's rows through the docs
   // layout.
   parts: DocsParts;
@@ -462,6 +464,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   const picker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log,
+    matcher: deps.matcher,
   });
   const { parts } = deps;
   const box = createTextBox({
@@ -511,6 +514,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       items: places,
       drawRow: pickerRow(title),
       label: (place) => place.title,
+      name: (place) => place.owner,
       selected: 0,
       chosen: (place) => nameDoc(kind, place),
       cancelled: () => {

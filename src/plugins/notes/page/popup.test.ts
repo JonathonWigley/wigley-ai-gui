@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type { DropTarget, DroppedFile } from '../../../contracts/drops';
 import type { EditorEvents, TextEditor } from '../../../contracts/editor';
 import type { ImageEncoder } from '../../../contracts/images';
@@ -342,6 +343,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   const popup = createNotePopup({
     channel: fakeChannel(draft, fakes, added, saved, savedMarkups),
     services,
+    matcher: fakeFuzzyMatcher,
     keys: recordingAnchors().keys,
     overlay: {
       contribute(element) {

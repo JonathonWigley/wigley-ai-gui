@@ -153,6 +153,7 @@ function caseInsensitive(files: MemoryFiles): Files {
 
 const REPO_PLACE = (folder: string): CreatePlace => ({
   title: `r · ${folder}`,
+  owner: 'r',
   folder,
   source: 'repo',
 });
@@ -330,6 +331,7 @@ describe('create', () => {
       kind: 'skill',
       place: {
         title: 'r · ~/dev/r/.claude/skills',
+        owner: 'r',
         folder: `${ROOT}/.claude/skills`,
         source: 'repo',
       },

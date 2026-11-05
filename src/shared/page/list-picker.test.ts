@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../contracts/editor';
+import { fakeFuzzyMatcher } from '../fake-fuzzy-matcher.test-support';
 import { createListPicker, type ListPickerRequest } from './list-picker';
 import {
   asFake,
@@ -19,6 +20,7 @@ function pickerSetup() {
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
     log: vi.fn(),
+    matcher: fakeFuzzyMatcher,
   });
   return { picker, layer: asFake(picker.element) };
 }
@@ -46,6 +48,7 @@ function filteredPickerSetup() {
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
     log: vi.fn(),
+    matcher: fakeFuzzyMatcher,
     filterEditor,
   });
   return {
@@ -257,4 +260,19 @@ describe('list picker', () => {
       expect(made).toHaveLength(9);
     },
   );
+
+  it('open_Name_FilterRanksItAheadOfLabels', () => {
+    const { picker, type } = filteredPickerSetup();
+    picker.open({
+      title: 'Target',
+      items: ['b/a', 'a/b'],
+      label: (item) => item,
+      name: (item) => item.split('/')[0],
+      chosen: () => undefined,
+    });
+
+    type('a');
+
+    expect(picker.cursorIndex()).toBe(1);
+  });
 });

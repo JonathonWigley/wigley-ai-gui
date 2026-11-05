@@ -1,4 +1,5 @@
 import type { EditorHost } from '../../contracts/editor';
+import type { FuzzyMatcher } from '../../contracts/fuzzy';
 import type { PluginLog } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
 import { element } from './dom';
@@ -21,6 +22,9 @@ export interface ListPickerRequest<T> {
   items: readonly T[];
   // The line drawn and filtered on.
   label(item: T): string;
+  // The row's name when its label also holds a path: a filter's match on it
+  // outranks any match on a label.
+  name?(item: T): string;
   // The item index highlighted on open; 0 when left out or out of range.
   selected?: number;
   // Runs once the list has closed on a choice.
@@ -62,7 +66,8 @@ export interface DrawnPickerRow {
 // request, if any, without hearing its cancel. Its scope is pushed while it
 // shows, and the base scope changing under it, or a click on the layer
 // outside the panel, cancels it. `choose` with nothing visible does nothing;
-// `close` hides it without hearing a cancel.
+// `close` hides it without hearing a cancel. A filter shows the rows it keeps
+// best match first, the cursor on the first.
 // A request's `headerEnd` sits at the end of the title line while it is open,
 // and its `cursorEnd` at the trailing end of the cursor row only, moved there
 // on each draw.
@@ -97,6 +102,8 @@ export interface ListPickerDeps {
   pushScope(): PushedScope;
   // Takes the `picker shown: <title>` line.
   log: PluginLog;
+  // Ranks the rows a filter keeps.
+  matcher: FuzzyMatcher;
   // Adds the filter box above the list when given.
   filterEditor?: EditorHost;
 }
@@ -193,7 +200,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   const draw = () => {
     disposeRows();
     list.replaceChildren();
-    for (const index of visibleIndexes(state)) {
+    for (const index of visibleIndexes(state, deps.matcher)) {
       drawnRows.set(index, drawRowAt(index));
     }
     scrollToCursor();
@@ -217,7 +224,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   // Moves the cursor by `step`, drawing only the rows it left and reached.
   const moveCursor = (step: 1 | -1) => {
     const left = state.cursor;
-    state = movePicker(state, step);
+    state = movePicker(state, step, deps.matcher);
     if (state.cursor === left) {
       return;
     }
@@ -230,7 +237,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   const filter =
     deps.filterEditor?.create(filterBox, '', {
       changed: (text) => {
-        state = filterPicker(state, text);
+        state = filterPicker(state, text, deps.matcher);
         draw();
       },
       focused: () => undefined,
@@ -280,7 +287,11 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
         drawRowAt: (parent, index, input) =>
           next.drawRow?.(parent, next.items[index], input) ?? null,
       };
-      state = openPicker(next.items.map(next.label), next.selected ?? 0);
+      state = openPicker(
+        next.items.map(next.label),
+        next.selected ?? 0,
+        next.name && next.items.map(next.name),
+      );
       title.textContent = next.title;
       head.replaceChildren(
         ...(next.headerEnd ? [title, next.headerEnd] : [title]),

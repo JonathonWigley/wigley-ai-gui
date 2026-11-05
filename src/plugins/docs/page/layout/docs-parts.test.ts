@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../../shared/fake-fuzzy-matcher.test-support';
 import { element } from '../../../../shared/page/dom';
 import {
   USER_LAYOUT,
@@ -185,6 +186,7 @@ function headerInput() {
 function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
   return {
     log: () => undefined,
+    matcher: fakeFuzzyMatcher,
     parts,
     isMachine: true,
     openLeaf: () => undefined,

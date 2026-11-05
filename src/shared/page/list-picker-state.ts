@@ -1,7 +1,11 @@
+import type { FuzzyMatcher } from '../../contracts/fuzzy';
+
 // A picker's list: `cursor` is an index into `labels`, −1 when nothing is
-// visible.
+// visible. `names` holds each row's name when its label also holds a path;
+// null when the labels are all there is to match.
 export interface PickerState {
   labels: readonly string[];
+  names: readonly string[] | null;
   filter: string;
   cursor: number;
 }
@@ -11,28 +15,42 @@ export interface PickerState {
 export function openPicker(
   labels: readonly string[],
   selected: number,
+  names?: readonly string[],
 ): PickerState {
   const isInRange = selected >= 0 && selected < labels.length;
   const fallback = labels.length > 0 ? 0 : -1;
-  return { labels, filter: '', cursor: isInRange ? selected : fallback };
+  return {
+    labels,
+    names: names ?? null,
+    filter: '',
+    cursor: isInRange ? selected : fallback,
+  };
 }
 
-// The indexes, in order, whose label holds the trimmed filter, compared
-// lower-cased; every index for an empty filter.
-export function visibleIndexes(state: PickerState): number[] {
-  const needle = state.filter.trim().toLowerCase();
-  const indexes: number[] = [];
-  state.labels.forEach((label, index) => {
-    if (label.toLowerCase().includes(needle)) {
-      indexes.push(index);
-    }
-  });
-  return indexes;
+// The indexes the filter keeps, best match first, a match on a row's name
+// ahead of a match on any label; every index in order for an empty trimmed
+// filter.
+export function visibleIndexes(
+  state: PickerState,
+  matcher: FuzzyMatcher,
+): number[] {
+  const { labels, names, filter } = state;
+  const indexes = labels.map((_label, index) => index);
+  if (filter.trim() === '') {
+    return indexes;
+  }
+  return matcher.rank(indexes, filter, (index) =>
+    names === null ? [[labels[index]]] : [[names[index]], [labels[index]]],
+  );
 }
 
 // The next or previous visible index, clamped at the ends.
-export function movePicker(state: PickerState, step: 1 | -1): PickerState {
-  const visible = visibleIndexes(state);
+export function movePicker(
+  state: PickerState,
+  step: 1 | -1,
+  matcher: FuzzyMatcher,
+): PickerState {
+  const visible = visibleIndexes(state, matcher);
   if (visible.length === 0) {
     return state;
   }
@@ -41,13 +59,19 @@ export function movePicker(state: PickerState, step: 1 | -1): PickerState {
   return { ...state, cursor: visible[next] };
 }
 
-// The cursor stays while its label is visible, else moves to the first
-// visible one.
-export function filterPicker(state: PickerState, filter: string): PickerState {
+// With a filter, the cursor goes to the best match, so Enter picks it. With
+// an empty trimmed filter it stays while it is on a row, else goes to the
+// first.
+export function filterPicker(
+  state: PickerState,
+  filter: string,
+  matcher: FuzzyMatcher,
+): PickerState {
   const filtered = { ...state, filter };
-  const visible = visibleIndexes(filtered);
-  const cursor = visible.includes(state.cursor)
-    ? state.cursor
-    : (visible[0] ?? -1);
-  return { ...filtered, cursor };
+  const visible = visibleIndexes(filtered, matcher);
+  const keepsCursor = filter.trim() === '' && visible.includes(state.cursor);
+  return {
+    ...filtered,
+    cursor: keepsCursor ? state.cursor : (visible[0] ?? -1),
+  };
 }

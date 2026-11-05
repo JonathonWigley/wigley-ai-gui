@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type { FollowupItem } from '../../../shared/followups/followup-file';
-import type { BacklogHome, BacklogPlan, BacklogRead } from '../contract';
+import type {
+  BacklogFeature,
+  BacklogHome,
+  BacklogPlan,
+  BacklogRead,
+} from '../contract';
 import {
   actedFollowup,
   type BacklogAction,
@@ -72,7 +78,10 @@ function read(...homes: BacklogHome[]): BacklogRead {
 }
 
 function run(state: BacklogState, ...actions: BacklogAction[]): BacklogState {
-  return actions.reduce(backlogReducer, state);
+  return actions.reduce(
+    (given, action) => backlogReducer(given, action, fakeFuzzyMatcher),
+    state,
+  );
 }
 
 // The state after loading `homes` and opening the first.
@@ -85,11 +94,13 @@ function opened(...homes: BacklogHome[]): BacklogState {
 }
 
 function titles(state: BacklogState): string[] {
-  return visibleRows(state).map(rowTitle);
+  return visibleRows(state, fakeFuzzyMatcher).map(rowTitle);
 }
 
 function selectedTitle(state: BacklogState): string | undefined {
-  const row = visibleRows(state).find((each) => each.key === state.selectedKey);
+  const row = visibleRows(state, fakeFuzzyMatcher).find(
+    (each) => each.key === state.selectedKey,
+  );
   return row === undefined ? undefined : rowTitle(row);
 }
 
@@ -143,6 +154,39 @@ describe('visibleRows', () => {
     );
 
     expect(titles(state)).toEqual(['Alpha cleanup', 'Beta', 'Gamma']);
+  });
+
+  it('visibleRows_FuzzyTitle_KeepsOrder', () => {
+    const feature = {
+      slug: 'clusters',
+      path: `${ROOT}/clusters`,
+      tasks: [],
+    } as unknown as BacklogFeature;
+    const state = run(
+      opened({
+        ...home(
+          ROOT,
+          [item('Delta'), item('claude-stream')],
+          [plan('cli stream', []), plan('Other', [])],
+        ),
+        features: [feature],
+      }),
+      { type: 'setFilter', text: 'clstr' },
+    );
+
+    expect(titles(state)).toEqual(['claude-stream', 'cli stream', 'clusters']);
+  });
+
+  it.each([
+    { filter: 'tpt', shown: [] },
+    { filter: ' TRANSPARENT ', shown: ['Beta'] },
+  ])('visibleRows_OneLineIsSubstringOnly "$filter"', ({ filter, shown }) => {
+    const state = run(
+      opened(home(ROOT, [item('Beta', { oneLine: 'A transparent wait' })])),
+      { type: 'setFilter', text: filter },
+    );
+
+    expect(titles(state)).toEqual(shown);
   });
 });
 
@@ -348,7 +392,7 @@ describe('backlogReducer', () => {
     const afterDelete = run(onHomes, { type: 'askDelete' });
 
     expect(selectedTitle(onHomes)).toBe('One');
-    expect(actedFollowup(onHomes)).toBeNull();
+    expect(actedFollowup(onHomes, fakeFuzzyMatcher)).toBeNull();
     expect(afterEdit.editor).toBeNull();
     expect(afterDelete.confirm).toBeNull();
   });
@@ -356,7 +400,7 @@ describe('backlogReducer', () => {
   it('backlogReducer_FollowupKeysWithFocusOnItems_ActOnSelectedFollowup', () => {
     const state = opened(home(ROOT, [item('One')]));
 
-    expect(actedFollowup(state)?.item.title).toBe('One');
+    expect(actedFollowup(state, fakeFuzzyMatcher)?.item.title).toBe('One');
     expect(run(state, { type: 'openEdit' }).editor?.baseline?.title).toBe(
       'One',
     );
@@ -499,9 +543,14 @@ describe('emptyReason', () => {
       given: opened(home(ROOT, [])),
       reason: 'nothing',
     },
+    {
+      state: 'a filter of only spaces',
+      given: run(opened(home(ROOT, [])), { type: 'setFilter', text: '   ' }),
+      reason: 'nothing',
+    },
     { state: 'no home open', given: initialBacklogState(), reason: 'noHome' },
   ])('is $reason with $state', ({ given, reason }) => {
-    expect(emptyReason(given)).toBe(reason);
+    expect(emptyReason(given, fakeFuzzyMatcher)).toBe(reason);
   });
 });
 

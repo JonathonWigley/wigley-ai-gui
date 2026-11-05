@@ -66,6 +66,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
     const popup = createNotePopup({
       channel: api.channel,
       services,
+      matcher: services.fuzzy,
       keys,
       overlay: api.areas.overlay,
       commands: {

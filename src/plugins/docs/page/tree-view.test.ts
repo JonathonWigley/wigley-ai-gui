@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
@@ -38,6 +39,7 @@ describe('createTreeView', () => {
     const { parts } = fakeDocsParts(() => shown);
     const tree = createTreeView({
       log: () => undefined,
+      matcher: fakeFuzzyMatcher,
       parts,
       isMachine: true,
       openLeaf: () => undefined,

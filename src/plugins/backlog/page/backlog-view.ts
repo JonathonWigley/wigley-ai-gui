@@ -3,6 +3,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type {
@@ -68,6 +69,7 @@ import {
   actedFollowup,
   actedHome,
   actedRow,
+  type BacklogAction,
   type BacklogConfirm,
   type BacklogEditor,
   type BacklogFocus,
@@ -133,6 +135,7 @@ export interface BacklogViewDeps {
   channel: PageChannel<BacklogChannel>;
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  matcher: FuzzyMatcher;
   paths: Paths;
   homeDir: string;
   uiState: UiState;
@@ -213,7 +216,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     return target;
   };
 
-  const store = createReducerStore(initialBacklogState(), backlogReducer);
+  const { matcher } = deps;
+  const store = createReducerStore(
+    initialBacklogState(),
+    (state: BacklogState, action: BacklogAction) =>
+      backlogReducer(state, action, matcher),
+  );
   const dispatch = store.dispatch;
 
   // ── Layouts ────────────────────────────────────────────────────────────
@@ -313,6 +321,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log: deps.log,
+    matcher,
   });
   deps.addOverlay(picker.element);
 
@@ -662,7 +671,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const drawRows = (state: BacklogState) => {
-    const rows = visibleRows(state);
+    const rows = visibleRows(state, matcher);
     rowDraws = disposeDraws(rowDraws);
     rowsList.replaceChildren();
     let section: GroupHeaderInput['section'] | null = null;
@@ -703,7 +712,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       }
     }
     placeCursorPrompt(selectedRow);
-    const reason = emptyReason(state);
+    const reason = emptyReason(state, matcher);
     if (reason !== null) {
       rowDraws.push(
         parts.draw('empty', rowsList, (empty, into, rollback) => ({
@@ -716,7 +725,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       );
     }
     listPane.classList.toggle('is-pane-inactive', state.focus !== 'items');
-    filterFrame.hidden = filterScope === null && state.filter === '';
+    filterFrame.hidden = filterScope === null && state.filter.trim() === '';
     if (filterScope === null) {
       filterBox.value = state.filter;
     }
@@ -827,7 +836,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // came from changed since the last draw, at the top; draws it again at the
   // kept scroll when only the panes drew again.
   const drawDetail = (state: BacklogState) => {
-    const shown = selectedRow(state);
+    const shown = selectedRow(state, matcher);
     detailBody.hidden = state.editor !== null;
     let key: string | null = null;
     if (shown !== null) {
@@ -901,7 +910,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     if (state.selectedKey !== shownSelectedKey) {
       shownSelectedKey = state.selectedKey;
-      const shown = selectedRow(state);
+      const shown = selectedRow(state, matcher);
       if (shown !== null) {
         deps.log(`selected ${rowTitle(shown)}`);
       }
@@ -1012,7 +1021,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const setTags = (tags: string[]) => {
-    const shown = actedFollowup(store.get());
+    const shown = actedFollowup(store.get(), matcher);
     const home = openHome(store.get());
     if (shown === null || home === null) {
       return;
@@ -1124,7 +1133,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
 
   const pickTag = () => {
     const state = store.get();
-    const shown = actedFollowup(state);
+    const shown = actedFollowup(state, matcher);
     const { editor } = state;
     let current: string[];
     if (editor !== null) {
@@ -1167,7 +1176,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const openInDocs = () => {
-    const shown = actedRow(store.get());
+    const shown = actedRow(store.get(), matcher);
     if (shown === null) {
       return;
     }
@@ -1212,7 +1221,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     edit: () => dispatch({ type: 'openEdit' }),
     delete: () => dispatch({ type: 'askDelete' }),
     toggleAgentReady() {
-      const shown = actedFollowup(store.get());
+      const shown = actedFollowup(store.get(), matcher);
       if (shown !== null) {
         setTags(withTagToggled(shown.item.tags, AGENT_READY));
       }
