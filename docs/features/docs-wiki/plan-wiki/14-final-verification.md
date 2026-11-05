@@ -1,6 +1,6 @@
 # 14 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 10 · Depends on: 13
 Plan: [plan.md](plan.md)
@@ -57,3 +57,4 @@ Commit: none, unless a fix lands through a dispatch.
 
 ## Proof
 
+Commit none · proof: Self-test --plugin docs,backlog: all passed, exit 0. Placement check did not run: a filtered run skips it. 1 PASS real script with HOME on the run home: schema 5, 13 entries, Main.md headings from the real parser, section links, no schema error, shelves in the sidebar. 2 PASS two clicks on .docs-sidebar-switch log All pages then the wiki. 3 PASS mouse click on a wrapped section link opened target.md, Ctrl+o returned, same-file link moved to line 12. 4 PASS section edit and :w changed only Middle notes by byte comparison. 5 PASS text column holds 670 either side of the change between window 1300 and 1310, aside returns. 6 PASS Recent changes shows two commits with time, subject and Commit page through real git. · concerns: Open page keeps its old title after a rebuild (Fixture main page) until reopened, possibly an artifact of swapping the script live. Tree highlight stays on the last tree row while another doc shows. A real-script index under a run home still lists the user's ~/.claude/CLAUDE.md, through inherited CLAUDE_CONFIG_DIR, read-only. The drive run inherits WIGLEY_AI_GUI_ENDPOINT_DIR, untraced.
