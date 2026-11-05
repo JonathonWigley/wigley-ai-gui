@@ -222,7 +222,7 @@ harness type.
 - [x] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
 
 ### Wave 5
-- [ ] [Final verification](07-final-verification.md) — after 06
+- [x] [Final verification](07-final-verification.md) — after 06
 
 ## Run log
 
@@ -235,6 +235,7 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - 04 · 33d71b2a · diff read; every Produces present; typecheck no errors; plugin and picker tests 1414 pass; filtered selftest docs,settings,backlog,notes 328 pass per worker; full selftest 949 pass, 1 fail in session-row fit, attributed to a peer's staged Sessions layout edit, re-checked at the test gate · concerns: self-test in a shared tree spoiled by peer page reloads; session-row fit failure unconfirmed as the peer's; Load states names the home folder by base, check live in 07; docs selftest commit split from a peer's staged line
 - 05 · d907ce67 · diff read; every Produces present; typecheck no errors; lint exit 0 per worker; five test files 133 pass; selftest --plugin chat 195 pass, no fail · concerns: one full selftest run had three unexplained chat close failures that did not reproduce; agent-lines session-row fit failure, same as task 04, unconfirmed as the peer's; descriptions follow each name so do not line up as a column; DESIGN.md has no line for completion descriptions; the long-description ellipsis was not seen on screen, check in 07; drawRow rebuilds the command list per row
 - 06 · 0f106a88 · diff read against the landed code; each listed check reported; docs only · concerns: DESIGN.md has no line for the description, left while a peer holds edits there; init.slash_commands holding the same 101 entries is unverified on 2.1.318; design.md still says the row's element holds the drawn name
+- 07 · 04bc4ebf · Live drive against real Claude, reports 07-1 and 07-fix-1. Checks 1, 3, 4, 5, 6 pass and the added merge check passes (110 to 117 commands, none lost). Check 2 and three extra bugs failed, were fixed in 04bc4ebf and re-checked: long-name rows, Ctrl+n and Ctrl+p with the popup open, /feature Tab, Docs path over-match. Notes Target exact-word case not reachable; substitute query tes put the name match first. · concerns: A worker's stray keys sent one real Claude message in the temp home, 0.32 dollars; byLengthAsc changes rank's tie rule for every picker; a name that alone fills the row not seen on screen; Ctrl+n before the popup opens still starts a new session; literal &lt; entities in some descriptions, source unconfirmed
 ### Contract changes
 ### Rulings
 - sameNames replaced by the existing isSameJson — compares all four fields with no new helper — a reordered alias list sends one extra message · group 02 · group 02
@@ -266,3 +267,4 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 ### Review rounds
 ### Test gate
 - Picks: typecheck, lint, npm test, and the touched plugins' self-test groups (chat, settings, docs, backlog, notes, sessions, agent-lines), since AGENTS.md keeps the whole self-test for the user's ask in that turn · typecheck 0, lint 0, npm test 463 files 8309 pass; self-test 582 PASS, 1 FAIL (Escape␣zla fits the held width: session-row 156px in 149px), no page reload lines; the failure sits in the Sessions row layout, which this run's commits do not touch
+- After task 07's fixes (04bc4ebf), in the worktree: typecheck 0, lint 0, npm test 8366 pass; self-test chat, docs, notes, settings, backlog, forms, primer 816 PASS, 0 FAIL, no page reload lines; forms and primer added because page-keys changed

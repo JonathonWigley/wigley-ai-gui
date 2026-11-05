@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -27,3 +27,4 @@ Commit:    only for a fix a check finds
 
 ## Proof
 
+Commit 04bc4ebf · proof: Live drive against real Claude, reports 07-1 and 07-fix-1. Checks 1, 3, 4, 5, 6 pass and the added merge check passes (110 to 117 commands, none lost). Check 2 and three extra bugs failed, were fixed in 04bc4ebf and re-checked: long-name rows, Ctrl+n and Ctrl+p with the popup open, /feature Tab, Docs path over-match. Notes Target exact-word case not reachable; substitute query tes put the name match first. · concerns: A worker's stray keys sent one real Claude message in the temp home, 0.32 dollars; byLengthAsc changes rank's tie rule for every picker; a name that alone fills the row not seen on screen; Ctrl+n before the popup opens still starts a new session; literal &lt; entities in some descriptions, source unconfirmed
