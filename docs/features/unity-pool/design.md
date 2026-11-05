@@ -70,8 +70,8 @@ A session row shows one badge per pool its session is in:
 - `Unity 3` while it holds clone 3: a claim, or an open `/clear` handoff to it.
 - `Unity: queued 2nd` while it waits in the pool's queue, second from the head.
 
-A claim, handoff or queue ticket belongs to a row when its `row` is the row's id, else when its `session` is the
-row's host session id. A user hold and a stranded mark show no badge: they belong to no session, and the panel shows
+A claim, handoff or queue ticket belongs to the row whose id is its `row`, else, when no row has that id, to the row
+whose host session id is its `session`. A user hold and a stranded mark show no badge: they belong to no session, and the panel shows
 them.
 
 ## Panel
@@ -106,7 +106,7 @@ Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the `unit
 (`python3` by default; `py` or `python` on a Windows install with no `python3`) and the script the
 `unity-pool.scriptPath` setting. Empty, `scriptPath` is `~/.local/bin/unity-pool`, and on Windows
 `~/wigley-agents/tools/unity-pool/unity-pool`, since a Windows install writes launchers, not a symlink a Python can
-run; main's start picks it from the platform. A run times out after 30 seconds. The button is disabled while its run is in
+run; `resolveScriptPath` picks it from the platform main reads. A run times out after 30 seconds. The button is disabled while its run is in
 flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`, or the CLI's
 error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
 with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an

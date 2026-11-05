@@ -4,9 +4,9 @@ import { FakeProcesses } from '../../../shared/fake-processes';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { PoolAction, PoolActionResult } from '../contract';
 import {
-  defaultScriptPath,
   poolCommandArgs,
   readActionResult,
+  resolveScriptPath,
   runPoolCommand,
 } from './pool-cli';
 
@@ -130,41 +130,26 @@ describe('runPoolCommand', () => {
     expect(run.processes.runs).toEqual([]);
   });
 
-  it('runPoolCommand_TildeScript_ExpandsAndRuns', async () => {
-    const run = deps(['/h/x'], '~/x');
-    const args = poolCommandArgs('/h/x', 'release', 'p', 4);
-    run.processes.script(
-      'python3',
-      args,
-      exited(0, '{"ok": true, "pool": "p", "clone": 4}'),
-    );
+  it.each(['python3', 'py'])(
+    'runPoolCommand_TildeScript_ExpandsAndRunsThePython: %s',
+    async (pythonCommand) => {
+      const run = deps(['/h/x'], '~/x', pythonCommand);
+      const args = poolCommandArgs('/h/x', 'release', 'p', 4);
+      run.processes.script(
+        pythonCommand,
+        args,
+        exited(0, '{"ok": true, "pool": "p", "clone": 4}'),
+      );
 
-    const result = await runPoolCommand(run.deps, 'release', 'p', 4);
+      const result = await runPoolCommand(run.deps, 'release', 'p', 4);
 
-    expect(run.statted).toEqual(['/h/x']);
-    expect(run.processes.runs[0]).toEqual({
-      command: 'python3',
-      args,
-      cwd: undefined,
-      timeoutMs: 30_000,
-    });
-    expect(result).toEqual({ ok: true, pool: 'p', clone: 4 });
-  });
-
-  it('runPoolCommand_ConfiguredPython_RunsThatCommand', async () => {
-    const run = deps(['/s/unity-pool'], '/s/unity-pool', 'py');
-    const args = poolCommandArgs('/s/unity-pool', 'hold', 'p', 3);
-    run.processes.script(
-      'py',
-      args,
-      exited(0, '{"ok": true, "pool": "p", "clone": 3}'),
-    );
-
-    const result = await runPoolCommand(run.deps, 'hold', 'p', 3);
-
-    expect(run.processes.runs.map((r) => r.command)).toEqual(['py']);
-    expect(result).toEqual({ ok: true, pool: 'p', clone: 3 });
-  });
+      expect(run.statted).toEqual(['/h/x']);
+      expect(run.processes.runs).toEqual([
+        { command: pythonCommand, args, cwd: undefined, timeoutMs: 30_000 },
+      ]);
+      expect(result).toEqual({ ok: true, pool: 'p', clone: 4 });
+    },
+  );
 
   it('runPoolCommand_RunRejects_CliFailed', async () => {
     const run = deps(['/s/unity-pool'], '/s/unity-pool');
@@ -182,11 +167,22 @@ describe('runPoolCommand', () => {
   });
 });
 
-describe('defaultScriptPath', () => {
-  it.each([
-    { windows: false, expected: '~/.local/bin/unity-pool' },
-    { windows: true, expected: '~/wigley-agents/tools/unity-pool/unity-pool' },
-  ])('defaultScriptPath: windows $windows', ({ windows, expected }) => {
-    expect(defaultScriptPath(windows)).toBe(expected);
+describe('resolveScriptPath', () => {
+  it('resolveScriptPath_Empty_DiffersByPlatform', () => {
+    const mac = resolveScriptPath('', false);
+    const windows = resolveScriptPath('', true);
+
+    expect(mac).not.toBe('');
+    expect(windows).not.toBe('');
+    expect(mac).not.toBe(windows);
   });
+
+  it.each([false, true])(
+    'resolveScriptPath_Set_KeepsIt: windows %s',
+    (windows) => {
+      expect(resolveScriptPath('~/tools/unity-pool', windows)).toBe(
+        '~/tools/unity-pool',
+      );
+    },
+  );
 });

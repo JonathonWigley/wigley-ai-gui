@@ -10,7 +10,7 @@ export interface ClaudeLaunch {
 // What a Claude Code session sets for its own children, which an app started
 // from a Claude Code terminal inherits: the names claude-stream.md § Launch
 // lists. Other `CLAUDE_CODE_*` names are the user's config and pass through, but
-// for `APP_SETTING_ENV`'s.
+// for `APP_LAUNCH_ENV`'s.
 const NESTED_SESSION_ENV: readonly string[] = [
   'AI_AGENT',
   'CLAUDECODE',
@@ -31,13 +31,14 @@ const NESTED_SESSION_ENV: readonly string[] = [
 const IDLE_COMPACT_ENV = 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS';
 // The row id `unity-pool` records as a claim's holder.
 const SESSION_ROW_ENV = 'WIGLEY_SESSION_ROW';
-// The app's settings, not a parent session's: a session launch sets them from its
-// request, and no other value in the inherited environment reaches a `claude` run,
-// the user's own included. A profile's `settings.json` `env` still reaches the child.
-const APP_SETTING_ENV: readonly string[] = [IDLE_COMPACT_ENV, SESSION_ROW_ENV];
+// The app's own values, not a parent session's: an app setting and the row id. A
+// session launch sets them from its request, and no other value in the inherited
+// environment reaches a `claude` run, the user's own included. A profile's
+// `settings.json` `env` still reaches the child.
+const APP_LAUNCH_ENV: readonly string[] = [IDLE_COMPACT_ENV, SESSION_ROW_ENV];
 
 // The environment every `claude` run for `profileDir` gets: a copy of `env`
-// without the nested-session variables and the app's settings, with `CLAUDE_CONFIG_DIR` set to
+// without the nested-session variables and the app's own values, with `CLAUDE_CONFIG_DIR` set to
 // `profileDir` resolved against `homeDir` when one is given, and removed when
 // that folder is the default `<homeDir>/.claude`.
 export function claudeEnv(
@@ -47,7 +48,7 @@ export function claudeEnv(
   paths: Paths,
 ): NodeJS.ProcessEnv {
   const launchEnv = { ...env };
-  for (const name of [...NESTED_SESSION_ENV, ...APP_SETTING_ENV]) {
+  for (const name of [...NESTED_SESSION_ENV, ...APP_LAUNCH_ENV]) {
     delete launchEnv[name];
   }
   if (profileDir === null) {

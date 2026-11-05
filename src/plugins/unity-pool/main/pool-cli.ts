@@ -51,9 +51,13 @@ export function readActionResult(result: ProcessResult): PoolActionResult {
   };
 }
 
-// The script the `scriptPath` setting names when it is empty: macOS and Linux link the tool into `~/.local/bin`, and a
-// Windows install writes launchers there, not a symlink a Python can run, so Windows runs the tool from its own folder.
-export function defaultScriptPath(windows: boolean): string {
+// The script the `scriptPath` setting names, the setting itself when set. Empty, it is `~/.local/bin/unity-pool`,
+// where macOS and Linux link the tool; a Windows install writes launchers there, not a symlink a Python can run, so
+// Windows runs the tool from its own folder.
+export function resolveScriptPath(setting: string, windows: boolean): string {
+  if (setting !== '') {
+    return setting;
+  }
   return windows
     ? '~/wigley-agents/tools/unity-pool/unity-pool'
     : '~/.local/bin/unity-pool';

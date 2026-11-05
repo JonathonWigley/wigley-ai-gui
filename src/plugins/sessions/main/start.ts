@@ -7,6 +7,7 @@ import type {
 } from '../../../contracts/plugin';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { errorText } from '../../../shared/error-text';
+import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import {
   argsObject,
   nullableNumberOr,
@@ -37,7 +38,6 @@ import {
   launchCommand,
   writeEndpointFiles,
 } from './relay/endpoint';
-import { createProjectNames } from './project-names';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
@@ -75,7 +75,7 @@ function createList(api: SessionsApi): SessionList {
     emit: (event, data) => api.events.emit(event, data),
     stateChanged: (state) => api.channel.send('stateChanged', state),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
-    projectName: createProjectNames(api.services.git),
+    projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
   });
   api.channel.handle('state', () => list.state());

@@ -76,7 +76,8 @@ interface HeldWrapper {
 // and Release run through main, one at a time per clone, each clone's last
 // result kept until the page reloads. Redraws all on each of those, on each
 // layouts set and once a minute for the times. Logs each row's badges and the
-// panel's showing, hiding and counts when they change.
+// panel's showing, hiding and counts when they change, and a Hold or Release
+// whose call to main fails; main logs every run it answers.
 export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {
@@ -159,7 +160,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       if (row === undefined) {
         return;
       }
-      const badges = rowBadges(pools, row);
+      const badges = rowBadges(pools, [...rows.values()], row);
       for (const badge of badges) {
         holder.badges.push(
           layoutParts.draw(
@@ -310,7 +311,6 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       redraw();
       const finish = (result: { ok: boolean; text: string }) => {
         pending.set(clone, { action, running: false, result });
-        log(`${action} ${pool} ${clone}: ${result.ok ? 'ok' : result.text}`);
         redraw();
       };
       api.channel.invoke('run', action, pool, clone).then(
@@ -320,7 +320,11 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
               ? { ok: true, text: `${DONE_WORDS[action]} Unity ${clone}` }
               : { ok: false, text: result.message },
           ),
-        (error: unknown) => finish({ ok: false, text: errorText(error) }),
+        (error: unknown) => {
+          const text = errorText(error);
+          log(`${action} ${pool} ${clone} not run: ${text}`);
+          finish({ ok: false, text });
+        },
       );
     };
 
