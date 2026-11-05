@@ -222,7 +222,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [workflow-heavy](05-workflow-heavy.md) — after 02, 04
 
 ### Wave 6
-- [ ] [workflow-light](07-light.md) — after 05
+- [x] [workflow-light](07-light.md) — after 05
 
 ### Wave 7
 - [ ] [workflow-medium](08-medium.md) — after 07
@@ -247,6 +247,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 03 · f205596a · diff read against the spec; every Produces present, parseChecklistItems included; typecheck and lint clean · concerns: checklist dispose line has no failing test; reportStep scoping has no start-level test that fails on a union lookup; merged table lost the ignored-step no-push assertion; StepTool_NotInTheUnion_ListsIt pins Heavy's step order, so task 05 reaches it; whitespace-only text accepted
 - 04 · 76979d31 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: activeMsOf copies every held session per agent event through chat.sessions(); a read in the clear window can log a negative activeMs; costUsd is 0 not null when the only spend predates the run; meter note after forget leaves one small entry
 - 05 · 6dd57b21 · diff read against the spec; § Finish's greps and file-gone checks hold; manifest, page part and layer rules read; typecheck and lint clean; a read of settings.json at preflight found no workflow setting to move · concerns: engine still registers layout types with no default folder, writing layouts/workflow/layout.d.ts; no set_workflow_step is contributed until a workflow with reportedAs is added; self-test not run until task 12, hello turn may draw No workflow in a pre-claim screenshot; page harness keys.command answers only the part's own commands; drive-commands.test.ts still names workflow.autoStartSeconds as a generic path; docs/features/layouts/design.md names the old owner, task 10's
+- 07 · b2d36d46 · Diff read; typecheck 0, lint 0; every Produces present by search of the named files; worker's touched tests pass · concerns: Self-test never run (task 12); callChecklistTool and Light's main part have no unit test; toggleFinishedWaves on an all-done flat list logs and changes nothing; empty checklist draws 0/0 pane; Heavy layout.css bare selectors land on Light's parts; logFlow logs no page stage ahead of shows and Heavy's Explore/Primer slot logs a second trail line; DESIGN.md left to task 10; drive-actions.test fakes copy start.test's
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 - RunMeter: five members → six, adding claimed(sessionId), which sets the baseline as finished does · why: the baseline resets at a null-to-claim move and the interface had no member for it · consumers: none outside workflow/main/start.ts · group 04
@@ -273,5 +274,11 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - Real engine plus real Heavy in two harnesses, with the engine's exports as a fakeDependency — the harness refuses fakes outside dependsOn — each harness has its own clock · group 05 · group 05
 - opened's body runs for the start walk of workflow.flows(), so a restart also clears a saved countdown — the spec says run the opened body — none · group 05 · group 05
 - Engine prose takes neutral examples, while pinned names (hasPlan, toggleFinishedWaves, countdownText, the finished-waves log line) stay — they are plan.md's names — a strict no-plan-word grep hits them · group 05 · group 05
+- 07: Light self-test uses services.paths.join, not node:path; 08 copies · group 07
+- 07: Light's turn-end listener acts only for the session it launched; 08 must copy · group 07
+- 07: width start sits on the last pinned step, so light-done is captured at start width; task 12 reads it · group 07
+- 07: Light's side pane is one flat list with a count line, per Pinned after the cold read · group 07
+- 07: checklistCount lives once in stages/build/page.ts; 08 copies the shape · group 07
+- 07: new workflow/page/engine-parts.test-support.ts holds startEnginePagePart and testWorkflowKit · group 07
 ### Review rounds
 ### Test gate

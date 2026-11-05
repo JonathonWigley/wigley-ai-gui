@@ -22,6 +22,7 @@ import { visualManifest } from './visual/manifest';
 import { workflowManifest } from './workflow/manifest';
 import { workflowHeavyManifest } from './workflow-heavy/manifest';
 import { workflowLightManifest } from './workflow-light/manifest';
+import { workflowMediumManifest } from './workflow-medium/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
 export { DIGITS } from './forms/manifest';
@@ -50,6 +51,7 @@ export const builtInManifests = [
   workflowManifest,
   workflowHeavyManifest,
   workflowLightManifest,
+  workflowMediumManifest,
   unityPoolManifest,
   visualManifest,
 ] as const;

@@ -1,6 +1,6 @@
 # 07 — workflow-light
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -162,3 +162,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit b2d36d46 · proof: Diff read; typecheck 0, lint 0; every Produces present by search of the named files; worker's touched tests pass · concerns: Self-test never run (task 12); callChecklistTool and Light's main part have no unit test; toggleFinishedWaves on an all-done flat list logs and changes nothing; empty checklist draws 0/0 pane; Heavy layout.css bare selectors land on Light's parts; logFlow logs no page stage ahead of shows and Heavy's Explore/Primer slot logs a second trail line; DESIGN.md left to task 10; drive-actions.test fakes copy start.test's

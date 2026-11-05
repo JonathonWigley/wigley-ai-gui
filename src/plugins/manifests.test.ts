@@ -44,4 +44,11 @@ describe('manifests', () => {
     expect(Object.keys(light?.settings ?? {})).toEqual(['layout']);
     expect(light?.themeTokens?.badge.default).toBe('var(--wg-status-info)');
   });
+
+  it('manifests_WorkflowMedium_HasItsLayoutSettingAndBadgeToken', () => {
+    const medium = manifests.find(({ id }) => id === 'workflow-medium');
+
+    expect(Object.keys(medium?.settings ?? {})).toEqual(['layout']);
+    expect(medium?.themeTokens?.badge.default).toBe('var(--wg-accent)');
+  });
 });

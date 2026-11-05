@@ -272,6 +272,66 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  'workflow-medium': {
+    main: { layers: ['src/plugins/workflow-medium/stages'] },
+    page: { layers: ['src/plugins/workflow-medium/stages'] },
+    sublayers: {
+      'src/plugins/workflow-medium/stages': {
+        layers: [
+          'src/contracts',
+          'src/plugins/workflow-medium',
+          'src/plugins/workflow-medium/contract.ts',
+          'src/plugins/workflow/contract.ts',
+        ],
+        packages: [],
+      },
+      // Runs Medium's stage rules through the engine's real fold.
+      'src/plugins/workflow-medium/stages/medium-stages.test.ts': {
+        layers: [
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow-medium/contract.ts',
+          'src/plugins/workflow-medium/stages',
+        ],
+        packages: [],
+      },
+      // Runs Medium's state rules through the engine's real fold.
+      'src/plugins/workflow-medium/medium-state.test.ts': {
+        layers: [
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow-medium',
+          'src/plugins/workflow-medium/contract.ts',
+          'src/plugins/workflow-medium/stages',
+        ],
+        packages: [],
+      },
+      // Starts the real engine page part and Medium's on it.
+      'src/plugins/workflow-medium/page/start.test.ts': {
+        layers: [
+          'src/shared',
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow/page',
+          'src/plugins/workflow-medium',
+          'src/plugins/workflow-medium/contract.ts',
+          'src/plugins/workflow-medium/page',
+          'src/plugins/workflow-medium/stages',
+        ],
+        packages: [],
+      },
+      // Draws with the engine's real kit.
+      'src/plugins/workflow-medium/layouts/default/layout.test.ts': {
+        layers: [
+          'src/shared/page',
+          'src/plugins/workflow-medium/layouts',
+          'src/plugins/workflow/layouts',
+          'src/plugins/workflow/page',
+        ],
+        packages: [],
+      },
+    },
+  },
 };
 
 const CORE_LAYERS: Record<string, LayerRule> = {
@@ -541,6 +601,20 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-heavy/layouts',
       'src/plugins/workflow-heavy/page',
       'src/plugins/workflow-heavy/plan-reader.ts',
+    ],
+    packages: [],
+  },
+  // The three level workflows' main rules through the engine's real fold.
+  'src/plugins/workflow-levels.test.ts': {
+    layers: [
+      'src/plugins/workflow',
+      'src/plugins/workflow/contract.ts',
+      'src/plugins/workflow-heavy',
+      'src/plugins/workflow-heavy/contract.ts',
+      'src/plugins/workflow-light/contract.ts',
+      'src/plugins/workflow-light/stages',
+      'src/plugins/workflow-medium/contract.ts',
+      'src/plugins/workflow-medium/stages',
     ],
     packages: [],
   },
