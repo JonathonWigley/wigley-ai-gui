@@ -161,7 +161,33 @@ describe('createSessionList', () => {
     expect(connected.session.id).toBe('00000001');
     expect(connected.session.info).toEqual(sessionInfo);
     expect(emitted).toEqual([
-      ['connected', { id: '00000001', info: sessionInfo }],
+      ['connected', { id: '00000001', info: sessionInfo, owned: false }],
+    ]);
+  });
+
+  it.each<{
+    name: string;
+    start: (list: ReturnType<typeof setUp>['list']) => AgentSession;
+    expected: boolean;
+  }>([
+    {
+      name: 'connect',
+      start: (list) => list.connect(info('/work/x')).session,
+      expected: false,
+    },
+    {
+      name: 'open',
+      start: (list) => list.open(owned('host-1')).session,
+      expected: true,
+    },
+  ])('connected_ConnectAndOpen_SayIfOwned: $name', ({ start, expected }) => {
+    const { list, emitted } = setUp();
+
+    const session = start(list);
+
+    expect(emitted.at(-1)).toEqual([
+      'connected',
+      { ...session, owned: expected },
     ]);
   });
 
@@ -249,7 +275,9 @@ describe('createSessionList', () => {
 
     expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
     expect(states).toEqual([]);
-    expect(emitted).toEqual([['connected', connected.session]]);
+    expect(emitted).toEqual([
+      ['connected', { ...connected.session, owned: false }],
+    ]);
   });
 
   // `hidden` connects that many sessions with no row before the three rows;
@@ -854,7 +882,7 @@ describe('createSessionList', () => {
     expect(states).toHaveLength(1);
     expect(emitted).toEqual([
       ['selected', { sessionId: '00000001' }],
-      ['connected', { id: '00000001', info: owned('host-1') }],
+      ['connected', { id: '00000001', info: owned('host-1'), owned: true }],
     ]);
   });
 
@@ -884,7 +912,10 @@ describe('createSessionList', () => {
       [selected.session.id, false],
       [opened.session.id, false],
     ]);
-    expect(emitted.at(-1)).toEqual(['connected', opened.session]);
+    expect(emitted.at(-1)).toEqual([
+      'connected',
+      { ...opened.session, owned: true },
+    ]);
   });
 
   it('open with select false and no selection stays unselected', () => {

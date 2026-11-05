@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionTitles } from './contract';
-import {
-  editableTitle,
-  shownTitle,
-  titleLimit,
-  titleProblem,
-} from './session-title';
+import { editableTitle, type SessionTitles } from './contract';
+import { shownTitle, titleLimit, titleProblem } from './session-title';
 
 const NO_TITLES: SessionTitles = {
   user: null,

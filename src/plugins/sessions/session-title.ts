@@ -59,8 +59,3 @@ export function shownTitle(titles: SessionTitles, max: number): string | null {
     ? null
     : cutTitle(titles.firstMessage, max);
 }
-
-// The title a rename starts from, uncut; empty when no source set one.
-export function editableTitle(titles: SessionTitles): string {
-  return titles.user ?? titles.agent ?? titles.firstMessage ?? '';
-}

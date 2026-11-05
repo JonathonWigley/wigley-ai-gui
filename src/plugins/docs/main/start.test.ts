@@ -228,7 +228,7 @@ describe('docs main part', () => {
       deadlineSeconds: null,
       harness: 'claude',
     };
-    docs.emit('sessions.connected', { id: 'row-1', info });
+    docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
 
     expect(await docs.invoke('loadIndex', 'session:row-1')).toEqual({
       document: INDEX_DOCUMENT,
@@ -260,7 +260,7 @@ describe('docs main part', () => {
       deadlineSeconds: null,
       harness: 'claude',
     };
-    docs.emit('sessions.connected', { id: 'row-1', info });
+    docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
 
     docs.emit('sessions.hostSessionChanged', {
       id: 'row-1',
@@ -316,7 +316,7 @@ describe('docs main part', () => {
       deadlineSeconds: null,
       harness: 'claude',
     };
-    docs.emit('sessions.connected', { id: 'row-1', info });
+    docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
     docs.emit('sessions.hostSessionChanged', {
       id: 'row-1',
       info: { ...info, sessionId: 'new-host' },
@@ -565,6 +565,7 @@ describe('docs main part lifecycle', () => {
         deadlineSeconds: null,
         harness: 'claude',
       },
+      owned: false,
     });
     const load = harness.invoke(
       'loadIndex',

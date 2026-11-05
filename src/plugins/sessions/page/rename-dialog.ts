@@ -6,14 +6,9 @@ import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-
 import { textBoxInput } from '../../../shared/page/text-box';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import type { SessionRow } from '../contract';
+import { editableTitle, type SessionRow } from '../contract';
 import type { SessionsPart } from '../layouts/layout';
-import {
-  editableTitle,
-  normalizedTitle,
-  titleLimit,
-  titleProblem,
-} from '../session-title';
+import { normalizedTitle, titleLimit, titleProblem } from '../session-title';
 import type { SessionsParts } from './layout/sessions-parts';
 
 // `pushScope` pushes the `rename` scope, whose Enter and Esc run `accept` and

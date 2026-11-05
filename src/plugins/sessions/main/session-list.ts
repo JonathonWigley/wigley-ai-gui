@@ -608,7 +608,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         );
       }
       const entry = addEntry(info, false);
-      deps.emit('connected', entry.session);
+      deps.emit('connected', { ...entry.session, owned: false });
       return {
         session: entry.session,
         call: (name, args, context) => routeCall(entry, name, args, context),
@@ -630,7 +630,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         reselectOnReturn = null;
       }
       sendState();
-      deps.emit('connected', entry.session);
+      deps.emit('connected', { ...entry.session, owned: true });
       return {
         session: entry.session,
         end: () => end(entry),

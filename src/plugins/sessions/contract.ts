@@ -36,6 +36,11 @@ export type TitleSource = (typeof TITLE_SOURCES)[number];
 // set none.
 export type SessionTitles = Record<TitleSource, string | null>;
 
+// The title a rename starts from, uncut; empty when no source set one.
+export function editableTitle(titles: SessionTitles): string {
+  return titles.user ?? titles.agent ?? titles.firstMessage ?? '';
+}
+
 // What a form source knows about the session it serves.
 export interface SessionInfo {
   sessionId: string | null;
@@ -212,6 +217,12 @@ export const sessionsMainKey: DependencyKey<
   'sessions'
 > = { id: 'sessions', process: 'main' };
 
+// `owned` is true for a session `open` started, false for one `connect`
+// connected.
+export interface ConnectedSessionEvent extends AgentSession {
+  owned: boolean;
+}
+
 // `closed` is a row the user closed, or one `release` closed, every guard
 // allowing; the session itself stays until it ends. `selected` is the selected
 // row changing, to another row or to none, emitted after the state that
@@ -222,7 +233,7 @@ export const sessionsMainKey: DependencyKey<
 // `titleChanged` is a session's titles changing, after the state that carries
 // them when the session has a row.
 export interface SessionsMainEvents extends EventShape {
-  connected: AgentSession;
+  connected: ConnectedSessionEvent;
   ended: { sessionId: string };
   closed: { sessionId: string };
   selected: { sessionId: string | null };

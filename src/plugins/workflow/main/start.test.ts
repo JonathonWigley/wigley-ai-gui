@@ -246,7 +246,10 @@ function startWorkflowPart(
     await settled();
   };
   const openS1 = async () => {
-    await emit('sessions.connected', session('s1', 'h1'));
+    await emit('sessions.connected', {
+      ...session('s1', 'h1'),
+      owned: false,
+    });
     await emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
   };
   const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
@@ -393,7 +396,7 @@ async function reachPlanReady(
     });
     await settled();
   };
-  harness.emit('sessions.connected', session('s1', 'h1'));
+  harness.emit('sessions.connected', { ...session('s1', 'h1'), owned: false });
   harness.emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
   await settled();
   await agentEvent(skill('wigley:feature', ''));
