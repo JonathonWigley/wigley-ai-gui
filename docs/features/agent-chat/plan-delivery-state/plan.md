@@ -138,11 +138,15 @@ Review base: 37c3020e57be67f8aa41edfbb3e771c5eacebfee
 - 02 · 41fd97f4 · diff read: Produces present on UserInput; tsc and lint clean · concerns: label look unchecked on screen until task 03; an older received entry's redraw refills its whole card, so thumbnails could flicker
 - 03 · none · preview draws all three labels, Received on the last only; 10 real logs: 36 of 36 named messages received, 5 /wigley:* among them, typed /compact null, no mismatch; notReceived has no real-log evidence · concerns: notReceived and an early interrupt are unproved against real lines
 ### Contract changes
+- UserInput: delivery cleared on older received entries → real delivery plus isLatestDelivery: boolean · why: review finding 4, a layout can draw its own rule · consumers: none · group review fix
 ### Rulings
 - Three test files outside the task's list took delivery: null or a new close assertion, since literal toEqual fixtures turned red — the compiler does not name them — a wider diff · group 01 · group 01
 - attach_ClosedDuringAttach now expects a notReceived entry before sessionEnded, since its log has started and no requesting line — follows the rule as written — the test pins that state · group 01 · group 01
 - No guard for an undefined delivery: SavedSession holds no ChatEntry and every constructor sets the field — so undefined cannot reach the page — an empty label if wrong · group 02 · group 02
 - Redraw also runs holdBlocks and the label has margin-top space-1, neither named by the plan — the cursor would hold detached blocks, and the label would sit flush — one line each · group 02 · group 02
+- Findings 4 to 7 went to one worker rather than step 7's lead edit — finding 4 rewrites the lines 6 and 7 touch — none if wrong · lead
+- UserInput keeps the real delivery and gains isLatestDelivery, overriding task 02's page-owned rule — the repo takes each review recommendation, and a layout can then draw its own rule — one field to drop · lead
 ### Review rounds
+- 1 · 6fb95bd8 · NEEDS FIXES
 ### Test gate
 - stream-decoder, session-fold, transcripts, claude-code-harness, fake-agent-harness (the fold and every entry source), layout-contracts (UserInput contract), src/plugins/chat/ (entry-list, layout, preview, literal fixtures) · 46 files, 1821 tests passed, no type errors
