@@ -1,11 +1,10 @@
 import type { PagePart } from '../../../contracts/plugin';
-import { workflowPageKey } from '../../workflow/contract';
+import { checklistCount, workflowPageKey } from '../../workflow/contract';
 import { MEDIUM_WORKFLOW_ID } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowMediumManifest } from '../manifest';
 import { MEDIUM_PAGE_STAGES } from '../stages';
-import { checklistCount } from '../stages/build/page';
 
 // Medium's page half on the engine: its stages, its layouts and its letter. The
 // engine's `defaultChecklist` draws the agent's list.

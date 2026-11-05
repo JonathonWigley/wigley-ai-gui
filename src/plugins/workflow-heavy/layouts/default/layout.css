@@ -1,7 +1,7 @@
 /* The default layout's workflow parts: the chip under a session row, the
    strip above the Chat composer and the side pane beside the transcript. */
 
-.workflow-chip {
+[data-layout-owner='workflow-heavy'].workflow-chip {
   display: flex;
   align-items: center;
   gap: var(--wg-space-2);
@@ -11,11 +11,13 @@
 }
 
 /* A chip with nothing to say gives its row part's room back. */
-.session-row-part[data-part='workflow.chip']:has(> .workflow-chip:empty) {
+.session-row-part[data-part='workflow.chip']:has(
+    > [data-layout-owner='workflow-heavy'].workflow-chip:empty
+  ) {
   display: none;
 }
 
-.workflow-strip {
+[data-layout-owner='workflow-heavy'].workflow-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -28,15 +30,15 @@
   font-size: var(--wg-text-12);
 }
 
-.workflow-strip .ui-button {
+[data-layout-owner='workflow-heavy'].workflow-strip .ui-button {
   height: var(--wg-icon-button);
 }
 
-.workflow-status-line {
+[data-layout-owner='workflow-heavy'] .workflow-status-line {
   color: var(--wg-fg-secondary);
 }
 
-.workflow-side-pane {
+[data-layout-owner='workflow-heavy'].workflow-side-pane {
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
@@ -45,33 +47,33 @@
   font-size: var(--wg-text-12);
 }
 
-.workflow-side-status {
+[data-layout-owner='workflow-heavy'] .workflow-side-status {
   display: flex;
   align-items: center;
   gap: var(--wg-space-2);
 }
 
-.workflow-side-detail {
+[data-layout-owner='workflow-heavy'] .workflow-side-detail {
   margin: 0;
   color: var(--wg-fg-secondary);
 }
 
-.workflow-side-detail:empty {
+[data-layout-owner='workflow-heavy'] .workflow-side-detail:empty {
   display: none;
 }
 
-.workflow-side-pane .ui-meter {
+[data-layout-owner='workflow-heavy'].workflow-side-pane .ui-meter {
   display: block;
   width: 100%;
 }
 
 /* The checklist's rows share the pane's left edge. */
-.workflow-side-pane .ui-row {
+[data-layout-owner='workflow-heavy'].workflow-side-pane .ui-row {
   padding-left: 0;
   padding-right: 0;
 }
 
-.workflow-side-tasks {
+[data-layout-owner='workflow-heavy'] .workflow-side-tasks {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -79,7 +81,7 @@
 
 /* The buttons stay in view while the list above them gives up height, over the
    section body's block padding. A body shorter than the buttons pins their top. */
-.workflow-side-actions {
+[data-layout-owner='workflow-heavy'] .workflow-side-actions {
   background: var(--wg-block-background);
   bottom: 0;
   display: flex;

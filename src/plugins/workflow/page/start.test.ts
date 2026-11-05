@@ -209,12 +209,18 @@ describe('workflow page part', () => {
     ]);
   });
 
-  it('exports_NameTheWorkflowSurface', () => {
-    const { exportsFor } = startWorkflow();
-    const exported = exportsFor(createRegistrations());
+  it('AddWorkflow_AfterItsFlowArrived_LogsItsLevelAndTrail', () => {
+    const { harness, exportsFor } = startWorkflow();
+    harness.send('flows', [flowOfLight('build')]);
+    const { workflow } = stubLight();
 
-    expect('addStage' in exported).toBe(false);
-    expect(typeof exported.createWorkflowDraw).toBe('function');
-    expect(typeof exported.runCommand).toBe('function');
+    exportsFor(createRegistrations()).addWorkflow(workflow);
+
+    expect(harness.logs).toEqual(
+      expect.arrayContaining([
+        { source: 'workflow', message: 's1 level L' },
+        { source: 'workflow', message: 's1 trail build' },
+      ]),
+    );
   });
 });

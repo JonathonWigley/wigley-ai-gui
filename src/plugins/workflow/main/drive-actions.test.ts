@@ -1,45 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import {
-  fakeDependency,
-  startMainPart,
-} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { type ChatMainExports, chatMainKey } from '../../chat/contract';
-import {
-  type SessionsMainExports,
-  sessionsMainKey,
-} from '../../sessions/contract';
 import {
   reportsStep,
   startsSkill,
   type WorkflowMainExports,
 } from '../contract';
-import { workflowMainPart } from './start';
+import { startEngineMainPart } from './engine-fakes.test-support';
 
 const settled = () => new Promise((settle) => setImmediate(settle));
 
 // The real engine with a drive host and a workflow `stub` holding `s1`, at `scope`.
 async function startEngine() {
-  const part = startMainPart(workflowMainPart, {
-    drive: true,
-    dependencies: [
-      fakeDependency(
-        sessionsMainKey,
-        (consumer) =>
-          ({
-            contributeTools: () => consumer.track({ dispose: () => undefined }),
-          }) as unknown as SessionsMainExports,
-      ),
-      fakeDependency(
-        chatMainKey,
-        (consumer) =>
-          ({
-            addInstructions: () => consumer.track({ dispose: () => undefined }),
-            activeTime: () => null,
-          }) as unknown as ChatMainExports,
-      ),
-    ],
-  });
+  const { engine: part } = startEngineMainPart({ drive: true });
   const engine = part
     .started()
     .exports?.(createRegistrations()) as WorkflowMainExports;

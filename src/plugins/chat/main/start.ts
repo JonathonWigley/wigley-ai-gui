@@ -488,9 +488,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       launch: async (request) => chat.launch(request),
       profiles,
       profileOf,
-      activeTime: (sessionId) =>
-        chat.sessions().find((held) => held.sessionId === sessionId)
-          ?.activeTime ?? null,
+      activeTime: (sessionId) => chat.activeTimeOf(sessionId),
       defaultProfile,
       send: async (sessionId, message) => {
         requireHeld(sessionId);

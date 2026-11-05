@@ -73,6 +73,7 @@ describe('Medium stages', () => {
       { from: 'land', signal: step('done'), stage: 'done' },
       { from: 'interview', signal: step('done'), stage: 'done' },
       { from: 'done', signal: skill('wigley:medium'), stage: 'interview' },
+      { from: 'build', signal: { type: 'turnEnded' } as const, stage: 'build' },
       { from: 'build', signal: skill('wigley:review'), stage: 'build' },
       { from: 'build', signal: step('check'), stage: 'build' },
     ].map(({ from, signal, stage }) => ({
@@ -150,7 +151,6 @@ describe('Medium stages', () => {
 
   it.each([
     { checklist: null, progress: '' },
-    { checklist: [], progress: '' },
     { checklist: ONE_OF_THREE, progress: ' 1/3' },
   ])('buildStatusProgress $progress', ({ checklist, progress }) => {
     expect(

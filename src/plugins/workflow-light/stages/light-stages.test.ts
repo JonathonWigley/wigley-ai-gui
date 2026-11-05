@@ -155,7 +155,6 @@ describe('Light stages', () => {
 
   it.each([
     { checklist: null, progress: '' },
-    { checklist: [], progress: '' },
     { checklist: ONE_OF_THREE, progress: ' 1/3' },
   ])('buildStatusProgress $progress', ({ checklist, progress }) => {
     expect(

@@ -1,11 +1,10 @@
 import type { PagePart } from '../../../contracts/plugin';
-import { workflowPageKey } from '../../workflow/contract';
+import { checklistCount, workflowPageKey } from '../../workflow/contract';
 import { LIGHT_WORKFLOW_ID } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowLightManifest } from '../manifest';
 import { LIGHT_PAGE_STAGES } from '../stages';
-import { checklistCount } from '../stages/build/page';
 
 // Light's page half on the engine: its stages, its layouts and its letter. The
 // engine's `defaultChecklist` draws the agent's list.

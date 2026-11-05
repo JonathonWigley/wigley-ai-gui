@@ -122,8 +122,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       redraw: () => view.redraw(),
     };
 
-    // Holds a copy whose stages are in stage order; its dispose does nothing once
-    // the copy is gone.
+    // Holds a copy whose stages are in stage order, and puts again each held flow
+    // of it, which arrived before its page half; its dispose does nothing once the
+    // copy is gone.
     const addWorkflow = (workflow: PageWorkflow): Disposable => {
       if (workflows.has(workflow.id)) {
         throw new Error(`${workflow.id} is already added`);
@@ -135,6 +136,11 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       workflows.set(added.id, added);
       const sidePart = chat.addSidePart(view.sidePartFor(added));
       view.redraw();
+      for (const flow of flows.values()) {
+        if (flow.workflow === added.id) {
+          putFlow(flow);
+        }
+      }
       return {
         dispose() {
           if (workflows.get(added.id) !== added) {

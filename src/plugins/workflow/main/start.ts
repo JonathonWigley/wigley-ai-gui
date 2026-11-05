@@ -40,6 +40,7 @@ import { createRunLog } from './run-log';
 import { createRunMeter } from './run-meter';
 import { SESSION_NOTE } from './session-note';
 import {
+  reportedSteps,
   SET_WORKFLOW_STEP_TOOL,
   startStepTool,
   stepToolDefinition,
@@ -58,9 +59,10 @@ type WorkflowApi = MainApi<
 // flow through the registered workflows, keeps the flows in `flows.json` keyed by
 // host session id, folds a re-attach's replay only past the flow's last save,
 // marks a live turn with agent work and no workflow as a missed level, tells each
-// observer every fold, open, close and replay, contributes `set_workflow_step`,
-// which lists every workflow's stages' `reportedAs` and moves a flow only by its own
-// workflow's, and `set_workflow_checklist`, hands chat the session note naming both,
+// observer every fold, open, close and replay, contributes `set_workflow_step`
+// while a workflow has a reportable stage, which lists every workflow's stages'
+// `reportedAs` and moves a flow only by its own workflow's, and
+// `set_workflow_checklist`, hands chat the session note naming both,
 // meters each session's active time and spend and appends a line to `runs.jsonl`
 // when a fold enters a stage that finishes its workflow, sends every flow to the
 // page on each change, and offers a drive run the two tools' reports as drive
@@ -68,7 +70,6 @@ type WorkflowApi = MainApi<
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
-    api.layouts.register({ layoutTypes });
     const { services, channel, events } = api;
     const { log, clock } = services;
     const chat = api.dependency(chatMainKey);
@@ -244,7 +245,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         return true;
       });
     const startChecklistToolSession = startChecklistTool({ reportChecklist });
-    const checklistTool = sessions.contributeTools(
+    sessions.contributeTools(
       [checklistToolDefinition()],
       startChecklistToolSession,
     );
@@ -254,14 +255,17 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     chat.addInstructions(SESSION_NOTE);
 
     // Contributes the tool again when the reportable stages change, so its
-    // schema lists a stage a workflow added.
+    // schema lists a stage a workflow added; with none left, no tool.
     let stepTool: Disposable | null = null;
     const contributeStepTool = () => {
       stepTool?.dispose();
-      stepTool = sessions.contributeTools(
-        [stepToolDefinition(workflows.all())],
-        startStepToolSession,
-      );
+      stepTool =
+        reportedSteps(workflows.all()).length === 0
+          ? null
+          : sessions.contributeTools(
+              [stepToolDefinition(workflows.all())],
+              startStepToolSession,
+            );
     };
     const addWorkflow = (workflow: MainWorkflow): Disposable => {
       const stages = [...workflow.stages].sort((a, b) => a.order - b.order);
@@ -288,26 +292,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           }
         },
       };
-    };
-
-    const engine = {
-      signal: (
-        sessionId: string,
-        signal: WorkflowSignal,
-        origin: 'live' | 'observed',
-      ) => apply(sessionId, signal, origin),
-      flowOf: (sessionId: string) => store.get(sessionId),
-      flows: () => store.all(),
-      setState(sessionId: string, state: unknown) {
-        const flow = store.get(sessionId);
-        if (flow === null) {
-          return;
-        }
-        store.putKeepingSavedAt({ ...flow, state: state ?? null });
-        sendFlows();
-      },
-      observe,
-      ready,
     };
 
     events.on('sessions.connected', ({ id, info }) => {
@@ -337,6 +321,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         if (hostSessionId !== null) {
           store.rekey(id, hostSessionId);
         }
+        turnWork.forget(id);
         runMeter.cleared(id);
         apply(id, { type: 'cleared' }, 'live');
       });
@@ -355,11 +340,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       'chat.agentEvent',
       ({ sessionId, hostSessionId, event, replayed }) => {
         void ready.then(() => {
-          runMeter.note(sessionId, event);
           const flow = store.get(sessionId);
           if (flow === null) {
             return;
           }
+          runMeter.note(sessionId, event);
           if (replayed) {
             tellObservers((observer) => observer.replaying(sessionId));
           } else {
@@ -420,13 +405,23 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     return {
       commands: {},
       exports: (consumer): WorkflowMainExports => ({
-        ...engine,
+        signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
+        flowOf: (sessionId) => store.get(sessionId),
+        flows: () => store.all(),
+        setState(sessionId, state) {
+          const flow = store.get(sessionId);
+          if (flow === null) {
+            return;
+          }
+          store.putKeepingSavedAt({ ...flow, state: state ?? null });
+          sendFlows();
+        },
+        ready,
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
         observe: (observer) => consumer.track(observe(observer)),
         layoutTypes,
         selfTestHooks: services.selfTest === null ? null : selfTestHooks,
       }),
-      dispose: () => checklistTool.dispose(),
     };
   },
 };

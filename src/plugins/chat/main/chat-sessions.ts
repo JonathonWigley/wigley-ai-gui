@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { ActiveTime } from '../../../contracts/active-time';
 import type {
   AgentEvent,
   AgentHarness,
@@ -115,6 +116,8 @@ export interface ChatSessions {
   // The held session's current host id, which a `clear` replaces; null for a
   // row chat does not hold.
   hostSessionIdOf(sessionId: string): string | null;
+  // The held session's active-time clock; null for a row chat does not hold.
+  activeTimeOf(sessionId: string): ActiveTime | null;
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
   // message; returns the row's sessionId. Throws before opening anything on
@@ -2911,6 +2914,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     sessions: () =>
       [...held.values()].map((session) => copyState(session.state)),
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
+    activeTimeOf: (sessionId) => held.get(sessionId)?.state.activeTime ?? null,
     start: (request) =>
       startNew(request, 'new', { select: true }).state.sessionId,
     launch,

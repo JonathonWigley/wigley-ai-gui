@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  checklistCount,
   isBusy,
   type MainStage,
   type MainWorkflow,
@@ -38,8 +39,17 @@ function workflow(
   };
 }
 
-const LIGHT = workflow('light', 10, 'wigley:light', 'scope');
-const MEDIUM = workflow('medium', 20, 'wigley:medium', 'interview');
+const NO_RULE: MainStage['enter'] = () => null;
+
+// Both hold a stage `done`; only Light's finishes its workflow.
+const LIGHT = workflow('light', 10, 'wigley:light', 'scope', [
+  { id: 'build', order: 10, enter: reportedBuild },
+  { id: 'done', order: 20, finishes: true, enter: NO_RULE },
+]);
+const MEDIUM = workflow('medium', 20, 'wigley:medium', 'interview', [
+  { id: 'build', order: 10, enter: reportedBuild },
+  { id: 'done', order: 20, enter: NO_RULE },
+]);
 const WORKFLOWS = [LIGHT, MEDIUM];
 
 const CHECKLIST = [{ text: 'a', done: false }];
@@ -81,10 +91,50 @@ const WORKFLOW_ROWS: {
     },
   },
   {
-    name: "the current workflow's own claim changes nothing",
-    flow: flowWith(LIGHT_AT_BUILD),
+    name: "the current workflow's own claim with no list changes nothing",
+    flow: flowWith({ ...LIGHT_AT_BUILD, movedUpFrom: 'medium' }),
     signal: skill('wigley:light'),
     expected: UNCHANGED,
+  },
+  {
+    name: "the current workflow's own claim mid-run empties the list and keeps the rest",
+    flow: flowWith({
+      ...LIGHT_AT_BUILD,
+      movedUpFrom: 'medium',
+      checklist: CHECKLIST,
+      state: { n: 1 },
+    }),
+    signal: skill('wigley:light'),
+    expected: {
+      workflow: 'light',
+      stage: 'build',
+      movedUpFrom: 'medium',
+      state: { n: 1 },
+      checklist: null,
+    },
+  },
+  {
+    name: "the current workflow's own claim from a finished stage starts a new run",
+    flow: flowWith({
+      workflow: 'light',
+      stage: 'done',
+      movedUpFrom: 'medium',
+      checklist: CHECKLIST,
+    }),
+    signal: skill('wigley:light'),
+    expected: { workflow: 'light', movedUpFrom: null, checklist: null },
+  },
+  {
+    name: "another workflow's claim from a finished stage starts a new run",
+    flow: flowWith({ workflow: 'light', stage: 'done', movedUpFrom: 'heavy' }),
+    signal: skill('wigley:medium'),
+    expected: { workflow: 'medium', stage: 'interview', movedUpFrom: null },
+  },
+  {
+    name: 'a stage of that id finishing in the claiming workflow alone moves up',
+    flow: flowWith({ workflow: 'medium', stage: 'done' }),
+    signal: skill('wigley:light'),
+    expected: { workflow: 'light', stage: 'scope', movedUpFrom: 'medium' },
   },
   {
     name: 'a skill no workflow claims changes nothing',
@@ -351,6 +401,24 @@ describe('markMissedLevel', () => {
     const flow = flowWith(fields);
 
     expect(markMissedLevel(flow)).toBe(flow);
+  });
+});
+
+describe('checklistCount', () => {
+  it.each([
+    { name: 'no list', checklist: null, count: null },
+    { name: 'an empty list', checklist: [], count: null },
+    {
+      name: 'one of three',
+      checklist: [
+        { text: 'a', done: true },
+        { text: 'b', done: false },
+        { text: 'c', done: false },
+      ],
+      count: '1/3',
+    },
+  ])('$name → $count', ({ checklist, count }) => {
+    expect(checklistCount(flowWith({ checklist }))).toBe(count);
   });
 });
 

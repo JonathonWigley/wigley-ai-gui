@@ -321,6 +321,14 @@ export function defaultChecklist(flow: SessionFlow): ChecklistView | null {
   };
 }
 
+// `<checked>/<total>` of the flow's checklist; null with no list or an empty one.
+export function checklistCount(flow: SessionFlow): string | null {
+  const checklist = defaultChecklist(flow);
+  return checklist === null || checklist.total === 0
+    ? null
+    : `${checklist.checked}/${checklist.total}`;
+}
+
 // A drawn part. `dispose` removes the element and disposes every anchor the part
 // named.
 export interface Drawn {

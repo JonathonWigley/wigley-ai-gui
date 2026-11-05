@@ -1,7 +1,8 @@
 /* The workflow parts the kit draws: the stepper's trail of step words, the status
    marks, the side pane's list and the fold over it, the countdown and the level's
-   badge, whose colour the kit sets from the drawing plugin's token. The default
-   layout's chip, strip and side pane are in its `layout.css`. */
+   badge, whose colour the kit sets from the drawing plugin's token, and the row
+   wrapper around a chip. Each workflow plugin's default layout styles its own chip,
+   strip and side pane in its `layout.css`. */
 
 .workflow-stepper {
   display: flex;
@@ -129,8 +130,9 @@
 }
 
 /* Once usage's bar has shrunk away, the stage's tag ellipsizes, so the parts
-   after it stay on the row's card. */
-.session-row-part[data-part='workflow.chip'] {
+   after it stay on the row's card. A user layout's chip and the `No workflow` tag
+   keep their width. */
+.session-row-part[data-part='workflow.chip']:has(> .workflow-chip) {
   flex: 0 1 auto;
   min-width: 0;
 }

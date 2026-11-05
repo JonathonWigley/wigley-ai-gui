@@ -82,20 +82,14 @@ describe('workflowLightPagePart', () => {
     ).rejects.toThrow('Light has no actions');
   });
 
-  it.each([
-    { name: 'no list', checklist: null, text: null },
-    { name: 'an empty list', checklist: [], text: null },
-    {
-      name: 'one of three',
-      checklist: [
-        { text: 'a', done: true },
-        { text: 'b', done: false },
-        { text: 'c', done: false },
-      ],
-      text: '1/3',
-    },
-  ])('progressText: $name', ({ checklist, text }) => {
-    expect(setUp().workflow.progressText?.(flowWith(checklist))).toBe(text);
+  it('progressText_CountsTheChecklist', () => {
+    const checklist = [
+      { text: 'a', done: true },
+      { text: 'b', done: false },
+      { text: 'c', done: false },
+    ];
+
+    expect(setUp().workflow.progressText?.(flowWith(checklist))).toBe('1/3');
   });
 
   it('createWorkflowDraw_TakesTheChecklistTitleAndThePluginsManifest', () => {

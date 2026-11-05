@@ -86,6 +86,30 @@ describe('createRunMeter', () => {
       costUsd: 1,
     },
     {
+      name: 'a spend that falls, as a process counting from 0',
+      steps: [usage(MAIN_AGENT_ID, 0.5), usage(MAIN_AGENT_ID, 0.25)],
+      activeMs: 0,
+      costUsd: 0.75,
+    },
+    {
+      name: 'a spend that falls below the run baseline reads as no negative',
+      steps: [usage(MAIN_AGENT_ID, 2), 'claimed', usage(MAIN_AGENT_ID, 0.5)],
+      activeMs: 0,
+      costUsd: 0.5,
+    },
+    {
+      name: 'a first run whose only spend predates the claim',
+      steps: [3000, usage(MAIN_AGENT_ID, 1), 'claimed', 5000],
+      activeMs: 2000,
+      costUsd: null,
+    },
+    {
+      name: 'a second run with no spend since finished',
+      steps: [4000, usage(MAIN_AGENT_ID, 0.5), 'finished', 6000],
+      activeMs: 2000,
+      costUsd: null,
+    },
+    {
       name: 'forget',
       steps: [4000, usage(MAIN_AGENT_ID, 0.5), 'forget', 0],
       activeMs: 0,

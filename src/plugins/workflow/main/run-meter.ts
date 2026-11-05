@@ -6,15 +6,15 @@ import { type AgentEvent, MAIN_AGENT_ID } from '../../../contracts/agent';
 export interface RunMeter {
   // Stores a main `usage`'s non-null spend as the process's, and the largest
   // active time seen since the last clear: an old process's event can arrive
-  // after chat reset the clock.
+  // after chat reset the clock. A figure below the stored one comes from a process
+  // counting from 0, so the stored one carries.
   note(sessionId: string, event: AgentEvent): void;
   // Adds the process's spend and the largest active time seen to the carried
   // totals.
   cleared(sessionId: string): void;
   // A workflow first took the flow: what came before counts toward no run.
   claimed(sessionId: string): void;
-  // The run so far. `costUsd` is null when no spend was stored since the last
-  // `forget`.
+  // The run so far. `costUsd` is null when no spend was stored since the run began.
   read(sessionId: string): { activeMs: number; costUsd: number | null };
   // The run ended: the next run counts from here.
   finished(sessionId: string): void;
@@ -65,23 +65,30 @@ export function createRunMeter(deps: {
     const meter = meterOf(sessionId);
     meter.baselineMs = totalMs(sessionId, meter);
     meter.baselineUsd = totalUsd(meter);
+    meter.hasSpend = false;
   };
 
   return {
     note(sessionId, event) {
       const meter = meterOf(sessionId);
-      const isMainSpend =
-        event.type === 'usage' &&
-        event.agentId === MAIN_AGENT_ID &&
-        event.spendUsd !== null;
-      if (isMainSpend) {
-        meter.processUsd = event.spendUsd;
+      const mainSpend =
+        event.type === 'usage' && event.agentId === MAIN_AGENT_ID
+          ? event.spendUsd
+          : null;
+      if (mainSpend !== null) {
+        if (meter.processUsd !== null && mainSpend < meter.processUsd) {
+          meter.carriedUsd += meter.processUsd;
+        }
+        meter.processUsd = mainSpend;
         meter.hasSpend = true;
       }
       meter.sampleMs = Math.max(meter.sampleMs, deps.activeMsOf(sessionId));
     },
     cleared(sessionId) {
-      const meter = meterOf(sessionId);
+      const meter = meters.get(sessionId);
+      if (meter === undefined) {
+        return;
+      }
       meter.carriedUsd = totalUsd(meter);
       meter.carriedMs += meter.sampleMs;
       meter.processUsd = null;

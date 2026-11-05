@@ -75,7 +75,7 @@ export interface WorkflowViewDeps {
 // finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
 // `toggleFinishedWaves` opens or folds one session's finished groups, logging
-// `nothing to run` and changing nothing while the pane would draw no fold.
+// `nothing to run` and changing nothing while the input holds no finished group.
 // `mainAction` is the spec the main action runs, and `runFor` the one path that
 // runs a workflow command for a session, through the flow's `runAction`; only
 // `toggleFinishedWaves` runs in the preview.

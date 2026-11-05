@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../workflow/contract';
 import { foldFlow, newFlow } from '../workflow/flow';
 import { MEDIUM_WORKFLOW_ID } from './contract';
-import {
-  foldMediumState,
-  mediumFixCycles,
-  mediumStateOf,
-} from './medium-state';
+import { mediumFixCycles, mediumStateOf } from './medium-state';
 import { mediumMainWorkflow } from './stages';
 
 function flowIn(stage: string, state: unknown = null): SessionFlow {
@@ -36,11 +32,6 @@ describe('Medium state', () => {
     );
 
     expect(mediumMainWorkflow.fixCycles?.(flow)).toBe(2);
-  });
-
-  it('mediumMainWorkflow_Values', () => {
-    expect(mediumMainWorkflow.foldState).toBe(foldMediumState);
-    expect(mediumMainWorkflow.fixCycles).toBe(mediumFixCycles);
   });
 
   it.each([

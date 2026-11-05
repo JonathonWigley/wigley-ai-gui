@@ -1,12 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionFlow, WorkflowSignal } from './workflow/contract';
+import {
+  type FakeDependency,
+  noCounts,
+  startMainPart,
+} from '../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../shared/registrations';
+import type {
+  SessionFlow,
+  WorkflowMainExports,
+  WorkflowSignal,
+} from './workflow/contract';
 import { foldFlow, newFlow } from './workflow/flow';
+import {
+  FAKE_CHAT,
+  FAKE_SESSIONS,
+  startEngineMainPart,
+} from './workflow/main/engine-fakes.test-support';
 import { HEAVY_WORKFLOW_ID } from './workflow-heavy/contract';
 import { heavyMainWorkflow } from './workflow-heavy/heavy-workflow';
 import { LIGHT_WORKFLOW_ID } from './workflow-light/contract';
+import { workflowLightMainPart } from './workflow-light/main/start';
 import { lightMainWorkflow } from './workflow-light/stages';
 import { MEDIUM_WORKFLOW_ID } from './workflow-medium/contract';
+import { workflowMediumMainPart } from './workflow-medium/main/start';
 import { mediumMainWorkflow } from './workflow-medium/stages';
+
+const settled = () => new Promise((settle) => setImmediate(settle));
 
 const WORKFLOWS = [
   lightMainWorkflow,
@@ -102,4 +121,45 @@ describe('workflow levels', () => {
 
     expect(claimers).toHaveLength(1);
   });
+
+  it.each([
+    {
+      workflow: LIGHT_WORKFLOW_ID,
+      claim: 'wigley:light',
+      start: (dependencies: readonly FakeDependency<'main'>[]) =>
+        startMainPart(workflowLightMainPart, { dependencies }),
+    },
+    {
+      workflow: MEDIUM_WORKFLOW_ID,
+      claim: 'wigley:medium',
+      start: (dependencies: readonly FakeDependency<'main'>[]) =>
+        startMainPart(workflowMediumMainPart, { dependencies }),
+    },
+  ])(
+    'mainPart_OnTheEngine_ClaimsUntilStopped $workflow',
+    async ({ workflow, claim, start }) => {
+      const { engine, dependency } = startEngineMainPart();
+      const exported = engine
+        .started()
+        .exports?.(createRegistrations()) as WorkflowMainExports;
+      const level = start([dependency, FAKE_SESSIONS, FAKE_CHAT]);
+      const claimedBy = async (sessionId: string) => {
+        engine.emit('sessions.connected', {
+          id: sessionId,
+          info: { sessionId: `h-${sessionId}`, projectDir: '/r' },
+        });
+        engine.emit('chat.sessionOpened', { sessionId, profileDir: '~/.c' });
+        await settled();
+        exported.signal(sessionId, skill(claim), 'live');
+        return exported.flowOf(sessionId)?.workflow;
+      };
+
+      expect(await claimedBy('s1')).toBe(workflow);
+
+      await level.stop();
+
+      expect(level.counts()).toEqual(noCounts);
+      expect(await claimedBy('s2')).toBeNull();
+    },
+  );
 });

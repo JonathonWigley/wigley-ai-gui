@@ -604,16 +604,21 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
-  // The three level workflows' main rules through the engine's real fold.
+  // The three level workflows' main rules through the engine's real fold, and
+  // Light's and Medium's main parts on the real engine.
   'src/plugins/workflow-levels.test.ts': {
     layers: [
+      'src/shared',
       'src/plugins/workflow',
       'src/plugins/workflow/contract.ts',
+      'src/plugins/workflow/main',
       'src/plugins/workflow-heavy',
       'src/plugins/workflow-heavy/contract.ts',
       'src/plugins/workflow-light/contract.ts',
+      'src/plugins/workflow-light/main',
       'src/plugins/workflow-light/stages',
       'src/plugins/workflow-medium/contract.ts',
+      'src/plugins/workflow-medium/main',
       'src/plugins/workflow-medium/stages',
     ],
     packages: [],

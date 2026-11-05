@@ -98,23 +98,43 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
   }
 }
 
-// A claim by another workflow starts it over at its first stage. The claim of the
-// current workflow changes nothing.
+// Every claim empties the checklist. A claim from a stage that finishes its
+// workflow starts a new run, which moved up from nothing. Mid-run, another
+// workflow's claim moved up from the current one, and the current workflow's own
+// claim continues the run. Another workflow's claim starts it over at its first
+// stage.
 function applyClaim(
   next: SessionFlow,
   signal: WorkflowSignal,
   workflows: readonly MainWorkflow[],
 ): void {
   const claimer = workflows.find((workflow) => workflow.claims(signal));
-  if (claimer === undefined || claimer.id === next.workflow) {
+  if (claimer === undefined) {
     return;
   }
-  next.movedUpFrom = next.workflow;
+  const isOwnClaim = claimer.id === next.workflow;
+  next.checklist = null;
+  if (stageFinishes(next, workflows)) {
+    next.movedUpFrom = null;
+  } else if (!isOwnClaim) {
+    next.movedUpFrom = next.workflow;
+  }
+  if (isOwnClaim) {
+    return;
+  }
   next.workflow = claimer.id;
   next.stage = claimer.firstStage;
   next.state = null;
-  next.checklist = null;
   next.missedLevel = false;
+}
+
+function stageFinishes(
+  flow: SessionFlow,
+  workflows: readonly MainWorkflow[],
+): boolean {
+  const current = workflows.find((workflow) => workflow.id === flow.workflow);
+  const stage = current?.stages.find((held) => held.id === flow.stage);
+  return stage?.finishes === true;
 }
 
 // An equal list keeps the current array, so the fold reads as no change.

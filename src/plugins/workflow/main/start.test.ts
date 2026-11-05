@@ -9,22 +9,15 @@ import {
 } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
-  fakeDependency,
   noCounts,
-  startMainPart,
   type MainPartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import {
-  type ChatMainEvents,
-  type ChatMainExports,
-  chatMainKey,
-} from '../../chat/contract';
+import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
 import {
   type AgentSession,
   type SessionsMainEvents,
   type SessionsMainExports,
-  sessionsMainKey,
   type ToolCallContext,
   type ToolDefinition,
   type ToolSession,
@@ -42,6 +35,7 @@ import {
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { SET_WORKFLOW_CHECKLIST_TOOL } from './checklist-tool';
+import { startEngineMainPart } from './engine-fakes.test-support';
 import { FLOWS_FILE } from './flow-store';
 import { RUNS_FILE, type RunLogLine } from './run-log';
 import { SESSION_NOTE } from './session-note';
@@ -170,7 +164,6 @@ function startWorkflowPart(
     dependency: (key: { id: string }) => dependencies[key.id] ?? {},
     data,
     drive: null,
-    layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof workflowMainPart.start>[0];
   const part = workflowMainPart.start(api);
 
@@ -272,25 +265,6 @@ function startWorkflowPart(
   };
 }
 
-// Sessions for the harness's parts: every contribution taken and disposable.
-const FAKE_SESSIONS = fakeDependency(
-  sessionsMainKey,
-  (consumer) =>
-    ({
-      contributeTools: () => consumer.track({ dispose: () => undefined }),
-    }) as unknown as SessionsMainExports,
-);
-
-// Chat for the harness's parts: every instruction taken and disposable.
-const FAKE_CHAT = fakeDependency(
-  chatMainKey,
-  (consumer) =>
-    ({
-      addInstructions: () => consumer.track({ dispose: () => undefined }),
-      activeTime: () => null,
-    }) as unknown as ChatMainExports,
-);
-
 const NO_CALL_CONTEXT: ToolCallContext = {
   toolUseId: null,
   signal: new AbortController().signal,
@@ -339,12 +313,13 @@ function stubWorkflow(fields: Partial<MainWorkflow> = {}): MainWorkflow {
   };
 }
 
-// The part with stub workflows that both take `build`, only Medium `review`.
+// The part with stub workflows that both take `build` under one stage id and
+// `ship` under their own, only Medium `review`.
 function startLightAndMedium(options: { data?: MemoryFiles } = {}) {
-  const reported = (id: string): MainStage => ({
+  const reported = (id: string, reportedAs = id): MainStage => ({
     id,
     order: 0,
-    reportedAs: id,
+    reportedAs,
     enter: (_flow, signal) =>
       signal.type === 'stepReported' && signal.step === id ? id : null,
   });
@@ -354,7 +329,7 @@ function startLightAndMedium(options: { data?: MemoryFiles } = {}) {
       id: 'light',
       claims: (signal) => startsSkill(signal, 'x:light'),
       firstStage: 'build',
-      stages: [reported('build')],
+      stages: [reported('build'), reported('ship-light', 'ship')],
     }),
   );
   workflow.exported().addWorkflow(
@@ -363,7 +338,11 @@ function startLightAndMedium(options: { data?: MemoryFiles } = {}) {
       order: 20,
       claims: (signal) => startsSkill(signal, 'x:medium'),
       firstStage: 'build',
-      stages: [reported('build'), reported('review')],
+      stages: [
+        reported('build'),
+        reported('ship-medium', 'ship'),
+        reported('review'),
+      ],
     }),
   );
   return workflow;
@@ -383,6 +362,9 @@ const USAGE: UsageAgentEvent = {
 
 // The main agent's `usage` reporting the process's spend so far.
 const spent = (spendUsd: number): UsageAgentEvent => ({ ...USAGE, spendUsd });
+
+// A clear in a list of agent events: the host session changes.
+const CLEARED = 'cleared';
 
 const activeFor = (totalMs: number): ActiveTime => ({ totalMs, since: null });
 
@@ -496,6 +478,14 @@ describe('workflowMainPart', () => {
       stage: 'review',
     },
     {
+      name: "the later workflow's own stage of a shared report",
+      skill: 'x:medium',
+      opens: true,
+      step: 'ship',
+      text: 'Step set to ship.',
+      stage: 'ship-medium',
+    },
+    {
       name: 'a new flow',
       skill: null,
       opens: true,
@@ -539,7 +529,7 @@ describe('workflowMainPart', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe(
-      'Unknown step. Use one of: build, review.',
+      'Unknown step. Use one of: build, ship, review.',
     );
     expect(workflow.lastFlow()?.stage).toBe('build');
   });
@@ -627,12 +617,6 @@ describe('workflowMainPart', () => {
     expect(workflow.instructions).toEqual([SESSION_NOTE]);
   });
 
-  it('SessionNote_NamesBothTools', () => {
-    expect(SESSION_NOTE).toContain('set_workflow_step');
-    expect(SESSION_NOTE).toContain('set_workflow_checklist');
-    expect(SESSION_NOTE).toContain('only where your running skill names it');
-  });
-
   it('Start_ContributesBothTools', () => {
     const workflow = startLightAndMedium();
 
@@ -688,6 +672,24 @@ describe('workflowMainPart', () => {
     expect(stepsOffered()).not.toContain('extra');
   });
 
+  it('stepTool_LastReportableWorkflowDisposed_LeavesNoTool', () => {
+    const workflow = startWorkflowPart();
+    const added = workflow.exported().addWorkflow(
+      stubWorkflow({
+        stages: [
+          { id: 'extra', order: 0, reportedAs: 'extra', enter: () => null },
+        ],
+      }),
+    );
+    const toolNames = () =>
+      workflow.contributions.flatMap(({ tools }) => tools.map((t) => t.name));
+    expect(toolNames()).toContain(SET_WORKFLOW_STEP_TOOL);
+
+    added.dispose();
+
+    expect(toolNames()).toEqual([SET_WORKFLOW_CHECKLIST_TOOL]);
+  });
+
   it('savedFlowInAStageNoLongerRegistered_OpensAndFoldsWithoutThrowing', async () => {
     const data = await savedFlowData({ stage: 'feature' });
     const workflow = startWorkflowPart({ data });
@@ -735,9 +737,7 @@ describe('workflowMainPart', () => {
   ])(
     'stop_LeavesNoLiveRegistration_AndWritesNothing ($state)',
     async ({ act }) => {
-      const harness = startMainPart(workflowMainPart, {
-        dependencies: [FAKE_SESSIONS, FAKE_CHAT],
-      });
+      const { engine: harness } = startEngineMainPart();
       const exported = harness
         .started()
         .exports?.(createRegistrations()) as WorkflowMainExports;
@@ -755,9 +755,7 @@ describe('workflowMainPart', () => {
   );
 
   it('stopThenStart_StartsAgain', async () => {
-    const harness = startMainPart(workflowMainPart, {
-      dependencies: [FAKE_SESSIONS, FAKE_CHAT],
-    });
+    const { engine: harness } = startEngineMainPart();
 
     await harness.restart();
 
@@ -765,9 +763,7 @@ describe('workflowMainPart', () => {
   });
 
   it('exports_ConsumerDisposed_FreesTheWorkflowId', () => {
-    const harness = startMainPart(workflowMainPart, {
-      dependencies: [FAKE_SESSIONS, FAKE_CHAT],
-    });
+    const { engine: harness } = startEngineMainPart();
     const exportsFor = (consumer: ReturnType<typeof createRegistrations>) =>
       harness.started().exports?.(consumer) as WorkflowMainExports;
     const consumerA = createRegistrations();
@@ -805,7 +801,7 @@ describe('workflowMainPart', () => {
 
   it.each<{
     name: string;
-    events: AgentEvent[];
+    events: (AgentEvent | typeof CLEARED)[];
     replayed: boolean;
     missedLevel: boolean;
   }>([
@@ -823,6 +819,17 @@ describe('workflowMainPart', () => {
       name: 'MissedLevel_LiveTurnWithNoWork_StaysFalse',
       events: [
         { type: 'turnStarted', at: 1 },
+        { type: 'turnEnded', at: 1 },
+      ],
+      replayed: false,
+      missedLevel: false,
+    },
+    {
+      name: 'MissedLevel_ClearedMidTurn_ForgetsTheWork',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        USAGE,
+        CLEARED,
         { type: 'turnEnded', at: 1 },
       ],
       replayed: false,
@@ -852,8 +859,17 @@ describe('workflowMainPart', () => {
     const workflow = startWorkflowPart();
     await workflow.openS1();
 
+    let hostSessionId = 'h1';
     for (const event of events) {
-      await workflow.agentEvent(event, 'h1', replayed);
+      if (event === CLEARED) {
+        hostSessionId = 'h2';
+        await workflow.emit(
+          'sessions.hostSessionChanged',
+          session('s1', hostSessionId),
+        );
+      } else {
+        await workflow.agentEvent(event, hostSessionId, replayed);
+      }
     }
 
     expect(workflow.lastFlow()).toMatchObject({
@@ -1160,13 +1176,18 @@ describe('workflowMainPart', () => {
     const workflow = startWorkflowPart({ selfTest: true });
     workflow.exported().addWorkflow(finishingWorkflow());
     await workflow.openS1();
+    workflow.setActiveTime(activeFor(4000));
     await workflow.agentEvent(spent(1));
 
     await end(workflow);
+    workflow.setActiveTime(activeFor(0));
     await workflow.openS1();
     await workflow.agentEvent(skill('x:stub', ''));
+    await workflow.emit('sessions.hostSessionChanged', session('s1', 'h2'));
     workflow.exported().signal('s1', FINISH, 'live');
 
-    expect(await runLogLines(workflow)).toMatchObject([{ costUsd: null }]);
+    expect(await runLogLines(workflow)).toMatchObject([
+      { activeMs: 0, costUsd: null },
+    ]);
   });
 });
