@@ -83,7 +83,7 @@ export interface RelayEndpoint {
   protocol: number;
   // A Unix socket path (macOS) or a named pipe path (Windows).
   channel: string;
-  launch: { command: string[]; cwd: string };
+  launch: { command: readonly string[]; cwd: string };
 }
 
 export interface ToolResult {

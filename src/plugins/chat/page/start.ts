@@ -106,7 +106,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         exists: (id: string) => api.keys.command(id) !== undefined,
         run: (id: string) => api.commands.run(id),
       },
-      platform: api.platform,
+      platform: api.platform.os,
       log: services.log,
     };
     const reasonBox = createReasonBox({
@@ -211,7 +211,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       keys,
       run,
       commands: partDeps.commands,
-      platform: api.platform,
+      platform: api.platform.os,
       layouts,
       composerParts,
       statusParts,

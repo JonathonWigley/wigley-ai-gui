@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MainServices } from '../../../contracts/plugin';
+import type { OsName } from '../../../contracts/platform';
+import { fakePlatform } from '../../../shared/platform.test-support';
 import {
   fakeDependency,
   noCounts,
@@ -13,10 +14,10 @@ import {
 import { unityPoolManifest } from '../manifest';
 import { unityPoolMainPart } from './start';
 
-function startOnHarness(platform: MainServices['platform'] = 'macos') {
+function startOnHarness(os: OsName = 'macos') {
   return startMainPart(unityPoolMainPart, {
     settings: { ...unityPoolManifest.settings, scriptPath: '' },
-    services: { platform },
+    services: { platform: fakePlatform(os) },
     dependencies: [
       fakeDependency(chatMainKey, () => ({}) as unknown as ChatMainExports),
       fakeDependency(

@@ -1,18 +1,21 @@
+import type { PlatformPrograms } from '../contracts/platform';
 import type { SettingInfos } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
 
-export const defaultSettings: Settings = {
-  window: { width: 900, height: 700, minWidth: 420, minHeight: 360 },
-  theme: 'catppuccin-mocha',
-  transparency: 'system',
-  fonts: {},
-  keySequenceTimeoutMs: 1000,
-  claude: { command: '~/.local/bin/claude' },
-  shell: { layout: 'default' },
-  plugins: { disabled: ['agent-lines', 'usage-tab-line'] },
-};
+export function defaultSettingsFor(programs: PlatformPrograms): Settings {
+  return {
+    window: { width: 900, height: 700, minWidth: 420, minHeight: 360 },
+    theme: 'catppuccin-mocha',
+    transparency: 'system',
+    fonts: {},
+    keySequenceTimeoutMs: 1000,
+    claude: { command: programs.claude },
+    shell: { layout: 'default' },
+    plugins: { disabled: ['agent-lines', 'usage-tab-line'] },
+  };
+}
 
-// The JSON kind of each core setting `defaultSettings` leaves unset, by its
+// The JSON kind of each core setting `defaultSettingsFor` leaves unset, by its
 // dotted path, so a `settings.json` may set it.
 export const optionalSettings: Readonly<
   Record<string, 'string' | 'number' | 'boolean'>

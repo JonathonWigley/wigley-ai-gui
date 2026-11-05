@@ -1,6 +1,6 @@
 import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
+import type { OsName } from '../../../../contracts/platform';
 import type { KeysPageExports } from '../../../keys/contract';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
@@ -29,7 +29,7 @@ export interface CardDeps {
   dispatch(action: FormsAction): void;
   toggleDontAsk(): void;
   keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
-  platform: Platform;
+  platform: OsName;
   log: PluginLog;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts'>;

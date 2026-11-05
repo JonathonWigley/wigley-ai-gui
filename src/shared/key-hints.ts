@@ -8,7 +8,7 @@ import type {
   EditorMode,
   InterceptBind,
 } from '../contracts/keymap';
-import type { Platform } from '../contracts/platform';
+import type { OsName } from '../contracts/platform';
 import { type Chord, parseChord } from './chord-notation';
 
 export interface KeyHint {
@@ -127,7 +127,7 @@ const PC_CHORDS: ChordStyle = {
   },
 };
 
-const CHORD_STYLES: Record<Platform, ChordStyle> = {
+const CHORD_STYLES: Record<OsName, ChordStyle> = {
   macos: MAC_CHORDS,
   windows: PC_CHORDS,
   linux: PC_CHORDS,
@@ -136,14 +136,14 @@ const CHORD_STYLES: Record<Platform, ChordStyle> = {
 // A page-notation chord as the user reads it on `platform`, e.g. `<S-D-k>` as
 // `⇧⌘K` on macOS and `Shift+Win+K` elsewhere. A token that is no chord returns
 // as it is.
-export function formatChord(token: string, platform: Platform): string {
+export function formatChord(token: string, platform: OsName): string {
   const chord = parseChord(token);
   return chord === null ? token : printChord(chord, platform);
 }
 
 // `chord` as the user reads it on `platform`: one character as its capital, a
 // named key by the platform's name for it or as it is spelled.
-function printChord(chord: Chord, platform: Platform): string {
+function printChord(chord: Chord, platform: OsName): string {
   const style = CHORD_STYLES[platform];
   const { modifiers } = style;
   const held = [
@@ -193,7 +193,7 @@ function vimChord(token: string): Chord | null {
 
 // A page key sequence as the user reads it on `platform`, e.g. `Space Space`,
 // `z a`, `⌥O`, or `Escape` as `⎋` on macOS and `Esc` elsewhere.
-export function formatKeys(keys: string[], platform: Platform): string {
+export function formatKeys(keys: string[], platform: OsName): string {
   const { keyNames } = CHORD_STYLES[platform];
   return keys
     .map((key) => keyNames[key] ?? formatChord(key, platform))
@@ -204,7 +204,7 @@ export function formatKeys(keys: string[], platform: Platform): string {
 // `Space`, `<Tab>` as `⇥` on macOS and `Tab` elsewhere, `<M-x>` as `⌘X` on
 // macOS and `Win+X` elsewhere. A token that is neither a `<…>` key nor a
 // chord, such as `w` or `<X-a>`, returns as it is.
-export function formatVimToken(token: string, platform: Platform): string {
+export function formatVimToken(token: string, platform: OsName): string {
   const chord = vimChord(token);
   if (chord !== null) {
     return printChord(chord, platform);
@@ -222,7 +222,7 @@ export function formatVimToken(token: string, platform: Platform): string {
 export function formatVimKeys(
   keys: string,
   leader: string,
-  platform: Platform,
+  platform: OsName,
 ): string {
   return vimTokens(keys, leader)
     .map((token) => formatVimToken(token, platform))
@@ -273,7 +273,7 @@ export function editorBindMode(bind: EditorBind): EditorMode {
 export function editorHints(
   editor: EditorKeymap,
   label: CommandLabel,
-  platform: Platform,
+  platform: OsName,
 ): KeyHint[] {
   return mergeHints(
     editor.binds.map((bind) => ({
@@ -290,7 +290,7 @@ export function withLeader(keys: string, leader: string): string {
 
 // An intercepted chord as the user reads it on `platform`, e.g. Control+Tab
 // as `⌃⇥` on macOS and `Ctrl+Tab` elsewhere.
-export function chordName(bind: InterceptBind, platform: Platform): string {
+export function chordName(bind: InterceptBind, platform: OsName): string {
   return printChord(
     {
       ctrl: bind.control ?? false,
@@ -309,7 +309,7 @@ export function chordName(bind: InterceptBind, platform: Platform): string {
 // as it is.
 export function formatAccelerator(
   accelerator: string,
-  platform: Platform,
+  platform: OsName,
 ): string {
   const parts = accelerator.split('+');
   const key = parts[parts.length - 1];
@@ -334,7 +334,7 @@ export function formatAccelerator(
 // an unknown modifier.
 function acceleratorModifier(
   modifier: string,
-  platform: Platform,
+  platform: OsName,
 ): keyof Omit<Chord, 'key'> | null {
   switch (modifier.toLowerCase()) {
     case 'control':

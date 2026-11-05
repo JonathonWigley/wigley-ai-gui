@@ -1,7 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import { keyPrompt } from '../../../shared/page/ui/key-prompt';
 import type { AnchorOptions, HintWhere } from '../contract';
 
@@ -17,7 +17,7 @@ export interface AnchorDeps {
   label(id: CommandId): string;
   scope(): ViewScope;
   showHints(): boolean;
-  platform: Platform;
+  platform: OsName;
 }
 
 // The anchor registry. `redraw` draws every live anchor's keys again, and none

@@ -126,7 +126,7 @@ async function start() {
   );
   themeApplier.apply(config.theme, settings);
 
-  document.documentElement.dataset.platform = config.platform;
+  document.documentElement.dataset.platform = config.platform.os;
   const shell = mountShell(
     document.getElementById('app') as HTMLElement,
     defaultShellLayout,
@@ -141,7 +141,7 @@ async function start() {
     defaultLayout: defaultChromeLayout,
     services: {
       markdown,
-      platform: config.platform,
+      platform: config.platform.os,
       commands: {
         exists: (id) => commands.has(id),
         run: (id) => commands.run(id, {}),
@@ -203,7 +203,7 @@ async function start() {
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   // An insert-mode key with no bind in force types as it would unbound, so
   // only a normal-mode miss is logged.
-  const paths = config.platform === 'windows' ? windowsPaths : posixPaths;
+  const paths = config.platform.os === 'windows' ? windowsPaths : posixPaths;
   const fuzzy = createFzfMatcher();
   const editor = createCodeMirrorVimHost(
     keymap.editor,

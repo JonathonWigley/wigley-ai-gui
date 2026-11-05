@@ -394,7 +394,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         }
       },
       markdown: api.services.markdown,
-      platform: api.platform,
+      platform: api.platform.os,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),

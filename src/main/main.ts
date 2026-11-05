@@ -21,7 +21,7 @@ import path from 'node:path';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { coreCommands, coreScopes } from '../config/keymap';
 import {
-  defaultSettings,
+  defaultSettingsFor,
   optionalSettings,
   settingChoices,
   settingInfo,
@@ -29,6 +29,7 @@ import {
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
 import { type AgentHarness, CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
+import type { Alerts } from '../contracts/alerts';
 import type {
   Clock,
   RandomHex,
@@ -38,7 +39,7 @@ import type {
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
-import type { Platform } from '../contracts/platform';
+import type { OsName, Platform } from '../contracts/platform';
 import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
 import type { UserConfig } from '../contracts/user-config';
@@ -57,6 +58,7 @@ import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { osPlatform } from '../shared/os-platform';
+import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
   pluginThemeTokens,
@@ -68,8 +70,10 @@ import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
-import { createElectronAlerts } from './alerts/electron-alerts';
+import { createPlainAlerts } from './alerts/electron-alerts';
+import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
+import { createWindowsAlerts } from './alerts/windows-alerts';
 import { appInstanceOf } from './app-instance';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
@@ -235,6 +239,16 @@ function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
   };
 }
 
+// The native alerts of the OS `osName`. Linux has no attention call and no badge.
+function alertsFor(osName: OsName, window: BrowserWindow, log: Log): Alerts {
+  if (osName === 'macos') {
+    return createMacAlerts(log);
+  }
+  return osName === 'windows'
+    ? createWindowsAlerts(window, log)
+    : createPlainAlerts(log);
+}
+
 // The user's app: the OS Trash, native alerts and dialogs, Claude Code, whose
 // relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, and
 // links opened in the user's browser.
@@ -242,7 +256,7 @@ function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
     forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
-      alerts: createElectronAlerts(window, log),
+      alerts: alertsFor(platform.os, window, log),
       agentHarnesses: [
         claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
       ],
@@ -316,13 +330,22 @@ const timers: Timers = {
   clear: (handle) => clearTimeout(handle),
 };
 const modeServices = modeServicesOf(runEnvironment);
-const files = createNodeFiles({ trashItem: modeServices.trashItem });
+// The platform record main runs on, as the served config and every plugin's services hold it.
+const platform: Platform = platformFor(osPlatform(process.platform), {
+  username: os.userInfo().username,
+  env: process.env,
+  execPath: process.execPath,
+  cwd: process.cwd(),
+  isDev: appInstance.isDev,
+});
+const files = createNodeFiles({
+  trashItem: modeServices.trashItem,
+  os: platform.os,
+});
 const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
-// The OS main runs on, as the served config and every plugin's services name it.
-const platform: Platform = osPlatform(process.platform);
-const paths: Paths = platform === 'windows' ? windowsPaths : posixPaths;
+const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
 const git = createProcessGit({ processes, files, paths });
 
 let mainWindow: BrowserWindow | null = null;
@@ -449,7 +472,7 @@ function titleBarOptions(
   config: AppConfig,
   log: Log,
 ): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
-  if (platform === 'macos') {
+  if (platform.os === 'macos') {
     return { titleBarStyle: 'hiddenInset' };
   }
   try {
@@ -525,13 +548,13 @@ async function runTempFolders(): Promise<string[]> {
   }
   const tempDir = os.tmpdir();
   try {
-    return tempFolders(await files.realPath(tempDir), platform);
+    return tempFolders(await files.realPath(tempDir), platform.os);
   } catch (error) {
     pageLog.log(
       'main',
       `temp folder ${tempDir} not resolved: ${errorText(error)}`,
     );
-    return tempFolders(tempDir, platform);
+    return tempFolders(tempDir, platform.os);
   }
 }
 
@@ -569,7 +592,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   return {
     files,
     folder: configFolder(homeDir),
-    defaults: defaultSettings,
+    defaults: defaultSettingsFor(platform.programs),
     optionalSettings,
     settingChoices,
     defaultKeymap,
@@ -781,7 +804,7 @@ function createWindow(
     const config = store.current();
     const isReduced = isTransparencyReduced(config);
     window.setBackgroundColor(windowBackgroundOf(config.theme, isReduced));
-    if (platform === 'macos') {
+    if (platform.os === 'macos') {
       return;
     }
     try {
@@ -972,7 +995,7 @@ function createWindow(
   // The window holds every open round, so on macOS closing it hides it
   // until the app quits.
   window.on('close', (event) => {
-    if (process.platform === 'darwin' && !isQuitting) {
+    if (platform.lifecycle.closeHidesWindow && !isQuitting) {
       event.preventDefault();
       window.hide();
     }
@@ -1002,11 +1025,10 @@ function startApp() {
   // The Mac app menu's About, Hide and Quit items show the app name. Every run
   // mode sets its user data folder itself, so the name moves no data.
   app.setName(appInstance.displayName);
-  if (process.platform === 'win32') {
-    // Windows shows a toast only for an app with an AppUserModelID.
+  if (platform.lifecycle.toastsNeedAppUserModelId) {
     app.setAppUserModelId(process.execPath);
   }
-  if (runMode !== 'live' && process.platform === 'darwin') {
+  if (runMode !== 'live' && platform.lifecycle.hidesFromDockBesideApp) {
     app.setActivationPolicy('accessory');
   }
   if (runMode !== 'live') {
@@ -1054,9 +1076,9 @@ function startApp() {
       const sessionHost = createSessionHostClient({
         folder: sessionHostFolder(inputs.homeDir),
         channel: sessionHostChannel(
-          platform,
+          platform.os,
           inputs.homeDir,
-          os.userInfo().username,
+          platform.relay.username,
           appInstance.id,
         ),
         hostScript: path.join(__dirname, 'session-host.js'),
@@ -1080,7 +1102,7 @@ function startApp() {
   // the self-test, whose exit closes the window and finishes its own teardown.
   app.on('window-all-closed', () => {
     const quitsWithTheWindow =
-      process.platform !== 'darwin' && runMode !== 'selfTest';
+      !platform.lifecycle.closeHidesWindow && runMode !== 'selfTest';
     if (quitsWithTheWindow) {
       app.quit();
     }

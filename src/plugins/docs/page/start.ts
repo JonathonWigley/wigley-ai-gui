@@ -146,7 +146,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),
       },
-      platform: api.platform,
+      platform: api.platform.os,
     };
     // A base kit whose keys fire in the docs scope `scope`, each anchor it
     // names recorded by `rollback`.

@@ -172,7 +172,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         run: (command) => api.commands.run(command),
       },
       contributions,
-      platform: api.platform,
+      platform: api.platform.os,
       uiState: services.uiState,
       timers: services.timers,
       drops: api.drops,

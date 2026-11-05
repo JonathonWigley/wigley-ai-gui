@@ -16,6 +16,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isMissingFile } from '../../contracts/files';
 import { describeFilesContract } from '../../shared/files-contract.test-support';
+import { osPlatform } from '../../shared/os-platform';
 import { createNodeFiles } from './node-files';
 
 // The real `watch`, keeping each watcher it opens so a test can make one fail.
@@ -49,6 +50,7 @@ const QUIET_MS = 100;
 
 const files = createNodeFiles({
   trashItem: () => Promise.reject(new Error('no test here trashes a path')),
+  os: osPlatform(process.platform),
 });
 let root: string;
 

@@ -3,7 +3,7 @@ import type { Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { ResizeTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { capitalised } from '../../../shared/capitalised';
@@ -197,7 +197,7 @@ export function createGalleryView(
 // log through and the scrollers they made last; `keptDragReorder` the drag the
 // DragReorder sample made last.
 function sectionSpecs(
-  platform: Platform,
+  platform: OsName,
   splitDeps: SplitSampleDeps,
   kept: KeptSplit,
   hScrollers: { log: PluginLog; kept: KeptHScrollers },
@@ -281,7 +281,7 @@ function materialsCells(): SampleCell[][] {
   ];
 }
 
-function kbdCells(platform: Platform): SampleCell[][] {
+function kbdCells(platform: OsName): SampleCell[][] {
   const hints = ['Space z g', '<A-o>', '<D-Enter>', 'j / k', '1–9'];
   return [hints.map((keys) => cell(kbd(keys, platform), keys))];
 }
@@ -293,7 +293,7 @@ function between(sample: HTMLElement): HTMLElement {
   return node;
 }
 
-function keyPromptCells(platform: Platform): SampleCell[][] {
+function keyPromptCells(platform: OsName): SampleCell[][] {
   return [
     [
       cell(keyPrompt('<A-o>', platform), 'Keys'),
@@ -308,7 +308,7 @@ function keyPromptCells(platform: Platform): SampleCell[][] {
 
 // The parts views build around anchors. Each sample anchor is a span holding
 // a KeyPrompt, as the keys plugin draws it; an unbound one is empty.
-function keyAnchorsCells(platform: Platform): SampleCell[][] {
+function keyAnchorsCells(platform: OsName): SampleCell[][] {
   const shown = (keys: string, label?: string) => {
     const node = element('span', 'ui-key-anchor');
     node.append(keyPrompt(keys, platform, label));
@@ -376,7 +376,7 @@ function keyAnchorsCells(platform: Platform): SampleCell[][] {
   ];
 }
 
-function buttonCells(platform: Platform): SampleCell[][] {
+function buttonCells(platform: OsName): SampleCell[][] {
   const variantRow = (
     variant: ButtonVariant,
     name: string,
@@ -756,7 +756,7 @@ function collapsibleCells(): SampleCell[][] {
   ];
 }
 
-function floatingPanelSample(platform: Platform): HTMLElement {
+function floatingPanelSample(platform: OsName): HTMLElement {
   const panel = floatingPanel();
   panel.append(
     sectionHeader('Space z'),
@@ -777,7 +777,7 @@ function dialogSample(): HTMLElement {
   return dialog.element;
 }
 
-function emptyStateCells(platform: Platform): SampleCell[][] {
+function emptyStateCells(platform: OsName): SampleCell[][] {
   return [
     [
       cell(
@@ -791,7 +791,7 @@ function emptyStateCells(platform: Platform): SampleCell[][] {
   ];
 }
 
-function sectionHeaderCells(platform: Platform): SampleCell[][] {
+function sectionHeaderCells(platform: OsName): SampleCell[][] {
   return [
     [
       cell(sectionHeader('Findings'), 'Plain', true),

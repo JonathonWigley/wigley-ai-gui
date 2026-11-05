@@ -33,6 +33,7 @@ import type {
 import type { AppConfig } from '../../contracts/settings';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
+import { fakePlatform } from '../../shared/platform.test-support';
 import { createRegistrations } from '../../shared/registrations';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
@@ -107,7 +108,7 @@ function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     commands: {},
     scopes: [],
     pluginSettings: { p: { delayMs: 1 }, q: { delayMs: 1 } },
-    platform: 'macos',
+    platform: fakePlatform('macos'),
     problems: [],
     ...overrides,
   } as AppConfig;

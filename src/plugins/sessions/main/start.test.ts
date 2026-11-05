@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { channelPath } from '../../../shared/local-channel/channel-path';
 import { osPlatform } from '../../../shared/os-platform';
+import { fakePlatform } from '../../../shared/platform.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   type ConnectedSession,
@@ -224,6 +225,7 @@ function startSessionsPart(
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
       git: { originRepoName },
+      platform,
       agentHarnesses,
     },
     drive: null,
@@ -242,8 +244,8 @@ function viewOf(
 // The app instance id the harness's fake services carry.
 const HARNESS_APP_ID = 'wigley-ai-gui-dev';
 
-// The OS the tests run on, so a test's relay opens the channel this OS's relays use.
-const platform = osPlatform(process.platform);
+// The record of the OS the tests run on, so a test's relay opens the channel this OS's relays use.
+const platform = fakePlatform(osPlatform(process.platform));
 
 const RELAY_HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -480,9 +482,9 @@ describe('sessions main part', () => {
 
       const socket = connectSocket(
         channelPath(
-          platform,
+          platform.os,
           homeDir,
-          os.userInfo().username,
+          platform.relay.username,
           HARNESS_APP_ID,
           '',
         ),
@@ -501,9 +503,9 @@ describe('sessions main part', () => {
     });
     const socket = connectSocket(
       channelPath(
-        platform,
+        platform.os,
         homeDir,
-        os.userInfo().username,
+        platform.relay.username,
         HARNESS_APP_ID,
         '',
       ),
@@ -519,11 +521,13 @@ describe('sessions main part', () => {
       const { connected, ended } = sessionEvents(harness);
       expect(connected).toHaveLength(1);
       expect(ended).toEqual(connected);
-      expect(
-        existsSync(
+      const endpoint: unknown = JSON.parse(
+        readFileSync(
           path.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
+          'utf8',
         ),
-      ).toBe(true);
+      );
+      expect(endpoint).toMatchObject({ launch: platform.relay.launch });
     } finally {
       socket.destroy();
       rmSync(homeDir, { recursive: true, force: true });

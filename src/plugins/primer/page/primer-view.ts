@@ -11,7 +11,7 @@ import {
   PANE_FOCUS_COMMANDS,
   type ResizeTarget,
 } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type {
   PluginAreas,
   PushedScope,
@@ -153,7 +153,7 @@ export interface PrimerViewDeps {
   keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   run(command: CommandId): void;
   commands: KitCommands;
-  platform: Platform;
+  platform: OsName;
   uiState: UiState;
   timers: Timers;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;

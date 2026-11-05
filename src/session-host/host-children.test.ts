@@ -20,6 +20,7 @@ import {
   type RecordedHostChild,
   SESSION_HOST_PROTOCOL,
 } from '../contracts/session-host-protocol';
+import { osPlatform } from '../shared/os-platform';
 import { createHostChildren } from './host-children';
 import {
   createOsProcesses,
@@ -121,7 +122,7 @@ function fakeProcesses(
 
 // The real OS, and a guard that nothing but this test's own children is signalled.
 function realProcesses() {
-  const real = createOsProcesses(process.platform);
+  const real = createOsProcesses(osPlatform(process.platform));
   const signals: string[] = [];
   const processes: OsProcesses = {
     report: real.report,

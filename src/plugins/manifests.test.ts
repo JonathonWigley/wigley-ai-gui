@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettings } from '../config/settings';
+import { defaultSettingsFor } from '../config/settings';
+import { fakePlatform } from '../shared/platform.test-support';
 import {
   disabledDependencyProblem,
   pluginSettingInfo,
@@ -15,7 +16,10 @@ describe('manifests', () => {
 
   it('manifests_DefaultDisabled_BreaksNoDependency', () => {
     expect(
-      disabledDependencyProblem(defaultSettings.plugins.disabled, manifests),
+      disabledDependencyProblem(
+        defaultSettingsFor(fakePlatform('macos').programs).plugins.disabled,
+        manifests,
+      ),
     ).toBeNull();
   });
 });

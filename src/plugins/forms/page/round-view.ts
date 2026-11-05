@@ -5,7 +5,7 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
@@ -92,7 +92,7 @@ export interface RoundViewDeps {
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
-  platform: Platform;
+  platform: OsName;
   uiState: UiState;
   timers: Timers;
   log: PluginLog;

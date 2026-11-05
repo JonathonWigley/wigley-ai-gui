@@ -1,6 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, ViewScope } from '../../../contracts/keymap';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import { formatKeys, formatVimKeys } from '../../../shared/key-hints';
 import type { HintWhere } from '../contract';
 import { isVimKeys, pageVimKeys } from './vim-keys';
@@ -26,7 +26,7 @@ export function keysFor(
   keymap: Keymap,
   command: CommandId,
   scope: ViewScope | undefined,
-  platform: Platform,
+  platform: OsName,
   where: HintWhere = 'page',
 ): string | null {
   if (where === 'box') {
@@ -48,7 +48,7 @@ export function promptKeysFor(
   keymap: Keymap,
   command: CommandId,
   scope: ViewScope | undefined,
-  platform: Platform,
+  platform: OsName,
   where: HintWhere,
 ): string | null {
   if (where === 'box') {

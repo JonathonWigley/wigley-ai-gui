@@ -29,6 +29,7 @@ import {
   isMissingFile,
   type WatchOptions,
 } from '../../contracts/files';
+import type { OsName } from '../../contracts/platform';
 
 // Editors save through a rename and FSEvents repeats events, so one save
 // arrives as several events for one path.
@@ -41,6 +42,7 @@ export interface NodeFilesOptions {
   // Moves a path to the OS Trash; main.ts passes Electron's shell.trashItem,
   // or a recursive rm under the self-test and a drive run.
   trashItem: (path: string) => Promise<void>;
+  os: OsName;
 }
 
 // `Files` over the disk, through `node:fs`. Paths are absolute. `trash` hands
@@ -58,7 +60,8 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     },
     readBytes: (file) => readFile(file),
     list: listFolder,
-    watch: watchDebounced,
+    watch: (folder, onChange, watchOptions) =>
+      watchDebounced(options.os, folder, onChange, watchOptions),
     stat: statPath,
     realPath: (file) => realpath(file),
     makeFolder: async (folder) => {
@@ -229,6 +232,7 @@ async function listFolder(
 }
 
 function watchDebounced(
+  os: OsName,
   folder: string,
   onChange: (path: string) => void,
   options?: WatchOptions,
@@ -237,7 +241,7 @@ function watchDebounced(
   const pending = new Map<string, NodeJS.Timeout>();
   const recursive = options?.recursive ?? true;
   const watcher = watchFolder(folder, { recursive }, (_event, name) => {
-    if (name === null || isWatchedFolderItself(folder, name)) {
+    if (name === null || isWatchedFolderItself(os, folder, name)) {
       return;
     }
     const changed = slashJoined(name);
@@ -276,9 +280,13 @@ function watchDebounced(
 
 // FSEvents reports a change to the watched folder itself (its contents
 // changing, or its own creation) under the folder's own name.
-function isWatchedFolderItself(folder: string, name: string): boolean {
+function isWatchedFolderItself(
+  os: OsName,
+  folder: string,
+  name: string,
+): boolean {
   return (
-    process.platform === 'darwin' &&
+    os === 'macos' &&
     name === path.basename(folder) &&
     !existsSync(path.join(folder, name))
   );

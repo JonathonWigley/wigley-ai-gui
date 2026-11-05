@@ -49,6 +49,7 @@ import { fakeDriveHost } from './fake-drive-host';
 import { createListeners, type Listeners } from './listeners';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
+import { fakePlatform } from './platform.test-support';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
 import { qualify } from './plugin-manifests';
@@ -686,7 +687,7 @@ function fakeMainApi(
       homeDir: '/home',
       tempFolders: [],
       paths: posixPaths,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       runMode: 'selfTest',
       selfTest: null,
       appInstance: DEV_APP,
@@ -1037,7 +1038,7 @@ function fakePageApi(
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
     settings: common.settings,
     onSettingsChanged: common.onSettingsChanged,
-    platform: 'macos',
+    platform: fakePlatform('macos'),
     commands: { run() {} },
     dependency: common.dependency as PageApi<
       PluginManifest,

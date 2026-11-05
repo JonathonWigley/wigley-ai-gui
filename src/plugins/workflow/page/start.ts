@@ -96,7 +96,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),
         },
-        platform: api.platform,
+        platform: api.platform.os,
       },
       log: services.log,
       clock: services.clock,

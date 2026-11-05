@@ -43,7 +43,7 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),
         },
-        platform: api.platform,
+        platform: api.platform.os,
       },
       log: services.log,
       nameOf: (sessionId) => names.get(sessionId) ?? sessionId,

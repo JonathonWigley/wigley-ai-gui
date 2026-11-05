@@ -5,7 +5,7 @@ import type { UserKeymap } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type {
   PageChannel,
   PushedScope,
@@ -155,7 +155,7 @@ export interface PickRequest<T> {
 // box's handler sees the layer in force when it commits.
 export interface RowContext {
   schema: UserConfigSchema;
-  platform: Platform;
+  platform: OsName;
   read(): UserConfigRead;
   settingsLayer(): Record<string, unknown> | null;
   keymapLayer(): UserKeymap | null;
@@ -175,7 +175,7 @@ export interface SettingsViewDeps {
   channel: PageChannel<SettingsChannel>;
   editor: EditorHost;
   matcher: FuzzyMatcher;
-  platform: Platform;
+  platform: OsName;
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   commands: KitCommands;

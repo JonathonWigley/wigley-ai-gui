@@ -40,7 +40,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       toast: services.toast,
       drops: api.drops,
       keys,
-      platform: api.platform,
+      platform: api.platform.os,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),

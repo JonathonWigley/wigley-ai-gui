@@ -12,7 +12,7 @@ import type {
   ResizeTarget,
 } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
   PageChannel,
@@ -146,7 +146,7 @@ export interface BacklogViewDeps {
   // Makes the follow-up editor's slot a drop target.
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   keys: KeysPageExports;
-  platform: Platform;
+  platform: OsName;
   // The commands a layout's kit runs by qualified id.
   commands: KitCommands;
   // The `tags` setting as the user config now sets it.

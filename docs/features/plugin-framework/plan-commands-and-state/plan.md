@@ -273,7 +273,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 
 ### Wave 1
 - [ ] [Platform record](01-platform-record.md)
-- [ ] [Forms takes the timers service](02-forms-timers.md)
+- [x] [Forms takes the timers service](02-forms-timers.md)
 
 ### Wave 2
 - [ ] [Window plugin](03-window-plugin.md) — after 01
@@ -317,10 +317,12 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 
 ## Run log
 
-Review base:
+Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 
 ### Groups
+- 02 · d2d7abad · diff read: Produces present; touched tests pass; compile waits on task 01's landing · concerns: session-host process-table.ts keeps its own copy of the 32-bit timer limit
 ### Contract changes
 ### Rulings
+- session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
 ### Review rounds
 ### Test gate

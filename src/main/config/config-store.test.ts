@@ -7,6 +7,7 @@ import type { Theme } from '../../contracts/theme';
 import { definePlugin } from '../../shared/define-plugin';
 import { errorText } from '../../shared/error-text';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
+import { fakePlatform } from '../../shared/platform.test-support';
 import {
   ThemeError,
   type ThemeFileText,
@@ -149,7 +150,7 @@ function load(
     themeTokens: { core: {}, plugins: {} },
     resolveTheme,
     checkTokens: () => null,
-    platform: 'windows',
+    platform: fakePlatform('windows'),
     homeDir: HOME,
     appInstance: {
       id: 'wigley-ai-gui-dev',
@@ -241,7 +242,7 @@ describe('loadConfigStore', () => {
     expect(pageCommands(config)).toEqual(['j p.down', 'k p.up']);
     expect(config.theme.name).toBe('mocha');
     expect(config.problems).toEqual([]);
-    expect(config.platform).toBe('windows');
+    expect(config.platform).toEqual(fakePlatform('windows'));
     expect(config.homeDir).toBe(HOME);
     expect(config.appInstance).toEqual({
       id: 'wigley-ai-gui-dev',

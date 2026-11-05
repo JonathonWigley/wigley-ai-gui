@@ -2,7 +2,7 @@ import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { ImageEncoder } from '../../../contracts/images';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
   PageChannel,
@@ -99,7 +99,7 @@ export interface NotePopupDeps {
   overlay: PluginAreas['overlay'];
   // The commands a layout's kit runs and checks.
   commands: KitCommands;
-  platform: Platform;
+  platform: OsName;
   pushScope(scope: NotesScope): PushedScope;
   // Read each time autosave schedules a save.
   autosaveDelayMs(): number;

@@ -171,7 +171,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         exists: (command) => api.keys.command(command) !== undefined,
         run: (command) => api.commands.run(command),
       },
-      platform: api.platform,
+      platform: api.platform.os,
       uiState: services.uiState,
       timers: services.timers,
       drops: api.drops,

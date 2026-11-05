@@ -1,4 +1,5 @@
 import { execFile, type ExecFileException } from 'node:child_process';
+import type { OsName } from '../contracts/platform';
 
 const REPORT_LIMIT_MS = 5000;
 const PS_LINE = /^(\S+\s+\S+\s+\d+\s+\S+\s+\d+)\s+(.+)$/;
@@ -78,9 +79,9 @@ async function reportFromPowerShell(
   return parseWindowsReport(stdout);
 }
 
-export function createOsProcesses(platform: NodeJS.Platform): OsProcesses {
+export function createOsProcesses(os: OsName): OsProcesses {
   return {
-    report: platform === 'win32' ? reportFromPowerShell : reportFromPs,
+    report: os === 'windows' ? reportFromPowerShell : reportFromPs,
     signal(pid, signal) {
       process.kill(pid, signal);
     },

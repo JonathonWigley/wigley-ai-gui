@@ -35,7 +35,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     const keys = api.dependency(keysPageKey);
     const view = createGalleryView(
       {
-        platform: api.platform,
+        platform: api.platform.os,
         uiState: api.services.uiState,
         timers: api.services.timers,
         markdown: api.services.markdown,

@@ -1,5 +1,5 @@
 import './key-prompt.css';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import { element } from '../dom';
 import { kbd } from './kbd';
 
@@ -7,7 +7,7 @@ import { kbd } from './kbd';
 // thing the keys plugin draws into an anchor.
 export function keyPrompt(
   keys: string,
-  platform: Platform,
+  platform: OsName,
   label?: string,
 ): HTMLElement {
   const node = element('span', 'ui-key-prompt');

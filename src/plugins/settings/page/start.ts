@@ -30,7 +30,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       channel: api.channel,
       editor: services.editor,
       matcher: services.fuzzy,
-      platform: api.platform,
+      platform: api.platform.os,
       markdown: services.markdown,
       keys,
       commands: {

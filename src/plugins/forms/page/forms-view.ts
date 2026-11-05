@@ -6,7 +6,7 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type {
   PluginAreas,
   PushedScope,
@@ -72,7 +72,7 @@ export interface FormsViewDeps {
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
-  platform: Platform;
+  platform: OsName;
   uiState: UiState;
   timers: Timers;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;

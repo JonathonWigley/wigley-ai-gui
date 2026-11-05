@@ -140,8 +140,8 @@ src/main/        core main process; main.ts is its composition root
                  through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
-  alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
-                 open counts each source sets
+  alerts/        native notification behind Alerts, with a Mac variant (Dock bounce, badge), a Windows variant (taskbar
+                 flash, overlay dot) and a plain one for Linux; the badge sums the open counts each source sets
   images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
@@ -617,7 +617,7 @@ round; primer: an open primer), since main, not the page, decides.
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the OS main runs on (`platform`, main only; a page reads `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
@@ -626,7 +626,7 @@ round; primer: an open primer), since main, not the page, decides.
   `services.homeDir`.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
-  runs on, the page by the served `platform`. Page and shared code that joins, splits or shows a full path calls it,
+  runs on, the page by the served `platform.os`. Page and shared code that joins, splits or shows a full path calls it,
   and so does every path compare in either process, so no plugin writes `/` into a full path or compares paths as
   strings; main-side code may join and split with `node:path`, which follows the OS main runs on, and a Unix socket
   path, which exists only on POSIX, is written with `/` and `path.posix`. Windows paths show with backslashes and the home folder

@@ -1,6 +1,6 @@
 # 02 — Forms takes the timers service
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -66,3 +66,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit d2d7abad · proof: diff read: Produces present; touched tests pass; compile waits on task 01's landing · concerns: session-host process-table.ts keeps its own copy of the 32-bit timer limit

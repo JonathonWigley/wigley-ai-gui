@@ -687,7 +687,7 @@ export interface DriveHost {
 // `timers` runs one-shot timers, the `Timers` seam the page shares.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `paths` handles full paths by the rules of the OS main runs on, and
-// `platform` names that OS, picked by the composition root.
+// `platform` is the record of that OS, picked by the composition root.
 // `processes` runs the machine's programs; `git` is the one way a plugin runs
 // `git`, and stopping the plugin leaves a `git` run to finish. `alerts` gets
 // the user's attention, and stopping the plugin zeroes the open counts it set.

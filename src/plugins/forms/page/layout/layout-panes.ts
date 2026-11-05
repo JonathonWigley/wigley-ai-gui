@@ -1,7 +1,7 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
+import type { OsName } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { button, element } from '../../../../shared/page/dom';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
@@ -79,7 +79,7 @@ import type { LayoutPick } from './layout-resolver';
 // recorded for disposal.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
-  platform: Platform;
+  platform: OsName;
   log: PluginLog;
   keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
   dispatch(action: FormsAction): void;

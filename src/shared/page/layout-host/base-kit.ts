@@ -3,7 +3,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type { PluginManifest } from '../../../contracts/plugin';
 import { qualify } from '../../plugin-manifests';
 import { appended, element } from '../dom';
@@ -46,7 +46,7 @@ export interface BaseKitDeps {
   commands: KitCommands;
   scope: ViewScope | null;
   commandNamed(short: string): CommandId | null;
-  platform: Platform;
+  platform: OsName;
   recordAnchor?(anchor: Disposable): void;
   recordMount?(mount: MarkdownMount): void;
   log?: PluginLog;
@@ -58,7 +58,7 @@ export interface OwnerKitServices {
   markdown: MarkdownRenderer;
   keys: BaseKitDeps['keys'];
   commands: KitCommands;
-  platform: Platform;
+  platform: OsName;
   log?: PluginLog;
 }
 

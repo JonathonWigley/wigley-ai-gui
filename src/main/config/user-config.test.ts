@@ -4,6 +4,7 @@ import type { Settings } from '../../contracts/settings';
 import type { UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
+import { fakePlatform } from '../../shared/platform.test-support';
 import { resolveTheme } from '../themes/theme-loader';
 import type { ConfigCheckDeps } from './config-checks';
 import { loadConfigStore } from './config-store';
@@ -109,7 +110,7 @@ async function create(
     manifests,
     files,
     folder: FOLDER,
-    platform: 'macos',
+    platform: fakePlatform('macos'),
     homeDir: HOME,
     appInstance: {
       id: 'wigley-ai-gui-dev',
@@ -588,7 +589,7 @@ describe('createUserConfig', () => {
       manifests: [flagPlugin],
       files,
       folder: FOLDER,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: HOME,
       appInstance: {
         id: 'wigley-ai-gui-dev',
@@ -656,7 +657,7 @@ describe('createUserConfig', () => {
       manifests: [overPlugin],
       files,
       folder: FOLDER,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: HOME,
       appInstance: {
         id: 'wigley-ai-gui-dev',
@@ -686,7 +687,7 @@ describe('createUserConfig', () => {
       ...CHECK_DEPS,
       files: createMemoryFiles(),
       folder: FOLDER,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: HOME,
       appInstance: {
         id: 'wigley-ai-gui-dev',

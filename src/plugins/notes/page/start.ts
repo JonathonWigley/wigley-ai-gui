@@ -73,7 +73,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),
       },
-      platform: api.platform,
+      platform: api.platform.os,
       pushScope: (scope) => api.keys.pushScope(scope),
       autosaveDelayMs: () => api.settings().autosaveDelayMs,
       selectedSession: () => {

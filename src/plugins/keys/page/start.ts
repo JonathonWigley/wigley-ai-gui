@@ -43,7 +43,8 @@ type KeysApi = PageApi<
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
-    const { keys, services, platform } = api;
+    const { keys, services } = api;
+    const platform = api.platform.os;
     const anchors = createAnchors({
       keysFor: (command, scope, where) =>
         promptKeysFor(keys.keymap(), command, scope, platform, where),
