@@ -463,7 +463,7 @@ describe('chips', () => {
 describe('contextChoices', () => {
   it('contextChoices_HomeFirstThenByFolder', () => {
     const document: IndexDocument = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       generatedAt: '2026-10-20T00:00:00Z',
       entries: [],
       contexts: [
@@ -535,6 +535,8 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     title: overrides.path.slice(overrides.path.lastIndexOf('/') + 1),
     meta: {},
     walked: [],
+    headings: [],
+    links: [],
     lastLoaded: null,
     ...overrides,
   };
@@ -545,7 +547,7 @@ function documentOf(
   contexts: IndexContext[] = [],
 ): IndexDocument {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts,
@@ -1375,6 +1377,8 @@ describe('provisionalEntry', () => {
       repo: null,
       root: null,
       walked: [],
+      headings: [],
+      links: [],
       lastLoaded: null,
     });
   });

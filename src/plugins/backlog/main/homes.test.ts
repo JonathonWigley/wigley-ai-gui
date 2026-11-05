@@ -25,6 +25,8 @@ function entry(
     title: path,
     meta,
     walked: [],
+    headings: [],
+    links: [],
     lastLoaded: null,
     ...fields,
   };

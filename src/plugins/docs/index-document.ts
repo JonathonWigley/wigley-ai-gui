@@ -7,11 +7,13 @@ import type {
   IndexDocument,
   IndexEntry,
   IndexHarness,
+  IndexHeading,
+  IndexLink,
   InstalledCopy,
 } from './contract';
 import { isJsonObject, isStringArray } from '../../shared/json';
 
-export const INDEX_SCHEMA_VERSION = 4;
+export const INDEX_SCHEMA_VERSION = 5;
 
 // `model.py`'s KINDS order; the tree groups kinds in this order.
 export const DOC_KINDS: readonly DocKind[] = [
@@ -37,6 +39,8 @@ export const DOC_KINDS: readonly DocKind[] = [
 const DOC_OWNERS: readonly DocOwner[] = ['mine', 'third-party'];
 
 export const INDEX_HARNESSES: readonly IndexHarness[] = ['claude', 'codex'];
+
+const LINK_FORMS: readonly IndexLink['form'][] = ['markdown', 'section'];
 
 const DOC_SOURCES: readonly DocSource[] = [
   'global',
@@ -139,14 +143,35 @@ function isInstalledCopy(value: unknown): value is InstalledCopy {
   );
 }
 
+function isIndexHeading(value: unknown): value is IndexHeading {
+  return (
+    isJsonObject(value) &&
+    typeof value.level === 'number' &&
+    typeof value.text === 'string' &&
+    typeof value.line === 'number'
+  );
+}
+
+function isIndexLink(value: unknown): value is IndexLink {
+  return (
+    isJsonObject(value) &&
+    (LINK_FORMS as readonly unknown[]).includes(value.form) &&
+    typeof value.raw === 'string' &&
+    typeof value.target === 'string' &&
+    typeof value.line === 'number' &&
+    (value.targetLine === null || typeof value.targetLine === 'number')
+  );
+}
+
 function failed(message: string): ParsedIndex {
   return { ok: false, message };
 }
 
 // The first field of `entry` that breaks the schema, or null. A kind or
 // source need only be a string; `repo`, `root` and `plugin` are each a string
-// where a known source requires it, else a string or null. `lastLoaded` is
-// null or a time `Date.parse` reads.
+// where a known source requires it, else a string or null. One bad element of
+// `headings` or `links` fails the entry. `lastLoaded` is null or a time
+// `Date.parse` reads.
 function malformedEntryField(entry: unknown): string | null {
   if (!isJsonObject(entry)) {
     return 'entry';
@@ -167,6 +192,11 @@ function malformedEntryField(entry: unknown): string | null {
     ['title', typeof entry.title === 'string'],
     ['meta', isJsonObject(entry.meta)],
     ['walked', isStringArray(entry.walked)],
+    [
+      'headings',
+      Array.isArray(entry.headings) && entry.headings.every(isIndexHeading),
+    ],
+    ['links', Array.isArray(entry.links) && entry.links.every(isIndexLink)],
     [
       'lastLoaded',
       entry.lastLoaded === null ||

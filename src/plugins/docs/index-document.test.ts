@@ -20,6 +20,8 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     title: posixPaths.base(overrides.path),
     meta: {},
     walked: [],
+    headings: [],
+    links: [],
     lastLoaded: null,
     ...overrides,
   };
@@ -31,9 +33,17 @@ function without(subject: IndexEntry, field: keyof IndexEntry) {
   return rest;
 }
 
+const VALID_LINK = {
+  form: 'section',
+  raw: 'a.md § B',
+  target: '/a.md',
+  line: 3,
+  targetLine: 7,
+};
+
 function documentText(fields: Record<string, unknown>): string {
   return JSON.stringify({
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: '2026-10-19T14:02:11Z',
     entries: [],
     contexts: [],
@@ -83,7 +93,7 @@ describe('parseIndexDocument', () => {
     }
   });
 
-  it.each([1, 2, 3])('parse_Schema%i_Unsupported', (version) => {
+  it.each([1, 2, 3, 4])('parse_Schema%i_Unsupported', (version) => {
     expect(
       parseIndexDocument(documentText({ schemaVersion: version })),
     ).toEqual({
@@ -114,6 +124,49 @@ describe('parseIndexDocument', () => {
       given: 'walked not strings',
       fields: { entries: [{ ...entry({ path: '/a' }), walked: ['/l', 2] }] },
       problem: 'entry 0 is malformed: walked',
+    },
+    {
+      given: 'no headings',
+      fields: { entries: [without(entry({ path: '/a' }), 'headings')] },
+      problem: 'entry 0 is malformed: headings',
+    },
+    {
+      given: 'heading without line',
+      fields: {
+        entries: [
+          { ...entry({ path: '/a' }), headings: [{ level: 2, text: 'A' }] },
+        ],
+      },
+      problem: 'entry 0 is malformed: headings',
+    },
+    {
+      given: 'no links',
+      fields: { entries: [without(entry({ path: '/a' }), 'links')] },
+      problem: 'entry 0 is malformed: links',
+    },
+    {
+      given: 'link of unknown form',
+      fields: {
+        entries: [
+          {
+            ...entry({ path: '/a' }),
+            links: [{ ...VALID_LINK, form: 'wiki' }],
+          },
+        ],
+      },
+      problem: 'entry 0 is malformed: links',
+    },
+    {
+      given: 'link targetLine a string',
+      fields: {
+        entries: [
+          {
+            ...entry({ path: '/a' }),
+            links: [{ ...VALID_LINK, targetLine: '3' }],
+          },
+        ],
+      },
+      problem: 'entry 0 is malformed: links',
     },
     {
       given: 'no lastLoaded',
@@ -209,6 +262,21 @@ describe('parseIndexDocument', () => {
       fields: {
         entries: [
           entry({ path: '/a', lastLoaded: '2026-10-26T21:01:32.174Z' }),
+        ],
+      },
+    },
+    {
+      given: 'headings and links of both forms',
+      fields: {
+        entries: [
+          {
+            ...entry({ path: '/a' }),
+            headings: [{ level: 2, text: 'A', line: 4 }],
+            links: [
+              VALID_LINK,
+              { ...VALID_LINK, form: 'markdown', targetLine: null },
+            ],
+          },
         ],
       },
     },

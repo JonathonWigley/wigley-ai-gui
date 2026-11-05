@@ -658,6 +658,8 @@ export function provisionalEntry(
     title: skill === null ? paths.base(path) : paths.base(skill),
     meta: {},
     walked: [],
+    headings: [],
+    links: [],
     lastLoaded: null,
   };
 }

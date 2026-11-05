@@ -203,7 +203,7 @@ function startDocsPart() {
 }
 
 const INDEX_DOCUMENT: IndexDocument = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   generatedAt: '2026-10-20T00:00:00Z',
   entries: [],
   contexts: [],
@@ -296,6 +296,8 @@ describe('docs main part', () => {
           title: 'notes',
           meta: {},
           walked: [],
+          headings: [],
+          links: [],
           lastLoaded: null,
         },
       ],

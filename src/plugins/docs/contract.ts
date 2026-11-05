@@ -1,4 +1,4 @@
-// The docs index document (schema 4), as `docs_index.py` writes it (the
+// The docs index document (schema 5), as `docs_index.py` writes it (the
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
@@ -49,6 +49,26 @@ export interface LoadStateRecord {
   reason: string;
 }
 
+export interface IndexHeading {
+  level: number;
+  text: string;
+  // 1-based in the file.
+  line: number;
+}
+
+export interface IndexLink {
+  form: 'markdown' | 'section';
+  // The exact source text of the reference.
+  raw: string;
+  // The real path of the target file.
+  target: string;
+  // 1-based in the file.
+  line: number;
+  // The target heading's line, 1-based in the file; null when the link names a
+  // file only.
+  targetLine: number | null;
+}
+
 export interface IndexEntry {
   // The real path, with `#L<line>` for an item inside a file and
   // `#hook:<event>:<n>` for a hook.
@@ -74,6 +94,8 @@ export interface IndexEntry {
   meta: Record<string, unknown>;
   // Each path where the index's walk reached this entry through a link.
   walked: string[];
+  headings: IndexHeading[];
+  links: IndexLink[];
   // The transcript timestamp (ISO 8601) of the latest load of the entry; null
   // when no transcript read shows one. Machine-wide in the `machine` source,
   // the session's own in a `session:<id>` source.
@@ -99,7 +121,7 @@ export interface IndexContext {
 }
 
 export interface IndexDocument {
-  schemaVersion: 4;
+  schemaVersion: 5;
   generatedAt: string;
   entries: IndexEntry[];
   contexts: IndexContext[];

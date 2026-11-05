@@ -104,6 +104,8 @@ function entry(
     title: path,
     meta,
     walked: [],
+    headings: [],
+    links: [],
     lastLoaded: null,
   };
 }
@@ -111,7 +113,7 @@ function entry(
 function indexRead(entries: IndexEntry[]): SourceRead {
   return {
     document: {
-      schemaVersion: 4,
+      schemaVersion: 5,
       generatedAt: '2026-10-27T00:00:00Z',
       entries,
       contexts: [],

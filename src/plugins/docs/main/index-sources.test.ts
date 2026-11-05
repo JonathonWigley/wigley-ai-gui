@@ -34,12 +34,14 @@ const ENTRY: IndexEntry = {
   title: 'Mine',
   meta: {},
   walked: [],
+  headings: [],
+  links: [],
   lastLoaded: null,
 };
 
 function documentOf(entries: IndexEntry[]): IndexDocument {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts: [],
@@ -87,15 +89,15 @@ function rebuildOf(source: IndexSource): Promise<IndexLoad> {
 }
 
 describe('machine source', () => {
-  it('load_SchemaFive_PinnedMessage', async () => {
+  it('load_SchemaSix_PinnedMessage', async () => {
     const test = setUp();
-    await test.files.write(INDEX_FILE, '{"schemaVersion":5}');
+    await test.files.write(INDEX_FILE, '{"schemaVersion":6}');
 
     test.registry.add(test.machine);
 
     const load = await test.registry.load('machine');
 
-    expect(load.message).toContain('5');
+    expect(load.message).toContain('6');
     expect(test.registry.loadedEntries()).toEqual([]);
   });
 
