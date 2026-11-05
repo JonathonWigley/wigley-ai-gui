@@ -121,10 +121,16 @@ describe('claude-commands', () => {
     },
   );
 
-  it.each<{ case: string; given: AgentCommand; aliases: string[] }>([
+  it.each<{
+    case: string;
+    others?: AgentCommand[];
+    given: AgentCommand;
+    aliases: string[];
+  }>([
     { case: 'no plugin', given: record('compact', ['c']), aliases: ['c'] },
     {
-      case: 'no alias',
+      case: 'a free name',
+      others: [record('debug'), record('code-review', ['review'])],
       given: record('wigley:brief'),
       aliases: ['brief'],
     },
@@ -134,7 +140,31 @@ describe('claude-commands', () => {
       aliases: ['feature', 'f'],
     },
     { case: 'a second colon', given: record('a:b:c'), aliases: ['b:c'] },
-  ])('withNameAfterPlugin_AddsAlias: $case', ({ given, aliases }) => {
-    expect(withNameAfterPlugin([given])).toEqual([{ ...given, aliases }]);
-  });
+    {
+      case: 'a name collision',
+      others: [record('debug')],
+      given: record('wigley:debug'),
+      aliases: [],
+    },
+    {
+      case: 'an alias collision',
+      others: [record('code-review', ['review'])],
+      given: record('wigley:review'),
+      aliases: [],
+    },
+    {
+      case: 'a bare name two plugins share',
+      others: [record('other:brief')],
+      given: record('wigley:brief'),
+      aliases: ['brief'],
+    },
+  ])(
+    'withNameAfterPlugin_AddsAlias: $case',
+    ({ others = [], given, aliases }) => {
+      expect(withNameAfterPlugin([...others, given]).at(-1)).toEqual({
+        ...given,
+        aliases,
+      });
+    },
+  );
 });

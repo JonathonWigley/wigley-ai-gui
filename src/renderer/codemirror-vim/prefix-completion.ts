@@ -176,14 +176,14 @@ function popupKeys() {
 // insert mode (not replace mode), ranked by `matcher`, reporting each newly
 // offered list once until the popup closes. `filter: false` keeps the ranked
 // order. Each word keeps one `Completion` for the life of the extension, so a
-// word selected below the first row stays selected while it is listed; otherwise
-// the first row is. The result's `update` reruns the match on every keystroke, so the
-// open popup never waits on the source and Tab accepts at once. Placed after
-// `vim(...)`: `autocompletion` brings in the keymap facet, whose keydown
-// handler runs ahead of vim's when it is first met ahead of `vim(...)`. With
-// no interaction delay, Tab accepts as soon as the popup shows. A row's
-// `drawRow` element sits at position 60: CodeMirror's label is 50, its detail
-// 80.
+// word selected below the first row stays selected while it is listed;
+// otherwise the first row is. The result's `update` reruns the match on every
+// keystroke, so the open popup never waits on the source and Tab accepts at
+// once. Placed after `vim(...)`: `autocompletion` brings in the keymap facet,
+// whose keydown handler runs ahead of vim's when it is first met ahead of
+// `vim(...)`. With no interaction delay, Tab accepts as soon as the popup
+// shows. A row's `drawRow` element sits at position 60: CodeMirror's label is
+// 50, its detail 80.
 export function prefixCompletion(
   completions: EditorCompletions,
   matcher: FuzzyMatcher,

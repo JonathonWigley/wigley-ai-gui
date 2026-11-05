@@ -76,19 +76,23 @@ export function mergeInitNames(
 }
 
 // `records` as a session offers them: each named `plugin:name` also answers to
-// the name after its first `:`, which the CLI's aliases do not always hold.
+// the name after its first `:`, unless a record in `records` is named it or
+// holds it as an alias. Records that gain the same name each keep it.
 export function withNameAfterPlugin(
   records: readonly AgentCommand[],
 ): AgentCommand[] {
+  const heldNames = new Set(
+    records.flatMap((record) => [record.name, ...record.aliases]),
+  );
   return records.map((record) => {
     const colon = record.name.indexOf(':');
     if (colon === -1) {
       return record;
     }
     const nameAfterPlugin = record.name.slice(colon + 1);
-    return {
-      ...record,
-      aliases: [...new Set([...record.aliases, nameAfterPlugin])],
-    };
+    if (heldNames.has(nameAfterPlugin)) {
+      return record;
+    }
+    return { ...record, aliases: [...record.aliases, nameAfterPlugin] };
   });
 }

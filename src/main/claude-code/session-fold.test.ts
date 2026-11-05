@@ -1345,7 +1345,7 @@ describe('session-fold', () => {
         kind: 'commands',
         commands: [
           { name: 'brief', description: '', argumentHint: '', aliases: [] },
-          offered,
+          brief,
         ],
       },
     ]);

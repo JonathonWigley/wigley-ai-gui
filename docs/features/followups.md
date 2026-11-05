@@ -856,3 +856,8 @@ because the earlier items rewrite many of these tests anyway.
   `src/plugins/backlog/page/backlog-view.ts` returns silently when no home is open, so `backlog.filter` logs, no box
   opens, and the following letters run as `backlog.list` commands. Source session: Claude Code
   a65d02f6-eab9-453b-be96-34ac71d33876 in wigley-ai-gui.
+- **Escape on a chat picker leaves focus off the box** — *needs a decision*: `open` in
+  `src/plugins/chat/page/picker.ts` calls `blurFocusedElement()` and the `cancelled` path only logs, so after Escape
+  nothing refocuses the box and the next keys go to the page until `i`. To decide: whether a cancelled step hands focus
+  back to the box. Pre-existing since 80edb99c. Source session: Claude Code a65d02f6-eab9-453b-be96-34ac71d33876 in
+  wigley-ai-gui.

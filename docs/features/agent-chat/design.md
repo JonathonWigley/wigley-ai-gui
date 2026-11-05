@@ -147,8 +147,9 @@ interview on 2026-10-23; this file is the record of both.
   `commands` as the records. Each `init` then replaces the list: an `init` name takes the held record of that exact
   name; a name with none then takes the first record left that holds it as an alias; a name that matches none becomes a
   record with empty text; a record no name took drops. An `init` with no names leaves the list. The list reported adds
-  the name after a `plugin:name` record's first `:` to its aliases, and the held records stay as the CLI listed them, so
-  the merge never matches on it. The session fold owns the records, so a failed `initialize` answer
+  the name after a `plugin:name` record's first `:` to its aliases, unless a held record is named it or holds it as an
+  alias, so `/debug` offers the `debug` command ahead of `/wigley:debug`. The held records stay as the CLI listed them,
+  so the merge never matches on the added alias. The session fold owns the records, so a failed `initialize` answer
   only logs and leaves the list to `init`, the answer stays out of the chat entries, and a re-attach rebuilds the
   records from the pipe log and writes no `initialize`. A process that started before the request existed has no such
   line in its log, so its list comes from `init`.
