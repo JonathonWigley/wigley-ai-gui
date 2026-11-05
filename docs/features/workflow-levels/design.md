@@ -16,6 +16,15 @@ for one is a new plugin folder or layout, with no engine edit. The rules for pic
 `~/wigley-agents/workflows.md`; the steps of each live in the marketplace's `wigley:light`,
 `wigley:medium` and `wigley:feature` skills.
 
+Where each part lives:
+
+- `docs/features/workflow/design.md` — the engine and every stage.
+- `src/plugins/workflow-light/`, `src/plugins/workflow-medium/` and `src/plugins/workflow-heavy/` — the three workflow
+  plugins.
+- `~/wigley-agents/tools/workflow-gate/README.md` — the edit gate.
+- `~/wigley-agents/workflows.md` — the rules for picking a level.
+- `wigley:light` and `wigley:medium` — the steps of the two lighter workflows.
+
 ## Vocabulary
 
 - **Workflow** — a named set of stages a session runs, registered by one plugin. Light, Medium and

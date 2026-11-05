@@ -1,6 +1,6 @@
 # 08 — workflow-medium
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -128,3 +128,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 4c82e48d · proof: Diff read; typecheck 0, lint 0; every Produces present by search of the named files; registered in manifests, main, page; worker's touched tests pass (6 files, 60) · concerns: checklistCount duplicated in Light and Medium, workflow/contract.ts the natural home; layout and self-test near-verbatim copies of Light's; main part and callChecklistTool path have no unit test; cleared keeps the cycle count; second /wigley:medium keeps the old checklist while the count resets; self-test first runs in task 12

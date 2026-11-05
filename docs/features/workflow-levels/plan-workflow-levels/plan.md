@@ -225,7 +225,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [workflow-light](07-light.md) — after 05
 
 ### Wave 7
-- [ ] [workflow-medium](08-medium.md) — after 07
+- [x] [workflow-medium](08-medium.md) — after 07
 
 ### Wave 8
 - [ ] [Project docs and follow-ups](10-project-docs.md) — after 08, 09
@@ -248,6 +248,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 04 · 76979d31 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: activeMsOf copies every held session per agent event through chat.sessions(); a read in the clear window can log a negative activeMs; costUsd is 0 not null when the only spend predates the run; meter note after forget leaves one small entry
 - 05 · 6dd57b21 · diff read against the spec; § Finish's greps and file-gone checks hold; manifest, page part and layer rules read; typecheck and lint clean; a read of settings.json at preflight found no workflow setting to move · concerns: engine still registers layout types with no default folder, writing layouts/workflow/layout.d.ts; no set_workflow_step is contributed until a workflow with reportedAs is added; self-test not run until task 12, hello turn may draw No workflow in a pre-claim screenshot; page harness keys.command answers only the part's own commands; drive-commands.test.ts still names workflow.autoStartSeconds as a generic path; docs/features/layouts/design.md names the old owner, task 10's
 - 07 · b2d36d46 · Diff read; typecheck 0, lint 0; every Produces present by search of the named files; worker's touched tests pass · concerns: Self-test never run (task 12); callChecklistTool and Light's main part have no unit test; toggleFinishedWaves on an all-done flat list logs and changes nothing; empty checklist draws 0/0 pane; Heavy layout.css bare selectors land on Light's parts; logFlow logs no page stage ahead of shows and Heavy's Explore/Primer slot logs a second trail line; DESIGN.md left to task 10; drive-actions.test fakes copy start.test's
+- 08 · 4c82e48d · Diff read; typecheck 0, lint 0; every Produces present by search of the named files; registered in manifests, main, page; worker's touched tests pass (6 files, 60) · concerns: checklistCount duplicated in Light and Medium, workflow/contract.ts the natural home; layout and self-test near-verbatim copies of Light's; main part and callChecklistTool path have no unit test; cleared keeps the cycle count; second /wigley:medium keeps the old checklist while the count resets; self-test first runs in task 12
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 - RunMeter: five members → six, adding claimed(sessionId), which sets the baseline as finished does · why: the baseline resets at a null-to-claim move and the interface had no member for it · consumers: none outside workflow/main/start.ts · group 04
@@ -280,5 +281,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 07: Light's side pane is one flat list with a count line, per Pinned after the cold read · group 07
 - 07: checklistCount lives once in stages/build/page.ts; 08 copies the shape · group 07
 - 07: new workflow/page/engine-parts.test-support.ts holds startEnginePagePart and testWorkflowKit · group 07
+- 08: medium-done captured at start width, as light-done; task 12 reads it · group 08
+- 08: foldFlow_MediumRules holds only the twelve pinned rows, so a turnEnded that moves a Medium stage would not turn red · group 08
 ### Review rounds
 ### Test gate

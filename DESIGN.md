@@ -473,19 +473,23 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   user set carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame,
   its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
   top.
-- **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
-  The chip is one line under a session row: the stage and its status as an accent Tag, unless the row's label says it,
-  and the countdown; an idle session draws no chip. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+- **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Light's, Medium's or Heavy's
+  own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
+  or H) in the plugin token `--wg-workflow-light-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
+  or `--wg-workflow-heavy-badge` (`status-warning`), then the stage and its status as an accent Tag, unless the row's
+  label says it, and Heavy's countdown; an idle session draws no stage, and a session that finished a turn with no
+  workflow started draws one error Tag, `No workflow`, in `status-error`. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status
   mark and line instead. Every stage's strip keeps the height of a line
   holding the action and starts on the composer's left edge; an idle session draws no strip. The side
-  pane sits beside the transcript from the first read of a plan: the status mark and line (pending in `fg-tertiary`,
+  pane sits beside the transcript from the first read of a plan (Heavy) or the agent's first checklist: the status mark and line (pending in `fg-tertiary`,
   running in `status-running`, ready in `accent`, paused in `status-warning`, done in `status-success`), the stage's
-  detail, a progress meter, the checklist and every action as buttons. The checklist folds finished waves into one
+  detail, a progress meter, the checklist and every action as buttons. Heavy's checklist, titled `Plan`, folds finished waves into one
   toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
-  one row each under `Up next`, all on the pane's left edge. An idle session, a session with no plan read and a hidden pane draw no pane. A
+  one row each under `Up next`, all on the pane's left edge. Light's and Medium's pane, titled `Checklist`, draws the status
+  mark and line, a `<checked>/<total>` line, the progress meter and one flat list with a mark per item, and no actions. An idle session, a session with no plan or checklist and a hidden pane draw no pane. A
   disabled action draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
@@ -516,7 +520,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-strip-*`, `workflow-side-pane-hidden`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-heavy-strip-*`, `workflow-heavy-side-pane-hidden`, `workflow-light-*` and `workflow-medium-*`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

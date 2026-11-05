@@ -246,7 +246,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch`, `profileOf` and `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
                  to visual, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
@@ -272,14 +272,25 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
                  usage's own session-line part through a usage page export, so the line has one look); in
                  `plugins.disabled` by default
-  workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
-                 (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
-                 each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
-                 `addStage`), main/ (hears `chat.agentEvent` and the sessions events, contributes the `set_workflow_step`
-                 MCP tool through sessions' `contributeTools` so the agent reports its step, keeps each session's flow in
-                 its plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
-                 side pane, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
-                 `docs/features/workflow/design.md`
+  workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow, run through the
+                 rules of the flow's current workflow alone), main/ (the engine: hears `chat.agentEvent` and the sessions
+                 events, keeps each session's flow in its plugin data, contributes `set_workflow_step` and
+                 `set_workflow_checklist` through sessions' `contributeTools`, appends a line to `runs.jsonl` when a
+                 workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/ (hosts the row chip,
+                 the composer strip and the side pane, each drawn through the flow's workflow's layout, and the preview;
+                 exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
+                 layout of its own); it names no skill, stage or plan; `docs/features/workflow/design.md`,
+                 `docs/features/workflow-levels/design.md`
+  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, plan-reader.ts (ticked, total, wave and review rounds from a
+                 plan.md), stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan
+                 folders, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
+                 the countdown, the preview samples), layouts/ (the built-in `default` layout); Heavy's workflow: the
+                 `wigley:feature` run, make, review, fix and close
+  workflow-light/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
+                 script), page/, layouts/ (the built-in `default` layout); claims `wigley:light`
+  workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
+                 land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
+                 `wigley:medium`
   unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json`, runs
                  `unity-pool hold|release` for the panel, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
@@ -398,7 +409,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line, workflow's stage chip, chat's run time and usage's context meter and cache mark are five. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage text and the `No workflow` tag), chat's run time and usage's context meter and cache mark are five. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
@@ -415,7 +426,7 @@ round; primer: an open primer), since main, not the page, decides.
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane and
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane (one section per workflow, `Plan` for Heavy and `Checklist` for the others) and
   the agent-skills plugin's list are two. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.
@@ -453,7 +464,7 @@ round; primer: an open primer), since main, not the page, decides.
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c`, agents' on `Space z l a` and workflow's on `Space z l w`; the gallery's `Space z g`, which shows Gallery
+  `Space z l c`, agents' on `Space z l a` and workflow's (Heavy's sample session in every stage) on `Space z l w`; the gallery's `Space z g`, which shows Gallery
   mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -825,8 +836,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
-  workflow, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-heavy/main/selftest-script.ts` for
+  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

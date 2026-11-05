@@ -46,7 +46,7 @@ or touches their data, so start one whenever a check needs it.
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). `setting <name> <json value>` takes the
    setting's dotted path, as `settings.json` nests it: `transparency`, `window.width`, and a
-   plugin's setting under its id, `workflow.autoStartSeconds`. It reports `applied: false` when the
+   plugin's setting under its id, `workflow-heavy.autoStartSeconds`. It reports `applied: false` when the
    served config did not change: the value was already served, or `settings.json` still holds a
    problem from an earlier write, which keeps the last good settings; fix or remove that key
    first. The page holds document focus as the visible app's does,
