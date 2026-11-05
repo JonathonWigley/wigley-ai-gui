@@ -72,11 +72,13 @@ import {
 } from './list-page';
 import {
   createRecentReader,
+  emptyMainTakesFocus,
   isMainPageStale,
   linkedPages,
   MAIN_STARTER_TEXT,
   mainOpenStep,
   type MainPageState,
+  type MainShowCause,
 } from './main-page';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
@@ -258,9 +260,6 @@ const SESSION_CONTEXT_TEXT =
 const SESSION_SWITCH_TEXT = "A session's Docs tab keeps its own tree";
 
 type IndexRun = 'loadIndex' | 'rebuildIndex';
-
-// Why the Main page is asked for: `gh` or the first show, or its file changing.
-type MainShowCause = 'picked' | 'firstShow' | 'fileChanged';
 
 const BUSY_TEXT: Record<IndexRun, string> = {
   loadIndex: 'Reading the docs index…',
@@ -899,23 +898,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     };
   };
 
-  // The empty Main page's offer shows and takes its key only with focus on the
-  // doc. A first show takes focus only on the active view with no filter box or
-  // dialog open.
   const focusEmptyMain = (cause: MainShowCause) => {
-    const isFirstShowFree =
-      cause === 'firstShow' &&
-      deps.isActive() &&
-      !tree.isFilterOpen() &&
-      !dialogs.isAnyOpen();
-    if (cause === 'picked' || isFirstShowFree) {
+    const takesFocus = emptyMainTakesFocus({
+      cause,
+      isViewActive: deps.isActive(),
+      isFilterOpen: tree.isFilterOpen(),
+      isDialogOpen: dialogs.isAnyOpen(),
+    });
+    if (takesFocus) {
       focusDocAndLog();
     }
   };
 
   // Shows `Main.md` as any doc, or the empty Main page with no file. A Main page
   // matching the file stays, and so does either page over a file that could not be
-  // read.
+  // read; with neither page, only `gh` opens such a file.
   const showMain = (cause: MainShowCause) => {
     const path = wikiMain?.path() ?? null;
     if (wikiMain === null || path === null) {
@@ -928,7 +925,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         deps.leafOpened();
       }
     };
-    switch (mainOpenStep(mainPageState(wikiMain.fileState()))) {
+    switch (mainOpenStep(mainPageState(wikiMain.fileState()), cause)) {
       case 'alreadyShows':
         log('Main page already shows');
         mainReady();
@@ -957,6 +954,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
               mainReady();
             }
           });
+        return;
+      case 'leavePane':
+        return;
+    }
+  };
+
+  // Runs the first show on a pane nothing has been asked of yet.
+  const showMainOnBlankPane = () => {
+    if (askedOpens === 0 && doc.isBlank()) {
+      showMain('firstShow');
     }
   };
 
@@ -997,7 +1004,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   // `Main.md` read another text: its links changed, a file that appeared replaces
   // the empty Main page, and the empty page replaces a file that went from under
-  // the pane, unless an editor holds unsaved edits on it.
+  // the pane, unless an editor holds unsaved edits on it. A read that answers
+  // runs the first show a rejected read left undone, once the index has read.
   const wikiMainChanged = () => {
     if (wikiMain === null) {
       return;
@@ -1006,6 +1014,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     const isStale = isMainPageStale(mainPageState(wikiMain.fileState()));
     if (isStale && !doc.hasUnsavedEdits()) {
       showMain('fileChanged');
+    }
+    if (wikiMain.fileState() !== 'unreadable') {
+      void firstRead.promise.then(showMainOnBlankPane);
     }
     refreshRecentOnMain();
   };
@@ -1399,11 +1410,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         firstShowRuns = null;
       });
       if (wikiMain !== null) {
-        void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
-          if (askedOpens === 0 && doc.isBlank()) {
-            showMain('firstShow');
-          }
-        });
+        void Promise.all([wikiMain.start(), firstRead.promise]).then(
+          showMainOnBlankPane,
+        );
       }
     },
     rescan() {

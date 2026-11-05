@@ -12,6 +12,9 @@ import type { MainFileState } from './wiki-main-source';
 export const MAIN_STARTER_TEXT =
   '# Main page\n\nEach `##` heading is a sidebar shelf, each `###` heading is a label inside it, and each link is a page. Edit this file to change the sidebar.\n';
 
+// Why the Main page is asked for: `gh` or the first show, or its file changing.
+export type MainShowCause = 'picked' | 'firstShow' | 'fileChanged';
+
 // What shows in the doc pane against `Main.md`, as a Main page open reads it.
 export interface MainPageState {
   isFileOpen: boolean;
@@ -24,20 +27,44 @@ export interface MainPageState {
 
 // What opening the Main page does: a Main page matching the file stays, since a
 // second open would close its editor. A file that could not be read keeps either
-// page and, with neither shown, opens: only an absent file offers to be created.
-export function mainOpenStep({
-  isFileOpen,
-  isEmptyPageShown,
-  file,
-}: MainPageState): 'alreadyShows' | 'showEmptyPage' | 'openFile' {
+// page. With neither shown, `gh` opens it for the read's own toast, and any other
+// cause leaves the pane as it is: only an absent file offers to be created.
+export function mainOpenStep(
+  { isFileOpen, isEmptyPageShown, file }: MainPageState,
+  cause: MainShowCause,
+): 'alreadyShows' | 'showEmptyPage' | 'openFile' | 'leavePane' {
   switch (file) {
     case 'exists':
       return isFileOpen ? 'alreadyShows' : 'openFile';
     case 'absent':
       return isEmptyPageShown ? 'alreadyShows' : 'showEmptyPage';
     case 'unreadable':
-      return isFileOpen || isEmptyPageShown ? 'alreadyShows' : 'openFile';
+      if (isFileOpen || isEmptyPageShown) {
+        return 'alreadyShows';
+      }
+      return cause === 'picked' ? 'openFile' : 'leavePane';
   }
+}
+
+export interface EmptyMainFocusState {
+  cause: MainShowCause;
+  isViewActive: boolean;
+  isFilterOpen: boolean;
+  isDialogOpen: boolean;
+}
+
+// The empty Main page's offer shows and takes its key only with focus on the doc.
+// `gh` always takes it; a first show only on the active view with no filter box or
+// dialog open.
+export function emptyMainTakesFocus({
+  cause,
+  isViewActive,
+  isFilterOpen,
+  isDialogOpen,
+}: EmptyMainFocusState): boolean {
+  const isFirstShowFree =
+    cause === 'firstShow' && isViewActive && !isFilterOpen && !isDialogOpen;
+  return cause === 'picked' || isFirstShowFree;
 }
 
 // Whether a change to the file leaves the Main page shown out of step with it: a

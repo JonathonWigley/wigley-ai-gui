@@ -244,6 +244,49 @@ describe('createWikiMainSource', () => {
     },
   );
 
+  it.each([
+    {
+      given: 'the file turns out absent',
+      secondRead: () => Promise.resolve(null),
+      fileState: 'absent',
+      changes: 1,
+      shelves: [],
+    },
+    {
+      given: 'a text answers',
+      secondRead: () => Promise.resolve(TWO_SHELVES),
+      fileState: 'exists',
+      changes: 1,
+      shelves: ['Shelf one', 'Shelf two'],
+    },
+    {
+      given: 'another rejection answers',
+      secondRead: () => Promise.reject(new Error('still denied')),
+      fileState: 'unreadable',
+      changes: 0,
+      shelves: [],
+    },
+  ])(
+    'reread_RejectedFirst_ChangedRunsAgainOnlyOnAnAnswer: $given',
+    async ({ secondRead, fileState, changes, shelves }) => {
+      const answers = [
+        () => Promise.reject(new Error('denied')),
+        secondRead,
+      ] as (() => Promise<string | null>)[];
+      const test = setUp({ read: () => answers.shift()!() });
+      await test.source.start();
+      test.changed.mockClear();
+
+      await test.source.reread();
+
+      expect({
+        fileState: test.source.fileState(),
+        changes: test.changed.mock.calls.length,
+        shelves: test.source.shelves().map((shelf) => shelf.title),
+      }).toEqual({ fileState, changes, shelves });
+    },
+  );
+
   it('reread_AbsentThenRejectedThenAbsent_StaysAbsentWithNoChange', async () => {
     const answers = [
       () => Promise.resolve<string | null>(null),

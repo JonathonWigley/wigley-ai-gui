@@ -348,6 +348,13 @@ async function renderText(
   return { fields: [], html, bodyStartLine: 1, liveFences: false };
 }
 
+const EMPTY_BODY: Rendered = {
+  fields: [],
+  html: '',
+  bodyStartLine: 1,
+  liveFences: true,
+};
+
 function detailRendered(detail: DocDetail): Rendered {
   return {
     fields: detail.fields,
@@ -1123,6 +1130,15 @@ export function createDocView(deps: DocViewDeps): DocView {
       );
   };
 
+  // Reads the target's file over an emptied body and text, so nothing of the file
+  // or detail shown before stands as the target's while the read is out or after
+  // it fails.
+  const readTargetFile = (doc: ShownDoc, after?: () => void) => {
+    doc.text = '';
+    drawKeepingScroll(doc, EMPTY_BODY, 0);
+    rereadLogging(doc, after);
+  };
+
   // Shows the detail's field table, the file it edits let go.
   const showDetail = (doc: ShownDoc, detail: DocDetail) => {
     doc.filePath = doc.target.path;
@@ -1189,12 +1205,13 @@ export function createDocView(deps: DocViewDeps): DocView {
     pane.scrollTop = scrollTop;
   };
 
-  // Destroys the editor and shows the rendered doc from the text last read
-  // or written, or the detail view it was opened from, at the scroll the
-  // pane had as the editor opened, set again once the body draws. `after` runs
-  // once it has; a failed render logs and skips it. `shownSections` empties until
-  // then, since `doc.text` may be newer than the body: a section read from them
-  // would splice the wrong lines.
+  // Destroys the editor and shows the detail view it was opened from, or the
+  // rendered doc from the text last read or written, at the scroll the pane had as
+  // the editor opened, set again once the body draws. A detail's editor on another
+  // file than a target with no detail shows that target's file instead, read
+  // afresh from the top. `after` runs once the body draws; a failed read or render
+  // logs and skips it. `shownSections` empties until then, since `doc.text` may be
+  // newer than the body: a section read from them would splice the wrong lines.
   const closeEditor = (doc: ShownDoc, after?: () => void) => {
     shownSections = [];
     dropEditor();
@@ -1210,7 +1227,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     if (!deps.paths.samePath(doc.filePath, doc.target.path)) {
       followTargetFile(doc);
-      rereadLogging(doc, () => {
+      readTargetFile(doc, () => {
         if (!isDisposed && shown === doc && editor === null) {
           after?.();
         }
@@ -1689,12 +1706,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
       const count = ++openCount;
       let text = '';
-      let rendered: Rendered = {
-        fields: [],
-        html: '',
-        bodyStartLine: 1,
-        liveFences: true,
-      };
+      let rendered = EMPTY_BODY;
       try {
         if (target.detail === null) {
           text = await deps.channel.invoke('readDoc', target.path);
@@ -1778,7 +1790,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       removeEmpty();
       showBanner(false);
       drawHeader();
-      drawBody({ fields: [], html: '', bodyStartLine: 1, liveFences: true });
+      drawBody(EMPTY_BODY);
       page = next;
       showDocState();
       pane.scrollTop = 0;
@@ -1852,7 +1864,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
       // A detail holds no text of the file to render.
       if (wasDetail) {
-        rereadLogging(doc);
+        readTargetFile(doc);
       } else {
         relinkLogging(doc);
       }
@@ -1869,7 +1881,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       showDocState();
       drawEmpty();
       drawHeader();
-      drawBody({ fields: [], html: '', bodyStartLine: 1, liveFences: true });
+      drawBody(EMPTY_BODY);
     },
     refreshChips: () => drawHeader(),
     setEntries(next) {
@@ -2113,6 +2125,6 @@ export function createDocView(deps: DocViewDeps): DocView {
   drawPane();
   drawFrame();
   drawEmpty();
-  drawBody({ fields: [], html: '', bodyStartLine: 1, liveFences: true });
+  drawBody(EMPTY_BODY);
   return view;
 }

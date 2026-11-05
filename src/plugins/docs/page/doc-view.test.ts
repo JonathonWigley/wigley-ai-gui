@@ -555,6 +555,7 @@ describe('createDocView', () => {
     watches: (string | null)[];
     fields: [string, string][];
     back: string;
+    isReadRejected?: boolean;
   }>([
     {
       name: 'an editor open, to not .md',
@@ -622,6 +623,18 @@ describe('createDocView', () => {
       fields: [],
       back: 'false',
     },
+    {
+      name: 'a detail to a target with none whose read rejects drops its fields',
+      from: { ...target(null), detail: hookDetail },
+      to: target(null, '/home/moved.md'),
+      isEditing: false,
+      rendered: [],
+      isAsideHidden: true,
+      watches: ['/home/moved.md'],
+      fields: [],
+      back: 'false',
+      isReadRejected: true,
+    },
   ])(
     'retarget_NothingToRenderFromItsText $name',
     async ({
@@ -633,6 +646,7 @@ describe('createDocView', () => {
       watches,
       fields,
       back,
+      isReadRejected,
     }) => {
       let drawnFields: [string, string][] = [];
       const fieldsLayout: Layout = {
@@ -643,7 +657,7 @@ describe('createDocView', () => {
           return { element: root };
         },
       };
-      const { view, deps, editors } = docViewOver(() =>
+      const { view, deps, editors, replies } = docViewOver(() =>
         withUser(defaultLayout, { ...asideLayout(), ...fieldsLayout }),
       );
       await view.open(from);
@@ -653,6 +667,9 @@ describe('createDocView', () => {
       }
       const render = vi.spyOn(deps.markdown, 'document');
       const invoke = channelSpy(deps);
+      if (isReadRejected === true) {
+        replies.readDoc = Promise.reject(new Error('denied'));
+      }
 
       view.retarget(to);
       await settled();
@@ -681,7 +698,18 @@ describe('createDocView', () => {
     // A detail whose `i` edits `editedPath`, its editor open, retargeted to
     // `/home/moved.md`.
     async function retargetedWhileEditing(editedPath: string) {
-      const test = docViewOver(() => withUser(defaultLayout, asideLayout()));
+      const shownFields: { latest: [string, string][] } = { latest: [] };
+      const fieldsLayout: Layout = {
+        docBody(parent, input, kit) {
+          shownFields.latest = input.fields;
+          const root = kit.el(parent, 'div');
+          kit.body(root);
+          return { element: root };
+        },
+      };
+      const test = docViewOver(() =>
+        withUser(defaultLayout, { ...asideLayout(), ...fieldsLayout }),
+      );
       const detail: DocDetail = {
         fields: [['Event', 'Stop']],
         editFile: async () => ({ path: editedPath, text: '# Held', line: 1 }),
@@ -692,7 +720,7 @@ describe('createDocView', () => {
       const invoke = channelSpy(test.deps);
       test.view.retarget(target(null, '/home/moved.md'));
       await settled();
-      return { ...test, invoke };
+      return { ...test, invoke, shownFields };
     }
 
     const writtenPaths = (invoke: ReturnType<typeof channelSpy>) =>
@@ -729,29 +757,59 @@ describe('createDocView', () => {
       },
     );
 
-    it("retarget_DetailsEditorThenCloses_ShowsAndWatchesTheTarget'sFile", async () => {
-      const { view, deps, editors, invoke, replies } =
-        await retargetedWhileEditing('/home/hook.json');
-      replies.readDoc = '# Moved';
-      const render = vi.spyOn(deps.markdown, 'document');
-
-      editors[0].events.quit(false);
-      await settled();
-      view.diskChanged('/home/hook.json');
-      await settled();
-
-      expect({
-        reads: invoke.mock.calls
-          .filter(([name]) => name === 'readDoc')
-          .map(([, path]) => path),
-        rendered: render.mock.calls.map(([text]) => text),
-        watches: watchedPaths(invoke),
-      }).toEqual({
-        reads: ['/home/moved.md'],
+    it.each([
+      {
+        name: 'its read answers',
+        settleRead: (read: PromiseWithResolvers<string>) =>
+          read.resolve('# Moved'),
         rendered: ['# Moved'],
-        watches: ['/home/moved.md'],
-      });
-    });
+        editedText: '# Moved',
+      },
+      {
+        name: 'its read rejects',
+        settleRead: (read: PromiseWithResolvers<string>) =>
+          read.reject(new Error('denied')),
+        rendered: [],
+        editedText: '',
+      },
+    ])(
+      "retarget_DetailsEditorThenCloses_ShowsAndWatchesTheTarget'sFile: $name",
+      async ({ settleRead, rendered, editedText }) => {
+        const { view, deps, editors, invoke, replies, shownFields } =
+          await retargetedWhileEditing('/home/hook.json');
+        const read = Promise.withResolvers<string>();
+        replies.readDoc = read.promise;
+        const render = vi.spyOn(deps.markdown, 'document');
+
+        editors[0].events.quit(false);
+        await settled();
+        const fieldsWhileOut = shownFields.latest;
+        settleRead(read);
+        await settled();
+        view.diskChanged('/home/hook.json');
+        await settled();
+        view.edit(1);
+        await settled();
+
+        expect({
+          fieldsWhileOut,
+          fields: shownFields.latest,
+          reads: invoke.mock.calls
+            .filter(([name]) => name === 'readDoc')
+            .map(([, path]) => path),
+          rendered: render.mock.calls.map(([text]) => text),
+          watches: watchedPaths(invoke),
+          editedText: editors[1].text(),
+        }).toEqual({
+          fieldsWhileOut: [],
+          fields: [],
+          reads: ['/home/moved.md'],
+          rendered,
+          watches: ['/home/moved.md'],
+          editedText,
+        });
+      },
+    );
   });
 
   it.each([

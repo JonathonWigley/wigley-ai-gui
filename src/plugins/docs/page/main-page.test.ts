@@ -7,11 +7,14 @@ import type { TreeNode } from '../tree';
 import { parseWikiMain } from '../wiki-main';
 import {
   createRecentReader,
+  type EmptyMainFocusState,
+  emptyMainTakesFocus,
   isMainPageStale,
   linkedPages,
   MAIN_STARTER_TEXT,
   mainOpenStep,
   type MainPageState,
+  type MainShowCause,
   recentRows,
 } from './main-page';
 
@@ -29,6 +32,7 @@ describe('the Main page against its file', () => {
   it.each([
     {
       given: 'the file open and on disk',
+      cause: 'picked',
       isFileOpen: true,
       isEmptyPageShown: false,
       isFileTrashedFromPane: false,
@@ -38,6 +42,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the file open and gone from disk',
+      cause: 'picked',
       isFileOpen: true,
       isEmptyPageShown: false,
       isFileTrashedFromPane: false,
@@ -47,6 +52,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the empty page over no file',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: true,
       isFileTrashedFromPane: false,
@@ -56,6 +62,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the empty page over a file that appeared',
+      cause: 'fileChanged',
       isFileOpen: false,
       isEmptyPageShown: true,
       isFileTrashedFromPane: false,
@@ -65,6 +72,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'another doc, with the file on disk',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: false,
       isFileTrashedFromPane: false,
@@ -74,6 +82,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'another doc, with no file',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: false,
       isFileTrashedFromPane: false,
@@ -83,6 +92,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the pane emptied by the trash, the read landed after',
+      cause: 'fileChanged',
       isFileOpen: false,
       isEmptyPageShown: false,
       isFileTrashedFromPane: true,
@@ -92,6 +102,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the pane emptied by the trash, the read not landed yet',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: false,
       isFileTrashedFromPane: true,
@@ -101,6 +112,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the file open and its read rejected',
+      cause: 'picked',
       isFileOpen: true,
       isEmptyPageShown: false,
       isFileTrashedFromPane: false,
@@ -110,6 +122,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the empty page and a read rejected',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: true,
       isFileTrashedFromPane: false,
@@ -118,7 +131,9 @@ describe('the Main page against its file', () => {
       isStale: false,
     },
     {
-      given: 'another doc and a read rejected',
+      given:
+        'gh over neither page, another doc or a blank pane, a read rejected',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: false,
       isFileTrashedFromPane: false,
@@ -128,6 +143,7 @@ describe('the Main page against its file', () => {
     },
     {
       given: 'the pane emptied by the trash and a read rejected',
+      cause: 'picked',
       isFileOpen: false,
       isEmptyPageShown: false,
       isFileTrashedFromPane: true,
@@ -135,14 +151,106 @@ describe('the Main page against its file', () => {
       step: 'openFile',
       isStale: false,
     },
+    {
+      given: 'a first show on a blank pane, the first read rejected',
+      cause: 'firstShow',
+      isFileOpen: false,
+      isEmptyPageShown: false,
+      isFileTrashedFromPane: false,
+      file: 'unreadable',
+      step: 'leavePane',
+      isStale: false,
+    },
+    {
+      given: 'a first show, rejected first then absent',
+      cause: 'firstShow',
+      isFileOpen: false,
+      isEmptyPageShown: false,
+      isFileTrashedFromPane: false,
+      file: 'absent',
+      step: 'showEmptyPage',
+      isStale: false,
+    },
+    {
+      given: 'a first show, rejected first then a text',
+      cause: 'firstShow',
+      isFileOpen: false,
+      isEmptyPageShown: false,
+      isFileTrashedFromPane: false,
+      file: 'exists',
+      step: 'openFile',
+      isStale: false,
+    },
+    {
+      given: 'the file open, a known text then rejected then absent',
+      cause: 'fileChanged',
+      isFileOpen: true,
+      isEmptyPageShown: false,
+      isFileTrashedFromPane: false,
+      file: 'absent',
+      step: 'showEmptyPage',
+      isStale: true,
+    },
   ] satisfies (MainPageState & {
     given: string;
+    cause: MainShowCause;
     step: string;
     isStale: boolean;
-  })[])('$given → $step', ({ step, isStale, given: _given, ...state }) => {
-    expect(mainOpenStep(state)).toBe(step);
-    expect(isMainPageStale(state)).toBe(isStale);
-  });
+  })[])(
+    '$given → $step',
+    ({ cause, step, isStale, given: _given, ...state }) => {
+      expect(mainOpenStep(state, cause)).toBe(step);
+      expect(isMainPageStale(state)).toBe(isStale);
+    },
+  );
+});
+
+describe('emptyMainTakesFocus', () => {
+  const FREE = {
+    isViewActive: true,
+    isFilterOpen: false,
+    isDialogOpen: false,
+  };
+
+  it.each([
+    { given: 'gh', cause: 'picked', ...FREE, takes: true },
+    {
+      given: 'gh, on an inactive view with a filter and a dialog open',
+      cause: 'picked',
+      isViewActive: false,
+      isFilterOpen: true,
+      isDialogOpen: true,
+      takes: true,
+    },
+    { given: 'a free first show', cause: 'firstShow', ...FREE, takes: true },
+    {
+      given: 'a first show on an inactive view',
+      cause: 'firstShow',
+      ...FREE,
+      isViewActive: false,
+      takes: false,
+    },
+    {
+      given: 'a first show under an open filter',
+      cause: 'firstShow',
+      ...FREE,
+      isFilterOpen: true,
+      takes: false,
+    },
+    {
+      given: 'a first show under an open dialog',
+      cause: 'firstShow',
+      ...FREE,
+      isDialogOpen: true,
+      takes: false,
+    },
+    { given: 'a file change', cause: 'fileChanged', ...FREE, takes: false },
+  ] satisfies (EmptyMainFocusState & { given: string; takes: boolean })[])(
+    '$given → $takes',
+    ({ takes, given: _given, ...state }) => {
+      expect(emptyMainTakesFocus(state)).toBe(takes);
+    },
+  );
 });
 
 describe('linkedPages', () => {

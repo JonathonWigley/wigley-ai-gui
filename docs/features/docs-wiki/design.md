@@ -49,8 +49,9 @@ pipeline, no stages, and no fixed shelf names. Every shelf comes from a file the
 - Docs mode opens on the Main page at each app start. Leaving and returning keeps the page shown, as
   every mode does. With no `Main.md`, the page shows an empty state that offers to create it. It takes
   focus when `gh` or the first show draws it, since the offer and its `i` work only with focus on the
-  doc pane. A trashed `Main.md` ends on this page too. A read of `Main.md` that fails keeps the page
-  shown.
+  doc pane. A `Main.md` trashed while it shows ends on this page too. A read of `Main.md` that fails
+  keeps the page shown. A first show whose read fails leaves the pane blank until a read answers, then
+  shows the page, and `gh` meanwhile tries the open, so its toast gives the reason.
 
 ## Page
 

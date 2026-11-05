@@ -8,14 +8,20 @@ export interface WikiMainSourceDeps {
   viewId: string;
   channel: PageChannel<DocsChannel>;
   log: PluginLog;
-  // Hears each read that found another text than the last one, the first
-  // settled read among them, present, absent or rejected.
+  // Hears the first settled read, a rejection included, and each read after it
+  // that says another thing of the file than the last answer did.
   changed(): void;
 }
 
 // What the newest settled read says of `Main.md`: `unreadable` is a rejected read
 // or no path from main, which says nothing of whether the file is there.
 export type MainFileState = 'exists' | 'absent' | 'unreadable';
+
+// What the reads that answered say of the file. A rejection answers nothing.
+type KnownFile =
+  | { type: 'neverKnown' }
+  | { type: 'absent' }
+  | { type: 'text'; text: string };
 
 // The wiki's `Main.md` as shelves, read and watched through the channel. Only an
 // absent file drops the shelves: a rejection keeps those it has. A watch or path
@@ -27,7 +33,7 @@ export interface WikiMainSource {
   // The real path of `Main.md`; null until main has given it.
   path(): string | null;
   shelves(): readonly WikiShelf[];
-  // Whether a first read has settled, present or absent.
+  // Whether a first read has settled, present, absent or rejected.
   isRead(): boolean;
   // Holds once `isRead` does.
   fileState(): MainFileState;
@@ -44,8 +50,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const { channel, log } = deps;
   const watchId = `${deps.viewId}:main`;
   let mainPath: string | null = null;
-  // Undefined until the first read settles; null with no text to show.
-  let lastText: string | null | undefined;
+  let known: KnownFile = { type: 'neverKnown' };
   // True from a rejection until a read answers.
   let isUnreadable = false;
   let shelves: readonly WikiShelf[] = [];
@@ -62,10 +67,10 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
       return;
     }
     isUnreadable = false;
-    if (lastText === null) {
+    if (known.type === 'absent') {
       return;
     }
-    lastText = null;
+    known = { type: 'absent' };
     shelves = [];
     log('no Main.md: the file is absent');
     deps.changed();
@@ -79,8 +84,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     }
     isUnreadable = true;
     log(`no Main.md: ${reason}`);
-    if (lastText === undefined) {
-      lastText = null;
+    if (known.type === 'neverKnown') {
       deps.changed();
     }
   };
@@ -90,10 +94,10 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
       return;
     }
     isUnreadable = false;
-    if (text === lastText) {
+    if (known.type === 'text' && known.text === text) {
       return;
     }
-    lastText = text;
+    known = { type: 'text', text };
     shelves = parseWikiMain(text);
     log(`read Main.md: ${shelves.length} shelves`);
     deps.changed();
@@ -160,12 +164,12 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     },
     path: () => mainPath,
     shelves: () => shelves,
-    isRead: () => lastText !== undefined,
+    isRead: () => known.type !== 'neverKnown' || isUnreadable,
     fileState() {
       if (isUnreadable) {
         return 'unreadable';
       }
-      return typeof lastText === 'string' ? 'exists' : 'absent';
+      return known.type === 'text' ? 'exists' : 'absent';
     },
     diskChanged(change) {
       if (change.viewId === watchId) {
