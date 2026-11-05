@@ -120,7 +120,7 @@ wigley-ai-gui, git:
 
 ### Wave 2
 - [x] [Git log and Recent changes call](04-git-log.md) — after 02
-- [ ] [Wiki tree and search rows](06-wiki-tree.md) — after 02, 03
+- [x] [Wiki tree and search rows](06-wiki-tree.md) — after 02, 03
 
 ### Wave 3
 - [ ] [Layout parts](05-layout-parts.md) — after 02, 04, 06
@@ -156,6 +156,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 03 · b83f527a · diff read, every Produces present, tsc clean · concerns: a file ending in a lone CR keeps it in ScannedLine.text; [a](<>) gives an empty path, for 06 to show dangling
 - 01 · 15fbf5c · diff read, every Produces present, py compile clean, check_pointers and check_manifests pass, in wigley-ai-marketplace · concerns: MARKDOWN_LINK text can cross a blank line; raw of a wrapped reference in a CRLF file holds LF, for task 10's search; pointer errors now report in offset order; extra test rows beyond the task
 - 04 · ed07573b · diff read; every Produces present by search (GitCommit, Git.log, RecentChange, recentChanges, readRecentChanges, RecentChangesDeps, recentChangesLimit); compile checked with task 06's partial edits in the tree · concerns: a negative recentChangesLimit gives all commits minus the last row (configurer's, per plan); docs-browser design.md not checked for a settings list
+- 06 · 47c67279 · diff read, every Produces present, buildTree unchanged, tsc clean · concerns: preferredEntry compares ids inline as byTitleThenId does; a skill's SKILL.md leaf can show its lead heading as a heading row; visibleRows re-tests every heading per draw under a filter, unmeasured; docs-view openHeading has no unit test, left to task 14
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -168,5 +169,9 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - A wigley:skill#frag href drops the fragment and targetLine stays null — the table gives null — a skill fragment does not move the page · group 01 · group 01
 - readRecentChanges de-duplicates real paths as well as asked paths, and compares paths with paths.samePath, as clonesOf does · group 04
 - one extra test row: realPath rejecting with a non-ENOENT error logs one line · group 04
+- one line in page/layout/docs-parts.test.ts beyond Files: TreeViewDeps.openHeading is required for the project to compile · group 06
+- a shelf titled S#2 after two shelves titled S gets shelf:S#2#2, so ids stay unique · group 06
+- three extra buildWikiTree_PageTarget rows: empty path dangling, walked tie order, owner before source · group 06
+- openedFromTree shared by openLeaf and openHeading in docs-view.ts · group 06
 ### Review rounds
 ### Test gate

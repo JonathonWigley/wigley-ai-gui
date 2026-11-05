@@ -1,6 +1,6 @@
 # 06 — Wiki tree and search rows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -235,3 +235,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 47c67279 · proof: diff read, every Produces present, buildTree unchanged, tsc clean · concerns: preferredEntry compares ids inline as byTitleThenId does; a skill's SKILL.md leaf can show its lead heading as a heading row; visibleRows re-tests every heading per draw under a filter, unmeasured; docs-view openHeading has no unit test, left to task 14
