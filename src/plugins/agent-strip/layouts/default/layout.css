@@ -10,13 +10,13 @@
 
 [data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.agent-strip-agent {
   width: calc(var(--wg-space-6) * 10);
-  /* Every closed card takes the height of the fullest one — a subagent's head,
-     tag and model line, three recent tool lines, footer and the cursor prompt:
-     seven lines (`text-12` at the inherited `leading-ui`), then four gaps plus
-     the tool block's padding, five `space-1` in all, inside the padding and the
-     Card's hairline border. */
+  /* Every closed card takes the height of a full unselected one — a subagent's
+     head, tag and model line, three recent tool lines and footer: six lines
+     (`text-12` at the inherited `leading-ui`), then three gaps plus the tool
+     block's padding, four `space-1` in all, inside the padding and the Card's
+     hairline border. The selected card grows by its cursor prompt. */
   min-height: calc(
-    7 * var(--wg-text-12) * var(--wg-leading-ui) + 5 * var(--wg-space-1) + 2 *
+    6 * var(--wg-text-12) * var(--wg-leading-ui) + 4 * var(--wg-space-1) + 2 *
       var(--wg-space-2) + 2 * 1px
   );
   padding: var(--wg-space-2);
