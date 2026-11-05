@@ -66,11 +66,22 @@ const controlRequest = (requestId: string, subtype: string) => ({
 });
 const contextUsageRequest = (requestId: string) =>
   controlRequest(requestId, 'get_context_usage');
+const settingsRequest = (requestId: string) =>
+  controlRequest(requestId, 'get_settings');
 const interruptRequest = (requestId: string) =>
   controlRequest(requestId, 'interrupt');
 const interruptReply = (requestId: string) => ({
   type: 'control_response',
   response: { subtype: 'success', request_id: requestId },
+});
+// A `get_settings` reply to `wigley-2`, nested as the CLI nests it.
+const settingsReply = (reply: object) => ({
+  type: 'control_response',
+  response: {
+    subtype: 'success',
+    request_id: 'wigley-2',
+    response: { effective: {}, sources: [], ...reply },
+  },
 });
 const send = (text: string, uuid: string) =>
   userMessage({ text, images: [] }, uuid);
@@ -120,6 +131,10 @@ function foldedState(lines: readonly PipeLine[]): SessionFoldState {
   return state;
 }
 
+function controlValues(state: SessionFoldState) {
+  return Object.fromEntries(state.controls.map(({ id, value }) => [id, value]));
+}
+
 // The fields the `in` lines change, with the maps as plain values.
 function snapshot(state: SessionFoldState) {
   return {
@@ -134,6 +149,7 @@ function snapshot(state: SessionFoldState) {
     activity: state.activity,
     graceDeadline: state.graceDeadline,
     isContextRequestOwed: state.isContextRequestOwed,
+    isSettingsRequestOwed: state.isSettingsRequestOwed,
   };
 }
 
@@ -226,6 +242,15 @@ describe('session-fold', () => {
         requestCount: 4,
         pending: { 'wigley-4': { kind: 'contextUsage' } },
         isContextRequestOwed: false,
+      },
+    },
+    {
+      case: 'settings request',
+      line: inLine(settingsRequest('wigley-4')),
+      state: {
+        requestCount: 4,
+        pending: { 'wigley-4': { kind: 'appliedSettings' } },
+        isSettingsRequestOwed: false,
       },
     },
     {
@@ -347,25 +372,182 @@ describe('session-fold', () => {
     },
   );
 
-  it('foldPipeLine_TurnEnd_OwesAContextRequest', () => {
-    const state = foldedState([
-      SEND_U1,
-      outLine(lifecycleInit),
-      outLine(lifecycle('u1', 'started')),
-    ]);
+  it.each([
+    { case: 'a model turn', text: 'hi' },
+    { case: 'a local command', text: '/effort high' },
+  ])(
+    'foldPipeLine_TurnEnd_OwesContextAndSettingsRequests ($case)',
+    ({ text }) => {
+      const state = foldedState([
+        inLine(settingsRequest('wigley-1')),
+        inLine(send(text, 'u1')),
+        outLine(lifecycleInit),
+        outLine(lifecycle('u1', 'started')),
+      ]);
+      expect(state.isSettingsRequestOwed).toBe(false);
 
-    const { effects } = foldPipeLine(
-      state,
-      outLine(successResult('ok', ['u1'])),
-    );
+      const { effects } = foldPipeLine(
+        state,
+        outLine(successResult('ok', ['u1'])),
+      );
 
-    expect(state.isContextRequestOwed).toBe(true);
-    expect(effects.filter((e) => e.kind === 'requestContextUsage')).toEqual([
-      { kind: 'requestContextUsage' },
-    ]);
-    foldPipeLine(state, inLine(contextUsageRequest('wigley-2')));
-    expect(state.isContextRequestOwed).toBe(false);
-  });
+      expect(state.isContextRequestOwed).toBe(true);
+      expect(state.isSettingsRequestOwed).toBe(true);
+      expect(
+        effects.filter(
+          (e) =>
+            e.kind === 'requestContextUsage' ||
+            e.kind === 'requestAppliedSettings',
+        ),
+      ).toEqual([
+        { kind: 'requestContextUsage' },
+        { kind: 'requestAppliedSettings' },
+      ]);
+      foldPipeLine(state, inLine(contextUsageRequest('wigley-2')));
+      expect(state.isContextRequestOwed).toBe(false);
+      foldPipeLine(state, inLine(settingsRequest('wigley-3')));
+      expect(state.isSettingsRequestOwed).toBe(false);
+    },
+  );
+
+  it.each<{
+    case: string;
+    held: Record<string, string>;
+    reply: object;
+    kinds: string[];
+    controls: { model: string | null; effort: string | null };
+  }>([
+    {
+      case: 'a new session reads what the process applies',
+      held: {},
+      reply: settingsReply({
+        applied: { model: 'claude-opus-5-5', effort: 'medium' },
+      }),
+      kinds: ['controls'],
+      controls: { model: 'opus', effort: 'medium' },
+    },
+    {
+      case: 'a model with no effort support clears the effort',
+      held: { model: 'opus', effort: 'high' },
+      reply: settingsReply({
+        applied: { model: 'claude-opus-5-5', effort: null },
+      }),
+      kinds: ['controls'],
+      controls: { model: 'opus', effort: null },
+    },
+    {
+      case: 'only the model changed',
+      held: { model: 'opus', effort: 'low' },
+      reply: settingsReply({
+        applied: { model: 'claude-sonnet-5-5', effort: 'low' },
+      }),
+      kinds: ['controls'],
+      controls: { model: 'sonnet', effort: 'low' },
+    },
+    {
+      case: 'held values equal the reply',
+      held: { model: 'opus', effort: 'medium' },
+      reply: settingsReply({
+        applied: { model: 'claude-opus-5-5', effort: 'medium' },
+      }),
+      kinds: [],
+      controls: { model: 'opus', effort: 'medium' },
+    },
+    {
+      case: 'an error reply',
+      held: { model: 'opus', effort: 'high' },
+      reply: {
+        type: 'control_response',
+        response: {
+          subtype: 'error',
+          request_id: 'wigley-2',
+          error: 'busy',
+        },
+      },
+      kinds: ['log'],
+      controls: { model: 'opus', effort: 'high' },
+    },
+    {
+      case: 'a reply with no applied model',
+      held: { model: 'opus', effort: 'high' },
+      reply: settingsReply({ effective: { effortLevel: 'low' } }),
+      kinds: ['log'],
+      controls: { model: 'opus', effort: 'high' },
+    },
+    {
+      case: 'an effort outside the choices stays raw',
+      held: { model: 'opus', effort: 'high' },
+      reply: settingsReply({
+        applied: { model: 'claude-opus-5-5', effort: 'ultra' },
+      }),
+      kinds: ['controls'],
+      controls: { model: 'opus', effort: 'ultra' },
+    },
+  ])(
+    'foldPipeLine_SettingsReply_HoldsAppliedValues ($case)',
+    ({ held, reply, kinds, controls }) => {
+      const state = createSessionFoldState({ ...request, controls: held });
+      foldPipeLine(state, inLine(settingsRequest('wigley-2')));
+
+      const { effects } = foldPipeLine(state, outLine(reply));
+
+      expect(effects.map((effect) => effect.kind)).toEqual(kinds);
+      expect(controlValues(state)).toEqual({ mode: null, ...controls });
+      for (const effect of effects) {
+        if (effect.kind === 'controls') {
+          expect(effect.controls).toEqual(state.controls);
+        }
+      }
+    },
+  );
+
+  it.each<{
+    case: string;
+    text: string;
+    held: Record<string, string>;
+    reportsControls: boolean;
+    effort: string | null;
+  }>([
+    {
+      case: 'a value already held confirms the pick',
+      text: '/effort medium',
+      held: { effort: 'medium' },
+      reportsControls: true,
+      effort: 'medium',
+    },
+    {
+      case: 'a new value',
+      text: '/effort high',
+      held: { effort: 'medium' },
+      reportsControls: true,
+      effort: 'high',
+    },
+    {
+      case: 'a value outside the choices, none held',
+      text: '/effort auto',
+      held: {},
+      reportsControls: false,
+      effort: null,
+    },
+  ])(
+    'foldPipeLine_ControlCommandResult_ReportsControls ($case)',
+    ({ text, held, reportsControls, effort }) => {
+      const state = createSessionFoldState({ ...request, controls: held });
+      foldPipeLine(state, inLine(send(text, 'u1')));
+      foldPipeLine(state, outLine(lifecycleInit));
+      foldPipeLine(state, outLine(lifecycle('u1', 'started')));
+
+      const { effects } = foldPipeLine(
+        state,
+        outLine(successResult('Set', ['u1'])),
+      );
+
+      expect(effects.some((effect) => effect.kind === 'controls')).toBe(
+        reportsControls,
+      );
+      expect(controlValues(state).effort).toBe(effort);
+    },
+  );
 
   it('foldPipeLine_HostRequest_OwedUntilAnswered', () => {
     const state = createSessionFoldState(request);
@@ -622,6 +804,7 @@ describe('session-fold', () => {
     for (const dropped of [
       'planUsage',
       'requestContextUsage',
+      'requestAppliedSettings',
       'refuseHostRequest',
       'log',
     ]) {

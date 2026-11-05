@@ -197,6 +197,7 @@ function reportEffect(events: AgentProcessEvents, effect: FoldEffect) {
       events.messageDropped(effect.entryId, effect.message);
       break;
     case 'requestContextUsage':
+    case 'requestAppliedSettings':
     case 'refuseHostRequest':
     case 'log':
       break;
@@ -209,12 +210,14 @@ interface ClaudeSession {
   process: AgentProcess;
   // Fold each line and run its effects, or end the process on `closed`.
   pipeEvents: HostedProcessEvents;
-  // What a new process emits first, then its first context request.
+  // What a new process emits first, then its first context and settings
+  // requests.
   open(): void;
   // Arms the live grace timer for `nextFoldDeadline(state)`.
   syncGraceTimer(): void;
   // Writes what a replay shows the process is owed, unless it has closed: a
-  // refusal for each unanswered host request, then the context request.
+  // refusal for each unanswered host request, then the context request, then the
+  // settings request.
   answerOwed(): void;
   // Starts the `settings.json` read no pipe line records.
   readConfiguredPercent(): void;
@@ -313,6 +316,11 @@ function createClaudeSession(
           requestContextUsage();
         }
         break;
+      case 'requestAppliedSettings':
+        if (!isEndCalled && !hasClosed) {
+          requestAppliedSettings();
+        }
+        break;
       case 'refuseHostRequest':
         refuseHostRequest(effect.requestId, effect.subtype);
         break;
@@ -359,13 +367,22 @@ function createClaudeSession(
 
   const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
-  // Asked at start and after every turn, a control command's included:
-  // `/model` changes the window and the limit.
+  // This request and `requestAppliedSettings` are asked at start and after every
+  // turn, a control command's included: `/model` changes the window and the limit,
+  // and `/effort` and `/model` change the applied model and effort.
   const requestContextUsage = () => {
     writeMessage({
       type: 'control_request',
       request_id: nextRequestId(),
       request: { subtype: 'get_context_usage' },
+    });
+  };
+
+  const requestAppliedSettings = () => {
+    writeMessage({
+      type: 'control_request',
+      request_id: nextRequestId(),
+      request: { subtype: 'get_settings' },
     });
   };
 
@@ -378,6 +395,9 @@ function createClaudeSession(
     }
     if (state.isContextRequestOwed) {
       requestContextUsage();
+    }
+    if (state.isSettingsRequestOwed) {
+      requestAppliedSettings();
     }
   };
 
@@ -489,6 +509,7 @@ function createClaudeSession(
     );
     emitActivity('idle');
     requestContextUsage();
+    requestAppliedSettings();
   };
 
   const agentProcess: AgentProcess = {
@@ -726,9 +747,10 @@ function startClaudeProcess(
 // replay's events before the promise resolves, then goes live. `request` carries
 // the `resume` and `controls` the process was launched with, the seeds the fold's
 // usage and controls start from. Writes only what fell due while no app was
-// attached: a refusal for each unanswered host request and the context request of
-// a turn that ended. Rejects, having detached from the host, when a step after the
-// host's attach fails; it never fires `ended` for that.
+// attached: a refusal for each unanswered host request, the context request of a
+// turn that ended, and the settings request of a turn that ended or of a log that
+// has none. Rejects, having detached from the host, when a step after the host's
+// attach fails; it never fires `ended` for that.
 async function attachClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,

@@ -1,4 +1,5 @@
 import type { ControlChoice, UserMessage } from '../../contracts/agent';
+import { asJson, asString, type Json } from './json-fields';
 
 export type ClaudeControlId = 'mode' | 'effort' | 'model';
 
@@ -74,6 +75,21 @@ export function controlValue(id: ClaudeControlId, reported: string): string {
   const name = reported.toLowerCase();
   const alias = MODEL_CHOICES.find((choice) => name.includes(choice.value));
   return alias?.value ?? reported;
+}
+
+// The model and effort a `get_settings` reply says the process applies, as
+// Claude reports them; null when it names no applied model. `effort` is null for
+// a model with no effort support.
+export function appliedControlsOf(
+  reply: Json,
+): { model: string; effort: string | null } | null {
+  const applied = asJson(reply.applied);
+  const model = asString(applied.model);
+  if (model === '') {
+    return null;
+  }
+  const effort = asString(applied.effort);
+  return { model, effort: effort === '' ? null : effort };
 }
 
 // One stdin line sending the user's message: plain text content when it has

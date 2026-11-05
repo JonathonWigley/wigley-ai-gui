@@ -1,6 +1,6 @@
 # 01 — Read the applied model and effort from `get_settings`
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { controlMessage, controlValue, userMessage } from './claude-controls';
+import {
+  appliedControlsOf,
+  controlMessage,
+  controlValue,
+  userMessage,
+} from './claude-controls';
 
 describe('claude-controls', () => {
   it('controlValue_Model_MapsFullNameToAlias', () => {
@@ -11,6 +16,41 @@ describe('claude-controls', () => {
   it('controlValue_ModeDefault_IsManual', () => {
     expect(controlValue('mode', 'default')).toBe('manual');
     expect(controlValue('mode', 'plan')).toBe('plan');
+  });
+
+  it.each([
+    {
+      case: 'model and effort',
+      reply: { applied: { model: 'claude-opus-5-5', effort: 'medium' } },
+      expected: { model: 'claude-opus-5-5', effort: 'medium' },
+    },
+    {
+      case: 'effort null',
+      reply: { applied: { model: 'claude-haiku-4-5', effort: null } },
+      expected: { model: 'claude-haiku-4-5', effort: null },
+    },
+    {
+      case: 'effort missing',
+      reply: { applied: { model: 'claude-haiku-4-5' } },
+      expected: { model: 'claude-haiku-4-5', effort: null },
+    },
+    {
+      case: 'effort not among the choices',
+      reply: { applied: { model: 'claude-opus-5-5', effort: 'ultra' } },
+      expected: { model: 'claude-opus-5-5', effort: 'ultra' },
+    },
+    {
+      case: 'no applied',
+      reply: { effective: { effortLevel: 'high', model: 'claude-opus-5-5' } },
+      expected: null,
+    },
+    {
+      case: 'applied model empty',
+      reply: { applied: { model: '', effort: 'medium' } },
+      expected: null,
+    },
+  ])('appliedControlsOf ($case)', ({ reply, expected }) => {
+    expect(appliedControlsOf(reply)).toEqual(expected);
   });
 
   it('controlMessage_Mode_IsControlRequest', () => {

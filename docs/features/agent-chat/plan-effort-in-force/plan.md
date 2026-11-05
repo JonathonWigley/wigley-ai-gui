@@ -89,7 +89,7 @@ Boundary rule: nothing outside `src/main/claude-code/` names `get_settings`.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 
 ### Groups
 ### Contract changes

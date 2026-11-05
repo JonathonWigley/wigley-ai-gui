@@ -16,6 +16,7 @@ import { isSameJson } from '../../shared/json';
 import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
 import type { AgentDefinitions } from './agent-definitions';
 import {
+  appliedControlsOf,
   CLAUDE_CONTROLS,
   type ClaudeControlId,
   CONTROL_COMMAND,
@@ -110,7 +111,8 @@ export function heldUserMessage({ draft }: HeldMessage): UserMessage {
 export type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
-  | { kind: 'contextUsage' };
+  | { kind: 'contextUsage' }
+  | { kind: 'appliedSettings' };
 
 // A `/compact` written and not yet taken by a compaction or ended.
 interface ArmedCompact {
@@ -175,6 +177,9 @@ export interface SessionFoldState {
   graceDeadline: number | null;
   // True from a turn's end until the next `get_context_usage` `in` line.
   isContextRequestOwed: boolean;
+  // True from the start and from a turn's end until the next `get_settings` `in`
+  // line.
+  isSettingsRequestOwed: boolean;
   // Subtype by request id, from a host request's `out` line until the `in` line
   // answering it.
   owedHostRequests: Map<string, string>;
@@ -190,6 +195,7 @@ export type FoldEffect =
   | { kind: 'planUsage'; update: PlanRowUpdate }
   | { kind: 'messageDropped'; entryId: string; message: UserMessage }
   | { kind: 'requestContextUsage' }
+  | { kind: 'requestAppliedSettings' }
   | { kind: 'refuseHostRequest'; requestId: string; subtype: string }
   | { kind: 'log'; text: string };
 
@@ -204,9 +210,13 @@ export interface FoldStep {
 export function createSessionFoldState(request: AgentStart): SessionFoldState {
   const pendingRequests = new Map<string, PendingRequest>();
   const state: SessionFoldState = {
-    // The adapter's own `get_context_usage` replies stay out of the chat.
+    // The adapter's own `get_context_usage` and `get_settings` replies stay out
+    // of the chat.
     decoder: createStreamDecoder(
-      (requestId) => pendingRequests.get(requestId)?.kind === 'contextUsage',
+      (requestId) => {
+        const kind = pendingRequests.get(requestId)?.kind;
+        return kind === 'contextUsage' || kind === 'appliedSettings';
+      },
       (agentType) => state.definitions.get(agentType) ?? null,
     ),
     tracker: createTurnTracker(),
@@ -229,6 +239,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     lastStderr: null,
     graceDeadline: null,
     isContextRequestOwed: false,
+    isSettingsRequestOwed: true,
     owedHostRequests: new Map(),
     compaction: {
       armed: [],
@@ -803,6 +814,9 @@ function foldRequestLine(
   if (request.subtype === 'get_context_usage') {
     state.pendingRequests.set(requestId, { kind: 'contextUsage' });
     state.isContextRequestOwed = false;
+  } else if (request.subtype === 'get_settings') {
+    state.pendingRequests.set(requestId, { kind: 'appliedSettings' });
+    state.isSettingsRequestOwed = false;
   } else if (request.subtype === 'interrupt') {
     state.pendingRequests.set(requestId, { kind: 'interrupt' });
     state.graceDeadline = at + INTERRUPT_GRACE_MS;
@@ -881,7 +895,9 @@ function releaseAllHeldMessages(
 
 // A control command's success sets the control, since the turn's init still
 // reports the value from before. A value that is not among the control's
-// choices leaves the control unknown. The app's `/compact` sets no control.
+// choices leaves the control unknown. A known value is reported even when the
+// control already held it, since that report confirms a pick of the held value.
+// The app's `/compact` sets no control.
 function foldControlValues(
   state: SessionFoldState,
   decoded: DecodedLine,
@@ -898,7 +914,8 @@ function foldControlValues(
   if (command !== null && command.id !== 'compact' && !decoded.turnFailed) {
     const value = controlValue(command.id, command.value);
     const known = isChoice(command.id, value) ? value : null;
-    hasChanged = setControlValue(state, command.id, known) || hasChanged;
+    hasChanged =
+      setControlValue(state, command.id, known) || known !== null || hasChanged;
   }
   if (hasChanged) {
     effects.push({ kind: 'controls', controls: reportedControls(state) });
@@ -923,6 +940,42 @@ function foldLineUsage(
   }
   if (replyUsage !== null || turnUsage !== null) {
     pushUsage(state, at, effects);
+  }
+}
+
+function foldAppliedSettings(
+  state: SessionFoldState,
+  response: NonNullable<DecodedLine['controlResponse']>,
+  effects: FoldEffect[],
+): void {
+  if (response.error !== null) {
+    effects.push({
+      kind: 'log',
+      text: `get_settings failed: ${response.error}`,
+    });
+    return;
+  }
+  const applied = appliedControlsOf(response.response);
+  if (applied === null) {
+    effects.push({
+      kind: 'log',
+      text: 'get_settings reply has no applied model',
+    });
+    return;
+  }
+  const { model, effort } = applied;
+  const hasModelChanged = setControlValue(
+    state,
+    'model',
+    controlValue('model', model),
+  );
+  const hasEffortChanged = setControlValue(
+    state,
+    'effort',
+    effort === null ? null : controlValue('effort', effort),
+  );
+  if (hasModelChanged || hasEffortChanged) {
+    effects.push({ kind: 'controls', controls: reportedControls(state) });
   }
 }
 
@@ -955,6 +1008,10 @@ function answerControlResponse(
       settleAfterSize(state, totalTokens, at, effects);
     }
     pushUsage(state, at, effects);
+    return;
+  }
+  if (pending.kind === 'appliedSettings') {
+    foldAppliedSettings(state, response, effects);
     return;
   }
   if (pending.kind === 'interrupt') {
@@ -1051,6 +1108,8 @@ function foldOutLine(
     state.graceDeadline = null;
     state.isContextRequestOwed = true;
     effects.push({ kind: 'requestContextUsage' });
+    state.isSettingsRequestOwed = true;
+    effects.push({ kind: 'requestAppliedSettings' });
   }
 }
 

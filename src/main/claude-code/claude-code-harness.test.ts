@@ -222,6 +222,25 @@ const contextUsageRequest = (requestId: string) => ({
   request: { subtype: 'get_context_usage' },
 });
 
+const settingsRequest = (requestId: string) => ({
+  type: 'control_request',
+  request_id: requestId,
+  request: { subtype: 'get_settings' },
+});
+
+// A `get_settings` reply to `requestId`, its values nested as the CLI nests them.
+const settingsReply = (
+  requestId: string,
+  applied: { model: string; effort: string | null },
+) => ({
+  type: 'control_response',
+  response: {
+    subtype: 'success',
+    request_id: requestId,
+    response: { effective: {}, sources: [], applied },
+  },
+});
+
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function started(
@@ -416,6 +435,17 @@ describe('createClaudeCodeHarness', () => {
     ]);
   });
 
+  it('start_Opens_WritesContextThenSettingsRequest', async () => {
+    const run = started();
+
+    await settle();
+
+    expect(run.written).toEqual([
+      contextUsageRequest('wigley-1'),
+      settingsRequest('wigley-2'),
+    ]);
+  });
+
   it('send_WritesUserMessageAndEmitsWorking', async () => {
     const run = await startedQuiet();
 
@@ -423,7 +453,11 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     const message = userMessage({ text: 'hi', images: [] }, 'uuid-1');
-    expect(run.written).toEqual([contextUsageRequest('wigley-1'), message]);
+    expect(run.written).toEqual([
+      contextUsageRequest('wigley-1'),
+      settingsRequest('wigley-2'),
+      message,
+    ]);
     expect(run.heard).toEqual([['activity', 'working']]);
   });
 
@@ -613,7 +647,7 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-2',
+        request_id: 'wigley-3',
         response: { mode: 'plan' },
       },
     });
@@ -621,7 +655,8 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
-      controlMessage('mode', 'plan', 'wigley-2'),
+      settingsRequest('wigley-2'),
+      controlMessage('mode', 'plan', 'wigley-3'),
     ]);
     const [name, controls] = run.heard[run.heard.length - 1];
     expect(name).toBe('controls');
@@ -655,8 +690,10 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
+      settingsRequest('wigley-2'),
       controlMessage('effort', 'high', '00000000-1'),
-      contextUsageRequest('wigley-2'),
+      contextUsageRequest('wigley-3'),
+      settingsRequest('wigley-4'),
     ]);
     expect(
       run.heard.some(
@@ -685,9 +722,9 @@ describe('createClaudeCodeHarness', () => {
       .filter((entry) => entry.kind === 'notice')
       .map((entry) => entry.id);
     expect(noticeIds).toEqual(['notice-1', 'control-notice-1']);
-    expect(run.written[4]).toEqual({
+    expect(run.written[6]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-3',
+      request_id: 'wigley-5',
       request: { subtype: 'interrupt' },
     });
   });
@@ -705,7 +742,7 @@ describe('createClaudeCodeHarness', () => {
     for (const text of [CONTEXT_REPLY_LINE, REPLY_LINE, RESULT_LINE]) {
       run.stdout.write(`${text}\n`);
     }
-    writeLine(run.stdout, contextReply('wigley-2', 200_000, 167_000));
+    writeLine(run.stdout, contextReply('wigley-3', 200_000, 167_000));
     await settle();
 
     // A new session knows its context from the start: the settings read and
@@ -743,8 +780,10 @@ describe('createClaudeCodeHarness', () => {
     ).toEqual([settingsRead, contextReplied, first, second, third]);
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
+      settingsRequest('wigley-2'),
       userMessage({ text: 'hi', images: [] }, 'uuid-1'),
-      contextUsageRequest('wigley-2'),
+      contextUsageRequest('wigley-3'),
+      settingsRequest('wigley-4'),
     ]);
   });
 
@@ -899,7 +938,7 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-2',
+        request_id: 'wigley-3',
         response: { mode: 'plan' },
       },
     };
@@ -970,9 +1009,9 @@ describe('createClaudeCodeHarness', () => {
 
     run.agent.interrupt();
 
-    expect(run.written[4]).toEqual({
+    expect(run.written[6]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-3',
+      request_id: 'wigley-5',
       request: { subtype: 'interrupt' },
     });
   });
@@ -1094,13 +1133,13 @@ describe('createClaudeCodeHarness', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'wigley-2',
+            request_id: 'wigley-3',
             response: { still_queued: [] },
           },
         }
       : {
           type: 'control_response',
-          response: { subtype: 'error', request_id: 'wigley-2', error },
+          response: { subtype: 'error', request_id: 'wigley-3', error },
         };
 
   it.each([
@@ -1427,6 +1466,9 @@ describe('createClaudeCodeHarness', () => {
       });
 
     await out(contextReply('wigley-1', 1000000, 967000));
+    await out(
+      settingsReply('wigley-2', { model: 'claude-opus-5-5', effort: 'medium' }),
+    );
     await step(() => run.agent.send({ text: 'hi', images: [] }));
     await out(lifecycleInit);
     await out(lifecycle('uuid-1', 'started'));
@@ -1435,10 +1477,13 @@ describe('createClaudeCodeHarness', () => {
     await step(() => run.agent.setControl('mode', 'plan'));
     await out({
       type: 'control_response',
-      response: { subtype: 'success', request_id: 'wigley-3' },
+      response: { subtype: 'success', request_id: 'wigley-5' },
     });
     await step(() => run.agent.setControl('effort', 'high'));
     await out(successResult('Set effort level to high', ['00000000-2']));
+    await out(
+      settingsReply('wigley-7', { model: 'claude-opus-5-5', effort: 'high' }),
+    );
     await step(() => run.agent.send({ text: 'two', images: [] }));
     await out(lifecycleInit);
     await out(lifecycle('uuid-3', 'started'));
@@ -1521,6 +1566,7 @@ describe('createClaudeCodeHarness', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'mode', value: 'plan' }),
         expect.objectContaining({ id: 'effort', value: 'high' }),
+        expect.objectContaining({ id: 'model', value: 'opus' }),
       ]),
     );
     expect(lastActivity(run.heard)).toBe('idle');
@@ -2309,7 +2355,7 @@ describe('createClaudeCodeHarness', () => {
             type: 'control_response',
             response: {
               subtype: 'success',
-              request_id: 'wigley-2',
+              request_id: 'wigley-3',
               response: { still_queued: [] },
             },
           },
@@ -2410,7 +2456,7 @@ describe('createClaudeCodeHarness', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'wigley-2',
+            request_id: 'wigley-3',
             response: { still_queued: [] },
           },
         },
@@ -3158,6 +3204,9 @@ describe('createClaudeCodeHarness on the session host', () => {
       step(() => host.output('p-1', 'out', asText(line)));
 
     await out(contextReply('wigley-1', 1000000, 967000));
+    await out(
+      settingsReply('wigley-2', { model: 'claude-opus-5-5', effort: 'medium' }),
+    );
     await step(() => agent.send({ text: 'hi', images: [] }));
     await out(lifecycleInit);
     await out(lifecycle('uuid-1', 'started'));
@@ -3166,10 +3215,13 @@ describe('createClaudeCodeHarness on the session host', () => {
     await step(() => agent.setControl('mode', 'plan'));
     await out({
       type: 'control_response',
-      response: { subtype: 'success', request_id: 'wigley-3' },
+      response: { subtype: 'success', request_id: 'wigley-5' },
     });
     await step(() => agent.setControl('effort', 'high'));
     await out(successResult('Set effort level to high', ['00000000-2']));
+    await out(
+      settingsReply('wigley-7', { model: 'claude-opus-5-5', effort: 'high' }),
+    );
     await step(() => agent.send({ text: 'two', images: [] }));
     await out(lifecycleInit);
     await out(lifecycle('uuid-3', 'started'));
@@ -3235,6 +3287,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'mode', value: 'plan' }),
         expect.objectContaining({ id: 'effort', value: 'high' }),
+        expect.objectContaining({ id: 'model', value: 'opus' }),
       ]),
     );
 
@@ -3280,13 +3333,13 @@ describe('createClaudeCodeHarness on the session host', () => {
       case: 'turn ended while away',
       goesOn: [],
       closes: false,
-      written: [contextUsageRequest('wigley-1')],
+      written: [contextUsageRequest('wigley-1'), settingsRequest('wigley-2')],
     },
     {
       case: 'request already written',
       goesOn: [CONTEXT_REQUEST_IN],
       closes: false,
-      written: [],
+      written: [settingsRequest('wigley-2')],
     },
     {
       case: 'closed during attach',
@@ -3298,13 +3351,17 @@ describe('createClaudeCodeHarness on the session host', () => {
       case: 'host request unanswered while away',
       goesOn: [CONTEXT_REQUEST_IN, HOST_REQUEST_OUT],
       closes: false,
-      written: [REFUSAL],
+      written: [REFUSAL, settingsRequest('wigley-2')],
     },
     {
       case: 'host request and context request both owed',
       goesOn: [HOST_REQUEST_OUT],
       closes: false,
-      written: [REFUSAL, contextUsageRequest('wigley-1')],
+      written: [
+        REFUSAL,
+        contextUsageRequest('wigley-1'),
+        settingsRequest('wigley-2'),
+      ],
     },
     {
       case: 'host request already refused',
@@ -3314,7 +3371,7 @@ describe('createClaudeCodeHarness on the session host', () => {
         CONTEXT_REQUEST_IN,
       ],
       closes: false,
-      written: [],
+      written: [settingsRequest('wigley-2')],
     },
   ] as {
     case: string;
@@ -3342,6 +3399,59 @@ describe('createClaudeCodeHarness on the session host', () => {
       expect(record.writes).toEqual(
         written.map((line) => JSON.stringify(line)),
       );
+    },
+  );
+
+  it.each([
+    {
+      case: 'a log holding the request and its reply',
+      goesOn: [
+        { dir: 'in', line: settingsRequest('wigley-1') },
+        {
+          dir: 'out',
+          line: settingsReply('wigley-1', {
+            model: 'claude-sonnet-5-5',
+            effort: 'low',
+          }),
+        },
+      ],
+      written: [],
+      controls: { mode: null, effort: 'low', model: 'sonnet' },
+    },
+    {
+      case: 'a log with no request',
+      goesOn: [],
+      written: [settingsRequest('wigley-1')],
+      controls: { mode: null, effort: null, model: null },
+    },
+  ] as {
+    case: string;
+    goesOn: { dir: PipeDirection; line: object }[];
+    written: object[];
+    controls: Record<string, string | null>;
+  }[])(
+    'attach_SettingsRequest_RebuiltOrWritten ($case)',
+    async ({ goesOn, written, controls }) => {
+      const host = createFakeSessionHost(clock);
+      const record = host.addRunning(running(logOf(goesOn)));
+      const { heard, events } = recordingEvents();
+
+      await hostHarness(host, clock).attach(request, events);
+      await settle();
+
+      expect(record.writes).toEqual(
+        written.map((line) => JSON.stringify(line)),
+      );
+      const replayed = heard
+        .filter(([name]) => name === 'controls')
+        .at(-1)?.[1];
+      expect(
+        Object.fromEntries(
+          (replayed as { id: string; value: string | null }[]).map(
+            ({ id, value }) => [id, value],
+          ),
+        ),
+      ).toEqual(controls);
     },
   );
 
