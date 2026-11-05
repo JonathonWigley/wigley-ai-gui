@@ -97,8 +97,9 @@ new registration in the plugin that knows it, with no edit to sessions.
 
 Idle draws nothing. "Views the session" is the session becoming the focused pane's session. Clearing the
 session's conversation, sending a message and the next turn starting also clear a done or error. A turn
-that ends while its session is the focused pane's skips done. A `marked` row with no activity draws
-the needs you label; while a row shows an activity, the default layout draws that activity's label alone.
+that ends while its session is the focused pane's skips done. An unselected `marked` row with no activity
+draws the needs you label; while a row shows an activity, the default layout draws that activity's label alone. A
+selected row draws as unmarked at once: the page clears a done on selecting before main's reply clears the mark.
 Other tabs' status lines (a form's or primer's name and count) still draw on the row's
 second line; chat no longer sends one.
 

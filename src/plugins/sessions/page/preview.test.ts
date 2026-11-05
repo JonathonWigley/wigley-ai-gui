@@ -229,6 +229,7 @@ describe('session rows', () => {
     marked: boolean;
     activity: RowActivity | null;
     label: string;
+    isInFocusedPane?: boolean;
     expected: { className: string; text: string } | null;
   }>([
     {
@@ -293,11 +294,23 @@ describe('session rows', () => {
       label: 'New Chat',
       expected: { className: 'ui-tag--attention', text: 'Needs you' },
     },
+    {
+      case: "marked alone, in the focused pane before main's reply",
+      agent: null,
+      marked: true,
+      activity: null,
+      label: 'New Chat',
+      isInFocusedPane: true,
+      expected: null,
+    },
   ])(
     'sessionsView_Row_DrawsTitleOrNewChatAndActivityLabel ($case)',
-    ({ agent, marked, activity, label, expected }) => {
+    ({ agent, marked, activity, label, isInFocusedPane, expected }) => {
       const { view, sideBar } = sessionsViewSetup();
       view.render(titledState(agent, marked));
+      if (isInFocusedPane === true) {
+        view.panes.load(view.panes.focusedPaneId(), 's1');
+      }
 
       view.setActivity('s1', 'chat', activity);
 
