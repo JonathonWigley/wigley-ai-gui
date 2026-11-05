@@ -20,7 +20,8 @@ release a clone.
 
 ## Status
 
-Built, in `src/contracts/agent.ts` and `src/main/claude-code/claude-launch.ts` (the launch variable) and
+Built, in `src/contracts/agent.ts`, `src/main/claude-code/claude-launch.ts` and `src/shared/session-env.ts` (the launch
+variable), `src/shared/origin-repo-names.ts` (the origin-name lookup) and
 `src/plugins/unity-pool/` (the state watch, the CLI runs and the self-test script in `main/`; the row badge, the
 right-bar panel and their view model in `page/`; the layout contract and the `default` layout in `layouts/`).
 

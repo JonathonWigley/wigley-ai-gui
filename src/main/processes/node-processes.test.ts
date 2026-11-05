@@ -91,12 +91,20 @@ describe('createNodeProcesses', () => {
   });
 
   it('run_UnsetEnv_DropsOnlyThoseNames', async () => {
-    const result = await runScript(
-      'process.stdout.write(JSON.stringify(["HOME" in process.env, "PATH" in process.env]))',
-      { unsetEnv: ['HOME'] },
-    );
+    // Names of the test's own, so the absence proves the option on every OS.
+    process.env.UNSET_ENV_TEST_DROPPED = '1';
+    process.env.UNSET_ENV_TEST_KEPT = '1';
+    try {
+      const result = await runScript(
+        'process.stdout.write(JSON.stringify(["UNSET_ENV_TEST_DROPPED" in process.env, "UNSET_ENV_TEST_KEPT" in process.env]))',
+        { unsetEnv: ['UNSET_ENV_TEST_DROPPED'] },
+      );
 
-    expect(JSON.parse(result.stdout)).toEqual([false, true]);
+      expect(JSON.parse(result.stdout)).toEqual([false, true]);
+    } finally {
+      delete process.env.UNSET_ENV_TEST_DROPPED;
+      delete process.env.UNSET_ENV_TEST_KEPT;
+    }
   });
 
   it('run_LargeOutput_KeepsPastOneMegabyte', async () => {
