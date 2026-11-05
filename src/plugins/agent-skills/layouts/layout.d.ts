@@ -1,5 +1,5 @@
 // The agent-skills layout contract: what a layout in `layouts/agent-skills/<name>/layout.js` draws a session's skills
-// with. In the session hub's Skills section, the app draws one `skillList` while the session's roster lists any skill,
+// with. In the session hub's Skills section, the app draws one `skillList` while the main agent has started any skill,
 // and nothing otherwise, which hides the section. The app sets `data-layout-owner="agent-skills"` and
 // `data-layout="<name>"` on the element the list returns, `<name>` being the layout that drew it, so
 // `[data-layout-owner="agent-skills"][data-layout="<name>"] …` in a layout's CSS selects only its own list.
@@ -9,18 +9,10 @@
 // - no keys and no focus: the list takes neither.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// One skill an agent started. `ownerName` names that agent as it was when the skill started: `main`, the subagent's
-// name, or `subagent` for one never listed. `isMain` is true for the main agent's skill alone, since a subagent may be
-// named `main`.
-export interface SkillRowInput {
-  skill: string;
-  ownerName: string;
-  isMain: boolean;
-}
-
-// The session's skills, one entry per skill and agent, in start order.
+// The names of the skills the session's main agent started, each once, in start order. A project-scoped skill's name
+// comes without its folder path.
 export interface SkillListInput {
-  skills: readonly SkillRowInput[];
+  skills: readonly string[];
 }
 
 // What a part returns: its root, appended to `parent`.
