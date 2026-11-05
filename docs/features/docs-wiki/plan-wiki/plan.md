@@ -127,7 +127,7 @@ wigley-ai-gui, git:
 
 ### Wave 4
 - [x] [Article page and right column](07-article-page.md) — after 03, 05
-- [ ] [Wiki sidebar and All pages](08-wiki-sidebar.md) — after 03, 04, 05, 06
+- [x] [Wiki sidebar and All pages](08-wiki-sidebar.md) — after 03, 04, 05, 06
 
 ### Wave 5
 - [ ] [Section editing](09-section-editing.md) — after 03, 07, 08
@@ -159,6 +159,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 06 · 47c67279 · diff read, every Produces present, buildTree unchanged, tsc clean · concerns: preferredEntry compares ids inline as byTitleThenId does; a skill's SKILL.md leaf can show its lead heading as a heading row; visibleRows re-tests every heading per draw under a filter, unmeasured; docs-view openHeading has no unit test, left to task 14
 - 05 · f2d0ccb5 · diff read; ten parts in layout.d.ts, PART_SCOPES, LAYOUT_PARTS, default builders, token, container and DESIGN.md entries present; tsc clean; oxfmt on docs/keymap.md committed as 883116bf (lead tooling) for the lint gate · concerns: eight of ten default builders run in no test until tasks 07, 08 and 11; container docs-doc / size is live in every docs view and needs its live check at 07, stacked session tab included; sectionEditControl passes kit.openSection unbound, so task 09's kit must not use this
 - 07 · 061c3e1b · diff read, every Produces present, tests pass per worker, no compile error in its files with task 08 in the tree; the live run follows task 08's landing (Rulings) · concerns: aside scroll resets across the whole-file editor; empty-state centring and editor height rest on CSS only; 100cqh needs the docs-doc container; retarget does not redraw the column, so it goes stale after a move or an extension change; linkedFrom runs on every drawAside
+- 08 · d7270be4 · diff read, every Produces present by search, tsc and lint clean, Done-when greps hold (one <Leader>vw line, no setEntries in docs-view.ts) · concerns: Space v w with the filter box focused leaves focus on a hidden input; an unstar elsewhere can also move the wiki cursor; with no entries a wiki filter shows No pages in Main.md; dangling and label row colours unseen on screen; wikiRowActions anchors are built in session views too; Docs mode opens on the wiki, so self-test groups expecting All pages fail until task 12
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -183,5 +184,11 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - placeAtEnds places a left-out article first and a left-out aside last, per layout.d.ts, rather than drawPane's plain append · group 07
 - setEntries guards on isDisposed, as retarget, clear and redraw do · group 07
 - two tests beyond the list: the tilde tooltip and an openSections assertion; the diskChanged test uses ShrinkingScrollerFakeElement so it can fail · group 07
+- reread awaits start, and concurrent connects share one in-flight promise, so no repeat watch is sent · group 08
+- no Main.md logs only when the state moves to absent · group 08
+- reread runs in runIndex's then, not its catch · group 08
+- selectEntry always draws once · group 08
+- openWikiLink takes only the link until task 11 · group 08
+- permitted extra: page/layout/docs-parts.test.ts · group 08
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 08 — Docs mode's sidebar shows the wiki tree or All pages
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -213,3 +213,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d7270be4 · proof: diff read, every Produces present by search, tsc and lint clean, Done-when greps hold (one <Leader>vw line, no setEntries in docs-view.ts) · concerns: Space v w with the filter box focused leaves focus on a hidden input; an unstar elsewhere can also move the wiki cursor; with no entries a wiki filter shows No pages in Main.md; dangling and label row colours unseen on screen; wikiRowActions anchors are built in session views too; Docs mode opens on the wiki, so self-test groups expecting All pages fail until task 12
