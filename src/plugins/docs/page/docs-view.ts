@@ -1419,16 +1419,19 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     hasUnsavedEdits: () => doc.hasUnsavedEdits(),
     unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
     dispose() {
-      view.closeOverlays();
-      listening.dispose();
-      starChange.dispose();
-      wikiMain?.dispose();
-      for (const overlay of overlays) {
-        overlay.dispose();
-      }
-      tree.dispose();
-      dialogs.dispose();
-      doc.dispose();
+      callEach<() => void>(
+        [
+          () => view.closeOverlays(),
+          () => listening.dispose(),
+          () => starChange.dispose(),
+          () => wikiMain?.dispose(),
+          ...overlays.map((overlay) => () => overlay.dispose()),
+          () => tree.dispose(),
+          () => dialogs.dispose(),
+          () => doc.dispose(),
+        ],
+        (step) => step(),
+      );
     },
     commands,
   };

@@ -9,7 +9,12 @@ import {
 } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
 import { element } from '../dom';
-import { type AnchorNamer, keyChevron, keyEdge } from './key-anchors';
+import {
+  type AnchorNamer,
+  disposeAnchors,
+  keyChevron,
+  keyEdge,
+} from './key-anchors';
 import {
   clampSplitWidth,
   nudgedSplitWidth,
@@ -214,9 +219,7 @@ export function createDividerHandle(
         options.timers.clear(promptTimer);
         promptTimer = null;
       }
-      for (const anchor of prompt.anchors) {
-        anchor.dispose();
-      }
+      disposeAnchors(prompt.anchors);
     },
   };
 }

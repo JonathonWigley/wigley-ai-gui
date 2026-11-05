@@ -3,6 +3,7 @@
 import './key-anchors.css';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
+import { callEach } from '../../call-each';
 import { element } from '../dom';
 
 // Names an anchor for `command` in `element`; the keys plugin's page `anchor`
@@ -31,12 +32,10 @@ export function recordingAnchor<Options>(
   };
 }
 
-// Disposes every anchor in `anchors` and empties it.
+// Empties `anchors` and disposes every anchor it held, a throw not skipping the
+// rest.
 export function disposeAnchors(anchors: Disposable[]): void {
-  for (const anchor of anchors) {
-    anchor.dispose();
-  }
-  anchors.length = 0;
+  callEach(anchors.splice(0), (anchor) => anchor.dispose());
 }
 
 // A `span.ui-key-chevron` reading `text` (`‹ › ▲ ▼ ◂ ▸`, with words after or

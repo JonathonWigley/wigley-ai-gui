@@ -32,4 +32,21 @@ describe('disposeAnchors', () => {
     expect(second.dispose).toHaveBeenCalledOnce();
     expect(anchors).toEqual([]);
   });
+
+  it('disposeAnchors_OneThrows_DisposesTheRestAndEmptiesTheList', () => {
+    const last = { dispose: vi.fn() };
+    const anchors: Disposable[] = [
+      {
+        dispose() {
+          throw new Error('anchor gone');
+        },
+      },
+      last,
+    ];
+
+    expect(() => disposeAnchors(anchors)).toThrow('anchor gone');
+
+    expect(last.dispose).toHaveBeenCalledOnce();
+    expect(anchors).toEqual([]);
+  });
 });

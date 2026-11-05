@@ -146,11 +146,12 @@ describe('docs page part lifecycle', () => {
   it('exports_ConsumerDisposed_DisposesItsView', () => {
     const { harness, exportsTo } = startDocsPage();
     const consumer = createRegistrations();
+    const observersBefore = harness.counts().observers;
     exportsTo(consumer).addView('extra', { isVisible: () => false });
-    expect(harness.counts().observers).toBe(1);
+    expect(harness.counts().observers).toBeGreaterThan(observersBefore);
 
     consumer.dispose();
 
-    expect(harness.counts().observers).toBe(0);
+    expect(harness.counts().observers).toBe(observersBefore);
   });
 });

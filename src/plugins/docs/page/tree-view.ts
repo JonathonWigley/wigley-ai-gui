@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -691,14 +692,18 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     },
     dispose() {
       isDisposed = true;
-      disposeAnchors(anchors);
-      for (const drawn of [drawnPane, drawnLine, drawnSwitch, ...drawnRows]) {
-        drawn?.dispose();
-      }
+      const drawn = [drawnPane, drawnLine, drawnSwitch, ...drawnRows];
       drawnPane = null;
       drawnLine = null;
       drawnSwitch = null;
       drawnRows = [];
+      callEach<() => void>(
+        [
+          () => disposeAnchors(anchors),
+          ...drawn.map((part) => () => part?.dispose()),
+        ],
+        (step) => step(),
+      );
     },
   };
 

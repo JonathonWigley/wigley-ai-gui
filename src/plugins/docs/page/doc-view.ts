@@ -885,11 +885,12 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   const disposeSectionControls = () => {
-    for (const { part, slot } of sectionControls) {
-      part.dispose();
-      slot.remove();
-    }
+    const disposing = sectionControls;
     sectionControls = [];
+    callEach(disposing, ({ part, slot }) => {
+      slot.remove();
+      part.dispose();
+    });
   };
 
   // The section whose heading is `heading`, a rendered block of `doc`.

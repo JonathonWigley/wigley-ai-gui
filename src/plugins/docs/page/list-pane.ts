@@ -1,3 +1,4 @@
+import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import { rowAction } from '../../../shared/page/ui/row';
@@ -45,11 +46,11 @@ export function createListPane(deps: ListPaneDeps): ListPane {
   let hasFocus = false;
 
   const disposeDrawn = () => {
-    rows.forEach((row) => row.part.dispose());
+    const drawn = [...rows.map((row) => row.part), drawnPage];
     rows = [];
-    drawnPage?.dispose();
     drawnPage = null;
     shown = null;
+    callEach(drawn, (part) => part?.dispose());
   };
 
   const cursorOf = (content: ListPageContent | null) =>

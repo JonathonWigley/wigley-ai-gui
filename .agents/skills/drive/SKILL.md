@@ -16,7 +16,8 @@ description: Driving wigley-ai-gui offscreen — launch it, press keys, click, c
 The agent checks every change in the running app itself, as the user would, so the user never
 gets a check the agent could have run. A drive run is the app offscreen as an accessory app, on a
 fresh temp home in `.drive/<run-id>/home`, beside the user's own app: it never takes the user's screen
-or touches their data, so start one whenever a check needs it.
+or touches their data, the real docs index script excepted (the run-folder paragraph under Loop), so
+start one whenever a check needs it.
 
 ## Loop
 
@@ -113,6 +114,14 @@ answers nothing.
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
 (the CLI's records of the start and the running app).
+
+`home/` is the app's own idea of home: `start` leaves `HOME` in the app's environment as the CLI's,
+so a child that asks the system for the home reaches the user's. The real `docs_index.py` uses
+`Path.home()`, so a run that swaps it over the stand-in and presses `R` writes the user's
+`~/.agents/wigley-docs/index.json` and `loads.json`. Such a run starts with `HOME=<absolute run home>
+npm run drive -- start --run <id>`, which keeps those writes in the home; the script still reads the
+user's `~/.claude` through an inherited `CLAUDE_CONFIG_DIR`, read-only. That `HOME` also moves where
+`--user-config` looks.
 
 ## Commands
 

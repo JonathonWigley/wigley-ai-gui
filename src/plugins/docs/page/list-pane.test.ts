@@ -77,6 +77,36 @@ describe('createListPane', () => {
     });
   });
 
+  it('dispose_OneRowThrows_DisposesTheOtherParts', () => {
+    const { parts } = fakeDocsParts(() => withUser(defaultLayout, plainRows));
+    const disposed: string[] = [];
+    const draw = parts.draw.bind(parts);
+    let throwsNext = true;
+    vi.spyOn(parts, 'draw').mockImplementation((part, ...rest) => {
+      const drawn = draw(part, ...rest);
+      return {
+        ...drawn,
+        dispose() {
+          drawn.dispose();
+          if (throwsNext) {
+            throwsNext = false;
+            throw new Error('row gone');
+          }
+          disposed.push(part);
+        },
+      };
+    });
+    const slot = asHtml(
+      document.createElement('div') as unknown as FakeElement,
+    );
+    const pane = createListPane({ slot, parts, openEntry: vi.fn() });
+    pane.show(THREE_ROWS);
+
+    expect(() => pane.dispose()).toThrow('row gone');
+
+    expect(disposed).toEqual(['listRow', 'listRow', 'listPage']);
+  });
+
   it.each<{ name: string; moves: (1 | -1)[]; expected: string }>([
     { name: 'up at the first stays', moves: [-1], expected: 'a' },
     { name: 'down twice crosses the group', moves: [1, 1], expected: 'c' },

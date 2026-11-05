@@ -172,6 +172,33 @@ describe('createTreeView', () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it('dispose_AnchorThrows_DisposesTheDrawnParts', () => {
+    const hintingPane: Layout = {
+      treePane(parent, _input, kit) {
+        const pane = kit.el(parent, 'div');
+        kit.keyHint(pane, 'filter');
+        return { element: pane };
+      },
+    };
+    const { parts, anchors } = fakeDocsParts(() =>
+      withUser(defaultLayout, hintingPane),
+    );
+    const tree = createTreeView({
+      ...treeDeps(parts),
+      anchor: () => ({
+        dispose() {
+          throw new Error('anchor gone');
+        },
+      }),
+    });
+    tree.redraw();
+    expect(anchors.length).toBeGreaterThan(0);
+
+    expect(() => tree.dispose()).toThrow('anchor gone');
+
+    expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+  });
+
   it('toggle_HeadingRow_CallsOpenHeading', () => {
     const shown = withUser(defaultLayout, paneLayout('pane'));
     const { parts } = fakeDocsParts(() => shown);
