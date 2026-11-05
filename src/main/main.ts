@@ -954,6 +954,7 @@ function createWindow(
     window,
     startServed.keymap,
     commands,
+    (id) => served().commands[id]?.label ?? id,
   );
   window.on('closed', () => {
     globalShortcut.unregisterAll();

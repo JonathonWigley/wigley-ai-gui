@@ -276,7 +276,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 - [x] [Forms takes the timers service](02-forms-timers.md)
 
 ### Wave 2
-- [ ] [Window plugin](03-window-plugin.md) — after 01
+- [x] [Window plugin](03-window-plugin.md) — after 01
 
 ### Wave 3
 - [ ] [Menu labels by label](04-menu-labels.md) — after 03
@@ -322,8 +322,11 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 ### Groups
 - 02 · d2d7abad · diff read: Produces present; touched tests pass; compile waits on task 01's landing · concerns: session-host process-table.ts keeps its own copy of the 32-bit timer limit
 - 01 · 1bcd3195 · Diff read; every Produces signature present; typecheck and lint clean; process.platform grep prints the 3 expected lines; start.ts and defaultSettings greps print nothing. · concerns: main.ts lifecycle and alertsFor wiring untested until task 16; os.userInfo, cwd and env now read at module load in every run mode; the served config now carries username and launch to the page; contracts/plugin.ts comment and sessions start.test.ts changed beyond the task's Files.
+- 03 · 0b1dc270 · Diff read; Produces present; typecheck and lint clean; the three Done-when greps as required. · concerns: keymap.test uses commandInfos({}, manifests) because src/plugins may not import src/config; live summon path left to task 16.
 ### Contract changes
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
+- Task 03: keymap.test's commandInfos takes {} for core commands, not coreCommands: the layer rule forbids the import and the bind's plugin comes from the manifest. · group 03
+- To report to the user at the end: 'show the app' moves to a Window group in the settings keymap view, its log line reads [window], and disabling the plugin removes the key. · group 03
 ### Review rounds
 ### Test gate

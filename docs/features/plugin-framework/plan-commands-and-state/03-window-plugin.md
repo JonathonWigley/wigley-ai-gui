@@ -1,6 +1,6 @@
 # 03 — Window plugin
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -117,3 +117,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 0b1dc270 · proof: Diff read; Produces present; typecheck and lint clean; the three Done-when greps as required. · concerns: keymap.test uses commandInfos({}, manifests) because src/plugins may not import src/config; live summon path left to task 16.

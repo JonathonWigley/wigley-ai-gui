@@ -5,6 +5,7 @@ import {
   Menu,
   type MenuItemConstructorOptions,
 } from 'electron';
+import type { CommandId } from '../contracts/commands';
 import type {
   AcceleratorBind,
   InterceptBind,
@@ -17,9 +18,13 @@ import { errorText } from '../shared/error-text';
 // Main-process commands receive the chord that fired them, e.g. `Control+Tab`.
 export type MainCommands = CommandRegistry<string>;
 
-function buildMenu(binds: AcceleratorBind[], commands: MainCommands): Menu {
+function buildMenu(
+  binds: AcceleratorBind[],
+  commands: MainCommands,
+  labelOf: (id: CommandId) => string,
+): Menu {
   const items: MenuItemConstructorOptions[] = binds.map((bind) => ({
-    label: `${bind.command} (${bind.accelerator})`,
+    label: `${labelOf(bind.command)} (${bind.accelerator})`,
     accelerator: bind.accelerator,
     click: () => commands.run(bind.command, bind.accelerator),
   }));
@@ -73,9 +78,10 @@ export function installWindowKeybindings(
   window: BrowserWindow,
   keymap: Keymap,
   commands: MainCommands,
+  labelOf: (id: CommandId) => string,
 ): WindowKeybindings {
   requireMainCommandsRegistered(keymap, commands);
-  Menu.setApplicationMenu(buildMenu(keymap.app, commands));
+  Menu.setApplicationMenu(buildMenu(keymap.app, commands, labelOf));
   let intercepts = keymap.intercept;
   window.webContents.on('before-input-event', (event, input) => {
     const bind = intercepts.find((candidate) => matchesChord(input, candidate));
@@ -88,7 +94,7 @@ export function installWindowKeybindings(
   return {
     setKeymap(next) {
       requireMainCommandsRegistered(next, commands);
-      Menu.setApplicationMenu(buildMenu(next.app, commands));
+      Menu.setApplicationMenu(buildMenu(next.app, commands, labelOf));
       intercepts = next.intercept;
     },
   };

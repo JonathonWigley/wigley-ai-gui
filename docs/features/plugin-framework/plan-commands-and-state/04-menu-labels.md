@@ -1,6 +1,6 @@
 # 04 — Menu labels by label
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
