@@ -30,17 +30,17 @@ const STREAMING_TEXT = [
   '<html>',
 ].join('\n');
 
-// The `at` of the preview's first entry; each entry after it is two seconds
-// later, so the finished lines read stable times.
+// The `at` of the preview's first entries; each step of `previewAt`'s index is
+// two seconds later, so the finished lines read stable times.
 const PREVIEW_START_AT = 1767225600000;
 const PREVIEW_ENTRY_STEP_MS = 2000;
 
 const previewAt = (index: number) =>
   PREVIEW_START_AT + index * PREVIEW_ENTRY_STEP_MS;
 
-// One entry of every kind, a tool and a permission in each of their states,
-// both notice tones, a reply holding two visuals, and a streaming reply last,
-// its visual still open.
+// One entry of every kind, a user message in each delivery state, a tool and a
+// permission in each of their states, both notice tones, a reply holding two
+// visuals, and a streaming reply last, its visual still open.
 export function previewEntries(): ChatEntry[] {
   return [
     {
@@ -49,7 +49,25 @@ export function previewEntries(): ChatEntry[] {
       at: previewAt(0),
       text: 'Draw this chat in your layout.',
       images: FAKE_HISTORY_IMAGES.map((image) => ({ ...image })),
-      delivery: null,
+      delivery: 'sent',
+      raw: [{ preview: 'user' }],
+    },
+    {
+      kind: 'user',
+      id: 'preview-user-2',
+      at: previewAt(0),
+      text: 'Is this one lost?',
+      images: [],
+      delivery: 'notReceived',
+      raw: [{ preview: 'user' }],
+    },
+    {
+      kind: 'user',
+      id: 'preview-user-3',
+      at: previewAt(0),
+      text: 'Is this one received?',
+      images: [],
+      delivery: 'received',
       raw: [{ preview: 'user' }],
     },
     {

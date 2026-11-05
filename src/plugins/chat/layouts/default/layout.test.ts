@@ -208,6 +208,7 @@ describe('default chat layout', () => {
       id: 'u1',
       text: 'hello',
       images: [] as { mediaType: string; data: string }[],
+      delivery: null,
       raw: [] as unknown[],
     };
 
@@ -229,6 +230,7 @@ describe('default chat layout', () => {
     id: 'u2',
     text: 'look',
     images: [{ mediaType: 'image/png', data: 'cG5n' }],
+    delivery: null,
     raw: [] as unknown[],
   };
 
@@ -247,6 +249,45 @@ describe('default chat layout', () => {
       const turn = asFake(view.element).children[0];
 
       expect(describeChildren(turn)).toEqual(children);
+    },
+  );
+
+  it.each([
+    {
+      delivery: 'sent',
+      label: 'div.chat-user-delivery:Sent',
+    },
+    {
+      delivery: 'received',
+      label: 'div.chat-user-delivery:Received',
+    },
+    {
+      delivery: 'notReceived',
+      label: 'div.chat-user-delivery is-not-received:Not received',
+    },
+    { delivery: null, label: null },
+  ] as const)(
+    'userDelivery_LabelFollowsCardAndUpdateReplacesIt ($delivery)',
+    ({ delivery, label }) => {
+      const { kit } = fakeKit();
+      const labelled = label === null ? [] : [label];
+      const entry = { ...userWithImage, images: [], delivery };
+
+      const view = draw(entry, kit);
+      const drawnChildren = describeChildren(asFake(view.element));
+      view.update?.({ ...entry, delivery: 'sent' });
+      const sentChildren = describeChildren(asFake(view.element));
+      view.update?.(entry);
+
+      expect(drawnChildren).toEqual(['card:none', ...labelled]);
+      expect(sentChildren).toEqual([
+        'card:none',
+        'div.chat-user-delivery:Sent',
+      ]);
+      expect(describeChildren(asFake(view.element))).toEqual([
+        'card:none',
+        ...labelled,
+      ]);
     },
   );
 

@@ -17,12 +17,19 @@ export type EntryKind =
 // What started a compaction: `app`, the app itself; `manual`, the user's `/compact`; `harness`, the harness on its own.
 export type CompactionTrigger = 'app' | 'manual' | 'harness';
 
+// How far a user message got toward the model. `sent`: a turn took it in. `received`: a response to it has started.
+// `notReceived`: it ended before a response.
+export type UserDelivery = 'sent' | 'received' | 'notReceived';
+
 // `images` are the message's attached images, base64 with no `data:` prefix.
+// `delivery` is null when nothing tracks the message, and on a `received` message that is not the session's latest
+// message with a delivery, so a layout draws what it holds.
 export interface UserInput {
   kind: 'user';
   id: string;
   text: string;
   images: { mediaType: string; data: string }[];
+  delivery: UserDelivery | null;
   raw: unknown[];
 }
 export interface AssistantInput {

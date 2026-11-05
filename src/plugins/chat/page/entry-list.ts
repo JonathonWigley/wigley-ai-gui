@@ -223,10 +223,12 @@ interface DrawnEntry {
 // One drawn entry and its slot. `drawsWithDefault` holds once an update of a
 // layout other than the bundled default has thrown, and the slot is drawn
 // with the bundled default layout from then on. `blocks` are the cursor's block
-// elements as last read from the drawn entry.
+// elements as last read from the drawn entry. `input` is what the slot last drew
+// or updated with.
 interface Slot extends DrawnEntry {
   element: HTMLLIElement;
   entry: ChatEntry;
+  input: EntryInput<EntryKind>;
   drawsWithDefault: boolean;
   blocks: HTMLElement[];
 }
@@ -356,6 +358,23 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const holdBlocks = (slot: Slot) => {
     slot.blocks = readBlocks(slot.element, slot.entry);
     blockCounts.set(slot.entry.id, slot.blocks.length);
+  };
+
+  // Redraws each `received` user entry of `next` whose slot shows another
+  // delivery than its input now holds.
+  const redrawReceivedEntries = (next: readonly ChatEntry[]) => {
+    for (const entry of next) {
+      const slot = slots.get(entry.id);
+      const isReceived = entry.kind === 'user' && entry.delivery === 'received';
+      if (slot === undefined || !isReceived) {
+        continue;
+      }
+      const input = entryInput(entry, next);
+      if (isDeliveryChanged(slot.input, input)) {
+        redrawSlot(slot, entry, input, deps);
+        holdBlocks(slot);
+      }
+    }
   };
 
   // The stop the list ends on: the newest pending row, else the last row's.
@@ -666,6 +685,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         redrawSlot(slot, entry, entryInput(entry, next), deps);
         holdBlocks(slot);
       }
+      if (entry.kind === 'user') {
+        redrawReceivedEntries(next);
+      }
       changed();
     },
     rebuild(next) {
@@ -864,15 +886,42 @@ function transcriptEntries(
     : entries.filter((entry) => isInTranscript(entry, activityInTranscript));
 }
 
-// What a layout draws `entry` from: the entry, a result with its turn's step
-// count from the session's `entries`, steps out of the transcript included.
+// What a layout draws `entry` from: the entry; a result with its turn's step
+// count from the session's `entries`, steps out of the transcript included; a
+// `received` user entry with no delivery unless it is the latest delivery entry.
 function entryInput(
   entry: ChatEntry,
   entries: readonly ChatEntry[],
 ): EntryInput<EntryKind> {
-  return entry.kind === 'result'
-    ? { ...entry, stepCount: resultStepCount(entries, entry.id) }
+  if (entry.kind === 'result') {
+    return { ...entry, stepCount: resultStepCount(entries, entry.id) };
+  }
+  const isReceived = entry.kind === 'user' && entry.delivery === 'received';
+  return isReceived && !isLatestDeliveryEntry(entry, entries)
+    ? { ...entry, delivery: null }
     : entry;
+}
+
+// Whether `entry` is the last user entry of `entries` holding a delivery.
+function isLatestDeliveryEntry(
+  entry: ChatEntry,
+  entries: readonly ChatEntry[],
+): boolean {
+  const latest = entries.findLast(
+    (held) => held.kind === 'user' && held.delivery !== null,
+  );
+  return latest?.id === entry.id;
+}
+
+function isDeliveryChanged(
+  last: EntryInput<EntryKind>,
+  next: EntryInput<EntryKind>,
+): boolean {
+  return (
+    last.kind === 'user' &&
+    next.kind === 'user' &&
+    last.delivery !== next.delivery
+  );
 }
 
 // The last stop of the last row the cursor can stop on; a divider after it has
@@ -1127,6 +1176,7 @@ function buildSlot(
   return {
     element: slot,
     entry,
+    input,
     ...drawEntry(slot, entry, input, deps, false),
     drawsWithDefault: false,
     blocks: [],
@@ -1145,6 +1195,7 @@ function redrawSlot(
   deps: EntryListDeps,
 ) {
   slot.entry = entry;
+  slot.input = input;
   slot.kit.update(entry);
   const { view } = slot;
   if (view?.update !== undefined) {

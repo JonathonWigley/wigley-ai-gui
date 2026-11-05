@@ -30,6 +30,12 @@ const WORKING_STATE_WORDS = {
   compacting: 'Compacting…',
 };
 
+const USER_DELIVERY_WORDS = {
+  sent: 'Sent',
+  received: 'Received',
+  notReceived: 'Not received',
+};
+
 // The divider's word for what started the compaction.
 const COMPACTION_TRIGGER_WORDS = {
   app: 'auto',
@@ -122,6 +128,28 @@ function fillUserTurn(turn, input, kit) {
   if (input.images.length > 0) {
     kit.images(turn);
   }
+}
+
+// The delivery label as the last child of `entry`, in place of `drawn`; null
+// when `delivery` draws none.
+/**
+ * @param {HTMLElement} entry
+ * @param {HTMLElement | null} drawn
+ * @param {import('../layout').UserDelivery | null} delivery
+ * @returns {HTMLElement | null}
+ */
+function replaceUserDelivery(entry, drawn, delivery) {
+  drawn?.remove();
+  if (delivery === null) {
+    return null;
+  }
+  const label = root(
+    entry,
+    'chat-user-delivery',
+    USER_DELIVERY_WORDS[delivery],
+  );
+  label.classList.toggle('is-not-received', delivery === 'notReceived');
+  return label;
 }
 
 // The sizes known so far, the trigger word, then the time when known.
@@ -519,10 +547,12 @@ const layout = {
       const entry = root(parent, 'chat-entry chat-user');
       const turn = kit.card(entry);
       fillUserTurn(turn, input, kit);
+      let delivery = replaceUserDelivery(entry, null, input.delivery);
       return {
         element: entry,
         update(next) {
           fillUserTurn(turn, next, kit);
+          delivery = replaceUserDelivery(entry, delivery, next.delivery);
         },
       };
     },

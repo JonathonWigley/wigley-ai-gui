@@ -23,6 +23,7 @@ import type {
   EntryInput,
   EntryKind,
   EntryView,
+  UserDelivery,
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import {
@@ -235,7 +236,7 @@ const timed = (entry: ChatEntry, time: number): ChatEntry => ({
   ...entry,
   at: time,
 });
-const user = (id: string): ChatEntry => ({
+const user = (id: string): Extract<ChatEntry, { kind: 'user' }> => ({
   kind: 'user',
   id,
   at: 1000,
@@ -398,6 +399,43 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     put,
     entries,
   };
+}
+
+const delivered = (id: string, delivery: UserDelivery | null): ChatEntry => ({
+  ...user(id),
+  delivery,
+});
+
+// A user layout whose user part draws one marked block, drawn anew on update,
+// and records each draw's and update's delivery by entry id.
+function recordingDelivery() {
+  const draws = new Map<string, UserDelivery | null>();
+  const updates: [string, UserDelivery | null][] = [];
+  const shown = withUser<ChatLayout>(
+    defaultLayout,
+    {
+      entries: {
+        user(parent, input, kit) {
+          draws.set(input.id, input.delivery);
+          const root = kit.el(parent, 'div', 'recorded');
+          const drawBlock = () => {
+            root.replaceChildren();
+            kit.el(root, 'div').dataset.mdLines = '0,1';
+          };
+          drawBlock();
+          return {
+            element: root,
+            update(next) {
+              updates.push([next.id, next.delivery]);
+              drawBlock();
+            },
+          };
+        },
+      },
+    },
+    'recording',
+  );
+  return { draws, updates, shown };
 }
 
 // The list's slots but the turn line.
@@ -1208,6 +1246,64 @@ describe('slots and focus', () => {
     },
   );
 
+  it.each<{
+    case: string;
+    deliveries: (UserDelivery | null)[];
+    inputs: (UserDelivery | null)[];
+  }>([
+    {
+      case: 'an earlier received clears, sent stays',
+      deliveries: ['received', 'sent', 'received'],
+      inputs: [null, 'sent', 'received'],
+    },
+    {
+      case: 'a later entry with no delivery leaves received the latest',
+      deliveries: ['received', null],
+      inputs: ['received', null],
+    },
+    {
+      case: 'not received stays on an earlier entry',
+      deliveries: ['notReceived', 'received'],
+      inputs: ['notReceived', 'received'],
+    },
+  ])('delivery_ListDraws_ReceivedOnLatestOnly ($case)', (row) => {
+    const { draws, shown } = recordingDelivery();
+    const { list } = setUpList(shown);
+
+    list.rebuild(row.deliveries.map((held, at) => delivered(`u${at}`, held)));
+
+    expect([...draws.values()]).toEqual(row.inputs);
+  });
+
+  it.each([
+    { case: 'following', scrollsUp: false, scrollTop: 500 },
+    { case: 'scrolled up', scrollsUp: true, scrollTop: 250 },
+  ])(
+    'delivery_SameIdArrivesReceived_RedrawsItsSlotAndKeepsTheScrollRule ($case)',
+    ({ scrollsUp, scrollTop }) => {
+      const { updates, shown } = recordingDelivery();
+      const { list, put } = setUpList(shown);
+      const scroller = asFake(list.element) as FakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.scrollHeight = 400;
+      scroller.clientHeight = 100;
+      put(delivered('u1', 'sent'));
+      scroller.scrollTop = 300;
+      if (scrollsUp) {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      }
+
+      scroller.scrollHeight = 500;
+      put(delivered('u1', 'received'));
+
+      expect(updates).toEqual([['u1', 'received']]);
+      expect(scroller.scrollTop).toBe(scrollTop);
+    },
+  );
+
   it('followsGrowth_ContentGrowsBeforeTheFollowsScrollEvent_KeepsFollowing', () => {
     const { list, put } = setUpList(blocksShown());
     const scroller = asFake(list.element) as FocusFakeElement & {
@@ -1371,6 +1467,26 @@ describe('block stops', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('delivery_LaterEntriesChangeTheLatest_EarlierReceivedRedrawsOnlyWhenItsInputChanges', () => {
+    const { updates, shown } = recordingDelivery();
+    const { list, put } = setUpList(shown);
+    put(delivered('u1', 'received'));
+
+    put(delivered('u2', 'sent'));
+    put(delivered('u3', 'sent'));
+    const afterLaterEntries = [...updates];
+    put(delivered('u2', null));
+    put(delivered('u3', null));
+    list.first();
+
+    expect(afterLaterEntries).toEqual([['u1', null]]);
+    expect(asFake(list.focusedBlock()!).parentNode).not.toBeNull();
+    expect(updates.filter(([id]) => id === 'u1')).toEqual([
+      ['u1', null],
+      ['u1', 'received'],
+    ]);
   });
 
   it.each<{

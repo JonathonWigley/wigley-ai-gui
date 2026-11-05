@@ -1,4 +1,4 @@
-/* The default Chat layout's look: entry text, the turn and compaction dividers, activity
+/* The default Chat layout's look: entry text, a user message's delivery label, the turn and compaction dividers, activity
    lines, the activity dock and its one line, queued messages, permission heads,
    the composer and its status line, a / completion row's description, a picker
    section row's title and details, the dialog and image viewer parts, the run
@@ -16,6 +16,18 @@
 .chat-thinking-body,
 .chat-raw-body {
   color: var(--wg-fg-secondary);
+}
+
+/* Under the message's card. */
+.chat-user-delivery {
+  color: var(--wg-fg-tertiary);
+  font-family: var(--wg-font-ui);
+  font-size: var(--wg-text-ui);
+  margin-top: var(--wg-space-1);
+}
+
+.chat-user-delivery.is-not-received {
+  color: var(--wg-status-error);
 }
 
 .chat-tool-result {
