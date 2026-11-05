@@ -3336,7 +3336,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       written: [contextUsageRequest('wigley-1'), settingsRequest('wigley-2')],
     },
     {
-      case: 'request already written',
+      case: 'context request already written',
       goesOn: [CONTEXT_REQUEST_IN],
       closes: false,
       written: [settingsRequest('wigley-2')],

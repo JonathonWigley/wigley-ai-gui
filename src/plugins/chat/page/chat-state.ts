@@ -111,7 +111,7 @@ export function isTurnUnderway(
 }
 
 // The label of the choice holding the control's value, else the raw value,
-// else `unset` before the harness reports one.
+// else `unset` while the harness reports none.
 export function valueLabel(control: SessionControl): string {
   if (control.value === null) {
     return 'unset';

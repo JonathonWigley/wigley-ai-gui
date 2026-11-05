@@ -9,7 +9,7 @@ export interface ControlChoice {
   value: string;
   label: string;
 }
-// A setting of a running session the harness declares; `value` is null until the harness reports it.
+// A setting of a running session the harness declares; `value` is null until the harness reports it, and while the harness reports none.
 export interface SessionControl {
   id: string;
   label: string;

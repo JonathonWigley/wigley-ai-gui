@@ -119,8 +119,8 @@ interview on 2026-10-23; this file is the record of both.
   choice; the model and effort also come from a `get_settings` control request, sent at process start and after each
   turn, local commands included, because no event reports effort and a default depends on the model, the flags and the
   profile: the reply's `applied` values replace the held ones, so the chips show what the process uses, or unset for a
-  model with no effort. The model also comes from the init event and the last successful `/model`, and a full model
-  name shows as its alias. A failed `get_settings` is logged and changes nothing.
+  model with no effort. The last successful `/effort` or `/model` also sets its control, the model also comes from the
+  init event, and a full model name shows as its alias. A failed `get_settings` is logged and changes nothing.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
   message. A SIGINT would end the process. Ctrl+C always ends the running turn (a message queued behind it still
   runs): when neither the turn's result nor an answer that leaves nothing running arrives within 5 s, the adapter
