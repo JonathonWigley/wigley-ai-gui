@@ -984,6 +984,30 @@ describe('chat main part', () => {
       { title: 'a section', rows: [RESUME_ROW] },
     ]);
   });
+
+  it('sessionsHostSessionChanged_OpenRow_MovesWhatIsResumable', async () => {
+    const chat = startChatPart();
+    const resumableIds: string[] = [];
+    chat.exports.addResumeSection({
+      title: 'a section',
+      rows: (isResumable) => {
+        resumableIds.push(...['host-a', 'host-b'].filter(isResumable));
+        return Promise.resolve([]);
+      },
+    });
+    chat.listeners.get('sessions.connected')?.({
+      id: 'relay-row',
+      info: { sessionId: 'host-a' },
+    });
+
+    chat.listeners.get('sessions.hostSessionChanged')?.({
+      id: 'relay-row',
+      info: { sessionId: 'host-b' },
+    });
+    await chat.invoke('resumeSections');
+
+    expect(resumableIds).toEqual(['host-a']);
+  });
 });
 
 // Chat's main part on the part harness, over a sessions fake that files each

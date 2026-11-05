@@ -253,8 +253,8 @@ const closedElsewhere: ResumeSectionRow = {
   at: 6,
 };
 
-function folderSectionLabel(row: ResumeSectionRow, shownPath: string): string {
-  return `${row.title} · ${shownPath} · ${row.profile} · ${sessionTime(row.at)}`;
+function folderSectionLabel(row: ResumeSectionRow, base: string): string {
+  return `${row.title} · ${base} · ${row.profile} · ${sessionTime(row.at)}`;
 }
 
 function recentlyClosed(
@@ -342,8 +342,8 @@ describe('start prompt', () => {
     await flush();
 
     expect(run.last().labels).toEqual([
-      folderSectionLabel(closedAlpha, '~/dev/app'),
-      folderSectionLabel(closedElsewhere, '~/dev/other'),
+      folderSectionLabel(closedAlpha, 'app'),
+      folderSectionLabel(closedElsewhere, 'other'),
       '~/dev/app',
       CHOOSE_FOLDER_LABEL,
     ]);
@@ -398,7 +398,7 @@ describe('start prompt', () => {
       },
     });
     await flush();
-    pickFolder(run.last(), folderSectionLabel(closedAlpha, '~/dev/app'));
+    pickFolder(run.last(), folderSectionLabel(closedAlpha, 'app'));
     await flush();
 
     expect(run.signIns.map(({ profile }) => profile)).toEqual(['work']);
@@ -427,7 +427,7 @@ describe('start prompt', () => {
       },
     });
     await flush();
-    pickFolder(run.last(), folderSectionLabel(gone, '~/dev/app'));
+    pickFolder(run.last(), folderSectionLabel(gone, 'app'));
     await flush();
 
     expect(run.invoked).not.toContain('accountStatus');

@@ -590,7 +590,7 @@ describe('createChatSessions', () => {
   it('pastSessions_LeavesOutOpenAndMarksArchived', async () => {
     const test = setUp();
     await test.archived.set(PAST_ONE.sessionId, true);
-    test.chat.sessionConnected(connected('row-9', PAST_TWO.sessionId));
+    test.chat.recordOpenHostId(connected('row-9', PAST_TWO.sessionId));
 
     const rows = await test.chat.pastSessions('/w/app', 'personal');
 
@@ -632,7 +632,7 @@ describe('createChatSessions', () => {
   it('pastSessions_AfterEnded_ListsItAgain', async () => {
     const test = setUp();
     await test.archived.set(PAST_ONE.sessionId, true);
-    test.chat.sessionConnected(connected('row-9', PAST_TWO.sessionId));
+    test.chat.recordOpenHostId(connected('row-9', PAST_TWO.sessionId));
     await test.chat.pastSessions('/w/app', 'personal');
 
     test.chat.sessionEnded('row-9');
@@ -977,7 +977,7 @@ describe('createChatSessions', () => {
   it('resume_AlreadyOpen_Rejects', async () => {
     const test = setUp();
     const hostId = PAST_ONE.sessionId;
-    test.chat.sessionConnected(connected('row-9', hostId));
+    test.chat.recordOpenHostId(connected('row-9', hostId));
 
     await expect(
       test.chat.resume({
@@ -1000,8 +1000,8 @@ describe('createChatSessions', () => {
       },
       [],
     );
-    test.chat.sessionConnected(connected(ROW_ID, PAST_ONE.sessionId));
-    test.chat.sessionConnected(connected('row-relay', PAST_TWO.sessionId));
+    test.chat.recordOpenHostId(connected(ROW_ID, PAST_ONE.sessionId));
+    test.chat.recordOpenHostId(connected('row-relay', PAST_TWO.sessionId));
 
     const rows = await test.chat.pastSessions('/w/app', 'work');
 
@@ -1018,7 +1018,7 @@ describe('createChatSessions', () => {
       },
       [],
     );
-    test.chat.sessionConnected(connected(ROW_ID, hostId));
+    test.chat.recordOpenHostId(connected(ROW_ID, hostId));
 
     const sessionId = await test.chat.resume({
       projectDir: '/w/app',
@@ -2596,7 +2596,7 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a host id open on a relay row',
       arrange: (test: ReturnType<typeof setUp>) =>
-        test.chat.sessionConnected(connected('row-relay', 'host-r')),
+        test.chat.recordOpenHostId(connected('row-relay', 'host-r')),
       saved: ['host-a', 'host-r', 'host-b'],
       opened: ['host-a', 'host-b'],
       logged: 'session host-r already open; not restored',
@@ -4219,7 +4219,7 @@ describe('createChatSessions active time', () => {
     async ({ startFails }) => {
       const test = setUp();
       const hostId = PAST_ONE.sessionId;
-      test.chat.sessionConnected(connected('row-relay', hostId));
+      test.chat.recordOpenHostId(connected('row-relay', hostId));
       test.chat.restore(
         {
           sessions: [
@@ -4722,7 +4722,7 @@ describe('createChatSessions restoring hosted processes', () => {
     'restore_SkippedRecordHoldingMessages_StaysSaved given $queued.length queued, $returned.length returned',
     ({ queued, returned, kept }) => {
       const test = setUp();
-      test.chat.sessionConnected(connected('row-relay', 'host-a'));
+      test.chat.recordOpenHostId(connected('row-relay', 'host-a'));
 
       test.chat.restore(
         {
@@ -4756,7 +4756,7 @@ describe('createChatSessions restoring hosted processes', () => {
       const hostId = PAST_ONE.sessionId;
       const queued = [{ text: 'saved', images: [] }];
       const returned = [{ text: 'not placed', images: [] }];
-      test.chat.sessionConnected(connected('row-relay', hostId));
+      test.chat.recordOpenHostId(connected('row-relay', hostId));
       test.chat.restore(
         {
           sessions: [record(hostId, { queued, returned })],
@@ -6871,7 +6871,7 @@ describe('createChatSessions resume sections', () => {
     {
       given: 'a session open on a row chat does not hold',
       arrange: (test: ReturnType<typeof setUp>) => {
-        test.chat.sessionConnected(connected('row-9', 'host-relay'));
+        test.chat.recordOpenHostId(connected('row-9', 'host-relay'));
       },
       ids: ['host-relay', 'host-free'],
       resumable: ['host-free'],
@@ -6881,7 +6881,7 @@ describe('createChatSessions resume sections', () => {
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START);
         await flush();
-        test.chat.sessionConnected(connected(ROW_ID, 'uuid-1'));
+        test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-1'));
         test.chat.clear(ROW_ID);
         await flush();
       },
@@ -6957,9 +6957,10 @@ describe('createChatSessions resume sections', () => {
       const test = setUp();
       test.chat.start(START);
       await flush();
-      test.chat.sessionConnected(connected(ROW_ID, 'uuid-1'));
+      test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-1'));
       if (clears) {
         test.chat.clear(ROW_ID);
+        test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-2'));
         await flush();
       }
       test.harness.holdEnd();

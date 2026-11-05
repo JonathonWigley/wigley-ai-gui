@@ -401,7 +401,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       preview.closed(sessionId);
     });
     api.events.on('sessions.connected', (session) =>
-      chat.sessionConnected(session),
+      chat.recordOpenHostId(session),
+    );
+    api.events.on('sessions.hostSessionChanged', (session) =>
+      chat.recordOpenHostId(session),
     );
     // closeSessionsIn's waits, by session id: each resolves when its session
     // ends or chat stops.

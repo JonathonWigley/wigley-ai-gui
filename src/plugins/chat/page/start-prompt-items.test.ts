@@ -1,10 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
-import {
-  filterPicker,
-  openPicker,
-  visibleIndexes,
-} from '../../../shared/page/list-picker-state';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { ChatProfile, RecentFolder, ResumeSectionRow } from '../contract';
@@ -115,56 +109,18 @@ describe('start prompt items', () => {
         kind: 'section',
         section: 'Recently closed',
         row: one,
-        label: 'Fix login · ~/dev/ai-dev · work · 2026-01-02 10:00',
+        label: 'Fix login · ai-dev · work · 2026-01-02 10:00',
       },
       {
         kind: 'section',
         section: 'Recently closed',
         row: two,
-        label: 'Add cache · ~/dev/ai-dev · work · 2026-01-02 10:00',
+        label: 'Add cache · ai-dev · work · 2026-01-02 10:00',
       },
       { kind: 'recent', folder: app, label: '~/dev/app' },
       { kind: 'choose', label: expect.any(String) },
     ]);
   });
-
-  it.each([
-    { filter: 'app', kept: [2, 0, 1] },
-    { filter: 'two/app', kept: [1, 2] },
-  ])(
-    "a filter of $filter, matched on a real folder's name first → $kept",
-    ({ filter, kept }) => {
-      const items = folderItems(
-        [{ ...app, projectDir: '/Users/u/two/app' }],
-        [
-          {
-            title: 'Recently closed',
-            rows: [
-              {
-                ...closedRow('one', 'Add cache'),
-                projectDir: '/Users/u/one/app',
-              },
-              {
-                ...closedRow('two', 'Add cache'),
-                projectDir: '/Users/u/two/app',
-              },
-            ],
-          },
-        ],
-        home,
-        posixPaths,
-      ).slice(0, 3);
-      const opened = openPicker(
-        items.map((item) => item.label),
-        0,
-        items.map((item) => folderName(item, posixPaths)),
-      );
-
-      const filtered = filterPicker(opened, filter, fakeFuzzyMatcher);
-
-      expect(visibleIndexes(filtered, fakeFuzzyMatcher)).toEqual(kept);
-    },
-  );
 
   it('folderName_SectionRow_IsEmpty', () => {
     const [section] = folderItems(

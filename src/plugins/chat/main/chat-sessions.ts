@@ -275,9 +275,9 @@ export interface ChatSessions {
   // leaves the last saved total. Nothing is saved or started after it, and every
   // later process event is ignored.
   detachAll(): Promise<void>;
-  // The sessions plugin's `connected` event: records the session's host id
-  // as open in the app.
-  sessionConnected(session: AgentSession): void;
+  // The sessions plugin's `connected` and `hostSessionChanged` events: records
+  // the session's current host id as open in the app.
+  recordOpenHostId(session: AgentSession): void;
   // The sessions plugin's `ended` event: the session's host id is no longer
   // open.
   sessionEnded(sessionId: string): void;
@@ -2839,7 +2839,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const wasSent = session.sent;
     const newHostId = deps.randomUuid();
     session.owned.setHostSessionId(newHostId);
-    openHostIds.set(sessionId, newHostId);
     session.hostId = newHostId;
     session.sent = false;
     session.historyPending = false;
@@ -3088,7 +3087,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
       return lastSave;
     },
-    sessionConnected(session) {
+    recordOpenHostId(session) {
       if (session.info.sessionId !== null) {
         openHostIds.set(session.id, session.info.sessionId);
       }
