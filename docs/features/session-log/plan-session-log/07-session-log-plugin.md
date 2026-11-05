@@ -1,6 +1,6 @@
 # 07 — The session-log plugin
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -73,3 +73,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 94e631e5 · proof: diff read; typecheck and lint pass · concerns: a crash's partial tail has no newline, so the next start's first append joins it and that line is lost; isSessionLogEntry checks only event, so a known event with a missing field makes recentlyClosed throw; contracts/plugin.ts:786 says the app may exit before dispose settles, so the last appends before a quit may be lost; the terminal row map lives only as long as the part

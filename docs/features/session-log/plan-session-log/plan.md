@@ -139,7 +139,7 @@ Boundary rules:
 
 ### Wave 4
 - [ ] [Start prompt sections](06-start-prompt-sections.md) — after 03, 05
-- [ ] [The session-log plugin](07-session-log-plugin.md) — after 01, 02, 03
+- [x] [The session-log plugin](07-session-log-plugin.md) — after 01, 02, 03
 
 ### Wave 5
 - [ ] [Self-test group](08-selftest-group.md) — after 06, 07
@@ -160,6 +160,7 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - 05 · 27b4edd7 · diff read; scoped typecheck clean; layout and layout-contract tests pass · concerns: picker wiring of section and drawHeading has no test, by the task's decision, so drive check 1 of task 10 proves it; the h3 inside the heading li has not been seen on screen; the comment on PickerItemInput rests on task 06's plan text
 - 02 · 8233a622 · diff read; typecheck and lint pass · concerns: a restored row with a missing profile fires sessionClosed with no sessionOpened, so task 07 must not assume they pair; the isLive guard means a closed or cleared row's old process and a failed attach fire no processEnded, as specified; stop_HeldRows_FiresNoSessionClosed does not exercise the plugin host's stop order; docs/features/usage/design.md:90 draws sessionOpened with its old fields
 - 03 · 415c67bf · diff read; typecheck and lint pass · concerns: the send gate's consumer.track has no consumer-disposed test, unlike the new section's; the single archivedIdsOrNone read has no test; isResumable reads archived ids from a snapshot at the top of the call and held and open rows live
+- 07 · 94e631e5 · diff read; typecheck and lint pass · concerns: a crash's partial tail has no newline, so the next start's first append joins it and that line is lost; isSessionLogEntry checks only event, so a known event with a missing field makes recentlyClosed throw; contracts/plugin.ts:786 says the app may exit before dispose settles, so the last appends before a quit may be lost; the terminal row map lives only as long as the part
 ### Contract changes
 - pickerHeading input: inline { title: string } → named PickerHeadingInput, with PickerHeadingKit = BaseKit · why: the file names each part's input · consumers: none need a change · group 05
 ### Rulings
@@ -171,5 +172,8 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - closeEarlierSessions in chat's self-test passes project-closed — it clears a self-test project and no user closed anything — one word if wrong · group 02 · group 02
 - processEnded fires last in the ended callback, after save — the row's state is settled for a listener — no consumer reads the row during it · group 02 · group 02
 - resumeSections_NoRows_LeavesSectionOut also pins answer order — the task lists order as a rule and names no test — one extra flush · group 03 · group 03
+- The part stamps at and append takes the whole entry — the planned deps hold no clock — a small change if wrong · group 07 · group 07
+- closed, cleared, processEnded and archived lines spread the chat event, opened copies by name to leave out profileDir — they match field for field today — a later event field reaches the file with no edit · group 07 · group 07
+- A blank line skips with no log and a skip's log names the line number without its text — the trailing newline makes one each read, and a line can hold titles — a mid-file blank goes unreported · group 07 · group 07
 ### Review rounds
 ### Test gate

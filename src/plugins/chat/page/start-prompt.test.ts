@@ -12,16 +12,23 @@ import type {
   PastSessionRow,
   RecentFolder,
   ResumeRequest,
+  ResumeSectionRow,
+  ResumeSectionRows,
   StartRequest,
 } from '../contract';
 import type { Picker, PickerRequest } from './picker';
 import {
   NEW_SESSION_LABEL,
   SESSION_STEP_TITLE,
+  SESSIONS_HEADING,
   sessionTime,
 } from './resume-items';
 import { createStartPrompt } from './start-prompt';
-import { CHOOSE_FOLDER_LABEL, type FolderItem } from './start-prompt-items';
+import {
+  CHOOSE_FOLDER_LABEL,
+  FOLDERS_HEADING,
+  type FolderItem,
+} from './start-prompt-items';
 
 const HOME = '/Users/u';
 
@@ -41,6 +48,7 @@ const app: RecentFolder = {
 // reject or answer differently each time.
 interface Answers {
   recentFolders: () => Promise<RecentFolder[]>;
+  resumeSections: () => Promise<ResumeSectionRows[]>;
   accountStatus: () => Promise<AccountStatus>;
   chooseFolder: () => Promise<string | null>;
   pastSessions: () => Promise<PastSessionRow[]>;
@@ -87,6 +95,7 @@ function setUp(
   }[] = [];
   const answers: Answers = {
     recentFolders: () => Promise.resolve(recent),
+    resumeSections: () => Promise.resolve([]),
     accountStatus: () =>
       Promise.resolve({ signedIn: true, account: 'me@example.invalid' }),
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
@@ -229,6 +238,36 @@ function rowLabel(row: PastSessionRow, archived = row.archived): string {
   return archived ? `${label} · archived` : label;
 }
 
+const closedAlpha: ResumeSectionRow = {
+  hostSessionId: 'a',
+  projectDir: '/Users/u/dev/app',
+  profile: 'work',
+  title: 'Fix login',
+  at: 5,
+};
+const closedElsewhere: ResumeSectionRow = {
+  hostSessionId: 'e',
+  projectDir: '/Users/u/dev/other',
+  profile: 'personal',
+  title: 'Add cache',
+  at: 6,
+};
+
+function folderSectionLabel(row: ResumeSectionRow, base: string): string {
+  return `${row.title} · ${base} · ${row.profile} · ${sessionTime(row.at)}`;
+}
+
+function recentlyClosed(
+  ...rows: ResumeSectionRow[]
+): () => Promise<ResumeSectionRows[]> {
+  return () => Promise.resolve([{ title: 'Recently closed', rows }]);
+}
+
+// The heading the opened list gives each of its items.
+function sectionsOf(opened: Opened): (string | null | undefined)[] {
+  return opened.request.items.map((item) => opened.request.section?.(item));
+}
+
 // A promise the test settles by hand.
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
@@ -292,6 +331,158 @@ describe('start prompt', () => {
     );
 
     expect(labels[filtered.cursor]).toBe('~/dev/wigley-gui');
+  });
+
+  it('open_Sections_ListsThemAndKeepsCursorOnFirstFolder', async () => {
+    const run = setUp({
+      answers: {
+        resumeSections: recentlyClosed(closedAlpha, closedElsewhere),
+      },
+    });
+    await flush();
+
+    expect(run.last().labels).toEqual([
+      folderSectionLabel(closedAlpha, 'app'),
+      folderSectionLabel(closedElsewhere, 'other'),
+      '~/dev/app',
+      CHOOSE_FOLDER_LABEL,
+    ]);
+    expect(sectionsOf(run.last())).toEqual([
+      'Recently closed',
+      'Recently closed',
+      FOLDERS_HEADING,
+      FOLDERS_HEADING,
+    ]);
+    expect(run.last().selected).toBe(2);
+    expect(run.logs).toEqual(['resume section Recently closed: 2 rows']);
+  });
+
+  it('open_NoSections_HasNoHeadings', async () => {
+    const run = await atSessionStep();
+
+    expect(sectionsOf(run.opened[0])).toEqual([null, null]);
+    expect(sectionsOf(run.last())).toEqual([null, null, null]);
+  });
+
+  it('openForNewSession_AsksForNoSections', async () => {
+    const run = setUp();
+    await flush();
+    const asked = () =>
+      run.invoked.filter((method) => method === 'resumeSections');
+    expect(asked()).toHaveLength(1);
+
+    run.prompt.openForNewSession();
+    await flush();
+
+    expect(asked()).toHaveLength(1);
+    expect(run.last().title).toBe('Folder');
+  });
+
+  it('open_SectionsReject_StillOpens', async () => {
+    const run = setUp({
+      answers: { resumeSections: () => Promise.reject(new Error('no log')) },
+    });
+    await flush();
+
+    expect(run.last().labels).toEqual(['~/dev/app', CHOOSE_FOLDER_LABEL]);
+    expect(run.logs).toEqual([expect.stringContaining('no log')]);
+    expect(run.toasts).toEqual([]);
+  });
+
+  it('pick_SectionRow_SignedOut_SignsInThenResumes', async () => {
+    const run = setUp({
+      answers: {
+        resumeSections: recentlyClosed(closedAlpha),
+        accountStatus: () =>
+          Promise.resolve({ signedIn: false, account: null }),
+      },
+    });
+    await flush();
+    pickFolder(run.last(), folderSectionLabel(closedAlpha, 'app'));
+    await flush();
+
+    expect(run.signIns.map(({ profile }) => profile)).toEqual(['work']);
+    expect(run.resumed).toEqual([]);
+
+    run.signIns[0].finished?.(true);
+    await flush();
+
+    expect(run.resumed).toEqual([
+      {
+        projectDir: '/Users/u/dev/app',
+        profile: 'work',
+        hostSessionId: 'a',
+        title: 'Fix login',
+      },
+    ]);
+    expect(run.revealed).toEqual(['row-2']);
+  });
+
+  it('pick_SectionRow_MissingProfile_ToastsRejection', async () => {
+    const gone = { ...closedAlpha, profile: 'gone' };
+    const run = setUp({
+      answers: {
+        resumeSections: recentlyClosed(gone),
+        resume: () => Promise.reject(new Error('no profile gone')),
+      },
+    });
+    await flush();
+    pickFolder(run.last(), folderSectionLabel(gone, 'app'));
+    await flush();
+
+    expect(run.invoked).not.toContain('accountStatus');
+    expect(run.resumed.map(({ profile }) => profile)).toEqual(['gone']);
+    expect(run.toasts).toEqual([
+      { text: expect.stringContaining('no profile gone'), tone: 'error' },
+    ]);
+  });
+
+  it('sessionStep_SectionRow_ResumesWithItsTitle', async () => {
+    const label = `Fix login · ${sessionTime(closedAlpha.at)}`;
+    const run = await atSessionStep(
+      { resumeSections: recentlyClosed(closedAlpha) },
+      [alpha, beta],
+    );
+
+    expect(run.last().labels).toEqual([
+      label,
+      NEW_SESSION_LABEL,
+      rowLabel(beta),
+    ]);
+    expect(sectionsOf(run.last())).toEqual([
+      'Recently closed',
+      SESSIONS_HEADING,
+      SESSIONS_HEADING,
+    ]);
+    expect(run.last().selected).toBe(1);
+
+    pickItem(run.last(), label);
+    await flush();
+
+    expect(run.resumed).toEqual([
+      {
+        projectDir: '/Users/u/dev/app',
+        profile: 'work',
+        hostSessionId: 'a',
+        title: 'Fix login',
+      },
+    ]);
+  });
+
+  it('toggleArchive_SectionRow_LeavesTheSectionAndMovesToTheNextRow', async () => {
+    const run = await atSessionStep(
+      { resumeSections: recentlyClosed(closedAlpha) },
+      [alpha, beta],
+    );
+    run.moveCursor(0);
+
+    run.prompt.toggleArchive();
+    await flush();
+
+    expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
+    expect(run.last().selected).toBe(0);
+    expect(sectionsOf(run.last())).toEqual([null, null]);
   });
 
   it('recentFolder_manyProfiles_opensProfileStepOnItsProfile', async () => {

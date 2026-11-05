@@ -1,16 +1,29 @@
 import type { ControlChoice, SessionControl } from '../../../contracts/agent';
+import type { Paths } from '../../../contracts/paths';
 import type { ChatProfile } from '../contract';
 import type { PickerItemInput } from '../layouts/layout';
 import { valueLabel } from './chat-state';
-import type { SessionItem } from './resume-items';
-import type { FolderItem } from './start-prompt-items';
+import { type SessionItem, sessionTime } from './resume-items';
+import { type FolderItem, folderSectionDetail } from './start-prompt-items';
 
 // Each list's row input for the `pickerRow` part, spelled as the row shows
 // it.
 
-export function folderRowInput(item: FolderItem): PickerItemInput {
+export function folderRowInput(
+  item: FolderItem,
+  paths: Paths,
+): PickerItemInput {
   if (item.kind === 'choose') {
     return { list: 'folder', kind: 'choose' };
+  }
+  if (item.kind === 'section') {
+    return {
+      list: 'folder',
+      kind: 'section',
+      title: item.row.title,
+      detail: folderSectionDetail(item.row, paths),
+      at: item.row.at,
+    };
   }
   return {
     list: 'folder',
@@ -28,6 +41,15 @@ export function profileRowInput(profile: ChatProfile): PickerItemInput {
 export function sessionRowInput(item: SessionItem): PickerItemInput {
   if (item.kind === 'new') {
     return { list: 'session', kind: 'new' };
+  }
+  if (item.kind === 'section') {
+    return {
+      list: 'session',
+      kind: 'section',
+      title: item.closed.title,
+      detail: sessionTime(item.closed.at),
+      at: item.closed.at,
+    };
   }
   return {
     list: 'session',

@@ -127,6 +127,16 @@ describe('rank', () => {
 
     expect(rankedIds(rows, 'gui')).toEqual(['wigley-ai-gui', 'backlog-repo']);
   });
+
+  it('rank_EmptyNameTier_FolderRanksFirstThenLabel', () => {
+    const rows = [
+      row('section', [''], ['Fix login · ai-dev · work · 2026-01-02 10:00']),
+      row('folder', ['ai-dev'], ['~/ai-dev']),
+    ];
+
+    expect(rankedIds(rows, 'ai-dev')).toEqual(['folder', 'section']);
+    expect(rankedIds(rows, 'login')).toEqual(['section']);
+  });
 });
 
 describe('matches', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionControl } from '../../../contracts/agent';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   choiceRowInput,
   controlRowInput,
@@ -7,6 +8,16 @@ import {
   profileRowInput,
   sessionRowInput,
 } from './picker-row';
+import { sessionTime } from './resume-items';
+
+const AT = new Date(2026, 0, 2, 3, 4).getTime();
+const closed = {
+  hostSessionId: 'h2',
+  projectDir: '/home/me/repo',
+  profile: 'work',
+  title: 'Fix login',
+  at: AT,
+};
 
 const mode: SessionControl = {
   id: 'mode',
@@ -22,11 +33,14 @@ describe('picker row inputs', () => {
   it.each([
     {
       row: 'a recent folder',
-      input: folderRowInput({
-        kind: 'recent',
-        folder: { projectDir: '/home/me/repo', profile: 'work', lastUsed: 7 },
-        label: '~/repo',
-      }),
+      input: folderRowInput(
+        {
+          kind: 'recent',
+          folder: { projectDir: '/home/me/repo', profile: 'work', lastUsed: 7 },
+          label: '~/repo',
+        },
+        posixPaths,
+      ),
       expected: {
         list: 'folder',
         kind: 'recent',
@@ -37,8 +51,30 @@ describe('picker row inputs', () => {
     },
     {
       row: 'the choose line',
-      input: folderRowInput({ kind: 'choose', label: 'Choose folder…' }),
+      input: folderRowInput(
+        { kind: 'choose', label: 'Choose folder…' },
+        posixPaths,
+      ),
       expected: { list: 'folder', kind: 'choose' },
+    },
+    {
+      row: 'a folder section row',
+      input: folderRowInput(
+        {
+          kind: 'section',
+          section: 'Recently closed',
+          row: closed,
+          label: 'Fix login · repo · work · time',
+        },
+        posixPaths,
+      ),
+      expected: {
+        list: 'folder',
+        kind: 'section',
+        title: 'Fix login',
+        detail: `repo · work · ${sessionTime(AT)}`,
+        at: AT,
+      },
     },
     {
       row: 'a profile',
@@ -53,6 +89,28 @@ describe('picker row inputs', () => {
       row: 'the new-session line',
       input: sessionRowInput({ kind: 'new', label: 'New session' }),
       expected: { list: 'session', kind: 'new' },
+    },
+    {
+      row: 'a session section row',
+      input: sessionRowInput({
+        kind: 'section',
+        section: 'Recently closed',
+        row: {
+          hostSessionId: 'h2',
+          title: 'first message',
+          modified: 9,
+          archived: false,
+        },
+        closed,
+        label: 'Fix login · time',
+      }),
+      expected: {
+        list: 'session',
+        kind: 'section',
+        title: 'Fix login',
+        detail: sessionTime(AT),
+        at: AT,
+      },
     },
     {
       row: 'a past session archived',

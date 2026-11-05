@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
-import type { ChatProfile, RecentFolder } from '../contract';
+import type { ChatProfile, RecentFolder, ResumeSectionRow } from '../contract';
 import {
   displayPath,
+  FOLDERS_HEADING,
+  type FolderItem,
   folderItems,
   folderName,
+  folderSection,
   preselectedProfile,
 } from './start-prompt-items';
 
@@ -22,6 +25,16 @@ const tool: RecentFolder = {
   lastUsed: 1,
 };
 const recent = [app, tool];
+
+function closedRow(hostSessionId: string, title: string): ResumeSectionRow {
+  return {
+    hostSessionId,
+    projectDir: '/Users/u/dev/ai-dev',
+    profile: 'work',
+    title,
+    at: new Date(2026, 0, 2, 10, 0).getTime(),
+  };
+}
 
 const profiles: ChatProfile[] = [
   { name: 'work', configDir: '~/.claude' },
@@ -70,27 +83,112 @@ describe('start prompt items', () => {
   );
 
   it('folderItems_RecentThenChoose', () => {
-    expect(folderItems(recent, home, posixPaths)).toEqual([
+    expect(folderItems(recent, [], home, posixPaths)).toEqual([
       { kind: 'recent', folder: app, label: '~/dev/app' },
       { kind: 'recent', folder: tool, label: '/opt/tool' },
       { kind: 'choose', label: expect.any(String) },
     ]);
   });
 
+  it('folderItems_Sections_ComeFirstAndOnce', () => {
+    const one = closedRow('one', 'Fix login');
+    const two = closedRow('two', 'Add cache');
+
+    const items = folderItems(
+      [app],
+      [
+        { title: 'Recently closed', rows: [one, two] },
+        { title: 'Pinned', rows: [closedRow('two', 'Add cache again')] },
+      ],
+      home,
+      posixPaths,
+    );
+
+    expect(items).toEqual([
+      {
+        kind: 'section',
+        section: 'Recently closed',
+        row: one,
+        label: 'Fix login · ai-dev · work · 2026-01-02 10:00',
+      },
+      {
+        kind: 'section',
+        section: 'Recently closed',
+        row: two,
+        label: 'Add cache · ai-dev · work · 2026-01-02 10:00',
+      },
+      { kind: 'recent', folder: app, label: '~/dev/app' },
+      { kind: 'choose', label: expect.any(String) },
+    ]);
+  });
+
+  it('folderName_SectionRow_IsEmpty', () => {
+    const [section] = folderItems(
+      [],
+      [{ title: 'Recently closed', rows: [closedRow('one', 'Fix login')] }],
+      home,
+      posixPaths,
+    );
+
+    expect(folderName(section, posixPaths)).toBe('');
+  });
+
+  it.each<{
+    given: string;
+    item: FolderItem;
+    showsSections: boolean;
+    heading: string | null;
+  }>([
+    {
+      given: 'a section row',
+      item: {
+        kind: 'section',
+        section: 'Recently closed',
+        row: closedRow('one', 'Fix login'),
+        label: 'Fix login',
+      },
+      showsSections: true,
+      heading: 'Recently closed',
+    },
+    {
+      given: 'a folder beside section rows',
+      item: { kind: 'recent', folder: app, label: '~/dev/app' },
+      showsSections: true,
+      heading: FOLDERS_HEADING,
+    },
+    {
+      given: 'the choose line beside section rows',
+      item: { kind: 'choose', label: 'Choose folder…' },
+      showsSections: true,
+      heading: FOLDERS_HEADING,
+    },
+    {
+      given: 'a folder with no section rows',
+      item: { kind: 'recent', folder: app, label: '~/dev/app' },
+      showsSections: false,
+      heading: null,
+    },
+  ])(
+    'folderSection for $given → $heading',
+    ({ item, showsSections, heading }) => {
+      expect(folderSection(item, showsSections)).toBe(heading);
+    },
+  );
+
   it('folderName_Recent_IsBase', () => {
-    const [recentItem] = folderItems(recent, home, posixPaths);
+    const [recentItem] = folderItems(recent, [], home, posixPaths);
 
     expect(folderName(recentItem, posixPaths)).toBe('app');
   });
 
   it('folderName_Choose_IsLabel', () => {
-    const [choose] = folderItems([], home, posixPaths);
+    const [choose] = folderItems([], [], home, posixPaths);
 
     expect(folderName(choose, posixPaths)).toBe(choose.label);
   });
 
   it('folderItems_NoRecent_ChooseOnly', () => {
-    expect(folderItems([], home, posixPaths)).toEqual([
+    expect(folderItems([], [], home, posixPaths)).toEqual([
       { kind: 'choose', label: expect.any(String) },
     ]);
   });

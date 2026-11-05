@@ -7,15 +7,19 @@ import type {
   ChatProfile,
   PastSessionRow,
   RecentFolder,
+  ResumeSectionRow,
+  ResumeSectionRows,
 } from '../contract';
 import type { Picker, PickerHandle } from './picker';
 import { folderRowInput, profileRowInput, sessionRowInput } from './picker-row';
 import {
   archiveStateOf,
+  newSessionIndex,
   type SessionItem,
   SESSION_STEP_TITLE,
   selectedAfterChange,
   sessionItems,
+  sessionSection,
   withArchived,
 } from './resume-items';
 import type { SignInDialog } from './sign-in-dialog';
@@ -24,6 +28,7 @@ import {
   type FolderItem,
   folderName,
   folderItems,
+  folderSection,
   preselectedProfile,
   profileLabel,
 } from './start-prompt-items';
@@ -43,12 +48,14 @@ export interface StartPromptDeps {
 // `open` asks for a folder, then a profile when there is more than one, then
 // signs a signed-out profile in through the sign-in dialog, then asks for a
 // new or saved session when the folder has saved ones, and starts or
-// resumes a chat session there, revealing its Chat tab. Esc at any step
-// starts nothing. Opening the prompt again drops the earlier one: an answer
-// or a sign-in that arrives for it is logged and goes no further.
-// `openForNewSession` asks the same way but passes the session step over,
-// starting a new session once the profile is signed in. `toggleArchive` and
-// `showArchived` act on the session step while it is open.
+// resumes a chat session there, revealing its Chat tab. Its folder step also
+// lists the resume sections' rows above the folders, a pick resuming that
+// session at once, and its session step those of its folder and profile. Esc
+// at any step starts nothing. Opening the prompt again drops the earlier one:
+// an answer or a sign-in that arrives for it is logged and goes no further.
+// `openForNewSession` asks the same way but lists no sections and passes the
+// session step over, starting a new session once the profile is signed in.
+// `toggleArchive` and `showArchived` act on the session step while it is open.
 export interface StartPrompt {
   open(): void;
   openForNewSession(): void;
@@ -70,13 +77,14 @@ interface SessionStep {
   isWriting: boolean;
 }
 
-// What the prompt has gathered once its first answer arrives. `isCurrent`
+// What the prompt has gathered once its first answers arrive. `isCurrent`
 // is false once the prompt has opened again.
 interface PromptContext {
   deps: StartPromptDeps;
   isCurrent(): boolean;
   offersSavedSessions: boolean;
   recent: readonly RecentFolder[];
+  sections: readonly ResumeSectionRows[];
   profiles: readonly ChatProfile[];
 }
 
@@ -104,13 +112,23 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     return true;
   };
 
+  // The sections' rows; none when they cannot be read.
+  const readSections = (): Promise<ResumeSectionRows[]> =>
+    channel.invoke('resumeSections').catch((error: unknown) => {
+      log(`resume sections not read: ${errorText(error)}`);
+      return [];
+    });
+
   const openPrompt = (offersSavedSessions: boolean) => {
     step = null;
     opens += 1;
     const opened = opens;
     const isCurrent = () => opens === opened;
-    void channel.invoke('recentFolders').then(
-      (recent) => {
+    void Promise.all([
+      channel.invoke('recentFolders'),
+      offersSavedSessions ? readSections() : [],
+    ]).then(
+      ([recent, sections]) => {
         if (isStale(isCurrent, 'recent folders')) {
           return;
         }
@@ -120,11 +138,15 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           deps.toast("Add a profile to chat's profiles setting first", 'error');
           return;
         }
+        for (const { title, rows } of sections) {
+          log(`resume section ${title}: ${rows.length} rows`);
+        }
         openFolderStep({
           deps,
           isCurrent,
           offersSavedSessions,
           recent,
+          sections,
           profiles,
         });
       },
@@ -135,19 +157,53 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     );
   };
 
+  // Opens the folder step with the cursor on its first folder, below the
+  // section rows.
   const openFolderStep = (context: PromptContext) => {
+    const items = folderItems(
+      context.recent,
+      context.sections,
+      deps.homeDir,
+      deps.paths,
+    );
+    const sectionRows = items.filter((item) => item.kind === 'section').length;
     deps.picker.open<FolderItem>({
       title: 'Folder',
-      items: folderItems(context.recent, deps.homeDir, deps.paths),
+      items,
       label: (item) => item.label,
       name: (item) => folderName(item, deps.paths),
-      rowInput: folderRowInput,
-      selected: 0,
-      picked: (item) =>
-        item.kind === 'recent'
-          ? openProfileStep(context, item.folder.projectDir)
-          : chooseFolder(context),
+      rowInput: (item) => folderRowInput(item, deps.paths),
+      section: (item) => folderSection(item, sectionRows > 0),
+      selected: sectionRows,
+      picked: (item) => {
+        if (item.kind === 'section') {
+          resumeSectionRow(context, item.row);
+        } else if (item.kind === 'recent') {
+          openProfileStep(context, item.folder.projectDir);
+        } else {
+          chooseFolder(context);
+        }
+      },
     });
+  };
+
+  // Resumes a folder step section row once its profile is signed in; a profile
+  // no longer in the settings goes straight to `resume`, which rejects it.
+  const resumeSectionRow = (context: PromptContext, row: ResumeSectionRow) => {
+    const goOn = () =>
+      resumeSession(
+        context,
+        row.projectDir,
+        row.profile,
+        row.hostSessionId,
+        row.title,
+      );
+    const profile = context.profiles.find(({ name }) => name === row.profile);
+    if (profile === undefined) {
+      goOn();
+      return;
+    }
+    checkAccount(context, profile, goOn);
   };
 
   // The folder dialog; dismissing it returns to the folder step.
@@ -174,7 +230,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const openProfileStep = (context: PromptContext, projectDir: string) => {
     const { profiles } = context;
     if (profiles.length === 1) {
-      checkAccount(context, projectDir, profiles[0]);
+      checkProfile(context, projectDir, profiles[0]);
       return;
     }
     deps.picker.open<ChatProfile>({
@@ -188,27 +244,35 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         projectDir,
         deps.paths,
       ),
-      picked: (profile) => checkAccount(context, projectDir, profile),
+      picked: (profile) => checkProfile(context, projectDir, profile),
     });
   };
 
   // Goes on to the session step, or to a new session when the prompt offers no
-  // saved ones, when the profile is signed in; a signed-out profile opens the
-  // sign-in dialog first, going on only once it finishes signed in. A status
-  // that cannot be read goes on. Nothing goes on once the prompt has opened
-  // again.
-  const checkAccount = (
+  // saved ones, once the profile picked for `projectDir` is signed in.
+  const checkProfile = (
     context: PromptContext,
     projectDir: string,
     profile: ChatProfile,
   ) => {
-    const goOn = () => {
+    checkAccount(context, profile, () => {
       if (context.offersSavedSessions) {
         listSessions(context, projectDir, profile);
       } else {
         startSession(context, projectDir, profile);
       }
-    };
+    });
+  };
+
+  // Runs `goOn` when the profile is signed in; a signed-out profile opens the
+  // sign-in dialog first, going on only once it finishes signed in. A status
+  // that cannot be read goes on. Nothing goes on once the prompt has opened
+  // again.
+  const checkAccount = (
+    context: PromptContext,
+    profile: ChatProfile,
+    goOn: () => void,
+  ) => {
     void channel.invoke('accountStatus', profile.name).then(
       (status) => {
         if (isStale(context.isCurrent, `${profile.name}'s status`)) {
@@ -260,7 +324,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         isWriting: false,
       };
       step = opened;
-      openSessionStep(opened, 0);
+      const items = sessionStepItems(opened);
+      openSessionStep(opened, items, newSessionIndex(items));
     };
     void channel.invoke('pastSessions', projectDir, profile.name).then(
       (rows) => {
@@ -284,24 +349,45 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     );
   };
 
-  // Opens, or reopens over itself, the session step on its rows with the
-  // cursor on `selected`.
-  const openSessionStep = (opened: SessionStep, selected: number) => {
-    opened.items = sessionItems(opened.rows, opened.showArchived);
+  const sessionStepItems = (opened: SessionStep): SessionItem[] =>
+    sessionItems(
+      opened.rows,
+      opened.context.sections,
+      { projectDir: opened.projectDir, profile: opened.profile.name },
+      deps.paths,
+      opened.showArchived,
+    );
+
+  // Opens, or reopens over itself, the session step on `items` with the cursor
+  // on `selected`.
+  const openSessionStep = (
+    opened: SessionStep,
+    items: SessionItem[],
+    selected: number,
+  ) => {
+    const showsSections = items.some((item) => item.kind === 'section');
+    opened.items = items;
     opened.shown = deps.picker.open<SessionItem>({
       title: SESSION_STEP_TITLE,
       scope: 'resume',
       archiveState: archiveStateOf,
-      items: opened.items,
+      items,
       label: (item) => item.label,
       rowInput: sessionRowInput,
+      section: (item) => sessionSection(item, showsSections),
       selected,
       picked: (item) => {
         step = null;
         if (item.kind === 'new') {
           startSession(opened.context, opened.projectDir, opened.profile);
         } else {
-          resumeSession(opened, item.row);
+          resumeSession(
+            opened.context,
+            opened.projectDir,
+            opened.profile.name,
+            item.row.hostSessionId,
+            item.kind === 'section' ? item.closed.title : item.row.title,
+          );
         }
       },
     });
@@ -314,8 +400,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     before: readonly SessionItem[],
     cursor: number | null,
   ) => {
-    const after = sessionItems(opened.rows, opened.showArchived);
-    openSessionStep(opened, selectedAfterChange(before, cursor, after));
+    const after = sessionStepItems(opened);
+    openSessionStep(opened, after, selectedAfterChange(before, cursor, after));
   };
 
   // Archives or restores the row under the cursor. A press while an earlier
@@ -380,18 +466,23 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   };
 }
 
-function resumeSession(step: SessionStep, row: PastSessionRow) {
-  const { deps } = step.context;
-  const { projectDir, profile } = step;
+function resumeSession(
+  context: PromptContext,
+  projectDir: string,
+  profileName: string,
+  hostSessionId: string,
+  title: string,
+) {
+  const { deps } = context;
   deps.log(
-    `resuming ${row.title} in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
+    `resuming ${title} in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profileName}`,
   );
   void deps.channel
     .invoke('resume', {
       projectDir,
-      profile: profile.name,
-      hostSessionId: row.hostSessionId,
-      title: row.title,
+      profile: profileName,
+      hostSessionId,
+      title,
     })
     .then(
       (sessionId) => deps.reveal(sessionId),
