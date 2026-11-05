@@ -1,6 +1,6 @@
 # 11 — Main page and list pages
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 7 · Depends on: 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)

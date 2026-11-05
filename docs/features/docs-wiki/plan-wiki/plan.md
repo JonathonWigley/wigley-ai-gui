@@ -133,7 +133,7 @@ wigley-ai-gui, git:
 - [x] [Section editing](09-section-editing.md) — after 03, 07, 08
 
 ### Wave 6
-- [ ] [Section links and history](10-links-history.md) — after 03, 09
+- [x] [Section links and history](10-links-history.md) — after 03, 09
 
 ### Wave 7
 - [ ] [Main page and list pages](11-main-list-pages.md) — after 03 to 10
@@ -161,6 +161,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 07 · 061c3e1b · diff read, every Produces present, tests pass per worker, no compile error in its files with task 08 in the tree; the live run follows task 08's landing (Rulings) · concerns: aside scroll resets across the whole-file editor; empty-state centring and editor height rest on CSS only; 100cqh needs the docs-doc container; retarget does not redraw the column, so it goes stale after a move or an extension change; linkedFrom runs on every drawAside
 - 08 · d7270be4 · diff read, every Produces present by search, tsc and lint clean, Done-when greps hold (one <Leader>vw line, no setEntries in docs-view.ts) · concerns: Space v w with the filter box focused leaves focus on a hidden input; an unstar elsewhere can also move the wiki cursor; with no entries a wiki filter shows No pages in Main.md; dangling and label row colours unseen on screen; wikiRowActions anchors are built in session views too; Docs mode opens on the wiki, so self-test groups expecting All pages fail until task 12
 - 09 · ce659133 · diff read, every Produces present, tsc clean; worker ran the task tests (123 pass), lint and the live run: all 6 steps pass after scrollToSectionNotice; the 950px breakpoint held the body at 670px down to where the column goes; the switch click focuses the tree · concerns: self-test anchor check has not seen the three new binds; short section has about 36px spare below its text, the height using prose metrics; On this page clicks use old lines after a :w until the editor closes; scrollToSectionNotice has no unit test; section editor logs editing <name>, the same as whole-file
+- 10 · 33b55c73 · diff read, every Produces present, tsc clean; worker ran the task tests (162 pass), lint and the live run, steps 1-5 pass with synthetic keys over the real schema-5 index · concerns: a link to a heading that cannot reach the top leaves one doc holding two places, so Ctrl+o can stop twice on it; focus falls to body after a link opens another doc, as every md-link already does; closest('a.md-link') is live-only under the fake DOM; a match could in theory enclose an a between its runs
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -199,5 +200,11 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - scrollToSectionNotice brings a banner or prompt into sight in section mode, from a live-run failure · group 09
 - scrollToHeading lands on the editor's frame for a heading hidden for the edit · group 09
 - docs-parts.test.ts beyond Files: sectionHint wiring; .docs-section-edit gets user-select none; after also runs on closeEditor's detail path; clickSection compares dataset.anchor among body.children · group 09
+- appliedLinks and the setEntries compare hold section links only · group 10
+- splitText is skipped at a node's edge, else the backticks form stays text · group 10
+- a block that is itself pre, .md-fence, .md-image or a yields no runs · group 10
+- relink adds doc.text !== text to reread's guards · group 10
+- moveWithinDoc finds through headingAt, since it must find before it scrolls · group 10
+- same-file file links with no line and # links go through moveWithinDoc and no longer reopen; task 12 owns the self-test steps · group 10
 ### Review rounds
 ### Test gate

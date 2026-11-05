@@ -1,6 +1,6 @@
 # 10 — Section links and history
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 03, 09
 Plan: [plan.md](plan.md)
@@ -185,3 +185,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 33b55c73 · proof: diff read, every Produces present, tsc clean; worker ran the task tests (162 pass), lint and the live run, steps 1-5 pass with synthetic keys over the real schema-5 index · concerns: a link to a heading that cannot reach the top leaves one doc holding two places, so Ctrl+o can stop twice on it; focus falls to body after a link opens another doc, as every md-link already does; closest('a.md-link') is live-only under the fake DOM; a match could in theory enclose an a between its runs
