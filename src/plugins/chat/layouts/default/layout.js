@@ -318,26 +318,43 @@ function workingHead(input) {
   return head;
 }
 
-// A finished turn's one line; a compaction's header over its bar; a running
+// A compaction's header over its bar. A redraw swaps only the header: removing
+// the bar from the DOM, even to put it straight back, restarts its slide.
+/**
+ * @param {HTMLElement} block
+ * @param {import('../layout').LiveWorkingInput} input
+ * @param {HTMLElement} bar
+ */
+function fillCompacting(block, input, bar) {
+  if (bar.parentNode === block) {
+    block.children[0]?.remove();
+    block.insertBefore(workingHead(input), bar);
+    return;
+  }
+  block.replaceChildren(workingHead(input), bar);
+}
+
+// A finished turn's one line; a compaction's header over `bar`; a running
 // turn's header, then, once the turn has a tool call, the box and the tool
 // counts.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
  * @param {import('../layout').BaseKit} kit
+ * @param {HTMLElement} bar
  */
-function fillWorking(block, input, kit) {
-  block.replaceChildren();
+function fillWorking(block, input, kit, bar) {
   block.classList.toggle('is-done', input.state === 'done');
+  if (input.state !== 'done' && input.compaction !== null) {
+    fillCompacting(block, input, bar);
+    return;
+  }
+  block.replaceChildren();
   if (input.state === 'done') {
     block.append(el('div', 'chat-working-done', doneLine(input, kit)));
     return;
   }
   block.append(workingHead(input));
-  if (input.compaction !== null) {
-    block.append(el('div', 'chat-working-bar'));
-    return;
-  }
   /** @type {import('../layout').ToolInput[]} */
   const tools = [];
   for (const step of input.steps) {
@@ -682,15 +699,17 @@ const layout = {
       },
     };
   },
-  // The activity dock: every update draws it afresh, as `activity` does; a
-  // `done` input draws the finished turn's one line.
+  // The activity dock: every update draws it afresh, as `activity` does, except
+  // a compaction's bar, which stays in place; a `done` input draws the finished
+  // turn's one line.
   working(parent, input, kit) {
     const block = root(parent, 'chat-working');
-    fillWorking(block, input, kit);
+    const bar = el('div', 'chat-working-bar');
+    fillWorking(block, input, kit, bar);
     return {
       element: block,
       update(next) {
-        fillWorking(block, next, kit);
+        fillWorking(block, next, kit, bar);
       },
     };
   },
