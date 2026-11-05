@@ -4,6 +4,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // Docs mode over the machine's index and a Docs tab in each session over that
 // session's. `scriptPath` names the `docs_index.py` to run; empty, the script
 // is found through the wigley plugin's install in each Claude config folder.
+// `recentChangesLimit` caps the commits the Main page's Recent changes lists.
 export const docsManifest = definePlugin({
   id: 'docs',
   dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
@@ -111,7 +112,7 @@ export const docsManifest = definePlugin({
     box: 'In a docs text box',
     confirm: 'In the Trash confirmation',
   },
-  settings: { scriptPath: '', layout: 'default' },
+  settings: { scriptPath: '', layout: 'default', recentChangesLimit: 10 },
   settingInfo: {
     scriptPath: {
       label: 'Docs index script',
@@ -122,6 +123,10 @@ export const docsManifest = definePlugin({
       label: 'Docs layout',
       description:
         'The layout the docs views draw with, a folder in ~/.config/wigley-ai-gui/layouts/docs/; default when unset.',
+    },
+    recentChangesLimit: {
+      label: 'Recent changes',
+      description: "How many commits the Main page's Recent changes lists.",
     },
   },
   themeTokens: {},

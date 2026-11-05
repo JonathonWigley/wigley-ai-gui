@@ -144,6 +144,7 @@ function fakeGit() {
     lastFetch: vi.fn<Git['lastFetch']>(async () => null),
     fileAtHead: vi.fn<Git['fileAtHead']>(async () => null),
     commitPaths: vi.fn<Git['commitPaths']>(async () => undefined),
+    log: vi.fn<Git['log']>(async () => []),
   } satisfies Git;
 }
 

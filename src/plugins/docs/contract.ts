@@ -299,6 +299,15 @@ export interface PluginStatusRead {
   clones: CloneStatus[];
 }
 
+// One commit touching docs `recentChanges` was asked about. `at` is the
+// committer date in ISO 8601 with its offset; `paths` are real paths.
+export interface RecentChange {
+  sha: string;
+  subject: string;
+  at: string;
+  paths: string[];
+}
+
 export interface DocChange {
   viewId: string;
   path: string;
@@ -349,6 +358,9 @@ export interface DocsChannel extends ChannelShape {
     // `fetch` runs a capped `git fetch` in each clone first. Rejects
     // `No docs index source <sourceId>` for an id not registered.
     pluginStatus(sourceId: string, fetch: boolean): Promise<PluginStatusRead>;
+    // At most `recentChangesLimit` commits touching `paths`, real or linked,
+    // newest first; what git cannot read is left out. Never rejects.
+    recentChanges(paths: string[]): Promise<RecentChange[]>;
   };
   messages: {
     docChanged: DocChange;

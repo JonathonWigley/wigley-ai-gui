@@ -155,7 +155,7 @@ src/main/        core main process; main.ts is its composition root
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, and a commit of named paths
+                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, a log over named paths, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes

@@ -1,3 +1,13 @@
+export interface GitCommit {
+  sha: string;
+  // Git's folded subject line; empty for a commit with no message.
+  subject: string;
+  // The committer date in strict ISO 8601 with its offset, as git prints it.
+  at: string;
+  // The paths the commit touched, from those `log` was asked for.
+  paths: string[];
+}
+
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
 // to it, `/`-separated. Every method but `topLevel`, `originRepoName`,
@@ -38,4 +48,8 @@ export interface Git {
   // Stages `paths` and commits only them with `message`; anything else staged
   // stays staged. Rejects on an empty `paths`, committing nothing.
   commitPaths(root: string, paths: string[], message: string): Promise<void>;
+  // The newest `limit` non-merge commits touching any of `paths`, newest first;
+  // `[]` for a path with no history, and for an empty `paths`, running nothing.
+  // Rejects when HEAD has no commit yet.
+  log(root: string, paths: string[], limit: number): Promise<GitCommit[]>;
 }

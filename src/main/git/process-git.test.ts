@@ -428,6 +428,66 @@ describe('createProcessGit', () => {
     await expect(test.git.commitPaths(ROOT, [], 'm')).rejects.toThrow();
     expect(test.processes.runs).toEqual([]);
   });
+
+  function logArgs(limit: number, ...paths: string[]): string[] {
+    return git(
+      '--literal-pathspecs',
+      'log',
+      '--no-show-signature',
+      '--no-merges',
+      `--max-count=${String(limit)}`,
+      '--format=%x00%H%x00%cI%x00%s',
+      '-z',
+      '--name-only',
+      '--',
+      ...paths,
+    );
+  }
+
+  it('log_ScriptedOutput_ParsesRecords', async () => {
+    const test = setUp();
+    const newer = '2026-11-05T10:00:00-06:00';
+    const older = '2026-11-04T09:00:00Z';
+    test.processes.script(
+      'git',
+      logArgs(5, 'x y.md', 'z.md'),
+      exited(
+        0,
+        `\0${SHA_A}\0${newer}\0a | b\tc\0\nx y.md\0z.md\0` +
+          `\0${SHA_B}\0${older}\0\0\nz.md\0`,
+      ),
+    );
+
+    expect(await test.git.log(ROOT, ['x y.md', 'z.md'], 5)).toEqual([
+      {
+        sha: SHA_A,
+        subject: 'a | b\tc',
+        at: newer,
+        paths: ['x y.md', 'z.md'],
+      },
+      { sha: SHA_B, subject: '', at: older, paths: ['z.md'] },
+    ]);
+  });
+
+  it('log_NoPaths_RunsNothing', async () => {
+    const test = setUp();
+
+    expect(await test.git.log(ROOT, [], 5)).toEqual([]);
+    expect(test.processes.runs).toEqual([]);
+  });
+
+  it('log_ExitsNonZero_Rejects', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      logArgs(5, 'a.md'),
+      exited(128, '', 'fatal: bad\n'),
+    );
+
+    await expect(test.git.log(ROOT, ['a.md'], 5)).rejects.toThrow(
+      'git log exited 128',
+    );
+  });
 });
 
 // The real-clone test runs the machine's git, which a machine without git on
@@ -553,6 +613,40 @@ describe('createProcessGit over a real clone', () => {
 
       expect(await adapter.isLinkedWorktree(main)).toBe(false);
       expect(await adapter.isLinkedWorktree(linked)).toBe(true);
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'log_RealRepo_NewestFirstAndOnlyAskedPaths',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      const subject = 'sub | with\ttab';
+      await run('init', '--quiet');
+      writeFileSync(path.join(root, 'a b.md'), '');
+      writeFileSync(path.join(root, 'c.md'), '');
+      writeFileSync(path.join(root, 'other.md'), '');
+      await run('add', '--', 'a b.md', 'c.md', 'other.md');
+      await run('commit', '--quiet', '-m', 'first');
+      writeFileSync(path.join(root, 'a b.md'), 'changed\n');
+      writeFileSync(path.join(root, 'other.md'), 'changed\n');
+      await run('add', '--', 'a b.md', 'other.md');
+      await run('commit', '--quiet', '-m', subject);
+
+      const commits = await adapter.log(root, ['a b.md', 'c.md'], 5);
+
+      expect(commits.map((commit) => commit.subject)).toEqual([
+        subject,
+        'first',
+      ]);
+      expect(commits.map((commit) => commit.paths)).toEqual([
+        ['a b.md'],
+        ['a b.md', 'c.md'],
+      ]);
+      for (const commit of commits) {
+        expect(Date.parse(commit.at)).not.toBeNaN();
+      }
+      expect(await adapter.log(root, ['a b.md', 'c.md'], 1)).toHaveLength(1);
     },
   );
 });

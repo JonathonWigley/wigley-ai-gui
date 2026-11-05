@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Disposable, Registrations } from '../../../contracts/disposable';
+import type { Git } from '../../../contracts/git';
 import type { RunMode } from '../../../contracts/plugin';
 import type { ProcessResult } from '../../../contracts/processes';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
@@ -160,6 +161,10 @@ function startDocsPart() {
   const emitted: [string, unknown][] = [];
   const processes = new FakeProcesses();
   const files = createMemoryFiles();
+  const git = {
+    topLevel: vi.fn<Git['topLevel']>(async () => '/r'),
+    log: vi.fn<Git['log']>(async () => []),
+  };
   const api = {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -173,10 +178,11 @@ function startDocsPart() {
       },
       emit: (name: string, payload: unknown) => emitted.push([name, payload]),
     },
-    settings: () => ({ scriptPath: '/script.py' }),
+    settings: () => ({ scriptPath: '/script.py', recentChangesLimit: 3 }),
     services: {
       files,
       processes,
+      git,
       log: () => undefined,
       homeDir: '/',
       runMode: 'live',
@@ -199,7 +205,7 @@ function startDocsPart() {
     listeners.get(name)?.(payload);
   };
   const exports = part.exports?.(createRegistrations()) as DocsMainExports;
-  return { part, exports, files, processes, invoke, emit, emitted };
+  return { part, exports, files, processes, git, invoke, emit, emitted };
 }
 
 const INDEX_DOCUMENT: IndexDocument = {
@@ -341,6 +347,16 @@ describe('docs main part', () => {
     expect(await docs.invoke('pluginStatus', 'machine', false)).toEqual({
       clones: [],
     });
+  });
+
+  it('recentChanges_LimitFromSettings', async () => {
+    const docs = startDocsPart();
+    await docs.files.makeFolder('/r');
+    await docs.files.write('/r/notes.md', 'one');
+
+    await docs.invoke('recentChanges', ['/r/notes.md']);
+
+    expect(docs.git.log).toHaveBeenCalledWith('/r', ['notes.md'], 3);
   });
 
   it('exports_AddSource_ServedOverChannel', async () => {

@@ -1,5 +1,5 @@
 import type { Files } from '../../contracts/files';
-import type { Git } from '../../contracts/git';
+import type { Git, GitCommit } from '../../contracts/git';
 import type { Paths } from '../../contracts/paths';
 import type { ProcessRunner } from '../../contracts/processes';
 
@@ -185,6 +185,29 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         ...paths,
       ]);
     },
+    log: async (root, paths, limit) => {
+      if (paths.length === 0) {
+        return [];
+      }
+      // `--literal-pathspecs` keeps a `*`, `?`, `[` or leading `:` in a path
+      // from matching other files. `-z` turns off path quoting.
+      return logCommits(
+        await gitOutput(processes, 'log', [
+          '-C',
+          root,
+          '--literal-pathspecs',
+          'log',
+          '--no-show-signature',
+          '--no-merges',
+          `--max-count=${String(limit)}`,
+          '--format=%x00%H%x00%cI%x00%s',
+          '-z',
+          '--name-only',
+          '--',
+          ...paths,
+        ]),
+      );
+    },
   };
 }
 
@@ -253,6 +276,29 @@ function treeBlobs(output: string): Map<string, string> {
     }
   }
   return blobs;
+}
+
+// The commits of a `log` run, whose NUL-split fields are an empty field, then
+// sha, date and subject by position, then paths up to the next empty field;
+// git prints one `\n` before each commit's first path.
+function logCommits(output: string): GitCommit[] {
+  const fields = output.split('\0');
+  const commits: GitCommit[] = [];
+  let index = 0;
+  while (index + 3 < fields.length) {
+    const [sha, at, subject] = fields.slice(index + 1, index + 4);
+    const paths: string[] = [];
+    index += 4;
+    while (index < fields.length && fields[index] !== '') {
+      const isFirstPath = paths.length === 0;
+      paths.push(
+        isFirstPath ? fields[index].replace(/^\n/, '') : fields[index],
+      );
+      index += 1;
+    }
+    commits.push({ sha, subject, at, paths });
+  }
+  return commits;
 }
 
 // A path `git -C <root> rev-parse` printed, which is relative to `root`

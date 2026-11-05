@@ -48,6 +48,7 @@ import {
   SESSION_SOURCE_TITLE,
 } from './index-sources';
 import { readPluginStatus } from './plugin-status';
+import { readRecentChanges } from './recent-changes';
 import { writeDocsFixture } from './selftest-fixture';
 import { docsSelfTestScript, openDocsFixtureSession } from './selftest-script';
 import { createViewWatches } from './view-watches';
@@ -219,10 +220,11 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
 
 // Serves the page every registered index source (the machine index and one
 // per live session, plus any a plugin adds through `addSource`), the guarded
-// doc changes, one watched file per view, external links, and the git
-// statuses of the marketplace clones among a source's entries. A source's
-// index entries stay writable while it is registered. The page's own index
-// reads emit `indexLoaded`; the exports' reads do not.
+// doc changes, one watched file per view, external links, the git statuses of
+// the marketplace clones among a source's entries, and the recent commits
+// touching named docs. A source's index entries stay writable while it is
+// registered. The page's own index reads emit `indexLoaded`; the exports'
+// reads do not.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -343,6 +345,14 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         },
         { fetch },
       ),
+    );
+    channel.handle('recentChanges', async (paths) =>
+      readRecentChanges(paths, api.settings().recentChangesLimit, {
+        git: services.git,
+        files: services.files,
+        paths: services.paths,
+        log: services.log,
+      }),
     );
     const sessions = api.dependency(sessionsMainKey);
     services.selfTest?.run(
