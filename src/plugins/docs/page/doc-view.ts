@@ -26,12 +26,7 @@ import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import type { DocsChannel, IndexEntry, IndexLink } from '../contract';
 import { splitFrontmatter } from '../frontmatter';
-import type {
-  AsideHeadingInput,
-  AsideLinkInput,
-  DocHeaderInput,
-  RecentChangesInput,
-} from '../layouts/layout';
+import type { DocHeaderInput, RecentChangesInput } from '../layouts/layout';
 import { linkedFrom } from '../linked-from';
 import { type LinkTarget, resolveLink } from '../links';
 import {
@@ -41,6 +36,7 @@ import {
   sectionText,
   spliceSection,
 } from '../sections';
+import { createDocAside } from './doc-aside';
 import { createDocHistory, type DocPlace } from './doc-history';
 import { docLinkOf, docLinksText, pastedImagePath } from './doc-links';
 import {
@@ -61,14 +57,16 @@ import { createListPane } from './list-pane';
 import type { ListPageContent } from './list-page';
 import { linkSections } from './section-links';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
-import { type DocsParts, type DrawnPart } from './layout/docs-parts';
+import {
+  type DocsParts,
+  type DrawnPart,
+  placeAtEnds,
+} from './layout/docs-parts';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 
 const BANNER_TEXT = 'Changed on disk since you opened it';
 const CONFLICT_TEXT = 'File changed on disk';
 const EMPTY_TEXT = 'Open a doc from the tree';
-const ON_THIS_PAGE_TEXT = 'On this page';
-const LINKED_FROM_TEXT = 'Linked from';
 const NOT_SECTIONED_TEXT = 'Only a markdown doc has sections';
 
 // The file a detail view's `i` edits, read, and the 1-based line it opens at.
@@ -148,10 +146,11 @@ export interface DocViewDeps {
 }
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
-// in `default`, a top row while a doc is open, above the scroller, holding the
-// `‹ tree ⌥H` edge prompt while the tree shows and the back and forward edge
-// prompts while the history has a place that way. The scroller holds the empty
-// state ending in the `Esc tree` hint while no doc is open, and the layout's
+// in `default`, a top row while a doc or a page shows, above the scroller, holding
+// the `‹ tree ⌥H` edge prompt while the tree shows, the `main` hint, and the back
+// and forward edge prompts while the history has a place that way. The scroller
+// holds the empty state ending in the `Esc tree` hint while no doc is open, and
+// the layout's
 // `pageFrame`, which stays for the view's life and places the article and the
 // right column. The article holds one slot per doc part, each drawn by the
 // layout: the header with its chips (load states, then plugin-source statuses,
@@ -173,7 +172,8 @@ export interface DocViewDeps {
 // doc. Opening another doc is refused while the editor holds unsaved edits.
 // `open` resolves to whether the doc opened. The body's section references the
 // index lists draw as links, and the pane keeps one history of the places shown:
-// every open and every move within the doc records, and `historyBack` and
+// each open but a detail's, and each move by a link or an On this page row,
+// records, a `Ctrl+h` or `Ctrl+l` move does not, and `historyBack` and
 // `historyForward` move through them. A page with no file (a generated list page,
 // or the empty Main page) draws in the same frame in place of a doc: `openPath`
 // is null while one shows, and a list page is a history place. Recent changes
@@ -202,14 +202,18 @@ export interface DocView {
   // button in the pane, since the bind takes Enter from the browser.
   listOpen(): void;
   // The open doc's file moved: the pane, its editor included, follows it to
-  // `target`, watching the new path. An open editor's frame keeps the name
-  // and path it opened with, since the editor never moves while open.
+  // `target`, watching the new path. The right column, the `edit` controls and
+  // the header draw for it at once, and the body once it renders; a detail keeps
+  // its field table, and an open editor's body waits for it to close. An open
+  // editor's frame keeps the name and path it opened with, since the editor never
+  // moves while open.
   retarget(target: DocTarget): void;
   // Empties the pane, its editor dropped and its watch stopped; a page stays.
   clear(): void;
   refreshChips(): void;
-  // Holds the index's entries and draws the right column again, and the body
-  // when the shown doc's section links changed and no editor is open.
+  // Holds the index's entries and draws the right column again, the body when
+  // the shown doc's section links changed and no editor is open, and the header
+  // when the index's title for the shown doc changed.
   setEntries(entries: readonly IndexEntry[]): void;
   diskChanged(path: string): void;
   // Opens the editor at `line`, else at the top visible line. On the empty Main
@@ -274,14 +278,6 @@ interface ShownDoc {
   // The file text the view last read or wrote.
   text: string;
   bodyStartLine: number;
-}
-
-// One row of the right column: its part's input, its root's tooltip and what
-// a click on it does.
-interface AsideRow {
-  input: AsideLinkInput;
-  tooltip: string;
-  action(): void;
 }
 
 type AfterWrite = 'stay' | 'close';
@@ -418,18 +414,12 @@ function partSlot(): HTMLElement {
   return element('div', 'docs-slot');
 }
 
-// Whether `doc` is a markdown file, the one kind of doc with a right column.
-function hasAside(doc: ShownDoc | null): doc is ShownDoc {
+// Whether `doc` shows a markdown file: a detail shows none, whatever its path.
+// Only such a doc has sections, section links and a right column.
+function isMarkdownDoc(doc: ShownDoc | null): doc is ShownDoc {
   return (
     doc !== null && doc.target.detail === null && doc.filePath.endsWith('.md')
   );
-}
-
-// Places a part's two app elements its layout left out, as its contract
-// states: the first at the start of `root`, the last at its end.
-function placeAtEnds([first, last]: AppSlot[], root: HTMLElement): void {
-  first.placeIfLeftOut(root, 'start');
-  last.placeIfLeftOut(root, 'end');
 }
 
 export function createDocView(deps: DocViewDeps): DocView {
@@ -473,23 +463,14 @@ export function createDocView(deps: DocViewDeps): DocView {
     pageSlot,
     editorSlot,
   );
-  const aside = element('div', 'docs-aside');
-  aside.hidden = true;
-  // The narrow rule that takes the column out of sight is CSS alone.
-  let isAsideInSight = false;
-  const asideObserver = new ResizeObserver(() => {
-    if (aside.hidden) {
-      return;
-    }
-    const isInSight = aside.offsetWidth > 0;
-    if (isInSight !== isAsideInSight) {
-      isAsideInSight = isInSight;
-      deps.log(`right column ${isInSight ? 'in' : 'out of'} sight`);
-    }
+  const aside = createDocAside({
+    parts,
+    paths: deps.paths,
+    homeDir: deps.homeDir,
+    log: deps.log,
+    moveToLine: (line) => moveWithinDoc(line, null),
+    followLink: (path, line) => deps.followFile(path, line, null),
   });
-  asideObserver.observe(aside);
-  const onThisPageSection = element('div', 'docs-aside-section');
-  const linkedFromSection = element('div', 'docs-aside-section');
   const body = element('div', 'md docs-body');
   const bodyMount = createMarkdownMount(deps.markdown, deps.log);
   body.addEventListener('click', followLink);
@@ -510,9 +491,6 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   let drawnPane: DrawnPart | null = null;
   let drawnFrame: DrawnPart | null = null;
-  let drawnAside: DrawnPart | null = null;
-  // The headings and rows drawn in the right column's two sections.
-  let drawnAsideRows: DrawnPart[] = [];
   let drawnEmpty: DrawnPart | null = null;
   let drawnHeader: DrawnPart | null = null;
   let drawnBanner: DrawnPart | null = null;
@@ -577,7 +555,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     let placing: AppSlot[] = [];
     drawnFrame = parts.draw('pageFrame', frameSlot, {}, (kit, slotFor) => {
       const placedArticle = slotFor(article, 'article');
-      const placedAside = slotFor(aside, 'aside');
+      const placedAside = slotFor(aside.element, 'aside');
       placing = [placedArticle, placedAside];
       return { ...kit, article: placedArticle.place, aside: placedAside.place };
     });
@@ -623,9 +601,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     showHistoryEdges();
   };
 
-  // The place the shown doc is being left at; a detail or an open editor is no
-  // place to return to.
-  const recordPlaceLeft = () => {
+  // Records the place the shown doc is at; a detail or an open editor is no place
+  // to return to.
+  const recordPlaceInSight = () => {
     if (shown !== null && editor === null && shown.target.detail === null) {
       recordPlace(placeInSight(shown));
     }
@@ -809,79 +787,16 @@ export function createDocView(deps: DocViewDeps): DocView {
           }));
   };
 
-  const disposeAside = () => {
-    drawnAsideRows.forEach((row) => row.dispose());
-    drawnAsideRows = [];
-    drawnAside?.dispose();
-    drawnAside = null;
-  };
-
-  // Draws one section of the right column; hidden and undrawn with no row.
-  const drawAsideSection = (
-    section: HTMLElement,
-    heading: AsideHeadingInput,
-    rows: AsideRow[],
-  ) => {
-    section.hidden = rows.length === 0;
-    if (rows.length === 0) {
-      return;
-    }
-    drawnAsideRows.push(
-      parts.draw('asideHeading', section, heading, (kit) => kit),
-    );
-    for (const row of rows) {
-      const drawn = parts.draw('asideLink', section, row.input, (kit) => kit);
-      drawn.element.title = row.tooltip;
-      rowAction(drawn.element, row.action);
-      drawnAsideRows.push(drawn);
-    }
-  };
-
   // Draws the right column for the open doc from `shownSections` and the
-  // entries, at the scroll it had.
+  // entries.
   const drawAside = () => {
-    const scrollTop = aside.scrollTop;
-    disposeAside();
     const doc = shown;
-    if (!hasAside(doc)) {
+    if (!isMarkdownDoc(doc)) {
       shownSections = [];
-      aside.hidden = true;
+      aside.clear();
       return;
     }
-    const links = linkedFrom(entries, doc.target.path);
-    if (shownSections.length === 0 && links.length === 0) {
-      aside.hidden = true;
-      return;
-    }
-    aside.hidden = false;
-    let placing: AppSlot[] = [];
-    drawnAside = parts.draw('pageAside', aside, {}, (kit, slotFor) => {
-      const onThisPage = slotFor(onThisPageSection, 'onThisPage');
-      const linked = slotFor(linkedFromSection, 'linkedFrom');
-      placing = [onThisPage, linked];
-      return { ...kit, onThisPage: onThisPage.place, linkedFrom: linked.place };
-    });
-    placeAtEnds(placing, drawnAside.element);
-    const least = Math.min(...shownSections.map((section) => section.level));
-    drawAsideSection(
-      onThisPageSection,
-      { title: ON_THIS_PAGE_TEXT, kind: 'sections' },
-      shownSections.map((section) => ({
-        input: { title: section.title, depth: section.level - least },
-        tooltip: section.title,
-        action: () => moveWithinDoc(section.startLine, null),
-      })),
-    );
-    drawAsideSection(
-      linkedFromSection,
-      { title: LINKED_FROM_TEXT, kind: 'linkedFrom' },
-      links.map((link) => ({
-        input: { title: link.title, depth: 0 },
-        tooltip: deps.paths.tilde(link.path, deps.homeDir),
-        action: () => deps.followFile(link.path, link.line, null),
-      })),
-    );
-    aside.scrollTop = scrollTop;
+    aside.show(shownSections, linkedFrom(entries, doc.target.path));
   };
 
   const disposeSectionControls = () => {
@@ -908,7 +823,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   const drawSectionControls = () => {
     disposeSectionControls();
     const doc = shown;
-    if (!hasAside(doc) || doc.target.readOnly !== null) {
+    if (!isMarkdownDoc(doc) || doc.target.readOnly !== null) {
       return;
     }
     for (const heading of [...body.children] as HTMLElement[]) {
@@ -929,17 +844,39 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
   };
 
-  // The section links of the file `doc` shows: a follow-up item's entry holds
-  // none, and its file's entry holds them.
+  // The entry for the whole file at `path`, not for an item inside it.
+  const fileEntryAt = (path: string) =>
+    entries.find(
+      (entry) => entry.line === null && deps.paths.samePath(entry.path, path),
+    );
+
+  // The section links `doc`'s file's own entry holds; a follow-up file's holds
+  // none, so a `§` in it stays plain.
   const sectionLinksOf = (doc: ShownDoc | null): IndexLink[] => {
-    if (!hasAside(doc)) {
+    if (!isMarkdownDoc(doc)) {
       return [];
     }
-    const fileEntry = entries.find(
-      (entry) =>
-        entry.line === null && deps.paths.samePath(entry.path, doc.target.path),
+    return (fileEntryAt(doc.target.path)?.links ?? []).filter(
+      (link) => link.form === 'section',
     );
-    return (fileEntry?.links ?? []).filter((link) => link.form === 'section');
+  };
+
+  // Takes the title the index now gives the shown target, which its entry names,
+  // else its file's entry; with neither it keeps its own.
+  const refreshTitle = () => {
+    const doc = shown;
+    if (doc === null) {
+      return;
+    }
+    const { entryId, path, title } = doc.target;
+    const entry =
+      entryId === null
+        ? fileEntryAt(path)
+        : entries.find(({ id }) => id === entryId);
+    if (entry !== undefined && entry.title !== title) {
+      doc.target = { ...doc.target, title: entry.title };
+      drawHeader();
+    }
   };
 
   const linkTitle = ({ target, targetLine }: IndexLink): string => {
@@ -960,7 +897,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     bodyFields = rendered.fields;
     bodyMount.draw(body, rendered.html, { liveFences: rendered.liveFences });
     applySectionLinks();
-    if (hasAside(shown)) {
+    if (isMarkdownDoc(shown)) {
       shownSections = sectionsOf(shown.text);
     }
     drawAside();
@@ -991,9 +928,18 @@ export function createDocView(deps: DocViewDeps): DocView {
   const shownSourceBlocks = () =>
     sourceBlocks(body, pane, editingSection?.hidden);
 
-  // Of the blocks at any depth, the one whose whole-file line is the
-  // greatest at or before `line`.
+  // Of the blocks at any depth, the one whose whole-file line is the greatest at
+  // or before `line`, or the section's editor while it hides that line.
   const scrollToLine = (line: number, bodyStartLine: number) => {
+    const edited = editingSection?.section;
+    const isHiddenForEdit =
+      edited !== undefined &&
+      line >= edited.startLine &&
+      line <= edited.endLine;
+    if (isHiddenForEdit && drawnEditorFrame !== null) {
+      pane.scrollTop = topIn(pane, drawnEditorFrame.element);
+      return;
+    }
     const blocks = shownSourceBlocks().filter(
       (block) => block.line + bodyStartLine - 1 <= line,
     );
@@ -1049,24 +995,11 @@ export function createDocView(deps: DocViewDeps): DocView {
           ),
   });
 
-  // The whole-file line a move to `line` or `fragment` landed on.
-  const landedLine = (
-    line: number | null,
-    fragment: string | null,
-    bodyStartLine: number,
-  ): number | null => {
-    if (line !== null || fragment === null) {
-      return line;
-    }
-    const heading = headingAt(fragment);
-    const bodyLine = heading === null ? null : sourceLineOf(heading);
-    return bodyLine === null ? null : bodyLine + bodyStartLine - 1;
-  };
-
   // Scrolls the shown doc to `line`, else its top, then to the heading
-  // `fragment`, recording the place left and the place reached. It reads and
-  // closes nothing, so a section's editor stays. A missing heading toasts and
-  // records nothing, since the scroll has not moved.
+  // `fragment`, recording the place in sight before and after, so a move that did
+  // not scroll records one. It reads and closes nothing, so a section's editor
+  // stays. A missing heading toasts and records nothing, since the scroll has not
+  // moved.
   const moveWithinDoc = (line: number | null, fragment: string | null) => {
     const doc = shown;
     if (doc === null) {
@@ -1081,10 +1014,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (fragment !== null) {
       scrollToHeading(fragment);
     }
-    recordPlace({
-      path: doc.target.path,
-      line: landedLine(line, fragment, doc.bodyStartLine),
-    });
+    recordPlace(placeInSight(doc));
     if (line !== null) {
       deps.log(`moved within ${doc.name} to line ${line}`);
     }
@@ -1224,6 +1154,17 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
   };
 
+  // Draws `rendered` as `doc`'s body, then puts the pane back at `scrollTop`.
+  const drawKeepingScroll = (
+    doc: ShownDoc,
+    rendered: Rendered,
+    scrollTop: number,
+  ) => {
+    doc.bodyStartLine = rendered.bodyStartLine;
+    drawBody(rendered);
+    pane.scrollTop = scrollTop;
+  };
+
   // Destroys the editor and shows the rendered doc from the text last read
   // or written, or the detail view it was opened from, at the scroll the
   // pane had as the editor opened, set again once the body draws. `after` runs
@@ -1246,9 +1187,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     renderText(deps.markdown, doc.filePath, doc.text, deps.paths)
       .then((rendered) => {
         if (!isDisposed && shown === doc && editor === null) {
-          doc.bodyStartLine = rendered.bodyStartLine;
-          drawBody(rendered);
-          pane.scrollTop = scrollTop;
+          drawKeepingScroll(doc, rendered, scrollTop);
           after?.();
         }
       })
@@ -1361,11 +1300,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (isDisposed || shown !== doc || editor !== null) {
       return;
     }
-    const scrollTop = pane.scrollTop;
     doc.text = diskText;
-    doc.bodyStartLine = rendered.bodyStartLine;
-    drawBody(rendered);
-    pane.scrollTop = scrollTop;
+    drawKeepingScroll(doc, rendered, pane.scrollTop);
     deps.log(`reloaded ${doc.name}`);
   };
 
@@ -1382,10 +1318,11 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (isDisposed || shown !== doc || editor !== null || doc.text !== text) {
       return;
     }
-    const scrollTop = pane.scrollTop;
-    doc.bodyStartLine = rendered.bodyStartLine;
-    drawBody(rendered);
-    pane.scrollTop = scrollTop;
+    drawKeepingScroll(doc, rendered, pane.scrollTop);
+  };
+
+  const relinkLogging = (doc: ShownDoc) => {
+    relink(doc).catch((error) => deps.log(`not rendered: ${errorText(error)}`));
   };
 
   // The index each pasted file of a take at `now` is named with, in order;
@@ -1472,7 +1409,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   // What every editor does once it exists: takes drops, and takes focus.
-  const startEditing = (doc: ShownDoc, focusing: DocumentEditor) => {
+  const startEditing = (focusing: DocumentEditor) => {
     dropTarget = deps.drops.addTarget({
       element: pane,
       take: (files) => {
@@ -1484,7 +1421,6 @@ export function createDocView(deps: DocViewDeps): DocView {
     showEditHint();
     showDocState();
     focusing.focus();
-    deps.log(`editing ${doc.name}`);
   };
 
   // The frame draws first, so the editor mounts into an attached host.
@@ -1502,7 +1438,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (drawnBody !== null) {
       drawnBody.element.hidden = true;
     }
-    startEditing(doc, editor);
+    startEditing(editor);
+    deps.log(`editing ${doc.name}`);
   };
 
   // Opens `section` in place: its rendered blocks hide, and the editor's frame,
@@ -1546,7 +1483,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (drawnEditorFrame !== null) {
       pane.scrollTop = topIn(pane, drawnEditorFrame.element);
     }
-    startEditing(doc, editor);
+    startEditing(editor);
     deps.log(`editing section ${section.title} in ${doc.name}`);
   };
 
@@ -1663,7 +1600,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     } else if (drawnBody !== null) {
       isBodyRedrawDeferred = true;
     }
-    if (!aside.hidden) {
+    if (aside.isShown()) {
       drawAside();
     }
     drawSectionControls();
@@ -1738,7 +1675,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
       const isRecorded = options?.isHistoryMove !== true;
       if (isRecorded) {
-        recordPlaceLeft();
+        recordPlaceInSight();
       }
       if (shown !== null && editor !== null) {
         closeEditor(shown);
@@ -1760,6 +1697,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawHeader();
       drawBody(rendered);
       pane.scrollTop = 0;
+      aside.scrollToTop();
       watchFile(target.detail === null ? target.path : null, name);
       deps.log(`opened ${name}`);
       if (target.line !== null) {
@@ -1769,27 +1707,20 @@ export function createDocView(deps: DocViewDeps): DocView {
         toastMissingHeading(target.fragment);
       }
       if (isRecorded) {
-        recordPlace({
-          path: target.path,
-          line: landedLine(
-            target.line,
-            target.fragment,
-            rendered.bodyStartLine,
-          ),
-        });
+        recordPlaceInSight();
       }
       showHistoryEdges();
       return true;
     },
     openPath: () => shown?.target.path ?? null,
     showPage(next, options) {
-      if (view.refuseWithUnsavedEdits()) {
+      if (isDisposed || view.refuseWithUnsavedEdits()) {
         return false;
       }
       openCount++;
       const isRecorded = options?.isHistoryMove !== true;
       if (isRecorded) {
-        recordPlaceLeft();
+        recordPlaceInSight();
       }
       if (shown !== null && editor !== null) {
         closeEditor(shown);
@@ -1814,7 +1745,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       return true;
     },
     updateList(content) {
-      if (page?.type !== 'list') {
+      if (isDisposed || page?.type !== 'list') {
         return;
       }
       page = { type: 'list', content };
@@ -1846,6 +1777,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (doc === null || isDisposed) {
         return;
       }
+      const wasDetail = doc.target.detail !== null;
       doc.target = target;
       deps.openChanged(target.path);
       if (target.detail === null) {
@@ -1854,7 +1786,20 @@ export function createDocView(deps: DocViewDeps): DocView {
         watchFile(target.path, doc.name);
       }
       showBanner(false);
+      drawAside();
+      drawSectionControls();
       drawHeader();
+      if (editor !== null || target.detail !== null) {
+        return;
+      }
+      // A detail holds no text of the file to render.
+      if (wasDetail) {
+        reread(doc).catch((error) =>
+          deps.log(`not reloaded ${doc.name}: ${errorText(error)}`),
+        );
+      } else {
+        relinkLogging(doc);
+      }
     },
     clear() {
       if (shown === null || isDisposed) {
@@ -1880,10 +1825,9 @@ export function createDocView(deps: DocViewDeps): DocView {
       const doc = shown;
       const hasNewLinks = JSON.stringify(sectionLinksOf(doc)) !== appliedLinks;
       if (doc !== null && editor === null && hasNewLinks) {
-        relink(doc).catch((error) =>
-          deps.log(`not rendered: ${errorText(error)}`),
-        );
+        relinkLogging(doc);
       }
+      refreshTitle();
     },
     diskChanged(changedPath) {
       const doc = shown;
@@ -1937,7 +1881,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         editor.focus();
         return;
       }
-      if (!hasAside(doc)) {
+      if (!isMarkdownDoc(doc)) {
         deps.toast(NOT_SECTIONED_TEXT, 'info');
         return;
       }
@@ -2074,7 +2018,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       // editor, so their picks leave the compared set: all but the editor's draw
       // once the editor closes, the editor's at the next edit.
       parts.redrawIfChanged(() =>
-        keepingFocusAndScroll(root, [pane, aside], redrawParts),
+        keepingFocusAndScroll(root, [pane, aside.element], redrawParts),
       );
     },
     dispose() {
@@ -2084,8 +2028,6 @@ export function createDocView(deps: DocViewDeps): DocView {
       const drawn = [
         drawnPane,
         drawnFrame,
-        drawnAside,
-        ...drawnAsideRows,
         drawnEmpty,
         drawnHeader,
         drawnBanner,
@@ -2104,7 +2046,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           () => bodyMount.dispose(),
           () => disposeSectionControls(),
           () => listPane.dispose(),
-          () => asideObserver.disconnect(),
+          () => aside.dispose(),
           ...drawn.map((part) => () => part?.dispose()),
         ],
         (step) => step(),

@@ -27,8 +27,6 @@ export interface ListPane {
   openCursor(): void;
   // Whether the page holds focus: the cursor's row shows `is-cursor` while so.
   setFocused(isFocused: boolean): void;
-  // Draws the shown content again.
-  redraw(): void;
   dispose(): void;
 }
 
@@ -100,7 +98,7 @@ export function createListPane(deps: ListPaneDeps): ListPane {
     });
   };
 
-  const pane: ListPane = {
+  return {
     show(content) {
       disposeDrawn();
       shown = content;
@@ -158,12 +156,6 @@ export function createListPane(deps: ListPaneDeps): ListPane {
       hasFocus = isFocused;
       markCursor();
     },
-    redraw() {
-      if (shown !== null) {
-        pane.show(shown);
-      }
-    },
     dispose: disposeDrawn,
   };
-  return pane;
 }

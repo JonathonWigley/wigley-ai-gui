@@ -73,6 +73,13 @@ export interface DocsParts {
   redrawIfChanged(redraw: () => void): void;
 }
 
+// Places a part's two app elements its layout left out, as its contract
+// states: the first at the start of `root`, the last at its end.
+export function placeAtEnds([first, last]: AppSlot[], root: HTMLElement): void {
+  first.placeIfLeftOut(root, 'start');
+  last.placeIfLeftOut(root, 'end');
+}
+
 const PART_SCOPES: Record<DocsPartName, DocsScope> = {
   treePane: 'tree',
   treeLine: 'tree',

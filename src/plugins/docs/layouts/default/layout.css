@@ -2,11 +2,11 @@
    front matter and box hints, the page frame and its right column, the section
    edit control, Recent changes, the list pages and the sidebar switch. */
 
-/* The default tree pane's tracks: the header, the status, the filter, the
-   line between the filter and the rows, and the rows. */
+/* The default tree pane's tracks: the header, the sidebar switch, the status, the
+   filter, the line between the filter and the rows, and the rows. */
 .docs-tree-pane {
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
 }
@@ -119,8 +119,8 @@
   font-size: var(--wg-text-12);
 }
 
-/* The default doc pane: a column holding its row of `‹ tree ⌥H` and the back
-   and forward edges above the scroller. */
+/* The default doc pane: a column holding its row of `‹ tree ⌥H`, the `main` hint
+   and the back and forward edges above the scroller. */
 .docs-doc-frame {
   display: flex;
   flex: 1;
@@ -129,8 +129,8 @@
   min-width: 0;
 }
 
-/* The row shows only with a doc open: the empty state names the tree's key,
-   and no doc means no place to move from. */
+/* The row shows with a doc or a page: the empty state names the tree's key, and
+   neither means no place to move from. */
 [data-doc='none'] .docs-doc-top {
   display: none;
 }
@@ -147,7 +147,8 @@
   padding: var(--wg-space-3) var(--wg-space-6) 0;
 }
 
-/* The back and forward edges, at the row's end. Each hides at its end of the
+/* The back and forward edges, at the row's end, the `main` hint staying between
+   them so each stays the first or last child. Each hides at its end of the
    history, and the other keeps its place. */
 .docs-history {
   display: flex;
@@ -298,6 +299,13 @@
   min-width: 0;
 }
 
+/* The empty Main page takes the pane's height, so its line centres; a list page
+   keeps its own height and scrolls. */
+.docs-page-frame:has(> .docs-article > .docs-page-slot > .ui-empty) {
+  align-items: stretch;
+  height: 100%;
+}
+
 /* The right column sticks while the article scrolls. The app sets `hidden` on
    it while it holds nothing, so it sets no `display`. */
 .docs-aside {
@@ -398,6 +406,11 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.docs-list-rows .ui-row-label {
+  flex: none;
+  max-width: 60%;
 }
 
 /* The sidebar's Wiki and All pages switch, its shown view in `fg`. */

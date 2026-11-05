@@ -16,8 +16,8 @@ import {
 import type { IndexEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
-  AsideLinkInput,
   DocHeaderInput,
+  DocsKit,
   Layout,
   ListRowInput,
   RecentChangesInput,
@@ -62,19 +62,16 @@ function frameLayout(marker: string): Layout {
 }
 
 // A layout drawing the right column's headings and rows as plain lines that
-// hold their titles, `links` recording each row's input.
-function asideLayout() {
-  const links: AsideLinkInput[] = [];
-  const layout: Layout = {
+// hold their titles.
+function asideLayout(): Layout {
+  return {
     asideHeading(parent, input, kit) {
       return { element: kit.el(parent, 'div', ASIDE_HEADING, input.title) };
     },
     asideLink(parent, input, kit) {
-      links.push(input);
       return { element: kit.el(parent, 'div', ASIDE_LINK, input.title) };
     },
   };
-  return { layout, links };
 }
 
 const ASIDE_HEADING = 'test-aside-heading';
@@ -374,7 +371,7 @@ describe('createDocView', () => {
     'open_DocKind_DrawsTheAsideSectionsItHas $path $text $linkedRows',
     async ({ path, text, detail, linkedRows, headings, isHidden }) => {
       const { view, replies } = docViewOver(() =>
-        withUser(defaultLayout, asideLayout().layout),
+        withUser(defaultLayout, asideLayout()),
       );
       replies.readDoc = text;
       view.setEntries(
@@ -409,44 +406,37 @@ describe('createDocView', () => {
     expect(asideOf(view).hidden).toBe(false);
   });
 
-  it('asideLink_NestedHeadings_IndentsFromTheLeastLevel', async () => {
-    const { layout, links } = asideLayout();
-    const { view, replies } = docViewOver(() =>
-      withUser(defaultLayout, layout),
+  it('pageFrame_LeavesOutItsParts_PlacesTheArticleFirstAndTheAsideLast', () => {
+    const { view } = docViewOver(() =>
+      withUser<Layout>(defaultLayout, {
+        pageFrame(parent, _input, kit) {
+          const frame = kit.el(parent, 'div', 'test-frame');
+          kit.el(frame, 'div', 'test-own');
+          return { element: frame };
+        },
+      }),
     );
-    replies.readDoc = '## A\n### B';
 
-    await view.open(target(null));
-
-    expect(links.map(({ depth }) => depth)).toEqual([0, 1]);
+    expect(
+      findAll(asFake(view.element), 'test-frame')[0].children.map(
+        (child) => child.className,
+      ),
+    ).toEqual(['docs-article', 'test-own', 'docs-aside']);
   });
 
-  it('asideLink_OnThisPage_RootTitleIsTheSectionTitle', async () => {
-    const { view, replies } = docViewOver(() =>
-      withUser(defaultLayout, asideLayout().layout),
-    );
-    replies.readDoc = '## A';
-
+  it('open_AnotherDoc_ScrollsTheAsideToTheTop', async () => {
+    const { view } = docViewOver(() => withUser(defaultLayout, asideLayout()));
     await view.open(target(null));
+    asideOf(view).scrollTop = 40;
 
-    expect(rowsOf(view)[0].title).toBe('A');
-  });
+    await view.open(target(null, OTHER_DOC));
 
-  it('asideLink_LinkedFrom_RootTitleIsTheTildePath', async () => {
-    const { view, replies } = docViewOver(() =>
-      withUser(defaultLayout, asideLayout().layout),
-    );
-    replies.readDoc = 'plain';
-    view.setEntries([linkingEntry('/home/source.md', '/home/notes.md', 5)]);
-
-    await view.open(target(null));
-
-    expect(rowsOf(view)[0].title).toBe('~/source.md');
+    expect(asideOf(view).scrollTop).toBe(0);
   });
 
   it('clickOnThisPage_ScrollsToTheHeadingsBlock', async () => {
     const { view, replies } = docViewOver(() =>
-      withUser(defaultLayout, asideLayout().layout),
+      withUser(defaultLayout, asideLayout()),
     );
     replies.readDoc = '---\nname: a\n---\n## A\n\n## B\n\n## C';
     await view.open(target(null));
@@ -460,7 +450,7 @@ describe('createDocView', () => {
 
   it('clickLinkedFrom_FollowsToTheLinkingLine', async () => {
     const { view, deps, replies } = docViewOver(() =>
-      withUser(defaultLayout, asideLayout().layout),
+      withUser(defaultLayout, asideLayout()),
     );
     const followFile = vi.spyOn(deps, 'followFile');
     replies.readDoc = 'plain';
@@ -473,9 +463,7 @@ describe('createDocView', () => {
   });
 
   it('setEntries_DocOpen_DrawsLinkedFromAgain', async () => {
-    const { view } = docViewOver(() =>
-      withUser(defaultLayout, asideLayout().layout),
-    );
+    const { view } = docViewOver(() => withUser(defaultLayout, asideLayout()));
     await view.open(target(null));
     const pane = scroller(view.element);
     pane.scrollTop = 120;
@@ -493,13 +481,197 @@ describe('createDocView', () => {
     });
   });
 
+  it.each([
+    {
+      name: 'to a linked path',
+      from: DOC,
+      to: '/home/moved.md',
+      rendered: '# Doc',
+      headings: ['On this page', 'Linked from'],
+      hasSectionHint: true,
+    },
+    {
+      name: '.md to not .md',
+      from: DOC,
+      to: '/home/moved.json',
+      rendered: '```json\n# Doc\n```',
+      headings: [],
+      hasSectionHint: false,
+    },
+    {
+      name: 'not .md to .md',
+      from: '/home/a.json',
+      to: '/home/moved.md',
+      rendered: '# Doc',
+      headings: ['On this page', 'Linked from'],
+      hasSectionHint: true,
+    },
+  ])(
+    'retarget_NoEditor_DrawsForTheNewPath $name',
+    async ({ from, to, rendered, headings, hasSectionHint }) => {
+      const { view, deps, anchored } = docViewOver(() =>
+        withUser(defaultLayout, asideLayout()),
+      );
+      view.setEntries([linkingEntry('/home/source.md', '/home/moved.md', 5)]);
+      await view.open(target(null, from));
+      const render = vi.spyOn(deps.markdown, 'document');
+
+      view.retarget(target(null, to));
+      await settled();
+
+      expect({
+        rendered: render.mock.calls.map(([text]) => text),
+        headings: titlesOf(view, ASIDE_HEADING),
+        isAsideHidden: asideOf(view).hidden,
+        isSectionHintHidden: anchored['editSection'].hidden,
+      }).toEqual({
+        rendered: [rendered],
+        headings,
+        isAsideHidden: headings.length === 0,
+        isSectionHintHidden: !hasSectionHint,
+      });
+    },
+  );
+
+  it.each<{
+    name: string;
+    from: DocTarget;
+    to: DocTarget;
+    isEditing: boolean;
+    rendered: string[];
+    isAsideHidden: boolean;
+  }>([
+    {
+      name: 'an editor open, to not .md',
+      from: target(null),
+      to: target(null, '/home/moved.json'),
+      isEditing: true,
+      rendered: [],
+      isAsideHidden: true,
+    },
+    {
+      name: 'a doc to a target with a detail',
+      from: target(null),
+      to: { ...target(null, '/home/moved.md'), detail: hookDetail },
+      isEditing: false,
+      rendered: [],
+      isAsideHidden: true,
+    },
+    {
+      name: 'a target with a detail',
+      from: { ...target(null), detail: hookDetail },
+      to: { ...target(null, '/home/moved.md'), detail: hookDetail },
+      isEditing: false,
+      rendered: [],
+      isAsideHidden: true,
+    },
+    {
+      name: 'a detail with its editor open, to a target with a detail',
+      from: { ...target(null), detail: hookDetail },
+      to: { ...target(null, '/home/moved.md'), detail: hookDetail },
+      isEditing: true,
+      rendered: [],
+      isAsideHidden: true,
+    },
+    {
+      name: 'a detail to a target with none reads the file',
+      from: { ...target(null), detail: hookDetail },
+      to: target(null, '/home/moved.md'),
+      isEditing: false,
+      rendered: ['# Doc'],
+      isAsideHidden: false,
+    },
+  ])(
+    'retarget_NothingToRenderFromItsText $name',
+    async ({ from, to, isEditing, rendered, isAsideHidden }) => {
+      const { view, deps, editors } = docViewOver(() =>
+        withUser(defaultLayout, asideLayout()),
+      );
+      await view.open(from);
+      if (isEditing) {
+        view.edit(1);
+        await settled();
+      }
+      const render = vi.spyOn(deps.markdown, 'document');
+
+      view.retarget(to);
+      await settled();
+
+      expect({
+        rendered: render.mock.calls.map(([text]) => text),
+        destroys: editors.flatMap(({ destroy }) => destroy.mock.calls),
+        path: view.openPath(),
+        isAsideHidden: asideOf(view).hidden,
+      }).toEqual({ rendered, destroys: [], path: to.path, isAsideHidden });
+    },
+  );
+
+  it.each([
+    {
+      name: "the shown entry's new title",
+      entryId: DOC,
+      entries: () => [{ ...linkingEntry(DOC, OTHER_DOC, 3), title: 'New' }],
+      titles: ['notes', 'New'],
+    },
+    {
+      name: "a target no entry named, its file's entry now listed",
+      entryId: null,
+      entries: () => [{ ...linkingEntry(DOC, OTHER_DOC, 3), title: 'New' }],
+      titles: ['notes', 'New'],
+    },
+    {
+      name: "a target with an item's entry, not its file's title",
+      entryId: `${DOC}#L5`,
+      entries: () => [
+        { ...linkingEntry(DOC, OTHER_DOC, 3), title: 'File' },
+        {
+          ...linkingEntry(DOC, OTHER_DOC, 3),
+          id: `${DOC}#L5`,
+          line: 5,
+          title: 'Item',
+        },
+      ],
+      titles: ['notes', 'Item'],
+    },
+    {
+      name: 'the same title draws nothing',
+      entryId: DOC,
+      entries: () => [{ ...linkingEntry(DOC, OTHER_DOC, 3), title: 'notes' }],
+      titles: ['notes'],
+    },
+    {
+      name: 'the entry gone keeps the title',
+      entryId: DOC,
+      entries: () => [],
+      titles: ['notes'],
+    },
+  ])('setEntries_ShownTitle $name', async ({ entryId, entries, titles }) => {
+    const headers: DocHeaderInput[] = [];
+    const header: Layout = {
+      docHeader(parent, input, kit) {
+        headers.push(input);
+        return { element: kit.el(parent, 'div') };
+      },
+    };
+    const chip = { text: '', tooltip: '', state: 'none' } as const;
+    const { view } = docViewOver(
+      () => withUser(defaultLayout, header),
+      () => ({ claude: chip, codex: chip }),
+    );
+    await view.open(target(entryId));
+
+    view.setEntries(entries());
+
+    expect(headers.map(({ title }) => title)).toEqual(titles);
+  });
+
   it('diskChanged_DocScrolled_KeepsBothScrollsAndShowsNewHeadings', async () => {
     installFocusFakeDom(
       (name, value) => vi.stubGlobal(name, value),
       ShrinkingScrollerFakeElement,
     );
     const { view, replies } = docViewOver(() =>
-      withUser(defaultLayout, asideLayout().layout),
+      withUser(defaultLayout, asideLayout()),
     );
     await view.open(target(null));
     const pane = scroller(view.element);
@@ -759,6 +931,19 @@ describe('createDocView', () => {
       late: ({ view }) => view.retarget(target(null, '/home/moved.md')),
     },
     { name: 'a clear', late: ({ view }) => view.clear() },
+    {
+      name: 'a page',
+      late: ({ view }) => {
+        view.showPage(list(['a']));
+      },
+    },
+    {
+      name: 'a list update',
+      inFlight: ({ view }) => {
+        view.showPage(list(['a']));
+      },
+      late: ({ view }) => view.updateList(listOf(['b'])),
+    },
     { name: 'a chip refresh', late: ({ view }) => view.refreshChips() },
     { name: 'an entries change', late: ({ view }) => view.setEntries([]) },
     {
@@ -1056,15 +1241,73 @@ describe('createDocView', () => {
       });
     });
 
-    it('clickOnThisPage_HiddenSection_LandsOnTheBlockAboveTheEditor', async () => {
-      const { view } = await openSection(TWO_SECTIONS);
-      const pane = scroller(view.element);
-      pane.scrollTop = 0;
+    it.each([
+      { name: "the open section's row", row: 1 },
+      { name: "a nested heading's row", row: 2 },
+    ])(
+      'clickOnThisPage_HiddenSection_LandsOnTheEditor $name',
+      async ({ row }) => {
+        const { view } = await openSection('# T\n\n## A\n### N\n\n## B\ny');
+        const pane = scroller(view.element);
+        pane.scrollTop = 50;
+        const frame = findAll(asFake(view.element), 'docs-editor-frame')[0];
+        (frame as ScrollerFakeElement).rectTop = 30;
 
-      findAll(asFake(view.element), 'ui-row')[1].click();
+        findAll(asFake(view.element), 'ui-row')[row].click();
 
-      // The block of line 1, two pixels above `## A`'s.
-      expect(pane.scrollTop).toBe(-2);
+        expect(pane.scrollTop).toBe(80);
+      },
+    );
+
+    it.each([
+      {
+        name: 'the banner, by a change on disk',
+        act: async ({ view, replies }: OpenSection) => {
+          replies.readDoc = 'other';
+          view.diskChanged(DOC);
+          await settled();
+        },
+      },
+      {
+        name: 'the prompt, by a :w conflict',
+        act: (shown: OpenSection) => hitConflict(shown, 'other'),
+      },
+    ])('notice_AboveASectionEditor_ScrollsToIt $name', async ({ act }) => {
+      const noticeAt = (parent: HTMLElement, kit: DocsKit) => {
+        const notice = kit.el(parent, 'div');
+        (asFake(notice) as ScrollerFakeElement).rectTop = -30;
+        return { element: notice };
+      };
+      const shown = await openSection(TWO_SECTIONS, 3, () =>
+        withUser<Layout>(defaultLayout, {
+          diskBanner: (parent, _input, kit) => noticeAt(parent, kit),
+          conflictPrompt: (parent, _input, kit) => noticeAt(parent, kit),
+        }),
+      );
+
+      await act(shown);
+
+      expect(scroller(shown.view.element).scrollTop).toBe(
+        SCROLL_BEFORE_OPEN - 30,
+      );
+    });
+
+    it.each([
+      { open: 'edit', lines: ['editing notes.md'] },
+      { open: 'editSection', lines: ['editing section A in notes.md'] },
+    ] as const)('editing_LogsOneLine $open', async ({ open, lines }) => {
+      const { view, deps } = await sectionDoc(TWO_SECTIONS);
+      const log = vi.spyOn(deps, 'log');
+      scroller(view.element).scrollTop = 100;
+      addBlocks(view, block(3, 0));
+
+      view[open]();
+
+      expect(
+        log.mock.calls
+          .map(([line]) => line)
+          .filter((line) => line.startsWith('editing')),
+      ).toEqual(lines);
     });
   });
 
@@ -1691,15 +1934,33 @@ describe('createDocView', () => {
       const { view, deps, replies } = shown;
       const followPlace = vi.spyOn(deps, 'followPlace');
       replies.readDoc = '---\nname: a\n---\nbody';
-      findAll(asFake(view.element), 'docs-body')[0].querySelector = () =>
-        heading(3, 'x');
+      const pane = scroller(view.element);
+      const landed = heading(3, 'x');
+      Object.defineProperty(landed, 'rectTop', {
+        get: () => 200 - pane.scrollTop,
+      });
+      const body = findAll(asFake(view.element), 'docs-body')[0];
+      body.querySelector = () => landed;
+      body.querySelectorAll = () => [landed];
       await view.open({ ...target(null), fragment: 'x' });
       await view.open(target(null, OTHER_DOC));
 
       view.historyBack();
+
+      expect(followPlace.mock.calls).toEqual([[DOC, 6]]);
+    });
+
+    it('moveWithinDoc_DidNotScroll_RecordsOnePlace', async () => {
+      const { view } = await sectionDoc(TWO_SECTIONS);
+      const pane = scroller(view.element);
+      pinBlocks(view);
+      pane.scrollTop = 110;
+
+      // Line 5 has no block, so the move lands on line 4's, where the pane is.
+      clickLink(view, { docPath: DOC, docLine: '5' });
       view.historyBack();
 
-      expect(followPlace.mock.calls.at(-1)).toEqual([DOC, 6]);
+      expect(pane.scrollTop).toBe(0);
     });
 
     it('clickOnThisPage_ThenBack_ReturnsToTheReadPlace', async () => {
@@ -1761,33 +2022,6 @@ describe('createDocView', () => {
   });
 
   describe('pages', () => {
-    const PLACE = 'wiki:kind/skill';
-
-    // A list page at `place` with one group, each title also its entry id.
-    function listOf(titles: string[], place = PLACE): ListPageContent {
-      return {
-        place,
-        input: {
-          title: 'Skills',
-          count: titles.length,
-          groups: [
-            {
-              title: 'Global',
-              rows: titles.map((title) => ({
-                title,
-                path: `~/${title}`,
-                time: null,
-              })),
-            },
-          ],
-        },
-        entryIds: [titles],
-      };
-    }
-
-    const list = (titles: string[], place = PLACE) =>
-      ({ type: 'list', content: listOf(titles, place) }) as const;
-
     // A doc view whose list rows and Recent changes draw through a user layout
     // that records their inputs.
     function pageView(extra: Layout = {}) {
@@ -1934,10 +2168,20 @@ describe('createDocView', () => {
       ]);
     });
 
-    it('history_MainEmpty_IsNoPlace', async () => {
+    it.each<{ name: string; show(view: DocView): Promise<unknown> | boolean }>([
+      {
+        name: 'the empty Main page',
+        show: (view) => view.showPage({ type: 'mainEmpty', path: '~/Main.md' }),
+      },
+      {
+        name: 'a detail',
+        show: (view) =>
+          view.open({ ...target(null, '/home/hook.md'), detail: hookDetail }),
+      },
+    ])('history_IsNoPlace $name', async ({ show }) => {
       const { view, followPlace } = pageView();
       await view.open(target(null, DOC));
-      view.showPage({ type: 'mainEmpty', path: '~/Main.md' });
+      await show(view);
       await view.open(target(null, OTHER_DOC));
 
       view.historyBack();
@@ -2198,6 +2442,33 @@ describe('createDocView', () => {
 
 const LIST_ROW = 'test-list-row';
 const RECENT = 'test-recent';
+const PLACE = 'wiki:kind/skill';
+
+// A list page at `PLACE` with one group, each title also its entry id.
+function listOf(titles: string[]): ListPageContent {
+  return {
+    place: PLACE,
+    input: {
+      title: 'Skills',
+      count: titles.length,
+      groups: [
+        {
+          title: 'Global',
+          rows: titles.map((title) => ({
+            title,
+            path: `~/${title}`,
+            time: null,
+          })),
+        },
+      ],
+    },
+    entryIds: [titles],
+  };
+}
+
+function list(titles: string[]) {
+  return { type: 'list', content: listOf(titles) } as const;
+}
 
 // The path `target(null)` opens, and another doc's.
 const DOC = '/home/notes.md';
@@ -2224,8 +2495,12 @@ async function sectionDoc(
 // A section editor on `text`'s section at file line `line`, its blocks in
 // `blocks`: the file's lines 1, 3, 4, 6 and 7, with the block of `line` at the
 // top of sight.
-async function openSection(text: string, line = 3) {
-  const shown = await sectionDoc(text);
+async function openSection(
+  text: string,
+  line = 3,
+  layouts?: () => ShownLayouts<Layout>,
+) {
+  const shown = await sectionDoc(text, target(null), layouts);
   scroller(shown.view.element).scrollTop = SCROLL_BEFORE_OPEN;
   const lines = [1, 3, 4, 6, 7];
   const blocks = lines.map((sourceLine) =>
@@ -2236,9 +2511,11 @@ async function openSection(text: string, line = 3) {
   return { ...shown, blocks };
 }
 
+type OpenSection = Awaited<ReturnType<typeof openSection>>;
+
 // Runs `:w` in the first editor against a disk that holds `diskText`.
 async function hitConflict(
-  { editors, replies }: Awaited<ReturnType<typeof openSection>>,
+  { editors, replies }: OpenSection,
   diskText: string,
 ) {
   replies.writeDoc = { type: 'changedOnDisk', diskText };

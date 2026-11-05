@@ -82,8 +82,9 @@ export interface TreeRowKit extends DocsKit {
 // The doc pane, scope `docs.doc`. The app sets `data-doc` on the element the pane draws into: `none` while no doc is
 // open, `open`, `editing`, or `page` while a page with no file shows: a list page or the empty Main page.
 export interface DocPaneKit extends DocsKit {
-  // The app's scroller `div.docs-doc`: it holds the doc parts and the editor, scrolls, and takes focus. Appended at
-  // the end when left out.
+  // The app's scroller `div.docs-doc`: it holds the doc parts and the editor, scrolls, and takes focus. Its size
+  // containment gives it no height from its content, so its parent gives it a definite height. Appended at the end
+  // when left out.
   scroller(parent: HTMLElement): HTMLElement;
 }
 // The doc pane while no doc is open.

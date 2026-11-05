@@ -124,7 +124,8 @@
   position: relative;
 }
 
-/* The empty state sits centred in the pane while no doc is open. */
+/* The empty state sits centred in the pane while no doc is open, and on the
+   empty Main page. */
 .docs-doc > .docs-slot > .ui-empty,
 .docs-article > .docs-page-slot > .ui-empty {
   height: 100%;
@@ -151,7 +152,7 @@
 .docs-editor.is-section {
   flex: none;
   height: min(
-    60vh,
+    60cqh,
     calc(
       (var(--docs-section-rows) + 2) * var(--wg-text-prose) *
         var(--wg-leading-prose)
@@ -169,11 +170,6 @@
 .docs-completion .ui-row-label {
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-12);
-}
-
-.docs-list-rows .ui-row-label {
-  flex: none;
-  max-width: 60%;
 }
 
 @media (max-width: 800px) {
