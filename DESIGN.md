@@ -393,16 +393,20 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   model-scoped limit) shows only while used, and extra usage only while on and spent.
 - **Unity pool:** a session row holding a pool clone carries a neutral Tag, `Unity 3`, in its row parts' line, and
   one waiting in a pool's queue an `attention` Tag, `Unity: queued 2nd`; one Tag per pool. While the shown session is
-  in a pool, the right bar holds the pool panel after the usage details: a section header `Unity pool · <pool>` over
-  one row per clone, which wraps in the bar's width: the title, the branch in `font-mono`, a `warning` `dirty` Tag
-  while the tree is dirty, the editor's state in `fg-tertiary`, then the holder (a session's row label in `fg-link`,
-  a click selecting its row; `Held by you` or `session <id>` in `fg-secondary`) and the Hold or Release button at the
-  row's end, disabled while its run is in flight. A `text-12` line under the row shows an open handoff's time left,
-  a stranded mark in `status-warning`, a warm-up in `status-running` while it runs or `status-error` with its error
-  once it failed, and the last Hold or Release's result (`status-error` for a failure). While a queue ticket waits
-  long, each clone that blocks the queue takes the `status-attention-tint` fill and edge and shows `idle <time>`. The
-  queue follows under a `Queue` section header, one row per ticket: its position, the waiting session, its branch in
-  mono and `waited <time>`; no queue draws no header.
+  in a pool, the right bar holds the pool panel after the usage details: a section header `Unity pool · <pool>`, a
+  `text-12` `fg-tertiary` summary of the counts (`3 free · 1 held`: free always, the rest while not zero), then a
+  two-column grid of `card-background` `radius-md` tiles, one per clone. A tile's head holds its StatusDot (`success`
+  free, `running` a session's, `idle` the user's hold, `warning` stranded or dirty with no holder), its title, and at
+  its end the Hold button (`ghost`) or Release button (`secondary`), disabled while its run is in flight. Under the head
+  in `text-12`: the branch in `font-mono`, wrapping anywhere; the editor's state in `fg-tertiary` with a `warning`
+  `dirty` Tag while the tree is dirty; then `Free` in `status-success`, or `Stranded` in `status-warning` and the holder
+  (a session's row label in `fg-link`, a click selecting its row; `Held by you` or `session <id>` in `fg-secondary`).
+  Each only while it applies, the tile then shows an open handoff's time left, a stranded mark's reason in
+  `status-warning`, a warm-up in `status-running` while it runs or a `warning` icon and `not warmed` in `status-warning`
+  once it failed, its error in the tooltip because a failed warm-up blocks no claim, and the last Hold or Release's
+  result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
+  `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
+  row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.

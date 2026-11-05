@@ -63,6 +63,18 @@ export function unityPoolSelfTestScript(
       ],
     },
     {
+      name: 'tiles',
+      why: 'Every clone state draws in its tile: held, free with a failed warm-up, stranded with its reason, and free while warming up.',
+      steps: [
+        {
+          writeFile: stateAt('tiles'),
+          keys: [],
+          expect: line(`panel ${SELFTEST_POOL}: 1 held, 2 free, 0 queued`),
+          screenshot: 'tiles',
+        },
+      ],
+    },
+    {
       name: 'long wait',
       why: 'A queue ticket past the long-wait mark marks every clone that keeps the queue waiting as blocking: the agent-claimed clone and the user-held one.',
       steps: [
