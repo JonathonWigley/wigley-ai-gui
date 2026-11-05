@@ -22,6 +22,7 @@ import {
   type SampleCell,
 } from './gallery-parts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 function fakeDeps(
   keys: GalleryPartsDeps['keys'] = recordingAnchors().keys,
@@ -36,6 +37,7 @@ function fakeDeps(
     keys,
     commands: { exists: () => true, run: vi.fn() },
     platform: 'macos',
+    state: noLayoutState,
     log: vi.fn(),
   };
 }

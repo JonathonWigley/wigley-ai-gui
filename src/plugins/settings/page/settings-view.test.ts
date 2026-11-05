@@ -25,6 +25,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
 import { createSettingsView, type SettingsView } from './settings-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One plugin section: a string leaf, then a choice leaf defaulting to `a`.
 const SCHEMA: UserConfigSchema = {
@@ -100,6 +101,7 @@ async function shownView(isSideBarShown = true) {
     editor: {} as EditorHost,
     matcher: fakeFuzzyMatcher,
     platform: 'macos',
+    state: noLayoutState,
     markdown: {
       block: (text) => text,
       inline: (text) => text,

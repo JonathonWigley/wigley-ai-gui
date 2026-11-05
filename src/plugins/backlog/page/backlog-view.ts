@@ -18,6 +18,7 @@ import type {
 } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
   CommandsRunIn,
   KeyHints,
@@ -146,6 +147,8 @@ export interface BacklogViewDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   keys: KeyHints;
   platform: OsName;
+  // The slots a layout's kit reads.
+  state: LayoutState;
   // The commands a layout's kit runs by qualified id.
   commands: KitCommands;
   // The `tags` setting as the user config now sets it.
@@ -235,6 +238,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
   };
   const kitFor = (scope: BacklogKitScope, rollback: RollbackDeps) =>
     createBacklogKit(kitServices, scope, rollback);

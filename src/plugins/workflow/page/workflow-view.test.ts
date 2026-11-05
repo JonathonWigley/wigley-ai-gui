@@ -28,6 +28,7 @@ import { createStageList } from '../stage-list';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createWorkflowView, type WorkflowView } from './workflow-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NO_SECTION = { setSummary: () => undefined };
 
@@ -139,6 +140,7 @@ function setUp(previews: readonly string[] = []) {
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: (line: string) => logged.push(line),
     clock: { now: () => now },

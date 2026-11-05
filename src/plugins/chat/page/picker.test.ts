@@ -11,6 +11,7 @@ import {
 } from '../../../shared/page/test-dom';
 import type { ChatLayouts } from './chat-layouts';
 import { createPicker } from './picker';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOOP = () => undefined;
 
@@ -64,6 +65,7 @@ function pickerSetup() {
     markdown: {} as never,
     commands: { exists: () => true, run: NOOP },
     platform: 'macos',
+    state: noLayoutState,
   });
   return { picker, layer: layer as unknown as FakeElement };
 }

@@ -16,6 +16,7 @@ import { mountHelpView } from '../help-view';
 import { mountWhichKeyView } from '../which-key-view';
 import { createKeysParts } from './keys-parts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // A part drawer whose kits record each anchor they name in `anchors`.
 function fakeKeysParts() {
@@ -32,6 +33,7 @@ function fakeKeysParts() {
       keys,
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: () => undefined,
   });

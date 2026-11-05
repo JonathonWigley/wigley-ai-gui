@@ -1,7 +1,9 @@
+import type { Disposable } from '../../../../contracts/disposable';
 import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { OsName } from '../../../../contracts/platform';
 import type { KeyHints } from '../../../../contracts/plugin';
+import type { LayoutState } from '../../../../contracts/state';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
@@ -20,7 +22,8 @@ export interface ItemCard {
 // scope and the anchors that show them (a card reads and anchors in the forms
 // view's), the platform key hints are drawn for, the log, the registered
 // commands `kit.command` checks and runs, the card parts other plugins
-// added, and where each markdown mount the card makes is recorded for
+// added, the slots `kit.state` reads, where each slot subscription the card
+// makes is recorded, and where each markdown mount it makes is recorded for
 // disposal.
 export interface CardDeps {
   markdown: MarkdownRenderer;
@@ -33,6 +36,8 @@ export interface CardDeps {
   log: PluginLog;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts'>;
+  state: LayoutState;
+  recordAnchor(anchor: Disposable): void;
   recordMount(mount: MarkdownMount): void;
 }
 

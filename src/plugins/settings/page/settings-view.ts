@@ -7,6 +7,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
   KeyHints,
   PageChannel,
@@ -167,7 +168,7 @@ export interface RowContext {
   toast(text: string, tone: ToastTone): void;
 }
 
-// `markdown`, `keys` and `commands` are what the layout's kits read.
+// `markdown`, `keys`, `commands` and `state` are what the layout's kits read.
 export interface SettingsViewDeps {
   channel: PageChannel<SettingsChannel>;
   editor: EditorHost;
@@ -176,6 +177,7 @@ export interface SettingsViewDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   commands: KitCommands;
+  state: LayoutState;
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;
   setScope(scope: 'sections' | 'rows'): void;
@@ -278,6 +280,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
   };
   const parts = createLayoutParts<SettingsLayout, CompleteSettingsLayout>({
     owner: 'settings',

@@ -8,6 +8,7 @@ import {
 import { chatCommand } from '../ids';
 import { createEntryKit } from './chat-kit';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 describe('createEntryKit', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
@@ -42,6 +43,7 @@ describe('createEntryKit', () => {
         },
         commands: { exists: () => true, run: () => undefined },
         platform: 'macos',
+        state: noLayoutState,
         allow: () => undefined,
         deny: () => undefined,
         openImages: () => undefined,

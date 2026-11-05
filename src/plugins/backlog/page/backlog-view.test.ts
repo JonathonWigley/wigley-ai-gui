@@ -27,6 +27,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
 import { createBacklogView } from './backlog-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const ROOT = '/home/repo/docs/features';
 
@@ -172,6 +173,7 @@ async function backlogSetup() {
     },
     keys,
     platform: 'macos',
+    state: noLayoutState,
     commands: { exists: () => true, run: () => undefined },
     tags: () => ['agent-ready', 'later'],
     openDoc: () => undefined,

@@ -6,6 +6,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
@@ -71,7 +72,8 @@ import {
 // moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
 // rail's dragged width; `timers` runs the split's resize prompt linger.
 // `commands` is what every kit's `command` checks and runs; `contributions`
-// holds the card parts and review columns other plugins added.
+// holds the card parts and review columns other plugins added; `state` is
+// what every kit's `state` reads.
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<
@@ -92,6 +94,7 @@ export interface RoundViewDeps {
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
   platform: OsName;
+  state: LayoutState;
   uiState: UiState;
   timers: Timers;
   log: PluginLog;
@@ -311,6 +314,8 @@ function buildRoundParts(
     shownView: () => deps.getState().view,
     commands: deps.commands,
     contributions: deps.contributions,
+    state: deps.state,
+    recordAnchor: (anchor) => anchors.push(anchor),
     recordMount: (mount) => anchors.push(mount),
   };
   const railHead = buildRailHead(split.start, keys);
@@ -323,6 +328,7 @@ function buildRoundParts(
       {
         ...deps,
         keys: recordingKeys(deps.keys, headAnchors),
+        recordAnchor: (anchor) => headAnchors.push(anchor),
         recordMount: (mount) => headAnchors.push(mount),
       },
       formsScope('forms'),
@@ -351,6 +357,8 @@ function buildRoundParts(
     log: deps.log,
     commands: deps.commands,
     contributions: deps.contributions,
+    state: deps.state,
+    recordAnchor: (anchor) => anchors.push(anchor),
     recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>

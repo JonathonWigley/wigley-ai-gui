@@ -15,6 +15,7 @@ import type { Roster, RosterSkill } from '../../agents/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, SkillListInput } from '../layouts/layout';
 import { createSkillList } from './skill-list';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const SESSION = 'row-1';
 
@@ -59,6 +60,7 @@ function setUp(skills: RosterSkill[] = []) {
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: (message) => logged.push(message),
     nameOf: () => 'proj',

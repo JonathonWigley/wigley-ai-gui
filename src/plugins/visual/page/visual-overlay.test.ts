@@ -10,6 +10,7 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import { createVisualParts } from './layout/visual-parts';
 import { createVisualOverlay } from './visual-overlay';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // An overlay over fake frames and the default layout: its backdrop, its log
 // lines, how many times its scope popped, and the scope's base-changed and
@@ -32,6 +33,7 @@ function overlayFixture() {
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: () => undefined,
   });

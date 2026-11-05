@@ -17,6 +17,7 @@ import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -135,6 +136,7 @@ function formTabSetup(others: string[] = []) {
     commands: { exists: () => false, run: vi.fn() },
     contributions: createFormsContributions(),
     platform: 'macos',
+    state: noLayoutState,
     uiState: { get: () => undefined, set: () => undefined },
     timers: { set: () => 0, clear: () => undefined },
     drops: {

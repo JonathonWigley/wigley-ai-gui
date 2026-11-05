@@ -39,6 +39,7 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
           run: (id) => api.commands.run(id),
         },
         platform: api.platform.os,
+        state: api.state.forLayouts,
       },
       log: services.log,
     });

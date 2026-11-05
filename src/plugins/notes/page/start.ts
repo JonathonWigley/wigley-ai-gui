@@ -71,6 +71,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
         run: (id) => api.commands.run(id),
       },
       platform: api.platform.os,
+      state: api.state.forLayouts,
       pushScope: (scope) => api.keys.pushScope(scope),
       autosaveDelayMs: () => api.settings().autosaveDelayMs,
       selectedSession: () => {

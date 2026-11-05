@@ -13,6 +13,7 @@ import { fakeUiState, sessionRow } from './session-fakes';
 import { createSessionRecency } from './session-recency';
 import { mountSessionsView } from './sessions-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 export { sessionRow };
 
@@ -37,6 +38,7 @@ function fakeKitServices() {
       ...NO_FENCES,
     },
     platform: 'macos' as const,
+    state: noLayoutState,
     commands: { exists: () => true, run: () => undefined },
     log: (message: string) => {
       logged.push(message);

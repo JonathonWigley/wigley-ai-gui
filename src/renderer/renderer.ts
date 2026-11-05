@@ -41,6 +41,7 @@ import {
   createRuntimeCommands,
   EMPTY_RUNTIME_CATALOG,
 } from '../shared/runtime-commands';
+import { layoutState } from '../shared/state/slot-store';
 import { wireAnchors } from './anchor-wiring';
 import { createBoxFocus } from './box-focus';
 import { mountCodeColours } from './codemirror-vim/code-colours';
@@ -210,6 +211,7 @@ async function start() {
         exists: hasHandler,
         run: (id) => commands.router.run(id, undefined),
       },
+      state: layoutState(state, 'shell', (handle) => handle),
     },
     instance: config.appInstance,
     log,

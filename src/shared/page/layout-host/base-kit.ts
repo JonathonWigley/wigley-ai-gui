@@ -5,6 +5,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { OsName } from '../../../contracts/platform';
 import type { PluginManifest } from '../../../contracts/plugin';
+import type { LayoutState } from '../../../contracts/state';
 import { qualify } from '../../plugin-manifests';
 import { appended, element } from '../dom';
 import { createMarkdownMount, type MarkdownMount } from '../markdown-mount';
@@ -27,11 +28,10 @@ import type { BaseKit } from './kit';
 // part's keys fire in; null anchors with no scope, so a hint shows in every
 // scope, and reads keys in any scope. `commandNamed` turns the owner's short
 // command name into its qualified id, null for a name the owner lacks.
-// `recordAnchor`, the drawing attempt's, takes each anchor the kit names;
-// left out, recording them is the `keys`' job, as forms' recording `keys`
-// does for its own anchors too. `recordMount` takes the kit's markdown mount;
-// left out, nothing disposes it. `log` takes the mount's lines; left out,
-// they are dropped.
+// `recordAnchor`, the drawing attempt's, takes each anchor the kit names and
+// each slot subscription its layout makes. `state` is what `kit.state` reads.
+// `recordMount` takes the kit's markdown mount; left out, nothing disposes it.
+// `log` takes the mount's lines; left out, they are dropped.
 export interface BaseKitDeps {
   markdown: MarkdownRenderer;
   keys: {
@@ -46,7 +46,8 @@ export interface BaseKitDeps {
   scope: ViewScope | null;
   commandNamed(short: string): CommandId | null;
   platform: OsName;
-  recordAnchor?(anchor: Disposable): void;
+  state: LayoutState;
+  recordAnchor(anchor: Disposable): void;
   recordMount?(mount: MarkdownMount): void;
   log?: PluginLog;
 }
@@ -58,6 +59,7 @@ export interface OwnerKitServices {
   keys: BaseKitDeps['keys'];
   commands: KitCommands;
   platform: OsName;
+  state: LayoutState;
   log?: PluginLog;
 }
 
@@ -91,6 +93,7 @@ export function ownerBaseKitDeps(
     keys: services.keys,
     commands: services.commands,
     platform: services.platform,
+    state: services.state,
     scope: qualifiedScope(manifest.id, scope),
     commandNamed: commandNamedIn(manifest),
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
@@ -132,7 +135,8 @@ export function commandRunner(
 // The parts every owner's layout draws with, so an owner makes one per part
 // draw. It holds one markdown mount, made on its first markdown draw and
 // handed to `deps.recordMount` then; it builds nothing else until a member is
-// called.
+// called. `state.read(id).on` hands its subscription to `deps.recordAnchor`,
+// so a layout holds no handle.
 export function createBaseKit(deps: BaseKitDeps): BaseKit {
   const keysFor = (id: CommandId) =>
     deps.scope === null
@@ -197,7 +201,7 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
           id,
           anchorOptions(deps.scope, options.label),
         );
-        deps.recordAnchor?.(anchor);
+        deps.recordAnchor(anchor);
       }
       return node;
     },
@@ -255,6 +259,17 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     rowTrailing: (parentRow) =>
       appended(parentRow, element('span', 'ui-row-trailing')),
     duration: (ms) => durationText(ms),
+    state: {
+      read(id) {
+        const reader = deps.state.read(id);
+        return {
+          get: (key) => reader.get(key),
+          on(listener) {
+            deps.recordAnchor(reader.on(listener));
+          },
+        };
+      },
+    },
   };
   return kit;
 }

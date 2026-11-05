@@ -17,6 +17,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { createSideSections, type SideTab } from './side-sections';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const COLLAPSED = 'collapsed-sections';
 const HIDDEN = 'hub-hidden';
@@ -52,6 +53,7 @@ function setUp(uiState = fakeUiState()) {
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
       log,
     },
     parts,

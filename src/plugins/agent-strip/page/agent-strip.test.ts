@@ -20,6 +20,7 @@ import type { ComposerStopExits } from '../../chat/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { AgentBoxInput, Layout } from '../layouts/layout';
 import { createAgentStrip } from './agent-strip';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOW = 1_000_000;
 const SESSION = 'row-1';
@@ -172,6 +173,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
       },
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: (line: string) => logged.push(line),
     clock: { now: () => now },

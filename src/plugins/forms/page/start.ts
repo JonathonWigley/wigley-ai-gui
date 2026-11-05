@@ -172,6 +172,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       },
       contributions,
       platform: api.platform.os,
+      state: api.state.forLayouts,
       uiState: services.uiState,
       timers: services.timers,
       drops: api.drops,

@@ -42,6 +42,7 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
           run: (id) => api.commands.run(id),
         },
         platform: api.platform.os,
+        state: api.state.forLayouts,
       },
       log: services.log,
       nameOf: (sessionId) => names.get(sessionId) ?? sessionId,

@@ -1,7 +1,9 @@
 import type { CommandId } from '../../../../contracts/commands';
+import type { Disposable } from '../../../../contracts/disposable';
 import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { OsName } from '../../../../contracts/platform';
+import type { LayoutState } from '../../../../contracts/state';
 import { errorText } from '../../../../shared/error-text';
 import { button, element } from '../../../../shared/page/dom';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
@@ -75,8 +77,9 @@ import type { LayoutPick } from './layout-resolver';
 // anchors that show them, the forms state and its actions, a forms command,
 // the round's text boxes, the forms view now, which decides what a rail click
 // does, the registered commands `kit.command` checks and runs, the review
-// columns other plugins added, and where each markdown mount a pane makes is
-// recorded for disposal.
+// columns other plugins added, the slots `kit.state` reads, where each slot
+// subscription a pane makes is recorded, and where each markdown mount it
+// makes is recorded for disposal.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: OsName;
@@ -90,6 +93,8 @@ export interface PaneDeps {
   shownView(): FormsView;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'reviewColumns'>;
+  state: LayoutState;
+  recordAnchor(anchor: Disposable): void;
   recordMount(mount: MarkdownMount): void;
 }
 

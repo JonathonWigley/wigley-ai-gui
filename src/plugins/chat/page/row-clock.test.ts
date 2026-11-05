@@ -15,6 +15,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout, PartView, RowClockInput } from '../layouts/layout';
 import { createChatLayouts, surfaceBaseKit } from './chat-layouts';
 import { createRowClock } from './row-clock';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOW = 50_000_000;
 const SESSION = 's1';
@@ -60,6 +61,7 @@ function setUp() {
     keys: recordingAnchors().keys,
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos' as const,
+    state: noLayoutState,
     log,
   };
   const rowClock = createRowClock({

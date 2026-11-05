@@ -113,7 +113,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
-                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter` and `duration`) and
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `duration` and `state`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
                  through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and

@@ -46,6 +46,7 @@ import { createPrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -205,6 +206,7 @@ function primerTabSetup(
     run: () => undefined,
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos',
+    state: noLayoutState,
     uiState: {
       get: (key) => uiValues.get(key),
       set: (key, value) => {

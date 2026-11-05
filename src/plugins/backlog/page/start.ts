@@ -39,6 +39,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       drops: api.drops,
       keys: api.keys,
       platform: api.platform.os,
+      state: api.state.forLayouts,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),

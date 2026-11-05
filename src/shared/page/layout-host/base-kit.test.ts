@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
+import type { KeyedSlotKey, SlotKey } from '../../../contracts/state';
+import { createSlotStore, layoutState } from '../../state/slot-store';
 import { asFake, asHtml, FakeElement, installFakeDom } from '../test-dom';
 import {
   type BaseKitDeps,
@@ -8,6 +11,7 @@ import {
   type KitCommands,
   ownerBaseKitDeps,
 } from './base-kit';
+import { noLayoutState } from './fake-layout-state.test-support';
 import { recordingAnchors } from './test-layouts';
 import type { MarkdownMount } from '../markdown-mount';
 import {
@@ -15,6 +19,17 @@ import {
   installMarkdownDom,
   NO_FENCES,
 } from '../markdown-mount.test-support';
+
+const valueSlot: SlotKey<number, 'page', 'p'> = {
+  id: 'p.v',
+  process: 'page',
+  kind: 'value',
+};
+const keyedSlot: KeyedSlotKey<number, 'page', 'p'> = {
+  id: 'p.k',
+  process: 'page',
+  kind: 'keyed',
+};
 
 const BOUND: Record<string, string> = {
   'docs.open': 'Mod+O',
@@ -56,6 +71,8 @@ function kitOver(scope: ViewScope | null) {
     commandNamed: (short) =>
       short === 'open' || short === 'close' ? `docs.${short}` : null,
     platform: 'macos',
+    state: noLayoutState,
+    recordAnchor: () => undefined,
   };
   return { kit: createBaseKit(deps), deps, anchors, reads };
 }
@@ -214,6 +231,7 @@ describe('createBaseKit', () => {
             keys,
             commands: { exists: () => true, run: () => undefined },
             platform: 'macos',
+            state: noLayoutState,
           },
           scope,
           { recordAnchor: (anchor) => recorded.push(anchor) },
@@ -295,6 +313,52 @@ describe('createBaseKit', () => {
     },
   );
 
+  it('stateRead_On_RecordsTheSubscription', () => {
+    const store = createSlotStore(() => undefined);
+    const writer = store.publish(valueSlot);
+    const recorded: Disposable[] = [];
+    const heard: unknown[][] = [];
+    const kit = createBaseKit({
+      ...kitOver(null).deps,
+      state: layoutState(store, 'docs', (handle) => handle),
+      recordAnchor: (anchor) => recorded.push(anchor),
+    });
+
+    kit.state.read('p.v').on((...args) => heard.push(args));
+    writer.set(1);
+    expect(recorded).toHaveLength(1);
+    recorded[0].dispose();
+    writer.set(2);
+
+    expect(heard).toEqual([[1]]);
+  });
+
+  it.each([
+    {
+      row: 'no key',
+      id: 'p.k',
+      key: undefined,
+      value: [
+        ['a', 1],
+        ['b', 2],
+      ],
+    },
+    { row: 'a key', id: 'p.k', key: 'b', value: 2 },
+    { row: 'no slot, no key', id: 'p.none', key: undefined, value: undefined },
+    { row: 'no slot, a key', id: 'p.none', key: 'b', value: undefined },
+  ])('stateRead_Get_ReadsThroughDeps: $row', ({ id, key, value }) => {
+    const store = createSlotStore(() => undefined);
+    const writer = store.publish(keyedSlot);
+    writer.set('a', 1);
+    writer.set('b', 2);
+    const kit = createBaseKit({
+      ...kitOver(null).deps,
+      state: layoutState(store, 'docs', (handle) => handle),
+    });
+
+    expect(kit.state.read(id).get(key)).toEqual(value);
+  });
+
   it('meter_AppendsAMeterFilledToItsPercentInItsTone', () => {
     const { kit } = kitOver(null);
     const parent = new FakeElement('div');
@@ -357,6 +421,7 @@ describe('createBaseKit', () => {
           keys: kitOver(null).deps.keys,
           commands: { exists: () => true, run: () => undefined },
           platform: 'macos',
+          state: noLayoutState,
         },
         null,
         { recordAnchor: (anchor) => recorded.push(anchor) },

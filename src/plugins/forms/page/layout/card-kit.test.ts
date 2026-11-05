@@ -16,7 +16,12 @@ import { questionFormat } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound, question } from '../test-rounds';
 import type { LayoutAction } from '../../layouts/layout';
-import { choiceGroupsOf, createCardKit } from './card-kit';
+import {
+  baseKitDepsFor,
+  choiceGroupsOf,
+  createCardKit,
+  createFormsBaseKit,
+} from './card-kit';
 import {
   asFake,
   asHtml,
@@ -25,6 +30,7 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
@@ -168,9 +174,11 @@ function fakeCardDeps(contributions: FormsContributions) {
     toggleDontAsk: vi.fn(),
     keys: { keysFor, anchor },
     platform: 'macos',
+    state: noLayoutState,
     log,
     commands: { exists: (id) => id === 'demo.run', run },
     contributions,
+    recordAnchor: () => {},
     recordMount: () => {},
   };
   return { deps, keysFor, anchor, run, log };
@@ -210,6 +218,29 @@ function recordingPart(id: string, kinds: ItemKind[], built: unknown[]) {
   };
   return part;
 }
+
+describe('baseKitDepsFor', () => {
+  it('baseKitDepsFor_RecordsSubscriptionThroughDeps', () => {
+    const handle = { dispose: () => undefined };
+    const recorded: unknown[] = [];
+    const kit = createFormsBaseKit(
+      baseKitDepsFor(
+        {
+          ...fakeCardDeps(createFormsContributions()).deps,
+          state: {
+            read: () => ({ get: () => undefined, on: () => handle }),
+          },
+          recordAnchor: (anchor) => recorded.push(anchor),
+        },
+        'forms.forms',
+      ),
+    );
+
+    kit.state.read('p.v').on(() => undefined);
+
+    expect(recorded).toEqual([handle]);
+  });
+});
 
 describe('card kit', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));

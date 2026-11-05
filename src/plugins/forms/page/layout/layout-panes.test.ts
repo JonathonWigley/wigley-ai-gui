@@ -16,6 +16,7 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // Round r1, two questions, open and active.
 function openRound(): FormsState {
@@ -42,6 +43,7 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
       ...NO_FENCES,
     },
     platform: 'macos',
+    state: noLayoutState,
     log,
     keys: { keysFor, anchor },
     dispatch: vi.fn(),
@@ -52,6 +54,7 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
     shownView: () => 'review',
     commands: { exists: () => false, run: vi.fn() },
     contributions,
+    recordAnchor: () => {},
     recordMount: () => {},
   };
   return { deps, keysFor, anchor, log };

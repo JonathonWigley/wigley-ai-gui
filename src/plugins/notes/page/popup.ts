@@ -2,6 +2,7 @@ import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ImageEncoder } from '../../../contracts/images';
 import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
   CommandsRunIn,
   KeyHints,
@@ -97,6 +98,7 @@ export interface NotePopupDeps {
   // The commands a layout's kit runs and checks.
   commands: KitCommands;
   platform: OsName;
+  state: LayoutState;
   pushScope(scope: NotesScope): PushedScope;
   // Read each time autosave schedules a save.
   autosaveDelayMs(): number;
@@ -135,6 +137,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
     log,
   };
   const parts = createNotesParts(partsDeps);

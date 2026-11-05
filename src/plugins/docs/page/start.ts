@@ -147,6 +147,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         run: (id) => api.commands.run(id),
       },
       platform: api.platform.os,
+      state: api.state.forLayouts,
     };
     // A base kit whose keys fire in the docs scope `scope`, each anchor it
     // names recorded by `rollback`.

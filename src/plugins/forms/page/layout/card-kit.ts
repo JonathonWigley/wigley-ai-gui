@@ -265,7 +265,14 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
 export function baseKitDepsFor(
   deps: Pick<
     CardDeps,
-    'markdown' | 'platform' | 'commands' | 'keys' | 'recordMount' | 'log'
+    | 'markdown'
+    | 'platform'
+    | 'commands'
+    | 'keys'
+    | 'state'
+    | 'recordAnchor'
+    | 'recordMount'
+    | 'log'
   >,
   scope: ViewScope,
 ): BaseKitDeps {
@@ -276,6 +283,8 @@ export function baseKitDepsFor(
     scope,
     commandNamed: formsCommandNamed,
     platform: deps.platform,
+    state: deps.state,
+    recordAnchor: (anchor) => deps.recordAnchor(anchor),
     recordMount: (mount) => deps.recordMount(mount),
     log: deps.log,
   };

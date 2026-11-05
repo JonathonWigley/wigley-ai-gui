@@ -40,6 +40,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createNotePopup, type NotePopup } from './popup';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -365,6 +366,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     },
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos',
+    state: noLayoutState,
     pushScope: pushed,
     autosaveDelayMs: () => AUTOSAVE_DELAY_MS,
     selectedSession: () => null,

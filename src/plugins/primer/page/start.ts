@@ -171,6 +171,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         run: (command) => api.commands.run(command),
       },
       platform: api.platform.os,
+      state: api.state.forLayouts,
       uiState: services.uiState,
       timers: services.timers,
       drops: api.drops,

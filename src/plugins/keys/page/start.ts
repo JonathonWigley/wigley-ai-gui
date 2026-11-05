@@ -46,6 +46,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       kit: {
         markdown: services.markdown,
         keys,
+        state: api.state.forLayouts,
         commands: {
           exists: (id) => keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),

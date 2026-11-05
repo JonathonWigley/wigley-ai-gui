@@ -1,6 +1,6 @@
 # 10 — Layouts read slots
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 9 · Depends on: 09
 Plan: [plan.md](plan.md)

@@ -46,6 +46,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
           run: (id) => api.commands.run(id),
         },
         platform: api.platform.os,
+        state: api.state.forLayouts,
       },
       log: services.log,
       clock: services.clock,

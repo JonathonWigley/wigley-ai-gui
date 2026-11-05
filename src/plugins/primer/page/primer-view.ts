@@ -12,6 +12,7 @@ import {
   type ResizeTarget,
 } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
   KeyHints,
   PluginAreas,
@@ -154,6 +155,7 @@ export interface PrimerViewDeps {
   run(command: CommandId): void;
   commands: KitCommands;
   platform: OsName;
+  state: LayoutState;
   uiState: UiState;
   timers: Timers;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
@@ -608,6 +610,7 @@ function createPrimerFormView(
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
     boxes: deps.boxes,
     dispatch,
     log: deps.log,

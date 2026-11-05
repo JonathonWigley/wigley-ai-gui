@@ -91,6 +91,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         run: (id) => api.commands.run(id),
       },
       platform: api.platform.os,
+      state: api.state.forLayouts,
     };
     const kitFor = (rollback: RollbackDeps) =>
       createBaseKit(

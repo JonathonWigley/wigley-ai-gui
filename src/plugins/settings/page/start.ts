@@ -29,6 +29,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       editor: services.editor,
       matcher: services.fuzzy,
       platform: api.platform.os,
+      state: api.state.forLayouts,
       markdown: services.markdown,
       keys: api.keys,
       commands: {

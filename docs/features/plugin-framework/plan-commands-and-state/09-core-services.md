@@ -1,6 +1,6 @@
 # 09 — Core picker and folder services
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -218,3 +218,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 50982631 · proof: Diff stat and page-api diff read; ListPickerService, PageServices and Bridge members present; typecheck and lint clean; the three Done-when greps print nothing. · concerns: renderer.ts and main.ts wiring reach no test, so a real folder dialog and link go to task 16; the harness fake neither checks declared scopes nor closes on stop, so those rules sit only in page-api.test; docs shares one list and an inactive view's redraw reaches it, reasoned unreachable by keys; AGENTS.md does not yet name services.picker, chooseFolder or openExternal (task 15).

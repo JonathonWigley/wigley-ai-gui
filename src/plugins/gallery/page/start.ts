@@ -34,6 +34,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     const view = createGalleryView(
       {
         platform: api.platform.os,
+        state: api.state.forLayouts,
         uiState: api.services.uiState,
         timers: api.services.timers,
         markdown: api.services.markdown,

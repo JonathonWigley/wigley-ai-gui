@@ -25,6 +25,7 @@ import defaultLayout from './layouts/default/layout.js';
 import type { Layout } from './layouts/layout';
 import { mountShellChrome } from './shell-chrome';
 import { NO_FENCES } from '../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../shared/page/layout-host/fake-layout-state.test-support';
 
 // An area that appends each contribution to `root`, its alignment as
 // `data-align`, in the order contributed.
@@ -97,6 +98,7 @@ function mountChrome(keys: KeyHints = recordingAnchors().keys) {
       keys,
       commands: { exists: (id) => id === REGISTERED, run: () => undefined },
       platform: 'macos',
+      state: noLayoutState,
     },
     instance: { id: 'wigley-ai-gui-dev', displayName: 'Auri Dev', isDev: true },
     log: () => undefined,

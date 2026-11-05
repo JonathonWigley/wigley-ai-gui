@@ -56,6 +56,22 @@ export interface KitEdgeOptions {
   label?: string;
 }
 
+// One slot as a layout reads it, by the slot's kind:
+//
+//   kind    get()                                   get(key)                  on(listener) passes
+//   value   the value                               undefined                 (value)
+//   keyed   the [key, value] entries, first-set     the entry, or undefined   (key, value); value undefined is a delete
+//   list    the [key, items] entries, first-set     the items, or []          (key, change)
+//
+// `change` is `{ kind: 'put', item }`, `{ kind: 'replace', items }` or `{ kind: 'delete' }`. An id with no slot reads
+// `undefined`, and its listener hears the first write's arguments. A slot owned by a plugin that has stopped keeps its
+// last value. `core.mode` reads `''` until the first mode switch. `on` calls `listener` on each change and redraws
+// nothing; the subscription ends with the draw that made it, when the part is disposed or its attempt fails.
+export interface KitSlotReader {
+  get(key?: string): unknown;
+  on(listener: (...args: unknown[]) => void): void;
+}
+
 // Every part appends itself to `parent` and returns what it appended, except where its comment says otherwise.
 export interface BaseKit {
   el(
@@ -151,4 +167,6 @@ export interface BaseKit {
   // How long `ms` lasts, in whole seconds rounded down: `42s` under a minute, `3m 05s` under an hour, else `1h 02m`;
   // a negative span reads `0s`. Appends nothing.
   duration(ms: number): string;
+  // Reads the slot `id` (as `core.theme`), any plugin's. It appends nothing.
+  state: { read(id: string): KitSlotReader };
 }
