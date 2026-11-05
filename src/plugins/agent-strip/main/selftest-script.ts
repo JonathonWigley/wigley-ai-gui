@@ -44,18 +44,18 @@ const GROUPS: SelfTestGroup[] = [
         expect: selectedLine(1),
         alsoExpect: [
           /^\[chat\] composer part agent-strip\.strip took the cursor in agent-strip-selftest$/,
-          /^\[agent-strip\] box 1 of 4 in agent-strip-selftest shows: map-decoderSubagent(\d+m )?\d+s/,
+          /^\[agent-strip\] box 1 of 4 in agent-strip-selftest shows: Map the stream decoder(\d+m )?\d+sSubagent/,
         ],
         screenshot: 'strip-selected',
-        why: 'G lands on the last entry, the last stop, and j from there hands the cursor to the strip, whose first box shows its name, tag and runtime.',
+        why: 'G lands on the last entry, the last stop, and j from there hands the cursor to the strip, whose first box shows its description as the title, its runtime and its tag.',
       },
       {
         keys: ['l'],
         expect: selectedLine(2),
         alsoExpect: [
-          /^\[agent-strip\] box 2 of 4 in agent-strip-selftest shows: ExploreBackground agent(\d+m )?\d+s/,
+          /^\[agent-strip\] box 2 of 4 in agent-strip-selftest shows: Find every Files adapter(\d+m )?\d+sSubagent/,
         ],
-        why: 'The launched subagent reads Background agent.',
+        why: 'A subagent launched in the background reads Subagent too.',
       },
       {
         keys: ['l'],
@@ -160,7 +160,7 @@ export function agentStripSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A box's name, description, model line, tool lines, closed command and open
+    // A box's title, open name, model line, tool lines, closed command and open
     // row's owner line end in an ellipsis inside their own boxes, an open box's
     // tool list scrolls inside its box and the rows scroll in their column, as
     // their CSS says. The activity dock's tool calls (the
@@ -168,8 +168,8 @@ export function agentStripSelfTestScript(
     // session row's status, end in an ellipsis inside their own boxes; the tab bar's
     // parts and the dock's one line clip in their own box.
     scrollsItself: [
+      '.agent-strip-title',
       '.agent-strip-name',
-      '.agent-strip-description',
       '.agent-strip-model',
       '.agent-strip-tool',
       '.agent-strip-command',

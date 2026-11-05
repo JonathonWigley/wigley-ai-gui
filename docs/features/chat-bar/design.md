@@ -119,12 +119,12 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **What it lists:** every subagent as a card, in start order, then every task as a row under the cards, in start
   order. A task is any process Claude reports that is not a subagent (`agent-tower/design.md` § The agents plugin,
   Tasks).
-- **A subagent card:** a running dot, a name, a kind tag (Subagent or Background agent) and the elapsed time since it
-  started, ticking once a second, then the description on its own line. The name is the Agent call's `name` when given,
-  else its agent type. Under the description, `model · effort` dim, the latest 3 tool calls as mono lines (the two older
-  ones fading), then a context bar with `84k/200k` (the warning colour at 80% or more; `84k` alone until the window is
-  known) and the estimated cost. The tag reads Background agent once Claude's launch receipt says the call runs in the
-  background, else Subagent.
+- **A subagent card:** a running dot, its title (the Agent call's short description, cut to one line) and the elapsed
+  time since it started, ticking once a second. Under them a Subagent tag and `model · effort` dim, the latest 3 tool
+  calls as mono lines (the two older ones fading), then a context bar with `84k/200k` (the warning colour at 80% or
+  more; `84k` alone until the window is known) and the estimated cost. An open card swaps the tool lines for its name,
+  the Agent call's `name` when given, else its agent type. The tag reads Subagent however the call was launched; the
+  layout input's `kind` still says whether Claude's launch receipt put it in the background.
 - **A task row:** one line: a running dot, the Shell tag, the command in mono (the Task tag and the description when the
   harness names no command) and the elapsed time. A task has no context or cost. Rows stack under the cards and scroll
   past four rows.
