@@ -55,12 +55,13 @@ stage rules, so two workflows may both have a `build` stage. Each plugin owns it
   the stage text on the session row.
 - **Trail** — in the composer for the whole run, as the `workflow-trail` work built it.
 - **Checklist** — in the side pane once a list or a plan exists.
-- **No workflow** — a warning tag on a row whose session finished a turn with no level skill started.
+- **No workflow** — a red tag on a row whose session finished a turn with no level skill started.
 
 ## The run log
 
 The engine appends one line to its plugin data when a workflow finishes: the level, any level it
-moved up from, active time, spend, and review fix cycles. Nothing draws it. An agent reads it when the
+moved up from, active time since the first claim, spend through the last finished turn, and review
+fix cycles. Nothing draws it. An agent reads it when the
 user asks to tune `workflows.md`, and it is the evidence for judging Heavy's agent count.
 
 ## Decisions

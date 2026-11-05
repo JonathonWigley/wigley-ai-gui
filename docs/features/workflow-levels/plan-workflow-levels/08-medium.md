@@ -72,6 +72,8 @@ Decisions, what differs from 07:
 
   `problems`: the sends equal, in order, `fake: tool`, `/wigley:medium`, then the eight sends above; main turn ends are at least the number of sends minus one.
 
+Pinned after the cold read: 07's pinned block holds here too, with `Medium has no actions`. `mediumMainWorkflow.foldState` is `foldMediumState` and `fixCycles` is `mediumFixCycles`.
+
 GIVEN a new flow WHEN `wigley:medium` starts THEN `workflow` is `workflow-medium`, `stage` is `interview`, and the row draws the `M` badge
 GIVEN a flow in `fix` WHEN the agent reports `review` THEN `stage` is `review`
 GIVEN a flow that entered `fix` twice WHEN the agent reports `done` THEN the run log line has `fixCycles` 2
@@ -81,6 +83,8 @@ GIVEN a Medium flow WHEN `wigley:review` starts THEN nothing changes
 GIVEN a Light flow and a Medium flow WHEN each reports `build` THEN each moves through its own stage alone
 
 Tests:
+- `medium-state.test.ts`: `fix, review, fix, done` through `foldFlow` with `[mediumMainWorkflow]` gives `mediumMainWorkflow.fixCycles?.(flow)` 2. `mediumMainWorkflow_Values` asserts `foldState` and `fixCycles` by reference.
+- `workflow-medium/page/start.test.ts`: the rows of `workflow-light/page/start.test.ts` with Medium's values.
 - `stages/medium-stages.test.ts`:
   - `foldFlow_MediumRules` table, through `foldFlow` with `[mediumMainWorkflow]`:
 

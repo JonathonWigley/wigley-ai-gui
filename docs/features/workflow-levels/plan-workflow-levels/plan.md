@@ -77,6 +77,8 @@ Decisions:
 - A standalone `wigley:explore` or `wigley:review` shows its level and trail through the level skill. This replaces the workflow-trail work's rule that standalone runs show nothing.
 - The edit gate is a Claude Code `PreToolUse` command hook on `Edit|Write|NotebookEdit`. It reads the session transcript for a level skill. A subagent's call passes.
 
+Accepted changes to Heavy, each visible once or never: the H badge; a Plan section the user collapsed opens once, because its part id changes; an in-flight run loses its flow once, because `flows.json` changes shape; a `plan.md` written before any level skill names no plan.
+
 Out of scope: any change to `wigley:feature` or `wigley:make` steps, a screen for the run log, Codex's adapter, a runtime plugin loader, a Stop hook that runs tests.
 
 ## File Structure
@@ -159,7 +161,7 @@ export interface PageWorkflow {
   draw: WorkflowDraw;                // from createWorkflowDraw
   // Left out: one group built from flow.checklist; null when that is null.
   checklist?(flow: SessionFlow): ChecklistView | null;
-  runAction(sessionId: string, command: string): Promise<void>;
+  runAction(sessionId: string, command: string, flow: SessionFlow): Promise<void>;
   countdownText?(flow: SessionFlow, now: number): string | null;
   progressText?(flow: SessionFlow): string | null;
   hasPlan?(flow: SessionFlow): boolean;   // left out: checklist(flow) !== null
@@ -190,7 +192,7 @@ export interface WorkflowPageExports {
 - `workflow-heavy/contract.ts` holds `HEAVY_WORKFLOW_ID`, `HeavyState`, `heavyStateOf`, `withHeavyState`, `HeavyEvent`, `heavySignal`, `heavyEventOf`, `HeavyMainStage`.
 - Step words and `reportedAs` values are the values in the skills: Light `build`, `check`, `land`, `done`; Medium `build`, `review`, `fix`, `land`, `done`. Each `done` stage shares its `stepSlot` with `land`, so the trail still reads `Land`.
 - Tool `set_workflow_checklist`, argument `items`: an array of `{ text: string, done: boolean }`. The tool name constant is `SET_WORKFLOW_CHECKLIST_TOOL` in `workflow/main/checklist-tool.ts`.
-- Run log: `runs.jsonl` in the `workflow` plugin data. One JSON object per line, with the keys `at`, `sessionId`, `projectDir`, `workflow`, `movedUpFrom`, `activeMs`, `costUsd`, `fixCycles`.
+- Run log: `runs.jsonl` in the `workflow` plugin data. One JSON object per line, with the keys `at`, `sessionId`, `projectDir`, `workflow`, `movedUpFrom`, `activeMs`, `costUsd`, `fixCycles`. `workflow` is the id, and `costUsd` is spend through the last finished turn.
 - Theme tokens: `workflow-light.badge` default `var(--wg-status-info)`; `workflow-medium.badge` default `var(--wg-accent)`; `workflow-heavy.badge` default `var(--wg-status-warning)`.
 - Row words: the tag `No workflow` draws with `--wg-status-error`.
 - Commands: `workflow.mainAction`, `workflow.toggleSidePane`, `workflow.toggleFinishedWaves` and `workflow.openPreview` stay in the engine. `clearAndMake`, `cancelCountdown`, `makeInNewSession`, `resumeMake`, `openPlan`, `retro` and `dismiss` move to `workflow-heavy.<name>`. Their keys do not change.

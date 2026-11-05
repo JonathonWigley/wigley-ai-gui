@@ -82,6 +82,8 @@ Heavy keeps:
 - The fold goes `live`, so it stamps the save time.
 - No Heavy skill text changes.
 
+Pinned after the cold read: `reportChecklist` returns false for a flow whose `workflow` is null or held by no plugin, as `reportStep` does, so the text never says `Checklist set` when nothing changed. `set_workflow_step`'s description does not change. The item validation is one exported function in `workflow/main/checklist-tool.ts`, `parseChecklistItems(value: unknown): readonly ChecklistItem[] | string` (a string is the error text), which the tool handler and task 07's drive action both call. Add a `ChecklistTool_Flow` row for a workflow no plugin holds.
+
 GIVEN `set_workflow_checklist` with `items` of a wrong shape WHEN called THEN it returns an error naming the shape and the flow does not change.
 GIVEN a session with no flow or a null workflow WHEN `set_workflow_checklist` is called with valid items THEN it succeeds saying ignored.
 GIVEN a Light flow WHEN `set_workflow_checklist` is called with valid items THEN `flow.checklist` holds them and `flows` pushes.

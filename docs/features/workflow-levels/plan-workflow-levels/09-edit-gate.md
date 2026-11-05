@@ -9,7 +9,7 @@ All paths are in the `wigley-agents` worktree, `~/Documents/ai-dev/.worktrees/wi
 
 Files:     create `tools/workflow-gate/workflow-gate` (executable, no extension, `#!/usr/bin/env python3`, standard library only) · create `tools/workflow-gate/README.md` · create `tools/workflow-gate/.gitignore` (the line `__pycache__/`) · test `tools/workflow-gate/tests/test_workflow_gate.py`
 
-Consumes:  `~/wigley-agents/workflows.md` (tree, branch `workflow-levels`, commit 936f725): the denial names it · the hook input and output below (Claude Code hooks docs, `https://code.claude.com/docs/en/hooks`, read at plan time) · no task
+Consumes:  `~/wigley-agents/workflows.md` (tree, branch `workflow-levels`): the denial names it · the hook input and output below (Claude Code hooks docs, `https://code.claude.com/docs/en/hooks`, read at plan time) · no task
 
 Produces:  in `tools/workflow-gate/workflow-gate`:
            `workflow-gate hook` — reads one hook event as JSON on stdin; prints one decision as JSON on stdout, or nothing; always exits 0
@@ -56,6 +56,8 @@ Decisions:
 - **Pinned result keys:** `symlink`, `target`, `settingsChanged` (real paths written), `settingsUnchanged` (real paths left), `skipped` (paths).
 - **Scope.** Claude Code on macOS and Linux. On Windows, `install` stops with exit 1: `workflow-gate install has no Windows launchers; the rule stays prose on this machine`. A shell edit and Codex are out of scope (`docs/features/workflow-levels/design.md` § Decisions). The README says so and gives the removal: delete the group from `hooks.PreToolUse`, then the link.
 - **README.** Follow `wigley:writing-for-agents`, with a Contents list: what the tool does, the decision table (pass, deny, fail open), the two transcript shapes and why it parses lines, `install` and its fixed link target, the symlinked profile, the scope, the removal.
+
+Pinned after the cold read. `install` creates a missing `--bin-dir`. Checked against the Claude Code hooks docs at plan time: `agent_id` marks a subagent or teammate, `additionalContext` works on `PreToolUse`, a command hook's default timeout is 600 seconds, and a hook that fails to start, exits with another code or times out lets the call through. The README's decision table says a timed-out scan passes silently with no notice.
 
 GIVEN a main-agent `Edit` and a transcript with no level skill WHEN `hook` runs THEN it prints the denial with the pinned text
 GIVEN a transcript with a Skill call or typed command for any of `LEVEL_SKILLS` WHEN `hook` runs THEN it prints nothing

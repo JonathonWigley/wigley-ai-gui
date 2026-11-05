@@ -99,6 +99,13 @@ Decisions:
 - The first step sets `width: 1200`, so the side pane shows in its screenshot. The script ends on `width: 'start'`.
 - `problems`: the sends equal, in order, `fake: tool`, `/wigley:light`, `fake: report done`, `/wigley:light`, `fake: report build`, `fake: checklist`, `fake: report check`, `fake: report land`, `fake: report done`; main turn ends are at least the number of sends minus one.
 
+Pinned after the cold read. These hold for 08 too.
+- `runsTasks: true` on Build alone, so open items show a running mark while the agent works.
+- The default layout's side pane draws one flat list in every state, finished or not, by joining `finishedGroups`, `currentGroup` and `laterGroups` in order, with a `<checked>/<total>` line and the bar. It draws no fold: a list of two to five items has nothing to hide.
+- At `total` 0 (an empty `items`), `statusProgress` is `''` and `progressText` is null.
+- `logFlow`'s order within one push: `level`, `trail`, `shows`, `progress`.
+- `workflow.reportChecklist` calls `parseChecklistItems` (03) and rejects with its text, and `workflow.reportStep` gives `accepted: false` for a step outside the union. `WorkflowDriveDeps` is `{ reportStep, reportChecklist }`, closures `workflow/main/start.ts` passes in.
+
 GIVEN a new flow WHEN `wigley:light` starts THEN `workflow` is `workflow-light`, `stage` is `scope`, and the row draws the `L` badge
 GIVEN a flow in `scope` WHEN the agent reports `done` THEN `stage` is `done`, the trail's last step reads `Land`, and `runs.jsonl` gains one line
 GIVEN a flow in `check` WHEN the agent reports `build` THEN `stage` is `build`
@@ -107,6 +114,11 @@ GIVEN a Light flow WHEN the agent reports `review` THEN the stage does not chang
 GIVEN a flow in `build` with a checklist of 1 done of 3 WHEN the trail draws THEN the current step reads `Build 1/3` and the side pane lists three items
 
 Tests:
+- `layouts/default/layout.test.ts`, `sidePane_AllDone_StillListsTheItems`: two done items draw two lines and no fold.
+- `buildStatusProgress` and `progressText` add a `total` 0 row.
+- `logFlow_LevelAndTrail_LogOncePerChange` asserts the order above.
+- Drive rows: `reportChecklist_BadItems` (non-array, empty `text`, non-boolean `done`, each rejects naming `items`), `reportStep_UnknownStep` (`accepted` false). `reportStep_Light` runs the real engine start with a stub workflow.
+- `workflow-light/page/start.test.ts`: the `addWorkflow` call carries `id`, `label`, `badge`, `stages`; `runAction` rejects with `Light has no actions`; `progressText` gives null for a null checklist and `1/3` for one of three; `createWorkflowDraw` gets `sideTitle` `Checklist` and the plugin's manifest.
 - `stages/light-stages.test.ts`:
   - `foldFlow_LightRules` table, through `foldFlow` with `[lightMainWorkflow]`:
 

@@ -16,13 +16,14 @@ Files:
 - move what 01 and 02 left in the engine, each under the name the Produces below gives: `workflow/stages/heavy-contract.ts` → `workflow-heavy/contract.ts`; `workflow/stages/heavy-state.ts` and its test → `workflow-heavy/heavy-state.ts`; `workflow/stages/heavy-workflow.ts` → `workflow-heavy/heavy-workflow.ts`
 - move the body of `workflow/main/heavy-runtime.ts` into `workflow-heavy/main/start.ts`, then delete the file
 - modify `src/plugins/workflow/main/start.ts`: drop `addWorkflow(heavyMainWorkflow)`, `startHeavyRuntime`, the settings log and its cancel, the `runAction` handler
-- modify `src/plugins/workflow/manifest.ts`: drop the seven commands, `autoClearAndMake`, `autoStartSeconds`, `layout` and the temporary token `badge`
+- modify `src/plugins/workflow/manifest.ts`: drop the seven commands, `autoClearAndMake`, `autoStartSeconds`, `layout` and the temporary token `badge`, inline `mainAction` (label `run the stage's next step`, `group: 'workflow'`, `runsIn: 'page'`) now that `stages/index.ts` goes, and drop `docs` from `dependsOn.page`
 - modify `src/plugins/workflow/contract.ts`: `WorkflowChannel` loses `runAction`
 - move from `src/plugins/workflow/` to `src/plugins/workflow-heavy/`: `plan-reader.ts`, `plan-reader.test.ts`, `main/plan-watch.ts`, `main/plan-watch.test.ts`, `main/actions.ts`, `main/actions.test.ts`, `main/countdown.ts`, `main/countdown.test.ts`, `stages/feature-run.ts`, `stages/main-stages.test.ts`, `stages/reported-steps.test.ts`, `stages/<id>/main.ts` and every `stages/<id>/main.test.ts`, for `<id>` in `idle`, `primer`, `explore`, `interview`, `plan`, `cold-read`, `plan-ready`, `make`, `review`, `fix`, `closed`
 - create `src/plugins/workflow-heavy/stages/index.ts`: main and page halves and commands
 - delete `src/plugins/workflow/stages/index.ts`
 - modify `src/plugins/manifests.ts`, `src/plugins/main.ts`: add the plugin
 - modify `scripts/check-layers.mts`: the layer rules
+- modify `src/main/drive/drive-commands.ts`: the help text and comment that name `workflow.autoStartSeconds` read `workflow-heavy.autoStartSeconds`
 - test `src/plugins/workflow-heavy-main.test.ts` (create), `src/plugins/workflow-heavy/heavy-workflow.test.ts` (create), and the moved `src/plugins/workflow-heavy/heavy-state.test.ts`. Each receives moved rows and new rows, and the Heavy rows 01 added to `workflow/main/start.test.ts` move too (`Open_SavedCountdown_RunsNone`, `FlowLeavingHeavy_StopsItsWatchAndCountdown`). The Tests field names them.
 
 Consumes:
@@ -115,9 +116,9 @@ Decisions:
   - `themeTokens` is `{ badge: { kind: 'color', default: 'var(--wg-status-warning)' } }`.
 - **Workflow.** `heavyMainWorkflow` has `id: 'workflow-heavy'`, `order: 30`, `firstStage: 'explore'`, `stages: HEAVY_MAIN_STAGES`, `foldState: foldHeavyState`, `sameState: sameHeavyState`, `fixCycles: heavyFixCycles`.
 - **Claims.** `claims` is true when `startsSkill` matches `wigley:feature`, `wigley:feature-primer` or `wigley:make`. `startsSkill` keeps the bare names.
-- **Stage modules.** Each keeps its `id`, `order` and `reportedAs`. Orders: idle 0, primer 10, explore 20, interview 22, plan 24, coldRead 26, planReady 30, make 40, review 50, fix 55, closed 60. `reportedAs`: `explore`, `interview`, `plan`, `cold_read`, `fix`. `planReady` keeps `autoCommand: 'clearAndMake'`. `explore` and `primer` keep `clearsPlan: true`. `make` keeps `recordsReviewRounds: true`. `closed` adds `finishes: true`.
+- **Stage modules.** Each keeps its `id`, `order` and `reportedAs`. Orders: idle 0, primer 10, explore 20, interview 22, plan 24, coldRead 26, planReady 30, make 40, review 50, fix 55, closed 60. `reportedAs`: `explore`, `interview`, `plan`, `cold_read`, `fix`. `planReady` keeps `autoCommand: 'clearAndMake'`. `explore` and `primer` keep `clearsPlan: true`. `make` keeps `recordsReviewRounds: true`. `closed` keeps the `finishes: true` 04 gave it.
 - **State reads.** A rule reads `flow.progress`, `flow.planDir` and `flow.reviewRoundsAtMake` through `heavyStateOf(flow)`. A rule reads `planChanged`, `planGone`, `handedOff` and `dismissed` through `heavyEventOf(signal)`. No rule condition changes in any other way.
-- **`heavyStateOf`.** It returns `flow.state` itself when the shape is valid. It returns `EMPTY_HEAVY_STATE` for null or a bad shape. `isPlanProgress` and `isPlanTaskLine` move here from `workflow/main/flow-store.ts`, because the store no longer knows the shape.
+- **`heavyStateOf`.** It returns `flow.state` itself when the shape is valid. It returns `EMPTY_HEAVY_STATE` for null or a bad shape. 01 already moved `isPlanProgress` and `isPlanTaskLine` into this file.
 - **`foldHeavyState` order.** The stage-entry effects need the stage the rules choose, and plan.md pins `foldState(flow, signal)` as one call before the rules. So `foldHeavyState` works in three steps:
   1. It applies today's `applyBookkeeping` to a copy of the state. `turnStarted` and `cleared` set `countdownEndsAt` to null. `fileWritten` of a plan file calls `setPlanDir`. `wigley:make` with a plan path in `argsPath` calls `setPlanDir`. `planChanged` keeps an equal `progress` object and fills a null `reviewRoundsAtMake`.
   2. It runs `HEAVY_MAIN_STAGES` in order over the flow with that state. The first non-null answer is the entered stage, and the search stops there.
@@ -134,11 +135,12 @@ Decisions:
   5. Start the countdown when all of these hold: `origin` is not `replay`, the session is not in `replayedTurnEnds`, `after.stage` differs from `before.stage`, the entered stage has `autoCommand`, `countdownEndsAt` is null and `autoClearAndMake` is on. `countdownEndsAt` is `clock.now() + Math.max(1, autoStartSeconds) * 1000`. Write it with `workflow.setState`.
   6. Call `countdown.sync` with the flow as it is now.
 - **Leaving Heavy.** When `before.workflow` is `workflow-heavy` and `after.workflow` is not, call `planWatch.follow(sessionId, null)`, `countdown.stop` and delete the session from `replayedTurnEnds`.
+- **Start with flows held.** Right after `workflow.observe`, walk `workflow.flows()` and run the `opened` body for each flow of this workflow, because a restarted part never hears `opened` for a flow already open.
 - **Other observer members.**
   - `opened` calls `planWatch.follow` with the flow's `planDir`, and clears a saved `countdownEndsAt` through `setState`. Today `flow-store.load` clears it.
   - `closed` calls `countdown.stop`, `planWatch.follow(sessionId, null)` and deletes the session from `replayedTurnEnds`.
   - `replaying` clears a running countdown through `setState`.
-- **Countdown state.** `cancelCountdown` and `fireCountdown` keep today's bodies and write through `setState`. This keeps `savedAt`, as `putKeepingSavedAt` does today. `fireCountdown` logs `ran <command> in <name>` on a run and `auto-start failed: <error>` on a reject. `<name>` is `sessions.label(sessionId)`, else `services.paths.base(projectDir)`.
+- **Countdown state.** `cancelCountdown` and `fireCountdown` keep the bodies 01 gave them: each write patches a fresh `flowOf`, goes through `setState`, then calls `countdown.sync`, only for a flow of this workflow with `countdownEndsAt` set. This keeps `savedAt`, as `putKeepingSavedAt` does today. `fireCountdown` logs `ran <command> in <name>` on a run and `auto-start failed: <error>` on a reject. `<name>` is `sessions.label(sessionId)`, else `services.paths.base(projectDir)`.
 - **Settings.** `api.onSettingsChanged` logs `settings: autoClearAndMake on|off, autoStartSeconds <n>`, with `n` at least 1. When the setting is off, it cancels every Heavy flow's countdown from `workflow.flows()`. The log prefix becomes `[workflow-heavy]`.
 - **Actions.** `createWorkflowActions` keeps its interface and its error texts. `requirePlanDir` reads `heavyStateOf(flow).planDir`. `handedOff` and `dismissed` go through `workflow.signal(sessionId, heavySignal(event), 'live')`. `channel.handle('runAction', …)` waits for `workflow.ready`.
 - **Pinned action text.** `/wigley:make <planDir>` goes unquoted. `/wigley:retro`. `The session has no plan`. `The session is not a chat session`. `Unknown workflow command <command>`. `No workflow flow for session <id>`. `clearAndMake`, `resumeMake` and `retro` log and do nothing while `isBusy`.
@@ -186,14 +188,21 @@ Tests: every behaviour below keeps its test. A moved test keeps its name and its
 
 Moved with changes: `built-in stage rules name only registered stages` in `stages/main-stages.test.ts` reads `HEAVY_MAIN_STAGES`, and its helper unwraps `heavyEventOf`, so `RULE_ROWS` keep their signal names. These tests stay in the engine under 01 and do not move: `exports_ConsumerDisposed_FreesTheStageId`, `stepTool_StageAddedByAPlugin_JoinsTheToolUntilDisposed`, `savedFlowInAStageNoLongerRegistered_OpensAndFoldsWithoutThrowing`.
 
+Rows 01 and 04 already wrote move here unchanged: `heavyStateOf_BadShape_ReadsEmpty`, `foldHeavyState_NoChange_ReturnsFlowState`, `heavyFixCycles_ReadsTheRounds`, `Open_SavedCountdown_RunsNone`, `FlowLeavingHeavy_StopsItsWatchAndCountdown`.
+
+After this group the engine registers no workflow, and a `workflow/` test may not import `workflow-heavy`. So each existing engine row that names Heavy gets one home:
+
+| Rows | Home |
+|---|---|
+| `MissedLevel_ClaimedInTurn_StaysFalse`, `StepTool_Heavy`, `RunLog_HeavyClosed`, `RunLog_MovedUp`, `RunLog_OnlyOnEntry`, `Countdown_CancelStopsTheTimer` | move to `workflow-heavy-main.test.ts` |
+| `sessionEnded_EndsTheTurnOnlyFromTheCurrentHost`, `stepTool_ReportIsIgnored ($name)`, the running-state half of `load_SavedFlowWith_$name_...`, `stop_LeavesNoLiveRegistration_AndWritesNothing`, `stopThenStart_StartsAgain` in `workflow/main/start.test.ts` | stay, rewritten over a stub workflow |
+| `runFor_IdleMainAction_RunsNothing`, `runFor_PreviewMainAction_RunsNothing` in `workflow-view.test.ts` | stay, rewritten over a stub workflow |
+| Any other engine row that fails to compile for the same reason | stub workflow if it states an engine rule, else the Heavy test file |
+
 New rows, one per new rule:
+- `workflow-heavy-main.test.ts`, `startWithFlowsHeld_FollowsTheirPlans`: a Heavy flow with `planDir` held when the part starts reads that plan.
 - `heavy-workflow.test.ts`, `claims_NamesOnlyHeavySkills`: `wigley:feature`, `feature`, `wigley:feature-primer`, `feature-primer`, `wigley:make`, `make` give true; `wigley:review`, `wigley:featurex`, `wigley:light`, and a `turnEnded` signal give false.
-- `heavy-state.test.ts`, `heavyStateOf_BadShape_ReadsEmpty`: state `null` and `{ planDir: 3 }` give `EMPTY_HEAVY_STATE`; a valid state gives the same object.
-- `heavy-state.test.ts`, `foldHeavyState_NoChange_ReturnsFlowState`: a `turnEnded` on a flow with state `null`, and on a flow with a valid state, returns `flow.state` by reference.
-- `heavy-state.test.ts`, `heavyFixCycles_ReadsTheRounds`: progress null gives 0; `reviewRounds` 2 gives 2; 2 after `planGone` gives 2.
-- `workflow-heavy-main.test.ts`, `openedFlowWithASavedCountdown_ClearsIt`: a saved state with `countdownEndsAt: 9_000` opens with `countdownEndsAt` null and `savedAtOf` unchanged.
 - `workflow-heavy-main.test.ts`, `subagentPlanWrite_NamesThePlanAndWatchesIt`: an `agentId: 'a1'` write of `<project>/docs/plan-a/plan.md` gives `planDir` `<project>/docs/plan-a`, and `progress` equals `readPlanProgress(PLAN)`.
-- `workflow-heavy-main.test.ts`, `flowLeavingHeavy_StopsItsWatchAndCountdown`: a running countdown, then a `wigley:light` claim, leaves 0 live timers, and a later plan delete signals nothing.
 - `workflow-heavy-main.test.ts`, `flowOfAnotherWorkflow_IsNotWatched`: a plan write in a `workflow-light` flow leaves `state` null and reads no plan.
 - `src/plugins/manifests.test.ts`, one row: `workflow-heavy` lists exactly the seven command ids above and the settings `layout`, `autoClearAndMake`, `autoStartSeconds`.
 
@@ -202,7 +211,7 @@ New rows, one per new rule:
 
 Files:
 - create `src/plugins/workflow-heavy/page/start.ts`, `src/plugins/workflow-heavy/page/checklist.ts`
-- move from `src/plugins/workflow/` to `src/plugins/workflow-heavy/`: `stages/<id>/page.ts` for `<id>` in `idle`, `primer`, `explore`, `interview`, `plan`, `cold-read`, `plan-ready`, `make`, `review`, `fix`, `closed`; `stages/stage-parts.ts`; `stages/page-stages.test.ts`; `page/countdown.ts`; `page/countdown.test.ts`; `page/preview.ts`; `page/preview.test.ts`; `page/start.test.ts`; `layouts/default/layout.js`; `layouts/default/layout.css`; `layouts/default/layout.test.ts`; `main/selftest-script.ts`
+- move from `src/plugins/workflow/` to `src/plugins/workflow-heavy/`: `stages/<id>/page.ts` for `<id>` in `idle`, `primer`, `explore`, `interview`, `plan`, `cold-read`, `plan-ready`, `make`, `review`, `fix`, `closed`; `stages/stage-parts.ts`; `stages/page-stages.test.ts`; `page/countdown.ts`; `page/countdown.test.ts`; `page/preview.ts`; `page/preview.test.ts`; `layouts/default/layout.js`; `layouts/default/layout.css`; `layouts/default/layout.test.ts`; `main/selftest-script.ts`
 - modify `src/plugins/workflow-heavy/main/start.ts`: run the self-test script
 - replace `src/plugins/workflow/stages/heavy-page-workflow.ts` and its test with `workflow-heavy/page/checklist.ts` and `workflow-heavy/page/start.ts`; `planChecklist` becomes `heavyChecklist`
 - modify `src/plugins/workflow/main/start.ts`: remove the self-test script run
@@ -242,7 +251,7 @@ Decisions:
 - **Pinned row activities.**
   - `planReady`: `{ word: 'ready to make', tone: 'attention', rank: STAGE_ACTIVITY_RANK, emphasis: 'raised' }`.
   - `closed`: `{ word: 'closed', tone: 'success', rank: STAGE_ACTIVITY_RANK, emphasis: 'raised' }`.
-- **`runAction`.** `openPlan` calls `docs.openDoc(paths.join(planDir, 'plan.md'))`, and with no plan it throws `the session has no plan`. Every other command calls `api.channel.invoke('runAction', { sessionId, command })`.
+- **`runAction`.** It takes `(sessionId, command, flow)`. `openPlan` calls `docs.openDoc(paths.join(planDir, 'plan.md'))` with `planDir` read through `heavyStateOf(flow)`, and with no plan it throws `the session has no plan`. Every other command calls `api.channel.invoke('runAction', { sessionId, command })`.
 - **Commands.** `page/start.ts` returns the seven `HEAVY_COMMANDS`. Each reads `sessions.selectedSessionId()`, and with none logs `no selected session for <command>`. Otherwise it calls `workflow.runCommand(sessionId, command)`. `mainAction`, `toggleSidePane`, `toggleFinishedWaves` and `openPreview` stay in the engine.
 - **Keys.** The chords do not change. In `keymap.ts`:
   - `<Leader>wn` → `workflow-heavy.makeInNewSession`
@@ -289,11 +298,11 @@ Tests: a moved test keeps its name and its assertion values, and reads plan fiel
 | The pane's summary and its null cases | `side pane draws and sets its summary only with a plan and while shown: $name`, all rows |
 | What the default layout draws | every test of `layouts/default/layout.test.ts`, unchanged |
 | Preview samples | `previewFlow_EachIndex_ShowsItsSample $index`, thirteen rows (`endsAt: NOW + 7000` at index 7; `checked` 3 at 8 and 9, 6 at 10 and 11, 7 at 12) |
-| Stop leaves nothing live | `stop_LeavesNoLiveRegistration`, `stopThenStart_StartsAgain` in `page/start.test.ts`; `stopThenStart_StartsAgain` asserts `Object.keys(commands)` contains `clearAndMake` in place of `mainAction` |
+| Stop leaves nothing live | `stop_LeavesNoLiveRegistration`, `stopThenStart_StartsAgain` in a new `workflow-heavy/page/start.test.ts`, over the real engine page part, asserting `Object.keys(commands)` contains `clearAndMake`. `workflow/page/start.test.ts` keeps 02's rows and its own stop rows asserting `mainAction` |
 
 The self-test groups pin the same moves end to end: task 12 runs them. These main behaviours are pinned in the main half: closed on plan gone, re-attach replay and `savedAt`, a subagent's plan write naming the plan, and `wigley:make` naming a folder not written yet.
 
-`exports_ConsumerDisposed_FreesTheStageId` in `page/start.test.ts` is already reworked by 02 and stays with the engine.
+`exports_ConsumerDisposed_FreesTheStageId` stays in `workflow/page/start.test.ts`, as 02 reworked it.
 
 New rows, one per new rule:
 - `page/checklist.test.ts`, `heavyChecklist_MapsThePlan`:
@@ -304,6 +313,7 @@ New rows, one per new rule:
   - No boxes gives `groups: []`, `total: 0`.
 - `src/plugins/keymap.test.ts`, `workflowHeavyCommands_KeepTheirChords`: the default keymap maps `<Leader>wn`, `<Leader>wr`, `<Leader>wo`, `<Leader>wt`, `<Leader>wd` to the five ids above, and `<Leader>ww` to `workflow.mainAction`.
 - `workflow-heavy-page.test.ts`, `commandWithNoSelectedSession_LogsAndRunsNothing`: with no selected session, `dismiss` logs `no selected session for dismiss` and calls no channel.
+- `workflow-heavy-page.test.ts`, `commands_WithASelectedSession_RunThroughTheEngine`: each of the seven ids with `s1` selected calls `runCommand('s1', <id>)` once, and `openPlan` reaches `docs.openDoc`, not the channel.
 - `workflow-heavy-page.test.ts`, `sideSection_ReadsPlan`: the side part's title reads `Plan`.
 
 

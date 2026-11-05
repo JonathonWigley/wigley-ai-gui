@@ -9,7 +9,7 @@ Files:
 - create `src/plugins/workflow/stages/heavy-contract.ts` · `src/plugins/workflow/stages/heavy-state.ts` · `src/plugins/workflow/stages/heavy-workflow.ts` · `src/plugins/workflow/main/heavy-runtime.ts` · `src/plugins/workflow/main/turn-work.ts`
 - modify `src/plugins/workflow/contract.ts` · `src/plugins/workflow/flow.ts` · `src/plugins/workflow/stage-list.ts`
 - modify `src/plugins/workflow/main/start.ts` · `src/plugins/workflow/main/flow-store.ts` · `src/plugins/workflow/main/agent-signals.ts` · `src/plugins/workflow/main/countdown.ts` · `src/plugins/workflow/main/actions.ts` · `src/plugins/workflow/main/plan-watch.ts` · `src/plugins/workflow/main/selftest-script.ts`
-- modify main stages `src/plugins/workflow/stages/index.ts` · `src/plugins/workflow/stages/{closed,idle,plan-ready,review}/main.ts`
+- modify main stages `src/plugins/workflow/stages/index.ts` · `src/plugins/workflow/stages/{closed,idle,plan-ready,review,primer,explore,make}/main.ts`
 - modify page readers `src/plugins/workflow/stages/stage-parts.ts` · `src/plugins/workflow/stages/{closed,make,review,fix,plan-ready}/page.ts` · `src/plugins/workflow/page/workflow-view.ts` · `src/plugins/workflow/page/preview.ts`
 - test: create `src/plugins/workflow/stages/heavy-state.test.ts` · `src/plugins/workflow/main/turn-work.test.ts`
 - test: modify `src/plugins/workflow/flow.test.ts` · `src/plugins/workflow/stage-list.test.ts` · `src/plugins/workflow/main/{start,flow-store,countdown,actions,agent-signals,plan-watch}.test.ts` · `src/plugins/workflow/stages/{main-stages,reported-steps,page-stages}.test.ts` · `src/plugins/workflow/stages/{idle,primer,explore,make,review,plan-ready,closed}/main.test.ts` · `src/plugins/workflow/page/{workflow-view,preview}.test.ts`
@@ -192,6 +192,13 @@ Accepted change for a flow that is not yet Heavy: a `plan.md` written while `wor
 
 Accepted: after Heavy's Dismiss or Make in new session the flow keeps `workflow` `'workflow-heavy'` at idle. No `No workflow` tag draws on it. A later skill of another workflow sets `movedUpFrom` to `'workflow-heavy'`, as plan.md's rule says.
 
+Replay and writes, pinned.
+- `applyReplayed`'s running-state branch calls `folded` with `whole` false for every replayed event at or before `savedAt`, whether or not `foldRunningState` changed the flow, because `replayedTurnEnds` must note an unchanged replayed `turnEnded`. It still puts only a changed flow.
+- Every write of the Heavy runtime patches `heavyStateOf(workflow.flowOf(id))` through `setState`, then calls `countdown.sync(workflow.flowOf(id))`, so timers always equal `countdownEndsAt`. It reads a fresh flow, not `FoldEvent.after`, because `planWatch.check` and `follow` can signal re-entrantly. This covers `cancelCountdown`, `fireCountdown`, the countdown start, `opened` and `replaying`.
+- Each of those paths acts only when `flow.workflow === HEAVY_WORKFLOW_ID` and `countdownEndsAt` is not null, so it never writes Heavy state over another workflow's.
+- `foldFlow` step 6 and `setState` turn an `undefined` state into `null`, because JSON drops `undefined` and the next load would drop every flow.
+- `newFlow` gives `stage` `IDLE_STAGE`, `workflow`, `movedUpFrom`, `checklist` and `state` null, `missedLevel` and `turnRunning` false, `runningSubagents` `[]`.
+
 GIVEN a new flow WHEN `wigley:light` starts THEN `workflow` is the claimer, `stage` is its `firstStage`, and `movedUpFrom` is null.
 GIVEN a Light flow with a checklist WHEN `wigley:medium` starts THEN `movedUpFrom` is `'light'`, `state` and `checklist` are null, and `stage` is Medium's first stage.
 GIVEN a Medium flow WHEN a `stepReported` names a stage id that Light also holds THEN only Medium's rule runs.
@@ -217,6 +224,7 @@ Tests:
   | light, `missedLevel` true, state `{n:1}` | `cleared` | `workflow` `'light'`, `stage` and `state` unchanged, `missedLevel` false |
   | `workflow` `'gone'` at `build` | `turnStarted` | `turnRunning` true, `stage` `'build'` |
 - `flow.test.ts` `foldFlow_FoldState`: a stub `foldState` returning `{n:2}` runs before the stage rules (a rule that reads `state.n` answers `'b'` only when `n` is 2); on a new claim the stub sees `stage` `firstStage` and `state` null; a `sameState` returning true gives the same flow object.
+- `flow.test.ts` `foldFlow_Workflows` adds a row: two workflows that both claim a skill give the lower `order`'s id. `foldFlow` adds a row: a `foldState` returning `undefined` gives `state` null.
 - `flow.test.ts` `markMissedLevel` table: null workflow and false gives true; null workflow and true gives the same object; `'light'` gives the same object.
 - `stages/heavy-state.test.ts`:
   - The bookkeeping rows that `flow.test.ts` holds today move here, with the values they have, run through `foldFlow` over `[heavyMainWorkflow]` and read through `heavyStateOf`. Their `planChanged`, `planGone`, `handedOff` and `dismissed` go through `heavySignal`.
@@ -232,6 +240,9 @@ Tests:
   - `MissedLevel_ReplayedTurn_StaysFalse`: the three events with `replayed` true give false.
   - `MissedLevel_ClaimedInTurn_StaysFalse`: `turnStarted`, skill `wigley:feature`, `usage`, `turnEnded` gives false and `workflow` `'workflow-heavy'`.
   - `Observer_Folded` table: a live signal that changes nothing calls `folded` with `before` equal to `after`, `origin` `'live'`, `whole` true; a replayed event past `savedAt` gives `origin` `'replay'`, `whole` true; a replayed event at `savedAt` gives `origin` `'replay'`, `whole` false.
+  - `Observer_Folded` adds a row: a replayed `turnEnded` at `savedAt` over a flow with `turnRunning` false still calls `folded`, `whole` false.
+  - `Countdown_CancelStopsTheTimer`: `cancelCountdown` on a running countdown leaves 0 live timers. `cancelCountdown` on a stub workflow's flow leaves its `state` the same object.
+  - `MissedLevel_SessionEnded_Sets`: `turnStarted`, `usage`, `sessionEnded` on a null workflow gives `missedLevel` true. `TurnWork_ForgottenOnEnd`: after `sessions.ended` and `forgetFlows`, a later turn with no work gives `missedLevel` false.
   - `Observer_Members`: `opened` gets the flow on `chat.sessionOpened`; `closed` gets the id on `sessions.ended` and on `forgetFlows`; `replaying` gets the id before `folded` for a replayed event.
   - `Exports_SetState_KeepsSavedAtAndSends`: `setState('s1',{n:1})` gives `flowOf('s1').state` `{n:1}`, `savedAtOf` unchanged, one `flows` push, and no `folded` call.
   - `Exports_Signal_ObservedKeepsSavedAt`: origin `'observed'` leaves `savedAtOf` unchanged; `'live'` stamps it.

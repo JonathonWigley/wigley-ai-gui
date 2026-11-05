@@ -49,7 +49,7 @@ Decisions: each doc's lines are checked against the source named here. A line th
 
 GIVEN a doc line that names a step, skill, tool, key, path or section WHEN the implementer checks it against its source THEN the line matches, or it is fixed in this task
 
-Tests:     none: the doc checks are reads. The commands below return the pinned values:
+Tests:     none: the doc checks are reads. The commands below return the pinned values: Also `command grep -c 'closed app' docs/features/workflow-levels/design.md` is 1 or more, because that is the one stale line known at plan time.
            `command grep -c 'plan.md' <wigley-ai-gui worktree>/docs/features/workflow-levels/design.md` — the count is 1 or more: Heavy's checklist line stays
            `command grep -n 'set_workflow_step' <wigley-ai-gui worktree>/docs/features/workflow-levels/design.md` — a line names `wigley:feature` or Heavy as the skills that call it from a terminal
 

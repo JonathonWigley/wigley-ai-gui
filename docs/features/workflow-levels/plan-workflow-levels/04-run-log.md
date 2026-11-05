@@ -68,6 +68,12 @@ Heavy keeps. This task only reads the flow. It must not change:
 - A failed append leaves the stage at `closed`.
 - `Clear & make` still clears and sends `/wigley:make <planDir>`.
 
+Pinned after the cold read.
+- `costUsd` is spend through the last finished turn. Spend only updates at a turn's result, and `done` or `closed` lands mid-turn, so a run's own last turn is not in the number, and a one-turn run logs null. Accepted: the log tunes levels, so being one turn behind does not change a comparison.
+- The meter's baseline resets at `finished` and when a flow's `workflow` goes from null to a claim, so work before the first claim does not count. A move up does not reset it: a moved-up run counts its lower part, and `movedUpFrom` says so.
+- `note` keeps the larger of the sample and the stored value until `cleared`, because an old process's events can be handled after `chat.clear` reset the clock.
+- `workflow` in a line is the workflow id (`workflow-light`), as `movedUpFrom` is.
+
 GIVEN a Heavy flow with progress `reviewRounds` 2, spend 1.25 before a clear and 2.5 after it WHEN `planGone` closes it THEN `runs.jsonl` gains one line with `workflow` `'workflow-heavy'`, `costUsd` 3.75 and `fixCycles` 2.
 GIVEN a flow already in a `finishes` stage WHEN another signal folds THEN no line goes out.
 GIVEN an append that fails WHEN the next run finishes THEN that line still goes, and the flow's stage is unaffected.
@@ -84,13 +90,16 @@ Tests:
   | clock 4000; `usage(main, 0.5)`; `finished`; clock 6000; `usage(main, 0.75)` | 2000 | 0.25 |
   | clock 4000; `usage(main, 0.5)`; `forget`; clock 0 | 0 | null |
 - `main/run-log.test.ts`:
-  - `Append_WritesOneJsonLine`: a line gives exactly `{"at":10,"sessionId":"s1","projectDir":"/r","workflow":"light","movedUpFrom":null,"activeMs":2000,"costUsd":0.25,"fixCycles":0}\n` in `runs.jsonl`.
+  - `Append_WritesOneJsonLine`: a line gives exactly `{"at":10,"sessionId":"s1","projectDir":"/r","workflow":"workflow-light","movedUpFrom":null,"activeMs":2000,"costUsd":0.25,"fixCycles":0}\n` in `runs.jsonl`.
   - `Append_InOrder`: two appends with the first held open write in call order.
   - `Append_Failure_LogsAndGoesOn`: the first append rejects with `boom`; the log has `runs.jsonl not written: boom`; the second line is written.
 - `main/start.test.ts`:
-  - `RunLog_HeavyClosed`: the first GIVEN's values, with chat's fake `activeTime` at `{totalMs:4000,since:null}` before the clear and `{totalMs:1500,since:null}` after it, a `clock` of 90000, gives one line `{"at":90000,"sessionId":"s1","projectDir":"/r","workflow":"workflow-heavy","movedUpFrom":null,"activeMs":5500,"costUsd":3.75,"fixCycles":2}`.
+  - `RunLog_HeavyClosed`: a `wigley:make` start with a plan path first, so the flow can close, then the first GIVEN's values, with chat's fake `activeTime` at `{totalMs:4000,since:null}` before the clear and `{totalMs:1500,since:null}` after it, a `clock` of 90000, gives one line `{"at":90000,"sessionId":"s1","projectDir":"/r","workflow":"workflow-heavy","movedUpFrom":null,"activeMs":5500,"costUsd":3.75,"fixCycles":2}`.
   - `RunLog_MovedUp`: a stub `light`, then `wigley:feature`, then a Heavy close, gives `movedUpFrom` `"light"`.
   - `RunLog_OnlyOnEntry`: another `heavySignal({type:'planGone'})` at `closed` adds no line.
+  - `RunLog_SpendAfterTheStep`: spend 1 at the finishing step, then a `usage` of 2 gives a line with `costUsd` 1.
+  - `RunMeter_BaselineAtClaim`: activity of 3000 and spend 1 before the first claim, then 2000 and 1 more, gives `activeMs` 2000 and `costUsd` 1. A move up keeps the baseline.
+  - `RunMeter_NoteKeepsTheLargest`: clock 4000, `usage`, clock 0, another event, `cleared`, clock 1500, `usage` gives 5500.
   - `RunLog_StubWorkflowWithNoFixCycles`: a stub stage with `finishes` gives `fixCycles` 0.
   - `RunLog_NoFinishesStage_NoLine`: a stage change to `make` adds no line.
 - `stages/closed/main.test.ts`: `closedMainStage.finishes` is true.

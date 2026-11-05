@@ -33,7 +33,7 @@ export interface PageWorkflow {
   stages: readonly PageStage[];
   draw: WorkflowDraw;
   checklist?(flow: SessionFlow): ChecklistView | null;
-  runAction(sessionId: string, command: string): Promise<void>;
+  runAction(sessionId: string, command: string, flow: SessionFlow): Promise<void>;
   countdownText?(flow: SessionFlow, now: number): string | null;
   progressText?(flow: SessionFlow): string | null;
   hasPlan?(flow: SessionFlow): boolean;     // left out: checklist(flow) !== null
@@ -105,7 +105,7 @@ Surfaces. `chipPart` and `stripPart` stay single parts, under the ids `workflow.
 
 The kit. `createWorkflowKit(services, rollback, run, clock, manifest)` builds its base from `manifest`. The main action's hint and the fold's hint stay `qualify('workflow', ...)` because those commands stay in the engine. Every other action's hint is `qualify(manifest.id, action.command)`. `run` still takes the short name.
 
-Heavy until task 05. `page/start.ts` makes `createWorkflowDraw(api, { manifest: workflowManifest, defaultLayout, defaultStylesheet, userLayout: () => api.settings().layout, sideTitle: 'Plan' })` and adds `heavyPageWorkflow(...)`. The manifest is the engine's because no `workflow-heavy` plugin exists until task 05: its layouts folder and key hints would name nothing. So the owner, the hints and the token stay `workflow`, as today. The side part's id is built from `workflow.id`, so it is `workflow-heavy.sidePane` from this task on. Only `page/workflow-view.ts` names today's id `workflow.sidePane`, so nothing else changes with it. `heavyPageWorkflow` holds `id` `HEAVY_WORKFLOW_ID`, `label` `'Heavy'`, `badge` `'H'`, `stages` `BUILT_IN_PAGE_STAGES`, `draw`, `checklist` `planChecklist`, and:
+Heavy until task 05. `page/start.ts` makes `createWorkflowDraw(api, { manifest: workflowManifest, defaultLayout, defaultStylesheet, userLayout: () => api.settings().layout, sideTitle: 'Plan' })` and adds `heavyPageWorkflow(...)`. The manifest is the engine's because no `workflow-heavy` plugin exists until task 05: its layouts folder and key hints would name nothing. So the owner, the hints and the token stay `workflow`, as today. The side part's id is built from `workflow.id`, so it is `workflow-heavy.sidePane` from this task on. Only `page/workflow-view.ts` names today's id `workflow.sidePane` in code. Chat stores collapsed sections by part id (`chat/page/side-sections.ts`), so a Plan section the user collapsed opens once. Accepted: the id comes from `workflow.id`. `heavyPageWorkflow` holds `id` `HEAVY_WORKFLOW_ID`, `label` `'Heavy'`, `badge` `'H'`, `stages` `BUILT_IN_PAGE_STAGES`, `draw`, `checklist` `planChecklist`, and:
 - `runAction`: `openPlan` calls `openDoc(join(planDir, 'plan.md'))`, and with no plan it throws `the session has no plan`. Every other command calls `runMainAction`, which is `api.channel.invoke('runAction', { sessionId, command })`.
 - `countdownText`: null when `countdownEndsAt` is null, else `countdownText(endsAt, now)` from `page/countdown.ts`.
 - `progressText`: null when `progress` is null, else today's text, `<checked>/<total>`, then ` wave <n>` while a wave is open, then ` review <r>` when `reviewRounds` is above 0.
@@ -119,7 +119,7 @@ Lookup per flow. These all use the flow's `PageWorkflow`:
 - A non-null `flow.workflow` with no match logs once per name: `no page workflow <id>`, or `no page stage <id>`.
 - `availableActions`, `buttonActions`, `mainAction`, `steps`, `chipInput`, `stripInput`, `sidePaneInput` and `showRowActivity` read only that stage. With a null stage, `availableActions` is `[]`, `mainAction` is null, and `showRowActivity` sets null. `runFor` then logs `nothing to run for <command> in <name>`.
 - `stepperStages` takes `workflow.stages`, not a global list. The rule of one place per `stepSlot` stays.
-- `runSpec` becomes `workflow.runAction(sessionId, spec.command)`. Its log and toast on a reject stay.
+- `runSpec` becomes `workflow.runAction(sessionId, spec.command, flow)`, with the flow `runFor` holds. Its log and toast on a reject stay.
 - `addWorkflow` adds to one `Map` keyed by `id`, and throws `<id> is already added` on a held id. It stores a copy whose `stages` is sorted by `order`, equal orders keeping array order. Add and dispose call `view.redraw()`. `PageWorkflow` has no `order`, and no draw depends on the order of workflows.
 - `exports.runCommand` is `view.runFor`.
 
@@ -175,6 +175,11 @@ Heavy keeps, each pinned by its existing row:
 - The preview through all thirteen samples.
 - The fallback draw: today an unregistered stage draws as idle, which draws nothing and logs `no page stage <id>`. The null stage does the same.
 
+Parts and the preview, pinned.
+- `createWorkflowDraw` replaces `createWorkflowParts`. `page/layout/workflow-parts.ts` loses `Drawn` and `RunCommand`, which live in `contract.ts` alone, and keeps only what `createWorkflowDraw` still calls. Delete the file if nothing remains.
+- The preview's `shown` stores the list length from the last `showStep`. `press` compares with that number, so the log's `<m>` and the close use one value and `previewFlows` runs once per press.
+- `No workflow` is an error tag (`ui-tag--error`): the session broke the mandatory rule.
+
 GIVEN a flow with a null workflow and `missedLevel` false WHEN parts draw THEN chip, strip and pane are empty.
 GIVEN a flow with a null workflow and `missedLevel` true WHEN the chip draws THEN it holds one `.ui-tag--error` reading `No workflow`, and strip and pane are empty.
 GIVEN two page workflows holding a stage `build` with labels `Build L` and `Build M` WHEN a flow of the second draws THEN its steps come from the second alone.
@@ -209,7 +214,9 @@ Tests:
 - `stages/heavy-page-workflow.test.ts`:
   - `planChecklist` of progress `{checked:3,total:7,wave:2,reviewRounds:0,title:'P',tasks:[wave 1 two done, wave 2 one done one open, wave null one open]}` gives `title` `'P'`, `checked` 3, `total` 7, group titles `['Wave 1','Wave 2','Tasks']`. A null progress gives null.
   - `heavyPageWorkflow` has `badge` `'H'`.
-  - `runAction` table: `openPlan` with `planDir` `/r/plan-a` opens `/r/plan-a/plan.md`; `openPlan` with no plan rejects with `the session has no plan`; `clearAndMake` calls `runMainAction('s1','clearAndMake')`.
+  - `countdownText`: `countdownEndsAt` null gives null; `now + 10000` gives `10s`.
+  - `previewFlows` gives thirteen flows, and the `planReady` sample's `countdownEndsAt` is `now + autoStartSeconds() * 1000`.
+  - `runAction` table, each row passing the flow as the third argument: `openPlan` with `planDir` `/r/plan-a` opens `/r/plan-a/plan.md`; `openPlan` with no plan rejects with `the session has no plan`; `clearAndMake` calls `runMainAction('s1','clearAndMake')`.
   - `progressText` table: null progress gives null; `{checked:3,total:7,wave:2,reviewRounds:1}` gives `3/7 wave 2 review 1`.
   - `hasPlan`: a null progress gives false; a progress with `total` 0 gives true.
 - `page/start.test.ts`: `exports(consumer).addWorkflow` draws a stub workflow's chip and adds its side part; `consumer` dispose removes both, and the id can be added again; `addStage` is not on the exports; `createWorkflowDraw` and `runCommand` are.

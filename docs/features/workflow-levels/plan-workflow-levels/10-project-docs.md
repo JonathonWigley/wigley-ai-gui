@@ -79,6 +79,13 @@ This file stays list-shaped, and its head says "Remove an item when its work lan
 - The Contents line for § Claude Code settings: add `the `workflow-gate` hook`.
 - These lines go live before task 12 installs the tool. That is safe: a session reads them, and the tool's own absence only means the hook is not wired yet. If task 12 stops before its install, its report names these lines as ahead of the machine.
 
+Also true after the engine move, and in this task's Files:
+- `DESIGN.md` § Workflow: the three parts are drawn by each workflow's own `default` layout, the chip draws a badge, and the screenshot names follow task 05.
+- `.agents/skills/drive/SKILL.md`: the example setting reads `workflow-heavy.autoStartSeconds`.
+- `docs/features/layouts/design.md`: the row naming `workflow.layout` lists the three owners.
+
+The AGENTS.md line numbers above are approximate: find each passage by its words.
+
 GIVEN the landed plugins WHEN an agent reads `AGENTS.md`'s plugin list THEN it finds the engine and the three workflow plugins, each with its real paths
 GIVEN `docs/features/followups.md` WHEN the Backlog reads it THEN the Heavy item carries the tag `needs a feature plan` and the closed item is gone
 
@@ -90,7 +97,7 @@ Tests:     none new: these are doc changes, and no test reads them. Each command
            `command grep -c 'workflow/main/selftest-script' AGENTS.md` — `0`
            `command grep -c 'workflow-gate' ~/.agents/AGENTS.local.md` — `3` or more
 
-Done when: each command above prints its value; `git diff --stat` holds only the four repo docs.
+Done when: each command above prints its value; `git diff --stat` holds only the four repo docs and the three below.
 
 Commit:    one commit for the group on `workflow-levels` of wigley-ai-gui, by pathspec. `~/.agents/AGENTS.local.md` is never committed.
 

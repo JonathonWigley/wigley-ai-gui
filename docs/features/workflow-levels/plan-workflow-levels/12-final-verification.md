@@ -58,7 +58,7 @@ Worktrees: `~/Documents/ai-dev/.worktrees/{wigley-ai-gui,wigley-ai-marketplace,w
 
 **Step 1 — wigley-ai-gui and wigley-ai-marketplace land, in § Landing's order.**
 
-- Rebase each branch onto its `main`, and re-run plan.md's Preconditions.
+- Rebase each branch onto its `main`, and re-run plan.md's Precondition 1. Preconditions 2 to 4 describe the start of the run and no longer apply.
 - **The version.** Re-read it at landing, because peers keep landing: `git -C ~/Documents/ai-dev/wigley-ai-marketplace show main:plugins/wigley/.claude-plugin/plugin.json`. It read 1.16.1 when this task was written. Two new skills are a minor bump, as 1.15.3 to 1.16.0 was: the next `x.(y+1).0`. Put the same value in both manifests, in one commit that says what the series adds.
 - Run the marketplace's Done commands from its root (`wigley-ai-marketplace/AGENTS.md` § Done).
 - Merge with `git -C <clone> merge --ff-only workflow-levels`, in each. While `main` is unavailable, poll and retry.
@@ -86,10 +86,16 @@ Worktrees: `~/Documents/ai-dev/.worktrees/{wigley-ai-gui,wigley-ai-marketplace,w
 
 **Step 5 — wigley-agents lands last,** in § Landing's order. This is what makes the rule live: `workflows.md`, the Required reads row, and the gate's script.
 
-- Rebase, re-run Preconditions, `git -C ~/Documents/ai-dev/wigley-agents merge --ff-only workflow-levels`, remove the worktree, delete the branch, push `main` in all four repos.
+- Rebase, re-run Precondition 1, `git -C ~/Documents/ai-dev/wigley-agents merge --ff-only workflow-levels`, remove the worktree, delete the branch, push `main` in all four repos.
 - **Check:** `git -C ~/Documents/ai-dev/wigley-agents merge-base --is-ancestor main origin/main` exits 0. `test -x ~/wigley-agents/tools/workflow-gate/workflow-gate` and `test -f ~/wigley-agents/workflows.md` pass.
 - **G1, low-confidence: the wired hook through its real link.** Write `{"type":"user","message":{"content":"hello"}}` to a file under `/tmp/claude-feature-tiers/`, then pipe `{"hook_event_name":"PreToolUse","tool_name":"Edit","transcript_path":"<that file>"}` into `~/.local/bin/workflow-gate hook`. It prints `permissionDecision` `deny`, and the reason names `~/wigley-agents/workflows.md`. The same event with `"agent_id":"a1"` prints nothing. Delete the file.
 - **G2, expected: a real session.** This run holds `wigley:make`, so its next `Edit` passes with no denial and no `hook error` notice: the plan's own tick is that edit.
+
+Pinned after the cold read.
+- L1 uses `do chat.start` naming the repo folder and a logged-in profile, as R1 does.
+- G1 also pipes a bad-path event through the link and reads the printed JSON: `additionalContext` present, no `permissionDecision`.
+- G2 also checks that `~/.local/bin/workflow-gate` is the command in the wired group. G2 proves only that nothing is falsely denied; G1 proves the deny path.
+- When step 5 stops midway, leave the hook wired, retry it, and name the window in the report, because edits still pass with a notice and removal needs a second settings edit.
 
 GIVEN a self-test and drive pass on the branch WHEN landing starts THEN each step runs in the order 1, 2, 3, 4, 5, and each check passes before the next step
 GIVEN the user declines the install WHEN step 3 reads the answer THEN steps 4 and 5 do not run, and `workflows.md` does not reach `main`
