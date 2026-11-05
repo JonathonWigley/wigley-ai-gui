@@ -8,17 +8,33 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import {
   sessionsActiveSlot,
+  type SessionRow,
   sessionsRowsSlot,
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import type { PoolClone, PoolSnapshot } from '../contract';
+import {
+  type PoolClone,
+  type PoolSnapshot,
+  unityPoolSnapshotSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, PanelInput } from '../layouts/layout';
 import { unityPoolPagePart } from './start';
 
 const ROW_ID = 'row-1';
 const CLONE_PATH = '/x/repo-1';
+
+const ROW: SessionRow = {
+  sessionId: ROW_ID,
+  label: 'alpha 1',
+  project: 'alpha',
+  harness: 'claude',
+  marked: false,
+  projectDir: CLONE_PATH,
+  hostSessionId: 'host-1',
+  titles: { user: null, agent: null, firstMessage: null },
+};
 
 const UNHELD_CLONE: PoolClone = {
   number: 1,
@@ -33,7 +49,7 @@ const UNHELD_CLONE: PoolClone = {
 };
 
 // The part on the harness, over fakes that file each handle with
-// `consumer.track` as the real views do. `invoke` answers main's channel;
+// `consumer.track` as the real views do. `invoke` answers main's channel.
 function startOnHarness(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
 ) {
@@ -50,6 +66,31 @@ function startOnHarness(
       ),
     ],
   });
+}
+
+const SNAPSHOT: PoolSnapshot = {
+  pools: [{ pool: 'p', updatedAt: 0, clones: [UNHELD_CLONE], queue: [] }],
+};
+
+// A layout that records each panel drawn, and the harness showing it.
+function captureLayout(harness: ReturnType<typeof startOnHarness>) {
+  const panels: PanelInput[] = [];
+  const capture: Layout = {
+    panel(parent, input) {
+      panels.push(input);
+      const root = document.createElement('div');
+      parent.append(root);
+      return { element: root };
+    },
+  };
+  harness.showLayouts({
+    layouts: new Map<string, Layout>([
+      ['default', defaultLayout],
+      ['capture', capture],
+    ]),
+    user: 'capture',
+  });
+  return panels;
 }
 
 describe('unityPoolPagePart', () => {
@@ -80,10 +121,28 @@ describe('unityPoolPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
+  it.each([
+    { name: 'written before core.pageReady', writesFirst: true },
+    { name: 'written after core.pageReady', writesFirst: false },
+  ])('pools_ReachThePanel: $name', ({ writesFirst }) => {
+    const harness = startOnHarness(() => Promise.resolve(null));
+    const panels = captureLayout(harness);
+    harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
+    harness.state.publish(sessionsActiveSlot).set(ROW_ID);
+    const pools = harness.state.publish(unityPoolSnapshotSlot);
+
+    if (writesFirst) {
+      pools.set(SNAPSHOT);
+    }
+    harness.emit('core.pageReady', null);
+    if (!writesFirst) {
+      pools.set(SNAPSHOT);
+    }
+
+    expect(panels.map(({ pool }) => pool).at(-1)).toBe('p');
+  });
+
   it('run_OnePerCloneAndARejectedCallShowsItsError', async () => {
-    const snapshot: PoolSnapshot = {
-      pools: [{ pool: 'p', updatedAt: 0, clones: [UNHELD_CLONE], queue: [] }],
-    };
     const run = deferred<unknown>();
     const runs: unknown[][] = [];
     const harness = startOnHarness(async (method, ...args) => {
@@ -91,35 +150,13 @@ describe('unityPoolPagePart', () => {
         runs.push(args);
         return run.promise;
       }
-      return method === 'snapshot' ? snapshot : null;
+      return null;
     });
-    const panels: PanelInput[] = [];
-    const capture: Layout = {
-      panel(parent, input) {
-        panels.push(input);
-        const root = document.createElement('div');
-        parent.append(root);
-        return { element: root };
-      },
-    };
-    harness.showLayouts({
-      layouts: new Map<string, Layout>([
-        ['default', defaultLayout],
-        ['capture', capture],
-      ]),
-      user: 'capture',
-    });
+    const panels = captureLayout(harness);
+    harness.state.publish(unityPoolSnapshotSlot).set(SNAPSHOT);
+    harness.emit('core.pageReady', null);
     harness.state.publish(sessionsActiveSlot).set(ROW_ID);
-    harness.state.publish(sessionsRowsSlot).set(ROW_ID, {
-      sessionId: ROW_ID,
-      label: 'alpha 1',
-      project: 'alpha',
-      harness: 'claude',
-      marked: false,
-      projectDir: CLONE_PATH,
-      hostSessionId: 'host-1',
-      titles: { user: null, agent: null, firstMessage: null },
-    });
+    harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
     await vi.waitFor(() => expect(panels.length).toBeGreaterThan(0));
     const hold = () => panels[panels.length - 1].clones[0].action?.run();
 

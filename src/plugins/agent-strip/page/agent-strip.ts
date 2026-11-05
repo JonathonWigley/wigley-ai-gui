@@ -16,7 +16,7 @@ import type {
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import type { HScroller } from '../../../shared/page/ui/h-scroller';
 import type {
-  AgentsPageExports,
+  Roster,
   RosterAgent,
   RosterTask,
   RosterTool,
@@ -44,7 +44,7 @@ import {
   stepIndex,
 } from './strip-boxes';
 
-// `agents` is the only way the strip reads a roster. `cutTitle` cuts a task
+// `roster` is a session's current roster. `cutTitle` cuts a task
 // row's title to the session title limit. `setScope` sets the
 // strip's key scope, `agent-strip.strip`; `nameOf` is a session's name in the
 // page log; `createScroller` makes the HScroller a strip draws its agent boxes
@@ -54,7 +54,7 @@ export interface AgentStripDeps {
   log: PluginLog;
   clock: Clock;
   timers: Timers;
-  agents: AgentsPageExports;
+  roster(sessionId: string): Roster;
   cutTitle(text: string): string;
   setScope(): void;
   nameOf(sessionId: string): string;
@@ -66,6 +66,7 @@ export interface AgentStripDeps {
 // cursor and do nothing while none does: `prevBox` / `nextBox` move the
 // selection, `leave` hands the cursor back to the entries, `toBox` to the chat
 // box, `toggleBox` opens or closes the selected box and scrolls it into view.
+// `rosterUpdated` redraws a session's strip after its roster changed;
 // `setLayouts` redraws every strip; `forget` drops a session that left.
 export interface AgentStrip {
   part: ChatComposerPart;
@@ -73,6 +74,7 @@ export interface AgentStrip {
   nextBox(): void;
   leave(): void;
   toBox(how: 'insert' | 'append'): void;
+  rosterUpdated(sessionId: string): void;
   toggleBox(): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;
@@ -141,7 +143,7 @@ const TOOL_STATUS: Record<RosterTool['outcome'], BoxStatus> = {
 // shows. Drawing an open box again keeps its tool list's scroll while the strip
 // shows; a draw in a hidden tab, or a rebuilt composer, starts the list at the top.
 export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
-  const { clock, timers, agents } = deps;
+  const { clock, timers } = deps;
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: agentStripManifest.id,
     defaultLayout,
@@ -161,7 +163,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   > = { agent: null, task: null };
 
   const boxesOf = (sessionId: string): StripBox[] =>
-    orderStripBoxes(agents.roster(sessionId));
+    orderStripBoxes(deps.roster(sessionId));
 
   const kitFor = (rollback: RollbackDeps): AgentStripKit =>
     createBaseKit(
@@ -615,7 +617,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   // scrolled into view when its index moved or another box took its place, or
   // hands the cursor back once no box is left, and the open box closes once its
   // box is gone.
-  const rosterChanged = (sessionId: string) => {
+  const rosterUpdated = (sessionId: string) => {
     const boxes = boxesOf(sessionId);
     const openKey = openKeys.get(sessionId);
     if (openKey !== undefined && !boxes.some((box) => box.key === openKey)) {
@@ -641,9 +643,8 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     handBack?.toEntries();
   };
 
-  agents.onRosterChanged(rosterChanged);
-
   return {
+    rosterUpdated,
     part: {
       id: 'agent-strip.strip',
       build(wrapper, sessionId) {

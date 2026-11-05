@@ -11,13 +11,14 @@ import {
   type SessionsMainEvents,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type {
-  MainStage,
-  SessionFlow,
-  StageId,
-  WorkflowChannel,
-  WorkflowMainExports,
-  WorkflowSignal,
+import {
+  type MainStage,
+  type SessionFlow,
+  type StageId,
+  type WorkflowChannel,
+  workflowFlowsSlot,
+  type WorkflowMainExports,
+  type WorkflowSignal,
 } from '../contract';
 import { foldFlow, foldRunningState, isPlanFile } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -71,7 +72,7 @@ export interface WorkflowSelfTestHooks {
 // watches each flow's plan folder, runs the main-side
 // workflow commands for the page and the plan-ready auto-start countdown,
 // contributes `set_workflow_step`, whose steps are the registered stages'
-// `reportedAs`, and sends every flow to the page on each change. Exports
+// `reportedAs`, and writes each open session's flow to `workflow.flows`. Exports
 // `addStage`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
@@ -83,6 +84,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const stages = createStageList<MainStage>();
     const store = createFlowStore({
+      flows: api.state.publish(workflowFlowsSlot),
       files: api.data,
       log,
       paths: services.paths,
@@ -103,7 +105,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     // signal.
     const replayedTurnEnds = new Set<string>();
 
-    const sendFlows = () => channel.send('flows', store.all());
     const stageOf = (flow: SessionFlow) =>
       stages.all().find((stage) => stage.id === flow.stage);
 
@@ -150,7 +151,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         store.putKeepingSavedAt(next);
       }
       countdown.sync(next);
-      sendFlows();
     };
 
     const noteTurnBoundary = (
@@ -307,7 +307,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         connected.delete(sessionId);
         const flow = store.open(sessionId, pair.hostSessionId, pair.projectDir);
         planWatch.follow(sessionId, flow.planDir);
-        sendFlows();
       });
     });
     events.on('sessions.hostSessionChanged', ({ id, info }) => {
@@ -326,7 +325,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         planWatch.follow(sessionId, null);
         replayedTurnEnds.delete(sessionId);
         store.drop(sessionId);
-        sendFlows();
       });
     });
     events.on(
@@ -375,13 +373,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       });
     });
 
-    channel.handle('flows', () => ready.then(() => store.all()));
     channel.handle('runAction', ({ sessionId, command }) =>
       ready.then(async () => {
         await actions.run(sessionId, command);
       }),
     );
-    void ready.then(sendFlows);
 
     if (services.selfTest !== null) {
       const selfTestHooks: WorkflowSelfTestHooks = {
@@ -391,7 +387,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
             planWatch.follow(sessionId, null);
             replayedTurnEnds.delete(sessionId);
           }
-          sendFlows();
         },
         callStepTool(sessionId, step) {
           void startStepToolSession({ id: sessionId }).call(

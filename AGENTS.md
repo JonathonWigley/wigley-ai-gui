@@ -202,8 +202,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
-                 `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
-                 part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
+                 `logs/<host session id>.jsonl` in its plugin data, the layout preview, and writes the `agents.rosters`
+                 slot the views below read); draws nothing; `docs/features/agent-tower/design.md`
   agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the working line
                  under each session row while it runs a subagent or task, through sessions' `addRowPart`), layouts/ (its Layout contract and
                  `default` layout); in `plugins.disabled` by default

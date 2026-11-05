@@ -6,6 +6,7 @@ import type {
 } from '../../../contracts/agent';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   fakeDependency,
   noCounts,
@@ -21,7 +22,7 @@ import {
   type SessionsMainEvents,
   sessionsSelectionSlot,
 } from '../../sessions/contract';
-import type { UsageSnapshot } from '../contract';
+import { type UsageSnapshot, usageSnapshotSlot } from '../contract';
 import type { UsageSelfTestDeps } from './selftest-script';
 import { usageMainPart } from './start';
 import { usageFixture } from './usage-fixture';
@@ -84,15 +85,17 @@ function usageEvent(agentId: string): UsageAgentEvent {
 }
 
 // Usage's main part started over a fake `MainApi` holding `PERSONAL` as
-// chat's one profile, `harnesses` and a drive host whose `run` runs an added
-// action; `emit` calls the listeners of a qualified event, `sent` records
-// every `changed`, `armed` every timer set and `pendingTimers` the ids set and
+// chat's one profile, `harnesses`, a real store for its slot and a drive host
+// whose `run` runs an added action; `emit` calls the listeners of a qualified
+// event, `sent` records every write of the slot after the start, `snapshot` reads
+// the slot, `armed` records every timer set and `pendingTimers` the ids set and
 // not yet cleared. The clock reads `NOW` and sessions' selected session is
 // `SELECTED`.
 function startUsagePart(harnesses: Partial<AgentHarness>[]) {
-  const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const sent: UsageSnapshot[] = [];
+  const store = createSlotStore(() => undefined);
+  const reader = store.read(usageSnapshotSlot, 'test');
   const logs: string[] = [];
   const armed: number[] = [];
   const pendingTimers = new Set<number>();
@@ -101,22 +104,16 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     profiles: () => [PERSONAL],
   };
   const api = {
-    channel: {
-      handle: (name: string, handler: (...args: unknown[]) => unknown) =>
-        handlers.set(name, handler),
-      send: (name: string, data: UsageSnapshot) => {
-        if (name === 'changed') {
-          sent.push(data);
-        }
-      },
-    },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       },
     },
-    state: { read: () => ({ get: () => SELECTED }) },
+    state: {
+      publish: () => store.publish(usageSnapshotSlot),
+      read: () => ({ get: () => SELECTED }),
+    },
     settings: () => ({ pollIntervalSeconds: 300, layout: 'default' }),
     onSettingsChanged: () => ({ dispose: () => undefined }),
     services: {
@@ -138,6 +135,11 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
   usageMainPart.start(api);
+  reader.on((snapshot) => {
+    if (snapshot !== undefined) {
+      sent.push(snapshot);
+    }
+  });
   const emit = <Name extends keyof UsageHeard & string>(
     event: Name,
     data: UsageHeard[Name],
@@ -146,7 +148,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
       listener(data);
     }
   };
-  const snapshot = () => handlers.get('snapshot')?.() as UsageSnapshot;
+  const snapshot = () => reader.get();
   return { sent, logs, armed, pendingTimers, drive, emit, snapshot };
 }
 
@@ -158,7 +160,7 @@ const pollingHarness: Partial<AgentHarness> = {
 };
 
 describe('usageMainPart', () => {
-  it('usageMainPart_EventsAndPolls_SendSnapshots', async () => {
+  it('usageMainPart_EventsAndPolls_WriteSnapshots', async () => {
     const usage = startUsagePart([pollingHarness]);
     await settled();
 
@@ -189,7 +191,6 @@ describe('usageMainPart', () => {
     };
     const polledPlan = { ...seededPlan, usage: POLLED, lastGoodAt: 1_000 };
     expect(usage.sent).toEqual([
-      { plans: [seededPlan], sessions: [] },
       { plans: [polledPlan], sessions: [] },
       {
         plans: [polledPlan],
@@ -204,7 +205,7 @@ describe('usageMainPart', () => {
       },
       { plans: [polledPlan], sessions: [] },
     ]);
-    expect(usage.snapshot()).toBe(usage.sent[3]);
+    expect(usage.snapshot()).toBe(usage.sent.at(-1));
   });
 
   it('usageMainPart_SessionOpened_RecordsProfileBeforeTheFirstTurn', async () => {
@@ -238,7 +239,7 @@ describe('usageMainPart', () => {
       replayed: false,
     });
 
-    expect(usage.snapshot().sessions).toEqual([
+    expect(usage.snapshot()?.sessions).toEqual([
       {
         sessionId: 's1',
         profileDir: '~/.claude-personal',
@@ -330,7 +331,7 @@ describe('usageMainPart', () => {
     });
   });
 
-  it('usageMainPart_Seed_StopsThePollerAndSendsTheFixture', async () => {
+  it('usageMainPart_Seed_StopsThePollerAndWritesTheFixture', async () => {
     const usage = startUsagePart([pollingHarness]);
     await settled();
     usage.sent.length = 0;
@@ -342,6 +343,45 @@ describe('usageMainPart', () => {
     await expect(usage.drive.run('pollNow')).rejects.toThrow(
       'usage.seed stopped the poller for this run',
     );
+  });
+
+  it('heldOnlyChange_WritesNothing', () => {
+    const usage = startUsagePart([]);
+    const before = usage.snapshot();
+    usage.sent.length = 0;
+
+    usage.emit('chat.planUsage', {
+      profileDir: '~/.claude-personal',
+      update: { rows: POLLED.rows, at: 2_000 },
+    });
+
+    expect(usage.sent).toEqual([]);
+    expect(usage.snapshot()).toBe(before);
+  });
+
+  it('seed_ThenSnapshot_ReadsTheSeed', async () => {
+    const usage = startUsagePart([]);
+
+    await usage.drive.run('seed');
+
+    expect(scriptDeps().snapshot()).toBe(usage.snapshot());
+    expect(usage.snapshot()).toEqual(usageFixture('fresh', NOW, SELECTED));
+  });
+
+  it('start_WritesTheEmptySnapshot', () => {
+    const harness = startMainPart(usageMainPart, {
+      dependencies: [
+        fakeDependency(
+          chatMainKey,
+          () => ({ profiles: () => [] }) as unknown as ChatMainExports,
+        ),
+      ],
+    });
+
+    expect(harness.state.read(usageSnapshotSlot, 'test').get()).toEqual({
+      plans: [],
+      sessions: [],
+    });
   });
 });
 
@@ -461,13 +501,14 @@ describe('usageMainPart lifecycle', () => {
         }),
     );
     await settled();
-    const sentBefore = harness.sent.length;
+    const slot = harness.state.read(usageSnapshotSlot, 'test');
+    const atStop = slot.get();
 
     await harness.stop();
     answer(POLLED);
     await settled();
 
-    expect(harness.sent).toHaveLength(sentBefore);
+    expect(slot.get()).toBe(atStop);
   });
 
   it('stopThenStart_StartsAgain', async () => {

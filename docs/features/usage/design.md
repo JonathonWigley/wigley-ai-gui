@@ -93,7 +93,7 @@ profile's `settings.json`, which is why the configured limit is read there.
         │                                                           │
         ▼                                                           ▼
  usage main: per-profile PlanUsage (poll, then live updates folded in), per-session usage
-        │ channel: snapshot
+        │ slot: usage.snapshot
         ▼
  usage page ──▶ status bar line (the shown session's profile's plan rows)
             ──▶ chat.addComposerPart: each Chat session's context line (context bar and cache countdown) above its box
@@ -144,7 +144,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   resumed row's saved usage the same way: it reads `harness.lastUsage` on restoring a row that ever sent a message,
   and on resuming a session from the past-sessions picker beside its history read, and emits the result as the row's
   `agentEvent` (a resumed row's as soon as the row opens, before its process emits). A failed read is logged, and the
-  row keeps the zero line until its process reports. It sends one snapshot over its channel on every change.
+  row keeps the zero line until its process reports. It writes the `usage.snapshot` slot at start when the slot holds none, and on every change.
 - A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
   the reason, which the details bar shows; the next good poll clears both. With no good poll yet the profile has no
   usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.

@@ -1,10 +1,12 @@
 import './agent-lines.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
+  QualifiedEvents,
 } from '../../../contracts/plugin';
-import { agentsPageKey } from '../../agents/contract';
+import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import {
   followRows,
   sessionsPageKey,
@@ -20,19 +22,19 @@ import { createWorkingLines } from './working-lines';
 type AgentLinesApi = PageApi<
   typeof agentLinesManifest,
   ChannelShape,
-  Record<never, never>
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // Draws a working line under each session's row while it runs any subagent
 // or task, through sessions' row parts and the `agent-lines.layout` layout.
-// Reads the rosters from agents' page exports, redrawing a session's line each
-// time its roster changes, and names each session by its side-bar label for
-// the page log.
+// Reads `agents.rosters`, redrawing a session's line each time its roster
+// changes, and names each session by its side-bar label for the page log.
 export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
   manifest: agentLinesManifest,
   start(api: AgentLinesApi) {
     const { services } = api;
-    const agents = api.dependency(agentsPageKey);
+    const rosters = api.state.read(agentsRostersSlot);
     const sessions = api.dependency(sessionsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
     const lines = createWorkingLines({
@@ -50,14 +52,19 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
       clock: services.clock,
       timers: services.timers,
       nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
-      roster: (sessionId) => agents.roster(sessionId),
+      roster: (sessionId) => rosters.get(sessionId) ?? EMPTY_ROSTER,
     });
     sessions.addRowPart(lines.part);
 
     followRows(rows, { removed: (sessionId) => lines.forget(sessionId) });
-    agents.onRosterChanged((sessionId) =>
-      lines.setRoster(sessionId, agents.roster(sessionId)),
-    );
+    api.events.on('core.pageReady', () => {
+      rosters.on((sessionId, roster) =>
+        lines.setRoster(sessionId, roster ?? EMPTY_ROSTER),
+      );
+      for (const [sessionId, roster] of rosters.all()) {
+        lines.setRoster(sessionId, roster);
+      }
+    });
 
     api.layouts.show<Layout>({
       defaultLayout,

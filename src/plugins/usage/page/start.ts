@@ -1,8 +1,13 @@
 import './usage.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type {
+  ChannelShape,
+  PageApi,
+  PagePart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
-import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { chatPageKey } from '../../chat/contract';
 import {
@@ -11,10 +16,10 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  UsageChannel,
-  UsagePageExports,
-  UsageSnapshot,
+import {
+  type UsagePageExports,
+  type UsageSnapshot,
+  usageSnapshotSlot,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -39,7 +44,12 @@ import {
   statusLineText,
 } from './usage-view-model';
 
-type UsageApi = PageApi<typeof usageManifest, UsageChannel>;
+type UsageApi = PageApi<
+  typeof usageManifest,
+  ChannelShape,
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
+>;
 
 // The `uiState` key holding `true` while the details are open.
 const DETAILS_OPEN_KEY = 'details-open';
@@ -52,13 +62,12 @@ const REDRAW_MS = 60_000;
 // details in the right bar while they are open (`toggleDetails`, kept in
 // `uiState`), all through the `usage.layout` layout. Exports `sessionLinePart`,
 // the whole session line as a part for a tab bar; every part it made redraws
-// with the page's own until the dependent that asked for it stops. Hears main's
-// `changed` snapshots (after
-// one `snapshot` read) and reads `sessions.active` for the shown session, and
-// redraws all on each, on each layouts set and once a minute for the
-// countdowns; reads `sessions.rows` for each session's name in the log
-// and to forget a removed session's lines. Draws nothing
-// until the first snapshot lands, or after the part stops. Logs the status line's
+// with the page's own until the dependent that asked for it stops. Reads
+// `usage.snapshot` and `sessions.active` for the shown session, and redraws all
+// at `core.pageReady`, on each change of either, on each layouts set and once a
+// minute for the countdowns; reads `sessions.rows` for each session's name in the
+// log and to forget a removed session's lines. Draws nothing while the slot holds
+// no snapshot. Logs the status line's
 // and each session's lines' text when it changes, and the details' states when
 // they show, hide or change.
 export const usagePagePart: PagePart<typeof usageManifest> = {
@@ -69,6 +78,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     const chat = api.dependency(chatPageKey);
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
+    const usage = api.state.read(usageSnapshotSlot);
     const parts = createUsageParts({
       defaultLayout,
       kit: {
@@ -84,8 +94,6 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       log: services.log,
     });
 
-    // Null until the `snapshot` reply or a `changed` lands.
-    let snapshot: UsageSnapshot | null = null;
     // Whether the details are open, wanted before the first snapshot too.
     let detailsOpen = services.uiState.get(DETAILS_OPEN_KEY) === true;
     const statusSlot = element('span', 'usage-status-slot');
@@ -97,12 +105,15 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     let details: Drawn | null = null;
     let lastStatusText: string | null = null;
     let lastDetailsText: string | null = null;
-    let isDisposed = false;
     const lineParts = createSessionLineParts();
     const nameOf = (sessionId: string) =>
       rows.get(sessionId)?.label ?? sessionId;
-    const latest = () =>
-      snapshot === null ? null : { snapshot, now: services.clock.now() };
+    const latest = () => {
+      const snapshot = usage.get();
+      return snapshot === undefined
+        ? null
+        : { snapshot, now: services.clock.now() };
+    };
     const makeSessionLines = <I>(
       id: string,
       line: SessionLineKind<I>,
@@ -183,7 +194,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     // Draws the line, and the details while open, at one `now`; shows the
     // details on their first draw.
     const redraw = () => {
-      if (isDisposed || snapshot === null) {
+      const snapshot = usage.get();
+      if (snapshot === undefined) {
         return;
       }
       const now = services.clock.now();
@@ -220,20 +232,10 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       services.log('details hidden');
     };
 
-    api.channel.on('changed', (next) => {
-      snapshot = next;
+    api.events.on('core.pageReady', () => {
+      usage.on(() => redraw());
       redraw();
     });
-    api.channel.invoke('snapshot').then(
-      (first) => {
-        if (snapshot === null) {
-          snapshot = first;
-          redraw();
-        }
-      },
-      (error: unknown) =>
-        services.log(`snapshot not read: ${errorText(error)}`),
-    );
     active.on(() => redraw());
     followRows(rows, { removed: (sessionId) => lineParts.forget(sessionId) });
     const tick = () => {
@@ -277,7 +279,6 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
           },
         }) satisfies UsagePageExports,
       dispose() {
-        isDisposed = true;
         callEach([statusLine, details], (drawn) => drawn?.dispose());
       },
     };

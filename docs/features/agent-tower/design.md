@@ -23,7 +23,7 @@ Built:
 - chat main forwarding each owned session's events as `chat.agentEvent`, carrying
   `{ sessionId, profileDir, hostSessionId, event }`
 - the `agents` plugin: each session's roster, one JSON-lines event log per host session, and the `Space z l a` layout
-  preview. It draws nothing; its page exports the rosters to the views that do
+  preview. It draws nothing; its main part writes the rosters to the `agents.rosters` slot the views that do read
 - the `agent-lines` plugin (in `plugins.disabled` by default): one working line under its session's row while the
   session runs any subagent or task, through sessions' `addRowPart`
 - the `agent-strip` plugin: the subagent and task boxes above the Chat composer's box (`docs/features/chat-bar/design.md`)
@@ -110,8 +110,9 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   `agentFinished`. The roster takes the reply's model, spend, context tokens and window.
 - **`agentLaunched`** is sent on a background Agent call's launch receipt (`isAsync`); the roster marks that subagent
   as running in the background.
-- **Page** draws nothing. It keeps every session's roster and exports `roster(sessionId)` and
-  `onRosterChanged(listener)` to the views that draw it.
+- **Slot.** Main writes each row's merged roster to `agents.rosters`, keyed by the row's session id, after each change,
+  and deletes the key once the roster lists nothing and when the row ends. The views read it through `api.state.read`,
+  taking `EMPTY_ROSTER` for a missing key. The page part draws nothing and holds no roster.
 - **`agent-lines`** (a separate plugin, in `plugins.disabled` by default; its `layout` setting is `agent-lines.layout`)
   adds a row part through sessions' `addRowPart` and draws, under each session row, one `workingLine` while the
   session runs any subagent or task: a running dot and the elapsed time since the earliest running item started. The

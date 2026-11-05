@@ -15,11 +15,12 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  PageStage,
-  SessionFlow,
-  WorkflowChannel,
-  WorkflowPageExports,
+import {
+  type PageStage,
+  type SessionFlow,
+  type WorkflowChannel,
+  workflowFlowsSlot,
+  type WorkflowPageExports,
 } from '../contract';
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
@@ -55,8 +56,9 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 
 // Draws each session's flow as a chip under its row, a strip above its Chat
 // composer and a side pane beside its transcript, through the
-// `workflow.layout` layout. Holds every flow main pushes, filled in by one
-// `flows` read, and the page halves of the stages, which `addStage` extends.
+// `workflow.layout` layout. Reads `workflow.flows`, drawing the one flow each
+// notice names and leaving a deleted flow drawn until its row leaves, and holds
+// the page halves of the stages, which `addStage` extends.
 // Each workflow command runs on the selected session; each button on the
 // session it draws. `toggleSidePane` shows or hides the pane in every session,
 // kept in `uiState`. `openPreview` steps chat's preview session through a
@@ -70,7 +72,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const chat = api.dependency(chatPageKey);
     const docs = api.dependency(docsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
-    const flows = new Map<string, SessionFlow>();
+    const flows = api.state.read(workflowFlowsSlot);
     const stages = createStageList<PageStage>();
 
     const nameOf = (sessionId: string) =>
@@ -139,25 +141,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     chat.addComposerPart(view.stripPart);
     chat.addSidePart(view.sidePart);
 
-    api.events.on('core.pageReady', () => {
-      followRows(rows, {
-        added: ({ sessionId, hostSessionId }) =>
-          preview.sessionAdded(sessionId, hostSessionId),
-        removed(sessionId) {
-          preview.sessionRemoved(sessionId);
-          flows.delete(sessionId);
-          view.forget(sessionId);
-        },
-      });
-    });
-
-    // A flows read is stale for each session a `flows` push touched since the
-    // read began; null once the read settles.
-    let changedSinceRead: Set<string> | null = new Set<string>();
-    // A flow whose draw throws is logged, so the rest of its push or read
-    // still draws.
-    const putFlow = (flow: SessionFlow) => {
-      flows.set(flow.sessionId, flow);
+    // A flow whose draw throws is logged, so the rest of the catch-up still draws.
+    const drawFlow = (flow: SessionFlow) => {
       if (isPreview(flow.sessionId)) {
         return;
       }
@@ -167,27 +152,25 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         log(`flow of ${flow.sessionId} not drawn: ${errorText(error)}`);
       }
     };
-    api.channel.on('flows', (pushed) => {
-      for (const flow of pushed) {
-        changedSinceRead?.add(flow.sessionId);
-        putFlow(flow);
+
+    api.events.on('core.pageReady', () => {
+      followRows(rows, {
+        added: ({ sessionId, hostSessionId }) =>
+          preview.sessionAdded(sessionId, hostSessionId),
+        removed(sessionId) {
+          preview.sessionRemoved(sessionId);
+          view.forget(sessionId);
+        },
+      });
+      flows.on((_sessionId, flow) => {
+        if (flow !== undefined) {
+          drawFlow(flow);
+        }
+      });
+      for (const flow of flows.all().values()) {
+        drawFlow(flow);
       }
     });
-    api.channel
-      .invoke('flows')
-      .then(
-        (read) => {
-          for (const flow of read) {
-            if (!changedSinceRead?.has(flow.sessionId)) {
-              putFlow(flow);
-            }
-          }
-        },
-        (error: unknown) => log(`flows not read: ${errorText(error)}`),
-      )
-      .finally(() => {
-        changedSinceRead = null;
-      });
 
     api.layouts.show<Layout>({
       defaultLayout,

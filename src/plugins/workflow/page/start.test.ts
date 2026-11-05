@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../../../contracts/disposable';
 import { createRegistrations } from '../../../shared/registrations';
 import {
@@ -14,8 +14,35 @@ import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import type { PageStage, WorkflowPageExports } from '../contract';
+import {
+  type PageStage,
+  type SessionFlow,
+  workflowFlowsSlot,
+  type WorkflowPageExports,
+} from '../contract';
+import { newFlow } from '../flow';
 import { workflowPagePart } from './start';
+import type { createWorkflowView } from './workflow-view';
+
+// Each session id the view's `setFlow` ran for, in order.
+const drawn = vi.hoisted(() => ({ setFlow: [] as string[] }));
+
+vi.mock('./workflow-view', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./workflow-view')>();
+  return {
+    ...original,
+    createWorkflowView(deps: Parameters<typeof createWorkflowView>[0]) {
+      const view = original.createWorkflowView(deps);
+      return {
+        ...view,
+        setFlow(flow: SessionFlow) {
+          drawn.setFlow.push(flow.sessionId);
+          view.setFlow(flow);
+        },
+      };
+    },
+  };
+});
 
 const NONE_LIVE: PartCounts = noCounts;
 
@@ -58,11 +85,14 @@ function startWorkflow() {
         () => ({ openDoc: () => undefined }) as unknown as DocsPageExports,
       ),
     ],
-    invoke: () => Promise.resolve([]),
   });
 }
 
 describe('workflow page part', () => {
+  beforeEach(() => {
+    drawn.setFlow = [];
+  });
+
   afterEach(() => vi.unstubAllGlobals());
 
   it('stop_LeavesNoLiveRegistration', async () => {
@@ -96,5 +126,40 @@ describe('workflow page part', () => {
     expect(() =>
       exportsFor(createRegistrations()).addStage(EXTRA_STAGE),
     ).not.toThrow();
+  });
+
+  // A harness past `core.pageReady` whose slot held flows of s1, s2 and s3 before it.
+  function startWithThreeFlows() {
+    const harness = startWorkflow();
+    const flows = harness.state.publish(workflowFlowsSlot);
+    for (const sessionId of ['s1', 's2', 's3']) {
+      flows.set(sessionId, newFlow(sessionId, '/r'));
+    }
+    harness.emit('core.pageReady', null);
+    return { harness, flows };
+  }
+
+  it('pageReady_DrawsEachFlowTheSlotHolds', () => {
+    startWithThreeFlows();
+
+    expect(drawn.setFlow).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('oneFlowNotice_DrawsOneFlow', () => {
+    const { flows } = startWithThreeFlows();
+    drawn.setFlow = [];
+
+    flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
+
+    expect(drawn.setFlow).toEqual(['s2']);
+  });
+
+  it('undefinedNotice_KeepsTheDrawnFlow', () => {
+    const { flows } = startWithThreeFlows();
+    drawn.setFlow = [];
+
+    flows.delete('s2');
+
+    expect(drawn.setFlow).toEqual([]);
   });
 });

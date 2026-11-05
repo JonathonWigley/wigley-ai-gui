@@ -14,6 +14,7 @@ import {
   type MainPartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
 import {
   type AgentSession,
@@ -24,7 +25,12 @@ import {
   type ToolDefinition,
   type ToolSession,
 } from '../../sessions/contract';
-import type { MainStage, SessionFlow, WorkflowMainExports } from '../contract';
+import {
+  type MainStage,
+  type SessionFlow,
+  workflowFlowsSlot,
+  type WorkflowMainExports,
+} from '../contract';
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { readPlanProgress } from '../plan-reader';
@@ -118,7 +124,8 @@ function session(id: string, hostSessionId: string): AgentSession {
 
 // Workflow's main part started over a fake `MainApi`: memory files for its
 // data and for the project (`project`), hand-moved time, and a chat fake that
-// records each `clear` and `send`. `silentWatch` gives the project files a
+// records each `clear` and `send`, and a real store for its slot: `sent` holds
+// each flow the slot's notices carry. `silentWatch` gives the project files a
 // watch that reports nothing, as an OS watcher that misses a delete;
 // `sessionLabel` is the side-bar label sessions gives s1 (none by default);
 // `data` is workflow's data folder as the last run left it.
@@ -132,7 +139,14 @@ function startWorkflowPart(
 ) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
-  const sent: SessionFlow[][] = [];
+  const sent: SessionFlow[] = [];
+  const store = createSlotStore(() => undefined);
+  const slot = store.read(workflowFlowsSlot, 'test');
+  slot.on((_sessionId, flow) => {
+    if (flow !== undefined) {
+      sent.push(flow);
+    }
+  });
   const logs: string[] = [];
   const chatCalls: unknown[][] = [];
   let settingsListener: (next: WorkflowTestSettings) => void = () => undefined;
@@ -176,12 +190,8 @@ function startWorkflowPart(
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
         handlers.set(name, handler),
-      send: (name: string, flows: SessionFlow[]) => {
-        if (name === 'flows') {
-          sent.push(flows);
-        }
-      },
     },
+    state: { publish: () => store.publish(workflowFlowsSlot) },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
@@ -259,7 +269,7 @@ function startWorkflowPart(
       origin: 'new',
     });
   };
-  const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
+  const lastFlow = () => slot.get('s1');
   const changeSettings = async (next: WorkflowTestSettings) => {
     settingsListener(next);
     await settled();
@@ -686,6 +696,30 @@ describe('workflowMainPart', () => {
     expect(workflow.lastFlow()?.countdownEndsAt).toBeNull();
   });
 
+  it('oneFlowChange_NotifiesOneKey', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.openS1();
+    for (const id of ['s2', 's3']) {
+      await workflow.emit('sessions.connected', {
+        ...session(id, `h-${id}`),
+        owned: true,
+      });
+      await workflow.emit('chat.sessionOpened', {
+        sessionId: id,
+        profileDir: '~/.c',
+        hostSessionId: `h-${id}`,
+        projectDir: '/p',
+        profile: 'personal',
+        origin: 'new',
+      });
+    }
+    workflow.sent.length = 0;
+
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+
+    expect(workflow.sent.map(({ sessionId }) => sessionId)).toEqual(['s1']);
+  });
+
   it('turnEndedChangingNoField_StillChecksThePlan', async () => {
     const workflow = startWorkflowPart(SETTINGS, { silentWatch: true });
     await workflow.project.write(PLAN_FILE, PLAN);
@@ -912,8 +946,11 @@ describe('workflowMainPart', () => {
     });
 
     await harness.restart();
+    await settled();
 
-    expect(await harness.invoke('flows')).toEqual([]);
+    expect([...harness.state.read(workflowFlowsSlot, 'test').all()]).toEqual(
+      [],
+    );
   });
 
   it('exports_ConsumerDisposed_FreesTheStageId', () => {

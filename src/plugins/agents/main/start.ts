@@ -8,7 +8,12 @@ import {
   type SessionsMainEvents,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type { AgentsChannel, Roster } from '../contract';
+import {
+  type AgentsChannel,
+  agentsRostersSlot,
+  EMPTY_ROSTER,
+  type Roster,
+} from '../contract';
 import { agentsManifest } from '../manifest';
 import { foldAgentEvent, isSameSkillRow } from '../roster';
 import { createAgentLog } from './agent-log';
@@ -22,9 +27,7 @@ type AgentsApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-const NONE: Roster = { agents: [], tasks: [], skills: [] };
-
-// A row's roster as the page sees it: each host session id's running subagents,
+// A row's roster as its slot holds it: each host session id's running subagents,
 // running tasks and skills, in the order each host id's roster began, a skill
 // row two hosts share kept once, at its first place.
 function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
@@ -42,21 +45,23 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
 
 // Hears chat's agent events: logs each in plugin data (all but replayed events
 // and the chat layout preview's sample events) and folds it, replayed or not,
-// into the roster of its process's host session id, sending the page each row's
-// roster that changed: every host id's subagents, tasks and skills in the row,
-// each list in fold order. A host id's roster is dropped once it lists no agent,
-// task or skill, and a row's rosters when it closes or ends. Holds agents' sample
-// session, whose roster `rosters` lists beside the live ones; a stop sends an open
-// preview's roster empty. Registers no layout and hands the self-test no script:
+// into the roster of its process's host session id, writing `agents.rosters` for
+// each row whose roster changed: every host id's subagents, tasks and skills in
+// the row, each list in fold order. A host id's roster is dropped once it lists no
+// agent, task or skill, and a row's rosters and its key when it closes or ends.
+// Holds agents' sample session, whose roster sits in the slot beside the live
+// ones; a stop deletes an open preview's key. Registers no layout and hands the
+// self-test no script:
 // agent-lines, agent-strip and agent-skills draw the rosters.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
     const sessions = api.dependency(sessionsMainKey);
+    const rowRosters = api.state.publish(agentsRostersSlot);
     const preview = createAgentsPreview({
       sessions,
       clock: api.services.clock,
-      send: (message, data) => api.channel.send(message, data),
+      rosters: rowRosters,
       log: api.services.log,
     });
     const agentLog = createAgentLog({
@@ -78,7 +83,7 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
           void agentLog.append(hostSessionId, event);
         }
         const hosts = rosters.get(sessionId) ?? new Map<string, Roster>();
-        const before = hosts.get(hostSessionId) ?? NONE;
+        const before = hosts.get(hostSessionId) ?? EMPTY_ROSTER;
         const after = foldAgentEvent(before, event);
         if (after === before) {
           return;
@@ -94,23 +99,17 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
         }
         if (hosts.size === 0) {
           rosters.delete(sessionId);
+          rowRosters.delete(sessionId);
         } else {
           rosters.set(sessionId, hosts);
+          rowRosters.set(sessionId, rowRoster(hosts));
         }
-        api.channel.send('rosterChanged', {
-          sessionId,
-          roster: rowRoster(hosts),
-        });
       },
     );
 
     const dropRoster = ({ sessionId }: { sessionId: string }) => {
-      if (rosters.delete(sessionId)) {
-        api.channel.send('rosterChanged', {
-          sessionId,
-          roster: { agents: [], tasks: [], skills: [] },
-        });
-      }
+      rosters.delete(sessionId);
+      rowRosters.delete(sessionId);
     };
     api.events.on('sessions.closed', (closed) => {
       dropRoster(closed);
@@ -118,12 +117,6 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
     });
     api.events.on('sessions.ended', dropRoster);
 
-    api.channel.handle('rosters', () => ({
-      ...Object.fromEntries(
-        [...rosters].map(([sessionId, hosts]) => [sessionId, rowRoster(hosts)]),
-      ),
-      ...preview.rosters(),
-    }));
     api.channel.handle('openPreview', () => preview.toggle());
 
     return { commands: {}, dispose: () => preview.close() };

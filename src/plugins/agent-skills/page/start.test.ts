@@ -9,7 +9,7 @@ import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { agentsPageKey } from '../../agents/contract';
+import { agentsRostersSlot } from '../../agents/contract';
 import {
   type ChatPageExports,
   chatPageKey,
@@ -46,10 +46,6 @@ function startOnHarness() {
             },
           }) as unknown as ChatPageExports,
       ),
-      fakeDependency(agentsPageKey, (consumer) => ({
-        roster: () => ROSTER,
-        onRosterChanged: () => consumer.track({ dispose() {} }),
-      })),
     ],
   });
   return { harness, sectionSummaries };
@@ -66,7 +62,7 @@ describe('agentSkillsPagePart', () => {
 
   it('stop_LeavesNoLiveRegistration', async () => {
     const { harness, sectionSummaries } = startOnHarness();
-    expect(sectionSummaries).toEqual(['1']);
+    expect(sectionSummaries).toEqual([null]);
     expect(harness.counts().registrations).toBeGreaterThan(0);
 
     await harness.stop();
@@ -81,5 +77,15 @@ describe('agentSkillsPagePart', () => {
     await harness.restart();
 
     expect(harness.counts()).toEqual(before);
+  });
+
+  it('pageReady_RosterWrittenBefore_DrawsIt', () => {
+    const { harness, sectionSummaries } = startOnHarness();
+    harness.state.publish(agentsRostersSlot).set(SESSION, ROSTER);
+    expect(sectionSummaries).toEqual([null]);
+
+    harness.emit('core.pageReady', null);
+
+    expect(sectionSummaries).toEqual([null, '1']);
   });
 });

@@ -1,5 +1,10 @@
+import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PagePart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
@@ -19,7 +24,12 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type { PoolAction, PoolState, UnityPoolChannel } from '../contract';
+import {
+  type PoolAction,
+  type PoolState,
+  type UnityPoolChannel,
+  unityPoolSnapshotSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type {
@@ -39,7 +49,12 @@ import {
   rowBadges,
 } from './pool-view-model';
 
-type UnityPoolApi = PageApi<typeof unityPoolManifest, UnityPoolChannel>;
+type UnityPoolApi = PageApi<
+  typeof unityPoolManifest,
+  UnityPoolChannel,
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
+>;
 
 const REDRAW_MS = 60_000;
 // After usage's details, which take the default order 0.
@@ -61,13 +76,13 @@ interface HeldWrapper {
 
 // Draws a badge under each session row for each clone it holds or queue it
 // waits in, and the right-bar panel of the shown session's pool, through the
-// `unity-pool.layout` layout. Reads main's `snapshot` once and applies each
-// `changed` after it; reads each row's match keys from `sessions.rows` and
-// the shown session from `sessions.active`; asks main for the shown
+// `unity-pool.layout` layout. Reads the pools from `unity-pool.snapshot`, each
+// row's match keys from `sessions.rows` and the shown session from
+// `sessions.active`; asks main for the shown
 // session's folder's origin name once per folder while any pool exists. Hold
 // and Release run through main, one at a time per clone, each clone's last
-// result kept until the page reloads. Redraws all on each of those, on each
-// layouts set and once a minute for the times. Logs each row's badges and the
+// result kept until the page reloads. Redraws all at `core.pageReady`, on each of
+// those, on each layouts set and once a minute for the times. Logs each row's badges and the
 // panel's showing, hiding and counts when they change, and a Hold or Release
 // whose call to main fails; main logs every run it answers.
 export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
@@ -96,9 +111,8 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       log: services.log,
     });
 
-    let pools: readonly PoolState[] = [];
-    // False until the `snapshot` reply or a `changed` lands.
-    let hasSnapshot = false;
+    const poolSnapshot = api.state.read(unityPoolSnapshotSlot);
+    const pools = (): readonly PoolState[] => poolSnapshot.get()?.pools ?? [];
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
     const originNames = new Map<string, OriginEntry>();
@@ -152,7 +166,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       if (row === undefined) {
         return;
       }
-      const badges = rowBadges(pools, [...rows.all().values()], row);
+      const badges = rowBadges(pools(), [...rows.all().values()], row);
       for (const badge of badges) {
         holder.badges.push(
           layoutParts.draw(
@@ -175,7 +189,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     // pool exists; a rejection clears the entry so a later redraw asks again.
     const askOriginName = () => {
       const folder = shownRow()?.projectDir ?? null;
-      if (folder === null || pools.length === 0 || originNames.has(folder)) {
+      if (folder === null || pools().length === 0 || originNames.has(folder)) {
         return;
       }
       originNames.set(folder, { kind: 'pending' });
@@ -199,7 +213,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       const entry =
         row.projectDir === null ? undefined : originNames.get(row.projectDir);
       const originName = entry?.kind === 'read' ? entry.name : null;
-      return poolOfRow(pools, row, originName, services.paths);
+      return poolOfRow(pools(), row, originName, services.paths);
     };
 
     // The panel's clone folders shown through `~`.
@@ -339,21 +353,10 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       },
     });
 
-    api.channel.on('changed', (next) => {
-      hasSnapshot = true;
-      pools = next.pools;
+    api.events.on('core.pageReady', () => {
+      poolSnapshot.on(() => redraw());
       redraw();
     });
-    api.channel.invoke('snapshot').then(
-      (first) => {
-        if (!hasSnapshot) {
-          hasSnapshot = true;
-          pools = first.pools;
-          redraw();
-        }
-      },
-      (error: unknown) => log(`snapshot not read: ${errorText(error)}`),
-    );
     followRows(rows, {
       removed: (sessionId) => loggedBadges.delete(sessionId),
     });

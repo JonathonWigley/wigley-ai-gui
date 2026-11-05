@@ -1,11 +1,13 @@
 import './agent-strip.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
+  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
-import { agentsPageKey } from '../../agents/contract';
+import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
 import {
   followRows,
@@ -22,19 +24,21 @@ import { readAgentStripLayout } from './layout/read-agent-strip-layout';
 type AgentStripApi = PageApi<
   typeof agentStripManifest,
   ChannelShape,
-  Record<never, never>
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // Draws each Chat tab's agent strip above its composer box through chat's
-// composer parts and the `agent-strip.layout` layout, reading the rosters from
-// agents' page exports, and runs the strip's keys while its stop holds the
-// entry cursor. Names each session by its side-bar label for the page log.
+// composer parts and the `agent-strip.layout` layout, reading `agents.rosters`,
+// and runs the strip's keys while its stop holds the entry cursor. Names each
+// session by its side-bar label for the page log.
 export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
   manifest: agentStripManifest,
   start(api: AgentStripApi) {
     const { services } = api;
     const chat = api.dependency(chatPageKey);
     const rows = api.state.read(sessionsRowsSlot);
+    const rosters = api.state.read(agentsRostersSlot);
     const strip = createAgentStrip({
       kit: {
         markdown: services.markdown,
@@ -49,7 +53,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       log: services.log,
       clock: services.clock,
       timers: services.timers,
-      agents: api.dependency(agentsPageKey),
+      roster: (sessionId) => rosters.get(sessionId) ?? EMPTY_ROSTER,
       cutTitle: api.dependency(sessionsPageKey).cutToTitleLimit,
       setScope: () => api.keys.setScope('strip'),
       nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
@@ -58,6 +62,12 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
     chat.addComposerPart(strip.part);
 
     followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });
+    api.events.on('core.pageReady', () => {
+      rosters.on((sessionId) => strip.rosterUpdated(sessionId));
+      for (const sessionId of rosters.all().keys()) {
+        strip.rosterUpdated(sessionId);
+      }
+    });
 
     api.layouts.show<Layout>({
       defaultLayout,

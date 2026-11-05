@@ -1,8 +1,9 @@
-// The workflow plugin's records, its stage extension points and its channel
-// between its main and page parts.
+// The workflow plugin's records, its stage extension points, its flows slot and
+// its channel between its main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 import type { RowActivity } from '../sessions/contract';
 import type { PlanProgress } from './plan-reader';
 
@@ -221,18 +222,17 @@ export interface WorkflowActionRequest {
   command: string;
 }
 
-// Main pushes `flows` (every flow, on start and on each change); the page
-// invokes runAction and flows().
+// Each open session's flow, keyed by the row's sessionId. A store change writes or
+// deletes the one flow it touched.
+export const workflowFlowsSlot: KeyedSlotKey<SessionFlow, 'main', 'workflow'> =
+  { id: 'workflow.flows', process: 'main', kind: 'keyed' };
+
+// The page invokes runAction.
 export interface WorkflowChannel extends ChannelShape {
   invoke: {
-    // Every flow main holds, once main has read flows.json.
-    flows(): Promise<SessionFlow[]>;
     // Runs a main-side command (a StageActionSpec.command with side 'main')
     // on the session's flow; rejects with main's error text.
     runAction(request: WorkflowActionRequest): Promise<void>;
   };
-  messages: {
-    // Every flow main holds, sent on each change.
-    flows: SessionFlow[];
-  };
+  messages: Record<never, never>;
 }

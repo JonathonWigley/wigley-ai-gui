@@ -72,7 +72,7 @@ function setUp(skills: RosterSkill[] = []) {
   const build = () => list.part.build(asHtml(parent), SESSION, section);
   const changeSkills = (next: RosterSkill[]) => {
     current = rosterOf(next);
-    list.rosterChanged(SESSION);
+    list.rosterUpdated(SESSION);
   };
   return { list, parent, summaries, logged, build, changeSkills };
 }
@@ -152,7 +152,7 @@ describe('skill list', () => {
     expect(summaries.at(-1)).toBe('1');
   });
 
-  it('rosterChanged_SkillAddedThenListEmptied_RedrawsAndLogsEachText', () => {
+  it('rosterUpdated_SkillAddedThenListEmptied_RedrawsAndLogsEachText', () => {
     const { parent, summaries, logged, build, changeSkills } = setUp([
       MAIN_FOO,
     ]);
@@ -176,7 +176,7 @@ describe('skill list', () => {
 
   // Each subagent tool call changes the roster; a redraw would close a row's
   // open tooltip.
-  it('rosterChanged_OnlySubagentSkillsDiffer_KeepsTheDrawnList', () => {
+  it('rosterUpdated_OnlySubagentSkillsDiffer_KeepsTheDrawnList', () => {
     const { parent, logged, build, changeSkills } = setUp([MAIN_FOO]);
     build();
     const drawn = parent.children[0];

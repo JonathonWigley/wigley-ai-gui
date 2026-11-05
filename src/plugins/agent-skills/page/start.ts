@@ -1,9 +1,11 @@
+import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
+  QualifiedEvents,
 } from '../../../contracts/plugin';
-import { agentsPageKey } from '../../agents/contract';
+import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
 import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -16,18 +18,19 @@ import { createSkillList } from './skill-list';
 type AgentSkillsApi = PageApi<
   typeof agentSkillsManifest,
   ChannelShape,
-  Record<never, never>
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // Draws the session hub's Skills section through chat's side parts and the
-// `agent-skills.layout` layout. Reads the rosters from agents' page exports,
-// redrawing a session's list each time its roster changes, and names each
-// session by its side-bar label for the page log.
+// `agent-skills.layout` layout. Reads `agents.rosters`, redrawing a session's
+// list each time its roster changes, and names each session by its side-bar
+// label for the page log.
 export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
   manifest: agentSkillsManifest,
   start(api: AgentSkillsApi) {
     const { services } = api;
-    const agents = api.dependency(agentsPageKey);
+    const rosters = api.state.read(agentsRostersSlot);
     const chat = api.dependency(chatPageKey);
     const rows = api.state.read(sessionsRowsSlot);
     const list = createSkillList({
@@ -43,12 +46,17 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
       },
       log: services.log,
       nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
-      roster: (sessionId) => agents.roster(sessionId),
+      roster: (sessionId) => rosters.get(sessionId) ?? EMPTY_ROSTER,
     });
     chat.addSidePart(list.part);
 
     followRows(rows, { removed: (sessionId) => list.forget(sessionId) });
-    agents.onRosterChanged((sessionId) => list.rosterChanged(sessionId));
+    api.events.on('core.pageReady', () => {
+      rosters.on((sessionId) => list.rosterUpdated(sessionId));
+      for (const sessionId of rosters.all().keys()) {
+        list.rosterUpdated(sessionId);
+      }
+    });
 
     api.layouts.show<Layout>({
       defaultLayout,
