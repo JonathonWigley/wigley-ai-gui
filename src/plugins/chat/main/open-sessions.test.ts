@@ -30,7 +30,7 @@ const TWO_SESSIONS: SavedSessions = {
           value: 'high',
         },
       ],
-      userSetControls: ['effort'],
+      confirmedPicks: { effort: 'high' },
       returnedDrops: [],
       activeMs: 42000,
     },
@@ -47,7 +47,7 @@ const TWO_SESSIONS: SavedSessions = {
       launchControls: {},
       launchResume: false,
       controls: [],
-      userSetControls: [],
+      confirmedPicks: {},
       returnedDrops: [],
       activeMs: 0,
     },
@@ -70,7 +70,7 @@ const ONE_SESSION: SavedSessions = {
       launchControls: {},
       launchResume: false,
       controls: [],
-      userSetControls: [],
+      confirmedPicks: {},
       returnedDrops: [],
       activeMs: 1500,
     },
@@ -130,9 +130,38 @@ describe('createOpenSessions', () => {
             queued: [],
             returned: [],
             controls: [],
-            userSetControls: [],
+            confirmedPicks: {},
             returnedDrops: [],
             activeMs: 0,
+          },
+        ],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'written before confirmedPicks were saved',
+      text: withSessions([
+        {
+          ...TWO_SESSIONS.sessions[0],
+          confirmedPicks: undefined,
+          controls: [
+            { id: 'mode', label: 'Mode', choices: [], value: 'plan' },
+            { id: 'model', label: 'Model', choices: [], value: 'opus' },
+            { id: 'effort', label: 'Effort', choices: [], value: null },
+          ],
+          userSetControls: ['model', 'effort', 'gone'],
+        },
+      ]),
+      expected: {
+        sessions: [
+          {
+            ...TWO_SESSIONS.sessions[0],
+            controls: [
+              { id: 'mode', label: 'Mode', choices: [], value: 'plan' },
+              { id: 'model', label: 'Model', choices: [], value: 'opus' },
+              { id: 'effort', label: 'Effort', choices: [], value: null },
+            ],
+            confirmedPicks: { model: 'opus' },
           },
         ],
         selectedHostSessionId: null,
@@ -231,6 +260,12 @@ describe('createOpenSessions', () => {
           ...TWO_SESSIONS.sessions[0],
           controls: [{ label: 'Mode', choices: [], value: null }],
         },
+      ]),
+    },
+    {
+      file: 'confirmedPicks holding a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], confirmedPicks: { effort: 1 } },
       ]),
     },
     {

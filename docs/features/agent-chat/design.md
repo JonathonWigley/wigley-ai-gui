@@ -114,7 +114,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: the adapter declares its controls and reports their current values; the chat draws whatever it declares.
   Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending `/effort <value>`
   and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The adapter reads Claude's
-  values like this: each control starts at the value the start carries, so a new row starts unset (null) and a resumed
+  values like this: each control starts at the value the start carries, so a new row starts with its mode at `auto`, the
+  value the launch passes, and its model and effort unset (null) until the first `get_settings` reply, and a resumed
   or cleared row starts with the row's mode and the model and effort the user picked; `default` mode is the `manual`
   choice; the model and effort also come from a `get_settings` control request, sent at process start and after each
   turn, local commands included, because no event reports effort and a default depends on the model, the flags and the
@@ -348,18 +349,20 @@ interview on 2026-10-23; this file is the record of both.
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting
   row starts its process (`--resume` when a message was ever sent, else `--session-id`); app slash commands run without
   one, its controls show what the record held, and the agent's slash commands and the controls' current values fill in
-  once it runs. Every process start in a row passes
-  (`AgentStart.controls`, each carrying the value the row holds for it now) the row's `mode` as `--permission-mode`
-  (`auto` when the row holds none), whoever set it, since a mode narrows nothing: a `plan` Claude entered after the user
-  approved its `EnterPlanMode` card carries over. It passes `model` as `--model` and `effort` as `--effort` only once
-  the user picked them through `setControl` in the row and a controls report from the same process then held the picked
-  value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer pick replaced is never
-  passed. A model or effort Claude only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a
-  pinned id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process
-  exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start.
-  A restored row, re-attached or resting, keeps them the same way: its record gives it the held controls and which of
-  them the user picked, a replay's report then replaces the values as a live report does, and its next start passes
-  them. A record with no controls opens with none and passes none, so its first start runs in `auto`.
+  once it runs. Every process start in a row passes, in `AgentStart.controls`, the `mode` the row holds now as
+  `--permission-mode` (`auto` when the row holds none), whoever set it, since a mode narrows nothing: a `plan` Claude
+  entered after the user approved its `EnterPlanMode` card carries over. It passes `model` as `--model` and `effort` as
+  `--effort` only once the user picked them through `setControl` in the row and a controls report from the same process
+  then held the picked value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer
+  pick replaced is never passed. The picked value is what a start passes, and a report never changes it, so a typed
+  `/effort low` after a pick of High goes back to High at the next start. A report of no value for the control drops the
+  pick: after `/effort auto`, or on a model with no effort, the next start passes none for it. A model or effort Claude
+  only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned id), which the chip shows as
+  its alias, is never narrowed to the alias. So a row resumed after its process exits, or cleared, keeps its mode and
+  the model and effort the user picked, and its chips show them from the start. A restored row, re-attached or resting,
+  keeps them the same way: its record gives it the held controls and the picked values, a replay's report then replaces
+  the held values and drops picks as a live report does, and its next start passes the mode it holds and the picks. A
+  record with no controls opens with none and passes none, so its first start runs in `auto`.
   Every start also passes `AgentStart.instructions`, the text plugins registered through `addInstructions` in
   registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
   registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until

@@ -27,8 +27,8 @@ export interface SavedSession {
   launchResume: boolean;
   // The controls the row held, as its process last reported them; [] when no process reported any.
   controls: SessionControl[];
-  // The ids of the controls whose pick in this row a report confirmed.
-  userSetControls: string[];
+  // Control id → the value the user picked in this row that a report confirmed.
+  confirmedPicks: Record<string, string>;
   // The entry ids of the messages the last process dropped that chat has already returned to the page.
   returnedDrops: string[];
   // The row's active time at the snapshot, its open span included. A restored
@@ -53,12 +53,16 @@ type LaterSavedField =
   | 'launchControls'
   | 'launchResume'
   | 'controls'
-  | 'userSetControls'
+  | 'confirmedPicks'
   | 'returnedDrops'
   | 'activeMs';
 
+// `userSetControls` is what a file written before `confirmedPicks` holds: the
+// picked controls' ids.
 type StoredSession = Omit<SavedSession, LaterSavedField> &
-  Partial<Pick<SavedSession, LaterSavedField>>;
+  Partial<Pick<SavedSession, LaterSavedField>> & {
+    userSetControls?: string[];
+  };
 
 export interface SavedSessions {
   // In row order.
@@ -111,7 +115,7 @@ function isOptionalMessages(value: unknown): boolean {
   );
 }
 
-function isOptionalLaunchControls(value: unknown): boolean {
+function isOptionalStringRecord(value: unknown): boolean {
   return (
     value === undefined ||
     (isJsonObject(value) &&
@@ -170,14 +174,30 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalProcessId(value.processId) &&
     isOptionalMessages(value.queued) &&
     isOptionalMessages(value.returned) &&
-    isOptionalLaunchControls(value.launchControls) &&
+    isOptionalStringRecord(value.launchControls) &&
     (value.launchResume === undefined ||
       typeof value.launchResume === 'boolean') &&
     isOptionalControlList(value.controls) &&
+    isOptionalStringRecord(value.confirmedPicks) &&
     isOptionalStrings(value.userSetControls) &&
     isOptionalStrings(value.returnedDrops) &&
     isOptionalActiveMs(value.activeMs)
   );
+}
+
+// A file written before `confirmedPicks` holds the picked ids only, so each
+// takes the value its record held.
+function picksOfPickedIds(
+  pickedIds: readonly string[],
+  controls: readonly SessionControl[],
+): Record<string, string> {
+  const picks: Record<string, string> = {};
+  for (const control of controls) {
+    if (pickedIds.includes(control.id) && control.value !== null) {
+      picks[control.id] = control.value;
+    }
+  }
+  return picks;
 }
 
 function parseSavedSessions(text: string): SavedSessions {
@@ -202,19 +222,23 @@ function parseSavedSessions(text: string): SavedSessions {
     throw unreadable;
   }
   return {
-    sessions: (sessions as StoredSession[]).map((stored) => ({
-      ...stored,
-      titles: stored.titles ?? NO_TITLES,
-      processId: stored.processId ?? null,
-      queued: stored.queued ?? [],
-      returned: stored.returned ?? [],
-      launchControls: stored.launchControls ?? {},
-      launchResume: stored.launchResume ?? false,
-      controls: stored.controls ?? [],
-      userSetControls: stored.userSetControls ?? [],
-      returnedDrops: stored.returnedDrops ?? [],
-      activeMs: stored.activeMs ?? 0,
-    })),
+    sessions: (sessions as StoredSession[]).map(
+      ({ userSetControls, ...stored }) => ({
+        ...stored,
+        titles: stored.titles ?? NO_TITLES,
+        processId: stored.processId ?? null,
+        queued: stored.queued ?? [],
+        returned: stored.returned ?? [],
+        launchControls: stored.launchControls ?? {},
+        launchResume: stored.launchResume ?? false,
+        controls: stored.controls ?? [],
+        confirmedPicks:
+          stored.confirmedPicks ??
+          picksOfPickedIds(userSetControls ?? [], stored.controls ?? []),
+        returnedDrops: stored.returnedDrops ?? [],
+        activeMs: stored.activeMs ?? 0,
+      }),
+    ),
     selectedHostSessionId,
   };
 }

@@ -335,9 +335,10 @@ interface HeldSession {
   writtenMessages: Map<string, WrittenMessage>;
   // Processes started in this row, the one running included.
   processStarts: number;
-  // Ids of the controls whose pick in this row a report confirmed; a start
-  // passes their held values and no other model or effort. Saved with the row.
-  userSetControls: Set<string>;
+  // Control id → the value the user picked in this row that a report confirmed,
+  // until a report holds no value for that control. A start passes these and no
+  // other model or effort. Saved with the row.
+  confirmedPicks: Map<string, string>;
   // Control id → the value the user picked that the running process has not
   // reported yet.
   pendingPicks: Map<string, string>;
@@ -438,36 +439,50 @@ function copyState(state: ChatSessionState): ChatSessionState {
 // A held mode narrows nothing, so a start passes it whoever set it.
 const MODE_CONTROL_ID = 'mode';
 
-// The launch values a process starts with: the held mode, and each other held
-// control the user set, all with a value.
+// The launch values a process starts with: the held mode, and each other
+// control's confirmed pick.
 function controlValuesOf(
   controls: readonly SessionControl[],
-  userSetControls: ReadonlySet<string>,
+  confirmedPicks: ReadonlyMap<string, string>,
 ): Record<string, string> {
   const values: Record<string, string> = {};
   for (const control of controls) {
-    const isPassed =
-      control.id === MODE_CONTROL_ID || userSetControls.has(control.id);
-    if (control.value !== null && isPassed) {
-      values[control.id] = control.value;
+    const value =
+      control.id === MODE_CONTROL_ID
+        ? control.value
+        : confirmedPicks.get(control.id);
+    if (value !== null && value !== undefined) {
+      values[control.id] = value;
     }
   }
   return values;
 }
 
 // Moves each pending pick whose control `controls` holds at the picked value
-// into `userSetControls`.
+// into `confirmedPicks`.
 function confirmPicks(
   controls: readonly SessionControl[],
   pendingPicks: Map<string, string>,
-  userSetControls: Set<string>,
+  confirmedPicks: Map<string, string>,
 ) {
   for (const control of controls) {
-    const isConfirmed =
-      control.value !== null && pendingPicks.get(control.id) === control.value;
+    const pick = pendingPicks.get(control.id);
+    const isConfirmed = pick !== undefined && pick === control.value;
     if (isConfirmed) {
       pendingPicks.delete(control.id);
-      userSetControls.add(control.id);
+      confirmedPicks.set(control.id, pick);
+    }
+  }
+}
+
+// Drops the confirmed pick of each control `controls` holds no value for.
+function dropPicksOfUnsetControls(
+  controls: readonly SessionControl[],
+  confirmedPicks: Map<string, string>,
+) {
+  for (const control of controls) {
+    if (control.value === null) {
+      confirmedPicks.delete(control.id);
     }
   }
 }
@@ -525,7 +540,7 @@ function savedSessionOf(
     launchControls: session.launchControls,
     launchResume: session.launchResume,
     controls: session.state.controls,
-    userSetControls: [...session.userSetControls],
+    confirmedPicks: Object.fromEntries(session.confirmedPicks),
     returnedDrops: [...session.returnedDrops],
     activeMs: activeMsAt(session.state.activeTime, now),
   };
@@ -1140,7 +1155,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       controls(controls) {
         if (isLive(session, processStart)) {
           session.state.controls = controls;
-          confirmPicks(controls, session.pendingPicks, session.userSetControls);
+          confirmPicks(controls, session.pendingPicks, session.confirmedPicks);
+          dropPicksOfUnsetControls(controls, session.confirmedPicks);
           send('controls', { sessionId, controls });
           save();
         }
@@ -1291,7 +1307,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       launchControls: Record<string, string>;
       launchResume: boolean;
       controls: SessionControl[];
-      userSetControls: readonly string[];
+      confirmedPicks: Record<string, string>;
       returnedDrops: readonly string[];
       activeMs: number;
     },
@@ -1349,7 +1365,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       rowOrders: new WeakMap(),
       writtenMessages: new Map(),
       processStarts: 0,
-      userSetControls: new Set(opening.userSetControls),
+      confirmedPicks: new Map(Object.entries(opening.confirmedPicks)),
       pendingPicks: new Map(),
       isOnlyAHoldsCompaction: false,
       compactionReason: null,
@@ -1500,7 +1516,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.processId = `${session.hostId}-${session.processStarts}-${deps.clock.now()}`;
     session.launchControls = controlValuesOf(
       session.state.controls,
-      session.userSetControls,
+      session.confirmedPicks,
     );
     session.launchResume = resume;
     session.returnedDrops.clear();
@@ -1829,7 +1845,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         launchControls: {},
         launchResume: false,
         controls: [],
-        userSetControls: [],
+        confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
       },
@@ -1882,7 +1898,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         launchControls: {},
         launchResume: true,
         controls: [],
-        userSetControls: [],
+        confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
       },
@@ -2282,7 +2298,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           launchControls: record.launchControls,
           launchResume: record.launchResume,
           controls: record.controls,
-          userSetControls: record.userSetControls,
+          confirmedPicks: record.confirmedPicks,
           returnedDrops: record.returnedDrops,
           activeMs: record.activeMs,
         },

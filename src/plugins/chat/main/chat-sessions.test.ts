@@ -145,7 +145,7 @@ function record(
     queued: [],
     returned: [],
     controls: [],
-    userSetControls: [],
+    confirmedPicks: {},
     returnedDrops: [],
     activeMs: 0,
     ...fields,
@@ -1174,7 +1174,7 @@ describe('createChatSessions', () => {
   // pick the process never confirms has its own reports dropped meanwhile.
   it.each([
     {
-      case: 'ConfirmedPicksFollowLaterReport',
+      case: 'ConfirmedPicksThroughLaterReports',
       picks: [
         ['model', 'fake-large'],
         ['effort', 'low'],
@@ -1182,7 +1182,16 @@ describe('createChatSessions', () => {
       confirms: true,
       clears: false,
       reported: { mode: 'auto', model: 'opus', effort: 'high' },
-      controls: { mode: 'auto', model: 'opus', effort: 'high' },
+      controls: { mode: 'auto', model: 'fake-large', effort: 'low' },
+    },
+    {
+      case: 'ConfirmedEffortDroppedByNullReport',
+      picks: [['effort', 'high']],
+      confirms: true,
+      clears: false,
+      reported: { mode: 'auto', model: 'opus', effort: null },
+      later: { mode: 'auto', model: 'opus', effort: 'medium' },
+      controls: { mode: 'auto' },
     },
     {
       case: 'ReportedOnly1mModelAndEffort',
@@ -1218,7 +1227,7 @@ describe('createChatSessions', () => {
     },
   ])(
     'restart_StartCarriesHeldModeAndConfirmedPicks ($case)',
-    async ({ picks, confirms, clears, reported, controls }) => {
+    async ({ picks, confirms, clears, reported, later, controls }) => {
       const test = await started();
       test.chat.send(ROW_ID, { text: 'first', images: [] });
       await flush();
@@ -1235,14 +1244,18 @@ describe('createChatSessions', () => {
       await flush();
       test.process.events.controls = reportControls;
       const current = test.harness.processes[clears ? 1 : 0];
-      current.events.controls(
-        Object.entries(reported).map(([id, value]) => ({
-          id,
-          label: id,
-          choices: [],
-          value,
-        })),
-      );
+      for (const report of later === undefined
+        ? [reported]
+        : [reported, later]) {
+        current.events.controls(
+          Object.entries(report).map(([id, value]) => ({
+            id,
+            label: id,
+            choices: [],
+            value,
+          })),
+        );
+      }
       current.events.ended({ code: 0, error: null });
 
       test.chat.send(ROW_ID, { text: 'second', images: [] });
@@ -2817,7 +2830,7 @@ describe('createChatSessions saved sessions', () => {
         launchControls: {},
         launchResume: false,
         controls: test.chat.sessions()[0].controls,
-        userSetControls: [],
+        confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
       },
@@ -3592,7 +3605,7 @@ describe('createChatSessions clear', () => {
           launchControls: { mode: 'auto', model: 'fake-large' },
           launchResume: false,
           controls: test.chat.sessions()[0].controls,
-          userSetControls: ['model'],
+          confirmedPicks: { model: 'fake-large' },
           returnedDrops: [],
           activeMs: 0,
         },
@@ -4601,8 +4614,9 @@ describe('createChatSessions restoring hosted processes', () => {
   const HELD_RECORD = {
     processId: 'p1',
     controls: HELD_CONTROLS,
-    userSetControls: ['model', 'effort'],
+    confirmedPicks: { model: 'opus', effort: 'high' },
   };
+  const LOW_EFFORT_PICK: Record<string, string> = { effort: 'low' };
 
   it.each([
     {
@@ -4627,11 +4641,19 @@ describe('createChatSessions restoring hosted processes', () => {
     },
     {
       given: 'a row whose picks are only reports',
-      fields: { ...HELD_RECORD, userSetControls: [] },
+      fields: { ...HELD_RECORD, confirmedPicks: {} },
       hosted: [],
       replayed: null,
       shown: HELD_CONTROLS,
       passed: { mode: 'plan' },
+    },
+    {
+      given: 'a row whose held effort differs from its pick',
+      fields: { ...HELD_RECORD, confirmedPicks: LOW_EFFORT_PICK },
+      hosted: [],
+      replayed: null,
+      shown: HELD_CONTROLS,
+      passed: { mode: 'plan', effort: 'low' },
     },
     {
       given: 'a saved file without controls',
@@ -4656,8 +4678,8 @@ describe('createChatSessions restoring hosted processes', () => {
 
       restoreOne(test, hostedRecord(fields), hosted);
       expect(test.chat.sessions()[0].controls).toEqual(shown);
-      expect(test.saved.last()?.sessions[0].userSetControls).toEqual(
-        hostedRecord(fields).userSetControls,
+      expect(test.saved.last()?.sessions[0].confirmedPicks).toEqual(
+        hostedRecord(fields).confirmedPicks,
       );
       await flush();
       attachedOf(test)[0]?.events.ended({ code: 0, error: null });
@@ -4683,7 +4705,7 @@ describe('createChatSessions restoring hosted processes', () => {
 
     expect(test.saved.last()?.sessions[0]).toMatchObject({
       controls,
-      userSetControls: ['model'],
+      confirmedPicks: { model: 'fake-large' },
     });
   });
 
