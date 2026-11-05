@@ -152,19 +152,19 @@ function layoutSave(
   };
 }
 
-// The most rows an earlier script may leave open between this script's rows
-// across the sessions list's wrap.
-const ROWS_LEFT_OPEN_MAX = 12;
+// The most presses a step to a row takes: past this script's other rows and
+// the rows earlier scripts left open, once round the list.
+const STEP_TO_ROW_PRESSES_MAX = 13;
 
 const SESSION_STEP_COMMANDS = {
   '<A-S-o>': 'sessions.nextSession',
   '<A-S-i>': 'sessions.prevSession',
 } as const;
 
-// A step across the sessions list's wrap to `label`'s row, pressing `key`
-// again past each row an earlier script left open. A press logs its command's
-// line and the activation's in one task.
-function stepAcrossWrapTo(
+// A step to `label`'s row however the rows draw, pressing `key` again past each
+// row on the way. A press logs its command's line and the activation's in one
+// task.
+function stepToRow(
   key: keyof typeof SESSION_STEP_COMMANDS,
   label: string,
 ): SelfTestStep {
@@ -173,9 +173,9 @@ function stepAcrossWrapTo(
     expect: `[page] ${key} ran ${SESSION_STEP_COMMANDS[key]}`,
     repeat: {
       until: `[sessions] activated ${label}`,
-      max: ROWS_LEFT_OPEN_MAX + 1,
+      max: STEP_TO_ROW_PRESSES_MAX,
     },
-    why: "The wrap passes the rows earlier scripts left open, which sit outside this script's rows.",
+    why: "Rows opened together can tie on their stamps and earlier scripts can leave rows open, so this script's rows draw in no fixed order.",
   };
 }
 
@@ -285,7 +285,7 @@ const GALLERY_STEPS: SelfTestStep[] = [
     expect: '[gallery] shell layout restored',
     screenshot: 'shell-layout-restored',
   },
-  stepAcrossWrapTo('<A-S-o>', 'selftest'),
+  stepToRow('<A-S-o>', 'selftest'),
 ];
 
 const FINDING_PICKS_STEPS: SelfTestStep[] = [
@@ -613,11 +613,7 @@ const PANE_RESIZE_STEPS: SelfTestStep[] = [
 ];
 
 const SECOND_SESSION_STEPS: SelfTestStep[] = [
-  {
-    keys: ['<A-S-o>'],
-    expect: '[sessions] activated selftest 2',
-    checksFit: true,
-  },
+  { ...stepToRow('<A-S-o>', 'selftest 2'), checksFit: true },
   {
     keys: ['<A-o>'],
     expect: '[sessions] showed Docs tab in selftest 2',
@@ -632,7 +628,7 @@ const SECOND_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem' },
   { keys: ['<A-p>'], expect: '[forms] jumped to question 1' },
-  { keys: ['<A-S-i>'], expect: '[sessions] activated selftest' },
+  stepToRow('<A-S-i>', 'selftest'),
 ];
 
 const SIDE_BAR_FROM_A_BOX_STEPS: SelfTestStep[] = [
@@ -658,7 +654,7 @@ const SIDE_BAR_FROM_A_BOX_STEPS: SelfTestStep[] = [
 ];
 
 const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
-  stepAcrossWrapTo('<A-S-i>', 'Layout preview'),
+  stepToRow('<A-S-i>', 'Layout preview'),
   {
     keys: ['<D-w>'],
     expect:
@@ -666,18 +662,26 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   },
   {
     keys: ['y'],
-    expect: '[docs] session index: No project folder is known for this session',
+    expect: '[sessions] activated Codex session',
     checksFit: true,
-    why: "Cancelling closes the session and selects its left neighbour, the Codex session with no folder, whose only tab is its Docs tab; that tab's first show runs the session source, which knows no folder.",
+    why: "Cancelling closes the session and selects its left neighbour in main's rows, the Codex session with no folder.",
   },
-  { keys: ['<A-o>'], expect: '[sessions] no other tab in Codex session' },
-  stepAcrossWrapTo('<A-S-o>', 'selftest'),
+  {
+    keys: ['R'],
+    expect: '[docs] session index: No project folder is known for this session',
+    why: "Its Docs tab's first show may have come in an earlier step passing its row, so R runs the session source again, which knows no folder.",
+  },
+  {
+    keys: ['<A-o>'],
+    expect: '[sessions] no other tab in Codex session',
+    why: 'Its Docs tab is its only tab.',
+  },
+  stepToRow('<A-S-o>', 'selftest'),
 ];
 
 const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
   {
-    keys: ['<A-S-o>', '<A-S-o>'],
-    expect: '[sessions] activated selftest 3',
+    ...stepToRow('<A-S-o>', 'selftest 3'),
     checksFit: true,
     why: 'The round opens on its first finding, the Nit.',
   },
@@ -718,10 +722,7 @@ const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
     expect:
       '[forms] layout selftest notice card failed: notice card has no notes box',
   },
-  {
-    keys: ['<A-S-i>', '<A-S-i>'],
-    expect: '[sessions] activated selftest',
-  },
+  stepToRow('<A-S-i>', 'selftest'),
   {
     writeFile: {
       path: USER_SETTINGS_FILE,
@@ -1298,7 +1299,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'cancelled preview',
-        why: "Cancelling the preview round closes its session and selects a Codex session with no folder, where no form keeps its scope; wrapping back gives the first session's form its scope again.",
+        why: "Cancelling the preview round closes its session and selects a Codex session with no folder, where no form keeps its scope; stepping back gives the first session's form its scope again.",
         steps: CANCELLED_PREVIEW_STEPS,
       },
       {

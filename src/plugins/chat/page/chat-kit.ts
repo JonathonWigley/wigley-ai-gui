@@ -1,5 +1,6 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
+import { formatTokens } from '../../../shared/format-tokens';
 import { appended, element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import {
@@ -95,6 +96,7 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       }
       return appended(parent, imageThumbnails(current.images, deps));
     },
+    tokens: (count) => formatTokens(count),
   };
   return {
     kit,
@@ -141,8 +143,9 @@ interface PermissionPart {
 }
 
 // Allow once and Deny, built once, each with its keys anchored in the Chat
-// tab's scope; once the entry carries its answer, the answer text, the two
-// anchors disposed.
+// tab's scope; a click on Allow once only allows, though its key also copies
+// with no permission pending. Once the entry carries its answer, the answer
+// text, the two anchors disposed.
 function createPermissionPart(
   entry: PermissionEntry,
   deps: KitDeps,
@@ -175,7 +178,7 @@ function createPermissionPart(
   };
   if (entry.answer === null) {
     part.append(
-      actionButton('Allow once', 'primary', 'allowPermission', (answered) =>
+      actionButton('Allow once', 'primary', 'allowOrCopy', (answered) =>
         deps.allow(answered),
       ),
       actionButton('Deny', 'secondary', 'denyPermission', (answered) =>

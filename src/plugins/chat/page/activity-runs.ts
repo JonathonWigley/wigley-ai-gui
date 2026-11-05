@@ -1,5 +1,6 @@
 import type { ChatEntry } from '../../../contracts/agent';
 import type { StepInput } from '../layouts/layout';
+import { blockStopId } from './entry-focus';
 
 // A step is a tool call, a thinking block or a raw entry; a run is a maximal
 // sequence of consecutive steps, ended by any other kind of entry.
@@ -49,9 +50,22 @@ export function runIdOf(firstStepId: string): string {
   return `activity:${firstStepId}`;
 }
 
-// The cursor stop a row is drawn as: its entry's id, or its run's.
-export function rowId(row: ListRow): string {
+// A row's id: its entry's, or its run's.
+function rowId(row: ListRow): string {
   return row.kind === 'entry' ? row.entry.id : row.runId;
+}
+
+// The stops a row is drawn as, a run's steps aside: one per block of an entry
+// `blockCounts` gives blocks, else the row's id.
+export function rowStops(
+  row: ListRow,
+  blockCounts: ReadonlyMap<string, number>,
+): string[] {
+  const id = rowId(row);
+  const blockCount = blockCounts.get(id) ?? 0;
+  return blockCount === 0
+    ? [id]
+    : Array.from({ length: blockCount }, (_, index) => blockStopId(id, index));
 }
 
 // The entries in order, each run of steps folded into one row. Only a run
@@ -91,15 +105,26 @@ export function listRows(
   return rows;
 }
 
-// The ids the entry cursor steps through: an entry's id, a run's id, and each
-// step's id after its run's when `openRuns` holds the run.
+// Whether the entry cursor stops on `row`: every row but a turn or compaction
+// divider.
+export function isCursorRow(row: ListRow): boolean {
+  return (
+    row.kind !== 'entry' ||
+    (row.entry.kind !== 'result' && row.entry.kind !== 'compaction')
+  );
+}
+
+// The ids the entry cursor steps through: each block of an entry `blockCounts`
+// gives blocks, any other entry's id, a run's id, and each step's id after its
+// run's when `openRuns` holds the run. A divider has none.
 export function cursorStops(
   rows: readonly ListRow[],
   openRuns: ReadonlySet<string>,
+  blockCounts: ReadonlyMap<string, number>,
 ): string[] {
   const stops: string[] = [];
-  for (const row of rows) {
-    stops.push(rowId(row));
+  for (const row of rows.filter(isCursorRow)) {
+    stops.push(...rowStops(row, blockCounts));
     if (row.kind === 'run' && openRuns.has(row.runId)) {
       for (const step of row.steps) {
         stops.push(step.id);

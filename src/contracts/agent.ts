@@ -33,6 +33,10 @@ export interface UserMessage {
   images: ChatImage[];
 }
 
+// What started a compaction: `app`, the app called `AgentProcess.compact()`; `manual`, the user sent `/compact`;
+// `harness`, the harness compacted on its own.
+export type CompactionTrigger = 'app' | 'manual' | 'harness';
+
 // `id` is unique among one process's entries (one `start`): a resumed session's new process numbers its
 // entries afresh. An entry sent again with the same id replaces the earlier one.
 // `at` is when the entry first appeared, epoch milliseconds; a later version of the entry (same id) keeps its first
@@ -104,6 +108,19 @@ export type ChatEntry =
       tone: 'info' | 'error';
       raw: unknown[];
     }
+  // One per finished compaction (outcome `done`). `afterTokens` is null until the next main reply after the compaction;
+  // the adapter then sends the entry again with the same id and `afterTokens` set. A saved transcript's compaction reads
+  // back with trigger `manual` or `harness`, never `app`.
+  | {
+      kind: 'compaction';
+      id: string;
+      at: number;
+      trigger: CompactionTrigger;
+      beforeTokens: number | null;
+      afterTokens: number | null;
+      durationMs: number | null;
+      raw: unknown[];
+    }
   | { kind: 'raw'; id: string; at: number; raw: unknown[] };
 
 export type ChatEntryKind = ChatEntry['kind'];
@@ -116,13 +133,21 @@ export type ChatEntryKind = ChatEntry['kind'];
 // it knows and ignores an id it does not declare.
 // `instructions` is text the session's agent is told before its first message, in the order its registrations were
 // made; [] when none. Each adapter hands it to its harness in that harness's own way.
+// `processId` is the hosted process id chat chooses for this start.
+// `idleCompactMinTokens` is the context size above which the harness may compact an idle session on its own; null
+// leaves the harness's default.
+// `rowId` is the app's id for the session's row, which `/clear` keeps while `sessionId` changes; each adapter hands it
+// to its harness's environment for tools that track the row, such as `unity-pool`.
 export interface AgentStart {
+  processId: string;
   sessionId: string;
   resume: boolean;
   projectDir: string;
   profileDir: string | null;
   controls: Readonly<Record<string, string>>;
   instructions: readonly string[];
+  idleCompactMinTokens: number | null;
+  rowId: string;
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';
@@ -212,16 +237,22 @@ export type AgentEvent =
       agentId: string;
       outcome: 'done' | 'failed';
     }
-  // A subagent's model and spend so far, on each of its replies and on its launch receipt. `model` is the model id
-  // Claude used (the reply's, or the receipt's resolved model); `spendUsd` is the agent's estimated spend so far
-  // (cumulative, not the reply's share), null before its first reply or when any reply's model has no list price.
+  // A subagent's model, spend and context, on each of its replies, on an Agent call's receipt that names its resolved
+  // model, and when a turn's end changes its model's context window. `model` is the model id Claude used (the reply's, or the receipt's resolved model);
+  // `spendUsd` is the agent's estimated spend so far (cumulative, not the reply's share), null before its first reply or
+  // when any reply's model has no list price; `contextTokens` is the input side of its latest reply, null before its
+  // first reply; `contextWindow` is its model's context window, null until the harness reports it.
   | {
       type: 'agentReplied';
       at: number;
       agentId: string;
       model: string;
       spendUsd: number | null;
+      contextTokens: number | null;
+      contextWindow: number | null;
     }
+  // A subagent now runs in the background: its Agent call returned at launch, and it runs on until its `agentFinished`.
+  | { type: 'agentLaunched'; at: number; agentId: string }
   // A process an agent started that runs apart from its turn (a background command). `agentId` is the agent that
   // started it, MAIN_AGENT_ID or a subagent's id. A task outlives its turn and its agent: it ends only on its own
   // `taskFinished` or `sessionEnded`. `command` is the shell command the task runs, the whole text; null when the
@@ -257,13 +288,21 @@ export type AgentEvent =
       toolUseId: string;
       ok: boolean;
     }
-  // `beforeTokens` is the context size when the compaction ran, `afterTokens` the context size after it; each null
-  // when the harness does not report it (Claude reports no after-size, so the next `usage` event carries it).
+  // A compaction started. Exactly one `compactionEnded` with the same trigger follows: on the harness's end line, on a
+  // failed compaction, on an interrupt (within the interrupt grace), and before `sessionEnded` when the process ends
+  // during it.
+  | { type: 'compactionStarted'; at: number; trigger: CompactionTrigger }
+  // `beforeTokens` is the context size when the compaction ran, null when the harness does not report it or the outcome
+  // is not `done`. `durationMs` is how long it ran, null when unknown. After a compaction's boundary no main `usage`
+  // goes out until the next main reply: that reply's `usage` is the first to carry the after-size, and spend or window
+  // news from the gap waits for it.
   | {
-      type: 'compacted';
+      type: 'compactionEnded';
       at: number;
+      trigger: CompactionTrigger;
+      outcome: 'done' | 'failed' | 'interrupted';
       beforeTokens: number | null;
-      afterTokens: number | null;
+      durationMs: number | null;
     }
   | { type: 'userMessage'; at: number }
   // A skill or slash command started: the agent called its Skill tool, or the user's sent message began with `/`.
@@ -296,13 +335,15 @@ export interface AgentProcessEvents {
   // Plan rows the session saw between polls.
   planUsage(update: PlanRowUpdate): void;
   agentEvent(event: AgentEvent): void;
-  // The agent let the message `send` returned `entryId` for go without taking
-  // it in; no entry with that id follows.
-  messageDropped(entryId: string): void;
+  // The agent let `message`, which `send` returned `entryId` for, go without
+  // taking it in; no entry with that id follows. An attach's replay fires it for
+  // every such message in the process's log, including one the caller heard
+  // before the attach.
+  messageDropped(entryId: string, message: UserMessage): void;
   ended(end: { code: number | null; error: string | null }): void;
 }
 
-// `send`, `interrupt` and `setControl` throw after `end`. `setControl` also
+// `send`, `interrupt`, `setControl` and `compact` throw after `end`. `setControl` also
 // throws for a control or choice the harness did not declare, or when the
 // harness cannot change that control now. `interrupt` always ends the running
 // turn: the adapter ends it within a grace period whatever the agent answers,
@@ -315,15 +356,23 @@ export interface AgentProcess {
   // agent decides when its turn takes it in. `messageDropped` names an id
   // whose entry will never come, and also arrives only after `send` returns.
   // A message whose entry has not come when `ended` fires gets neither: the
-  // process's end lets it go.
+  // process's end lets it go. One written before an `attach`, which the caller
+  // never passed to this process's `send`, gets `messageDropped` before `ended`.
   send(message: UserMessage): string;
   interrupt(): void;
   setControl(id: string, value: string): void;
+  // Starts a compaction with trigger `app`. It makes no user entry. It throws while the process is not idle. A
+  // `compact()` that returns is always followed by a `compactionStarted` and `compactionEnded` pair, even when none ran.
+  compact(): void;
   // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
   // Stops the process at once, mid-turn included, for a caller that cannot
-  // wait for `end`, such as an app quit; `ended` follows once it exits.
+  // wait for `end`; `ended` follows once it exits.
   kill(): void;
+  // Stops this process object's events and timers and leaves the hosted process
+  // running; a pending `end` settles, with no `ended`. Chat calls it on quit and on
+  // a chat plugin stop, in place of `kill`.
+  detach(): void;
 }
 
 // A session the harness saved for a folder. `title` is its first user message, whitespace collapsed to
@@ -370,6 +419,13 @@ export interface ProjectFolder {
 export interface AgentHarness {
   id: string;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
+  // Attaches to the hosted process `request.processId`. Every event it fires before its promise resolves is replayed,
+  // except what a process that exited during the attach fires for that exit, its `sessionEnded` and `ended` included.
+  // Null when the host holds no running process with that id.
+  attach(
+    request: AgentStart,
+    events: AgentProcessEvents,
+  ): Promise<AgentProcess | null>;
   // Every session the harness saved for `projectDir` under `profileDir` (as `AgentStart` holds it), newest first;
   // [] when none.
   listSessions(
@@ -377,15 +433,16 @@ export interface AgentHarness {
     profileDir: string | null,
   ): Promise<PastSession[]>;
   // The saved session's conversation as chat entries, oldest first. Rejects naming the path when the
-  // transcript is missing.
+  // transcript is missing. `before`: only entries the transcript recorded before that epoch ms; null reads them all.
   history(
     sessionId: string,
     projectDir: string,
     profileDir: string | null,
+    before: number | null,
   ): Promise<ChatEntry[]>;
-  // The main agent's `usage` event as the saved session's main replies left it: `at` is the last main reply's time;
-  // the window, both limits and spend are null. Null when the session has no main reply. Rejects naming the path when
-  // the transcript is missing.
+  // The main agent's `usage` event as the saved session's main replies since the last compaction left it: `at` is the
+  // last main reply's time; the window, both limits and spend are null. Null when the session has no main reply since
+  // the last compaction. Rejects naming the path when the transcript is missing.
   lastUsage(
     sessionId: string,
     projectDir: string,

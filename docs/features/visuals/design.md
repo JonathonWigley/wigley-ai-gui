@@ -87,7 +87,7 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   The theme arrives after the frame's own scripts ran, so the frame stays hidden until the first theme message and
   never paints unthemed.
 - **Focus.** A click gives the visual the user's clicks and typing; `Esc` inside it hands focus back to the page.
-- **Overlay.** `v` on the focused chat entry opens its visuals full size; `h`/`l` move between them and `Esc` closes.
+- **Overlay.** `v` on the focused chat entry opens its visuals full size, at the first one in the cursor's block when it holds one; `h`/`l` move between them and `Esc` closes.
   Each visual also carries an expand control, which is the route outside chat.
 - **No library.** Agents draw flowcharts as SVG by hand. A Mermaid or chart renderer is one more fence contribution
   later, and any package is the user's per-package ask.

@@ -1,7 +1,9 @@
+import type { ActiveTime } from '../../contracts/active-time';
 import type {
   AccountStatus,
   AgentEvent,
   ChatEntry,
+  CompactionTrigger,
   PlanRowUpdate,
   ProcessActivity,
   SessionControl,
@@ -64,9 +66,48 @@ export interface ResumeRequest {
 // turn ends or the user sends it now; `id` is unique within its session.
 // `sentEntryId` is null while it waits, and once sent now the id of the user
 // entry the agent adds when it takes the message in, which drops the row.
+// `holdReason` is non-null on a held row, a send gate's reason: the row waits
+// for its session's compaction and is written when the compaction ends. A
+// session has at most one held row.
 export interface QueuedMessage extends UserMessage {
   id: string;
   sentEntryId: string | null;
+  holdReason: string | null;
+}
+
+// A compaction running in a session. `reason` is the send gate's reason for a
+// compaction a hold started; null for any other.
+export interface SessionCompaction {
+  trigger: CompactionTrigger;
+  reason: string | null;
+  startedAt: number;
+}
+
+// What a send gate reads about a send to an idle session. `sessionId` is the
+// row's id, `hostSessionId` the id its `agentEvent`s carry now, and `text` the
+// message as the user wrote it.
+export interface SendGateInput {
+  sessionId: string;
+  hostSessionId: string;
+  text: string;
+  now: number;
+}
+
+// `action: 'compact'` compacts the session before the send is written, and
+// `reason` names why on the held row and the dock.
+export interface SendGateVerdict {
+  action: 'compact';
+  reason: string;
+}
+
+// A rule run before chat main writes a message to an idle session; null lets
+// the write go on.
+export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
+
+// A message on its way back into its session's box; `id` is unique within the
+// session.
+export interface ReturnedMessage extends UserMessage {
+  id: string;
 }
 
 // `sessionId` is the sessions plugin's id for the row. A session's row lasts
@@ -83,15 +124,27 @@ export interface ChatSessionState {
   // The subagents and background tasks still running in the session's
   // process; while any runs, a turn's end does not end the agent's work.
   background: number;
+  // How long the agent has worked: it runs while `activity` is `working` or
+  // `background` is above 0. A restored row starts paused at its saved total,
+  // any other row at 0, and `/clear` resets it to 0. `since` is epoch ms on the
+  // wall clock main and the page share, so the page reads it with `activeMsAt`.
+  activeTime: ActiveTime;
   // The session's slash commands and skills, as typed after `/`; [] until the
   // harness reports them.
   commands: string[];
   // True while the session's process runs; false while it rests, with no
   // process yet or its process exited.
   running: boolean;
-  // The messages waiting for the running turn to end, and those sent now not
-  // yet taken in, oldest first; [] while nothing waits.
+  // The messages waiting for the running turn to end, the held row waiting on
+  // its compaction and the rows behind it, and those sent now not yet taken in,
+  // oldest first; [] while nothing waits.
   queued: QueuedMessage[];
+  // The compaction running in the session, whatever started it; null while
+  // none runs.
+  compaction: SessionCompaction | null;
+  // The messages returned to the box that the page has not placed yet, oldest
+  // first; a page mounting the session's tab puts them in its box.
+  returned: ReturnedMessage[];
   // The name of the clone's top folder holding `projectDir`; the folder's own
   // name outside a clone, and until the first read.
   repo: string;
@@ -136,8 +189,10 @@ export interface ChatChannel extends ChannelShape {
     // `entries`. While the agent reports the session's turn running the
     // message is queued, arriving as `queued`, and written to the agent when
     // the turns before it end, unless sent now first; a permission call left
-    // waiting after its turn ended queues nothing. A written message the agent
-    // never takes in arrives back as `returned`.
+    // waiting after its turn ended queues nothing. The same goes while a
+    // compaction runs or a hold is up. An idle send can be held by a send gate:
+    // it arrives in `queued` as the held row, and the session compacts first. A
+    // written message the agent never takes in arrives back as `returned`.
     send(sessionId: string, message: UserMessage): Promise<void>;
     // Reads a restored session's earlier conversation, arriving as `entries`.
     // While its profile is missing a call reads nothing and a later call
@@ -161,26 +216,37 @@ export interface ChatChannel extends ChannelShape {
     cancelLogIn(id: number): void;
     logOut(profile: string): Promise<void>;
     // Returns every queued message not sent now, arriving as `returned`, then
-    // interrupts the running turn; messages sent now stay queued.
+    // interrupts the running turn; messages sent now stay queued. While a hold
+    // is up it skips the compaction and returns nothing: the held row is written
+    // when the compaction ends, then the rows behind it.
     interrupt(sessionId: string): void;
     // Ends the session's process and starts a fresh one under a new host
     // session id; the entries become one `Conversation cleared` notice, sent
-    // as `entries`, and every message written but not taken in, then every
-    // queued message, arrives as `returned`. Rejects when the fresh process
-    // cannot start, leaving the row resting.
+    // as `entries`, the active time returns to 0, sent as `activeTime`, and
+    // every message written but not taken in, then every queued message,
+    // arrives as `returned`. Rejects when the fresh process cannot start,
+    // leaving the row resting.
     clear(sessionId: string): void;
     // Takes the queued message out of the queue, arriving as `returned`; does
-    // nothing for one already written to the agent or sent now.
+    // nothing for one already written to the agent or sent now. On the held row
+    // the compaction goes on, and the rows behind wait for its end.
     pullBack(sessionId: string, queuedId: string): void;
+    // The page put these messages from `returned` into the session's box, so
+    // main holds them no longer.
+    returnedPlaced(sessionId: string, returnedIds: string[]): void;
     // Writes the queued message to the agent at once, ahead of the rest of the
     // queue; its row stays, arriving in `queued` with `sentEntryId` set, until
     // the agent takes it in. Does nothing for one already written or sent now.
+    // On the held row it skips the compaction, as `interrupt` does, and the row
+    // is written when the compaction ends.
     sendNow(sessionId: string, queuedId: string): void;
     // While the agent reports the session's turn running, writes every queued
     // message not sent now, oldest first, then `message` as a new last row,
     // each as `sendNow` does; a write that throws leaves that row and every
-    // later one unsent. Otherwise sends `message` as `send` does, and a null
-    // `message` does nothing.
+    // later one unsent; the same while a compaction runs with no hold up. While
+    // a hold is up it queues `message` behind the held row and skips the
+    // compaction, as `interrupt` does, writing nothing now. Otherwise sends
+    // `message` as `send` does, and a null `message` does nothing.
     sendAllNow(sessionId: string, message: UserMessage | null): Promise<void>;
     setControl(sessionId: string, controlId: string, value: string): void;
     answerPermission(
@@ -188,6 +254,8 @@ export interface ChatChannel extends ChannelShape {
       entryId: string,
       answer: PermissionAnswer,
     ): void;
+    // Kills every session process chat holds; the rows stay, resting.
+    stopAll(): void;
     // Opens the layout preview's sample session and selects its row, or
     // selects the row of the one already open.
     openPreview(): void;
@@ -198,6 +266,8 @@ export interface ChatChannel extends ChannelShape {
     controls: { sessionId: string; controls: SessionControl[] };
     activity: { sessionId: string; activity: ProcessActivity };
     background: { sessionId: string; background: number };
+    // The session's clock started, stopped or was reset.
+    activeTime: { sessionId: string; activeTime: ActiveTime };
     commands: { sessionId: string; names: string[] };
     // Replaces the session's whole entry list, as when restored history
     // arrives.
@@ -208,12 +278,15 @@ export interface ChatChannel extends ChannelShape {
     sessionRested: { sessionId: string; error: string | null };
     // Replaces the session's whole queue.
     queued: { sessionId: string; queued: QueuedMessage[] };
+    // A compaction started in the session, or the running one ended.
+    compaction: { sessionId: string; compaction: SessionCompaction | null };
     // The session's repo or branch changed: read at its open and after each
     // turn ends.
     branch: { sessionId: string; repo: string; branch: string | null };
     // Messages taken out of the queue, or written and never taken in by the
-    // agent, in the order written, for the page to put back into the box.
-    returned: { sessionId: string; messages: UserMessage[] };
+    // agent, in the order written, for the page to put back into the box. Main
+    // holds each in `ChatSessionState.returned` until `returnedPlaced`.
+    returned: { sessionId: string; messages: ReturnedMessage[] };
     // The page the user opens to finish sign-in `id`.
     logInLink: { id: number; profile: string; url: string };
     // `status` is null when the status could not be read; `error` is null
@@ -230,17 +303,21 @@ export interface ChatChannel extends ChannelShape {
 
 // One agent event of a session chat owns. `sessionId` is the sessions plugin's
 // row id, `hostSessionId` the harness's session id, which a resumed session
-// keeps.
+// keeps. `replayed` is true for an event a re-attach replayed from a pipe log;
+// a listener that appends or alerts skips it.
 export interface ChatAgentEvent {
   sessionId: string;
   profileDir: string | null;
   hostSessionId: string;
   event: AgentEvent;
+  replayed: boolean;
 }
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the
 // row closes for its process's `sessionEnded`; also a restored or resumed
-// row's saved usage, read from its transcript rather than sent by a process.
+// row's saved usage, read from its transcript rather than sent by a process,
+// and the `interrupted` `compactionEnded` chat makes for a compaction whose
+// process a clear or a failed attach let go.
 // `planUsage`: the plan rows one of those sessions saw. Both carry the
 // `profileDir` of the profile the row opened under: its `configDir` as the
 // `profiles` setting writes it, unexpanded; null is the harness default, which
@@ -259,15 +336,18 @@ export interface ChatMainExports {
   // opening nothing, on an image chat refuses (with the refusal text), an
   // unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
-  // Chat's profile names, in settings order.
-  profileNames(): string[];
-  // Chat's profiles, in settings order, read at each call. The first is
-  // chat's default profile: the one a drive `chat.start` takes when it names
-  // none, and the only choice the start prompt skips to.
+  // Chat's profiles, in settings order, read at each call. The first profile
+  // is the one a drive `chat.start` takes when it names none, and the only
+  // choice the start prompt skips to.
   profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
-  // Sends as the composer does: queued while the session's turn runs.
+  // The profile a launch takes when its caller names none: the profile of a
+  // session chat owns, else chat's first; null when chat has no profiles.
+  // `sessionId` is null when the launch comes from no session.
+  defaultProfile(sessionId: string | null): string | null;
+  // Sends as the composer does: queued while the session's turn or compaction
+  // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // The `/clear` command's clear: resolves once the fresh process started;
@@ -284,6 +364,17 @@ export interface ChatMainExports {
   // the texts registered before it; a running session keeps what it started
   // with. Disposing it leaves later starts without it.
   addInstructions(text: string): Disposable;
+  // Gates are asked in registration order before a write to an idle session; the
+  // first non-null verdict holds the send, and no later gate is asked. A gate
+  // that throws is logged and counts as null. Disposing the handle removes the
+  // gate.
+  addSendGate(gate: SendGate): Disposable;
+  // At each process start chat asks the newest reader still registered for the
+  // context size above which the harness may compact the idle session on its
+  // own; with none, or when it throws (logged), the harness keeps its default. A
+  // running process keeps what it started with. Disposing the handle removes the
+  // reader.
+  addIdleCompactThreshold(read: () => number | null): Disposable;
 }
 
 export const chatMainKey: DependencyKey<ChatMainExports, 'main', 'chat'> = {
@@ -348,6 +439,31 @@ export interface ChatStatusPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
+// A side part's handle on its section's frame in one Chat tab. `setSummary` sets
+// the text at the frame's end, null for none; after the build's dispose it does
+// nothing.
+export interface ChatSideSection {
+  setSummary(text: string | null): void;
+}
+
+// What a plugin draws in the session hub beside every Chat tab's entries and
+// composer, as one section: chat draws the frame with `title` and hands `build`
+// the frame's body, the tab's session id and the section. Chat sorts the sections
+// by `order`, equal orders keeping add order. The body adds its own padding, so
+// the part adds none. A part that draws nothing, by drawing no child element in
+// `parent` or by setting `hidden` on each, hides its section. It takes no stop
+// and no key scope.
+export interface ChatSidePart {
+  id: string;
+  title: string;
+  order: number;
+  build(
+    parent: HTMLElement,
+    sessionId: string,
+    section: ChatSideSection,
+  ): { dispose?(): void };
+}
+
 // The page part's exports. `addSlashCommand` registers an app slash command
 // until its `dispose`, and throws when the name is already registered.
 // `fillComposer` replaces the session's draft, leaving its attached images,
@@ -363,15 +479,38 @@ export interface ChatStatusPart {
 // Chat tab's composer again; a status part is built at each composer draw and
 // redraws into its wrapper itself when its content changes; it draws in every
 // Chat tab, the preview's included.
+// `addSidePart` throws on an id already added; a side part draws in every Chat
+// tab, the preview's included, as a section of the session hub at its place by
+// `order`. It is built once per tab, when it is added or its tab is built, and
+// disposed when it is removed or its tab closes; a chat layout change disposes
+// and builds it again. Adding or removing another side part, a composer draw and
+// a change to its frame (a collapse, a summary) each leave it and its parent as
+// they are, so a part whose content changes redraws into its parent itself. A
+// part whose build throws is logged and stays unbuilt in that tab until it is
+// added again or the chat layout changes.
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
+// `focusedBlock` is the visible Chat tab's cursor block element, inside that
+// slot; null in the same cases and on a stop with no blocks.
+// `activeTime` is the session's clock as main last sent it, null for a session
+// the page does not hold; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;
+  addSidePart(part: ChatSidePart): Disposable;
   focusedEntry(): HTMLElement | null;
+  focusedBlock(): HTMLElement | null;
+  activeTime(sessionId: string): ActiveTime | null;
+}
+
+// `activeTimeChanged` fires when a session arrives on the page with its total,
+// and when main sends a session's clock: at each start and stop and at a
+// `/clear` reset.
+export interface ChatPageEvents extends EventShape {
+  activeTimeChanged: { sessionId: string; activeTime: ActiveTime };
 }
 
 export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {

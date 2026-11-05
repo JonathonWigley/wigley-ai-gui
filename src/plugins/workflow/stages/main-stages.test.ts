@@ -24,7 +24,6 @@ function flowIn(stage: string): SessionFlow {
     planDir: '/r/plan-f',
     progress: PROGRESS,
     reviewRoundsAtMake: 0,
-    hasLeftIdle: true,
   };
 }
 

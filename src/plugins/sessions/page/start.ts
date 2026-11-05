@@ -10,6 +10,7 @@ import {
   createPartStore,
   type PartStore,
 } from '../../../shared/page/contributed-parts';
+import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
 import { createListPicker } from '../../../shared/page/list-picker';
 import {
   leafIds,
@@ -36,12 +37,14 @@ import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
   type ActivationTarget,
   activationTarget,
+  echoesAfterReply,
   fillPlan,
   liveWaits,
   type PaneSessions,
   type PendingEcho,
   panesToClose,
   pickerRows,
+  pressedFocusAction,
   restorePlan,
   type SelectionTarget,
   savedPaneSessions,
@@ -50,7 +53,9 @@ import {
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
+import { createProjectFavorites } from './project-favorites';
 import { createRenameDialog } from './rename-dialog';
+import { createSessionRecency } from './session-recency';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -158,7 +163,10 @@ function createExports(
 // swaps the side bar's rows for a sample of every row state and back,
 // page-only: it sends nothing to main. `renameSession` opens the rename dialog
 // over the focused pane's session; the rows draw titles cut to the
-// `titleMaxLength` setting, drawn again when it changes.
+// `titleMaxLength` setting, drawn again when it changes. The rows group by
+// project under Favorites and Recent, from the favorites and recency stamps in
+// uiState; the session step keys follow that drawn order, and the project keys
+// change the focused pane's session's project's favorite.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -273,9 +281,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       pendingEchoes.at(-1)?.sessionId ?? state.selectedSessionId;
 
     // Asks main to select `sessionId`, recording the echo its state will
-    // carry when that differs from the selection main will hold. Main sends
-    // that state before the invoke resolves, so an echo still pending then
-    // is one main never answers (an unknown session), and is dropped.
+    // carry when that differs from the selection main will hold, until
+    // `echoesAfterReply` drops it.
     const tellMain = (sessionId: string) => {
       const echo = sessionId === mainSelection() ? null : { sessionId };
       if (echo !== null) {
@@ -283,8 +290,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       api.channel
         .invoke('activate', sessionId)
-        .then(() => {
-          pendingEchoes = pendingEchoes.filter((pending) => pending !== echo);
+        .then((sentState) => {
+          pendingEchoes = echoesAfterReply(pendingEchoes, echo, sentState);
         })
         .catch((error) => {
           pendingEchoes = [];
@@ -358,6 +365,31 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           tellMain(sessionId);
         }
       },
+      // The keys follow a release into its pane, as `pressedFocusAction` says.
+      panePressed(pane) {
+        const selection = window.getSelection();
+        const focused = document.activeElement;
+        const sessionId = view.panes.focusedSessionId();
+        const action = pressedFocusAction({
+          hasSelectionInPane:
+            selection?.isCollapsed === false &&
+            pane.contains(selection.anchorNode),
+          isFocusInPane: pane.contains(focused),
+          doesFocusTakeText: holdsTextEntry(focused),
+          isChatTabShown:
+            sessionId !== null &&
+            view.tabs.selectedTabOf(sessionId)?.id === 'chat',
+        });
+        if (action === 'keep') {
+          return;
+        }
+        blurFocusedElement();
+        const canFocusBox =
+          sessionId !== null && api.keys.command('chat.focusBox') !== undefined;
+        if (canFocusBox) {
+          api.commands.run('chat.focusBox');
+        }
+      },
       markdown: api.services.markdown,
       platform: api.platform,
       commands: {
@@ -368,6 +400,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       rowParts,
       barParts,
       titleMaxLength: () => api.settings().titleMaxLength,
+      recency: createSessionRecency(api.services.clock, uiState),
+      favorites: createProjectFavorites(uiState),
     });
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {
@@ -567,7 +601,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       mode.toggleSideBar();
     };
 
-    // Steps the focused pane over the sessions no other pane shows.
+    // Steps the focused pane, in drawn order, over the sessions no other pane
+    // shows.
     const stepToSession = (by: 1 | -1) => {
       mode.show();
       if (view.isPreviewShown()) {
@@ -576,7 +611,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       const { panes } = view;
       const sessionId = stepSession(
-        { ...state, selectedSessionId: panes.focusedSessionId() },
+        {
+          ...state,
+          rows: view.orderedRows(),
+          selectedSessionId: panes.focusedSessionId(),
+        },
         by,
         shownElsewhere(panes.sessions(), panes.focusedPaneId()),
       );
@@ -652,18 +691,35 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       renameDialog.open(row);
     };
 
+    // Runs a project key on the focused pane's session's project, as
+    // `renameSession` acts on its session.
+    const projectKey = (run: (project: string) => void) => () => {
+      if (!mode.isShown()) {
+        log('projects ignored: Sessions mode is hidden');
+        return;
+      }
+      const sessionId = view.panes.focusedSessionId();
+      const row = sessionId === null ? undefined : rowOf(sessionId);
+      if (row === undefined) {
+        log('no session for projects');
+        return;
+      }
+      run(row.project);
+    };
+
     // Asks which session the new pane `paneId` shows: the sessions no pane
-    // shows, then a new one when chat can start one. A cancel while the pane
-    // still shows nothing closes it.
+    // shows, in drawn order, then a new one when chat can start one. A cancel
+    // while the pane still shows nothing closes it.
     const openSplitPicker = (paneId: string) => {
       const choices: PickerChoice[] = pickerRows(
-        state.rows,
+        view.orderedRows(),
         view.panes.sessions(),
       ).map((row) => ({ kind: 'row', row }));
       if (api.keys.command('chat.newSession') !== undefined) {
         choices.push({ kind: 'new' });
       }
       const isPaneLive = () => leafIds(view.panes.tree()).includes(paneId);
+      blurFocusedElement();
       picker.open<PickerChoice>({
         title: 'Show session',
         items: choices,
@@ -780,6 +836,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         renameSession,
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
+        favoriteProject: projectKey((project) => view.toggleFavorite(project)),
+        moveProjectUp: projectKey((project) => view.moveFavorite(project, -1)),
+        moveProjectDown: projectKey((project) => view.moveFavorite(project, 1)),
       },
       exports: (consumer) =>
         sessionsPageView(exports, consumer, (listener) =>

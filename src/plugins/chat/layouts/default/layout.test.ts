@@ -4,6 +4,7 @@ import type {
   ChatKit,
   ChatLayout,
   CollapsibleCardOptions,
+  CompactionInput,
   ComposerInput,
   ComposerKit,
   EntryInput,
@@ -30,6 +31,7 @@ class FakeElement {
   tagName: string;
   className = '';
   textContent = '';
+  title = '';
   hidden = false;
   src = '';
   alt = '';
@@ -65,6 +67,17 @@ class FakeElement {
       node.parentNode = this;
       this.children.push(node);
     }
+  }
+
+  insertBefore(node: FakeElement, reference: FakeElement | null) {
+    node.remove();
+    node.parentNode = this;
+    const at =
+      reference === null
+        ? this.children.length
+        : this.children.indexOf(reference);
+    this.children.splice(at, 0, node);
+    return node;
   }
 
   replaceChildren(...nodes: FakeElement[]) {
@@ -141,6 +154,7 @@ function fakeKit() {
     permissionActions: (parent) => part(parent, 'div', 'permissionActions'),
     images: (parent) => part(parent, 'div', 'images'),
     duration: (ms) => `${Math.floor(ms / 1000)}s`,
+    tokens: (count) => `${Math.round(count / 1000)}k`,
   };
   return { kit: parts as ChatKit, calls };
 }
@@ -365,24 +379,48 @@ describe('default chat layout', () => {
   });
 
   it.each([
-    { costUsd: 0.01234, durationMs: 4210, line: 'end_turn · $0.01 · 4.2 s' },
-    { costUsd: 0.5, durationMs: null, line: 'end_turn · $0.50' },
-    { costUsd: 0.004, durationMs: null, line: 'end_turn · $0.00' },
-    { costUsd: null, durationMs: null, line: 'end_turn' },
-  ])('result_lineFormats ($line)', ({ costUsd, durationMs, line }) => {
-    const { kit } = fakeKit();
-    const entry = {
-      kind: 'result' as const,
-      id: 'r1',
+    {
       stopReason: 'end_turn',
-      costUsd,
-      durationMs,
-      raw: [] as unknown[],
-    };
+      durationMs: 4210,
+      stepCount: 31,
+      line: 'Turn ended · 4s · 31 steps',
+    },
+    {
+      stopReason: 'success',
+      durationMs: 9000,
+      stepCount: 1,
+      line: 'Turn ended · 9s · 1 step',
+    },
+    {
+      stopReason: 'max_tokens',
+      durationMs: null,
+      stepCount: 2,
+      line: 'max_tokens · 2 steps',
+    },
+    {
+      stopReason: 'end_turn',
+      durationMs: null,
+      stepCount: 0,
+      line: 'Turn ended',
+    },
+  ])(
+    'result_lineFormats ($line)',
+    ({ stopReason, durationMs, stepCount, line }) => {
+      const { kit } = fakeKit();
+      const entry = {
+        kind: 'result' as const,
+        id: 'r1',
+        stopReason,
+        costUsd: null,
+        durationMs,
+        stepCount,
+        raw: [] as unknown[],
+      };
 
-    const view = draw(entry, kit);
-    expect(asFake(view.element).textContent).toBe(line);
-  });
+      const view = draw(entry, kit);
+      expect(asFake(view.element).textContent).toBe(line);
+    },
+  );
 
   it('raw_rowShowsTheEvents', () => {
     const { kit, calls } = fakeKit();
@@ -395,7 +433,73 @@ describe('default chat layout', () => {
       `json:${JSON.stringify([{ type: 'x' }])}`,
     ]);
   });
+
+  it.each([
+    {
+      trigger: 'app',
+      beforeTokens: 182000,
+      afterTokens: 24000,
+      durationMs: 9000,
+      line: 'Compacted 182k → 24k · auto · 9s',
+    },
+    {
+      trigger: 'manual',
+      beforeTokens: 182000,
+      afterTokens: null,
+      durationMs: 9000,
+      line: 'Compacted 182k · manual · 9s',
+    },
+    {
+      trigger: 'harness',
+      beforeTokens: 182000,
+      afterTokens: 24000,
+      durationMs: null,
+      line: 'Compacted 182k → 24k · autocompact',
+    },
+    {
+      trigger: 'app',
+      beforeTokens: null,
+      afterTokens: null,
+      durationMs: null,
+      line: 'Compacted · auto',
+    },
+  ] satisfies (CompactionFields & { line: string })[])(
+    'compaction_lineFormats ($line)',
+    ({ line, ...fields }) => {
+      const view = draw(compactionEntry(fields), fakeKit().kit);
+
+      expect(asFake(view.element).className).toBe('chat-entry chat-compaction');
+      expect(asFake(view.element).textContent).toBe(line);
+    },
+  );
+
+  it('compaction_update_FillsTheAfterSizeInPlace', () => {
+    const fields: CompactionFields = {
+      trigger: 'app',
+      beforeTokens: 182000,
+      afterTokens: null,
+      durationMs: 9000,
+    };
+    const view = draw(compactionEntry(fields), fakeKit().kit);
+    const divider = view.element;
+
+    view.update?.(compactionEntry({ ...fields, afterTokens: 24000 }));
+
+    expect(view.element).toBe(divider);
+    expect(asFake(divider).textContent).toBe(
+      'Compacted 182k → 24k · auto · 9s',
+    );
+  });
 });
+
+type CompactionFields = Pick<
+  CompactionInput,
+  'trigger' | 'beforeTokens' | 'afterTokens' | 'durationMs'
+>;
+
+function compactionEntry(fields: CompactionFields): CompactionInput {
+  return { kind: 'compaction', id: 'c1', at: 1000, raw: [], ...fields };
+}
 
 // A tool step named `name`, its result failed when `isError`; null leaves it
 // running.
@@ -598,7 +702,7 @@ function workingTurn(
   now: number,
   startedAt = 0,
 ): WorkingInput {
-  return { state, steps, startedAt, now };
+  return { state, steps, startedAt, now, compaction: null };
 }
 
 // A finished turn of `steps` from `startedAt` to `endedAt`.
@@ -765,8 +869,96 @@ describe('default chat layout working', () => {
         'div.chat-working-done:Done · 2s · $0.10',
       ],
     },
+    {
+      name: 'CompactingWithATool',
+      input: {
+        state: 'compacting',
+        steps: [toolStep('Read', 'a.ts')],
+        startedAt: 0,
+        now: 6000,
+        compaction: 'auto · cache cold · 182k',
+      } satisfies WorkingInput,
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:06 span.chat-working-state:Compacting… span.chat-working-trigger:auto · cache cold · 182k',
+        'div.chat-working-bar:',
+      ],
+    },
+    {
+      name: 'CompactingManual',
+      input: {
+        state: 'compacting',
+        steps: [],
+        startedAt: 0,
+        now: 6000,
+        compaction: '/compact',
+      } satisfies WorkingInput,
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:06 span.chat-working-state:Compacting… span.chat-working-trigger:/compact',
+        'div.chat-working-bar:',
+      ],
+    },
   ])('working_draws ($name)', ({ input, lines }) => {
     expect(workingLines(drawWorking(input))).toEqual(lines);
+  });
+
+  it.each([
+    {
+      name: 'Thinking',
+      input: workingTurn('thinking', [toolStep('Read', 'a.ts')], 65000),
+      lines: [
+        'chat-working-line',
+        'span.chat-working-time:1:05 span.chat-working-state:Thinking…',
+      ],
+    },
+    {
+      name: 'CompactingWithATrigger',
+      input: {
+        state: 'compacting',
+        steps: [toolStep('Read', 'a.ts')],
+        startedAt: 0,
+        now: 6000,
+        compaction: '/compact',
+      } satisfies WorkingInput,
+      lines: [
+        'chat-working-line',
+        'span.chat-working-time:0:06 span.chat-working-state:Compacting… span.chat-working-trigger:/compact',
+      ],
+    },
+    {
+      name: 'Done',
+      input: doneTurn('end_turn', [toolStep('Bash', 'ls')], 0, 5000, 0.57),
+      lines: [
+        'chat-working-line is-done',
+        'div.chat-working-done:Done · 5s · $0.57 · Bash 1',
+      ],
+    },
+  ])('workingLine_draws ($name)', ({ input, lines }) => {
+    const parent = new FakeElement('div');
+
+    const view = layout.workingLine(asHtml(parent), input, fakeKit().kit);
+
+    expect(parent.children).toEqual([asFake(view.element)]);
+    expect(workingLines(view)).toEqual(lines);
+  });
+
+  it('workingLine_update_LiveToDone_KeepsTheRootAndDrawsTheLine', () => {
+    const parent = new FakeElement('div');
+    const view = layout.workingLine(
+      asHtml(parent),
+      workingTurn('thinking', [], 3000),
+      fakeKit().kit,
+    );
+    const line = view.element;
+
+    view.update?.(doneTurn('end_turn', [], 0, 5000, null));
+
+    expect(view.element).toBe(line);
+    expect(workingLines(view)).toEqual([
+      'chat-working-line is-done',
+      'div.chat-working-done:Done · 5s',
+    ]);
   });
 
   it('working_update_RedrawsTheTime', () => {
@@ -818,15 +1010,79 @@ describe('default chat layout queuedMessage', () => {
   });
 
   it.each([
-    { imageCount: 0, sent: false, label: 'pending' },
-    { imageCount: 1, sent: false, label: 'pending · 1 image' },
-    { imageCount: 3, sent: false, label: 'pending · 3 images' },
-    { imageCount: 0, sent: true, label: 'sending' },
-    { imageCount: 2, sent: true, label: 'sending · 2 images' },
+    {
+      imageCount: 0,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'pending',
+    },
+    {
+      imageCount: 1,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'pending · 1 image',
+    },
+    {
+      imageCount: 3,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'pending · 3 images',
+    },
+    {
+      imageCount: 0,
+      sent: true,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'sending',
+    },
+    {
+      imageCount: 2,
+      sent: true,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'sending · 2 images',
+    },
+    {
+      imageCount: 0,
+      sent: false,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '⌃C',
+      label: 'sends after compaction · ⌃C skips',
+    },
+    {
+      imageCount: 1,
+      sent: false,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '⌃C',
+      label: 'sends after compaction · ⌃C skips · 1 image',
+    },
+    {
+      imageCount: 0,
+      sent: false,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '',
+      label: 'sends after compaction',
+    },
+    {
+      imageCount: 0,
+      sent: true,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '⌃C',
+      label: 'sending',
+    },
   ])(
-    'queuedMessage_Default_Label ($imageCount, sent $sent → $label)',
-    ({ imageCount, sent, label }) => {
-      const view = drawQueued({ text: 'fix the tests', imageCount, sent });
+    'queuedMessage_Default_Label ($imageCount, sent $sent, hold $holdReason, key $skipKey → $label)',
+    ({ imageCount, sent, holdReason, skipKey, label }) => {
+      const view = drawQueued({
+        text: 'fix the tests',
+        imageCount,
+        sent,
+        holdReason,
+        skipKey,
+      });
 
       expect(describeChildren(asFake(view.element))).toEqual([
         `div.chat-queued-label:${label}`,
@@ -840,10 +1096,18 @@ describe('default chat layout queuedMessage', () => {
       text: 'fix the tests',
       imageCount: 0,
       sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
     });
     const row = view.element;
 
-    view.update?.({ text: 'and the lint', imageCount: 2, sent: false });
+    view.update?.({
+      text: 'and the lint',
+      imageCount: 2,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+    });
 
     expect(view.element).toBe(row);
     expect(describeChildren(asFake(row))).toEqual([
@@ -900,6 +1164,7 @@ type SurfacePart = Exclude<
 const SURFACE_PARTS: Record<SurfacePart, true> = {
   activity: true,
   working: true,
+  workingLine: true,
   queuedMessage: true,
   composer: true,
   statusLine: true,
@@ -909,6 +1174,9 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   reasonBox: true,
   closeConfirm: true,
   imageViewer: true,
+  rowClock: true,
+  sideSection: true,
+  sessionFacts: true,
 };
 
 // Draws `input` with the default layout's `name` part into a fresh parent,
@@ -965,6 +1233,27 @@ describe('default chat layout surfaces', () => {
     controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
   };
 
+  it('rowClock_Default_UpdateChangesTextAndRunningInPlace', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(
+      'rowClock',
+      { text: '1m 05s', isRunning: false },
+      kit,
+    );
+    const clock = asFake(view.element);
+
+    expect(clock.tagName).toBe('SPAN');
+    expect(clock.textContent).toBe('1m 05s');
+    expect(clock.classList.contains('is-running')).toBe(false);
+
+    view.update?.({ text: '1m 06s', isRunning: true });
+
+    expect(asFake(view.element)).toBe(clock);
+    expect(clock.textContent).toBe('1m 06s');
+    expect(clock.classList.contains('is-running')).toBe(true);
+  });
+
   it('composer_Default_PlacesEachSlotOnce', () => {
     const { kit } = fakeSurfaceKit();
 
@@ -992,8 +1281,7 @@ describe('default chat layout surfaces', () => {
         'modelEffort',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
     {
@@ -1005,8 +1293,7 @@ describe('default chat layout surfaces', () => {
         'modelEffort',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
     {
@@ -1018,8 +1305,7 @@ describe('default chat layout surfaces', () => {
         'typeHint',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
   ])(
@@ -1029,7 +1315,12 @@ describe('default chat layout surfaces', () => {
 
       const view = drawSurface('statusLine', input, kit);
 
-      expect(describeChildren(asFake(view.element))).toEqual(line);
+      const root = asFake(view.element);
+      expect(describeChildren(root)).toEqual(line);
+      expect(describeChildren(root.children[line.length - 1])).toEqual([
+        'running',
+        'send',
+      ]);
     },
   );
 
@@ -1070,6 +1361,54 @@ describe('default chat layout surfaces', () => {
       'span.chat-sign-in-link:https://example.com/a',
       'copy',
     ]);
+  });
+
+  it('sessionFacts_Default_DrawsARowPerFactWithTheWholeValueAsTitle', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(
+      'sessionFacts',
+      {
+        facts: [
+          { label: 'Project', value: 'app' },
+          { label: 'Folder', value: '~/dev/app' },
+        ],
+      },
+      kit,
+    );
+
+    const rows = asFake(view.element).children.map(
+      ({ children: [label, value] }) => [
+        label.textContent,
+        value.textContent,
+        value.title,
+      ],
+    );
+    expect(rows).toEqual([
+      ['Project', 'app', 'app'],
+      ['Folder', '~/dev/app', '~/dev/app'],
+    ]);
+  });
+
+  it('sessionFacts_Default_UpdatePatchesRowsByLabel', () => {
+    const { kit } = fakeSurfaceKit();
+    const project = { label: 'Project', value: 'app' };
+    const branch = { label: 'Branch', value: 'main' };
+    const folder = { label: 'Folder', value: '~/dev/app' };
+    const view = drawSurface('sessionFacts', { facts: [project, folder] }, kit);
+    const holder = asFake(view.element);
+    const [projectRow, folderRow] = holder.children;
+
+    view.update?.({ facts: [project, branch, folder] });
+    const branchRow = holder.children[1];
+
+    expect(holder.children).toEqual([projectRow, branchRow, folderRow]);
+    expect(branchRow.children[1].textContent).toBe('main');
+
+    view.update?.({ facts: [project, folder] });
+
+    expect(holder.children).toEqual([projectRow, folderRow]);
+    expect(branchRow.parentNode).toBeNull();
   });
 
   it('imageViewer_Default_UpdateMovesCounterAndHidesItForOne', () => {

@@ -16,6 +16,7 @@ import {
   requiredString,
 } from '../../../shared/drive-args';
 import type { JsonObject } from '../../../shared/json';
+import { channelPath } from '../../../shared/local-channel/channel-path';
 import {
   DRIVE_SESSION_DEFAULTS,
   type OwnedSession,
@@ -32,11 +33,12 @@ import { titleLimit } from '../session-title';
 import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
 import {
-  channelPath,
   endedDriveRunLaunch,
   launchCommand,
   writeEndpointFiles,
 } from './relay/endpoint';
+import { createProjectNames } from './project-names';
+import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
@@ -57,6 +59,7 @@ function createList(api: SessionsApi): SessionList {
     emit: (event, data) => api.events.emit(event, data),
     stateChanged: (state) => api.channel.send('stateChanged', state),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
+    projectName: createProjectNames(api.services.git),
   });
   api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
@@ -76,15 +79,17 @@ function createList(api: SessionsApi): SessionList {
 // Opens the channel relay.py connects to, each relay connecting one session
 // served the live tool list. A relay that finds the app gone starts
 // it again, except a drive run's, which stays ended and names the run's home.
-function openRelay(api: SessionsApi, list: SessionList) {
+function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
   const channel = channelPath(
     process.platform,
     api.services.homeDir,
     os.userInfo().username,
     api.services.appInstance.id,
+    '',
   );
   const relay = startRelayServer({
     channel,
+    ready: () => hold.ready(),
     connect: (info) => list.connect(info),
     serve: (streams, session) => serveMcp(streams, session, list),
     log: api.services.log,
@@ -226,8 +231,9 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
     const list = createList(api);
+    const hold = createConnectHold(api.services.timers, api.services.log);
     const opened =
-      api.services.runMode === 'selfTest' ? null : openRelay(api, list);
+      api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
     const endpointDir = appEndpointDir(
       api.services.paths,
       api.services.homeDir,
@@ -257,6 +263,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
+      holdConnects: (until) => hold.hold(until),
     };
     exports.contributeTools(
       [SET_SESSION_TITLE_TOOL],
@@ -279,6 +286,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       commands: {},
       exports: (consumer) => sessionsMainView(exports, consumer),
       dispose: async () => {
+        list.stop();
         try {
           list.endAll();
         } finally {

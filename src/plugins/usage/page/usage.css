@@ -17,7 +17,43 @@
   min-width: calc(var(--wg-space-8) * 1.5 + var(--wg-space-1));
 }
 
-/* A session's context under its side-bar row, after the row's other parts. */
+/* While the session compacts, both stop at the meter's width and the line's gap
+   plus the chip reading a few characters and its ellipsis. */
+.session-bar-part:has(
+  > [data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
+) {
+  min-width: calc(var(--wg-space-8) * 3.25);
+}
+
+.session-bar-parts:has(
+  > .session-bar-part
+    > [data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
+) {
+  min-width: calc(var(--wg-space-8) * 3.25 + var(--wg-space-1));
+}
+
+/* A session's context under its side-bar row, after the row's other parts, and
+   its cache mark at the line's end. Each plugin orders its own wrapper; chat's
+   `chat.rowClock` takes the order between these two. The context's
+   `margin-right: auto` shares the free room with the run time's
+   `margin-left: auto`, so a row with a run time looks the same, and a row
+   without one still keeps the cache mark at the line's end. Under the default
+   layout the wrapper gives up width when the parts outgrow the line, which the
+   line passes on to its meter's bar (`layout.css`); a user layout's wrapper
+   stays at least its content's width, as only the default layout's content
+   shrinks. */
 .session-row-part[data-part='usage.rowLine'] {
+  margin-right: auto;
   order: 2;
+}
+
+.session-row-part[data-part='usage.rowLine']:has(
+    > [data-layout-owner='usage'][data-layout='default'].usage-row-line
+  ) {
+  flex: 0 1 auto;
+  min-width: calc(var(--wg-space-8) + var(--wg-space-1_5));
+}
+
+.session-row-part[data-part='usage.rowCache'] {
+  order: 4;
 }

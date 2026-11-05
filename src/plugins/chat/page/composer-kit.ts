@@ -3,6 +3,7 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   type ContributedPartsPlace,
@@ -23,7 +24,11 @@ import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { statusDot } from '../../../shared/page/ui/status-dot';
-import type { ChatComposerPart, ChatStatusPart } from '../contract';
+import type {
+  ChatComposerPart,
+  ChatStatusPart,
+  SessionCompaction,
+} from '../contract';
 import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import type {
   AttachmentsInput,
@@ -42,7 +47,7 @@ import {
   type SurfaceKitDeps,
   surfaceBaseKit,
 } from './chat-layouts';
-import { chipKeyCommands } from './composer-input';
+import { chipKeyCommands, modelEffortText } from './composer-input';
 import { controlCommand } from './control-commands';
 
 // `run` runs a command, as the chips and Send do; `composerParts` holds the
@@ -68,34 +73,49 @@ export interface ComposerPieces {
   removeImage(index: number): void;
 }
 
-// One Chat tab's composer, drawn through the chat layout. The box, the
-// working, attachments and status line slots, the status parts' slot and the
-// status line's key-holding parts are built once and placed again by each draw;
-// other plugins' composer parts and status parts are built again by each
-// composer draw, not by a status line draw. The working slot holds the
-// activity dock: the `working` part, drawn with what the tab's activity dock
-// shows and hidden while it shows nothing or while the default `working` draw
-// has failed since the last composer draw.
+// One Chat tab's composer, drawn through the chat layout, and its activity
+// dock. The box, the working, attachments and status line slots, the status
+// parts' slot and the status line's key-holding parts are built once and placed
+// again by each draw; other plugins' composer parts and status parts are built
+// again by each composer draw, not by a status line draw. The tab's activity
+// dock draws two parts with one input: `working` in `dockSlot`, which the
+// surface makes and the session hub's Main agent section places, and
+// `workingLine` in the composer's working slot. Each slot hides while the dock
+// shows nothing or while its part's default draw has failed since the last
+// composer draw.
 export interface ComposerSurface {
+  // `div.chat-dock-slot`, the same element for the surface's life.
+  dockSlot: HTMLElement;
+  // What the activity dock shows now; null while it shows nothing.
+  dockInput(): WorkingInput | null;
+  // Hears what the activity dock shows, after both of its parts have drawn it. A
+  // listener that throws stops no other, and the first throw reaches the caller.
+  onDockChanged(listener: (input: WorkingInput | null) => void): Disposable;
   // Draws the composer into `parent` in place of its last draw, then the
-  // status line with `input`, the last attached images and the activity dock
-  // afresh, retrying a failed default `working` draw; returns the composer's
-  // root.
+  // status line with `input`, the last attached images and both of the activity
+  // dock's parts afresh, retrying a failed default draw of either; returns the
+  // composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
-  // it in place of its last draw. Returns false, drawing no status line, when
-  // the update threw: the composer then draws with `default` until the
-  // layouts change, and the caller draws it again.
+  // it in place of its last draw. A change to `isBoxFocused` alone moves only the
+  // type hint, and an unchanged input draws nothing, so the elements under a
+  // release that focused the pane stay in the document for its click. Returns
+  // false, drawing no status line, when the update threw: the composer then
+  // draws with `default` until the layouts change, and the caller draws it again.
   drawStatusLine(input: ComposerInput): boolean;
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
   drawAttachments(images: readonly ChatImage[]): void;
-  // Hands the activity dock the session's entries after a change and whether
-  // the session's turn is under way: working, or waiting on a permission
-  // answer.
-  setTurn(entries: readonly ChatEntry[], working: boolean): void;
-  // Disposes every draw, the activity dock's tick and the status line's
-  // anchors.
+  // Hands the activity dock the session's entries after a change, whether the
+  // session's turn is under way (working, or waiting on a permission answer),
+  // and the compaction running in the session.
+  setTurn(
+    entries: readonly ChatEntry[],
+    working: boolean,
+    compaction: SessionCompaction | null,
+  ): void;
+  // Disposes every draw, the activity dock's tick and listeners and the status
+  // line's anchors.
   dispose(): void;
 }
 
@@ -104,10 +124,22 @@ interface BuiltPart<I> {
   view: PartView<I>;
 }
 
+// One part the activity dock draws, in a slot of its own.
+interface DockPart {
+  slot: HTMLElement;
+  // Runs the drawn part's update with `input`; a part with no update, or whose
+  // update threw, is drawn again.
+  show(input: WorkingInput | null): void;
+  // Draws the part afresh with `input`, retrying a failed default draw.
+  redraw(input: WorkingInput | null): void;
+  dispose(): void;
+}
+
 // The status line's parts holding keys, each anchored once in `chat.chat`:
-// the type hint (`i` and `a`), the running indicator (dot and interrupt
-// keys), Send, and a key span per pick command, which the first chip running
-// it holds.
+// the type hint (`i` and `a`, then `.chat-cursor-keys`, the page keys that read
+// the entries: `J`, `K`, `V` and `y`, with no labels), the
+// running indicator (dot and interrupt keys), Send, and a key span per pick
+// command, which the first chip running it holds.
 interface StatusLineParts {
   typeHint: HTMLElement;
   running: HTMLElement;
@@ -127,8 +159,6 @@ export function createComposerSurface(
   deps: ComposerSurfaceDeps,
   pieces: ComposerPieces,
 ): ComposerSurface {
-  const workingSlot = element('div', 'chat-working-slot');
-  workingSlot.hidden = true;
   const attachmentsSlot = element('div', 'chat-attachments-slot');
   attachmentsSlot.hidden = true;
   const statusLineSlot = element('div', 'chat-status-line-slot');
@@ -137,58 +167,34 @@ export function createComposerSurface(
   const composerDraws = chatPartDraws(deps.layouts, 'composer', deps.log);
   const statusLineDraws = chatPartDraws(deps.layouts, 'statusLine', deps.log);
   const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
-  const workingDraws = chatPartDraws(deps.layouts, 'working', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let statusLine: DrawnPart<BuiltPart<ComposerInput>> | null = null;
+  let statusLineDrawnFor: string | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
-  let workingPart: DrawnPart<BuiltPart<WorkingInput>> | null = null;
   let images: readonly ChatImage[] = [];
-  let isWorkingFailed = false;
 
-  const clearWorking = () => {
-    workingPart?.dispose();
-    workingPart = null;
-    workingSlot.replaceChildren();
-    workingSlot.hidden = true;
-  };
-  // Draws the `working` part afresh with `input`, or leaves the slot hidden
-  // for null; a default that fails is logged once and leaves it hidden until
-  // the next composer draw.
-  const drawWorking = (input: WorkingInput | null) => {
-    clearWorking();
-    if (input === null || isWorkingFailed) {
-      return;
-    }
-    workingSlot.hidden = false;
-    try {
-      workingPart = workingDraws.draw(workingSlot, (builder, at, rollback) => {
-        const view = builder(at, input, surfaceBaseKit(deps, 'chat', rollback));
-        return { element: view.element, view };
-      });
-    } catch (error) {
-      deps.log(`default layout working failed: ${errorText(error)}`);
-      isWorkingFailed = true;
-      clearWorking();
-    }
-  };
-  // Runs the drawn part's update with `input`; a part with no update, or
-  // whose update threw, is drawn again.
-  const showWorking = (input: WorkingInput | null) => {
-    const isUpdated =
-      input !== null &&
-      workingPart !== null &&
-      workingDraws.update(workingPart, input) === 'ran';
-    if (!isUpdated) {
-      drawWorking(input);
-    }
-  };
+  const dockPart = createDockPart(deps, 'working', 'chat-dock-slot');
+  const linePart = createDockPart(deps, 'workingLine', 'chat-working-slot');
+  const workingSlot = linePart.slot;
+  const dockListeners = new Set<(input: WorkingInput | null) => void>();
   const dock = createActivityDock({
     clock: deps.clock,
     timers: deps.timers,
-    changed: showWorking,
+    changed: (input) =>
+      callEach([dockPart.show, linePart.show, ...dockListeners], (show) =>
+        show(input),
+      ),
   });
 
   const surface: ComposerSurface = {
+    dockSlot: dockPart.slot,
+    dockInput: () => dock.input(),
+    onDockChanged(listener) {
+      // A wrapper per subscription, so each handle removes only its own.
+      const wrapped = (input: WorkingInput | null) => listener(input);
+      dockListeners.add(wrapped);
+      return { dispose: () => dockListeners.delete(wrapped) };
+    },
     drawComposer(parent, input) {
       composer?.dispose();
       composer?.built.element.remove();
@@ -249,8 +255,8 @@ export function createComposerSurface(
       });
       drawStatusLinePart(input);
       surface.drawAttachments(images);
-      isWorkingFailed = false;
-      drawWorking(dock.input());
+      dockPart.redraw(dock.input());
+      linePart.redraw(dock.input());
       return composer.built.element;
     },
     drawStatusLine(input) {
@@ -258,6 +264,10 @@ export function createComposerSurface(
         composer !== null && composerDraws.update(composer, input) === 'threw';
       if (isComposerStale) {
         return false;
+      }
+      if (statusLineDrawnFor === statusLineFacts(input)) {
+        showBoxFocus(parts, input);
+        return true;
       }
       drawStatusLinePart(input);
       return true;
@@ -295,20 +305,23 @@ export function createComposerSurface(
         },
       );
     },
-    setTurn(entries, working) {
-      dock.set(entries, working);
+    setTurn(entries, working, compaction) {
+      dock.set(entries, working, compaction);
     },
     dispose() {
       dock.dispose();
       composer?.dispose();
       statusLine?.dispose();
       attachments?.dispose();
-      workingPart?.dispose();
+      dockPart.dispose();
+      linePart.dispose();
+      dockListeners.clear();
       disposeAnchors(parts.anchors);
     },
   };
 
   const drawStatusLinePart = (input: ComposerInput) => {
+    statusLineDrawnFor = null;
     statusLine?.dispose();
     statusLineSlot.replaceChildren();
     statusLine = statusLineDraws.draw(
@@ -327,9 +340,77 @@ export function createComposerSurface(
         return { element: view.element, view };
       },
     );
+    statusLineDrawnFor = statusLineFacts(input);
   };
 
   return surface;
+}
+
+// What a status line draw depends on: all of `input` but `isBoxFocused`, which
+// `showBoxFocus` applies in place.
+function statusLineFacts(input: ComposerInput): string {
+  return JSON.stringify({ ...input, isBoxFocused: false });
+}
+
+function showBoxFocus(
+  parts: Pick<StatusLineParts, 'typeHint'>,
+  input: ComposerInput,
+) {
+  parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
+}
+
+// `key`'s part in a new hidden `div.<slotClass>`, which shows while the part has
+// an input to draw; a default that fails is logged once and leaves the slot hidden
+// until the next `redraw`.
+function createDockPart(
+  deps: ComposerSurfaceDeps,
+  key: 'working' | 'workingLine',
+  slotClass: string,
+): DockPart {
+  const slot = element('div', slotClass);
+  slot.hidden = true;
+  const draws = chatPartDraws(deps.layouts, key, deps.log);
+  let part: DrawnPart<BuiltPart<WorkingInput>> | null = null;
+  let isFailed = false;
+
+  const clear = () => {
+    part?.dispose();
+    part = null;
+    slot.replaceChildren();
+    slot.hidden = true;
+  };
+  const draw = (input: WorkingInput | null) => {
+    clear();
+    if (input === null || isFailed) {
+      return;
+    }
+    slot.hidden = false;
+    try {
+      part = draws.draw(slot, (builder, at, rollback) => {
+        const view = builder(at, input, surfaceBaseKit(deps, 'chat', rollback));
+        return { element: view.element, view };
+      });
+    } catch (error) {
+      deps.log(`default layout ${key} failed: ${errorText(error)}`);
+      isFailed = true;
+      clear();
+    }
+  };
+  return {
+    slot,
+    show(input) {
+      const isUpdated =
+        input !== null && part !== null && draws.update(part, input) === 'ran';
+      if (!isUpdated) {
+        draw(input);
+      }
+    },
+    redraw(input) {
+      isFailed = false;
+      draw(input);
+    },
+    dispose: () => part?.dispose(),
+  };
 }
 
 const COMPOSER_PARTS: ContributedPartsPlace = {
@@ -379,7 +460,13 @@ function createStatusLineParts(
   const typeKey = element('span', 'chat-type-key');
   const appendKey = element('span', 'chat-type-key');
   const typeHint = element('span', 'chat-type-hint');
-  typeHint.append(typeKey, appendKey);
+  const nextMessageKey = element('span', 'chat-type-key');
+  const prevMessageKey = element('span', 'chat-type-key');
+  const rangeKey = element('span', 'chat-type-key');
+  const copyKey = element('span', 'chat-type-key');
+  const cursorKeys = element('span', 'chat-cursor-keys');
+  cursorKeys.append(nextMessageKey, prevMessageKey, rangeKey, copyKey);
+  typeHint.append(typeKey, appendKey, cursorKeys);
   const interruptKey = element('span', 'chat-running-key');
   const sendNowKey = element('span', 'chat-running-key');
   const running = element('span', 'chat-running');
@@ -408,6 +495,10 @@ function createStatusLineParts(
       ...scope,
       label: 'to append',
     }),
+    deps.keys.anchor(nextMessageKey, chatCommand('nextMessage'), scope),
+    deps.keys.anchor(prevMessageKey, chatCommand('prevMessage'), scope),
+    deps.keys.anchor(rangeKey, chatCommand('toggleRange'), scope),
+    deps.keys.anchor(copyKey, chatCommand('allowOrCopy'), scope),
     deps.keys.anchor(sendKey, chatCommand('send'), scope),
   ];
   const chipKeys = new Map<ChatCommandName, HTMLElement>();
@@ -440,14 +531,15 @@ function statusLineKit(
   return {
     ...base,
     typeHint(parent) {
-      parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
+      showBoxFocus(parts, input);
       return appended(parent, parts.typeHint);
     },
-    modelEffortChip(parent, { model, effort }) {
-      const value =
-        effort === null ? model.value : `${model.value} · ${effort.value}`;
-      const modelEffortChip = chip(model.label, value, () =>
-        run(chatCommand('pickModel')),
+    modelEffortChip(parent, modelEffort) {
+      const { model, effort } = modelEffort;
+      const modelEffortChip = chip(
+        model.label,
+        modelEffortText(modelEffort),
+        () => run(chatCommand('pickModel')),
       ) as HTMLButtonElement;
       modelEffortChip.disabled = !model.enabled;
       holdKeys(modelEffortChip, 'pickModel');

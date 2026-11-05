@@ -6,6 +6,7 @@ import {
   type SessionControl,
 } from '../../../contracts/agent';
 import type { ScrollStep, TextEditor } from '../../../contracts/editor';
+import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import type { ChatSessionState, SlashCommandContext } from '../contract';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -16,7 +17,7 @@ import {
   putBack,
   sendQueuedNow,
 } from './chat-commands';
-import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
+import type { ChatSession, ChatTabs } from './chat-view';
 import type { ListStop } from './activity-runs';
 import type { EntryListStop, TranscriptScroll } from './entry-list';
 import type { ImageViewer } from './image-viewer';
@@ -62,15 +63,27 @@ const activityStop: ListStop = {
   ],
 };
 
+const pendingPermission: ChatEntry = {
+  id: 'permission-1',
+  at: 1000,
+  kind: 'permission',
+  toolName: 'Bash',
+  input: {},
+  answer: null,
+  raw: [],
+};
+
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 const gif: ChatImage = { mediaType: 'image/gif', data: 'Z2lm' };
 
 // `scrollBy` records each step and direction in `scrolls` and answers with
-// `scroll`; `latest` counts each call in `latest`.
+// `scroll`; `latest` counts each call in `latest`. `stateFields` replace the
+// session state's.
 function session(
   running: boolean,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
+  stateFields: Partial<ChatSessionState> = {},
 ) {
   const counts = {
     scrolls: [] as [ScrollStep, 1 | -1][],
@@ -84,11 +97,15 @@ function session(
     controls: [mode],
     activity: 'working',
     background: 0,
+    activeTime: NO_ACTIVE_TIME,
     commands: [],
     running,
     queued: [],
+    compaction: null,
+    returned: [],
     repo: 'app',
     branch: 'main',
+    ...stateFields,
   };
   const entries = {
     scrollBy(step: ScrollStep, direction: 1 | -1) {
@@ -157,16 +174,21 @@ function box(text: string) {
 // `invoked` records each call to chat main, `opened` each picker request,
 // `viewed` each image viewer opening, `revealed` each session the tabs
 // reveal, `marked` each session the tabs mark sent, `toasts` each toast and
-// `toastTones` its tone. Every invoke
+// `toastTones` its tone, `allowed` each permission entry allowed and `clipboard`
+// each clipboard write. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
-// commands send matches. `close` removes the session from the tabs.
+// commands send matches. Every clipboard write rejects with `clipboardFailure`
+// when one is given. `close` removes the session from the tabs.
 function setUp(
   shown: ChatSession,
   refusal?: Error,
   visible = true,
   slashCommands: SlashCommands = createSlashCommands(),
+  clipboardFailure?: Error,
 ) {
+  const allowed: string[] = [];
+  const clipboard: string[] = [];
   const invoked: unknown[][] = [];
   const opened: PickerRequest<unknown>[] = [];
   const logs: string[] = [];
@@ -199,7 +221,10 @@ function setUp(
           : Promise.reject(refusal);
       },
     } as unknown as ChatCommandDeps['channel'],
-    permissions: {} as PermissionActions,
+    permissions: {
+      allow: (_session, entry) => allowed.push(entry.id),
+      deny: () => undefined,
+    },
     reasonBox: {} as ReasonBox,
     confirm: {} as CloseConfirm,
     picker,
@@ -210,6 +235,12 @@ function setUp(
         viewed.push({ images, index });
       },
     } as ImageViewer,
+    writeClipboard(text) {
+      clipboard.push(text);
+      return clipboardFailure === undefined
+        ? Promise.resolve()
+        : Promise.reject(clipboardFailure);
+    },
     toast: (text, tone) => {
       toasts.push(text);
       toastTones.push(tone);
@@ -219,6 +250,8 @@ function setUp(
   return {
     handlers: chatCommandHandlers(deps),
     deps,
+    allowed,
+    clipboard,
     invoked,
     revealed,
     marked,
@@ -258,13 +291,82 @@ describe('chat commands', () => {
     expect(run.toastTones).toEqual(['error']);
   });
 
-  it('interrupt_runningWorkingSession_interruptsIt', () => {
+  it('stopAll_InvokesMain', async () => {
     const run = setUp(session(true));
 
-    run.handlers.interrupt({});
+    run.handlers.stopAll({});
+    await flush();
 
-    expect(run.invoked).toEqual([['interrupt', 'row-1']]);
+    expect(run.invoked).toEqual([['stopAll']]);
+    expect(run.logs).toEqual(['stopping every session']);
   });
+
+  it('stopAll_Rejects_ToastsError', async () => {
+    const run = setUp(session(true), new Error('host gone'));
+
+    run.handlers.stopAll({});
+    await flush();
+
+    expect(run.invoked).toEqual([['stopAll']]);
+    expect(run.toasts).toEqual(['Sessions not stopped: host gone']);
+    expect(run.toastTones).toEqual(['error']);
+  });
+
+  it.each([
+    {
+      given: 'idle with nothing up',
+      fields: { activity: 'idle' },
+      invoked: [],
+      logs: ['nothing to interrupt in app'],
+    },
+    {
+      given: 'idle with a compaction up',
+      fields: {
+        activity: 'idle',
+        compaction: { trigger: 'app', reason: 'a', startedAt: 1 },
+      },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['interrupted app'],
+    },
+    {
+      given: 'idle with a held row',
+      fields: {
+        activity: 'idle',
+        queued: [
+          {
+            id: 'q-1',
+            text: 'held',
+            images: [],
+            sentEntryId: null,
+            holdReason: 'a',
+          },
+        ],
+      },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['interrupted app'],
+    },
+    {
+      given: 'working',
+      fields: { activity: 'working' },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['interrupted app'],
+    },
+  ] satisfies {
+    given: string;
+    fields: Partial<ChatSessionState>;
+    invoked: string[][];
+    logs: string[];
+  }[])(
+    'interrupt_IdleActivity_InterruptsOnlyWithAHoldOrCompaction: $given',
+    ({ fields, invoked, logs }) => {
+      const run = setUp(session(true, undefined, fields));
+
+      run.handlers.interrupt({});
+
+      expect(run.invoked).toEqual(invoked);
+      expect(run.logs).toEqual(logs);
+    },
+  );
 
   it('pickMode_runningSession_sessionBoundPickerSetsTheChoice', () => {
     const run = setUp(session(true));
@@ -352,7 +454,13 @@ describe('chat commands', () => {
   it('toggleEntry_pendingRow_pullsItBack', () => {
     const entries = focusedOnStop({
       kind: 'queued',
-      message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
+      message: {
+        id: 'q-2',
+        text: 'later',
+        images: [],
+        sentEntryId: null,
+        holdReason: null,
+      },
     });
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
@@ -416,7 +524,13 @@ describe('chat commands', () => {
 
   const pendingStop: EntryListStop = {
     kind: 'queued',
-    message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
+    message: {
+      id: 'q-2',
+      text: 'later',
+      images: [],
+      sentEntryId: null,
+      holdReason: null,
+    },
   };
 
   const unsentRow = { ...pendingStop.message };
@@ -597,6 +711,223 @@ describe('chat commands', () => {
     expect(counts).toEqual({ offered, moves });
     expect(run.logs).toEqual(logs);
   });
+
+  it.each([
+    {
+      command: 'nextMessage',
+      calls: ['moveToMessage 1'],
+      hasStop: true,
+      logs: ['focused activity line'],
+    },
+    {
+      command: 'prevMessage',
+      calls: ['moveToMessage -1'],
+      hasStop: true,
+      logs: ['focused activity line'],
+    },
+    {
+      command: 'toggleRange',
+      calls: ['toggleRange'],
+      hasStop: true,
+      logs: ['toggled the range'],
+    },
+    {
+      command: 'toggleRange',
+      calls: ['toggleRange'],
+      hasStop: false,
+      logs: ['no entries in app'],
+    },
+  ] as const)(
+    '$command calls the list',
+    ({ command, calls, hasStop, logs }) => {
+      const called: string[] = [];
+      const entries = {
+        isAtLastStop: () => true,
+        moveToMessage(step: 1 | -1) {
+          called.push(`moveToMessage ${step}`);
+          return activityStop;
+        },
+        toggleRange() {
+          called.push('toggleRange');
+          return hasStop;
+        },
+      } as Partial<ChatSession['entries']> as ChatSession['entries'];
+      const shown = Object.assign(session(true), {
+        entries,
+        enterStop() {
+          called.push('enterStop');
+          return 'agent-strip.strip';
+        },
+      });
+      const run = setUp(shown);
+
+      run.handlers[command]({});
+
+      expect(called).toEqual(calls);
+      expect(run.logs).toEqual(logs);
+    },
+  );
+
+  it.each([
+    {
+      given: 'an open range',
+      isOpen: true,
+      logs: ['cancelled the range'],
+    },
+    {
+      given: 'no open range',
+      isOpen: false,
+      logs: ['no range to cancel in app'],
+    },
+  ])('cancelRange_$given', ({ isOpen, logs }) => {
+    const called: string[] = [];
+    const entries = {
+      cancelRange() {
+        called.push('cancelRange');
+        return isOpen;
+      },
+    } as Partial<ChatSession['entries']> as ChatSession['entries'];
+    const run = setUp(Object.assign(session(true), { entries }));
+
+    run.handlers.cancelRange({});
+
+    expect(called).toEqual(['cancelRange']);
+    expect(run.logs).toEqual(logs);
+    expect(run.toasts).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'a pending permission',
+      stateEntries: [pendingPermission],
+      isRangeOpen: false,
+      selected: { text: 'kept', blockCount: 1 },
+      failure: undefined,
+      allowed: ['permission-1'],
+      clipboard: [],
+      toasts: [],
+      tones: [],
+      cancels: 0,
+      logs: [],
+    },
+    {
+      given: 'a pending permission and an open range',
+      stateEntries: [pendingPermission],
+      isRangeOpen: true,
+      selected: { text: 'a\n\nb', blockCount: 2 },
+      failure: undefined,
+      allowed: [],
+      clipboard: ['a\n\nb'],
+      toasts: ['Copied 2 blocks'],
+      tones: ['success'],
+      cancels: 1,
+      logs: ['copied 2 blocks in app'],
+    },
+    {
+      given: 'no pending permission and a cursor block',
+      stateEntries: [],
+      isRangeOpen: false,
+      selected: { text: 'one block', blockCount: 1 },
+      failure: undefined,
+      allowed: [],
+      clipboard: ['one block'],
+      toasts: ['Copied 1 block'],
+      tones: ['success'],
+      cancels: 1,
+      logs: ['copied 1 block in app'],
+    },
+    {
+      given: 'an open range of three blocks',
+      stateEntries: [],
+      isRangeOpen: true,
+      selected: { text: 'a\n\nb\n\nc', blockCount: 3 },
+      failure: undefined,
+      allowed: [],
+      clipboard: ['a\n\nb\n\nc'],
+      toasts: ['Copied 3 blocks'],
+      tones: ['success'],
+      cancels: 1,
+      logs: ['copied 3 blocks in app'],
+    },
+    {
+      given: 'an open range and a clipboard write that fails',
+      stateEntries: [],
+      isRangeOpen: true,
+      selected: { text: 'a\n\nb', blockCount: 2 },
+      failure: new Error('denied'),
+      allowed: [],
+      clipboard: ['a\n\nb'],
+      toasts: ['Copy failed'],
+      tones: ['error'],
+      cancels: 0,
+      logs: ['copy failed: denied'],
+    },
+    {
+      given: 'a pending permission and an open range with nothing to copy',
+      stateEntries: [pendingPermission],
+      isRangeOpen: true,
+      selected: null,
+      failure: undefined,
+      allowed: [],
+      clipboard: [],
+      toasts: ['Nothing to copy'],
+      tones: ['info'],
+      cancels: 0,
+      logs: ['nothing to copy'],
+    },
+    {
+      given: 'a stop with nothing to copy',
+      stateEntries: [],
+      isRangeOpen: false,
+      selected: null,
+      failure: undefined,
+      allowed: [],
+      clipboard: [],
+      toasts: [],
+      tones: [],
+      cancels: 0,
+      logs: ['nothing to copy'],
+    },
+  ])(
+    'allowOrCopy_$given',
+    async ({
+      stateEntries,
+      isRangeOpen,
+      selected,
+      failure,
+      allowed,
+      clipboard,
+      toasts,
+      tones,
+      cancels,
+      logs,
+    }) => {
+      let cancelled = 0;
+      const entries = {
+        isRangeOpen: () => isRangeOpen,
+        selectedSource: () => selected,
+        cancelRange() {
+          cancelled++;
+          return true;
+        },
+      } as Partial<ChatSession['entries']> as ChatSession['entries'];
+      const shown = Object.assign(
+        session(true, undefined, { entries: stateEntries }),
+        { entries },
+      );
+      const run = setUp(shown, undefined, true, undefined, failure);
+
+      run.handlers.allowOrCopy({});
+      await flush();
+
+      expect(run.allowed).toEqual(allowed);
+      expect(run.clipboard).toEqual(clipboard);
+      expect(run.toasts).toEqual(toasts);
+      expect(run.toastTones).toEqual(tones);
+      expect(cancelled).toBe(cancels);
+      expect(run.logs).toEqual(logs);
+    },
+  );
 
   it.each([
     {

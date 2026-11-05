@@ -6,6 +6,7 @@ import type {
 import type { Paths } from '../../../contracts/paths';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { ChatSessionState } from '../contract';
+import { isWorkRunning } from '../session-work';
 
 export type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
 
@@ -60,7 +61,7 @@ export function rowActivity(state: {
   if (state.activity === 'waiting') {
     return NEEDS_YOU_ACTIVITY;
   }
-  if (state.activity === 'working' || state.background > 0) {
+  if (isWorkRunning(state)) {
     return WORKING_ACTIVITY;
   }
   if (state.unseen === 'done') {

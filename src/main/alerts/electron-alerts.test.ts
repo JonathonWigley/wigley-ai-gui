@@ -2,13 +2,39 @@ import type { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElectronAlerts } from './electron-alerts';
 
-vi.mock('electron', () => ({
+const DOT = 'dot';
+
+const electron = vi.hoisted(() => ({
   app: {},
-  nativeImage: { createFromBitmap: () => ({}) },
+  nativeImage: { createFromBitmap: () => 'dot' },
   Notification: { isSupported: () => false },
 }));
+vi.mock('electron', () => electron);
 
-describe('createElectronAlerts', () => {
+// A window whose calls throw once it is destroyed, as Electron's do.
+function fakeWindow({ isDestroyed }: { isDestroyed: boolean }) {
+  const calls: unknown[][] = [];
+  const live = () => {
+    if (isDestroyed) {
+      throw new TypeError('Object has been destroyed');
+    }
+  };
+  const window = {
+    isDestroyed: () => isDestroyed,
+    on: () => {},
+    flashFrame(flag: boolean) {
+      live();
+      calls.push(['flashFrame', flag]);
+    },
+    setOverlayIcon(icon: unknown) {
+      live();
+      calls.push(['setOverlayIcon', icon]);
+    },
+  };
+  return { window: window as unknown as BrowserWindow, calls };
+}
+
+describe('createElectronAlerts on Windows', () => {
   const realPlatform = process.platform;
 
   beforeEach(() => {
@@ -19,27 +45,28 @@ describe('createElectronAlerts', () => {
     Object.defineProperty(process, 'platform', { value: realPlatform });
   });
 
-  it.each([
-    { isDestroyed: false, calls: 1 },
-    { isDestroyed: true, calls: 0 },
-  ])(
-    'calls the taskbar $calls time(s) when isDestroyed is $isDestroyed',
-    ({ isDestroyed, calls }) => {
-      const setOverlayIcon = vi.fn();
-      const flashFrame = vi.fn();
-      const window = {
-        on: vi.fn(),
-        isDestroyed: () => isDestroyed,
-        setOverlayIcon,
-        flashFrame,
-      } as unknown as BrowserWindow;
-      const alerts = createElectronAlerts(window, vi.fn());
+  it('destroyedWindow_AnswersWithoutThrowing', () => {
+    const { window, calls } = fakeWindow({ isDestroyed: true });
+    const alerts = createElectronAlerts(window, vi.fn());
 
-      alerts.setOpenCount('forms', 2);
-      alerts.announce('title', 'body', vi.fn());
+    alerts.setOpenCount('forms', 0);
+    alerts.announce('title', 'body', vi.fn());
 
-      expect(setOverlayIcon).toHaveBeenCalledTimes(calls);
-      expect(flashFrame).toHaveBeenCalledTimes(calls);
-    },
-  );
+    expect(calls).toEqual([]);
+  });
+
+  it('liveWindow_UsesTheWindow', () => {
+    const { window, calls } = fakeWindow({ isDestroyed: false });
+    const alerts = createElectronAlerts(window, vi.fn());
+
+    alerts.setOpenCount('forms', 2);
+    alerts.setOpenCount('forms', 0);
+    alerts.announce('title', 'body', vi.fn());
+
+    expect(calls).toEqual([
+      ['setOverlayIcon', DOT],
+      ['setOverlayIcon', null],
+      ['flashFrame', true],
+    ]);
+  });
 });

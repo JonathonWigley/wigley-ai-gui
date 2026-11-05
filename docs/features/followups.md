@@ -46,7 +46,8 @@ Core seams that most items below assume.
 - **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
   (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (forms' on an
   unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Chat stops after
-  forms, so a forms `dispose` that suspends can keep chat's `killAll` from running. Hold the quit until `stopAll`
+  forms, so a forms `dispose` that suspends can keep chat's `detachAll`, and with it the last save, from running (the
+  cut save itself: **A quit can lose a session's open run time**). Hold the quit until `stopAll`
   settles, and prove it in a live quit, which a drive run cannot show because it holds the quit itself. The hold
   changes quit latency, which is why it waits here.
 - **Runtime command API** — *agent-ready*: commands at runtime and around other plugins:
@@ -118,15 +119,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   kept; check that the form service, which reads it once per session in `startSession`
   (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a row to the session-list join tests: GIVEN
   an owned row opened with a null deadline WHEN a relay joins with 300 THEN the session's info reads 300.
-- **One rule for the chat cursor, scroll and keys** — *needs a feature plan*: the chat entry cursor has gathered too
-  many rules (follow the latest, hold an open activity line, land on the newest pending row, fall back to the latest
-  stop when the focused row leaves, scroll-to-bottom following), and they disagree at the edges. Settle exactly how
-  the cursor, scrolling and keyboard input interact. Known case: a cursor following the bottom on an open last run's
-  last step moves up to the run line on any redraw (tool result, new step, turn end, queued change), so Enter
-  collapses the run and `j` restarts at its first step (`src/plugins/chat/page/entry-focus.ts` `focusAfterChange`,
-  `entry-focus.test.ts` row pinning `onLine`). The one-line fix kept in reserve:
-  `focusLatest(isListed ? ids.at(-1) ?? null : lastStopId)`. Source session: Claude Code
-  b8ee3503-3c04-48fc-bd7d-bc4f2ec56c17 in wigley-ai-gui.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
@@ -145,9 +137,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   `usage-tab-line` in its tab line) does not fit at the minimum width. Find what grew it (check recent commits
   touching the sessions tab bar or the usage tab line, such as 4c8a2b0b and 4b7f175a) and make the bar fit or
   scroll. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
-- **Esc in the split's session picker** — *agent-ready*: while the split's "Show session" picker is open, focus stays
-  in the chat editor, so Esc reaches the editor (`<Esc> has no bind in sessions.picker`) and the picker stays open;
-  the picker should take focus when it opens (`openSplitPicker`, `src/plugins/sessions/page/start.ts`).
 - **Window adapter misses page load 1** — *agent-ready*: the window adapter numbers page loads from 1 only because both
   `electronDrivenWindow` calls (`src/main/main.ts` `createWindow`, `src/main/selftest.ts` `startSelfTest`) run in the
   same synchronous pass that starts the first load (`src/main/window.ts` `loadURL`); an `await` added between them
@@ -199,14 +188,98 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Missed rebuild on a rules folder write** — *agent-ready*: in a drive run, a doc written into the temp home's
   `.claude/rules/` from outside the app started no rebuild until Rescan. Check whether the docs watches cover that
   folder or the change was debounced away (`src/plugins/docs/main/view-watches.ts`, which watches one file per view).
-- **Composer status line cut off in a very short Chat tab** — *needs a feature plan*: in a tab under about 318px (a
-  900x360 window, or a pane after `splitDown` at 900x700) the live activity dock (`.chat-working-slot`, `flex-shrink:
-  0`, about 97px), the box and a wrapped status line outgrow the composer's cap, and the status line runs past the
-  tab's bottom. CSS-only shrinking was tried and reverted (d22bc1b5, 9bba64c2): flex shrink is weighted, not ordered,
-  so a shrinkable dock also gave up its lines to a long draft in a tall tab, and its all-or-nothing wrap dropped parts
-  on sub-pixel shares. A dock that measures its room in script (composer-kit hands the default `working` draw a line
-  budget once the composer parts reach 0) would give a strict order; the `ComposerKit.working` contract
-  (`src/plugins/chat/layouts/layout.d.ts`) would then say a user draw gets that budget.
+- **Composer status line cut off in a very short Chat tab** — *needs a feature plan*: the composer's activity slot
+  (`.chat-working-slot`, `flex-shrink: 0`) once held the live activity dock, about 97px, and with the box and a wrapped
+  status line it outgrew the composer's cap in a tab under about 318px (a 900x360 window, or a pane after `splitDown`
+  at 900x700), so the status line ran past the tab's bottom. The dock now draws in the session hub, and the slot holds
+  one activity line, only while the hub is not visible; recheck the cut-off at a short tab before planning. CSS-only
+  shrinking of the dock was tried and reverted (d22bc1b5, 9bba64c2): flex shrink is weighted, not ordered, so a
+  shrinkable dock also gave up its lines to a long draft in a tall tab, and its all-or-nothing wrap dropped parts on
+  sub-pixel shares.
+- **Composer spills past its cap in a short pane** — *needs a feature plan*: `.ui-floating.chat-composer` caps at
+  `max-height: 50%` (`src/plugins/chat/layouts/default/layout.css`) with nothing under it able to scroll enough, so its
+  status line and Send run out of the panel's bottom edge: at 720x600 under `fake: steps`, and at 420x600 under
+  `fake: hold`. The dock now draws in the session hub, and these measurements predate that move; recheck both sizes
+  before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
+  c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
+- **Background subagent misattributed and dropped early** — *needs a feature plan*: two faults a real session showed
+  on 2026-11-03, a haiku background subagent under an Opus main told to run `sleep 90`. Take the first one first; it
+  misattributes who said what. (1) The subagent's replies show in the main transcript as the main agent's: the
+  decoder's text entries read no `parent_tool_use_id` (`decodeTextBlock`, `src/main/claude-code/stream-decoder.ts`).
+  Only a background subagent was seen doing this; check a foreground one. To decide: where a subagent's text belongs,
+  such as its strip box or nowhere. (2) A subagent waiting on its own background shell lost its strip box about 80 s
+  before it really ended, then replied and handed back with no box. The box follows `agentFinished`, which for a
+  launched subagent comes from `task_notification` (`finishByNotification`; `docs/features/agent-chat/claude-stream.md`
+  § its end event notes the measurement). The raw line was not captured, so capture it first. To decide: whether a late
+  reply lists the subagent again, or its box waits for the shells it owns. Source session: Claude Code
+  2294388c-6fcc-4d43-a794-070e11683453 in /Users/jonathonwigley/Documents/ai-dev
+
+- **A quit can lose a session's open run time** — *needs a feature plan*: chat's final save at quit is not waited for
+  (`detachAll`, `chat-sessions.ts`), and `src/main/main.ts` lets the user's quit exit without waiting, so a cut write
+  leaves the last saved total, which can lack the whole span of a long turn. Deciding means choosing between a bounded
+  hold on the quit path and a synchronous write. `docs/features/session-clock/design.md` § Across relaunch states the
+  current behaviour.
+- **`/clear` then relaunch loses the row's selection** — *agent-ready*: select a row, `/clear` it (running or idle),
+  and restart; no row is selected and the main pane says `Pick a session in the side bar`, though
+  `open-sessions.json`'s `selectedHostSessionId` holds the row's new host id. A selected row with no `/clear` stays
+  selected. Seen on the fake harness through a drive `restart`; the cause isn't traced, and it may be fixture-only,
+  since the fake has no saved history for the new id.
+- **Tabs lose their first click in an unfocused pane** — *agent-ready*: the first click on a tab in an unfocused pane
+  focuses the pane but does not select the tab. Pane focus moves on the release, and `drawFrame`
+  (`src/plugins/sessions/page/session-tabs-view.ts`) then rebuilds the strip with `strip.replaceChildren()`, so the
+  released tab leaves the document before its `click`: `pointerup` lands on the tab, `mouseup` on the `NAV`, and no
+  `click` fires. A second click selects it. The bar's other controls (Split right, Close pane) work on the first click.
+  Keep the tab elements across draws. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **Pane focus keys leave the keyboard in the old pane** — *agent-ready*: `Alt+h` from a focused box moves pane focus
+  while `activeElement` stays in the old pane's box (seen: active in slot 1, focused slot 0). A click already moves it
+  (`panePressed`, `src/plugins/sessions/page/start.ts`); give the keys the same treatment. Source session: Claude Code
+  368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **A press on an older selection in an unfocused pane leaves the keys nowhere** — *agent-ready*: `pressedFocusAction`
+  (`src/plugins/sessions/page/pane-sessions.ts`) reads the selection at the release, so it cannot tell one this press
+  began from an older one left in that pane. A press on the selected text keeps nothing (Chromium collapses it at
+  `mouseup`, from memory, not measured) and focus stays at the body; a press on a `preventDefault` target keeps the
+  selection and the box takes no keys. Each costs one extra key; typing never reaches the wrong pane. Read, not driven.
+  Record at the press whether a selection already existed. Source session: Claude Code
+  368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **A re-attach on the real harness reports `Earlier conversation not read: ENOENT`** — *agent-ready*: after a drive
+  `restart` with `--harness claude`, the first transcript entry read that, for
+  `~/.claude/projects/-tmp-claude-session-hub-p3/<id>.jsonl`; later entries stayed. The text comes from
+  `src/plugins/chat/main/chat-sessions.ts`. Cause not traced: one lead is a Claude config folder other than `~/.claude`,
+  which this machine's profile uses. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **The `chat: visuals` self-test step failed once** — *agent-ready*: `v -> [visual] visual overlay showing 2 of 2`
+  (`src/plugins/chat/main/selftest-script.ts`) failed in 1 of 4 filtered runs at 914024cd, with no page reload in the
+  log, then passed twice under `--plugin chat` and once under the same wider filter. The cause isn't traced; a late
+  rest position on the reply's last block is one lead, since `d3ca10c9` had just changed the chat cursor's band move.
+  Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **Skills lists a slash the CLI did not recognise** — *agent-ready*: on the real harness, `/tiny` drew a Skills row
+  `tiny main` while the agent replied that `/tiny` isn't a command in this session. The skill's file was written after
+  the session started, so a loaded skill was not seen doing this. The event source is not traced; start at
+  `foldAgentEvent` (`src/plugins/agents/roster.ts`). Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in
+  wigley-ai-gui.
+- **The message box's vim mode label contradicts `DESIGN.md`** — `DESIGN.md` § Surfaces (the composer) says the box has no
+  mode label because the cursor's shape shows the vim mode, yet `src/renderer/codemirror-vim/codemirror-vim-host.ts`
+  runs `vim({ status: true })`, and a live run shows `--INSERT--`, which stays after focus leaves the box. The doc or
+  the panel is wrong, and the user decides which: drop the panel and keep the doc, or write the label into the doc.
+  Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **A clamped key on a too-tall last block stops following** — *agent-ready*: with the cursor following at the bottom on
+  a last stop taller than the band, `j`, `J` or `k` takes `scrollIntoView({ block: 'nearest' })`, which pulls the list up
+  a few pixels and ends following, so a streaming reply is left behind until `G`. Read from `entry-list.ts`
+  (`scrollsToStop`, `drawFocus`), not yet seen live: force a tall last block, press `G`, `j`, then read `scrollTop` and
+  add an entry. Fix: `scrollsToStop` also requires `!isScrolledToEnd(list, 1)`, with a test row. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **A turn ending in a hidden tab can leave the chat cursor off screen** — *agent-ready*: `latest` skips its band move on a
+  hidden list, and `scrollToFocus` on show fires no scroll when the list is already at the bottom, so over an overflowing
+  open run the bar stays off screen until the next scroll. The window is narrow: a turn ending with no new height. Fix:
+  settle in `scrollToFocus`'s following path. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **`G` from an open run's last step can move the cursor up**: `G`, or a turn end, from the last step of an overflowing
+  open run walks forward from the run's line and lands on the first step in view, while `design.md` says "the nearest step
+  in view". To decide: settle from the last stop in `latest` (recommended, the cursor stays at the end) or keep the
+  documented rule. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **One rule for the chat cursor's scroll exceptions** — *needs a feature plan*: the on-screen rule in `entry-list.ts` was
+  patched in four steps of one run: wholly in the band with a 1px tolerance, a fallback to the nearest overlapping stop,
+  a band move in `latest` for a list that fires no scroll, and a too-tall exception on scrolling a following focus to the
+  bottom; the three items above are the same mechanism again. Each patch was kept rather than stepped back from, because
+  the run's two fix cycles ran out. To decide: whether one settle step run after every programmatic scroll and redraw,
+  owning the band and following together, replaces the scroll event path and these exceptions. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
 
 ## Harness seams
 
@@ -317,6 +390,11 @@ What Windows support and installers need.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers). On the first signed build, check live that a notification click focuses its round:
   an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge).
+- **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
+  (`Operation not permitted`) right after the stable app relaunched, and regained it once the user changed the macOS
+  privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS
+  ties the folder permission to one build and each `npm run install-app` can drop it for every running agent. Confirm
+  the cause, then decide which signing identity `install-app` uses.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
 - **Menu labels by label** — *agent-ready*: the app menu labels commands by `label`, not id
@@ -402,10 +480,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 
 User-facing features, those other work builds on first.
 
-- **Keep sessions running when the app closes** — *needs a feature plan*: closing the app stops every running
-  session (chat main's `dispose` calls `chat.killAll()` on quit, `src/plugins/chat/main/start.ts`). The user wants
-  running sessions to carry on to their turn end, so updating the app and restarting it does not cancel work in
-  progress; if there is a better way to reach that goal, propose it.
 - **Chat holds a scrolled-up position and shows a "new messages" bubble** — *needs a feature plan*: the transcript
   jumps to the bottom only while the user is already there. Scrolled up, the user's position holds through every
   new entry, streaming text and resize, and a "new messages" bubble floats at the bottom of the transcript, above
@@ -414,7 +488,7 @@ User-facing features, those other work builds on first.
   `src/plugins/chat/page/entry-list.ts`), but nothing shows that new entries arrived below. Open for the plan: what
   counts as new (an entry, an assistant message only, or streaming growth too), whether the bubble shows a count,
   its key binding, and its draw through the chat layout contract (`src/plugins/chat/layouts/layout.d.ts`). Settle it
-  with **One rule for the chat cursor, scroll and keys** (Bugs seen in use), which covers the same following rule.
+  with `focusAfterChange` in `src/plugins/chat/page/entry-focus.ts`, which holds the following rule.
 - **Command palette and fuzzy finders** — *needs a feature plan*: a command palette, and `Space f f` (find a file) and
   `Space f s` (search text), all ranked by the `FuzzyMatcher` page service (Foundations; `docs/keymap.md` reserves
   the keys). Builds on the runtime command API (command labels) and the core picker service. Deferred from the docs
@@ -461,6 +535,10 @@ User-facing features, those other work builds on first.
   fixing-accessibility and fixing-motion-performance (MIT) and Impeccable's critique, audit, polish and quieter
   guidance (Apache-2.0; keep notices) into wigley skills that read a project's `DESIGN.md`, dropping the detector
   CLI. Plan it in that repo.
+
+- **Usage's cache mark has no preview route** — *needs a feature plan*: `rowCache` draws nothing without a cache expiry,
+  and no `Space z l` sample holds usage, so a usage layout author cannot see the mark in the app. Decide between a usage
+  preview and seeding chat's preview session (`AGENTS.md`: a view needing agent data has a preview sample).
 
 ## Code cleanup
 
@@ -543,6 +621,11 @@ Duplication and drift with no user-visible defect.
   default object drew (e.g. `drewBundled` on `DrawnPart`) and use it in chat, so the rule lives in one place.
   Source session: Claude Code eb4e38a7-3b4f-4519-a0f6-31da367ff30f in /Users/jonathonwigley/Documents/ai-dev.
 
+- **One shared tick and one shared `fakeTimers`** — *agent-ready*: the block "one pending one-shot, set while needed,
+  clear when not" has four copies (`grep pendingTick`: `chat/page/row-clock.ts`, `agent-strip/page/agent-strip.ts`,
+  `workflow/page/workflow-view.ts`, `agent-lines/page/working-lines.ts`). The `fakeTimers` test helper has eight
+  (`grep 'fakeTimers ='`). Give each one home in `src/shared`.
+
 ## Latent defects and tests
 
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
@@ -578,13 +661,14 @@ because the earlier items rewrite many of these tests anyway.
   dialog, settings view), and `keys.setScope` leaves its base behind. Same trigger as the item above.
 - **A disposed layout preview still opens** — after `dispose`, the layout preview's `show` can open a preview, because
   it does not check. Make a disposed service refuse, as `track` does for a registration made after the stop.
-- **A throwing teardown step skips the rest** — *agent-ready*: these remain plain sequences: chat's `killAll` (a
-  throwing `kill` cannot happen today), `disposeAnchors`, `dispose` in the docs view, and the sessions tabs view's
+- **A throwing teardown step skips the rest** — *agent-ready*: these remain plain sequences: chat's `detachAll` (a
+  throwing `detach` or `kill` cannot happen today), `disposeAnchors`, `dispose` in the docs view, and the sessions tabs view's
   `drop`, `disposeText` and `disposeTabs`, where a throw leaves a half-disposed frame in the map. Run the remaining steps
   through `callEach`, the way `Registrations.dispose` does. Grep every plain teardown sequence in one pass: the fixes so
   far patched sites as each review found them.
-- **A sessions view's dispose leaves the side bar** — `SessionsView.dispose` covers the pane tree and tabs and does not
-  dispose the side bar or its rows. Check every view's `dispose` against what it drew in one pass, for the same reason.
+- **Every view's dispose against what it drew** — *agent-ready*: the sessions side bar and the gallery's drag reorder
+  each outlasted their view's `dispose` until fixed one at a time. Check every view's `dispose` against what it drew in
+  one pass, for the same reason.
 - **The part harness's fakes drift from their contracts** — *agent-ready*: three review rounds each found a fake that
   dropped a throw its contract states; the fake markdown's fence list still lacks the renderer's built-in `diff`. A
   contract row suite run against both fake and real, as `files-contract.test-support.ts` does, would end the site-by-site
@@ -666,3 +750,82 @@ because the earlier items rewrite many of these tests anyway.
   `src/plugins/workflow/layouts/default/layout.test.ts:117`, `src/plugins/workflow/main/flow-store.test.ts:87` and
   `src/main/drive/drive-commands.test.ts:131` and `:152`. Fix as the note says: each row carries its whole name, and
   the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
+- **Hosted process reads busy with no way out** — *needs a feature plan*: a process that reads busy leaves only on a
+  `result`. Reached by a background subagent's `assistant` line after `result`, then an interrupt that prints no
+  `result`, then a quit: the keep window never arms, a drain never finishes, and process and host run on. A crossing
+  `user` line also reads idle at the earlier `result` until the first `stream_event`, which matters only under a drain
+  or a window of 0. To decide: bound the busy state while no app is connected, weighed against long silent tools, after
+  measuring what Claude prints after an interrupt. Mechanism: turn state read from pipe lines
+  (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE`), stacked on twice (`73bdb0c8` ignored lists, `540fb434` busy
+  lists, which the user chose as the step back). Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in
+  wigley-ai-gui.
+- **One rule for returning a dropped message once** — *needs a feature plan*: `clear` silently loses a message a replay
+  left held, since the row has moved to a new process when the harness reports it at close (`chat-sessions.ts` `clear`,
+  `claude-code-harness.ts` close). A resume that attaches has no `returnedDrops`, so its replay returns placed messages
+  again, and `takeOverSkipped` discards a skipped record's list. A message whose process ended while the app was away is
+  still lost, since its attach is null. Mechanism: a per-process saved dedupe list, patched in `675e5b1c` and
+  `b66b3f02`; these want one rule, not a third patch. Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345
+  in wigley-ai-gui.
+- **Drive quit should wait on the host's actual end** — *agent-ready*: the refusal of a plain `quit` on a kept run
+  checks once, before `stop`. A plain `quit` during a kept quit's hold, or one ended by SIGTERM, still deletes a run's
+  folders under a live host (`scripts/drive.mts`, `removeQuitEntries`). `removeIdleRuns` can also delete a kept run's
+  folder while its host runs, and `kept` means only that a home and `start.json` exist, so it covers a crashed run too.
+  A bounded wait for the host to go, then a refusal, is the likely shape. Source session: Claude Code
+  4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
+- **Codex tool timeout cannot fit a wait that restarts** — *needs a feature plan*: a re-sent call gets a fresh deadline
+  from the new app, so a round open before a drop costs its time plus up to 75 s plus 240 s, past `tool_timeout_sec`
+  330. Stated as a limit in the forms README. To decide: carry the time left through the relay, or accept it, since
+  `collect_last_round` recovers the round. Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in
+  wigley-ai-gui.
+- **Two hosts on one channel** — *agent-ready*: the check-then-listen at
+  `src/shared/local-channel/local-channel.ts:91-102` lets two hosts listen, and a socket file gone lets a second start
+  beside a live one. Reaping is safe since `30af5c3e`, but the older host's `shutDown` can remove the newer one's socket
+  and record, and the newer one renames the older's log and sweeps its pipe logs. A lock around listening and acting
+  only on a record still its own are the likely shape. Stated as a limit in `docs/features/session-host/design.md`.
+  Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
+- **An idle harness compaction cannot be interrupted** — *needs a feature plan*: it opens no turn, so `interrupt()` does
+  nothing while the chip shows compacting and `compact()` would queue a second (`src/main/claude-code/claude-code-harness.ts`).
+  It cannot happen until an idle compaction is seen under the app's flags (`docs/features/agent-chat/claude-stream.md`
+  § Idle compaction); measure that shape, then treat an unended compaction as busy in both calls. Source session: Claude
+  Code c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
+- **Docs tab's first show has no test** — *agent-ready*: `handle.shown` runs `showFirstTime`
+  (`src/plugins/docs/page/start.ts`), which runs `loadIndex` (`docs-view.ts`). The forms self-test used to pin it live
+  through its `y` step, and now presses `R`, because rows draw in no fixed order and an earlier step can pass the Codex
+  row first. No test creates `createDocsView` (about 20 deps) and `page/start.ts` has no test, so a pin needs a small
+  seam first. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
+- **Chat self-test steps by single presses** — *agent-ready*: rows draw most recent first and rows opened in one
+  millisecond tie, so the chat script's single `<A-S-o>` and `<A-S-i>` steps between its two rows may land elsewhere.
+  It passes today and was not audited for ties or rows left open. Forms' `stepToRow` and sessions' `stepNextTo` hold
+  the shape, and could become one shared helper. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in
+  wigley-ai-gui.
+- **Sessions header wraps at the side bar's least width** — *agent-ready*: `Sessions` draws as `Session` / `s` at
+  160 px in the default layout. Its markup predates the session groups work. Source session: Claude Code
+  e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
+- **Preview's sample statuses read as chat's** — *agent-ready*: `PREVIEW_STATUSES` in
+  `src/plugins/sessions/page/preview.ts` holds `working` and `waiting for permission`, though chat no longer sends a
+  status and a row's second line now shows only a form's or primer's. Source session: Claude Code
+  e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
+- **The session clock counts a machine's sleep** — *needs a feature plan*: spans are wall-clock (`src/shared/active-time.ts`),
+  so a lid closed during a turn or background work adds the whole sleep to the row's run time. Fixing it needs a power
+  signal in chat main, or a cap on a span's gap.
+- **Side swap prompt draws over content** — *needs a decision*: `.session-pane-edge.is-left` and `.is-right` in
+  `src/plugins/sessions/page/sessions.css` sit at z-index 2 with no inset, while the up and down prompts reserve one.
+  In a split the prompt can cover a side pane row while hints show. The choices are an inset, which narrows the pane,
+  or moving the prompt. Source session: Claude Code 38d42f6d-8deb-450b-9655-d83e50e050c4 in wigley-ai-gui.
+- **Esc on a new split's Folder picker leaves an empty pane** — *agent-ready*: choosing New session then Esc on the
+  Folder picker leaves the split open and empty, while Esc on Show session cancels the split. Seen in a drive run;
+  whether it predates that run's work was not checked. Source session: Claude Code
+  38d42f6d-8deb-450b-9655-d83e50e050c4 in wigley-ai-gui.
+- **Self-test has no click step** — *agent-ready*: `SelfTestStep` drives keys and file writes only
+  (`src/contracts/plugin.ts`, `src/main/selftest-runner.ts`), so a first click in an unfocused pane is proved only by
+  drive runs and the `sessionsView_FocusChange_KeepsPartWithUpdate` rows. Add a click step, then a step in chat's
+  `session hub` group that clicks a head in an unfocused pane and expects its collapse log. Source session: Claude Code
+  368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **A row's id changes across an app relaunch, so a re-attached session's `/clear` loses its pool claim** — *needs a
+  feature plan*: once the `unity-pool` plugin lands, the launcher sets `WIGLEY_SESSION_ROW` to the row's app id
+  (`AgentStart.rowId`). Chat reopens each saved row through `sessions.open`, which makes a new `randomHex()` id
+  (`src/plugins/sessions/main/session-list.ts`). A process the session host kept running and chat re-attached keeps
+  the old id in its environment. Its first `/clear` hands off under the old row id and starts the new process under
+  the new one. The pool then misses the handoff, and the claim falls back to the expiry rules
+  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id. To
+  decide: keep a row's app id across relaunch, or have `/clear` pass the old row id to the new process.

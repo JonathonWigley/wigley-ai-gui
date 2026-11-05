@@ -1,20 +1,24 @@
 // `npm run install-app -- [--ref <ref>]`: packages a committed ref in a
 // build-only worktree beside the repo and installs it as the stable app: it
-// copies the app beside the install while the stable app still runs, then
-// quits that app, swaps the copy in, and starts the app again when it was
-// running, even after a failed swap, on whichever version is then installed.
+// copies the app beside the install while the stable app still runs, then quits
+// that app, moves the copy in, and starts the app again when it was running,
+// even after a failed move, on whichever version is then installed. On macOS the
+// copy swaps in for the installed bundle; on Windows each commit keeps its own
+// `app-<short sha>` folder, since a running session host locks its exe's folder.
 // The build bakes in this clone's path, never the build worktree's, so the
 // stable app reads each live default layout from this clone.
-// `scripts/install-steps.mts` holds the paths and the argument parsing.
+// `scripts/install-steps.mts` holds the decisions made from inputs alone.
 import { type SpawnSyncOptions, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -22,29 +26,113 @@ import { setTimeout as wait } from 'node:timers/promises';
 import {
   type InstallPaths,
   installPaths,
+  installRootCleanup,
   isInstallDue,
+  isStableAppProcess,
+  type ListedProcess,
   parseInstallArgs,
+  parseMacProcessList,
+  parseWindowsProcessList,
+  processesToQuit,
+  type StableProcess,
 } from './install-steps.mts';
 
 const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const LOCK_HASH_FILE = '.install-app-lock-hash';
 const QUIT_TIMEOUT_MS = 15_000;
 const POLL_MS = 500;
-// Windows refuses a rename with these codes for a moment after the app's
-// processes exit, while their handles release.
+// Windows refuses a rename or a delete with these codes for a moment after the
+// app's processes exit, while their handles release.
 const RENAME_RETRY_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 const RENAME_ATTEMPTS = 10;
 const RENAME_RETRY_MS = 250;
 const IS_WINDOWS = process.platform === 'win32';
 
 async function main(ref: string): Promise<void> {
+  const commit = resolveCommit(ref);
   const paths = installPaths(
     process.platform,
     process.arch,
     REPO_DIR,
     process.env,
+    commit,
   );
-  const commit = resolveCommit(ref);
+  if (IS_WINDOWS) {
+    await installOnWindows(paths, ref, commit);
+  } else {
+    await installOnMac(paths, commit);
+  }
+  console.log(`Installed ${ref} (${commit})`);
+  console.log(paths.installDir);
+}
+
+async function installOnMac(
+  paths: InstallPaths,
+  commit: string,
+): Promise<void> {
+  packageApp(paths, commit);
+  stageInstall(paths);
+  const running = stableProcessesToQuit(paths);
+  const wasRunning = running.length > 0;
+  if (wasRunning) {
+    await quitStableApp(paths, running);
+  }
+  try {
+    try {
+      await swapInStagedInstall(paths);
+    } catch (error) {
+      throw new Error(
+        `Replacing ${paths.installDir} failed: ${errorMessage(error)}`,
+      );
+    }
+  } finally {
+    if (wasRunning) {
+      startMacApp(paths.installDir);
+    }
+  }
+}
+
+// A folder reaches installDir only through the rename out of staging, so one
+// that exists is complete and is reused without packaging. The app starts again
+// before the root is cleaned, because deleting older folders can take seconds
+// and a relay holding a call is waiting on the app's channel.
+async function installOnWindows(
+  paths: InstallPaths,
+  ref: string,
+  commit: string,
+): Promise<void> {
+  const isAlreadyInstalled = existsSync(paths.installDir);
+  if (isAlreadyInstalled) {
+    console.log(
+      `${ref} (${commit}) is already installed; reusing ${paths.installDir}`,
+    );
+  } else {
+    packageApp(paths, commit);
+    stageInstall(paths);
+  }
+  const toQuit = stableProcessesToQuit(paths);
+  if (toQuit.length > 0) {
+    await quitStableApp(paths, toQuit);
+  }
+  try {
+    if (!isAlreadyInstalled) {
+      await moveStagedInstall(paths);
+    }
+    const now = new Date();
+    utimesSync(paths.installDir, now, now);
+    writeShortcut(paths);
+  } finally {
+    if (toQuit.length > 0) {
+      startWindowsApp(
+        existsSync(paths.binary) ? paths.binary : toQuit[0].executable,
+      );
+    }
+  }
+  await cleanInstallRoot(paths);
+}
+
+// Checks out `commit` in the build worktree and packages it there.
+function packageApp(paths: InstallPaths, commit: string): void {
   checkOutBuildWorktree(paths.buildDir, commit);
   installDependenciesWhenDue(paths.buildDir);
   runNpmStep('npm run package', paths.buildDir, {
@@ -54,35 +142,6 @@ async function main(ref: string): Promise<void> {
   if (!existsSync(paths.packagedApp)) {
     throw new Error(`npm run package left no app at ${paths.packagedApp}`);
   }
-  try {
-    stageInstall(paths.packagedApp, paths.installDir);
-  } catch (error) {
-    throw new Error(
-      `Staging the app beside ${paths.installDir} failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  const wasRunning = runningStablePids(paths.binary).length > 0;
-  if (wasRunning) {
-    await quitStableApp(paths);
-  }
-  try {
-    try {
-      await swapInStagedInstall(paths.installDir);
-    } catch (error) {
-      throw new Error(
-        `Replacing ${paths.installDir} failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-    if (paths.shortcut !== null) {
-      writeShortcut(paths);
-    }
-  } finally {
-    if (wasRunning) {
-      startStableApp(paths);
-    }
-  }
-  console.log(`Installed ${ref} (${commit})`);
-  console.log(paths.installDir);
 }
 
 // Runs one step's command and returns its output; throws naming the step and
@@ -177,47 +236,68 @@ function installDependenciesWhenDue(buildDir: string): void {
   writeFileSync(hashFile, lockHash);
 }
 
-// The pids running the installed binary. Matched by path, not by name, so a
-// packaged drive run from `out/` is left alone. On Windows every Electron
-// process of the app runs from that path, so a running app has several; on
-// macOS the helpers run from their own bundles, so only the main process
-// matches, and waiting on it is enough.
-function runningStablePids(binary: string): number[] {
-  if (IS_WINDOWS) {
-    const output = runStep('Finding the stable app', 'powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      `${stableProcessesScript(binary)} | ForEach-Object { $_.Id }`,
-    ]);
-    return pidsOf(output);
-  }
-  const result = spawnSync('pgrep', ['-f', `^${escapeRegExp(binary)}`], {
-    encoding: 'utf8',
-  });
-  // pgrep exits 1 when nothing matches.
-  if (result.status === 1) {
-    return [];
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `Finding the stable app exited ${result.status}:\n${result.stderr}`,
-    );
-  }
-  return pidsOf(result.stdout);
+// The processes of the stable app: never a session host, and never a packaged
+// drive run from `out/`. On Windows every Electron process of the app runs the
+// exe, so a running app has several; on macOS the helpers run from their own
+// bundles, so only the main process matches, and waiting on it is enough.
+function runningStableProcesses(paths: InstallPaths): StableProcess[] {
+  const listed = IS_WINDOWS ? listWindowsProcesses() : listMacProcesses();
+  return listed.filter((listedProcess) =>
+    isStableAppProcess(
+      process.platform,
+      paths,
+      listedProcess.executable,
+      listedProcess.commandLine,
+    ),
+  );
 }
 
-// Asks the stable app to quit and waits for every process of it to exit.
-// Never force-kills: the app holds the user's open rounds.
-async function quitStableApp(paths: InstallPaths): Promise<void> {
+function stableProcessesToQuit(paths: InstallPaths): StableProcess[] {
+  return processesToQuit(
+    process.platform,
+    paths,
+    runningStableProcesses(paths),
+  );
+}
+
+// Every running wigley-ai-gui.exe. PowerShell writes UTF-8 with no byte order
+// mark because Node reads the paths it prints.
+function listWindowsProcesses(): ListedProcess[] {
+  const output = runStep('Finding the stable app', 'powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; Get-CimInstance Win32_Process -Filter ${powerShellString("Name = 'wigley-ai-gui.exe'")} | ForEach-Object { ($_.ProcessId, $_.ExecutablePath, $_.CommandLine) -join [char]9 }`,
+  ]);
+  return parseWindowsProcessList(output);
+}
+
+// Every running process; `ww` keeps `ps` from cutting the command line.
+function listMacProcesses(): ListedProcess[] {
+  const output = runStep('Finding the stable app', 'ps', [
+    '-axww',
+    '-o',
+    'pid=,args=',
+  ]);
+  return parseMacProcessList(output);
+}
+
+// Asks the stable app's `processes` to quit and waits for them to exit. Never
+// force-kills: the app holds the user's open rounds.
+async function quitStableApp(
+  paths: InstallPaths,
+  processes: readonly StableProcess[],
+): Promise<void> {
   if (IS_WINDOWS) {
-    // Only the main process has a window; closing it quits the app. A process
-    // that exits before its close call throws there, so the call is caught.
+    // Only the main process has a window; closing it quits the app. A pid that
+    // exited before this script reads it is not a failure, nor is one that
+    // exits before its close call, which throws there.
+    const pids = processes.map(({ pid }) => pid).join(',');
     runStep('Quitting the stable app', 'powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `${stableProcessesScript(paths.binary)} | ForEach-Object { try { [void]$_.CloseMainWindow() } catch {} }`,
+      `Get-Process -Id ${pids} -ErrorAction SilentlyContinue | ForEach-Object { try { [void]$_.CloseMainWindow() } catch {} }; exit 0`,
     ]);
   } else {
     runStep('Quitting the stable app', 'osascript', [
@@ -226,7 +306,7 @@ async function quitStableApp(paths: InstallPaths): Promise<void> {
     ]);
   }
   const deadline = Date.now() + QUIT_TIMEOUT_MS;
-  while (runningStablePids(paths.binary).length > 0) {
+  while (stableProcessesToQuit(paths).length > 0) {
     if (Date.now() > deadline) {
       throw new Error(
         `The stable app did not quit within ${QUIT_TIMEOUT_MS / 1000} s; quit it and run install-app again. Nothing was installed.`,
@@ -236,37 +316,122 @@ async function quitStableApp(paths: InstallPaths): Promise<void> {
   }
 }
 
-// Copies the packaged app beside the install as `<installDir>.new`, leaving
-// the installed app untouched, so it may still be running. A `.new` or `.old`
-// left by an earlier failed run is deleted first.
-function stageInstall(packagedApp: string, installDir: string): void {
-  const newDir = `${installDir}.new`;
-  rmSync(newDir, { recursive: true, force: true });
-  rmSync(`${installDir}.old`, { recursive: true, force: true });
-  mkdirSync(path.dirname(installDir), { recursive: true });
-  if (IS_WINDOWS) {
-    cpSync(packagedApp, newDir, { recursive: true });
-  } else {
-    // ditto keeps the bundle's symlinks.
-    runStep('Copying the app', 'ditto', [packagedApp, newDir]);
+// Copies the packaged app to `stagingDir`, leaving the installed app untouched,
+// so it may still be running. A copy, or on macOS a `.old`, left by an earlier
+// failed run is deleted first.
+function stageInstall(paths: InstallPaths): void {
+  try {
+    rmSync(paths.stagingDir, { recursive: true, force: true });
+    mkdirSync(path.dirname(paths.stagingDir), { recursive: true });
+    if (IS_WINDOWS) {
+      cpSync(paths.packagedApp, paths.stagingDir, { recursive: true });
+    } else {
+      rmSync(`${paths.installDir}.old`, { recursive: true, force: true });
+      // ditto keeps the bundle's symlinks.
+      runStep('Copying the app', 'ditto', [
+        paths.packagedApp,
+        paths.stagingDir,
+      ]);
+    }
+  } catch (error) {
+    throw new Error(
+      `Staging the app at ${paths.stagingDir} failed: ${errorMessage(error)}`,
+    );
   }
 }
 
-// Swaps the app `stageInstall` left at `<installDir>.new` in for the installed
-// one, which must no longer be running: renames the installed app to `.old`,
-// the staged one into its place, then deletes `.old`. When the staged app
-// cannot move in, the installed one is renamed back before the error is
-// rethrown. A `.old` that cannot be deleted only warns, since the swap is done
-// and the next run's `stageInstall` deletes it.
-async function swapInStagedInstall(installDir: string): Promise<void> {
-  const newDir = `${installDir}.new`;
+// Renames the staged app to installDir; a failure leaves the previous version
+// installed.
+async function moveStagedInstall(paths: InstallPaths): Promise<void> {
+  try {
+    await renameRetrying(paths.stagingDir, paths.installDir);
+  } catch (error) {
+    throw new Error(
+      `Moving the staged app to ${paths.installDir} failed: ${errorMessage(error)}`,
+    );
+  }
+}
+
+// Deletes what the install root holds beyond installDir, and the flat scheme's
+// `.new` and `.old` siblings. Leftovers go first, so an old `deleting-*` folder
+// cannot block the rename of the `app-*` folder it came from. The install is
+// done by now, so every failure only warns.
+async function cleanInstallRoot(paths: InstallPaths): Promise<void> {
+  const installRoot = paths.installRoot ?? '';
+  try {
+    const { olderAppFolders, leftovers } = installRootCleanup(
+      readdirSync(installRoot),
+      path.basename(paths.installDir),
+    );
+    for (const leftover of [
+      ...leftovers.map((name) => path.join(installRoot, name)),
+      `${installRoot}.new`,
+      `${installRoot}.old`,
+    ]) {
+      removeOrWarn(leftover);
+    }
+    for (const name of olderAppFolders) {
+      await deleteOlderAppFolder(installRoot, name);
+    }
+  } catch (error) {
+    console.warn(`Cleaning ${installRoot} failed: ${errorMessage(error)}`);
+  }
+}
+
+// Windows refuses to rename a folder holding a running exe, so the rename is the
+// lock check; a partial rmSync could delete files a running host still loads.
+async function deleteOlderAppFolder(
+  installRoot: string,
+  name: string,
+): Promise<void> {
+  const folder = path.join(installRoot, name);
+  const deleting = path.join(installRoot, `deleting-${name}`);
+  try {
+    await renameRetrying(folder, deleting);
+  } catch (error) {
+    console.warn(
+      `Keeping ${folder}: a running process holds it, most likely the session host of that version; the next install-app run deletes it (${errorMessage(error)})`,
+    );
+    return;
+  }
+  if (removeOrWarn(deleting)) {
+    console.log(`Deleted ${name}`);
+  }
+}
+
+// Whether `target` is gone; a failure names the path and the next run retries it.
+function removeOrWarn(target: string): boolean {
+  try {
+    rmSync(target, {
+      recursive: true,
+      force: true,
+      maxRetries: RENAME_ATTEMPTS - 1,
+      retryDelay: RENAME_RETRY_MS,
+    });
+    return true;
+  } catch (error) {
+    console.warn(
+      `Deleting ${target} failed; the next install-app run deletes it: ${errorMessage(error)}`,
+    );
+    return false;
+  }
+}
+
+// Swaps the app `stageInstall` left at `stagingDir` in for the installed one,
+// which must no longer be running: renames the installed app to `.old`, the
+// staged one into its place, then deletes `.old`. When the staged app cannot
+// move in, the installed one is renamed back before the error is rethrown. A
+// `.old` that cannot be deleted only warns, since the swap is done and the next
+// run's `stageInstall` deletes it.
+async function swapInStagedInstall(paths: InstallPaths): Promise<void> {
+  const { installDir, stagingDir } = paths;
   const oldDir = `${installDir}.old`;
   const hadInstall = existsSync(installDir);
   if (hadInstall) {
     await renameRetrying(installDir, oldDir);
   }
   try {
-    await renameRetrying(newDir, installDir);
+    await renameRetrying(stagingDir, installDir);
   } catch (error) {
     if (hadInstall) {
       await restoreOldInstall(oldDir, installDir, error);
@@ -277,7 +442,7 @@ async function swapInStagedInstall(installDir: string): Promise<void> {
     rmSync(oldDir, { recursive: true, force: true });
   } catch (error) {
     console.warn(
-      `Deleting the previous app at ${oldDir} failed, so it is left there for the next install-app run to delete: ${error instanceof Error ? error.message : String(error)}`,
+      `Deleting the previous app at ${oldDir} failed, so it is left there for the next install-app run to delete: ${errorMessage(error)}`,
     );
   }
 }
@@ -294,7 +459,7 @@ async function restoreOldInstall(
     await renameRetrying(oldDir, installDir);
   } catch (restoreError) {
     throw new Error(
-      `${swapError instanceof Error ? swapError.message : String(swapError)}; renaming the previous app back also failed, so it is at ${oldDir}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`,
+      `${errorMessage(swapError)}; renaming the previous app back also failed, so it is at ${oldDir}: ${errorMessage(restoreError)}`,
     );
   }
 }
@@ -333,23 +498,24 @@ function writeShortcut(paths: InstallPaths): void {
   ]);
 }
 
-// Starts the installed app detached from this script, in the install folder
-// as the Start menu shortcut does; macOS's `open` hands the launch to
-// LaunchServices, which sets the app's working folder itself. A failed start
-// is printed and fails the run's exit code but is never thrown, so it cannot
-// hide a failed swap's error.
-function startStableApp(paths: InstallPaths): void {
-  if (!IS_WINDOWS) {
-    try {
-      runStep('Starting the stable app', 'open', [paths.installDir]);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-    return;
+// macOS's `open` hands the launch to LaunchServices, which sets the app's working
+// folder itself. A failed start is printed and fails the run's exit code but is
+// never thrown, so it cannot hide a failed swap's error.
+function startMacApp(installDir: string): void {
+  try {
+    runStep('Starting the stable app', 'open', [installDir]);
+  } catch (error) {
+    console.error(errorMessage(error));
+    process.exitCode = 1;
   }
-  const child = spawn(paths.binary, [], {
-    cwd: paths.installDir,
+}
+
+// Starts `binary` detached from this script, in its own folder as the Start menu
+// shortcut does. A failed start is printed and fails the run's exit code but is
+// never thrown, so it cannot hide a failed move's error.
+function startWindowsApp(binary: string): void {
+  const child = spawn(binary, [], {
+    cwd: path.dirname(binary),
     detached: true,
     stdio: 'ignore',
   });
@@ -361,33 +527,18 @@ function startStableApp(paths: InstallPaths): void {
   child.unref();
 }
 
-// PowerShell that pipes out the processes running `binary`, none when no
-// wigley-ai-gui process runs. Get-Process throws ProcessCommandException when
-// the name matches nothing, which reads as none; under `Stop` any other error
-// ends the script with exit code 1.
-function stableProcessesScript(binary: string): string {
-  return `$ErrorActionPreference = 'Stop'; $found = try { Get-Process -Name wigley-ai-gui } catch [Microsoft.PowerShell.Commands.ProcessCommandException] { @() }; $found | Where-Object Path -eq ${powerShellString(binary)}`;
-}
-
 // A PowerShell single-quoted string, which expands nothing; `'` doubles.
 function powerShellString(text: string): string {
   return `'${text.replaceAll("'", "''")}'`;
 }
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function pidsOf(output: string): number[] {
-  return output
-    .split(/\s+/)
-    .filter((line) => line !== '')
-    .map(Number);
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 try {
   await main(parseInstallArgs(process.argv.slice(2)).ref);
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exitCode = 1;
 }

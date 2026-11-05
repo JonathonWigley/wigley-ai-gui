@@ -5,10 +5,13 @@ import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import type {
   CompleteLayout,
+  ContextLineInput,
   DetailsInput,
   Layout,
+  RowCacheInput,
   RowLineInput,
   SessionLineInput,
+  SpendLineInput,
   StatusLineInput,
 } from '../../layouts/layout';
 import { usageManifest } from '../../manifest';
@@ -34,7 +37,10 @@ export interface UsagePartsDeps {
 export interface UsageParts {
   statusLine(parent: HTMLElement, input: StatusLineInput): Drawn;
   sessionLine(parent: HTMLElement, input: SessionLineInput): Drawn;
+  contextLine(parent: HTMLElement, input: ContextLineInput): Drawn;
+  spendLine(parent: HTMLElement, input: SpendLineInput): Drawn;
   rowLine(parent: HTMLElement, input: RowLineInput): Drawn;
+  rowCache(parent: HTMLElement, input: RowCacheInput): Drawn;
   details(parent: HTMLElement, input: DetailsInput): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
@@ -83,9 +89,24 @@ export function createUsageParts(deps: UsagePartsDeps): UsageParts {
         sessionLine(slot, input, createUsageKit(deps.kit, rollback)),
       );
     },
+    contextLine(parent, input) {
+      return draw('contextLine', parent, (contextLine, slot, rollback) =>
+        contextLine(slot, input, createUsageKit(deps.kit, rollback)),
+      );
+    },
+    spendLine(parent, input) {
+      return draw('spendLine', parent, (spendLine, slot, rollback) =>
+        spendLine(slot, input, createUsageKit(deps.kit, rollback)),
+      );
+    },
     rowLine(parent, input) {
       return draw('rowLine', parent, (rowLine, slot, rollback) =>
         rowLine(slot, input, createUsageKit(deps.kit, rollback)),
+      );
+    },
+    rowCache(parent, input) {
+      return draw('rowCache', parent, (rowCache, slot, rollback) =>
+        rowCache(slot, input, createUsageKit(deps.kit, rollback)),
       );
     },
     details(parent, input) {

@@ -1,13 +1,9 @@
-import {
-  contextBridge,
-  ipcRenderer,
-  type IpcRendererEvent,
-  webUtils,
-} from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
+import { createPluginMessageSubscribe } from './plugin-message-subscribe';
 
 // Electron prefixes a handler's error with the channel and the error's name.
 const REMOTE_ERROR_PREFIX =
@@ -55,27 +51,13 @@ const bridge: Bridge = {
       throw new Error(mainErrorText(error));
     }
   },
-  onMessage: (pluginId, message, listener) => {
-    const onPluginMessage = (
-      _event: IpcRendererEvent,
-      toPlugin: string,
-      sent: string,
-      data: unknown,
-    ) => {
-      if (toPlugin === pluginId && sent === message) {
-        listener(data);
-      }
-    };
-    ipcRenderer.on(BRIDGE_CHANNELS.pluginMessage, onPluginMessage);
-    return {
-      dispose: () => {
-        ipcRenderer.removeListener(
-          BRIDGE_CHANNELS.pluginMessage,
-          onPluginMessage,
-        );
-      },
-    };
-  },
+  onMessage: createPluginMessageSubscribe((deliver) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.pluginMessage,
+      (_event, toPlugin: string, message: string, data: unknown) =>
+        deliver(toPlugin, message, data),
+    );
+  }),
   pathForFile: (file) => webUtils.getPathForFile(file),
   savePasted: async (bytes, mediaType) => {
     try {

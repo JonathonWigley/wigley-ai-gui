@@ -36,6 +36,7 @@ import type {
   ShownLayouts,
   UntypedEvents,
 } from '../contracts/plugin';
+import type { SessionHost } from '../contracts/session-host';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -697,6 +698,7 @@ function fakeMainApi(
       openExternal: gateExternalLinks(async () => undefined),
       agentHarnesses: [],
       git: notFaked<Git>('git'),
+      sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
       ...replaced,
       files:
@@ -1058,6 +1060,7 @@ function fakePageApi(
       clock: common.clock,
       paths: posixPaths,
       homeDir: '/home',
+      runMode: 'selfTest',
       uiState: {
         get: (key) => record.uiState.get(key),
         set(key, value) {

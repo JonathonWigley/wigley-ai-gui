@@ -48,7 +48,10 @@ function tool(name: string): ToolDefinition {
   return { name, description: `${name} tool`, inputSchema: {} };
 }
 
-function setUp() {
+function setUp(
+  projectName: (projectDir: string) => Promise<string | null> = async () =>
+    null,
+) {
   let hexCount = 0;
   const emitted: [string, unknown][] = [];
   const states: SessionsState[] = [];
@@ -77,6 +80,7 @@ function setUp() {
       activated.push(sessionId);
       calls.push(`activated ${sessionId}`);
     },
+    projectName,
   });
   return { list, clock, emitted, states, logged, activated, calls };
 }
@@ -108,6 +112,27 @@ function fakeContribution() {
 
 function labels(state: SessionsState): string[] {
   return state.rows.map((row) => row.label);
+}
+
+function rowProjects(state: SessionsState): string[] {
+  return state.rows.map((row) => row.project);
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+}
+
+// A promise the test settles by hand.
+function deferred<T>(): Deferred<T> {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<T>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 type SessionList = ReturnType<typeof setUp>['list'];
@@ -515,6 +540,7 @@ describe('createSessionList', () => {
         {
           sessionId: '00000002',
           label: 'x 2',
+          project: 'x',
           harness: null,
           marked: false,
           projectDir: '/work/x',
@@ -727,6 +753,31 @@ describe('createSessionList', () => {
     expect(list.state().rows).toEqual([]);
   });
 
+  it.each([
+    { name: 'an unknown session', target: 'ffffffff', sent: false },
+    { name: 'the selected row', target: '00000002', sent: false },
+    { name: 'another row', target: '00000001', sent: true },
+    {
+      name: 'a connected session with no row',
+      target: '00000003',
+      sent: true,
+    },
+  ])(
+    'activate says whether it sent the state, which the page holds its echo for: $name',
+    ({ target, sent }) => {
+      const { list, states } = setUp();
+      connectWithRow(list, info('/work/x'));
+      list.activate(connectWithRow(list, info('/work/y')).session.id);
+      list.connect(info('/work/z'));
+      const sentBefore = states.length;
+
+      const returned = list.activate(target);
+
+      expect(returned).toBe(sent);
+      expect(states.length > sentBefore).toBe(sent);
+    },
+  );
+
   it('ignores unknown sessions, and activateExistingRow of a session with no row, with a log line', () => {
     const { list, states, logged, activated } = setUp();
     connectWithRow(list, info('/work/x'));
@@ -787,6 +838,7 @@ describe('createSessionList', () => {
         {
           sessionId: '00000001',
           label: 'x',
+          project: 'x',
           harness: 'claude',
           marked: false,
           projectDir: '/work/x',
@@ -1733,4 +1785,184 @@ describe('createSessionList', () => {
 
     expect(endedIds()).toHaveLength(2);
   });
+  // Each row connects `sessions`, gives them rows when `rowStage` says so,
+  // lands each folder's lookup with its `landings` answer, an Error rejecting.
+  // `sent` holds the projects of each state the landings sent.
+  it.each<{
+    name: string;
+    sessions: SessionInfo[];
+    rowStage:
+      | 'at connect'
+      | 'after landing'
+      | 'ended before landing'
+      | 'stopped before landing';
+    landings: Record<string, string | null | Error>;
+    projectsBeforeLanding: string[];
+    sent: string[][];
+    projects: string[];
+    finalLabels: string[];
+    logged: string[];
+  }>([
+    {
+      name: 'two clones of one repo share a project and keep their labels',
+      sessions: [
+        info('/work/new-games-prototypes-2'),
+        info('/work/new-games-prototypes-3'),
+      ],
+      rowStage: 'at connect',
+      landings: {
+        '/work/new-games-prototypes-2': 'new-games-prototypes',
+        '/work/new-games-prototypes-3': 'new-games-prototypes',
+      },
+      projectsBeforeLanding: [
+        'new-games-prototypes-2',
+        'new-games-prototypes-3',
+      ],
+      sent: [
+        ['new-games-prototypes', 'new-games-prototypes-3'],
+        ['new-games-prototypes', 'new-games-prototypes'],
+      ],
+      projects: ['new-games-prototypes', 'new-games-prototypes'],
+      finalLabels: ['new-games-prototypes-2', 'new-games-prototypes-3'],
+      logged: [],
+    },
+    {
+      name: 'a pending lookup shows the folder, then one more state',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'at connect',
+      landings: { '/work/clone-2': 'repo' },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [['repo']],
+      projects: ['repo'],
+      finalLabels: ['clone-2'],
+      logged: [],
+    },
+    {
+      name: 'a null sends nothing',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'at connect',
+      landings: { '/work/clone-2': null },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [],
+      projects: ['clone-2'],
+      finalLabels: ['clone-2'],
+      logged: [],
+    },
+    {
+      name: 'the fallback itself sends nothing',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'at connect',
+      landings: { '/work/clone-2': 'clone-2' },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [],
+      projects: ['clone-2'],
+      finalLabels: ['clone-2'],
+      logged: [],
+    },
+    {
+      name: 'a rejection logs and keeps the fallback',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'at connect',
+      landings: { '/work/clone-2': new Error('git cannot start') },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [],
+      projects: ['clone-2'],
+      finalLabels: ['clone-2'],
+      logged: ['project of /work/clone-2 not read: git cannot start'],
+    },
+    {
+      name: 'no folder asks nothing and takes the no-folder label',
+      sessions: [info(null), info(null, 'codex')],
+      rowStage: 'at connect',
+      landings: {},
+      projectsBeforeLanding: ['session', 'Codex session'],
+      sent: [],
+      projects: ['session', 'Codex session'],
+      finalLabels: ['session', 'Codex session'],
+      logged: [],
+    },
+    {
+      name: 'a session that ended first sends nothing',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'ended before landing',
+      landings: { '/work/clone-2': 'repo' },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [],
+      projects: [],
+      finalLabels: [],
+      logged: [],
+    },
+    {
+      name: 'a lookup landing after the stop sends nothing and keeps the fallback',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'stopped before landing',
+      landings: { '/work/clone-2': 'repo' },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [],
+      projects: ['clone-2'],
+      finalLabels: ['clone-2'],
+      logged: [],
+    },
+    {
+      name: 'a session with no row sends nothing, and its later row carries it',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'after landing',
+      landings: { '/work/clone-2': 'repo' },
+      projectsBeforeLanding: [],
+      sent: [],
+      projects: ['repo'],
+      finalLabels: ['clone-2'],
+      logged: [],
+    },
+  ])(
+    'rowProjectFollowsTheLookup: $name',
+    async ({
+      sessions,
+      rowStage,
+      landings,
+      projectsBeforeLanding,
+      sent,
+      projects,
+      finalLabels,
+      logged: expectedLogged,
+    }) => {
+      const lookups = new Map<string, Deferred<string | null>>();
+      const { list, states, logged } = setUp((projectDir) => {
+        const lookup = deferred<string | null>();
+        lookups.set(projectDir, lookup);
+        return lookup.promise;
+      });
+      const connected = sessions.map((session) => list.connect(session));
+      if (rowStage !== 'after landing') {
+        connected.forEach(({ session }) => list.mark(session.id));
+      }
+      expect(rowProjects(list.state())).toEqual(projectsBeforeLanding);
+      if (rowStage === 'ended before landing') {
+        connected.forEach((session) => session.end());
+      }
+      if (rowStage === 'stopped before landing') {
+        list.stop();
+      }
+      expect([...lookups.keys()]).toEqual(Object.keys(landings));
+      const statesBeforeLanding = states.length;
+
+      for (const [projectDir, lookup] of lookups) {
+        const answer = landings[projectDir];
+        if (answer instanceof Error) {
+          lookup.reject(answer);
+        } else {
+          lookup.resolve(answer);
+        }
+      }
+      await new Promise((settle) => setImmediate(settle));
+
+      expect(states.slice(statesBeforeLanding).map(rowProjects)).toEqual(sent);
+      if (rowStage === 'after landing') {
+        connected.forEach(({ session }) => list.mark(session.id));
+      }
+      expect(rowProjects(list.state())).toEqual(projects);
+      expect(labels(list.state())).toEqual(finalLabels);
+      expect(logged).toEqual(expectedLogged);
+    },
+  );
 });

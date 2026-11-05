@@ -23,7 +23,7 @@ export interface NoteSenderDeps {
   store: DraftStore;
   images: ImageEncoder;
   backlog: Pick<BacklogMainExports, 'fileNote'>;
-  chat: Pick<ChatMainExports, 'launch' | 'profileNames' | 'profileOf'>;
+  chat: Pick<ChatMainExports, 'launch' | 'defaultProfile'>;
   launchBrief(): string;
   paths: Paths;
   homeDir: Promise<string>;
@@ -201,10 +201,8 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (images === null) {
         return refused(SHRINK_REFUSED);
       }
-      const owner =
-        draft.session === null ? null : chat.profileOf(draft.session.sessionId);
-      const profile = owner ?? chat.profileNames().at(0);
-      if (profile === undefined) {
+      const profile = chat.defaultProfile(draft.session?.sessionId ?? null);
+      if (profile === null) {
         return refused('Chat has no profiles');
       }
       const line = await lineOf(draft);

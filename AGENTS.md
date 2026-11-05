@@ -78,11 +78,12 @@ modes, the command and key engine, settings, themes, the Bridge and services; ev
 reaches the app only through the plugin API, so a new tool has the same reach as anything already built.
 
 ```
-src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
+src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
+                 record of a clock that counts only while something runs); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, the fake agent harness)
+                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `active-time.ts`: the functions over an `ActiveTime`)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
@@ -112,7 +113,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
-                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
                  through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
@@ -153,7 +154,7 @@ src/main/        core main process; main.ts is its composition root
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, and a commit of named paths
+                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
@@ -186,13 +187,15 @@ src/renderer/    core page; renderer.ts is its composition root
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, session-title.ts (the title rules main and page share), main/ (the
-                 session list — rows, their titles, the selected session, tool routing — the `set_session_title`
-                 tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions
-                 mode: the sidebar, the pane tree of whole sessions with its split, swap and close commands and the
+                 session list — rows, their titles and origin-repo project names, the selected session, tool routing — the
+                 `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
+                 page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
+                 recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
+                 sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
                  shared list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add,
                  each row's activities, the rename dialog, and the layout preview rows),
                  layouts/ (the sessions Layout contract and the built-in `default` layout);
-                 `docs/features/session-titles/design.md`
+                 `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
@@ -203,6 +206,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
                  `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
                  layout); `docs/features/chat-bar/design.md`
+  agent-skills/  main/ (registers its layouts, hands its self-test script), page/ (the session hub's Skills section,
+                 through chat's `addSidePart`), layouts/ (its Layout contract and `default` layout);
+                 `docs/features/chat-bar/design.md`
+  auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
+                 registers the send gate that compacts a cold-cache session before a message when its context is above
+                 the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction);
+                 `docs/features/auto-compact/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -223,14 +233,16 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
-                 permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in, preview/: the
+                 permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
                  layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
-                 parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), and `addInstructions` (text every session chat starts carries to its harness)
-                 to visual; page exports `focusedEntry` (the focused entry's element) to visual
+                 parts share; main exports `launch` (a background session with a first message) and
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual and `activeTime` (a session's clock)
+                 with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
+                 sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
                  (the keys Layout contract and the built-in `default` layout)
@@ -246,8 +258,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
                  layout)
   usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
-                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
-                 the Chat status line through chat's `addStatusPart`, its context meter under each session row, and the right-bar details),
+                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's context line
+                 above the Chat box through chat's `addComposerPart` and its spend in the Chat status line through `addStatusPart`, its context meter and cache mark under each session row, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
@@ -258,13 +270,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
                  `addStage`), main/ (hears `chat.agentEvent` and the sessions events, keeps each session's flow in its
                  plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
-                 Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
+                 side pane, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
                  visual on the page; `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
-                 focused entry, `h`/`l` between visuals and `Esc` to close),
+                 focused entry, opening at the first visual in the cursor's block, `h`/`l` between visuals and `Esc` to close),
                  layouts/ (the visual Layout contract and the built-in `default` layout);
                  `docs/features/visuals/design.md`
 ```
@@ -303,7 +315,8 @@ round; primer: an open primer), since main, not the page, decides.
   `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
   a page part starts on every page load. The plugin host's `stop(id)` stops the plugin's dependents first, in
   reverse start order, then awaits the part's `dispose` and disposes its registrations. Quit stops every main
-  part this way.
+  part this way, and from its first task on main sends the page no plugin message: those stops end rows the next
+  start restores, and a page told of it would save them as gone (panes, recency).
 - **A registration** — a listener, a handler, a contribution, a scope, a mode, a timer, a watch, a command —
   returns a `Disposable` (`src/contracts/disposable.ts`), so a plugin can stop and start again. The plugin API
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,
@@ -360,25 +373,29 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line and usage's context meter are two. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's stage chip, chat's run time and usage's context meter and cache mark are five. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
-- **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
-  needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page
-  export `setActivity`, and the row shows the highest rank, so a new state is a registration in the plugin that knows
-  it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
+- **A row activity** is the short state a session's row shows beside its title — a label holding its word (working,
+  needs you, done, error), also in the row's tooltip. A page plugin sets one per session under its own source id through the
+  `sessions` page export `setActivity`, and the row shows the highest rank, so a new state is a registration in the
+  plugin that knows it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
   the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
 - **A composer part** is what a plugin draws above the Chat composer's box, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
   plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the entry cursor's last stop (the
-  newest pending row, else the last entry or an open last run's last step) hands the cursor to it, and the part holds
+  newest pending row, else the last block of the last entry or an open last run's last step) hands the cursor to it, and the part holds
   its own key scope until it hands the cursor back.
+- **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
+  export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane and
+  the agent-skills plugin's list are two. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
-  `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
+  `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.
 - **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
-  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing; chat does the
-  holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
+  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing, and the first hold
+  wins; chat does the holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
   (`docs/features/auto-compact/design.md`).
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
@@ -650,12 +667,12 @@ round; primer: an open primer), since main, not the page, decides.
   `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
-  `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the composer's `working`
-  slot: the running turn, then its finished line, § Activity dock),
+  `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the session hub's Main agent
+  section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session rows),
   `queuedMessage` (one pending message's row, § Pending messages), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws
-  the activity lines, their steps and the `result` entries; a layout that leaves it out takes `default`'s, `false`.
+  the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.
@@ -750,8 +767,11 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown names
   (`CFBundleName`, which the menu bar shows, and `CFBundleDisplayName`) to Auri in `Info.plist`, renames the
   `wigley-ai-gui Helper*.app` bundles to `Auri Helper*.app` (Electron finds its helpers by `CFBundleName`), and
-  re-signs it ad hoc (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. The
-  installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
+  re-signs it (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. It signs with the
+  self-signed certificate `npm run create-signing-identity` makes once per Mac, in a keychain of its own, and
+  ad hoc on a Mac without one. macOS ties an ad hoc app's privacy grants to its code hash, so each ad hoc install
+  loses them and asks again; a denied Documents grant makes every session in `~/Documents` exit with `EPERM`. The
+  `install` skill (`.agents/skills/install/SKILL.md`) holds the steps. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
   which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.

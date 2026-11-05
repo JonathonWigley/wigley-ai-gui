@@ -16,9 +16,10 @@ import {
   numberOrNull,
   parsed,
 } from './json-fields';
-import { replySpendUsd } from './model-prices';
+import { CONTEXT_SUFFIX, replySpendUsd } from './model-prices';
 import { rateLimitRows } from './plan-usage';
 import {
+  replyInputTokens,
   type ReplyUsage,
   replyUsageOf,
   type TurnUsage,
@@ -37,6 +38,8 @@ import { SYNTHETIC_MODEL } from './transcripts';
 // init's `capabilities` strings, null on any other line; `lifecycle` is a
 // `command_lifecycle` line's `command_uuid` and `state`; `turnOpener` is a
 // `result`'s `user_message_uuid` and `turnMessages` its `user_message_uuids`.
+// `compaction` is what a main-conversation line says about a compaction, null on
+// every other line; the session fold owns the compaction's state and events.
 // `agentEvents` are the line's agent events other than
 // `usage`, not yet stamped with `at`, in the order the line gave them. The
 // usage side channels: `planRows` from a `rate_limit_event`, `replyUsage` from
@@ -64,7 +67,20 @@ export interface DecodedLine {
   planRows: PlanRowPatch[] | null;
   replyUsage: ReplyUsage | null;
   turnUsage: TurnUsage | null;
+  compaction: CompactionLine | null;
 }
+
+// `started` is every `compacting` status, repeats included. `boundary` is the
+// `compact_boundary` event, which gets no entry of its own.
+export type CompactionLine =
+  | { phase: 'started' }
+  | {
+      phase: 'done';
+      beforeTokens: number | null;
+      durationMs: number | null;
+      boundary: unknown;
+    }
+  | { phase: 'failed' };
 
 // An agent event as the decoder builds it, before it is stamped with its `at`.
 // `usage` is left out: the harness builds it from the usage side channels.
@@ -106,6 +122,15 @@ const UNREQUESTED_ORIGINS: ReadonlySet<string> = new Set([
   'task-notification',
 ]);
 
+// `compact_error`s that show no notice. A plain interrupt's: its synthetic
+// `Compaction canceled.` line says so. A refused `/compact`'s: its synthetic line
+// gives the same reason. A routine automatic attempt's: the turn goes on past it.
+const QUIET_COMPACT_ERRORS: ReadonlySet<string> = new Set([
+  'API Error: Request was aborted.',
+  'Not enough messages to compact.',
+  'too_few_groups',
+]);
+
 // The names of the tool that starts a subagent: the `tool_use` carries
 // `Agent`, and init's tool list still names it `Task`.
 const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
@@ -121,6 +146,14 @@ const WRITE_TOOL_PATHS: Readonly<Record<string, string>> = {
   MultiEdit: 'file_path',
   NotebookEdit: 'notebook_path',
 };
+
+// What the decoder last knows of a subagent. `sentWindow` is the context window
+// its last `agentReplied` carried.
+interface SubagentFacts {
+  model: string;
+  contextTokens: number | null;
+  sentWindow: number | null;
+}
 
 function emptyLine(): DecodedLine {
   return {
@@ -141,7 +174,30 @@ function emptyLine(): DecodedLine {
     planRows: null,
     replyUsage: null,
     turnUsage: null,
+    compaction: null,
   };
+}
+
+function compactionOf(event: Json): CompactionLine | null {
+  if (typeof event.parent_tool_use_id === 'string') {
+    return null;
+  }
+  if (event.subtype === 'compact_boundary') {
+    const metadata = asJson(event.compact_metadata);
+    return {
+      phase: 'done',
+      beforeTokens: numberOrNull(metadata.pre_tokens),
+      durationMs: numberOrNull(metadata.duration_ms),
+      boundary: event,
+    };
+  }
+  if (event.subtype !== 'status') {
+    return null;
+  }
+  if (event.status === 'compacting') {
+    return { phase: 'started' };
+  }
+  return event.compact_result === 'failed' ? { phase: 'failed' } : null;
 }
 
 // A copy the decoder's later changes cannot reach.
@@ -250,6 +306,11 @@ export function createStreamDecoder(
   // Each subagent's reply spends by message id, by its Agent call id: null for
   // a reply whose model has no list price.
   const replySpends = new Map<string, Map<string, number | null>>();
+  // Each subagent with a known model, by its Agent call id, until it ends. A
+  // late reply may re-create an ended one's entry, which nothing reads again.
+  const subagentFacts = new Map<string, SubagentFacts>();
+  // The context windows results have named, by `modelUsage` key.
+  const modelWindows = new Map<string, number>();
   let rawCount = 0;
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
@@ -260,6 +321,10 @@ export function createStreamDecoder(
   let turnEvents: RawEntry | null = null;
   // True from a result until the next turn's init.
   let betweenTurns = false;
+  // True from a compaction's boundary to the next result, while its
+  // `<local-command-stdout>` replay, which the compaction entry stands for, may
+  // come.
+  let isAfterBoundary = false;
   let noticeCount = 0;
   let resultCount = 0;
   // `total_cost_usd` is the process's cost so far.
@@ -376,9 +441,66 @@ export function createStreamDecoder(
     return total;
   }
 
+  // Every window a result's `modelUsage` names. A result that names a `[…]` key
+  // and drops the plain key replaces the plain key's window. `modelUsage` is
+  // cumulative, so a model moved to `[…]` mid-process usually keeps both keys, and
+  // a subagent replying under the plain id keeps the plain window.
+  function learnWindows(modelUsage: Json) {
+    for (const [key, usage] of Object.entries(modelUsage)) {
+      const window = asJson(usage).contextWindow;
+      if (typeof window !== 'number') {
+        continue;
+      }
+      modelWindows.set(key, window);
+      const plainKey = key.replace(CONTEXT_SUFFIX, '');
+      if (!Object.hasOwn(modelUsage, plainKey)) {
+        modelWindows.delete(plainKey);
+      }
+    }
+  }
+
+  // The window of the entry keyed `model`, else of the entry keyed `model` with
+  // a `[…]` suffix; null when no result named either.
+  function windowFor(model: string): number | null {
+    const exact = modelWindows.get(model);
+    if (exact !== undefined) {
+      return exact;
+    }
+    for (const [key, window] of modelWindows) {
+      if (key.replace(CONTEXT_SUFFIX, '') === model) {
+        return window;
+      }
+    }
+    return null;
+  }
+
+  // Keeps a subagent's latest model and context and reports them with its spend
+  // so far and its model's window.
+  function reportSubagentFacts(
+    agentId: string,
+    model: string,
+    contextTokens: number | null,
+    out: DecodedLine,
+  ) {
+    const contextWindow = windowFor(model);
+    subagentFacts.set(agentId, {
+      model,
+      contextTokens,
+      sentWindow: contextWindow,
+    });
+    out.agentEvents.push({
+      type: 'agentReplied',
+      agentId,
+      model,
+      spendUsd: spendOf(agentId),
+      contextTokens,
+      contextWindow,
+    });
+  }
+
   // A subagent's model reply records its spend under its message id (Claude
   // sends one line per content block, each with the message's usage) and
-  // reports the agent's model and spend so far.
+  // reports the agent's model, spend so far and context.
   function reportSubagentReply(event: Json, message: Json, out: DecodedLine) {
     const agentId = event.parent_tool_use_id;
     const model = message.model;
@@ -392,16 +514,9 @@ export function createStreamDecoder(
     }
     const spends = replySpends.get(agentId) ?? new Map<string, number | null>();
     replySpends.set(agentId, spends);
-    spends.set(
-      asString(message.id),
-      replySpendUsd(model, asJson(message.usage)),
-    );
-    out.agentEvents.push({
-      type: 'agentReplied',
-      agentId,
-      model,
-      spendUsd: spendOf(agentId),
-    });
+    const usage = asJson(message.usage);
+    spends.set(asString(message.id), replySpendUsd(model, usage));
+    reportSubagentFacts(agentId, model, replyInputTokens(usage), out);
   }
 
   function keepWritePath(id: string, name: string, input: Json) {
@@ -418,13 +533,14 @@ export function createStreamDecoder(
   // on it: the agent finishes first, then its calls breadth-first, each level
   // in its parents' order and then in spawn order under each parent. A launched
   // background call waits for its own end event. Each ending agent's open tool
-  // calls fail just ahead of its `agentFinished`.
+  // calls fail just ahead of its `agentFinished`, and its kept facts go.
   function finishAgent(agentId: string, isOk: boolean, out: DecodedLine) {
     const ending = [agentId];
     for (let index = 0; index < ending.length; index += 1) {
       const endingId = ending[index];
       pendingAgents.delete(endingId);
       launchedAgents.delete(endingId);
+      subagentFacts.delete(endingId);
       failOpenTools(endingId, out);
       out.agentEvents.push({
         type: 'agentFinished',
@@ -457,9 +573,9 @@ export function createStreamDecoder(
   }
 
   // A pending Agent call's `tool_result` is its subagent's end, except a
-  // background call's launch receipt, which leaves it running until its end
-  // event. Any other paired result finishes its tool call, and an ok result of
-  // a write call reports its file written. The receipt check
+  // background call's launch receipt, which reports it launched and leaves it
+  // running until its end event. Any other paired result finishes its tool
+  // call, and an ok result of a write call reports its file written. The receipt check
   // reads the line's `tool_use_result`, which describes the whole line: it
   // assumes a user line carries one `tool_result`, as every measured one did.
   function finishAgentOrTool(block: Json, event: Json, out: DecodedLine) {
@@ -472,6 +588,7 @@ export function createStreamDecoder(
       if (isLaunchReceipt) {
         pendingAgents.delete(id);
         launchedAgents.add(id);
+        out.agentEvents.push({ type: 'agentLaunched', agentId: id });
         return;
       }
       finishAgent(id, isOk, out);
@@ -501,12 +618,21 @@ export function createStreamDecoder(
     if (model === '') {
       return;
     }
-    out.agentEvents.push({
-      type: 'agentReplied',
-      agentId,
-      model,
-      spendUsd: spendOf(agentId),
-    });
+    const contextTokens = subagentFacts.get(agentId)?.contextTokens ?? null;
+    reportSubagentFacts(agentId, model, contextTokens, out);
+  }
+
+  // Each running subagent whose model's window has changed since its last
+  // `agentReplied` gets one with the new window.
+  function reportChangedWindows(out: DecodedLine) {
+    for (const agentId of [...pendingAgents.keys(), ...launchedAgents]) {
+      const facts = subagentFacts.get(agentId);
+      const hasNewWindow =
+        facts !== undefined && windowFor(facts.model) !== facts.sentWindow;
+      if (hasNewWindow) {
+        reportSubagentFacts(agentId, facts.model, facts.contextTokens, out);
+      }
+    }
   }
 
   // A subagent's end event; it also comes for other background tasks, whose
@@ -579,14 +705,10 @@ export function createStreamDecoder(
       finishByNotification(event, out);
       finishTask(event, out);
     }
-    if (event.subtype === 'compact_boundary') {
-      // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so
-      // the after-size is left to the next usage event (claude-stream.md § Compaction).
-      out.agentEvents.push({
-        type: 'compacted',
-        beforeTokens: numberOrNull(asJson(event.compact_metadata).pre_tokens),
-        afterTokens: null,
-      });
+    out.compaction = compactionOf(event);
+    if (out.compaction?.phase === 'done') {
+      isAfterBoundary = true;
+      return;
     }
     if (event.subtype === 'init') {
       out.agentEvents.push({ type: 'turnStarted' });
@@ -615,6 +737,17 @@ export function createStreamDecoder(
         ? gathered(event, event.subtype === 'init')
         : rawEntry(event),
     );
+    const error = event.compact_error;
+    const isErrorShown =
+      out.compaction?.phase === 'failed' &&
+      typeof error === 'string' &&
+      error !== '' &&
+      !QUIET_COMPACT_ERRORS.has(error);
+    if (isErrorShown) {
+      out.entries.push(
+        noticeEntry(`Compaction failed: ${error}`, 'error', event),
+      );
+    }
   }
 
   function decodeStreamEvent(event: Json, out: DecodedLine) {
@@ -796,8 +929,9 @@ export function createStreamDecoder(
   }
 
   // Tool results pair with their tool entries. Local command output (the
-  // `set_model` replay) wrapped in `<local-command-stdout>` is a notice; any
-  // other text (the interrupt marker) joins the turn's events.
+  // `set_model` replay) wrapped in `<local-command-stdout>` is a notice, except
+  // after a compaction's boundary; any other text (the interrupt marker, a
+  // compaction's summary) joins the turn's events.
   function decodeUser(event: Json, out: DecodedLine) {
     const content = asJson(event.message).content;
     const toolResults = asArray(content)
@@ -817,7 +951,7 @@ export function createStreamDecoder(
       .replace(LOCAL_OUTPUT_CLOSE, '')
       .trim();
     out.entries.push(
-      isLocalOutput && output !== ''
+      isLocalOutput && output !== '' && !isAfterBoundary
         ? noticeEntry(output, 'info', event)
         : gathered(event),
     );
@@ -828,10 +962,12 @@ export function createStreamDecoder(
   // the last one has no turn share, so its cost is null. A result ends the
   // turn's open blocks, and its events entry takes events until the next init.
   // Every result ends a turn of the main conversation, an unrequested one
-  // included.
+  // included, and teaches the windows its `modelUsage` names.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
     failPendingAgents(out);
+    learnWindows(asJson(event.modelUsage));
+    reportChangedWindows(out);
     out.agentEvents.push({ type: 'turnEnded' });
     const isError = event.is_error === true;
     out.turnEnded = true;
@@ -870,6 +1006,7 @@ export function createStreamDecoder(
       raw: [event],
     });
     betweenTurns = true;
+    isAfterBoundary = false;
   }
 
   function decodeControlResponse(event: Json, out: DecodedLine) {

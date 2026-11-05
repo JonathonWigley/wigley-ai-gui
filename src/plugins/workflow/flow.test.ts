@@ -96,7 +96,7 @@ interface FoldRow {
   stages?: readonly MainStage[];
 }
 
-const IN_C = { stage: 'c', hasLeftIdle: true } as const;
+const IN_C = { stage: 'c' } as const;
 
 const FOLD_ROWS: FoldRow[] = [
   {
@@ -262,19 +262,18 @@ const FOLD_ROWS: FoldRow[] = [
     name: 'the first stage rule in order wins',
     flow: flowWith({}),
     signal: skill('x:b', null),
-    expected: flowWith({ stage: 'b', hasLeftIdle: true }),
+    expected: flowWith({ stage: 'b' }),
   },
   {
     name: 'no rule answering keeps the stage',
-    flow: flowWith({ stage: 'b', hasLeftIdle: true, turnRunning: true }),
+    flow: flowWith({ stage: 'b', turnRunning: true }),
     signal: { type: 'turnEnded' },
-    expected: flowWith({ stage: 'b', hasLeftIdle: true }),
+    expected: flowWith({ stage: 'b' }),
   },
   {
     name: 'a rule answering moves the stage',
     flow: flowWith({
       stage: 'b',
-      hasLeftIdle: true,
       turnRunning: true,
       planDir: PLAN_X,
     }),
@@ -288,7 +287,6 @@ const FOLD_ROWS: FoldRow[] = [
     stages: WITH_PLAN_WATCHER,
     expected: flowWith({
       stage: 'd',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       reviewRoundsAtMake: null,
     }),
@@ -297,7 +295,6 @@ const FOLD_ROWS: FoldRow[] = [
     name: 'a stage change stops the countdown',
     flow: flowWith({
       stage: 'b',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       countdownEndsAt: 5000,
     }),
@@ -308,18 +305,17 @@ const FOLD_ROWS: FoldRow[] = [
     name: 'entering a clearsPlan stage drops the plan',
     flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
     signal: skill('x:e', null),
-    expected: flowWith({ stage: 'e', hasLeftIdle: true }),
+    expected: flowWith({ stage: 'e' }),
   },
   {
     name: 're-entering a clearsPlan stage drops the plan',
     flow: flowWith({
       stage: 'e',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       progress: PROGRESS,
     }),
     signal: skill('x:e', null),
-    expected: flowWith({ stage: 'e', hasLeftIdle: true }),
+    expected: flowWith({ stage: 'e' }),
   },
   {
     name: "entering a recordsReviewRounds stage records the plan's review rounds",
@@ -327,7 +323,6 @@ const FOLD_ROWS: FoldRow[] = [
     signal: skill('x:m', null),
     expected: flowWith({
       stage: 'm',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       progress: PROGRESS,
       reviewRoundsAtMake: 1,
@@ -337,7 +332,6 @@ const FOLD_ROWS: FoldRow[] = [
     name: 're-entering a recordsReviewRounds stage records the rounds again',
     flow: flowWith({
       stage: 'm',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       progress: PROGRESS,
       reviewRoundsAtMake: 0,
@@ -345,7 +339,6 @@ const FOLD_ROWS: FoldRow[] = [
     signal: skill('x:m', null),
     expected: flowWith({
       stage: 'm',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       progress: PROGRESS,
       reviewRoundsAtMake: 1,
@@ -357,7 +350,6 @@ const FOLD_ROWS: FoldRow[] = [
     signal: skill('x:m', null),
     expected: flowWith({
       stage: 'm',
-      hasLeftIdle: true,
       planDir: PLAN_X,
       reviewRoundsAtMake: null,
     }),
@@ -397,10 +389,10 @@ const FOLD_ROWS: FoldRow[] = [
     }),
   },
   {
-    name: 'returning to idle drops the plan and keeps hasLeftIdle',
+    name: 'returning to idle drops the plan',
     flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
     signal: { type: 'handedOff' },
-    expected: flowWith({ hasLeftIdle: true }),
+    expected: flowWith({}),
   },
   {
     name: 'a signal nothing answers changes nothing',

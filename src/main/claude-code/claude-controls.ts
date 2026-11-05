@@ -45,6 +45,20 @@ export const CLAUDE_CONTROLS: readonly {
   },
 ];
 
+// A typed `/effort <value>` or `/model <value>` sets that control.
+export const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
+
+export function controlOf(
+  id: string,
+): (typeof CLAUDE_CONTROLS)[number] | undefined {
+  return CLAUDE_CONTROLS.find((control) => control.id === id);
+}
+
+export function isChoice(id: ClaudeControlId, value: string): boolean {
+  const choices = controlOf(id)?.choices ?? [];
+  return choices.some((choice) => choice.value === value);
+}
+
 // Claude reports the `manual` mode as `default`.
 const REPORTED_MODES: Readonly<Record<string, string>> = { default: 'manual' };
 

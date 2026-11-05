@@ -33,7 +33,10 @@ function startOnHarness() {
       fakeDependency(
         chatPageKey,
         () =>
-          ({ focusedEntry: () => asHtml(entry) }) as unknown as ChatPageExports,
+          ({
+            focusedEntry: () => asHtml(entry),
+            focusedBlock: () => null,
+          }) as unknown as ChatPageExports,
       ),
     ],
   });

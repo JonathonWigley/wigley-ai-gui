@@ -15,6 +15,7 @@ import { icon } from '../ui/icon';
 import { kbd } from '../ui/kbd';
 import { keyChevron } from '../ui/key-anchors';
 import { keyPrompt } from '../ui/key-prompt';
+import { meter } from '../ui/meter';
 import { row } from '../ui/row';
 import { sectionHeader } from '../ui/section-header';
 import { setDotStatus, statusDot } from '../ui/status-dot';
@@ -225,6 +226,7 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     sectionHeader: (parent, text) => appended(parent, sectionHeader(text)),
     statusDot: (parent, status) => appended(parent, statusDot(status)),
     setDotStatus: (dot, status) => setDotStatus(dot, status),
+    meter: (parent, percent, tone) => appended(parent, meter(percent, tone)),
     row: (parent, options) => appended(parent, row(options)),
     emptyState: (parent, text, hint) =>
       appended(parent, emptyState(text, hint)),

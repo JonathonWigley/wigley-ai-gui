@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type {
-  Roster,
-  RosterAgent,
-  RosterOutcome,
-  RosterTask,
-} from '../../agents/contract';
+import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 import {
-  agentMeta,
-  boxLook,
   entryIndex,
   orderStripBoxes,
   reselect,
   type StripBox,
   stepIndex,
-  taskOwner,
 } from './strip-boxes';
 
-function agent(
-  agentId: string,
-  startedAt: number,
-  outcome: RosterOutcome = 'running',
-  fields: Partial<RosterAgent> = {},
-): RosterAgent {
+function agent(agentId: string, startedAt: number): RosterAgent {
   return {
     agentId,
     agentType: 'Explore',
@@ -32,25 +19,21 @@ function agent(
     model: null,
     effort: null,
     spendUsd: null,
+    isBackground: false,
+    contextTokens: null,
+    contextWindow: null,
     tools: [],
-    outcome,
-    ...fields,
   };
 }
 
-function task(
-  taskId: string,
-  startedAt: number,
-  outcome: RosterOutcome = 'running',
-  agentId: string = MAIN_AGENT_ID,
-): RosterTask {
+function task(taskId: string, startedAt: number): RosterTask {
   return {
     taskId,
-    agentId,
+    agentId: MAIN_AGENT_ID,
+    ownerName: 'main',
     description: 'npm test',
     command: null,
     startedAt,
-    outcome,
   };
 }
 
@@ -60,19 +43,37 @@ const keysOf = (boxes: readonly StripBox[]) => boxes.map((box) => box.key);
 describe('orderStripBoxes', () => {
   it.each<{ name: string; roster: Roster; keys: string[] }>([
     {
-      name: 'start order across kinds',
+      name: 'the agent, then the tasks in start order',
       roster: {
-        agents: [agent('a1', 300), agent('a2', 100)],
-        tasks: [task('t1', 200), task('t2', 50)],
+        agents: [agent('a1', 300)],
+        tasks: [task('t200', 200), task('t100', 100)],
+        skills: [],
       },
-      keys: ['t2', 'a2', 't1', 'a1'],
+      keys: ['a1', 't100', 't200'],
     },
     {
-      name: 'equal start keeps the agent first',
-      roster: { agents: [agent('a1', 100)], tasks: [task('t1', 100)] },
-      keys: ['a1', 't1'],
+      name: 'equal starts keep roster order',
+      roster: {
+        agents: [],
+        tasks: [task('t1', 100), task('t2', 100)],
+        skills: [],
+      },
+      keys: ['t1', 't2'],
     },
-    { name: 'empty roster', roster: { agents: [], tasks: [] }, keys: [] },
+    {
+      name: 'an agent that started after a task sorts first',
+      roster: {
+        agents: [agent('a1', 300), agent('a2', 50)],
+        tasks: [task('t1', 100)],
+        skills: [],
+      },
+      keys: ['a2', 'a1', 't1'],
+    },
+    {
+      name: 'empty roster',
+      roster: { agents: [], tasks: [], skills: [] },
+      keys: [],
+    },
   ])('$name', ({ roster, keys }) => {
     expect(keysOf(orderStripBoxes(roster))).toEqual(keys);
   });
@@ -81,22 +82,19 @@ describe('orderStripBoxes', () => {
 describe('entryIndex', () => {
   it.each<{ name: string; roster: Roster; index: number | null }>([
     {
-      name: 'first running in the middle',
+      name: 'the first of several',
       roster: {
-        agents: [agent('a1', 100, 'done'), agent('a2', 200)],
+        agents: [agent('a1', 100), agent('a2', 200)],
         tasks: [task('t1', 300)],
-      },
-      index: 1,
-    },
-    {
-      name: 'none running',
-      roster: {
-        agents: [agent('a1', 100, 'failed')],
-        tasks: [task('t1', 200, 'done')],
+        skills: [],
       },
       index: 0,
     },
-    { name: 'no boxes', roster: { agents: [], tasks: [] }, index: null },
+    {
+      name: 'no boxes',
+      roster: { agents: [], tasks: [], skills: [] },
+      index: null,
+    },
   ])('$name', ({ roster, index }) => {
     expect(entryIndex(boxesOf(roster))).toBe(index);
   });
@@ -117,6 +115,7 @@ describe('reselect', () => {
   const three = boxesOf({
     agents: [agent('a1', 100), agent('a2', 200)],
     tasks: [task('t1', 300)],
+    skills: [],
   });
   it.each<{
     name: string;
@@ -149,44 +148,5 @@ describe('reselect', () => {
     { name: 'empty', key: 'a1', lastIndex: 0, boxes: [], index: null },
   ])('$name', ({ key, lastIndex, boxes, index }) => {
     expect(reselect(key, lastIndex, boxes)).toBe(index);
-  });
-});
-
-describe('boxLook', () => {
-  it.each<{ outcome: RosterOutcome; dot: string; isDimmed: boolean }>([
-    { outcome: 'running', dot: 'running', isDimmed: false },
-    { outcome: 'done', dot: 'success', isDimmed: true },
-    { outcome: 'failed', dot: 'error', isDimmed: true },
-  ])('$outcome', ({ outcome, dot, isDimmed }) => {
-    expect(boxLook(outcome)).toEqual({ dot, isDimmed });
-  });
-});
-
-describe('agentMeta', () => {
-  it.each<{ name: string; fields: Partial<RosterAgent>; meta: string }>([
-    {
-      name: 'all three',
-      fields: { model: 'claude-sonnet-4-5', effort: 'high', spendUsd: 0.4213 },
-      meta: 'claude-sonnet-4-5 · high · $0.42',
-    },
-    {
-      name: 'no effort',
-      fields: { model: 'claude-sonnet-4-5', spendUsd: 0.4213 },
-      meta: 'claude-sonnet-4-5 · $0.42',
-    },
-    { name: 'all null', fields: {}, meta: '' },
-  ])('$name', ({ fields, meta }) => {
-    expect(agentMeta(agent('a1', 100, 'running', fields))).toBe(meta);
-  });
-});
-
-describe('taskOwner', () => {
-  const agents = [agent('a1', 100), agent('a2', 200)];
-  it.each<{ name: string; agentId: string; owner: string }>([
-    { name: 'main', agentId: MAIN_AGENT_ID, owner: 'main' },
-    { name: 'a listed subagent', agentId: 'a2', owner: 'name-a2' },
-    { name: 'an unlisted id', agentId: 'gone', owner: 'subagent' },
-  ])('$name', ({ agentId, owner }) => {
-    expect(taskOwner(task('t1', 300, 'running', agentId), agents)).toBe(owner);
   });
 });

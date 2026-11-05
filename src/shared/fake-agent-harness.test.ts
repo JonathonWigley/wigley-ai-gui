@@ -13,7 +13,13 @@ import type { Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
 import {
   createFakeAgentHarness,
+  type FakeAgentHarness,
+  type FakeAttachScript,
   FAKE_AGENTS_TEXT,
+  FAKE_BLOCKS_REPLY,
+  FAKE_BLOCKS_TEXT,
+  FAKE_COLD_TEXT,
+  FAKE_COMPACT_TEXT,
   FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
   FAKE_HOLD_TEXT,
@@ -41,14 +47,19 @@ import {
 } from './sample-visuals';
 
 const clock = { now: () => 1000 };
+// The second fake history entry's `at`.
+const FAKE_HISTORY_AT_SECOND = 1767236646000;
 
 const request: AgentStart = {
+  processId: 'p-1',
   sessionId: 's-1',
   resume: false,
   projectDir: '/p',
   profileDir: null,
   controls: {},
   instructions: [],
+  idleCompactMinTokens: null,
+  rowId: 'row-1',
 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
@@ -83,8 +94,8 @@ function recordingEvents() {
 }
 
 // One timeline event as a line: an entry as its kind, id and tool result text,
-// an agent event as its type, task id, agent id and outcome, any other as its
-// name and, for activity, its value.
+// an agent event as its type, task id, agent id, trigger and outcome, any other
+// as its name and, for activity, its value.
 function timelineLine([name, payload]: [string, unknown]): string {
   if (name === 'entry') {
     const entry = payload as ChatEntry;
@@ -95,8 +106,11 @@ function timelineLine([name, payload]: [string, unknown]): string {
     const event = payload as AgentEvent;
     const taskId = 'taskId' in event ? event.taskId : undefined;
     const agentId = 'agentId' in event ? event.agentId : undefined;
+    const trigger = 'trigger' in event ? event.trigger : undefined;
     const outcome = 'outcome' in event ? event.outcome : undefined;
-    return [event.type, taskId, agentId, outcome].filter(Boolean).join(' ');
+    return [event.type, taskId, agentId, trigger, outcome]
+      .filter(Boolean)
+      .join(' ');
   }
   return name === 'activity' ? `activity ${String(payload)}` : name;
 }
@@ -607,6 +621,42 @@ describe('createFakeAgentHarness', () => {
     },
   );
 
+  it('send_BlocksText_RepliesWithEachBlockKindThenEndsTheTurn', async () => {
+    const { agent, heard } = await startedProcess();
+
+    agent.send({ text: FAKE_BLOCKS_TEXT, images: [] });
+    await flush();
+
+    expect(heard.slice(2)).toEqual([
+      [
+        'entry',
+        {
+          kind: 'assistant',
+          id: 'assistant-1',
+          at: 1000,
+          text: FAKE_BLOCKS_REPLY,
+          streaming: false,
+          raw: [{ fake: 'assistant', text: FAKE_BLOCKS_REPLY }],
+        },
+      ],
+      [
+        'entry',
+        {
+          kind: 'result',
+          id: 'result-1',
+          at: 1000,
+          stopReason: 'end_turn',
+          costUsd: null,
+          durationMs: null,
+          raw: [{ fake: 'result' }],
+        },
+      ],
+      ['agentEvent', fakeUsageEvent(1, 1000)],
+      ['planUsage', fakePlanRowUpdate(1, 1000)],
+      ['activity', 'idle'],
+    ]);
+  });
+
   it('send_HoldText_HoldsTurnOpen', async () => {
     const { agent, heard } = await startedProcess();
 
@@ -771,7 +821,13 @@ describe('createFakeAgentHarness', () => {
       n: number,
       tool: string,
       summary: string,
-      reply: { model: string; spendUsd: number },
+      reply: {
+        model: string;
+        spendUsd: number;
+        contextTokens: number;
+        contextWindow: number;
+      },
+      isLaunched: boolean,
     ) => [
       {
         type: 'agentReplied',
@@ -779,6 +835,9 @@ describe('createFakeAgentHarness', () => {
         agentId: `fake-agent-1-${n}`,
         ...reply,
       },
+      ...(isLaunched
+        ? [{ type: 'agentLaunched', at: 1000, agentId: `fake-agent-1-${n}` }]
+        : []),
       {
         type: 'toolStarted',
         at: 1000,
@@ -820,14 +879,30 @@ describe('createFakeAgentHarness', () => {
         model: null,
         effort: null,
       },
-      ...subagentTool(1, 'Read', 'src/main/claude-code/stream-decoder.ts', {
-        model: 'claude-sonnet-5-5',
-        spendUsd: 0.0421,
-      }),
-      ...subagentTool(2, 'Grep', 'append', {
-        model: 'claude-haiku-5-5',
-        spendUsd: 0.0019,
-      }),
+      ...subagentTool(
+        1,
+        'Read',
+        'src/main/claude-code/stream-decoder.ts',
+        {
+          model: 'claude-sonnet-5-5',
+          spendUsd: 0.0421,
+          contextTokens: 84_000,
+          contextWindow: 200_000,
+        },
+        false,
+      ),
+      ...subagentTool(
+        2,
+        'Grep',
+        'append',
+        {
+          model: 'claude-haiku-5-5',
+          spendUsd: 0.0019,
+          contextTokens: 166_000,
+          contextWindow: 200_000,
+        },
+        true,
+      ),
       {
         type: 'taskStarted',
         at: 1000,
@@ -952,6 +1027,7 @@ describe('createFakeAgentHarness', () => {
         'tool agent-2-1-tool fake',
         'toolFinished fake-agent-2-1',
         'agentReplied fake-agent-2-2',
+        'agentLaunched fake-agent-2-2',
         'tool agent-2-2-tool',
         'toolStarted fake-agent-2-2',
         'tool agent-2-2-tool fake',
@@ -1296,6 +1372,7 @@ describe('createFakeAgentHarness', () => {
         sessionId: null,
         projectDir: '/a',
         profileDir: '/p',
+        before: null,
       },
     ]);
   });
@@ -1308,7 +1385,7 @@ describe('createFakeAgentHarness', () => {
     );
     const known = '00000000-0000-4000-8000-000000000001';
 
-    expect(await harness.history(known, '/a', null)).toEqual([
+    expect(await harness.history(known, '/a', null, null)).toEqual([
       {
         kind: 'user',
         id: `history:${known}-user`,
@@ -1326,36 +1403,55 @@ describe('createFakeAgentHarness', () => {
         raw: [{ fake: 'history-assistant' }],
       },
     ]);
-    await expect(harness.history('nope', '/a', null)).rejects.toThrow(/nope/);
+    await expect(harness.history('nope', '/a', null, null)).rejects.toThrow(
+      /nope/,
+    );
     harness.failNextHistory('cannot read');
-    await expect(harness.history(known, '/a', null)).rejects.toThrow(
+    await expect(harness.history(known, '/a', null, null)).rejects.toThrow(
       'cannot read',
     );
-    expect(await harness.history(known, '/a', null)).toHaveLength(2);
+    expect(await harness.history(known, '/a', null, null)).toHaveLength(2);
+    const cut = FAKE_HISTORY_AT_SECOND;
+    expect(
+      (await harness.history(known, '/a', null, cut)).map(
+        (entry) => entry.kind,
+      ),
+    ).toEqual(['user']);
     expect(harness.pastSessionCalls).toEqual([
       {
         method: 'history',
         sessionId: known,
         projectDir: '/a',
         profileDir: null,
+        before: null,
       },
       {
         method: 'history',
         sessionId: 'nope',
         projectDir: '/a',
         profileDir: null,
+        before: null,
       },
       {
         method: 'history',
         sessionId: known,
         projectDir: '/a',
         profileDir: null,
+        before: null,
       },
       {
         method: 'history',
         sessionId: known,
         projectDir: '/a',
         profileDir: null,
+        before: null,
+      },
+      {
+        method: 'history',
+        sessionId: known,
+        projectDir: '/a',
+        profileDir: null,
+        before: FAKE_HISTORY_AT_SECOND,
       },
     ]);
   });
@@ -1437,6 +1533,794 @@ describe('createFakeAgentHarness', () => {
       ),
     ).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
+  });
+});
+
+describe('createFakeAgentHarness compaction', () => {
+  const hi = { text: 'hi', images: [] };
+  const sendText = (agent: AgentProcess, text: string) =>
+    agent.send({ text, images: [] });
+  const compactionEntries = (timeline: [string, unknown][]) =>
+    timeline
+      .filter(
+        ([name, payload]) =>
+          name === 'entry' && (payload as ChatEntry).kind === 'compaction',
+      )
+      .map(([, payload]) => payload);
+
+  it.each([
+    {
+      case: 'app',
+      trigger: 'app',
+      start: (agent: AgentProcess) => agent.compact(),
+      lines: [
+        'turnStarted',
+        'activity working',
+        'compactionStarted app',
+        'compaction compaction-1',
+        'compactionEnded app done',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'manual',
+      trigger: 'manual',
+      start: (agent: AgentProcess) => sendText(agent, '/compact'),
+      lines: [
+        'user user-2',
+        'userMessage',
+        'skillStarted main',
+        'turnStarted',
+        'activity working',
+        'compactionStarted manual',
+        'compaction compaction-1',
+        'compactionEnded manual done',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'manualWithArgs',
+      trigger: 'manual',
+      start: (agent: AgentProcess) => sendText(agent, '/compact keep the plan'),
+      lines: [
+        'user user-2',
+        'userMessage',
+        'skillStarted main',
+        'turnStarted',
+        'activity working',
+        'compactionStarted manual',
+        'compaction compaction-1',
+        'compactionEnded manual done',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'harness',
+      trigger: 'harness',
+      start: (agent: AgentProcess) => sendText(agent, FAKE_COMPACT_TEXT),
+      lines: [
+        'user user-2',
+        'userMessage',
+        'turnStarted',
+        'activity working',
+        'compactionStarted harness',
+        'compaction compaction-1',
+        'compactionEnded harness done',
+        'assistant assistant-2',
+        'result result-2',
+        'compaction compaction-1',
+        'usage main',
+        'planUsage',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+  ])('compaction_$case', async ({ trigger, start, lines }) => {
+    const { agent, timeline } = await startedProcess();
+    agent.send(hi);
+    await flush();
+    timeline.length = 0;
+
+    start(agent);
+    await flush();
+
+    expect(timeline.map(timelineLine)).toEqual(lines);
+    expect(compactionEntries(timeline)[0]).toEqual({
+      kind: 'compaction',
+      id: 'compaction-1',
+      at: 1000,
+      trigger,
+      beforeTokens: 42000,
+      afterTokens: null,
+      durationMs: 0,
+      raw: [{ fake: 'compaction' }],
+    });
+  });
+
+  it('send_CompactText_NextUsageReadsTheCompactedSize', async () => {
+    const { agent, timeline } = await startedProcess();
+
+    sendText(agent, FAKE_COMPACT_TEXT);
+    await flush();
+
+    expect(timeline).toContainEqual([
+      'agentEvent',
+      { ...fakeUsageEvent(1, 1000), contextTokens: 24000 },
+    ]);
+    expect(compactionEntries(timeline)[1]).toMatchObject({
+      id: 'compaction-1',
+      beforeTokens: null,
+      afterTokens: 24000,
+    });
+  });
+
+  it('afterSize_NextMainUsage_FillsTheEntryOnce', async () => {
+    const { agent, timeline } = await startedProcess();
+    agent.send(hi);
+    await flush();
+    agent.compact();
+    await flush();
+    timeline.length = 0;
+
+    agent.send(hi);
+    await flush();
+
+    const usageIndex = timeline.findIndex(
+      ([, payload]) => (payload as AgentEvent).type === 'usage',
+    );
+    expect(timeline[usageIndex - 1]).toEqual([
+      'entry',
+      {
+        kind: 'compaction',
+        id: 'compaction-1',
+        at: 1000,
+        trigger: 'app',
+        beforeTokens: 42000,
+        afterTokens: 24000,
+        durationMs: 0,
+        raw: [{ fake: 'compaction' }, { fake: 'compaction-after' }],
+      },
+    ]);
+    expect(timeline[usageIndex]).toEqual([
+      'agentEvent',
+      { ...fakeUsageEvent(2, 1000), contextTokens: 24000 },
+    ]);
+
+    timeline.length = 0;
+    agent.send(hi);
+    await flush();
+
+    expect(compactionEntries(timeline)).toEqual([]);
+    expect(timeline).toContainEqual(['agentEvent', fakeUsageEvent(3, 1000)]);
+  });
+
+  it('afterSize_NewerDoneCompaction_ReplacesTheWaitingOne', async () => {
+    const { agent, timeline } = await startedProcess();
+    agent.compact();
+    await flush();
+    agent.compact();
+    await flush();
+    timeline.length = 0;
+
+    agent.send(hi);
+    await flush();
+
+    expect(compactionEntries(timeline)).toMatchObject([
+      { id: 'compaction-2', afterTokens: 24000 },
+    ]);
+  });
+
+  it('afterSize_CutShortCompaction_LeavesTheDoneOneWaiting', async () => {
+    const { harness, agent, timeline } = await startedProcess();
+    agent.compact();
+    await flush();
+    harness.holdCompactions();
+    agent.compact();
+    await flush();
+    agent.interrupt();
+    await flush();
+    timeline.length = 0;
+
+    agent.send(hi);
+    await flush();
+
+    expect(compactionEntries(timeline)).toMatchObject([
+      { id: 'compaction-1', afterTokens: 24000 },
+    ]);
+  });
+
+  it('send_ColdText_UsageIsColdAtOnce', async () => {
+    const { agent, timeline } = await startedProcess();
+
+    sendText(agent, FAKE_COLD_TEXT);
+    await flush();
+
+    expect(timeline).toContainEqual([
+      'agentEvent',
+      {
+        ...fakeUsageEvent(1, 1000),
+        contextTokens: 200000,
+        cacheExpiresAt: 1000,
+      },
+    ]);
+  });
+
+  it('send_ColdTextAfterCompaction_ItsSizeWins', async () => {
+    const { agent, timeline } = await startedProcess();
+    agent.compact();
+    await flush();
+    timeline.length = 0;
+
+    sendText(agent, FAKE_COLD_TEXT);
+    await flush();
+
+    expect(compactionEntries(timeline)).toMatchObject([
+      { id: 'compaction-1', afterTokens: 200000 },
+    ]);
+    expect(timeline).toContainEqual([
+      'agentEvent',
+      {
+        ...fakeUsageEvent(1, 1000),
+        contextTokens: 200000,
+        cacheExpiresAt: 1000,
+      },
+    ]);
+  });
+
+  type HeldContext = {
+    agent: AgentProcess;
+    harness: FakeAgentHarness;
+  };
+  const interruptLines = (trigger: string) => [
+    `compactionEnded ${trigger} interrupted`,
+    'notice notice-compaction-1',
+    'turnEnded',
+    'activity idle',
+  ];
+  const failedLines = ['compactionEnded app failed', 'sessionEnded', 'ended'];
+
+  it.each([
+    {
+      case: 'release',
+      call: ({ harness }: HeldContext) => harness.releaseCompactions(),
+      lines: [
+        'compaction compaction-1',
+        'compactionEnded app done',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'interrupt',
+      call: ({ agent }: HeldContext) => agent.interrupt(),
+      lines: interruptLines('app'),
+    },
+    {
+      case: 'interruptManual',
+      trigger: 'manual',
+      start: (agent: AgentProcess) => sendText(agent, '/compact'),
+      call: ({ agent }: HeldContext) => agent.interrupt(),
+      lines: interruptLines('manual'),
+    },
+    {
+      case: 'interruptHarness',
+      trigger: 'harness',
+      start: (agent: AgentProcess) => sendText(agent, FAKE_COMPACT_TEXT),
+      call: ({ agent }: HeldContext) => agent.interrupt(),
+      lines: interruptLines('harness'),
+    },
+    {
+      case: 'interruptThenRelease',
+      call: async ({ agent, harness }: HeldContext) => {
+        agent.interrupt();
+        await flush();
+        harness.releaseCompactions();
+      },
+      lines: interruptLines('app'),
+    },
+    {
+      case: 'end',
+      call: ({ agent }: HeldContext) => agent.end(),
+      lines: failedLines,
+    },
+    {
+      case: 'kill',
+      call: ({ agent }: HeldContext) => agent.kill(),
+      lines: failedLines,
+    },
+    {
+      case: 'endText',
+      call: ({ agent }: HeldContext) => sendText(agent, FAKE_END_TEXT),
+      lines: ['user user-2', 'userMessage', 'activity working', ...failedLines],
+    },
+    {
+      case: 'heldEnd',
+      call: async ({ agent, harness }: HeldContext) => {
+        harness.holdEnd();
+        void agent.end();
+        await flush();
+        harness.releaseEnd();
+      },
+      lines: failedLines,
+    },
+    {
+      case: 'heldEndThenRelease',
+      call: async ({ agent, harness }: HeldContext) => {
+        harness.holdEnd();
+        void agent.end();
+        await flush();
+        harness.releaseCompactions();
+        await flush();
+        harness.releaseEnd();
+      },
+      lines: failedLines,
+    },
+    {
+      case: 'send',
+      call: ({ agent }: HeldContext) => agent.send(hi),
+      lines: [
+        'compaction compaction-1',
+        'compactionEnded app done',
+        'turnEnded',
+        'activity idle',
+        'user user-2',
+        'userMessage',
+        'turnStarted',
+        'activity working',
+        'assistant assistant-2',
+        'assistant assistant-2',
+        'result result-2',
+        'compaction compaction-1',
+        'usage main',
+        'planUsage',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'holdTextThenInterrupt',
+      call: async ({ agent }: HeldContext) => {
+        sendText(agent, FAKE_HOLD_TEXT);
+        await flush();
+        agent.interrupt();
+      },
+      lines: [
+        'compaction compaction-1',
+        'compactionEnded app done',
+        'turnEnded',
+        'activity idle',
+        'user user-2',
+        'userMessage',
+        'turnStarted',
+        'activity working',
+        'notice notice-2',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+  ])(
+    'heldCompaction_$case',
+    async ({ trigger = 'app', start, call, lines }) => {
+      const { harness, agent, timeline } = await startedProcess();
+      agent.send(hi);
+      await flush();
+      harness.holdCompactions();
+
+      if (start === undefined) {
+        agent.compact();
+      } else {
+        start(agent);
+      }
+      await flush();
+      expect(timeline.map(timelineLine).at(-1)).toBe(
+        `compactionStarted ${trigger}`,
+      );
+      timeline.length = 0;
+
+      await call({ agent, harness });
+      await flush();
+
+      expect(timeline.map(timelineLine)).toEqual(lines);
+    },
+  );
+
+  it.each([
+    {
+      case: 'interrupt',
+      call: ({ agent }: HeldContext) => agent.interrupt(),
+      outcome: 'interrupted',
+      beforeTokens: null,
+    },
+    {
+      case: 'end',
+      call: ({ agent }: HeldContext) => agent.end(),
+      outcome: 'failed',
+      beforeTokens: null,
+    },
+    {
+      case: 'release',
+      call: ({ harness }: HeldContext) => harness.releaseCompactions(),
+      outcome: 'done',
+      beforeTokens: null,
+    },
+  ])(
+    'heldCompaction_ClockAdvanced_EndCarriesTheDuration ($case)',
+    async ({ call, outcome, beforeTokens }) => {
+      let now = 1000;
+      const harness = createFakeAgentHarness(
+        { now: () => now },
+        createMemoryFiles(),
+        FAKE_MICROTASK_TIMERS,
+      );
+      const { agentEvents, events } = recordingEvents();
+      const agent = harness.start(request, events);
+      await flush();
+      harness.holdCompactions();
+      agent.compact();
+      await flush();
+
+      now += 3000;
+      await call({ agent, harness });
+      await flush();
+
+      expect(
+        agentEvents.filter((event) => event.type === 'compactionEnded'),
+      ).toEqual([
+        {
+          type: 'compactionEnded',
+          at: 4000,
+          trigger: 'app',
+          outcome,
+          beforeTokens,
+          durationMs: 3000,
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    {
+      case: 'interrupt',
+      holds: false,
+      call: ({ agent }: HeldContext) => agent.interrupt(),
+      after: [
+        'compactionEnded app interrupted',
+        'notice notice-compaction-1',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'interruptWhileHeldThenRelease',
+      holds: true,
+      call: ({ agent }: HeldContext) => agent.interrupt(),
+      after: [
+        'compactionEnded app interrupted',
+        'notice notice-compaction-1',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'kill',
+      holds: false,
+      call: ({ agent }: HeldContext) => agent.kill(),
+      after: ['compactionEnded app failed', 'sessionEnded', 'ended'],
+    },
+  ])(
+    'compact_EndedInTheSameTick_PairsItsEvents ($case)',
+    async ({ holds, call, after }) => {
+      const { harness, agent, timeline } = await startedProcess();
+      if (holds) {
+        harness.holdCompactions();
+      }
+
+      agent.compact();
+      call({ agent, harness });
+      await flush();
+      harness.releaseCompactions();
+      await flush();
+
+      expect(timeline.map(timelineLine)).toEqual([
+        'turnStarted',
+        'activity working',
+        'compactionStarted app',
+        ...after,
+      ]);
+    },
+  );
+
+  it('releaseCompactions_AcrossProcesses_FinishesInStartOrder', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const finished: string[] = [];
+    const startNamed = (name: string) =>
+      harness.start(request, {
+        ...recordingEvents().events,
+        agentEvent: (event) => {
+          if (event.type === 'compactionEnded') {
+            finished.push(name);
+          }
+        },
+      });
+    const first = startNamed('first');
+    const second = startNamed('second');
+    await flush();
+    harness.holdCompactions();
+    second.compact();
+    first.compact();
+    await flush();
+    expect(finished).toEqual([]);
+
+    harness.releaseCompactions();
+    await flush();
+
+    expect(finished).toEqual(['second', 'first']);
+  });
+
+  it('releaseCompactions_NothingHeld_ClearsTheHold', async () => {
+    const { harness, agent, timeline } = await startedProcess();
+    harness.holdCompactions();
+    harness.releaseCompactions();
+
+    agent.compact();
+    await flush();
+
+    expect(timeline.map(timelineLine).at(-1)).toBe('activity idle');
+  });
+
+  it('heldCompaction_LateAnswerToAnInterruptedPermissionTurn_LeavesItOpen', async () => {
+    const { harness, agent, timeline } = await startedProcess();
+    let allow: (allowed: boolean) => void = () => undefined;
+    harness.askPermissionsWith(
+      () =>
+        new Promise<boolean>((resolve) => {
+          allow = resolve;
+        }),
+    );
+    sendText(agent, FAKE_PERMISSION_TEXT);
+    await flush();
+    agent.interrupt();
+    await flush();
+    harness.holdCompactions();
+    agent.compact();
+    await flush();
+    timeline.length = 0;
+
+    allow(true);
+    await flush();
+    await flush();
+
+    expect(timeline).toEqual([]);
+    expect(() => agent.compact()).toThrow();
+  });
+
+  it.each([
+    {
+      case: 'app',
+      start: (agent: AgentProcess) => agent.compact(),
+      text: 'Compaction canceled.',
+    },
+    {
+      case: 'manual',
+      start: (agent: AgentProcess) => sendText(agent, '/compact'),
+      text: 'Compaction canceled.',
+    },
+    {
+      case: 'harness',
+      start: (agent: AgentProcess) => sendText(agent, FAKE_COMPACT_TEXT),
+      text: 'Interrupted',
+    },
+  ])('interrupt_HeldCompaction_NoticeText ($case)', async ({ start, text }) => {
+    const { harness, agent, heard } = await startedProcess();
+    harness.holdCompactions();
+    start(agent);
+    await flush();
+
+    agent.interrupt();
+    await flush();
+
+    expect(heard).toContainEqual([
+      'entry',
+      expect.objectContaining({ id: 'notice-compaction-1', text }),
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'afterEnd',
+      arrange: async ({ agent }: HeldContext) => {
+        await agent.end();
+      },
+    },
+    {
+      case: 'heldTurn',
+      arrange: async ({ agent }: HeldContext) => {
+        sendText(agent, FAKE_HOLD_TEXT);
+        await flush();
+      },
+    },
+    {
+      case: 'heldCompaction',
+      arrange: async ({ agent, harness }: HeldContext) => {
+        harness.holdCompactions();
+        agent.compact();
+        await flush();
+      },
+    },
+    {
+      case: 'sameTick',
+      arrange: ({ agent }: HeldContext) => {
+        agent.compact();
+      },
+    },
+    {
+      case: 'workflowTurn',
+      files: {
+        write: () => new Promise<void>(() => undefined),
+        trash: () => Promise.resolve(),
+      },
+      arrange: async ({ agent }: HeldContext) => {
+        sendText(agent, FAKE_WORKFLOW_FEATURE_TEXT);
+        await flush();
+      },
+    },
+  ])('compact_Refused_ThrowsAndRecords ($case)', async ({ files, arrange }) => {
+    const { harness, agent, record } = await startedProcess(files);
+    // Only an async row awaits: an await would flush `sameTick`'s microtask.
+    const arranged = arrange({ agent, harness });
+    if (arranged !== undefined) {
+      await arranged;
+    }
+
+    expect(() => agent.compact()).toThrow();
+
+    expect(record.calls.at(-1)).toEqual({ method: 'compact' });
+  });
+});
+
+describe('createFakeAgentHarness attach and detach', () => {
+  const replayedEntry: ChatEntry = {
+    kind: 'notice',
+    id: 'replayed',
+    at: 1000,
+    text: 'replayed',
+    tone: 'info',
+    raw: [],
+  };
+  const replayOne = (events: AgentProcessEvents) => events.entry(replayedEntry);
+
+  function attachRig() {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    return { harness, ...recordingEvents() };
+  }
+
+  it.each([
+    { case: 'no script', script: null, resolved: 'null' },
+    { case: 'null', script: { outcome: 'null' }, resolved: 'null' },
+    {
+      case: 'reject',
+      script: { outcome: 'reject', message: 'gone' },
+      resolved: 'gone',
+    },
+    {
+      case: 'process',
+      script: { outcome: 'process', replay: replayOne },
+      resolved: 'process',
+    },
+  ] as { case: string; script: FakeAttachScript | null; resolved: string }[])(
+    'attach_Scripted_ResolvesAsSet ($case)',
+    async ({ script, resolved }) => {
+      const { harness, events, heard, agentEvents } = attachRig();
+      if (script !== null) {
+        harness.scriptAttach('p-1', script);
+      }
+
+      const outcome = await harness.attach(request, events).then(
+        (process) => (process === null ? 'null' : 'process'),
+        (error: Error) => error.message,
+      );
+      const heardBeforeResolve = [...heard];
+      await flush();
+
+      expect(outcome).toBe(resolved);
+      expect(harness.attachCalls).toEqual([request]);
+      if (resolved === 'process') {
+        expect(heardBeforeResolve).toEqual([['entry', replayedEntry]]);
+        expect(harness.processes[0].attached).toBe(true);
+        expect(agentEvents).toEqual([]);
+        expect(heard).toEqual(heardBeforeResolve);
+      } else {
+        expect(heard).toEqual([]);
+        expect(harness.processes).toEqual([]);
+      }
+    },
+  );
+
+  it('attach_Scripted_ScriptIsUsedOnce', async () => {
+    const { harness, events } = attachRig();
+    harness.scriptAttach('p-1', { outcome: 'process', replay: replayOne });
+
+    await harness.attach(request, events);
+
+    expect(await harness.attach(request, events)).toBeNull();
+    expect(harness.attachCalls).toHaveLength(2);
+  });
+
+  it('attach_Scripted_TurnsContinueTheReplayedIds', async () => {
+    const { harness, events } = attachRig();
+    harness.scriptAttach('p-1', {
+      outcome: 'process',
+      turns: 2,
+      replay: replayOne,
+    });
+
+    const agent = await harness.attach(request, events);
+
+    expect(agent?.send({ text: 'hi', images: [] })).toBe('user-3');
+  });
+
+  it('detach_StopsEventsAndRefusesCalls', async () => {
+    const { agent, heard, agentEvents, record } = await startedProcess();
+    agent.send({ text: FAKE_HOLD_TEXT, images: [] });
+    await flush();
+    agent.interrupt();
+    agent.detach();
+    heard.length = 0;
+    agentEvents.length = 0;
+
+    await flush();
+    expect(() => agent.send({ text: 'hi', images: [] })).toThrow(
+      'fake agent process has detached',
+    );
+    expect(() => agent.interrupt()).toThrow('fake agent process has detached');
+    expect(() => agent.setControl('mode', 'plan')).toThrow(
+      'fake agent process has detached',
+    );
+    agent.kill();
+    await agent.end();
+    await flush();
+
+    expect(heard).toEqual([]);
+    expect(agentEvents).toEqual([]);
+    expect(record.detached).toBe(true);
+    expect(record.calls).toContainEqual({ method: 'detach' });
+    expect(record.calls.slice(0, 3)).toEqual([
+      { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
+      { method: 'interrupt' },
+      { method: 'detach' },
+    ]);
+  });
+
+  it('detach_HeldEnd_SettlesItsOwnWithNoEnded', async () => {
+    const { harness, agent, heard } = await startedProcess();
+    const other = harness.start(request, recordingEvents().events);
+    harness.holdEnd();
+    let hasOtherSettled = false;
+    void other.end().then(() => {
+      hasOtherSettled = true;
+    });
+
+    const ending = agent.end();
+    agent.detach();
+    await ending;
+    await flush();
+
+    expect(hasOtherSettled).toBe(false);
+    harness.releaseEnd();
+    await flush();
+    expect(hasOtherSettled).toBe(true);
+    expect(heard).toEqual([]);
   });
 });
 
@@ -1690,6 +2574,38 @@ describe('createFakeAgentHarness workflow', () => {
       expect(workflowEvents(second.agentEvents)).toEqual(step.events);
       expect(await planText()).toBe(step.plan);
     }
+  });
+
+  it('doneCompaction_ReplylessTurn_NoUsageUntilTheNextMainReply', async () => {
+    const { agent, timeline } = await startedProcess({
+      write: () => Promise.reject(new Error('disk full')),
+      trash: () => Promise.resolve(),
+    });
+    agent.compact();
+    await settle();
+    const usageEvents = () =>
+      timeline.filter(
+        ([name, payload]) =>
+          name === 'agentEvent' && (payload as AgentEvent).type === 'usage',
+      );
+
+    agent.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+    expect(usageEvents()).toEqual([]);
+
+    agent.send({ text: 'hello', images: [] });
+    await settle();
+    expect(usageEvents()).toHaveLength(1);
+  });
+
+  it('compact_AfterAWorkflowTurnEnds_Runs', async () => {
+    const { agent, record } = await startedProcess();
+    agent.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+
+    agent.compact();
+
+    expect(record.calls.at(-1)).toEqual({ method: 'compact' });
   });
 
   it('workflowTypedFeature_RunsTheScriptWithOneSkillStarted', async () => {

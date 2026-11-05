@@ -10,10 +10,12 @@ export type DriveInvocation =
       packaged: boolean;
       harness: DriveHarness;
       userConfig: boolean;
+      // Whether the command line named a flag beyond `--run`.
+      namesFlags: boolean;
       run: string | null;
     }
   | { kind: 'restart'; run: string | null }
-  | { kind: 'quit'; run: string | null }
+  | { kind: 'quit'; keepSessions: boolean; run: string | null }
   | { kind: 'help'; run: string | null }
   | {
       kind: 'send';
@@ -28,6 +30,7 @@ interface Flags {
   harness: string | null;
   userConfig: boolean;
   hold: boolean;
+  keepSessions: boolean;
 }
 
 interface PositionalForm {
@@ -48,6 +51,7 @@ const END_OF_FLAGS = '--';
 const COMMAND_FLAGS: Record<string, string[]> = {
   start: ['--packaged', '--harness', '--user-config'],
   drag: ['--hold'],
+  quit: ['--keep-sessions'],
 };
 
 const POSITIONAL_FORMS: Record<string, PositionalForm> = {
@@ -194,7 +198,7 @@ export const CLI_FORMS = [
   '',
   'start [--packaged] [--harness fake|claude] [--user-config]',
   'restart',
-  'quit',
+  'quit [--keep-sessions]',
   'help',
   ...Object.values(POSITIONAL_FORMS).map((form) => form.usage),
   '<command> [json]',
@@ -219,10 +223,15 @@ export function parseDriveArgs(argv: string[]): DriveInvocation {
       packaged: flags.packaged,
       harness: harnessOf(flags.harness),
       userConfig: flags.userConfig,
+      namesFlags: flags.packaged || flags.harness !== null || flags.userConfig,
       run,
     };
   }
-  if (command === 'restart' || command === 'quit' || command === 'help') {
+  if (command === 'quit') {
+    requireCount(rest, 0, 0, command);
+    return { kind: 'quit', keepSessions: flags.keepSessions, run };
+  }
+  if (command === 'restart' || command === 'help') {
     requireCount(rest, 0, 0, command);
     return { kind: command, run };
   }
@@ -248,6 +257,7 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
     harness: null,
     userConfig: false,
     hold: false,
+    keepSessions: false,
   };
   const positionals: string[] = [];
   for (let index = 0; index < argv.length; index++) {
@@ -275,6 +285,8 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
       flags.userConfig = true;
     } else if (argument === '--hold') {
       flags.hold = true;
+    } else if (argument === '--keep-sessions') {
+      flags.keepSessions = true;
     } else {
       throw new Error(`Unknown flag ${argument}`);
     }

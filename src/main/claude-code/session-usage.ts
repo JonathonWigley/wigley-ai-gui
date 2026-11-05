@@ -160,15 +160,21 @@ export function usageEvent(
   };
 }
 
+// The input side of an `assistant` message's `usage`, a missing field counting 0.
+export function replyInputTokens(usage: Json): number {
+  return (
+    numberOr(usage.input_tokens, 0) +
+    numberOr(usage.cache_read_input_tokens, 0) +
+    numberOr(usage.cache_creation_input_tokens, 0)
+  );
+}
+
 // An `assistant` message's `usage`. A reply that wrote both cache lifetimes takes the shorter: part of its context
 // goes cold then.
 export function replyUsageOf(usage: Json): ReplyUsage {
   const cacheRead = numberOr(usage.cache_read_input_tokens, 0);
   const contextTokens =
-    numberOr(usage.input_tokens, 0) +
-    cacheRead +
-    numberOr(usage.cache_creation_input_tokens, 0) +
-    numberOr(usage.output_tokens, 0);
+    replyInputTokens(usage) + numberOr(usage.output_tokens, 0);
   const cacheCreation = asJson(usage.cache_creation);
   const wrote1h = numberOr(cacheCreation.ephemeral_1h_input_tokens, 0) > 0;
   const wrote5m = numberOr(cacheCreation.ephemeral_5m_input_tokens, 0) > 0;

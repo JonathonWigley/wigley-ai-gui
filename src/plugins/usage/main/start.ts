@@ -4,6 +4,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
 import {
   CHAT_HARNESS_ID,
   type ChatMainEvents,
@@ -26,6 +27,7 @@ import {
   withoutSession,
   withPollResult,
   withProfiles,
+  withSessionCompaction,
   withSessionUsage,
 } from './usage-store';
 
@@ -41,11 +43,13 @@ type UsageApi = MainApi<
 // every change. Seeds a plan per chat profile, polls each through the Claude
 // harness every `pollIntervalSeconds` (rescheduled on a settings change), and
 // hears `chat.planUsage` (live rows), `chat.sessionOpened` (a session's
-// profile), `chat.agentEvent` (the main agent's `usage`) and `sessions.ended`.
-// It hands the self-test its script, and in a drive run it adds the drive
-// actions; a seed from either replaces the snapshot and stops the poller for
-// the run, while live rows and usage events still fold. The script's
-// `sessionUsage` waits for a session's first `usage` event in the store.
+// profile), `chat.agentEvent` (the main agent's `usage`, and each compaction's
+// start and end) and `sessions.ended`. It hands the self-test its script, and
+// in a drive run it adds the drive actions; a seed from either replaces the
+// snapshot and stops the poller for the run, while live rows, usage events and
+// compaction events still fold. The script's `sessionUsage` waits for a
+// session's first `usage` event in the store, and its `compactions` hold and
+// release every fake harness's compactions.
 export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -92,6 +96,15 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     events.on('chat.agentEvent', ({ sessionId, profileDir, event }) => {
       if (event.type === 'usage' && event.agentId === MAIN_AGENT_ID) {
         apply(withSessionUsage(state, sessionId, profileDir, event));
+      } else if (event.type === 'compactionStarted') {
+        apply(
+          withSessionCompaction(state, sessionId, profileDir, {
+            trigger: event.trigger,
+            startedAt: event.at,
+          }),
+        );
+      } else if (event.type === 'compactionEnded') {
+        apply(withSessionCompaction(state, sessionId, profileDir, null));
       }
     });
     events.on('sessions.ended', ({ sessionId }) =>
@@ -140,6 +153,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     api.onSettingsChanged(() => poller?.reschedule());
     poller?.start();
     const snapshot = () => state.snapshot;
+    const fakeHarnesses = services.agentHarnesses.filter(isFakeAgentHarness);
     services.selfTest?.run(
       usageSelfTestScript({
         homeDir: services.homeDir,
@@ -151,6 +165,18 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
         snapshot,
         seed,
         sessionUsage,
+        compactions: {
+          hold() {
+            for (const fake of fakeHarnesses) {
+              fake.holdCompactions();
+            }
+          },
+          release() {
+            for (const fake of fakeHarnesses) {
+              fake.releaseCompactions();
+            }
+          },
+        },
       }),
     );
     if (api.drive !== null) {

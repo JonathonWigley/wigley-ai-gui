@@ -1,65 +1,85 @@
 // @ts-check
 
-// The built-in agent-strip look: each box a card of fixed width. A subagent
-// box holds its status dot and name, its model, effort and cost, its task cut
-// to one line and its latest tool calls in mono, which an open box swaps for
-// the list of every call. A task box holds its status dot, a terminal icon and
-// what it runs, then its owner and elapsed time, and its command in mono while
-// open. A finished box dims; the selected one takes the focus ring and the
-// prompt of the keys that type in the chat box.
+// The built-in agent-strip look. A subagent box is a card of fixed width: its
+// running dot, name, kind tag and runtime, then its description cut to one line,
+// its model and effort, its latest tool calls in mono, which an open box drops,
+// and a footer of its context bar and cost. The app draws an open subagent box's
+// list of every call after all of these. A task box is a row the composer's
+// width: its running dot, Shell tag (Task when it has no command), command or
+// else description in mono and runtime on one line.
+// An open row wraps the command and adds its owner under the line. The selected
+// box takes the focus ring and the prompt of the keys that type in the chat box.
 
 /** @typedef {import('../layout').AgentStripKit} AgentStripKit */
+/** @typedef {import('../layout').AgentBoxInput} AgentBoxInput */
+/** @typedef {import('../layout').TaskBoxInput} TaskBoxInput */
 /** @typedef {import('../layout').ToolLineInput} ToolLineInput */
+
+// The share of its context window at which a subagent's bar turns the warning colour.
+const CONTEXT_WARNING_RATIO = 0.8;
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
   agentBox(parent, input, kit) {
     const element = kit.card(parent, boxClass('agent-strip-agent', input));
-    const head = kit.el(element, 'div', 'agent-strip-head');
-    kit.statusDot(head, input.status);
-    kit.el(head, 'span', 'agent-strip-name', input.name);
-    if (input.meta !== '') {
-      kit.el(element, 'div', 'agent-strip-meta', input.meta);
+    const isBackground = input.kind === 'backgroundAgent';
+    const runtime = boxTop(
+      element,
+      input,
+      isBackground ? 'Background agent' : 'Subagent',
+      isBackground ? 'accent' : 'neutral',
+      kit,
+    );
+    const modelLine = [input.model, input.effort]
+      .filter((part) => part !== null)
+      .join(' · ');
+    if (modelLine !== '') {
+      kit.el(element, 'div', 'agent-strip-model', modelLine);
     }
-    kit.el(element, 'div', 'agent-strip-description', input.description);
-    if (!input.isOpen && input.recentTools.length > 0) {
+    if (!input.isOpen) {
       const recent = kit.el(element, 'div', 'agent-strip-recent');
       for (const tool of input.recentTools) {
         toolLine(recent, tool, kit);
       }
     }
-    if (input.isSelected) {
-      cursorPrompt(element, kit);
-    }
-    return { element };
-  },
-  taskBox(parent, input, kit) {
-    const element = kit.card(parent, boxClass('agent-strip-task', input));
-    const head = kit.el(element, 'div', 'agent-strip-head');
-    kit.statusDot(head, input.status);
-    kit.icon(head, 'terminal', 'agent-strip-task-icon');
-    kit.el(head, 'span', 'agent-strip-name', input.description);
-    const meta = kit.el(
-      element,
-      'div',
-      'agent-strip-meta',
-      taskMeta(input, kit),
-    );
-    if (input.isOpen) {
-      kit.el(
-        element,
-        'div',
-        'agent-strip-command',
-        input.command ?? 'no command',
-      );
-    }
+    agentFooter(element, input, kit);
     if (input.isSelected) {
       cursorPrompt(element, kit);
     }
     return {
       element,
       update(next) {
-        meta.textContent = taskMeta(next, kit);
+        runtime.textContent = kit.duration(next.elapsedMs);
+      },
+    };
+  },
+  taskBox(parent, input, kit) {
+    const element = kit.card(parent, boxClass('agent-strip-task', input));
+    const line = kit.el(element, 'div', 'agent-strip-row-line');
+    kit.statusDot(line, 'running');
+    kit.tag(line, input.command === null ? 'Task' : 'Shell', 'accent');
+    kit.el(
+      line,
+      'div',
+      'agent-strip-command',
+      input.command ?? input.description,
+    );
+    if (input.isSelected) {
+      cursorPrompt(line, kit);
+    }
+    const runtime = kit.el(
+      line,
+      'span',
+      'agent-strip-runtime',
+      kit.duration(input.elapsedMs),
+    );
+    if (input.isOpen) {
+      kit.el(element, 'div', 'agent-strip-row-owner', rowOwner(input));
+    }
+    return {
+      element,
+      update(next) {
+        runtime.textContent = kit.duration(next.elapsedMs);
       },
     };
   },
@@ -74,13 +94,12 @@ const layout = {
 
 /**
  * @param {string} kindClass
- * @param {{ isDimmed: boolean; isSelected: boolean; isOpen: boolean }} input
+ * @param {{ isSelected: boolean; isOpen: boolean }} input
  */
 function boxClass(kindClass, input) {
   return [
     'agent-strip-box',
     kindClass,
-    input.isDimmed ? 'is-dimmed' : '',
     input.isSelected ? 'is-selected' : '',
     input.isOpen ? 'is-open' : '',
   ]
@@ -89,14 +108,94 @@ function boxClass(kindClass, input) {
 }
 
 /**
- * A task box's owner, then its elapsed time while it runs.
- * @param {import('../layout').TaskBoxInput} input
+ * What an open row says under its line: its owner, and its description unless
+ * the command line already shows it.
+ * @param {TaskBoxInput} input
+ */
+function rowOwner(input) {
+  return input.command === null
+    ? input.name
+    : `${input.name} · ${input.description}`;
+}
+
+/**
+ * An agent box's head row and description; returns the runtime `update` rewrites.
+ * @param {HTMLElement} element
+ * @param {{ name: string; description: string; elapsedMs: number }} input
+ * @param {string} tagText
+ * @param {import('../../../../shared/page/layout-host/kit').TagTone} tagTone
  * @param {AgentStripKit} kit
  */
-function taskMeta(input, kit) {
-  return input.elapsedMs === null
-    ? input.owner
-    : `${input.owner} · ${kit.duration(input.elapsedMs)}`;
+function boxTop(element, input, tagText, tagTone, kit) {
+  const head = kit.el(element, 'div', 'agent-strip-head');
+  kit.statusDot(head, 'running');
+  kit.el(head, 'span', 'agent-strip-name', input.name);
+  kit.tag(head, tagText, tagTone);
+  const runtime = kit.el(
+    head,
+    'span',
+    'agent-strip-runtime',
+    kit.duration(input.elapsedMs),
+  );
+  kit.el(element, 'div', 'agent-strip-description', input.description);
+  return runtime;
+}
+
+/**
+ * The context bar and text, then the cost, each left out while unknown; no
+ * footer when both are.
+ * @param {HTMLElement} element
+ * @param {AgentBoxInput} input
+ * @param {AgentStripKit} kit
+ */
+function agentFooter(element, input, kit) {
+  const { contextTokens, contextWindow, spendUsd } = input;
+  if (contextTokens === null && spendUsd === null) {
+    return;
+  }
+  const footer = kit.el(element, 'div', 'agent-strip-footer');
+  if (contextTokens !== null) {
+    if (contextWindow !== null) {
+      contextBar(footer, contextTokens / contextWindow, kit);
+    }
+    kit.el(
+      footer,
+      'span',
+      'agent-strip-context',
+      contextWindow === null
+        ? tokenCount(contextTokens)
+        : `${tokenCount(contextTokens)}/${tokenCount(contextWindow)}`,
+    );
+  }
+  if (spendUsd !== null) {
+    kit.el(footer, 'span', 'agent-strip-cost', `$${spendUsd.toFixed(2)}`);
+  }
+}
+
+/**
+ * A meter filled to `ratio`, held to full, in the warning tone once `ratio`
+ * reaches the warning share.
+ * @param {HTMLElement} footer
+ * @param {number} ratio
+ * @param {AgentStripKit} kit
+ */
+function contextBar(footer, ratio, kit) {
+  const percent = Math.min(100, Math.round(ratio * 100));
+  kit.meter(
+    footer,
+    percent,
+    ratio >= CONTEXT_WARNING_RATIO ? 'warning' : 'normal',
+  );
+}
+
+/**
+ * `84k`, or `1.2M` from where the thousands would round to `1000k`.
+ * @param {number} tokens
+ */
+function tokenCount(tokens) {
+  return tokens >= 999_500
+    ? `${(tokens / 1_000_000).toFixed(1)}M`
+    : `${Math.round(tokens / 1000)}k`;
 }
 
 /**
@@ -117,11 +216,11 @@ function toolLine(parent, tool, kit) {
 
 /**
  * The selected box's cursor prompt: the keys that leave it for the chat box.
- * @param {HTMLElement} element
+ * @param {HTMLElement} parent
  * @param {AgentStripKit} kit
  */
-function cursorPrompt(element, kit) {
-  const line = kit.el(element, 'div', 'agent-strip-prompt');
+function cursorPrompt(parent, kit) {
+  const line = kit.el(parent, 'div', 'agent-strip-prompt');
   kit.keyHint(line, 'focusBox', { label: 'to type' });
   kit.keyHint(line, 'appendBox', { label: 'to append' });
 }

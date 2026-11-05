@@ -28,6 +28,7 @@ function sessionList() {
       state = next;
     },
     activated: () => undefined,
+    projectName: async () => null,
   });
   for (const name of ['ask_round', 'open_primer']) {
     list.contributeTools(

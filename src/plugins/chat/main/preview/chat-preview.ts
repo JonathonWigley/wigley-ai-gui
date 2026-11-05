@@ -85,9 +85,12 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         controls: previewControls(),
         activity: 'idle',
         background: 0,
+        activeTime: { totalMs: 185_000, since: null },
         commands: [],
         running: true,
         queued: [],
+        compaction: null,
+        returned: [],
         repo: PREVIEW_PROJECT_DIR,
         branch: 'main',
       };
@@ -101,6 +104,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
           profileDir: null,
           hostSessionId: CHAT_PREVIEW_HOST_ID,
           event,
+          replayed: false,
         });
       }
       log('chat preview opened');

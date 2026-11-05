@@ -5,9 +5,11 @@ const CHECKER = 'preview-agent-check';
 
 // The agent events of the sample session, in event order, dated before `at`:
 // a running subagent with three tool calls (two done, one running) and a
-// reply's model and spend; a subagent that finished done; and a running task
-// of the main agent's with a command. Whatever draws a session's subagents and
-// tasks from agent events draws these in the sample's Chat tab.
+// reply's model, spend and near-full context; a subagent that finished done
+// with no reply; a running task of the main agent's with a command; and a skill
+// started by the main agent and one by the running subagent, neither a workflow
+// stage's skill. Whatever draws a session's subagents, tasks and skills from
+// agent events draws these in the sample's Chat tab.
 export function previewAgentEvents(at: number): AgentEvent[] {
   return [
     {
@@ -22,11 +24,27 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       effort: 'medium',
     },
     {
+      type: 'skillStarted',
+      at: at - 93_000,
+      agentId: MAIN_AGENT_ID,
+      skill: 'wigley:writing-code',
+      args: '',
+    },
+    {
       type: 'agentReplied',
       at: at - 90_000,
       agentId: MAPPER,
       model: 'claude-sonnet-5-5',
       spendUsd: 0.4213,
+      contextTokens: 166_000,
+      contextWindow: 200_000,
+    },
+    {
+      type: 'skillStarted',
+      at: at - 89_000,
+      agentId: MAPPER,
+      skill: 'wigley:explore',
+      args: '',
     },
     ...previewTool(
       MAPPER,

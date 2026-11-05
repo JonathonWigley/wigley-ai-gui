@@ -86,21 +86,32 @@ function withoutHash(url: string): string {
 // the window has focus; `chooseFolder` opens the native folder dialog over the
 // window and resolves to the chosen folder, or null when the user cancels;
 // `capture` resolves to a PNG of the window's content as shown, and rejects
-// when the capture is empty.
+// when the capture is empty. A call can arrive after the window is destroyed,
+// as on quit: `show` does nothing, `isFocused` is false, `chooseFolder` resolves
+// to null and `capture` rejects.
 export function windowService(window: BrowserWindow): MainServices['window'] {
   return {
     show: () => {
+      if (window.isDestroyed()) {
+        return;
+      }
       window.show();
       window.focus();
     },
-    isFocused: () => window.isFocused(),
+    isFocused: () => !window.isDestroyed() && window.isFocused(),
     chooseFolder: async () => {
+      if (window.isDestroyed()) {
+        return null;
+      }
       const chosen = await dialog.showOpenDialog(window, {
         properties: ['openDirectory', 'createDirectory'],
       });
       return chosen.canceled ? null : (chosen.filePaths[0] ?? null);
     },
     capture: async () => {
+      if (window.isDestroyed()) {
+        throw new Error('Window capture is empty: the window is destroyed');
+      }
       const image = await window.webContents.capturePage();
       if (image.isEmpty()) {
         throw new Error('Window capture is empty');
@@ -116,6 +127,9 @@ export function registerWindowCommands(
   log: Log,
 ) {
   commands.register('window.summon', (chord) => {
+    if (window.isDestroyed()) {
+      return;
+    }
     // A hidden app stays inactive behind the frontmost app unless activated.
     app.show();
     window.show();

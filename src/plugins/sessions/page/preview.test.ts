@@ -43,6 +43,25 @@ function cellText(row: FakeElement, className: string): string | null {
   return findAll(row, className)[0]?.textContent ?? null;
 }
 
+// The class of the activity label one row draws and its text, null for none.
+function activityLabel(row: FakeElement): {
+  className: string;
+  text: string;
+} | null {
+  for (const className of [
+    'ui-tag--attention',
+    'ui-tag--error',
+    'session-row-activity--running',
+    'session-row-activity--success',
+  ]) {
+    const text = cellText(row, className);
+    if (text !== null) {
+      return { className, text };
+    }
+  }
+  return null;
+}
+
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
 });
@@ -210,9 +229,7 @@ describe('session rows', () => {
     marked: boolean;
     activity: RowActivity | null;
     label: string;
-    detail: string | null;
-    word: string | null;
-    dots: number;
+    expected: { className: string; text: string } | null;
   }>([
     {
       case: 'agent title',
@@ -220,53 +237,65 @@ describe('session rows', () => {
       marked: false,
       activity: null,
       label: 'Fix the build',
-      detail: null,
-      word: null,
-      dots: 0,
+      expected: null,
     },
     {
       case: 'no title',
       agent: null,
       marked: false,
       activity: null,
-      label: 'label s1',
-      detail: null,
-      word: null,
-      dots: 0,
+      label: 'New Chat',
+      expected: null,
     },
     {
       case: 'working',
       agent: null,
       marked: false,
       activity: WORKING,
-      label: 'label s1',
-      detail: null,
-      word: 'working',
-      dots: 1,
+      label: 'New Chat',
+      expected: {
+        className: 'session-row-activity--running',
+        text: 'Working',
+      },
+    },
+    {
+      case: 'done',
+      agent: null,
+      marked: false,
+      activity: { word: 'done', tone: 'success', rank: 10 },
+      label: 'New Chat',
+      expected: { className: 'session-row-activity--success', text: 'Done' },
+    },
+    {
+      case: 'error',
+      agent: null,
+      marked: false,
+      activity: { word: 'error', tone: 'error', rank: 30 },
+      label: 'New Chat',
+      expected: { className: 'ui-tag--error', text: 'Error' },
     },
     {
       case: 'marked with an activity',
       agent: null,
       marked: true,
-      activity: NEEDS_YOU_ACTIVITY,
-      label: 'label s1',
-      detail: null,
-      word: 'needs you',
-      dots: 1,
+      activity: WORKING,
+      label: 'New Chat',
+      expected: {
+        className: 'session-row-activity--running',
+        text: 'Working',
+      },
     },
     {
       case: 'marked alone',
       agent: null,
       marked: true,
       activity: null,
-      label: 'label s1',
-      detail: null,
-      word: null,
-      dots: 1,
+      label: 'New Chat',
+      expected: { className: 'ui-tag--attention', text: 'Needs you' },
     },
   ])(
-    'sessionsView_Row_DrawsTitleFolderAndActivity ($case)',
-    ({ agent, marked, activity, label, detail, word, dots }) => {
+    'sessionsView_Row_DrawsTitleOrNewChatAndActivityLabel ($case)',
+    ({ agent, marked, activity, label, expected }) => {
       const { view, sideBar } = sessionsViewSetup();
       view.render(titledState(agent, marked));
 
@@ -274,9 +303,7 @@ describe('session rows', () => {
 
       const [row] = drawnRows(sideBar);
       expect(cellText(row, 'ui-row-label')).toBe(label);
-      expect(cellText(row, 'ui-row-detail')).toBe(detail);
-      expect(cellText(row, 'session-row-activity')).toBe(word);
-      expect(findAll(row, 'ui-dot')).toHaveLength(dots);
+      expect(activityLabel(row)).toEqual(expected);
     },
   );
 
@@ -309,25 +336,38 @@ describe('session rows', () => {
     );
   });
 
-  it('sessionsView_RowTooltip_JoinsTitleLabelAndStatus', () => {
-    const { view, sideBar } = sessionsViewSetup();
-    view.render(titledState('Fix the build'));
+  it.each([
+    {
+      case: 'with an activity',
+      activity: WORKING,
+      tooltip: 'Fix the build · label s1 · working · Round 2/5',
+    },
+    {
+      case: 'with no activity',
+      activity: null,
+      tooltip: 'Fix the build · label s1 · Round 2/5',
+    },
+  ])(
+    'sessionsView_RowTooltip_JoinsTitleLabelActivityAndStatus ($case)',
+    ({ activity, tooltip }) => {
+      const { view, sideBar } = sessionsViewSetup();
+      view.render(titledState('Fix the build'));
+      view.setActivity('s1', 'chat', activity);
 
-    view.tabs
-      .add('s1', {
-        id: 'chat',
-        title: 'Chat',
-        icon: 'comment',
-        element: asHtml(new FakeElement('div')),
-        beforeClose: () => true,
-        shown: () => undefined,
-      })
-      .setStatus('thinking');
+      view.tabs
+        .add('s1', {
+          id: 'chat',
+          title: 'Chat',
+          icon: 'comment',
+          element: asHtml(new FakeElement('div')),
+          beforeClose: () => true,
+          shown: () => undefined,
+        })
+        .setStatus('Round 2/5');
 
-    expect(drawnRows(sideBar)[0].title).toBe(
-      'Fix the build · label s1 · thinking',
-    );
-  });
+      expect(drawnRows(sideBar)[0].title).toBe(tooltip);
+    },
+  );
 
   it('sessionsView_SetActivityTopUnchanged_DrawsNothing', () => {
     const { view, sideBar } = sessionsViewSetup();
@@ -347,9 +387,10 @@ describe('session rows', () => {
     view.setActivity('s1', 'chat', WORKING);
     view.render(stateOf(['s1'], 's1'));
 
-    expect(cellText(drawnRows(sideBar)[0], 'session-row-activity')).toBe(
-      'working',
-    );
+    expect(activityLabel(drawnRows(sideBar)[0])).toEqual({
+      className: 'session-row-activity--running',
+      text: 'Working',
+    });
   });
 
   it('sessionsView_RowRemoved_DropsItsActivities', () => {
@@ -360,6 +401,6 @@ describe('session rows', () => {
     view.render(stateOf([], null));
     view.render(stateOf(['s1'], 's1'));
 
-    expect(findAll(drawnRows(sideBar)[0], 'session-row-activity')).toEqual([]);
+    expect(activityLabel(drawnRows(sideBar)[0])).toBeNull();
   });
 });

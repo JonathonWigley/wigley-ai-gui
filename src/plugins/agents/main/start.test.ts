@@ -11,7 +11,7 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type { Roster, RosterAgent, RosterTask } from '../contract';
+import type { Roster, RosterAgent, RosterSkill, RosterTask } from '../contract';
 import { agentsMainPart } from './start';
 
 const PREVIEW_ROW = 'preview-row';
@@ -57,8 +57,10 @@ const runningA: RosterAgent = {
   model: null,
   effort: null,
   spendUsd: null,
+  isBackground: false,
+  contextTokens: null,
+  contextWindow: null,
   tools: [],
-  outcome: 'running',
 };
 const runningB: RosterAgent = {
   agentId: 'toolu_b',
@@ -69,10 +71,11 @@ const runningB: RosterAgent = {
   model: null,
   effort: null,
   spendUsd: null,
+  isBackground: false,
+  contextTokens: null,
+  contextWindow: null,
   tools: [],
-  outcome: 'running',
 };
-const failedA: RosterAgent = { ...runningA, outcome: 'failed' };
 
 const taskStartedA: AgentEvent = {
   type: 'taskStarted',
@@ -93,23 +96,43 @@ const taskStartedMain: AgentEvent = {
 const runningTaskA: RosterTask = {
   taskId: 'task_a',
   agentId: 'toolu_a',
+  ownerName: 'subagent',
   description: 'npm test --watch',
   command: null,
   startedAt: 1_500,
-  outcome: 'running',
 };
 const runningTaskMain: RosterTask = {
   taskId: 'task_main',
   agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
   description: 'npm run build',
   command: null,
   startedAt: 6_000,
-  outcome: 'running',
 };
 
-// A roster holding these agents and tasks.
-function roster(agents: RosterAgent[], tasks: RosterTask[] = []): Roster {
-  return { agents, tasks };
+// `task_a` when its owner `toolu_a` is listed as it starts.
+const taskOfListedA: RosterTask = { ...runningTaskA, ownerName: 'Explore' };
+
+const skillStartedFoo: AgentEvent = {
+  type: 'skillStarted',
+  at: 7_000,
+  agentId: MAIN_AGENT_ID,
+  skill: 'foo',
+  args: '',
+};
+const fooByMain: RosterSkill = {
+  skill: 'foo',
+  agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
+};
+
+// A roster holding these agents, tasks and skills.
+function roster(
+  agents: RosterAgent[],
+  tasks: RosterTask[] = [],
+  skills: RosterSkill[] = [],
+): Roster {
+  return { agents, tasks, skills };
 }
 
 // Row s1's process after a clear, beside its first process `h1`.
@@ -163,12 +186,17 @@ function startAgentsPart() {
       listener(payload);
     }
   };
-  const agentEvent = (event: AgentEvent, hostSessionId = 'h1') =>
+  const agentEvent = (
+    event: AgentEvent,
+    hostSessionId = 'h1',
+    replayed = false,
+  ) =>
     emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: null,
       hostSessionId,
       event,
+      replayed,
     });
   const invoke = (name: string) => handlers.get(name)?.();
   return { sent, data, emit, agentEvent, invoke };
@@ -203,11 +231,10 @@ describe('agentsMainPart', () => {
       rosters: {},
     },
     {
-      name: 'a failed agent stays listed until the next message',
-      steps: [spawned, failed, userMessage],
+      name: 'a failed agent leaves the roster at once',
+      steps: [spawned, failed],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([failedA]) },
         { sessionId: 's1', roster: roster([]) },
       ],
       rosters: {},
@@ -234,30 +261,14 @@ describe('agentsMainPart', () => {
       rosters: { s1: roster([runningA]) },
     },
     {
-      name: "a message drops a cleared host's finished items",
-      steps: [
-        spawned,
-        { host: CLEARED_HOST, event: spawnedB },
-        sessionEnded,
-        { host: CLEARED_HOST, event: userMessage },
-      ],
-      sent: [
-        { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([runningA, runningB]) },
-        { sessionId: 's1', roster: roster([failedA, runningB]) },
-        { sessionId: 's1', roster: roster([runningB]) },
-      ],
-      rosters: { s1: roster([runningB]) },
-    },
-    {
-      name: "a row's old process ending fails only its own subagents",
+      name: "a row's old process ending removes only its own subagents",
       steps: [spawned, { host: CLEARED_HOST, event: spawnedB }, sessionEnded],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
         { sessionId: 's1', roster: roster([runningA, runningB]) },
-        { sessionId: 's1', roster: roster([failedA, runningB]) },
+        { sessionId: 's1', roster: roster([runningB]) },
       ],
-      rosters: { s1: roster([failedA, runningB]) },
+      rosters: { s1: roster([runningB]) },
     },
     {
       name: 'a started task sends a roster listing it',
@@ -282,10 +293,40 @@ describe('agentsMainPart', () => {
       steps: [spawned, taskStartedA, finished],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([runningA], [runningTaskA]) },
-        { sessionId: 's1', roster: roster([], [runningTaskA]) },
+        { sessionId: 's1', roster: roster([runningA], [taskOfListedA]) },
+        { sessionId: 's1', roster: roster([], [taskOfListedA]) },
       ],
-      rosters: { s1: roster([], [runningTaskA]) },
+      rosters: { s1: roster([], [taskOfListedA]) },
+    },
+    {
+      name: 'two hosts of one row with the same skill by main show one row',
+      steps: [skillStartedFoo, { host: CLEARED_HOST, event: skillStartedFoo }],
+      sent: [
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+      ],
+      rosters: { s1: roster([], [], [fooByMain]) },
+    },
+    {
+      name: 'a host with only skills left stays',
+      steps: [spawned, skillStartedFoo, finished, userMessage],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+      ],
+      rosters: { s1: roster([], [], [fooByMain]) },
+    },
+    {
+      name: "a cleared host's skill stays through its end, until the row ends",
+      steps: [spawned, skillStartedFoo, sessionEnded, 'sessions.ended'],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([]) },
+      ],
+      rosters: {},
     },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();
@@ -316,45 +357,55 @@ describe('agentsMainPart', () => {
     );
   });
 
-  it('previewEvents_NoLogWritten', async () => {
-    const agents = startAgentsPart();
+  it.each([
+    {
+      given: 'the chat preview host',
+      hostSessionId: CHAT_PREVIEW_HOST_ID,
+      replayed: false,
+    },
+    { given: 'a replayed event', hostSessionId: 'h1', replayed: true },
+  ])(
+    'agentLog_UnloggedEvents_NoLogWritten ($given)',
+    async ({ hostSessionId, replayed }) => {
+      const agents = startAgentsPart();
 
-    agents.agentEvent(spawnedB, CHAT_PREVIEW_HOST_ID);
-    agents.agentEvent(spawned);
-    await settled();
+      agents.agentEvent(spawned, hostSessionId, replayed);
+      await settled();
 
-    expect(agents.invoke('rosters')).toEqual({
-      s1: roster([runningB, runningA]),
-    });
-    await expect(
-      agents.data.read(`logs/${CHAT_PREVIEW_HOST_ID}.jsonl`),
-    ).rejects.toThrow();
-    expect(await agents.data.read('logs/h1.jsonl')).toBe(
-      JSON.stringify(spawned) + '\n',
-    );
-  });
+      expect(await agents.data.list('logs')).toEqual([]);
+      expect(agents.invoke('rosters')).toEqual({ s1: roster([runningA]) });
+      expect(agents.sent).toEqual([
+        { sessionId: 's1', roster: roster([runningA]) },
+      ]);
+    },
+  );
 
   it('rosters copies each live list and merges the preview roster', () => {
     const agents = startAgentsPart();
     agents.agentEvent(spawned);
     agents.agentEvent(taskStartedA);
+    agents.agentEvent(skillStartedFoo);
     agents.invoke('openPreview');
 
     const first = agents.invoke('rosters') as Record<string, Roster>;
     first.s1.agents.pop();
     first.s1.tasks.pop();
+    first.s1.skills.pop();
     first[PREVIEW_ROW].agents.pop();
     first[PREVIEW_ROW].tasks.pop();
+    // The sample lists no skills, so only an added one can reach the live list.
+    first[PREVIEW_ROW].skills.push(fooByMain);
     const second = agents.invoke('rosters') as Record<string, Roster>;
 
     expect(Object.keys(second)).toEqual(['s1', PREVIEW_ROW]);
-    expect(second.s1).toEqual(roster([runningA], [runningTaskA]));
+    expect(second.s1).toEqual(roster([runningA], [taskOfListedA], [fooByMain]));
     expect(second[PREVIEW_ROW].agents).toHaveLength(
       first[PREVIEW_ROW].agents.length + 1,
     );
     expect(second[PREVIEW_ROW].tasks).toHaveLength(
       first[PREVIEW_ROW].tasks.length + 1,
     );
+    expect(second[PREVIEW_ROW].skills).not.toContainEqual(fooByMain);
   });
 });
 
@@ -391,7 +442,9 @@ describe('agentsMainPart lifecycle', () => {
       name: 'preview open',
       opensPreview: true,
       ended: 1,
-      sent: [{ sessionId: 'row-1', roster: { agents: [], tasks: [] } }],
+      sent: [
+        { sessionId: 'row-1', roster: { agents: [], tasks: [], skills: [] } },
+      ],
     },
   ])(
     'stop_LeavesNoLiveRegistration $name',

@@ -18,7 +18,7 @@ function startOnHarness() {
   return startPagePart(agentLinesPagePart, {
     dependencies: [
       fakeDependency(agentsPageKey, (consumer) => ({
-        roster: () => ({ agents: [], tasks: [] }),
+        roster: () => ({ agents: [], tasks: [], skills: [] }),
         onRosterChanged: () => consumer.track({ dispose() {} }),
       })),
       fakeDependency(

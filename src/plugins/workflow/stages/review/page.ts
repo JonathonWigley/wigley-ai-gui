@@ -1,4 +1,4 @@
-import { detailLine, isBusy, type PageStage } from '../../contract';
+import { busyStatus, detailLine, isBusy, type PageStage } from '../../contract';
 
 export const reviewPageStage: PageStage = {
   id: 'review',
@@ -36,5 +36,10 @@ export const reviewPageStage: PageStage = {
       `${progress.checked}/${progress.total}`,
       progress.title,
     );
+  },
+  status: busyStatus,
+  statusProgress(flow) {
+    const rounds = flow.progress?.reviewRounds ?? 0;
+    return rounds === 0 ? '' : ` · round ${rounds}`;
   },
 };

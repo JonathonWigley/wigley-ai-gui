@@ -33,7 +33,9 @@ const USAGE: UsageAgentEvent = {
 
 const SNAPSHOT: UsageSnapshot = {
   plans: [],
-  sessions: [{ sessionId: 's1', profileDir: null, usage: USAGE }],
+  sessions: [
+    { sessionId: 's1', profileDir: null, usage: USAGE, compaction: null },
+  ],
 };
 
 // The part on the harness, over fakes that file each handle with
@@ -47,6 +49,7 @@ function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
         chatPageKey,
         (consumer) =>
           ({
+            addComposerPart: () => consumer.track({ dispose() {} }),
             addStatusPart: () => consumer.track({ dispose() {} }),
           }) as unknown as ChatPageExports,
       ),

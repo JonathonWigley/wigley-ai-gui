@@ -11,6 +11,7 @@ import {
   noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { channelPath } from '../../../shared/local-channel/channel-path';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   type ConnectedSession,
@@ -22,7 +23,6 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../contract';
-import { channelPath } from './relay/endpoint';
 import { addDriveActions, sessionsMainPart } from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
@@ -197,15 +197,19 @@ function startSessionsPart(
     runMode = 'selfTest',
     homeDir = '/home',
     log = () => undefined,
+    send = () => undefined,
+    originRepoName = () => Promise.resolve(null),
   }: {
     runMode?: 'selfTest' | 'live';
     homeDir?: string;
     log?: (message: string) => void;
+    send?: (message: string, payload: unknown) => void;
+    originRepoName?: (projectDir: string) => Promise<string | null>;
   } = {},
 ) {
   let hex = 0;
   const api = {
-    channel: { handle: () => undefined, send: () => undefined },
+    channel: { handle: () => undefined, send },
     events: { emit: () => undefined, on: () => undefined },
     settings: () => ({ layout: 'default', titleMaxLength }),
     services: {
@@ -216,6 +220,7 @@ function startSessionsPart(
       homeDir,
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
+      git: { originRepoName },
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -254,6 +259,38 @@ function sessionEvents(harness: Parameters<typeof dataEmitted>[0]) {
 }
 
 describe('sessions main part', () => {
+  it.each([
+    { case: 'running', disposed: false, messages: ['stateChanged'] },
+    { case: 'disposed', disposed: true, messages: [] },
+  ])(
+    'a project lookup landing while the part is $case sends $messages',
+    async ({ disposed, messages }) => {
+      const lookup = Promise.withResolvers<string | null>();
+      const sent: string[] = [];
+      const started = startSessionsPart(10, {
+        send: (message) => sent.push(message),
+        originRepoName: () => lookup.promise,
+      });
+      const exports = viewOf(started);
+      const { session } = exports.connect({
+        sessionId: 'host-1',
+        projectDir: '/work/folder',
+        deadlineSeconds: null,
+        harness: 'claude',
+      });
+      exports.mark(session.id);
+      if (disposed) {
+        await started.dispose?.();
+      }
+      sent.length = 0;
+
+      lookup.resolve('repo');
+      await new Promise((settle) => setImmediate(settle));
+
+      expect(sent).toEqual(messages);
+    },
+  );
+
   it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
     const exports = viewOf(startSessionsPart(10));
     const connected = exports.connect({
@@ -387,6 +424,7 @@ describe('sessions main part', () => {
           homeDir,
           os.userInfo().username,
           HARNESS_APP_ID,
+          '',
         ),
       );
       await expect(once(socket, 'connect')).rejects.toThrow();
@@ -407,6 +445,7 @@ describe('sessions main part', () => {
         homeDir,
         os.userInfo().username,
         HARNESS_APP_ID,
+        '',
       ),
     );
     socket.on('error', () => undefined);

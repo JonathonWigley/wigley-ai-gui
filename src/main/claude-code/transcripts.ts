@@ -4,8 +4,19 @@ import {
   MAIN_AGENT_ID,
 } from '../../contracts/agent';
 import { isJsonObject } from '../../shared/json';
-import { asArray, asJson, asString, type Json, parsed } from './json-fields';
-import { replyUsageOf, type SavedReply } from './session-usage';
+import {
+  asArray,
+  asJson,
+  asString,
+  type Json,
+  numberOrNull,
+  parsed,
+} from './json-fields';
+import {
+  type ReplyUsage,
+  replyUsageOf,
+  type SavedReply,
+} from './session-usage';
 import { pairToolResult, toolUseEntry } from './tool-entries';
 
 // Claude's saved session transcripts: one JSON object per line in
@@ -59,6 +70,7 @@ const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
 const ID_PREFIX = 'history:';
 
 type StampedToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
+type CompactionEntry = Extract<ChatEntry, { kind: 'compaction' }>;
 
 // What a transcript's opening bytes hold: its folder, its first typed user
 // message, and whether any `user` line in them parsed whole.
@@ -124,11 +136,21 @@ export function sessionTitle(message: string | null): string {
 // become nothing. Each entry's `at` is its line's `timestamp`, or, when the
 // line has none, that of the last line that had one, entry or not (`0` before
 // any); a tool entry keeps its `tool_use` line's time when its result pairs.
-export function transcriptEntries(text: string): ChatEntry[] {
+// A compaction boundary becomes a compaction entry, whose `afterTokens` is the
+// context of the first main reply before the next boundary.
+// With `before` set, a line timed at or after it gives no entry and pairs no
+// tool result, though it may still give an earlier compaction its after-size;
+// each line is tested alone, since sidechain lines may interleave.
+export function transcriptEntries(
+  text: string,
+  before: number | null = null,
+): ChatEntry[] {
   const entries: ChatEntry[] = [];
   const toolEntries = new Map<string, StampedToolEntry>();
   const lines = text.split('\n');
   let lastAt = 0;
+  let awaitingAfterSize: CompactionEntry | null = null;
+  const isCut = (at: number) => before !== null && at >= before;
   for (const [index, lineText] of lines.entries()) {
     if (lineText.trim() === '') {
       continue;
@@ -136,20 +158,34 @@ export function transcriptEntries(text: string): ChatEntry[] {
     const lineNumber = index + 1;
     const json = parsed(lineText);
     if (!json.ok) {
-      entries.push(lineRaw(lineNumber, lineText, lastAt));
+      if (!isCut(lastAt)) {
+        entries.push(lineRaw(lineNumber, lineText, lastAt));
+      }
       continue;
     }
     const line = asJson(json.value);
     lastAt = lineAt(line, lastAt);
-    addLineEntries(line, lineNumber, lastAt, entries, toolEntries);
+    const reply = mainReplyUsage(line);
+    if (reply !== null && awaitingAfterSize !== null) {
+      awaitingAfterSize.afterTokens = reply.contextTokens;
+      awaitingAfterSize = null;
+    }
+    if (isMainCompactBoundary(line)) {
+      awaitingAfterSize = compactionEntry(line, lineNumber, lastAt);
+      if (!isCut(lastAt)) {
+        entries.push(awaitingAfterSize);
+      }
+    } else if (!isCut(lastAt)) {
+      addLineEntries(line, lineNumber, lastAt, entries, toolEntries);
+    }
   }
   return entries;
 }
 
-// The main conversation's model replies, oldest first: every `assistant` line
-// that is not a sidechain's, whose model is not `SYNTHETIC_MODEL`, and that
-// carries `message.usage`. Each `at` follows `transcriptEntries`' rule; a line
-// that does not parse is skipped.
+// The main conversation's model replies since its last compaction, oldest first:
+// every `assistant` line that is not a sidechain's, whose model is not
+// `SYNTHETIC_MODEL`, and that carries `message.usage`. Each `at` follows
+// `transcriptEntries`' rule; a line that does not parse is skipped.
 export function mainReplies(text: string): SavedReply[] {
   const replies: SavedReply[] = [];
   let lastAt = 0;
@@ -160,17 +196,59 @@ export function mainReplies(text: string): SavedReply[] {
     }
     const line = asJson(json.value);
     lastAt = lineAt(line, lastAt);
-    const message = asJson(line.message);
-    const isMainReply =
-      line.type === 'assistant' &&
-      line.isSidechain !== true &&
-      message.model !== SYNTHETIC_MODEL &&
-      isJsonObject(message.usage);
-    if (isMainReply) {
-      replies.push({ reply: replyUsageOf(asJson(message.usage)), at: lastAt });
+    if (isMainCompactBoundary(line)) {
+      replies.length = 0;
+    }
+    const reply = mainReplyUsage(line);
+    if (reply !== null) {
+      replies.push({ reply, at: lastAt });
     }
   }
   return replies;
+}
+
+// The usage of a line `mainReplies` counts; null on any other line.
+function mainReplyUsage(line: Json): ReplyUsage | null {
+  const message = asJson(line.message);
+  const isMainReply =
+    line.type === 'assistant' &&
+    line.isSidechain !== true &&
+    message.model !== SYNTHETIC_MODEL &&
+    isJsonObject(message.usage);
+  return isMainReply ? replyUsageOf(asJson(message.usage)) : null;
+}
+
+function isMainCompactBoundary(line: Json): boolean {
+  return (
+    line.type === 'system' &&
+    line.subtype === 'compact_boundary' &&
+    line.isSidechain !== true
+  );
+}
+
+// The transcript cannot tell the app's own compact from a typed `/compact`, so it
+// reads back `manual`; the binary writes any other trigger as `auto`.
+function compactionEntry(
+  line: Json,
+  lineNumber: number,
+  at: number,
+): CompactionEntry {
+  const metadata = asJson(line.compactMetadata);
+  return {
+    kind: 'compaction',
+    id: systemLineId(line, lineNumber),
+    at,
+    trigger: metadata.trigger === 'manual' ? 'manual' : 'harness',
+    beforeTokens: numberOrNull(metadata.preTokens),
+    afterTokens: null,
+    durationMs: numberOrNull(metadata.durationMs),
+    raw: [line],
+  };
+}
+
+function systemLineId(line: Json, lineNumber: number): string {
+  const id = typeof line.uuid === 'string' ? line.uuid : `line-${lineNumber}`;
+  return `${ID_PREFIX}${id}`;
 }
 
 // A line's top-level `timestamp` (ISO 8601) in epoch milliseconds, or
@@ -212,7 +290,8 @@ function addLineEntries(
   }
 }
 
-// A local command's output is a notice; every other system line is nothing.
+// A local command's output is a notice; every other system line but a compaction
+// boundary, which `transcriptEntries` reads, is nothing.
 function systemEntries(
   line: Json,
   lineNumber: number,
@@ -233,11 +312,10 @@ function systemEntries(
   if (text === '') {
     return [];
   }
-  const id = typeof line.uuid === 'string' ? line.uuid : `line-${lineNumber}`;
   return [
     {
       kind: 'notice',
-      id: `${ID_PREFIX}${id}`,
+      id: systemLineId(line, lineNumber),
       at,
       text,
       tone: 'info',

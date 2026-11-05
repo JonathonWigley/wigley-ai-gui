@@ -48,16 +48,15 @@ interface FiledNote {
 }
 
 // A sender over a memory-files store whose draft holds `fields`, with fakes
-// that record each `fileNote` and `launch` call. `owners` maps a session id to
-// the chat profile that owns it.
+// that record each `fileNote` and `launch` call. `defaultProfile` is chat's
+// answer, by default `work`.
 async function setUp(options: {
   fields?: Partial<NoteFields>;
   images?: Uint8Array[];
   encoder?: ImageEncoder;
   fileNote?: () => Promise<BacklogWriteResult>;
   launch?: () => Promise<string>;
-  profiles?: string[];
-  owners?: Record<string, string>;
+  defaultProfile?: (sessionId: string | null) => string | null;
 }) {
   const files = createMemoryFiles();
   const store = createDraftStore(files, () => undefined);
@@ -91,8 +90,7 @@ async function setUp(options: {
         launched.push(request);
         return options.launch?.() ?? Promise.resolve('row-1');
       },
-      profileNames: () => options.profiles ?? ['work', 'personal'],
-      profileOf: (sessionId) => options.owners?.[sessionId] ?? null,
+      defaultProfile: options.defaultProfile ?? (() => 'work'),
     },
     launchBrief: () => BRIEF,
     paths: posixPaths,
@@ -108,29 +106,36 @@ function refusedWith(reason: string) {
 }
 
 describe('toSession', () => {
-  it('toSession_SessionChatOwns_LaunchesUnderItsProfile', async () => {
-    const note = await setUp({
-      fields: { session: SESSION },
-      owners: { s1: 'personal' },
-    });
+  it.each([
+    {
+      given: 'an attached session',
+      session: SESSION,
+      asked: 's1',
+    },
+    {
+      given: 'no attached session',
+      session: null,
+      asked: null,
+    },
+  ])(
+    "toSession_LaunchesUnderChat'sDefaultProfile given $given",
+    async ({ session, asked }) => {
+      const note = await setUp({
+        fields: { session },
+        defaultProfile: (sessionId) =>
+          sessionId === asked ? 'personal' : 'wrong',
+      });
 
-    await note.sender.toSession('/home/me/repo', []);
+      await note.sender.toSession('/home/me/repo', []);
 
-    expect(note.launched.map((request) => request.profile)).toEqual([
-      'personal',
-    ]);
-  });
-
-  it('toSession_SessionChatDoesNotOwn_LaunchesUnderFirstProfile', async () => {
-    const note = await setUp({ fields: { session: SESSION } });
-
-    await note.sender.toSession('/home/me/repo', []);
-
-    expect(note.launched.map((request) => request.profile)).toEqual(['work']);
-  });
+      expect(note.launched.map((request) => request.profile)).toEqual([
+        'personal',
+      ]);
+    },
+  );
 
   it('toSession_NoProfiles_Refuses', async () => {
-    const note = await setUp({ profiles: [] });
+    const note = await setUp({ defaultProfile: () => null });
 
     const result = await note.sender.toSession('/home/me/repo', []);
 

@@ -5,7 +5,8 @@
 - **Status** — what is built now and what waits.
 - **Vocabulary** — agent event, agent id, roster, plan step.
 - **Agent events** — the record every view reads, who emits it, and where it is logged.
-- **The agents plugin** — the roster, the event log and the views that draw it (`agent-lines`, `agent-strip`).
+- **The agents plugin** — the roster, the event log and the views that draw it (`agent-lines`, `agent-strip`,
+  `agent-skills`).
 - **The tower** — the game view the seams are built for: constraints, inputs and phases.
 
 A gamified view of a session's agents: each plan step is a floor of a tower, and chibi characters fight their way up
@@ -40,11 +41,12 @@ harness and read by the workflow plugin (`docs/features/workflow/design.md`).
 - **Task** — a process an agent started that runs apart from its turn, such as a background shell command (Claude: a
   `task_started` whose `task_type` is not `local_agent`; a subagent is a task too in Claude's stream, but the app
   calls it a subagent and never a task).
-- **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each subagent with its
+- **Roster** — a session's agents, tasks and skills as the agents plugin tracks them from its events: each subagent with its
   type, name, description, start time, whether it runs in the background, model, effort, spend, context tokens and
   window, and every tool call (name, summary, outcome), and each task with its owning agent's id and name,
-  description, command and start time. Every listed item is running: an item leaves the moment it ends, done or
-  failed, and `sessionEnded` empties the roster.
+  description, command and start time, and each skill an agent started with that agent's id and name. Every listed
+  agent and task is running: it leaves the moment it ends, done or failed, and `sessionEnded` empties both lists. The
+  skills stay until the session's row ends or the app relaunches.
 - **Plan step** — one step of the session's task plan, one floor of the tower. Chat's **step** (a tool, thinking or
   raw entry, `agent-chat/design.md` § Vocabulary) is a different thing; the tower always says plan step.
 
@@ -67,7 +69,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, one-line summary (started only), success or failure (finished only) | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
 | `compactionStarted` | trigger: `app` (the app called `compact()`), `manual` (the user sent `/compact`) or `harness` (the harness's own autocompact) | rest begins |
-| `compactionEnded` | trigger, outcome (done, failed or interrupted), context tokens before (null when the harness does not report it), duration in ms (null when unknown); one for each `compactionStarted`. The after-size is the next `usage` | rest / heal |
+| `compactionEnded` | trigger, outcome (done, failed or interrupted), context tokens before (null when the harness does not report it, and unless the outcome is done), duration in ms (null when unknown); one for each `compactionStarted`. The after-size is the next `usage` | rest / heal |
 | `userMessage` | — | "message from HQ" |
 | `skillStarted` | agent id, skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
 | `fileWritten` | agent id, the full path of a Write or Edit | — (the workflow plugin's plan detection) |
@@ -84,7 +86,7 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 
 ## The agents plugin
 
-`src/plugins/agents/` depends on `sessions`, `chat` and `keys` (its layout kit's key prompts).
+`src/plugins/agents/` depends on `sessions` and `chat`.
 
 - **Main** hears `chat.agentEvent`, folds each event into the roster of its process's host session id under its row (a
   cleared row's old process ending drops only its own subagents and tasks) with a pure reducer, appends the event as one JSON line
@@ -103,8 +105,9 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   subagent's Agent call through the subagent's own `task_started`), or `main`. A task outlives the turn and the
   subagent that started it: neither a `result` nor an agent's end finishes it, only its own end event or
   `sessionEnded`. Foreground Bash calls of a subagent get a task too (`is_backgrounded: false`) and show the same way.
-- **`agentReplied`** is sent on a subagent's reply and on its launch receipt's `resolvedModel`; on a foreground
-  completion receipt it comes before `agentFinished`. The roster takes the reply's model and spend.
+- **`agentReplied`** is sent on a subagent's reply, on its launch receipt's `resolvedModel`, and on a `result` whose
+  `modelUsage` changes a running subagent's model's window; on a foreground completion receipt it comes before
+  `agentFinished`. The roster takes the reply's model, spend, context tokens and window.
 - **`agentLaunched`** is sent on a background Agent call's launch receipt (`isAsync`); the roster marks that subagent
   as running in the background.
 - **Page** draws nothing. It keeps every session's roster and exports `roster(sessionId)` and

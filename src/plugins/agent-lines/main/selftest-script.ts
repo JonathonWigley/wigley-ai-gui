@@ -72,7 +72,7 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: ['<C-c>'],
         expect: `[agent-lines] running in ${SELFTEST_PROJECT_NAME}: 0`,
-        why: 'Interrupt ends each running subagent and task, so the roster marks them finished and the page draws no line.',
+        why: 'Interrupt ends each running subagent and task, so their line leaves and the page draws none.',
       },
     ],
   },
@@ -102,16 +102,19 @@ export function agentLinesSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A session row's status, and each of the activity dock's tool calls (the
-    // Agent calls carry the subagents' prompts) and its done line, end in an
-    // ellipsis inside their own boxes, as their CSS says. The tab bar's parts clip in their own box.
+    // A session row's status, a project group's name, and each of the activity
+    // dock's tool calls (the Agent calls carry the subagents' prompts) and its
+    // done line, end in an ellipsis inside their own boxes, as their CSS says.
+    // The tab bar's parts and the dock's one line clip in their own box.
     // The side bar handle's resize prompt shows past its box for a second
     // after each resize step, and the split handle of the preview pane's Docs
     // tab holds its prompt, hidden until hovered, over both panes.
     scrollsItself: [
       '.session-row-status',
+      '.session-group-name',
       '.session-bar-parts',
       '.chat-working-action',
+      '.chat-working-line',
       '.chat-working-done',
       '.shell-side-bar-handle',
       '.ui-split-handle',

@@ -15,7 +15,7 @@ cold.
 
 ## Status
 
-Planned: `plan-row-clock/` beside this file.
+Built.
 
 ## Active time
 
@@ -25,18 +25,22 @@ Planned: `plan-row-clock/` beside this file.
 - Chat main owns each session's clock, since chat alone holds both the turn state and the background count. It
   sends the clock in each session's state and on each change; the chat page offers it to other plugins through
   `ChatPageExports.activeTime` and the `activeTimeChanged` event.
-- The clock is an `ActiveTime` record (`src/shared/active-time.ts`): the closed total and the moment the open span
-  started, null while paused. Any clock that counts only while something runs builds on this module.
+- The clock is an `ActiveTime` record (`src/contracts/active-time.ts`): the closed total and the moment the open span
+  started, null while paused. Its functions are in `src/shared/active-time.ts`, and any clock that counts only while
+  something runs builds on that module.
 
 ## Across relaunch
 
 - Chat saves each session's total at the moment of the save, the open span included, with the session
-  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and once
-  more when the app quits, so a quit mid-turn keeps the span up to the quit. A restored session's clock starts
-  paused at that total.
-- A session opened from Claude's saved history (the resume picker) starts at zero: no active time was recorded for
-  it.
-- `/clear` resets the clock to zero: the run time describes the conversation in the row, as the title, transcript,
+  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and tries once
+  more when the app quits. The app does not wait for that last write, so a quit that cuts it short leaves the last
+  saved total, which can lack the whole open span. A restored session's clock starts paused at that total.
+- A kept run's work while the app is closed is not counted. A run still working restarts its clock at relaunch, and a
+  turn that ended meanwhile adds nothing, so the row's time can run below the run's own.
+- A session opened from Claude's saved history (the resume picker) starts at zero, unless a saved record the restore
+  skipped holds that session: the row takes over that record's total with its messages. A record of a row already
+  open adds its total the same way.
+- `/clear` resets the clock to zero: the run time describes the conversation in the row, as the transcript,
   context and cache do, and `/clear` starts a new conversation.
 
 ## The side-bar row
@@ -45,11 +49,13 @@ The row's second line holds the status chip, the context meter and its used toke
 mark at the line's end:
 
 - `chat.rowClock`, chat's row part, draws the run time through chat's `rowClock` layout part, again once a second
-  while the clock runs.
+  while the clock runs. It draws nothing for a session chat does not hold, and `0s` for a clock paused at 0.
 - `usage.rowCache`, usage's row part, draws the cache mark through usage's `rowCache` layout part: a cache icon,
-  `status-error` once the cache is cold, its tooltip the minutes left.
+  `status-error` once the cache is cold or while the session has no usage yet, its tooltip the minutes left.
 - Each plugin orders its own row part's wrapper (`sessions.css`: a part may set its own wrapper's `order`):
   `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`, `chat.rowClock` 3 with `margin-left: auto` in `chat.css`.
+  `usage.rowLine` also has `margin-right: auto`: the two auto margins share the free room between the meter and the
+  run time, and a row whose run time draws nothing (a session chat does not hold) keeps any cache mark at the line's end.
 
 ## Decisions
 
@@ -58,7 +64,16 @@ mark at the line's end:
   background events, and could not save the total with the session.
 - **The cache mark is its own usage row part**: the run time sits between the meter and the cache mark, and parts
   from two plugins order only as whole parts.
-- **The second line never wraps**: the status chip ellipsizes and the parts stay whole, so the row stays two lines.
+- **The second line never wraps**: the parts stay whole and the row stays two lines. When the line is too narrow the
+  status gives way first (it ellipsizes, to nothing), then the meter's bar shrinks to nothing, the used tokens
+  staying whole (under the default layout `usage.rowLine` shrinks, its bar the only part of it that can). No container query is used on
+  `div.session-row-parts`: `container-type: inline-size` gives the holder no intrinsic width. Below that the other
+  parts clip at the card edge with no ellipsis: measured at 12m 05s clocks, a plain row (meter, clock, cache) needs
+  about 113px of line and clips below a side bar of about 136px, under `SIDE_BAR_MIN` (160). A row with five
+  parts (workflow chip, working line, meter, clock, cache) is an estimate: about 258px of line, a side bar of about
+  282px, so it would clip at the default 256 and below. It assumes an injected 62px `Reviewing` chip, which is not
+  a built-in label (the labels are Idle, Primer, Feature, Plan, Make, Review, Closed), and the working line comes from
+  `agent-lines`, which is off by default.
 - **The cache mark turns cold at usage's next redraw**: usage redraws its lines once a minute, so the mark can lag
   the expiry by up to a minute.
 

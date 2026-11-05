@@ -69,20 +69,29 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* Other plugins' row parts share the footer's line after the status,
-   wrapping when it is full; each part styles its own content and may set its
-   own wrapper's `order`. */
+/* Other plugins' row parts share the footer's line after the status and stay
+   on it; each part styles its own content and may set its
+   own wrapper's `order`. Under `default`, the holder shrinks only after the
+   status has given up its width (`.session-row-status`). */
 .session-row-parts {
   display: flex;
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  column-gap: var(--wg-space-3);
+  column-gap: var(--wg-space-1_5);
   min-width: 0;
 }
 
+/* A part's wrapper keeps its content's width, so the status gives up its
+   width first; a part whose content can be long sets `flex: 0 1 auto;
+   min-width: 0` on its own wrapper. An empty wrapper takes no room, its column
+   gap included. */
 .session-row-part {
-  min-width: 0;
+  flex: none;
+}
+
+.session-row-part:empty {
+  display: none;
 }
 
 /* A session's frame: the bar holding its tab strip over the sheet of its

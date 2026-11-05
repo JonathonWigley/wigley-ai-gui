@@ -23,6 +23,7 @@ function row(titles: SessionTitles = NO_TITLES): SessionRow {
   return {
     sessionId: 's1',
     label: 'gamma',
+    project: 'project',
     harness: 'claude',
     marked: false,
     projectDir: null,

@@ -39,6 +39,7 @@ import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { Platform } from '../contracts/platform';
+import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
 import type { UserConfig } from '../contracts/user-config';
 import type {
@@ -100,6 +101,8 @@ import {
   type LayoutService,
 } from './layouts/layout-service';
 import { resolveCloneDir } from './resolve-clone-dir';
+import { createSessionHostClient } from './session-host/session-host-client';
+import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
@@ -188,15 +191,17 @@ interface ModeServicesContext {
   store: ConfigStore;
   homeDir: string;
   log: Log;
+  sessionHost: SessionHost;
 }
 
 // Claude Code run as the user of `homeDir`, its command and profile folders
-// expanded against that home.
+// expanded against that home, its sessions on `host`.
 function claudeHarness(
   store: ConfigStore,
   homeDir: string,
   env: NodeJS.ProcessEnv,
   log: Log,
+  host: SessionHost,
 ) {
   return createClaudeCodeHarness({
     command: () =>
@@ -204,6 +209,7 @@ function claudeHarness(
     permissionTool: CLAUDE_PERMISSION_TOOL,
     env,
     log,
+    host,
     spawn,
     files,
     homeDir,
@@ -233,10 +239,10 @@ function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
-    forWindow: ({ window, store, homeDir, log }) => ({
+    forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
       alerts: createElectronAlerts(window, log),
       agentHarnesses: [
-        claudeHarness(store, homeDir, endpointEnv(homeDir), log),
+        claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
       ],
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
@@ -275,12 +281,18 @@ function offscreenRunServices(
 // folder in the run's home.
 function driveHarness(
   name: DriveHarnessName,
-  { store, homeDir, log }: ModeServicesContext,
+  { store, homeDir, log, sessionHost }: ModeServicesContext,
 ): AgentHarness {
   if (name === 'fake') {
     return createFakeAgentHarness(clock, files, timers);
   }
-  return claudeHarness(store, os.homedir(), endpointEnv(homeDir), log);
+  return claudeHarness(
+    store,
+    os.homedir(),
+    endpointEnv(homeDir),
+    log,
+    sessionHost,
+  );
 }
 
 function modeServicesOf(environment: RunEnvironment): ModeServices {
@@ -304,7 +316,6 @@ const timers: Timers = {
   clear: (handle) => clearTimeout(handle),
 };
 const modeServices = modeServicesOf(runEnvironment);
-
 const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
@@ -321,6 +332,7 @@ let layoutService: LayoutService | null = null;
 // The work the app does as it quits, started in the order it was added.
 const quitTasks: (() => unknown)[] = [];
 let quitWork: Promise<unknown> | null = null;
+let hasQuitStarted = false;
 
 function onQuit(task: () => unknown) {
   quitTasks.push(task);
@@ -330,6 +342,7 @@ function onQuit(task: () => unknown) {
 // has. Outside the user's app, a task's rejection goes to stderr, which the
 // drive CLI keeps in the run's `app.log`.
 function startQuitWork() {
+  hasQuitStarted = true;
   quitWork ??= Promise.allSettled(
     quitTasks.map(async (task) => {
       try {
@@ -483,6 +496,14 @@ function dataFolder(homeDir: string): string {
     : path.join(homeDir, 'plugin-data');
 }
 
+// The session host's folder: the app instance's, or a drive run's, own user data;
+// in the self-test, whose user data every self-test shares, its temp home.
+function sessionHostFolder(homeDir: string): string {
+  return runMode === 'selfTest'
+    ? path.join(homeDir, 'session-host')
+    : path.join(app.getPath('userData'), 'session-host');
+}
+
 // The app's ui-state file; outside a live run it sits inside the run's own
 // home folder beside the plugin data.
 function uiStateFilePath(homeDir: string): string {
@@ -571,6 +592,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
     platform,
     homeDir: await files.realPath(homeDir),
     appInstance,
+    runMode,
     log: pageLog.log,
   };
 }
@@ -593,6 +615,12 @@ async function loadConfig(
 function livePage(window: BrowserWindow): WebContents | null {
   const isGone = window.isDestroyed() || window.webContents.isDestroyed();
   return isGone ? null : window.webContents;
+}
+
+// The app's window, or null before it is made and once it is destroyed, as on
+// quit, when another start or an activate may still ask for it.
+function liveMainWindow(): BrowserWindow | null {
+  return mainWindow?.isDestroyed() === false ? mainWindow : null;
 }
 
 // Serves the ui-state file at `filePath` to the page. It loads on the page's
@@ -679,7 +707,11 @@ function startMainParts(
   disabled: readonly string[],
   commands: MainCommands,
 ): PluginHost<MainStart<PluginManifest>> {
-  const channels = createPluginChannels(ipcMain, () => livePage(window));
+  // The stops a quit runs end the rows the next start restores, and a page told
+  // of it would save them as gone: panes, recency.
+  const channels = createPluginChannels(ipcMain, () =>
+    hasQuitStarted ? null : livePage(window),
+  );
   const bus = createEventBus();
   return startPlugins(
     mainParts,
@@ -728,6 +760,7 @@ function createWindow(
   inputs: StartInputs,
   store: ConfigStore,
   userConfig: UserConfig,
+  sessionHost: SessionHost,
 ) {
   const startConfig = store.current();
   const window = createMainWindow(
@@ -748,6 +781,9 @@ function createWindow(
   window.webContents.on('did-finish-load', pageLog.pageLoaded);
   window.webContents.on('did-stop-loading', pageLog.pageLoaded);
   const recolour = () => {
+    if (window.isDestroyed()) {
+      return;
+    }
     const config = store.current();
     const isReduced = isTransparencyReduced(config);
     window.setBackgroundColor(windowBackgroundOf(config.theme, isReduced));
@@ -775,9 +811,14 @@ function createWindow(
       : null;
   // Quit and the self-test exit stop the started main parts through the host, in
   // reverse start order, each awaited before the next; a start that throws leaves
-  // no host, so the parts started before it are not stopped.
+  // no host, so the parts started before it are not stopped. A live quit leaves
+  // every hosted process running; a drive run stops them after the parts, so chat
+  // has detached and sees no `closed`, unless its `quit` command kept them for a
+  // `restart`.
   let mainHost: PluginHost<MainStart<PluginManifest>> | null = null;
+  let stopsSessionsOnQuit = runMode === 'drive';
   onSelfTestExit('the plugin parts', () => mainHost?.stopAll());
+  onSelfTestExit('the session host', () => sessionHost.stopAll());
   const driveRun =
     inputs.driveRunDir === null
       ? null
@@ -790,7 +831,10 @@ function createWindow(
           processes,
           randomHex,
           configChanged: (listener) => store.onChanged(listener),
-          quit: () => app.quit(),
+          quit: (keepSessions) => {
+            stopsSessionsOnQuit = !keepSessions;
+            app.quit();
+          },
           log,
         });
   if (driveRun !== null) {
@@ -832,11 +876,13 @@ function createWindow(
       images: nativeImageEncoder,
       runMode,
       appInstance,
+      sessionHost,
       ...modeServices.forWindow({
         window,
         store,
         homeDir: inputs.homeDir,
         log,
+        sessionHost,
       }),
     },
     selfTest,
@@ -851,6 +897,9 @@ function createWindow(
       await mainHost?.stopAll();
     } finally {
       layouts.dispose();
+      if (stopsSessionsOnQuit) {
+        await sessionHost.stopAll();
+      }
     }
   });
   onSelfTestExit('the layouts service', () => layouts.dispose());
@@ -979,7 +1028,7 @@ function startApp() {
   }
   // A second start (a relay starting the app) shows the window without
   // taking the user's focus.
-  app.on('second-instance', () => mainWindow?.showInactive());
+  app.on('second-instance', () => liveMainWindow()?.showInactive());
   app.on('before-quit', () => {
     isQuitting = true;
   });
@@ -1004,11 +1053,27 @@ function startApp() {
       ipcMain.handle(BRIDGE_CHANNELS.serveVisual, (_event, source: string) =>
         serveVisual(source),
       );
-      createWindow(inputs, store, userConfig);
+      const sessionHost = createSessionHostClient({
+        folder: sessionHostFolder(inputs.homeDir),
+        channel: sessionHostChannel(
+          process.platform,
+          inputs.homeDir,
+          os.userInfo().username,
+          appInstance.id,
+        ),
+        hostScript: path.join(__dirname, 'session-host.js'),
+        execPath: process.execPath,
+        env: process.env,
+        spawn,
+        clock,
+        timers,
+        log: pageLog.log,
+      });
+      createWindow(inputs, store, userConfig, sessionHost);
       // Starts with createWindow's quit tasks, ahead of every part but the first
       // to stop; `current` still answers after it, for the parts still stopping.
       onQuit(() => store.dispose());
-      app.on('activate', () => mainWindow?.show());
+      app.on('activate', () => liveMainWindow()?.show());
     })
     .catch(failStart);
   app.on('will-quit', runQuitTasks);

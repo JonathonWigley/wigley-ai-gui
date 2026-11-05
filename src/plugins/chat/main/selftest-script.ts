@@ -9,6 +9,8 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
+  FAKE_BLOCKS_TEXT,
+  FAKE_COLD_TEXT,
   FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
@@ -20,6 +22,7 @@ import {
   type FakeAgentCall,
   type FakeAgentProcessRecord,
   type FakePermissionAsk,
+  isFakeAgentHarness,
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
@@ -51,7 +54,12 @@ export interface ChatSelfTestDeps {
   files: Pick<Files, 'makeFolder' | 'realPath'>;
   chat: Pick<
     ChatSessions,
-    'start' | 'closed' | 'permissionToolSession' | 'sessions' | 'setArchived'
+    | 'start'
+    | 'closed'
+    | 'permissionToolSession'
+    | 'sessions'
+    | 'setArchived'
+    | 'addSendGate'
   >;
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: readonly AgentHarness[];
@@ -109,7 +117,7 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   {
     keys: ['y'],
-    expect: '[chat] no pending permission in chat-second',
+    expect: '[chat] nothing to copy',
     why: "The first session's pending permission stays pending.",
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
@@ -274,12 +282,94 @@ const VISUAL_STEPS: SelfTestStep[] = [
     expect: '[chat] left the box',
     why: 'The result is no stop, so focus follows the reply holding both visuals.',
   },
-  { keys: ['v'], expect: '[visual] visual overlay showing 1 of 2' },
+  {
+    keys: ['v'],
+    expect: '[visual] visual overlay showing 2 of 2',
+    why: "From the rest position, the reply's last block, v opens on the second visual.",
+  },
+  { keys: ['Escape'], expect: '[visual] visual overlay closed' },
+  {
+    keys: ['K', 'J', 'v'],
+    expect: '[visual] visual overlay showing 1 of 2',
+    why: "Focus rests on the reply's last block, the second visual, where v would open on that one, so K J first moves the cursor to the reply's first block.",
+  },
   { keys: ['l'], expect: '[visual] visual overlay showing 2 of 2' },
   { keys: ['l'], expect: '[visual] no next visual' },
   { keys: ['h'], expect: '[visual] visual overlay showing 1 of 2' },
   { keys: ['h'], expect: '[visual] no previous visual' },
   { keys: ['Escape'], expect: '[visual] visual overlay closed' },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
+// The fake's blocks reply in the second session, whose calls the run does not
+// check. Every move logs its stop's entry kind, so a step tells a block move
+// from a message move by the kind it lands on.
+const BLOCK_CURSOR_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: sendKeys(FAKE_BLOCKS_TEXT),
+    expect: '[chat] result entry added in chat-second',
+    checksFit: true,
+  },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['K'],
+    expect: '[chat] focused user entry',
+    why: "From the reply's last block, K leaves the reply for the message before it.",
+  },
+  {
+    keys: ['J'],
+    expect: '[chat] focused assistant entry',
+    why: "J lands on the reply's first block.",
+  },
+  {
+    keys: ['j'],
+    expect: '[chat] focused assistant entry',
+    why: 'j moves to the second block of the same reply.',
+  },
+  {
+    keys: ['k'],
+    expect: '[chat] focused assistant entry',
+    why: 'k moves back to the first block, still in the reply.',
+  },
+  {
+    keys: ['k'],
+    expect: '[chat] focused user entry',
+    why: 'One more k leaves the first block, so j moved by one block and not to the next stop past the reply.',
+  },
+  { keys: ['J'], expect: '[chat] focused assistant entry' },
+  {
+    keys: ['V', 'j'],
+    expect: '[chat] focused assistant entry',
+    alsoExpect: [/^\[chat\] toggled the range$/],
+    why: 'V anchors a range on the first block and j extends it.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[chat] cancelled the range',
+    why: 'Esc on the page ends the open range.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[chat] no range to cancel in chat-second',
+    why: 'The range is gone, so Esc only says so.',
+  },
+  { keys: ['V'], expect: '[chat] toggled the range' },
+  {
+    keys: ['V'],
+    expect: '[chat] toggled the range',
+    why: 'A second V ends the range the first opened.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[chat] no range to cancel in chat-second',
+    why: 'Esc finds no range, so the second V ended it.',
+  },
+  {
+    keys: ['V', 'j', 'y'],
+    expect: '[chat] copied 2 blocks in chat-second',
+    why: "y copies the range's two blocks, through the self-test's clipboard, which leaves the system clipboard alone.",
+  },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
@@ -493,6 +583,30 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
   {
+    keys: sendKeys(FAKE_COLD_TEXT),
+    expect: '[chat] assistant entry added in chat-selftest',
+  },
+  {
+    keys: sendKeys('after cold'),
+    expect: '[chat] 1 pending message(s) in chat-selftest',
+    alsoExpect: [/^\[chat\] chat-selftest compacting: selftest · cache cold$/],
+    why: "The fixture gate holds the send after fake: cold; the held row waits while the fake holds the app compaction, and the page logs the compaction's label as it starts.",
+  },
+  {
+    keys: sendKeys('behind hold'),
+    expect: '[chat] 2 pending message(s) in chat-selftest',
+    why: 'A send during the hold queues behind the held row.',
+  },
+  {
+    keys: ['<C-c>'],
+    expect: '[chat] 0 pending message(s) in chat-selftest',
+    alsoExpect: [
+      /^\[chat\] interrupted chat-selftest$/,
+      /^\[chat\] chat-selftest compaction ended$/,
+    ],
+    why: 'Ctrl+C skips the held compaction; the held row is written when the compaction ends, then the row behind it at the next idle.',
+  },
+  {
     keys: sendKeys(FAKE_HOLD_TEXT),
     expect: '[chat] chat-selftest is working',
   },
@@ -655,8 +769,13 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'visuals',
-    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v on the reply opens the overlay on its first visual, l and h step through both and stop at either end, and Esc closes it.",
+    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v from the rest position opens the overlay on the second visual, and on the reply's first block on its first visual, l and h step through both and stop at either end, and Esc closes it.",
     steps: VISUAL_STEPS,
+  },
+  {
+    name: 'block cursor',
+    why: "Over fake: blocks' reply of paragraphs, a list and code in chat-second: J and K jump between messages, j and k move by block inside one, V j opens a range that page Esc cancels, page Esc with no range logs that there is none, a second V ends a range, and V j y copies two blocks.",
+    steps: BLOCK_CURSOR_STEPS,
   },
   {
     name: 'sending',
@@ -675,7 +794,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'activity dock',
-    why: "A held steps turn draws the live activity dock in the composer (the time and state word, the main agent's 3 latest tool calls, the counts) with the box focused; Ctrl+C ends it with the fake's notice and no result, so the dock hides; Esc shows the focused entry's left bar; k focuses the user entry and G follows the latest again.",
+    why: "A held steps turn draws the live activity dock in the session hub (the time and state word, the main agent's 3 latest tool calls, the counts) with the box focused; Ctrl+C ends it with the fake's notice and no result, so the dock hides; Esc shows the focused entry's left bar; k focuses the user entry and G follows the latest again.",
     steps: ACTIVITY_DOCK_STEPS,
   },
   {
@@ -690,7 +809,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'interrupt and close',
-    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows; Cmd+Enter on a focused row writes that row into the turn, and Cmd+Enter in the box writes every pending row then the box; Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; Cmd+W on a working session asks before y ends it.",
+    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows; Cmd+Enter on a focused row writes that row into the turn, and Cmd+Enter in the box writes every pending row then the box; Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; a send after fake: cold is held as a pending row for an app compaction, a later send queues behind it, and Ctrl+C skips the compaction and writes both in order; Cmd+W on a working session asks before y ends it.",
     steps: INTERRUPT_AND_CLOSE_STEPS,
   },
   {
@@ -733,11 +852,47 @@ const GROUPS: SelfTestGroup[] = [
     why: 'Space z l c opens the sample session with no agent, and a send there sends nothing.',
     steps: LAYOUT_PREVIEW_STEPS,
   },
+  {
+    name: 'session hub',
+    why: 'Space v s hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box.',
+    steps: [
+      {
+        keys: ['Escape', ' ', 'v', 's'],
+        expect: '[chat] session hub hidden',
+      },
+      {
+        keys: ['Escape', ' ', 'v', 's'],
+        expect: '[chat] session hub shown',
+      },
+      {
+        keys: ['i', '<A-;>'],
+        expect: '[sessions] pane split right',
+        alsoExpect: [/^\[chat\] focused the box in /],
+        width: 1800,
+      },
+      {
+        keys: ['Enter'],
+        expect: '[page] Enter ran sessions.pickerChoose',
+      },
+      {
+        keys: ['<A-w>'],
+        expect: '[sessions] pane closed',
+        width: 'start',
+      },
+    ],
+  },
+  {
+    name: 'stop all',
+    why: 'Space : stops every session process; the rows stay, resting.',
+    steps: [
+      { keys: ['Escape', ' ', ':'], expect: '[chat] stopping every session' },
+    ],
+  },
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, a
 // row's status and the activity dock's tool calls and done line end in an
-// ellipsis, and the tab bar's parts clip in their own box.
+// ellipsis, and the tab bar's parts and the dock's one line clip in their own box.
 const SCROLLS_ITSELF = [
   '.chat-json',
   '.chat-tool-result',
@@ -745,6 +900,7 @@ const SCROLLS_ITSELF = [
   '.md table',
   '.session-row-status',
   '.chat-working-action',
+  '.chat-working-line',
   '.chat-working-done',
   '.session-bar-parts',
 ];
@@ -771,9 +927,16 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
   { method: 'send', text: 'pending one\npending two', imageCount: 0 },
+  { method: 'send', text: FAKE_COLD_TEXT, imageCount: 0 },
+  { method: 'compact' },
+  { method: 'interrupt' },
+  { method: 'send', text: 'after cold', imageCount: 0 },
+  { method: 'send', text: 'behind hold', imageCount: 0 },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'end' },
 ];
+
+const FIXTURE_HOLD_REASON = 'selftest · cache cold';
 
 // The saved session the steps resume, the first of the fake's.
 const RESUMED_SESSION_ID = '00000000-0000-4000-8000-000000000001';
@@ -953,7 +1116,10 @@ interface SelfTestProjects {
 // folder; problems reads the fake processes, whose records the steps keep
 // changing in place, when it runs, reading only the records this run added.
 // Each fake harness asks a `fake: permission` turn's permission through
-// chat's tool too. The run waits on the session's Chat tab being shown.
+// chat's tool too. The run waits on the session's Chat tab being shown. A
+// fixture send gate, registered here once for every run, holds a send to the
+// self-test's session that follows `fake: cold`, with the fake holding the
+// compaction until problems reads the run; it needs no auto-compact plugin.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses, files } = deps;
   // Cleared when making them fails, so a later run tries again.
@@ -961,6 +1127,30 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   let previousRelay: ConnectedSession | null = null;
   let archiveResetFailures: string[] = [];
   let marks: RunMark[] = [];
+  let selftestProject: string | null = null;
+
+  chat.addSendGate((input) => {
+    const isSelftestSession = chat
+      .sessions()
+      .some(
+        (state) =>
+          state.sessionId === input.sessionId &&
+          state.projectDir === selftestProject,
+      );
+    if (!isSelftestSession || selftestProject === null) {
+      return null;
+    }
+    const lastCall = selftestProcess(marks, selftestProject, false)?.calls.at(
+      -1,
+    );
+    const followsCold =
+      lastCall?.method === 'send' && lastCall.text === FAKE_COLD_TEXT;
+    if (!followsCold) {
+      return null;
+    }
+    harnesses.find(isFakeAgentHarness)?.holdCompactions();
+    return { action: 'compact', reason: FIXTURE_HOLD_REASON };
+  });
 
   async function makeProjects(): Promise<SelfTestProjects> {
     const home = await files.realPath(deps.homeDir);
@@ -970,6 +1160,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     };
     await files.makeFolder(madeProjects.selftest);
     await files.makeFolder(madeProjects.second);
+    selftestProject = madeProjects.selftest;
     return madeProjects;
   }
 
@@ -1059,9 +1250,12 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       };
     },
     groups: GROUPS,
-    problems: (result) => [
-      ...archiveResetFailures,
-      ...runProblems(result as ChatSelfTestResult),
-    ],
+    problems: (result) => {
+      harnesses.find(isFakeAgentHarness)?.releaseCompactions();
+      return [
+        ...archiveResetFailures,
+        ...runProblems(result as ChatSelfTestResult),
+      ];
+    },
   };
 }

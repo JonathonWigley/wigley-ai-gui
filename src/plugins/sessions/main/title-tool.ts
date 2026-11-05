@@ -1,16 +1,18 @@
-import type {
-  AgentSession,
-  SessionsMainExports,
-  ToolDefinition,
-  ToolResult,
-  ToolSession,
+import {
+  type AgentSession,
+  errorResult,
+  type SessionsMainExports,
+  textResult,
+  type ToolDefinition,
+  type ToolResult,
+  type ToolSession,
 } from '../contract';
 import { normalizedTitle, titleProblem } from '../session-title';
 
 export const SET_SESSION_TITLE_TOOL: ToolDefinition = {
   name: 'set_session_title',
   description:
-    'Name this session in the Auri side bar so the user can tell it apart from their other sessions. Give a title of 2 to 4 words, at most 30 characters, that names the topic of the work like a heading ("Agent Status Line", "Forms Crash on Resume"), not a sentence describing the request. Call it at the end of your first turn, and again only when the work\'s focus clearly changes. A title over the length limit is refused with the limit; send a shorter one.',
+    'Name this session in the Auri side bar so the user can tell it apart from their other sessions. Give a title of 2 to 4 words, at most 30 characters, that names the topic of the work like a heading ("Agent Status Line", "Forms Crash on Resume"), not a sentence describing the request. Call it as the first thing you do in your first turn, before any other work, and again only when the work\'s focus clearly changes. A title over the length limit is refused with the limit; send a shorter one.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -32,10 +34,6 @@ export interface TitleToolDeps {
   maxLength(): number;
 }
 
-function textResult(text: string, isError: boolean): ToolResult {
-  return { content: [{ type: 'text', text }], isError };
-}
-
 // The text an agent reads after its title is stored: over a user title, that
 // the user's title still shows, so the agent does not retry.
 function storedText(title: string, userTitle: string | null): string {
@@ -54,18 +52,18 @@ function setSessionTitle(
 ): ToolResult {
   const titles = deps.titles(sessionId);
   if (titles === null) {
-    return textResult('This session has ended.', true);
+    return errorResult('This session has ended.');
   }
   const title = (args as { title?: unknown } | null | undefined)?.title;
   if (typeof title !== 'string') {
-    return textResult('title must be a string.', true);
+    return errorResult('title must be a string.');
   }
   const problem = titleProblem(title, deps.maxLength());
   if (problem !== null) {
-    return textResult(problem, true);
+    return errorResult(problem);
   }
   deps.setTitle(sessionId, 'agent', title);
-  return textResult(storedText(normalizedTitle(title), titles.user), false);
+  return textResult(storedText(normalizedTitle(title), titles.user));
 }
 
 // The `start` sessions hands its own `contributeTools` with

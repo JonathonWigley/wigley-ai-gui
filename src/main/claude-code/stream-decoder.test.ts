@@ -219,12 +219,35 @@ const started = (
   summary: string,
 ) => ({ type: 'toolStarted', agentId, toolUseId, tool, summary });
 
-const replied = (agentId: string, model: string, spendUsd: number | null) => ({
+const replied = (
+  agentId: string,
+  model: string,
+  spendUsd: number | null,
+  contextTokens: number | null,
+  contextWindow: number | null,
+) => ({
   type: 'agentReplied',
   agentId,
   model,
   spendUsd: spendUsd === null ? null : expect.closeTo(spendUsd, 12),
+  contextTokens,
+  contextWindow,
 });
+
+const launched = (agentId: string) => ({ type: 'agentLaunched', agentId });
+
+// A `result` whose `modelUsage` names each model's window.
+const resultNaming = (windows: Record<string, number>) =>
+  line({
+    type: 'result',
+    subtype: 'success',
+    modelUsage: Object.fromEntries(
+      Object.entries(windows).map(([model, contextWindow]) => [
+        model,
+        { contextWindow },
+      ]),
+    ),
+  });
 
 // A subagent reply of one text block with `usage`.
 const subagentReply = (
@@ -817,6 +840,203 @@ describe('createStreamDecoder', () => {
     ]);
   });
 
+  const compactStatus = (fields: object) =>
+    line({ type: 'system', subtype: 'status', ...fields });
+
+  it.each<{
+    case: string;
+    text: string;
+    compaction: unknown;
+    entries: object[];
+  }>([
+    {
+      case: 'compacting status',
+      text: compactStatus({ status: 'compacting' }),
+      compaction: { phase: 'started' },
+      entries: [{ kind: 'raw', id: 'turn-events-1' }],
+    },
+    {
+      case: 'boundary',
+      text: compactBoundary({
+        pre_tokens: 37559,
+        post_tokens: 9023,
+        duration_ms: 8303,
+      }),
+      compaction: {
+        phase: 'done',
+        beforeTokens: 37559,
+        durationMs: 8303,
+        boundary: {
+          type: 'system',
+          subtype: 'compact_boundary',
+          compact_metadata: {
+            trigger: 'manual',
+            pre_tokens: 37559,
+            post_tokens: 9023,
+            duration_ms: 8303,
+          },
+        },
+      },
+      entries: [],
+    },
+    {
+      case: 'boundary without sizes',
+      text: compactBoundary({}),
+      compaction: {
+        phase: 'done',
+        beforeTokens: null,
+        durationMs: null,
+        boundary: expect.anything(),
+      },
+      entries: [],
+    },
+    {
+      case: 'success status',
+      text: compactStatus({ status: null, compact_result: 'success' }),
+      compaction: null,
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'prompt_too_long',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [
+        { kind: 'raw' },
+        {
+          kind: 'notice',
+          text: 'Compaction failed: prompt_too_long',
+          tone: 'error',
+        },
+      ],
+    },
+    {
+      case: 'failed status of a refused /compact',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'Not enough messages to compact.',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status without error',
+      text: compactStatus({ status: null, compact_result: 'failed' }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status of a plain interrupt',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'API Error: Request was aborted.',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status of a routine automatic attempt',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'too_few_groups',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: "a subagent's boundary",
+      text: line({
+        type: 'system',
+        subtype: 'compact_boundary',
+        compact_metadata: { pre_tokens: 1 },
+        parent_tool_use_id: 'a1',
+      }),
+      compaction: null,
+      entries: [{ kind: 'raw', id: 'raw-1' }],
+    },
+    {
+      case: "a subagent's failed status",
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'boom',
+        parent_tool_use_id: 'a1',
+      }),
+      compaction: null,
+      entries: [{ kind: 'raw' }],
+    },
+  ])(
+    'decode_CompactionLines_ReportCompaction ($case)',
+    ({ text, compaction, entries }) => {
+      const decoded = createStreamDecoder().decode(text);
+
+      expect(decoded.compaction).toEqual(compaction);
+      expect(decoded.entries).toMatchObject(entries);
+      expect(decoded.entries).toHaveLength(entries.length);
+    },
+  );
+
+  const COMPACTED_REPLAY = line({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: '<local-command-stdout>Compacted </local-command-stdout>',
+    },
+    parent_tool_use_id: null,
+    isReplay: true,
+  });
+
+  it.each<{ case: string; lines: string[]; entries: object[] }>([
+    {
+      case: 'after a boundary',
+      lines: [compactBoundary({}), COMPACTED_REPLAY],
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: "after the boundary turn's result",
+      lines: [
+        compactBoundary({}),
+        line({ type: 'result', subtype: 'success', is_error: false }),
+        COMPACTED_REPLAY,
+      ],
+      entries: [{ kind: 'notice', text: 'Compacted', tone: 'info' }],
+    },
+  ])(
+    'decode_LocalOutputAfterBoundary_GathersInsteadOfNotice ($case)',
+    ({ lines, entries }) => {
+      const decoder = createStreamDecoder();
+
+      const last = lines.map((text) => decoder.decode(text)).at(-1);
+
+      expect(last?.entries).toMatchObject(entries);
+      expect(last?.entries).toHaveLength(entries.length);
+    },
+  );
+
+  it('decode_AutomaticCompactSummary_JoinsTheEvents', () => {
+    const decoded = createStreamDecoder().decode(
+      line({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'This session is being continued.' }],
+        },
+        parent_tool_use_id: null,
+        isSynthetic: true,
+      }),
+    );
+
+    expect(decoded.entries).toMatchObject([
+      { kind: 'raw', id: 'turn-events-1' },
+    ]);
+  });
+
   it('decode_SyntheticAssistant_AddsNotice', () => {
     const decoder = createStreamDecoder();
 
@@ -1168,16 +1388,6 @@ describe('createStreamDecoder', () => {
       expected: [spawned('a1')],
     },
     {
-      case: 'compaction',
-      lines: [compactBoundary({ pre_tokens: 37559, post_tokens: 9023 })],
-      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: null }],
-    },
-    {
-      case: 'compaction without before size',
-      lines: [compactBoundary({ post_tokens: 9023 })],
-      expected: [{ type: 'compacted', beforeTokens: null, afterTokens: null }],
-    },
-    {
       case: 'background spawn',
       lines: [
         agentCall('b1'),
@@ -1188,6 +1398,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('b1'),
+        launched('b1'),
         started('b1', 't1', 'Read', 'notes.txt'),
         { type: 'toolFinished', agentId: 'b1', toolUseId: 't1', ok: true },
         finished('b1', 'done'),
@@ -1205,7 +1416,7 @@ describe('createStreamDecoder', () => {
         launchReceipt('b1'),
         taskNotification('b1', 'stopped'),
       ],
-      expected: [spawned('b1'), finished('b1', 'failed')],
+      expected: [spawned('b1'), launched('b1'), finished('b1', 'failed')],
     },
     {
       case: 'foreground notification then result',
@@ -1227,6 +1438,7 @@ describe('createStreamDecoder', () => {
       expected: [
         spawned('a1'),
         spawned('b1'),
+        launched('b1'),
         finished('a1', 'failed'),
         TURN_ENDED,
       ],
@@ -1262,7 +1474,12 @@ describe('createStreamDecoder', () => {
         agentCall('n1', { run_in_background: false }, 'b1'),
         RESULT_LINE,
       ],
-      expected: [spawned('b1'), spawned('n1', 'Explore', 'b1'), TURN_ENDED],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        spawned('n1', 'Explore', 'b1'),
+        TURN_ENDED,
+      ],
     },
     {
       case: 'interrupted foreground subagent fails its nested call',
@@ -1291,6 +1508,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('b1'),
+        launched('b1'),
         spawned('n1', 'Explore', 'b1'),
         finished('b1', 'done'),
         finished('n1', 'failed'),
@@ -1325,6 +1543,7 @@ describe('createStreamDecoder', () => {
       expected: [
         spawned('a1'),
         spawned('b2', 'Explore', 'a1'),
+        launched('b2'),
         finished('a1', 'done'),
       ],
     },
@@ -1539,7 +1758,7 @@ describe('createStreamDecoder', () => {
         taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
         taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
       ],
-      expected: [spawned('a1'), taskBegan('bpdumb7hy', 'a1')],
+      expected: [spawned('a1'), launched('a1'), taskBegan('bpdumb7hy', 'a1')],
     },
     {
       case: 'failed task',
@@ -1573,7 +1792,7 @@ describe('createStreamDecoder', () => {
         taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
         taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
       ],
-      expected: [spawned('a1'), finished('a1', 'done')],
+      expected: [spawned('a1'), launched('a1'), finished('a1', 'done')],
     },
     {
       case: 'task with no type starts nothing',
@@ -1615,6 +1834,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
+        launched('a1'),
         taskBegan('bpdumb7hy', 'a1'),
         finished('a1', 'done'),
         taskEnded('bpdumb7hy', 'done'),
@@ -1661,7 +1881,13 @@ describe('createStreamDecoder', () => {
       lines: [agentCall(MEASURED_AGENT_CALL), MEASURED_SUBAGENT_READ],
       expected: [
         spawned(MEASURED_AGENT_CALL),
-        replied(MEASURED_AGENT_CALL, 'claude-haiku-5-5', 0.001963325),
+        replied(
+          MEASURED_AGENT_CALL,
+          'claude-haiku-5-5',
+          0.001963325,
+          15639,
+          null,
+        ),
         started(
           MEASURED_AGENT_CALL,
           'toolu_01Th9zCiM7nvQkeAH1gsms6w',
@@ -1679,8 +1905,8 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        replied('a1', 'claude-haiku-5-5', 0.0005),
-        replied('a1', 'claude-haiku-5-5', 0.0005),
+        replied('a1', 'claude-haiku-5-5', 0.0005, 0, null),
+        replied('a1', 'claude-haiku-5-5', 0.0005, 0, null),
       ],
     },
     {
@@ -1695,8 +1921,240 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        replied('a1', 'claude-haiku-5-5', 0.0005),
-        replied('a1', 'claude-sonnet-5-5', 0.0265),
+        replied('a1', 'claude-haiku-5-5', 0.0005, 0, null),
+        replied('a1', 'claude-sonnet-5-5', 0.0265, 3000, null),
+      ],
+    },
+    {
+      case: "subagent reply's context is its input tokens, cache included",
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', {
+          input_tokens: 10,
+          cache_creation_input_tokens: 2000,
+          cache_read_input_tokens: 80000,
+          output_tokens: 500,
+        }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null, 82010, null),
+      ],
+    },
+    {
+      case: "subagent's context is its latest reply's, not a sum",
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', { input_tokens: 700 }),
+        subagentReply('a1', 'm2', 'claude-mythos-5-1', { input_tokens: 90 }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null, 700, null),
+        replied('a1', 'claude-mythos-5-1', null, 90, null),
+      ],
+    },
+    {
+      case: "subagent reply when no result named its model's window",
+      lines: [
+        resultNaming({ 'claude-opus-5-5': 1000000 }),
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', { input_tokens: 40 }),
+      ],
+      expected: [
+        TURN_ENDED,
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null, 40, null),
+      ],
+    },
+    {
+      case: 'subagent reply after a result named its window under a suffix',
+      lines: [
+        resultNaming({ 'claude-mythos-5-1[1m]': 1000000 }),
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', { input_tokens: 40 }),
+      ],
+      expected: [
+        TURN_ENDED,
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null, 40, 1000000),
+      ],
+    },
+    {
+      case: "result names a running subagent's window",
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-opus-5-5', {
+          input_tokens: 70,
+          output_tokens: 1000,
+        }),
+        resultNaming({ 'claude-opus-5-5': 200000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-opus-5-5', 0.02028, 70, null),
+        replied('b1', 'claude-opus-5-5', 0.02028, 70, 200000),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result repeats a window already sent',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 70 }),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 70, null),
+        replied('b1', 'claude-mythos-5-1', null, 70, 200000),
+        TURN_ENDED,
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result names a new window under a suffix and no plain key',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-opus-5-5', { input_tokens: 70 }),
+        resultNaming({ 'claude-opus-5-5': 200000 }),
+        resultNaming({ 'claude-opus-5-5[1m]': 1000000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-opus-5-5', 0.00028, 70, null),
+        replied('b1', 'claude-opus-5-5', 0.00028, 70, 200000),
+        TURN_ENDED,
+        replied('b1', 'claude-opus-5-5', 0.00028, 70, 1000000),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result names a plain key beside a suffixed key already learned',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 70 }),
+        resultNaming({ 'claude-mythos-5-1[1m]': 1000000 }),
+        resultNaming({
+          'claude-mythos-5-1': 200000,
+          'claude-mythos-5-1[1m]': 1000000,
+        }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 70, null),
+        replied('b1', 'claude-mythos-5-1', null, 70, 1000000),
+        TURN_ENDED,
+        replied('b1', 'claude-mythos-5-1', null, 70, 200000),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result names no window for a subagent, and keeps what it learned',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 70 }),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+        resultNaming({}),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 70, null),
+        replied('b1', 'claude-mythos-5-1', null, 70, 200000),
+        TURN_ENDED,
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: "result names one model's window among three running subagents",
+      lines: [
+        agentCall('b1'),
+        agentCall('b2'),
+        agentCall('b3'),
+        launchReceipt('b1'),
+        launchReceipt('b2'),
+        launchReceipt('b3'),
+        subagentReply('b2', 'm2', 'claude-mythos-5-1', { input_tokens: 20 }),
+        subagentReply('b3', 'm3', 'claude-mythos-9-9', { input_tokens: 30 }),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 10 }),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        spawned('b2'),
+        spawned('b3'),
+        launched('b1'),
+        launched('b2'),
+        launched('b3'),
+        replied('b2', 'claude-mythos-5-1', null, 20, null),
+        replied('b3', 'claude-mythos-9-9', null, 30, null),
+        replied('b1', 'claude-mythos-5-1', null, 10, null),
+        replied('b1', 'claude-mythos-5-1', null, 10, 200000),
+        replied('b2', 'claude-mythos-5-1', null, 20, 200000),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result sends a new window to pending calls before launched ones',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        agentCall('n1', {}, 'b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 10 }),
+        subagentReply('n1', 'm2', 'claude-mythos-5-1', { input_tokens: 20 }),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        spawned('n1', 'Explore', 'b1'),
+        replied('b1', 'claude-mythos-5-1', null, 10, null),
+        replied('n1', 'claude-mythos-5-1', null, 20, null),
+        replied('n1', 'claude-mythos-5-1', null, 20, 200000),
+        replied('b1', 'claude-mythos-5-1', null, 10, 200000),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result fails a pending main call and sends it no window',
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', { input_tokens: 10 }),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null, 10, null),
+        finished('a1', 'failed'),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result sends no window to a finished subagent',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 10 }),
+        taskNotification('b1', 'completed'),
+        resultNaming({ 'claude-mythos-5-1': 200000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 10, null),
+        finished('b1', 'done'),
+        TURN_ENDED,
       ],
     },
     {
@@ -1705,7 +2163,10 @@ describe('createStreamDecoder', () => {
         agentCall('a1'),
         subagentReply('a1', 'm1', 'claude-mythos-5-1', { output_tokens: 1000 }),
       ],
-      expected: [spawned('a1'), replied('a1', 'claude-mythos-5-1', null)],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null, 0, null),
+      ],
     },
     {
       case: 'subagent replies priced then unpriced',
@@ -1716,8 +2177,8 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        replied('a1', 'claude-haiku-5-5', 0.0005),
-        replied('a1', 'claude-mythos-5-1', null),
+        replied('a1', 'claude-haiku-5-5', 0.0005, 0, null),
+        replied('a1', 'claude-mythos-5-1', null, 0, null),
       ],
     },
     {
@@ -1729,8 +2190,8 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        replied('a1', 'claude-mythos-5-1', null),
-        replied('a1', 'claude-haiku-5-5', null),
+        replied('a1', 'claude-mythos-5-1', null, 0, null),
+        replied('a1', 'claude-haiku-5-5', null, 0, null),
       ],
     },
     {
@@ -1750,8 +2211,86 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('b1', 'Explore', 'main', { model: 'haiku' }),
-        replied('b1', 'claude-haiku-5-5', null),
+        replied('b1', 'claude-haiku-5-5', null, null, null),
+        launched('b1'),
         finished('b1', 'done'),
+      ],
+    },
+    {
+      case: "launch receipt carries the agent's context and its model's window",
+      lines: [
+        resultNaming({ 'claude-sonnet-5-5[1m]': 1000000 }),
+        agentCall('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 70 }),
+        toolResultLine('b1', {
+          toolUseResult: {
+            isAsync: true,
+            status: 'async_launched',
+            resolvedModel: 'claude-sonnet-5-5',
+          },
+        }),
+      ],
+      expected: [
+        TURN_ENDED,
+        spawned('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 70, null),
+        replied('b1', 'claude-sonnet-5-5', null, 70, 1000000),
+        launched('b1'),
+      ],
+    },
+    {
+      case: 'launch receipt with no resolved model',
+      lines: [agentCall('b1'), launchReceipt('b1')],
+      expected: [spawned('b1'), launched('b1')],
+    },
+    {
+      case: 'launch receipt that failed',
+      lines: [
+        agentCall('b1'),
+        toolResultLine('b1', {
+          isError: true,
+          toolUseResult: { isAsync: true },
+        }),
+      ],
+      expected: [spawned('b1'), finished('b1', 'failed')],
+    },
+    {
+      case: 'foreground completion receipt',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        toolResultLine('a1', {
+          toolUseResult: {
+            status: 'completed',
+            resolvedModel: 'claude-haiku-5-5',
+          },
+        }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-haiku-5-5', null, null, null),
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: "result sends the window of the receipt's model",
+      lines: [
+        agentCall('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 70 }),
+        toolResultLine('b1', {
+          toolUseResult: {
+            isAsync: true,
+            resolvedModel: 'claude-mythos-9-9',
+          },
+        }),
+        resultNaming({ 'claude-mythos-9-9': 200000 }),
+      ],
+      expected: [
+        spawned('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 70, null),
+        replied('b1', 'claude-mythos-9-9', null, 70, null),
+        launched('b1'),
+        replied('b1', 'claude-mythos-9-9', null, 70, 200000),
+        TURN_ENDED,
       ],
     },
     {
@@ -1813,6 +2352,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
+        launched('a1'),
         started(
           'a1',
           'toolu_013y',

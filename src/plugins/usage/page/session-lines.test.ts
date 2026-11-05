@@ -10,7 +10,14 @@ import {
 import type { UsageSnapshot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { createUsageParts } from './layout/usage-parts';
-import { createSessionLines, sessionLineKind } from './session-lines';
+import {
+  contextLineKind,
+  createSessionLines,
+  rowCacheKind,
+  type SessionLineKind,
+  sessionLineKind,
+  spendLineKind,
+} from './session-lines';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 50_000_000;
@@ -41,19 +48,13 @@ function snapshotWith(usage?: UsageAgentEvent | null): UsageSnapshot {
     sessions:
       usage === undefined
         ? []
-        : [{ sessionId: SESSION, profileDir: null, usage }],
+        : [{ sessionId: SESSION, profileDir: null, usage, compaction: null }],
   };
 }
 
-// Lines over the default layout whose `latest` is `shown` at NOW until `show`
-// replaces it, naming `s1` `gamma 2` while `names` holds it.
-function setUp(
-  initial: UsageSnapshot | null,
-  names: ReadonlyMap<string, string> = new Map([[SESSION, NAME]]),
-) {
-  const logged: string[] = [];
-  let shown = initial;
-  const parts = createUsageParts({
+// The parts over the default layout.
+function defaultParts() {
+  return createUsageParts({
     defaultLayout,
     kit: {
       markdown: {
@@ -68,9 +69,19 @@ function setUp(
     },
     log: () => undefined,
   });
+}
+
+// Lines over the default layout whose `latest` is `shown` at NOW until `show`
+// replaces it, naming `s1` `gamma 2` while `names` holds it.
+function setUp(
+  initial: UsageSnapshot | null,
+  names: ReadonlyMap<string, string> = new Map([[SESSION, NAME]]),
+) {
+  const logged: string[] = [];
+  let shown = initial;
   const lines = createSessionLines({
     id: 'usage.sessionLine',
-    line: sessionLineKind(parts),
+    line: sessionLineKind(defaultParts()),
     log: (line) => logged.push(line),
     nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
     latest: () => (shown === null ? null : { snapshot: shown, now: NOW }),
@@ -79,6 +90,23 @@ function setUp(
     shown = snapshot;
   };
   return { lines, logged, show };
+}
+
+// What `line` logs when a part over `snapshot` first draws `s1`.
+function logOnBuild<I>(
+  line: SessionLineKind<I>,
+  snapshot: UsageSnapshot,
+): string[] {
+  const logged: string[] = [];
+  const lines = createSessionLines({
+    id: 'usage.line',
+    line,
+    log: (text) => logged.push(text),
+    nameOf: () => NAME,
+    latest: () => ({ snapshot, now: NOW }),
+  });
+  lines.part.build(asHtml(new FakeElement('div')), SESSION);
+  return logged;
 }
 
 beforeEach(() => {
@@ -230,6 +258,77 @@ describe('session lines', () => {
     expect(logged).toEqual([
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'ContextLine',
+      logged: (snapshot: UsageSnapshot) =>
+        logOnBuild(contextLineKind(defaultParts()), snapshot),
+      expected: 'context line in gamma 2: context 180k/300k, cache 42m',
+      usage: usageEvent(),
+    },
+    {
+      case: 'Spend',
+      logged: (snapshot: UsageSnapshot) =>
+        logOnBuild(spendLineKind(defaultParts()), snapshot),
+      expected: 'spend in gamma 2: $1.23',
+      usage: usageEvent(),
+    },
+    {
+      case: 'NullSpend',
+      logged: (snapshot: UsageSnapshot) =>
+        logOnBuild(spendLineKind(defaultParts()), snapshot),
+      expected: 'spend in gamma 2: none',
+      usage: usageEvent({ spendUsd: null }),
+    },
+  ])('build_LogsUnderItsLabel_$case', ({ logged, expected, usage }) => {
+    expect(logged(snapshotWith(usage))).toEqual([expected]);
+  });
+
+  it('rowCacheKind_NoExpiryThenWarmThenColdThenNoExpiry_DrawsTheMarkAndLogsEachState', () => {
+    let shown = snapshotWith(usageEvent({ cacheExpiresAt: null }));
+    const logged: string[] = [];
+    const lines = createSessionLines({
+      id: 'usage.rowCache',
+      line: rowCacheKind(defaultParts()),
+      log: (line) => logged.push(line),
+      nameOf: (sessionId) => sessionId,
+      latest: () => ({ snapshot: shown, now: NOW }),
+    });
+    const wrapper = new FakeElement('div');
+
+    lines.part.build(asHtml(wrapper), SESSION);
+    const childrenWithNoExpiry = [...wrapper.children];
+    shown = snapshotWith(usageEvent());
+    lines.redraw();
+    const warm = findAll(wrapper, 'usage-row-cache');
+    const warmMark = {
+      title: warm[0]?.title,
+      isCold: warm[0]?.classList.contains('is-cold'),
+    };
+    shown = snapshotWith(usageEvent({ cacheExpiresAt: NOW - MINUTE }));
+    lines.redraw();
+    const cold = findAll(wrapper, 'usage-row-cache');
+    const coldMark = {
+      title: cold[0]?.title,
+      isCold: cold[0]?.classList.contains('is-cold'),
+    };
+    shown = snapshotWith(usageEvent({ cacheExpiresAt: null }));
+    lines.redraw();
+
+    expect(childrenWithNoExpiry).toEqual([]);
+    expect(warm).toHaveLength(1);
+    expect(warmMark).toEqual({ title: 'cache warm · 42m left', isCold: false });
+    expect(cold).toHaveLength(1);
+    expect(coldMark).toEqual({ title: 'cache cold', isCold: true });
+    expect(wrapper.children).toEqual([]);
+    expect(logged).toEqual([
+      `session line in ${SESSION}: cache none`,
+      `session line in ${SESSION}: cache warm`,
+      `session line in ${SESSION}: cache cold`,
+      `session line in ${SESSION}: cache none`,
     ]);
   });
 });

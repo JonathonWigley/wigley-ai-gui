@@ -25,6 +25,16 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         ? deps.paths.normalize(result.stdout.trim())
         : null;
     },
+    originRepoName: async (folder) => {
+      const result = await processes.run('git', [
+        '-C',
+        folder,
+        'remote',
+        'get-url',
+        'origin',
+      ]);
+      return result.code === 0 ? repoNameOfUrl(result.stdout) : null;
+    },
     currentBranch: async (folder) => {
       // An unborn branch's name prints here too; a detached HEAD exits 1.
       const branch = await processes.run('git', [
@@ -191,6 +201,17 @@ async function gitOutput(
     );
   }
   return result.stdout;
+}
+
+// The text after a URL's or path's last `/`, `\` or `:`, past any trailing
+// separators, without one `.git`; null when nothing is left.
+function repoNameOfUrl(url: string): string | null {
+  const name = url
+    .trim()
+    .replace(/[/\\]+$/, '')
+    .replace(/^.*[/\\:]/, '')
+    .replace(/\.git$/, '');
+  return name === '' ? null : name;
 }
 
 function nulFields(output: string): string[] {

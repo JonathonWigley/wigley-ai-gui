@@ -4,7 +4,7 @@ import { foldFlow, newFlow } from '../../flow';
 import { BUILT_IN_MAIN_STAGES } from '../index';
 
 function flowIn(stage: string): SessionFlow {
-  return { ...newFlow('s1', '/r'), stage, hasLeftIdle: true };
+  return { ...newFlow('s1', '/r'), stage };
 }
 
 describe('idleMainStage', () => {

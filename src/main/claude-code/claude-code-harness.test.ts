@@ -1,31 +1,55 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
+import { createInterface } from 'node:readline';
+import { PassThrough, type Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentEvent,
+  AgentProcess,
   AgentProcessEvents,
   AgentStart,
+  ChatEntry,
   LogInEvents,
 } from '../../contracts/agent';
 import type { Clock } from '../../contracts/ambient';
+import type { Log } from '../../contracts/log';
+import type {
+  HostedExit,
+  PipeDirection,
+  PipeLine,
+  SessionHost,
+} from '../../contracts/session-host';
+import {
+  createFakeSessionHost,
+  type FakeSessionHost,
+} from '../../shared/fake-session-host';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import type { Files } from '../../contracts/files';
+import type { Paths } from '../../contracts/paths';
 import {
+  CLAUDE_IDLE_RULE,
   createClaudeCodeHarness,
   type ClaudeSpawn,
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
+import {
+  appCommandUuid,
+  createSessionFoldState,
+  replayPipeLog,
+} from './session-fold';
 
 const request: AgentStart = {
+  processId: 'p-1',
   sessionId: 's-1',
   resume: false,
   projectDir: '/proj',
   profileDir: null,
   controls: {},
   instructions: [],
+  idleCompactMinTokens: null,
+  rowId: 'row-1',
 };
 
 // A child with `PassThrough` stdio that records its signals and stdin lines.
@@ -68,6 +92,72 @@ function fakeChild() {
 
 const clock = { now: () => 1000 };
 
+// A `SessionHost` whose one process is the fake child: `seq` counts over stdout
+// and stderr together; `closed` fires once, on an `error` event at once.
+function childHost(
+  fake: ReturnType<typeof fakeChild>,
+  hostClock: Clock,
+  log: Log,
+): SessionHost {
+  return {
+    spawn(hostedRequest, events) {
+      const { child } = fake;
+      let seq = 0;
+      let hasClosed = false;
+      let isDetached = false;
+      const readLines = (input: Readable, dir: 'out' | 'err') => {
+        createInterface({ input }).on('line', (text) => {
+          seq += 1;
+          if (!isDetached) {
+            events.line({ seq, dir, at: hostClock.now(), text });
+          }
+        });
+      };
+      const close = (exit: HostedExit) => {
+        if (hasClosed || isDetached) {
+          return;
+        }
+        hasClosed = true;
+        events.closed(exit);
+      };
+      readLines(child.stdout, 'out');
+      readLines(child.stderr, 'err');
+      child.stdin.on('error', (error) => log('claude', error.message));
+      child.on('close', (code: number | null, signal: string | null) =>
+        close({ code, signal, error: null }),
+      );
+      child.on('error', (error: Error) =>
+        close({ code: null, signal: null, error: error.message }),
+      );
+      return {
+        id: hostedRequest.id,
+        write(text) {
+          if (!isDetached) {
+            child.stdin.write(`${text}\n`);
+          }
+        },
+        endInput() {
+          if (!isDetached) {
+            child.stdin.end();
+          }
+        },
+        kill(signal) {
+          if (!isDetached) {
+            child.kill(signal);
+          }
+        },
+        detach() {
+          isDetached = true;
+        },
+      };
+    },
+    attach: async () => null,
+    list: async () => [],
+    setKeepIdleMinutes() {},
+    stopAll: async () => {},
+  };
+}
+
 // Every event the process emits, as `[event name, payload]`, in emit order,
 // except the agent events other than `usage`, which `agentEvents` holds.
 // `timeline` holds every event, those included, in emit order.
@@ -93,7 +183,8 @@ function recordingEvents() {
       agentEvents.push(event);
       timeline.push(['agentEvent', event]);
     },
-    messageDropped: (entryId) => hear('messageDropped', entryId),
+    messageDropped: (entryId, message) =>
+      hear('messageDropped', { entryId, message }),
     ended: (end) => hear('ended', end),
   };
   return { heard, agentEvents, timeline, events };
@@ -142,11 +233,13 @@ function started(
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
   let uuidCount = 0;
+  const log: Log = (source, message) => logged.push([source, message]);
   const harness = createClaudeCodeHarness({
     command: () => '/bin/claude',
     permissionTool: 'tool',
     env: {},
-    log: (source, message) => logged.push([source, message]),
+    log,
+    host: childHost(fake, harnessClock, log),
     spawn,
     files,
     homeDir: '/Users/u',
@@ -262,6 +355,31 @@ function resultEntries(heard: [string, unknown][]) {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+const SAVED_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+const TRANSCRIPT = `/Users/u/.claude/projects/-proj/${SAVED_ID}.jsonl`;
+const resumeRequest: AgentStart = {
+  ...request,
+  sessionId: SAVED_ID,
+  resume: true,
+};
+// A saved main reply of 12123 tokens that wrote the 1 h cache.
+const SAVED_REPLY_LINE = JSON.stringify({
+  type: 'assistant',
+  timestamp: '2026-10-27T16:07:09.193Z',
+  message: {
+    model: 'claude-opus-5-5',
+    role: 'assistant',
+    content: [{ type: 'text', text: 'ok' }],
+    usage: {
+      input_tokens: 3,
+      cache_creation_input_tokens: 2000,
+      cache_read_input_tokens: 10000,
+      output_tokens: 120,
+      cache_creation: { ephemeral_1h_input_tokens: 2000 },
+    },
+  },
 });
 
 describe('createClaudeCodeHarness', () => {
@@ -383,7 +501,10 @@ describe('createClaudeCodeHarness', () => {
       ],
       atWrite: [],
       expected: [
-        ['messageDropped', 'user-1'],
+        [
+          'messageDropped',
+          { entryId: 'user-1', message: { text: 'hi', images: [] } },
+        ],
         ['activity', 'idle'],
       ],
     })),
@@ -534,7 +655,7 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
-      controlMessage('effort', 'high', 'uuid-1'),
+      controlMessage('effort', 'high', '00000000-1'),
       contextUsageRequest('wigley-2'),
     ]);
     expect(
@@ -628,34 +749,10 @@ describe('createClaudeCodeHarness', () => {
   });
 
   describe('usage reads', () => {
-    const SAVED_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
-    const TRANSCRIPT = `/Users/u/.claude/projects/-proj/${SAVED_ID}.jsonl`;
-    const resumeRequest: AgentStart = {
-      ...request,
-      sessionId: SAVED_ID,
-      resume: true,
-    };
     const SAVED_USER_LINE = JSON.stringify({
       type: 'user',
       timestamp: '2026-10-27T16:07:00.000Z',
       message: { role: 'user', content: 'hi' },
-    });
-    // A saved main reply of 12123 tokens that wrote the 1 h cache.
-    const SAVED_REPLY_LINE = JSON.stringify({
-      type: 'assistant',
-      timestamp: '2026-10-27T16:07:09.193Z',
-      message: {
-        model: 'claude-opus-5-5',
-        role: 'assistant',
-        content: [{ type: 'text', text: 'ok' }],
-        usage: {
-          input_tokens: 3,
-          cache_creation_input_tokens: 2000,
-          cache_read_input_tokens: 10000,
-          output_tokens: 120,
-          cache_creation: { ephemeral_1h_input_tokens: 2000 },
-        },
-      },
     });
     const seeded = (contextTokens: number, cacheExpiresAt: number | null) => ({
       type: 'usage',
@@ -1274,6 +1371,176 @@ describe('createClaudeCodeHarness', () => {
     expect(run.heard).toEqual([['ended', { code: null, error: null }]]);
   });
 
+  it.each([
+    { case: 'no late line', lateLine: null },
+    { case: 'a late line', lateLine: lifecycleInit },
+  ])('end_ThenClose_ClearsEveryTimer ($case)', async ({ lateLine }) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const run = await startedQuiet();
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.interrupt();
+    const ending = run.agent.end();
+    await settle();
+
+    run.emitter.emit('close', 0, null);
+    if (lateLine !== null) {
+      writeLine(run.stdout, lateLine);
+    }
+    await ending;
+    await settle();
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(10000);
+    await settle();
+    const names = run.heard.map(([name]) => name);
+    expect(names.at(-1)).toBe('ended');
+    expect(noticeTexts(run.heard)).not.toContain(GRACE_NOTICE);
+  });
+
+  it('replayPipeLog_RecordedLiveSession_EqualsTheLiveRun', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let at = 1000;
+    const recorded: PipeLine[] = [];
+    const record = (dir: PipeDirection, text: string) => {
+      recorded.push({ seq: recorded.length + 1, dir, at, text });
+    };
+    const fake = fakeChild();
+    const { stdin } = fake.child;
+    const writeStdin = stdin.write.bind(stdin) as (text: string) => boolean;
+    stdin.write = ((text: string) => {
+      record('in', text.trimEnd());
+      return writeStdin(text);
+    }) as typeof stdin.write;
+    const run = started(fake, createMemoryFiles(), { now: () => at });
+    await settle();
+    const startedAt = at;
+    const step = async (action: () => void) => {
+      at += 1000;
+      action();
+      await settle();
+    };
+    const out = (line: object | string) =>
+      step(() => {
+        const text = typeof line === 'string' ? line : JSON.stringify(line);
+        record('out', text);
+        run.stdout.write(`${text}\n`);
+      });
+
+    await out(contextReply('wigley-1', 1000000, 967000));
+    await step(() => run.agent.send({ text: 'hi', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-1', 'started'));
+    await out(REPLY_LINE);
+    await out(successResult('ok', ['uuid-1']));
+    await step(() => run.agent.setControl('mode', 'plan'));
+    await out({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: 'wigley-3' },
+    });
+    await step(() => run.agent.setControl('effort', 'high'));
+    await out(successResult('Set effort level to high', ['00000000-2']));
+    await step(() => run.agent.send({ text: 'two', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-3', 'started'));
+    await step(() => run.agent.interrupt());
+    const interruptedAt = at;
+    await step(() => {
+      record('err', 'warn');
+      run.stderr.write('warn\n');
+    });
+    at = interruptedAt + 5000;
+    vi.advanceTimersByTime(5000);
+    await settle();
+
+    const state = createSessionFoldState(request);
+    const replay = replayPipeLog(state, recorded, at, null);
+
+    const lastVersions = (entries: readonly ChatEntry[]) => {
+      const byId = new Map<string, ChatEntry>();
+      for (const entry of entries) {
+        byId.set(entry.id, entry);
+      }
+      return [...byId.values()];
+    };
+    const liveEntries = lastVersions(
+      run.timeline.flatMap(([name, payload]) =>
+        name === 'entry' ? [payload as ChatEntry] : [],
+      ),
+    );
+    const replayEntries = replay.flatMap((effect) =>
+      effect.kind === 'entry' ? [effect.entry] : [],
+    );
+    expect(replayEntries).toEqual(liveEntries);
+    const ids = replayEntries.map((entry) => entry.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'user-1',
+        'user-2',
+        'control-notice-1',
+        'control-notice-2',
+      ]),
+    );
+    for (const entries of [liveEntries, replayEntries]) {
+      expect(entries.find((entry) => entry.id === 'control-notice-2')?.at).toBe(
+        interruptedAt + 5000,
+      );
+    }
+
+    const liveEvents = run.timeline.flatMap(([name, payload]) =>
+      name === 'agentEvent' ? [payload as AgentEvent] : [],
+    );
+    const settingsRead: AgentEvent = {
+      type: 'usage',
+      agentId: 'main',
+      at: startedAt,
+      contextTokens: 0,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: null,
+      spendUsd: null,
+    };
+    expect(liveEvents).toContainEqual(settingsRead);
+    expect(
+      replay.flatMap((effect) =>
+        effect.kind === 'agentEvent' ? [effect.event] : [],
+      ),
+    ).toEqual(
+      liveEvents.filter(
+        (event) => JSON.stringify(event) !== JSON.stringify(settingsRead),
+      ),
+    );
+
+    const liveControls = run.heard
+      .filter(([name]) => name === 'controls')
+      .at(-1)?.[1];
+    expect(replay.find((effect) => effect.kind === 'controls')).toEqual({
+      kind: 'controls',
+      controls: liveControls,
+    });
+    expect(liveControls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'mode', value: 'plan' }),
+        expect.objectContaining({ id: 'effort', value: 'high' }),
+      ]),
+    );
+    expect(lastActivity(run.heard)).toBe('idle');
+    expect(replay.at(-1)).toEqual({ kind: 'activity', activity: 'idle' });
+
+    const highestRequest = Math.max(
+      ...run.written.flatMap((line) => {
+        const id = (line as { request_id?: string }).request_id;
+        return id === undefined ? [] : [Number(id.replace('wigley-', ''))];
+      }),
+    );
+    expect(state).toMatchObject({
+      sendCount: 2,
+      requestCount: highestRequest,
+      lastStderr: 'warn',
+      graceDeadline: null,
+      isContextRequestOwed: false,
+    });
+  });
+
   it('start_AgentEvents_StampedAtTheClockAndBracketedBySession', async () => {
     let at = 1000;
     const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
@@ -1404,6 +1671,20 @@ describe('createClaudeCodeHarness', () => {
       text: '/effort high',
       expected: [{ type: 'userMessage', at: 1000 }],
     },
+    {
+      case: 'compact command',
+      text: '/compact',
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        {
+          type: 'skillStarted',
+          at: 1000,
+          agentId: 'main',
+          skill: 'compact',
+          args: '',
+        },
+      ],
+    },
   ])('send_SlashText_EmitsSkillStarted ($case)', async ({ text, expected }) => {
     const run = started();
     writeLine(run.stdout, plainInit);
@@ -1428,6 +1709,763 @@ describe('createClaudeCodeHarness', () => {
     expect(() => run.agent.send({ text: 'hi', images: [] })).toThrow(
       'Claude Code process has ended',
     );
+    expect(() => run.agent.compact()).toThrow('Claude Code process has ended');
+  });
+
+  describe('compaction', () => {
+    const compactingStatus = {
+      type: 'system',
+      subtype: 'status',
+      status: 'compacting',
+    };
+    const compactBoundary = {
+      type: 'system',
+      subtype: 'compact_boundary',
+      compact_metadata: {
+        trigger: 'manual',
+        pre_tokens: 37559,
+        post_tokens: 9023,
+        duration_ms: 8303,
+      },
+    };
+    const compactFailed = {
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      compact_result: 'failed',
+      compact_error: 'Not enough messages to compact.',
+    };
+    // The first app command's uuid: `randomUuid`'s `uuid-1` as `appCommandUuid`
+    // writes it.
+    const APP_UUID = appCommandUuid('uuid-1');
+    const TYPED_UUID = 'uuid-1';
+    const mainReply = (id: string) => ({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        model: 'claude-opus-5-5',
+        id,
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        usage: {
+          input_tokens: 2,
+          cache_creation_input_tokens: 909,
+          cache_read_input_tokens: 38019,
+          output_tokens: 5,
+        },
+      },
+    });
+    const STARTED = (trigger: string, at = 1000) => ({
+      type: 'compactionStarted',
+      at,
+      trigger,
+    });
+    const DONE = (trigger: string, at = 1000) => ({
+      type: 'compactionEnded',
+      at,
+      trigger,
+      outcome: 'done',
+      beforeTokens: 37559,
+      durationMs: 8303,
+    });
+    const NEVER_RAN = (trigger: string, outcome: string, at = 1000) => ({
+      type: 'compactionEnded',
+      at,
+      trigger,
+      outcome,
+      beforeTokens: null,
+      durationMs: null,
+    });
+    const compactionEvents = (events: AgentEvent[]) =>
+      events.filter((event) => event.type.startsWith('compaction'));
+    const compactionEntries = (heard: [string, unknown][]) =>
+      heard.flatMap(([name, payload]) =>
+        name === 'entry' && (payload as ChatEntry).kind === 'compaction'
+          ? [payload as ChatEntry]
+          : [],
+      );
+    const writeLines = async (
+      run: { stdout: PassThrough },
+      lines: readonly object[],
+    ) => {
+      for (const line of lines) {
+        writeLine(run.stdout, line);
+      }
+      await settle();
+    };
+
+    it('compact_WritesTheCommandWithNoUserEntry', async () => {
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started')]);
+
+      expect(run.written.at(-1)).toEqual(
+        userMessage({ text: '/compact', images: [] }, APP_UUID),
+      );
+      expect(
+        run.heard.filter(
+          ([name, payload]) =>
+            name === 'entry' && (payload as ChatEntry).kind === 'user',
+        ),
+      ).toEqual([]);
+      expect(
+        run.agentEvents.filter(
+          (event) =>
+            event.type === 'userMessage' || event.type === 'skillStarted',
+        ),
+      ).toEqual([]);
+      expect(lastActivity(run.heard)).toBe('working');
+    });
+
+    it('compact_WhileATurnRuns_Throws', async () => {
+      const run = await startedQuiet();
+
+      run.agent.send({ text: 'hi', images: [] });
+
+      expect(() => run.agent.compact()).toThrow(
+        'Claude is working; compact when the turn ends',
+      );
+    });
+
+    it.each<{
+      name: string;
+      act: (agent: AgentProcess) => void;
+      lines: object[];
+      expected: string;
+    }>([
+      {
+        name: 'app',
+        act: (agent) => agent.compact(),
+        lines: [lifecycle(APP_UUID, 'started'), compactingStatus],
+        expected: 'app',
+      },
+      {
+        name: 'typed',
+        act: (agent) => agent.send({ text: '/compact', images: [] }),
+        lines: [lifecycle(TYPED_UUID, 'started'), compactingStatus],
+        expected: 'manual',
+      },
+      {
+        name: 'typed with instructions',
+        act: (agent) =>
+          agent.send({ text: '/compact keep the plan', images: [] }),
+        lines: [lifecycle(TYPED_UUID, 'started'), compactingStatus],
+        expected: 'manual',
+      },
+      {
+        name: 'a model turn',
+        act: (agent) => agent.send({ text: 'hi', images: [] }),
+        lines: [
+          lifecycle(TYPED_UUID, 'started'),
+          lifecycleInit,
+          compactingStatus,
+        ],
+        expected: 'harness',
+      },
+      {
+        name: 'a longer command name',
+        act: (agent) => agent.send({ text: '/compactor', images: [] }),
+        lines: [lifecycle(TYPED_UUID, 'started'), compactingStatus],
+        expected: 'harness',
+      },
+      {
+        name: 'fallback, the oldest armed command',
+        act: (agent) => {
+          agent.send({ text: '/compact', images: [] });
+          agent.send({ text: '/compact again', images: [] });
+        },
+        lines: [plainInit, compactingStatus],
+        expected: 'manual',
+      },
+    ])(
+      'compaction_Trigger_FromWhatStartedIt ($name)',
+      async ({ act, lines, expected }) => {
+        const run = await startedQuiet();
+
+        act(run.agent);
+        await writeLines(run, [...lines, compactBoundary]);
+
+        expect(compactionEvents(run.agentEvents)).toEqual([
+          STARTED(expected),
+          DONE(expected),
+        ]);
+      },
+    );
+
+    it.each<{
+      name: string;
+      lines: object[];
+      expected: object[];
+    }>([
+      {
+        name: 'repeated statuses',
+        lines: [compactingStatus, compactingStatus, compactBoundary],
+        expected: [DONE('app', 4000)],
+      },
+      {
+        name: 'failed status',
+        lines: [compactFailed],
+        expected: [
+          {
+            type: 'compactionEnded',
+            at: 4000,
+            trigger: 'app',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 3000,
+          },
+        ],
+      },
+      {
+        name: "the command's result",
+        lines: [{ ...errorResult, user_message_uuid: APP_UUID }],
+        expected: [
+          {
+            type: 'compactionEnded',
+            at: 4000,
+            trigger: 'app',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 3000,
+          },
+        ],
+      },
+      {
+        name: 'the end by a terminal lifecycle frame',
+        lines: [lifecycle(APP_UUID, 'cancelled')],
+        expected: [
+          {
+            type: 'compactionEnded',
+            at: 4000,
+            trigger: 'app',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 3000,
+          },
+        ],
+      },
+    ])('compaction_EndsOncePerStart ($name)', async ({ lines, expected }) => {
+      let at = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), {
+        now: () => at,
+      });
+      await settle();
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started'), compactingStatus]);
+      at = 4000;
+
+      await writeLines(run, [
+        ...lines,
+        successResult('', [APP_UUID]),
+        lifecycle(APP_UUID, 'completed'),
+      ]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app'),
+        ...expected,
+      ]);
+    });
+
+    it('compaction_ProcessCloses_EndsBeforeSessionEnded', async () => {
+      let at = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
+      await settle();
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started'), compactingStatus]);
+      at = 4000;
+
+      run.emitter.emit('close', 0, null);
+      await settle();
+
+      const endings = run.agentEvents.slice(-2);
+      expect(endings).toEqual([
+        {
+          type: 'compactionEnded',
+          at: 4000,
+          trigger: 'app',
+          outcome: 'failed',
+          beforeTokens: null,
+          durationMs: 3000,
+        },
+        { type: 'sessionEnded', at: 4000 },
+      ]);
+    });
+
+    it.each<{
+      name: string;
+      isInterrupted: boolean;
+      outcome: string;
+    }>([
+      {
+        name: 'a command that never ran',
+        isInterrupted: false,
+        outcome: 'failed',
+      },
+      {
+        name: 'a command an interrupt caught',
+        isInterrupted: true,
+        outcome: 'interrupted',
+      },
+    ])(
+      'compaction_ProcessClosesBeforeAnyStatus_StillPairs ($name)',
+      async ({ isInterrupted, outcome }) => {
+        const run = await startedQuiet();
+        run.agent.compact();
+        if (isInterrupted) {
+          run.agent.interrupt();
+        }
+
+        run.emitter.emit('close', 0, null);
+        await settle();
+
+        expect(compactionEvents(run.agentEvents)).toEqual([
+          STARTED('app'),
+          NEVER_RAN('app', outcome),
+        ]);
+      },
+    );
+
+    it('compaction_AppCommandBehindAnAbandonedTurn_StillPairs', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+      run.agent.compact();
+      await writeLines(run, [lifecycleInit]);
+
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app', 6000),
+        NEVER_RAN('app', 'failed', 6000),
+      ]);
+    });
+
+    it.each<{ name: string; act?: 'hi'; lines: object[]; expected: object[] }>([
+      {
+        name: 'a boundary with no start',
+        act: 'hi',
+        lines: [lifecycleInit, compactBoundary],
+        expected: [STARTED('harness'), DONE('harness')],
+      },
+      {
+        name: 'a harness end on a bare result',
+        act: 'hi',
+        lines: [lifecycleInit, compactingStatus, successResult('ok')],
+        expected: [
+          STARTED('harness'),
+          {
+            type: 'compactionEnded',
+            at: 1000,
+            trigger: 'harness',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 0,
+          },
+        ],
+      },
+      {
+        name: 'a harness end on an unrequested result',
+        lines: [lifecycleInit, compactingStatus, ownTurnResult],
+        expected: [
+          STARTED('harness'),
+          {
+            type: 'compactionEnded',
+            at: 1000,
+            trigger: 'harness',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 0,
+          },
+        ],
+      },
+      {
+        name: 'a failed attempt, then a new compaction in one turn',
+        act: 'hi',
+        lines: [
+          lifecycleInit,
+          compactingStatus,
+          {
+            type: 'system',
+            subtype: 'status',
+            status: null,
+            compact_result: 'failed',
+            compact_error: 'too_few_groups',
+          },
+          mainReply('m1'),
+          compactingStatus,
+          compactBoundary,
+        ],
+        expected: [
+          STARTED('harness'),
+          {
+            type: 'compactionEnded',
+            at: 1000,
+            trigger: 'harness',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 0,
+          },
+          STARTED('harness'),
+          DONE('harness'),
+        ],
+      },
+    ])(
+      'compaction_InAHarnessTurn ($name)',
+      async ({ act, lines, expected }) => {
+        const run = await startedQuiet();
+        if (act !== undefined) {
+          run.agent.send({ text: act, images: [] });
+        }
+
+        await writeLines(run, lines);
+
+        expect(compactionEvents(run.agentEvents)).toEqual(expected);
+      },
+    );
+
+    it.each<{
+      name: string;
+      act: (agent: AgentProcess) => void;
+      lines: object[];
+      expected: object[];
+    }>([
+      {
+        name: 'app',
+        act: (agent) => agent.compact(),
+        lines: [
+          lifecycle(APP_UUID, 'started'),
+          { ...errorResult, user_message_uuid: APP_UUID },
+          lifecycle(APP_UUID, 'completed'),
+        ],
+        expected: [STARTED('app'), NEVER_RAN('app', 'failed')],
+      },
+      {
+        name: 'typed, refused with no compaction line',
+        act: (agent) => agent.send({ text: '/compact', images: [] }),
+        lines: [
+          lifecycle(TYPED_UUID, 'started'),
+          successResult('Not enough', [TYPED_UUID]),
+          lifecycle(TYPED_UUID, 'completed'),
+        ],
+        expected: [STARTED('manual'), NEVER_RAN('manual', 'failed')],
+      },
+      {
+        name: 'fallback, on a result',
+        act: (agent) => agent.compact(),
+        lines: [plainInit, successResult('Not enough')],
+        expected: [STARTED('app'), NEVER_RAN('app', 'failed')],
+      },
+    ])(
+      'compaction_CommandEndsWithoutCompacting_StartsAndFails ($name)',
+      async ({ act, lines, expected }) => {
+        const run = await startedQuiet();
+
+        act(run.agent);
+        await writeLines(run, lines);
+
+        expect(compactionEvents(run.agentEvents)).toEqual(expected);
+      },
+    );
+
+    it('compaction_RefusedAsMeasured_OneStartOneFailedEnd', async () => {
+      const run = await startedQuiet();
+
+      run.agent.send({ text: '/compact', images: [] });
+      await writeLines(run, [
+        lifecycle(TYPED_UUID, 'started'),
+        compactingStatus,
+        compactFailed,
+        lifecycleInit,
+        successResult('Not enough messages to compact.', [TYPED_UUID]),
+        lifecycle(TYPED_UUID, 'completed'),
+      ]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('manual'),
+        {
+          type: 'compactionEnded',
+          at: 1000,
+          trigger: 'manual',
+          outcome: 'failed',
+          beforeTokens: null,
+          durationMs: 0,
+        },
+      ]);
+    });
+
+    it('compaction_FallbackAnyResult_EndsTheCompaction', async () => {
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      await writeLines(run, [plainInit, compactingStatus, successResult('ok')]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app'),
+        {
+          type: 'compactionEnded',
+          at: 1000,
+          trigger: 'app',
+          outcome: 'failed',
+          beforeTokens: null,
+          durationMs: 0,
+        },
+      ]);
+    });
+
+    it('compaction_Boundary_EmitsEntryThenItsAfterSize', async () => {
+      let at = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
+      await settle();
+
+      run.agent.compact();
+      await writeLines(run, [
+        lifecycle(APP_UUID, 'started'),
+        compactingStatus,
+        compactBoundary,
+      ]);
+      const entry = {
+        kind: 'compaction',
+        id: 'compaction-1',
+        at: 1000,
+        trigger: 'app',
+        beforeTokens: 37559,
+        afterTokens: null,
+        durationMs: 8303,
+        raw: [compactBoundary],
+      };
+      expect(compactionEntries(run.heard)).toEqual([entry]);
+
+      at = 2000;
+      await writeLines(run, [mainReply('m1'), mainReply('m2')]);
+
+      expect(compactionEntries(run.heard)).toEqual([
+        entry,
+        { ...entry, afterTokens: 38935 },
+      ]);
+    });
+
+    it.each<{
+      name: string;
+      act: (agent: AgentProcess) => void;
+      uuid: string;
+      results: number;
+    }>([
+      {
+        name: 'app',
+        act: (agent) => agent.compact(),
+        uuid: APP_UUID,
+        results: 0,
+      },
+      {
+        name: 'typed',
+        act: (agent) => agent.send({ text: '/compact', images: [] }),
+        uuid: TYPED_UUID,
+        results: 1,
+      },
+    ])(
+      'compaction_AppResult_ShowsNoResultEntry ($name)',
+      async ({ act, uuid, results }) => {
+        const run = await startedQuiet();
+
+        act(run.agent);
+        await writeLines(run, [
+          lifecycleInit,
+          lifecycle(uuid, 'started'),
+          compactingStatus,
+          compactBoundary,
+          { ...successResult('', [uuid]), local_command: 'compact' },
+          lifecycle(uuid, 'completed'),
+        ]);
+
+        expect(resultEntries(run.heard)).toHaveLength(results);
+      },
+    );
+
+    const INTERRUPTED = {
+      type: 'compactionEnded',
+      trigger: 'app',
+      outcome: 'interrupted',
+    };
+
+    it.each<{
+      name: string;
+      steps: (object | number)[];
+      ended: object[];
+      entries?: number;
+    }>([
+      {
+        name: 'no line within the grace',
+        steps: [5000],
+        ended: [INTERRUPTED],
+      },
+      { name: 'just before the grace', steps: [4999], ended: [] },
+      {
+        name: 'the reply idles the session',
+        steps: [
+          {
+            type: 'control_response',
+            response: {
+              subtype: 'success',
+              request_id: 'wigley-2',
+              response: { still_queued: [] },
+            },
+          },
+          5000,
+        ],
+        ended: [INTERRUPTED],
+      },
+      {
+        name: 'the boundary within the grace',
+        steps: [compactBoundary, 5000],
+        ended: [{ type: 'compactionEnded', outcome: 'done' }],
+        entries: 1,
+      },
+      {
+        name: 'the boundary after the grace',
+        steps: [5000, compactBoundary],
+        ended: [INTERRUPTED],
+        entries: 1,
+      },
+      {
+        name: "the command's result within the grace",
+        steps: [{ ...errorResult, user_message_uuid: APP_UUID }, 5000],
+        ended: [INTERRUPTED],
+      },
+      {
+        name: 'a failed status within the grace',
+        steps: [compactFailed, 5000],
+        ended: [INTERRUPTED],
+      },
+      {
+        name: 'the plain interrupt as measured',
+        steps: [
+          {
+            type: 'system',
+            subtype: 'status',
+            status: null,
+            compact_result: 'failed',
+            compact_error: 'API Error: Request was aborted.',
+          },
+          lifecycleInit,
+          { ...successResult('', [APP_UUID]), local_command: 'compact' },
+          lifecycle(APP_UUID, 'cancelled'),
+          5000,
+        ],
+        ended: [INTERRUPTED],
+      },
+    ])(
+      'compaction_Interrupted_EndsOnceWithinTheGrace ($name)',
+      async ({ steps, ended, entries = 0 }) => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const run = await startedQuiet();
+        run.agent.compact();
+        await writeLines(run, [
+          lifecycle(APP_UUID, 'started'),
+          compactingStatus,
+        ]);
+        run.agent.interrupt();
+
+        for (const step of steps) {
+          if (typeof step === 'number') {
+            vi.advanceTimersByTime(step);
+            await settle();
+          } else {
+            await writeLines(run, [step]);
+          }
+        }
+
+        expect(
+          run.agentEvents.filter((event) => event.type === 'compactionEnded'),
+        ).toEqual(ended.map((end) => expect.objectContaining(end)));
+        expect(compactionEntries(run.heard)).toHaveLength(entries);
+      },
+    );
+
+    it('compaction_InterruptBeforeTheFirstStatus_EndsAtTheGrace', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app', 6000),
+        NEVER_RAN('app', 'interrupted', 6000),
+      ]);
+    });
+
+    it('compaction_InterruptBeforeTheFirstStatus_ItsStatusStillTakesTheCommand', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      run.agent.interrupt();
+      await writeLines(run, [
+        {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'wigley-2',
+            response: { still_queued: [] },
+          },
+        },
+        compactingStatus,
+        compactFailed,
+      ]);
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app'),
+        {
+          type: 'compactionEnded',
+          at: 1000,
+          trigger: 'app',
+          outcome: 'interrupted',
+          beforeTokens: null,
+          durationMs: 0,
+        },
+      ]);
+    });
+
+    it('compaction_StaleArmedUuidAfterAbandon_NextStatusIsHarness', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.send({ text: '/compact', images: [] });
+      run.agent.send({ text: '/compact again', images: [] });
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+      await writeLines(run, [compactingStatus]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('manual', 6000),
+        NEVER_RAN('manual', 'interrupted', 6000),
+        STARTED('harness'),
+      ]);
+    });
+
+    it('compaction_StatusAfterAGraceEndedCompaction_StartsANewOne', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started'), compactingStatus]);
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+      await writeLines(run, [compactingStatus]);
+
+      expect(
+        run.agentEvents.filter((event) => event.type === 'compactionStarted'),
+      ).toEqual([STARTED('app'), STARTED('harness')]);
+    });
   });
 });
 
@@ -1456,6 +2494,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       permissionTool: 'tool',
       env,
       log: () => {},
+      host: createFakeSessionHost(clock),
       spawn: () => fakeChild().child,
       files,
       homeDir: '/Users/u',
@@ -1542,6 +2581,7 @@ describe('createClaudeCodeHarness accounts', () => {
       permissionTool: 'tool',
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
       log: () => {},
+      host: createFakeSessionHost(harnessClock),
       spawn: (_command, args, options) => {
         spawned.push({ args, options });
         const next = queue.shift();
@@ -1931,5 +2971,826 @@ describe('createClaudeCodeHarness accounts', () => {
     await exitWith(child, '', 1);
 
     await rejected;
+  });
+});
+
+describe('createClaudeCodeHarness on the session host', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A harness on `host`; `spawn` throws, since no session may reach it.
+  function hostHarness(
+    host: SessionHost,
+    harnessClock: Clock,
+    overrides: { env?: NodeJS.ProcessEnv; paths?: Paths; files?: Files } = {},
+  ) {
+    let uuidCount = 0;
+    return createClaudeCodeHarness({
+      command: () => '/bin/claude',
+      permissionTool: 'tool',
+      env: overrides.env ?? {},
+      log: () => {},
+      host,
+      spawn: () => {
+        throw new Error('a session process reached deps.spawn');
+      },
+      files: overrides.files ?? createMemoryFiles(),
+      homeDir: '/Users/u',
+      paths: overrides.paths ?? posixPaths,
+      clock: harnessClock,
+      randomUuid: () => {
+        uuidCount += 1;
+        return `uuid-${uuidCount}`;
+      },
+    });
+  }
+
+  const asText = (line: object | string) =>
+    typeof line === 'string' ? line : JSON.stringify(line);
+
+  // Pipe lines one second apart from 1000, unless a row gives its `at`.
+  function logOf(
+    lines: readonly {
+      dir: PipeDirection;
+      line: object | string;
+      at?: number;
+    }[],
+  ): PipeLine[] {
+    return lines.map(({ dir, line, at }, index) => ({
+      seq: index + 1,
+      dir,
+      at: at ?? 1000 * (index + 1),
+      text: asText(line),
+    }));
+  }
+
+  const SEND_LINE = userMessage({ text: 'hi', images: [] }, 'uuid-1');
+  const interruptRequest = (requestId: string) => ({
+    type: 'control_request',
+    request_id: requestId,
+    request: { subtype: 'interrupt' },
+  });
+  // A send and its turn up to its `started`.
+  const WORKING_LOG = [
+    { dir: 'in', line: SEND_LINE },
+    { dir: 'out', line: lifecycleInit },
+    { dir: 'out', line: lifecycle('uuid-1', 'started') },
+  ] as const;
+  const ENDED_TURN_LOG = [
+    ...WORKING_LOG,
+    { dir: 'out', line: successResult('ok', ['uuid-1']) },
+  ] as const;
+  const running = (log: PipeLine[]) => ({
+    id: 'p-1',
+    startedAt: 1000,
+    current: true,
+    log,
+  });
+  const entriesOf = (timeline: [string, unknown][]) =>
+    timeline.flatMap(([name, payload]) =>
+      name === 'entry' ? [payload as ChatEntry] : [],
+    );
+
+  it('start_SpawnsThroughTheHost', () => {
+    const host = createFakeSessionHost(clock);
+
+    hostHarness(host, clock).start(request, recordingEvents().events);
+
+    expect(host.processes[0].request).toEqual({
+      id: 'p-1',
+      command: '/bin/claude',
+      args: [
+        '-p',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+        '--include-partial-messages',
+        '--verbose',
+        '--session-id',
+        's-1',
+        '--permission-mode',
+        'auto',
+        '--permission-prompt-tool',
+        'tool',
+      ],
+      cwd: '/proj',
+      env: { WIGLEY_SESSION_ROW: 'row-1' },
+      idleRule: {
+        key: 'type',
+        value: 'result',
+        busyStdoutValues: expect.arrayContaining(['assistant', 'stream_event']),
+        busyStdinValues: expect.arrayContaining(['user']),
+      },
+    });
+    expect(host.processes[0].writes[0]).toBe(
+      JSON.stringify(contextUsageRequest('wigley-1')),
+    );
+  });
+
+  it('idleRule_LinesBetweenTurns_AreNotBusy', () => {
+    // `user` on stdout: a `set_model` acknowledgement prints one with no turn.
+    const stdoutBetweenTurns = [
+      'system',
+      'command_lifecycle',
+      'control_response',
+      'user',
+    ];
+    const stdinBetweenTurns = ['control_request', 'control_response'];
+
+    expect(
+      CLAUDE_IDLE_RULE.busyStdoutValues.filter((value) =>
+        stdoutBetweenTurns.includes(value),
+      ),
+    ).toEqual([]);
+    expect(
+      CLAUDE_IDLE_RULE.busyStdinValues.filter((value) =>
+        stdinBetweenTurns.includes(value),
+      ),
+    ).toEqual([]);
+  });
+
+  it('start_EnvWithUndefined_SpawnsWithoutIt', () => {
+    const host = createFakeSessionHost(clock);
+    const env = { KEEP: 'a', DROP: undefined };
+
+    hostHarness(host, clock, { env }).start(request, recordingEvents().events);
+
+    expect(host.processes[0].request?.env).toEqual({
+      KEEP: 'a',
+      WIGLEY_SESSION_ROW: 'row-1',
+    });
+  });
+
+  it('start_HostSpawnFails_EndsWithHint', async () => {
+    const host = createFakeSessionHost(clock);
+    host.failNextSpawn('spawn /bin/claude ENOENT');
+    const { heard, events } = recordingEvents();
+
+    hostHarness(host, clock).start(request, events);
+    await settle();
+
+    const ended = heard.filter(([name]) => name === 'ended');
+    expect(ended).toEqual([
+      [
+        'ended',
+        { code: null, error: expect.stringMatching(/\/bin\/claude.*\/proj/) },
+      ],
+    ]);
+  });
+
+  it('attach_RecordedLiveSession_EqualsTheLiveRun', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let at = 1000;
+    const stepClock = { now: () => at };
+    const host = createFakeSessionHost(stepClock);
+    const a = recordingEvents();
+    const agent = hostHarness(host, stepClock).start(request, a.events);
+    await settle();
+    const startedAt = at;
+    const step = async (action: () => void) => {
+      at += 1000;
+      action();
+      await settle();
+    };
+    const out = (line: object | string) =>
+      step(() => host.output('p-1', 'out', asText(line)));
+
+    await out(contextReply('wigley-1', 1000000, 967000));
+    await step(() => agent.send({ text: 'hi', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-1', 'started'));
+    await out(REPLY_LINE);
+    await out(successResult('ok', ['uuid-1']));
+    await step(() => agent.setControl('mode', 'plan'));
+    await out({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: 'wigley-3' },
+    });
+    await step(() => agent.setControl('effort', 'high'));
+    await out(successResult('Set effort level to high', ['00000000-2']));
+    await step(() => agent.send({ text: 'two', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-3', 'started'));
+    await step(() => agent.interrupt());
+    const interruptedAt = at;
+    await step(() => host.output('p-1', 'err', 'warn'));
+    at = interruptedAt + 5000;
+    vi.advanceTimersByTime(5000);
+    await settle();
+    const record = host.processes[0];
+    const writesBeforeAttach = record.writes.length;
+
+    const b = recordingEvents();
+    const attached = await hostHarness(host, stepClock).attach(
+      request,
+      b.events,
+    );
+    const replayedTimeline = [...b.timeline];
+
+    const lastVersions = (entries: readonly ChatEntry[]) => {
+      const byId = new Map<string, ChatEntry>();
+      for (const entry of entries) {
+        byId.set(entry.id, entry);
+      }
+      return [...byId.values()];
+    };
+    const agentEventsOf = (timeline: [string, unknown][]) =>
+      timeline.flatMap(([name, payload]) =>
+        name === 'agentEvent' ? [payload as AgentEvent] : [],
+      );
+    const lastOf = (name: string) =>
+      a.timeline.filter(([heardName]) => heardName === name).at(-1);
+    const settingsRead: AgentEvent = {
+      type: 'usage',
+      agentId: 'main',
+      at: startedAt,
+      contextTokens: 0,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: null,
+      spendUsd: null,
+    };
+
+    expect(replayedTimeline[0]).toEqual([
+      'agentEvent',
+      { type: 'sessionStarted', at: record.log[0].at },
+    ]);
+    expect(entriesOf(replayedTimeline)).toEqual(
+      lastVersions(entriesOf(a.timeline)),
+    );
+    expect(agentEventsOf(a.timeline)).toContainEqual(settingsRead);
+    expect(agentEventsOf(replayedTimeline)).toEqual(
+      agentEventsOf(a.timeline).filter(
+        (event) => JSON.stringify(event) !== JSON.stringify(settingsRead),
+      ),
+    );
+    expect(replayedTimeline.slice(-3)).toEqual([
+      lastOf('controls'),
+      lastOf('commands'),
+      lastOf('activity'),
+    ]);
+    expect(lastOf('controls')?.[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'mode', value: 'plan' }),
+        expect.objectContaining({ id: 'effort', value: 'high' }),
+      ]),
+    );
+
+    await settle();
+    expect(b.timeline).toEqual(replayedTimeline);
+    expect(record.writes).toHaveLength(writesBeforeAttach);
+
+    const highestRequest = Math.max(
+      ...record.log.flatMap((line) => {
+        const id = /"request_id":"wigley-(\d+)"/.exec(line.text)?.[1];
+        return line.dir === 'in' && id !== undefined ? [Number(id)] : [];
+      }),
+    );
+    expect(attached?.send({ text: 'three', images: [] })).toBe('user-3');
+    attached?.interrupt();
+    expect(record.writes.at(-1)).toBe(
+      JSON.stringify(interruptRequest(`wigley-${highestRequest + 1}`)),
+    );
+  });
+
+  const HOST_REQUEST_OUT = {
+    dir: 'out',
+    line: {
+      type: 'control_request',
+      request_id: 'r-1',
+      request: { subtype: 'can_use_tool' },
+    },
+  } as const;
+  const REFUSAL = {
+    type: 'control_response',
+    response: {
+      subtype: 'error',
+      request_id: 'r-1',
+      error: 'wigley-ai-gui answers no can_use_tool requests',
+    },
+  };
+  const CONTEXT_REQUEST_IN = {
+    dir: 'in',
+    line: contextUsageRequest('wigley-1'),
+  } as const;
+  it.each([
+    {
+      case: 'turn ended while away',
+      goesOn: [],
+      closes: false,
+      written: [contextUsageRequest('wigley-1')],
+    },
+    {
+      case: 'request already written',
+      goesOn: [CONTEXT_REQUEST_IN],
+      closes: false,
+      written: [],
+    },
+    {
+      case: 'closed during attach',
+      goesOn: [HOST_REQUEST_OUT],
+      closes: true,
+      written: [],
+    },
+    {
+      case: 'host request unanswered while away',
+      goesOn: [CONTEXT_REQUEST_IN, HOST_REQUEST_OUT],
+      closes: false,
+      written: [REFUSAL],
+    },
+    {
+      case: 'host request and context request both owed',
+      goesOn: [HOST_REQUEST_OUT],
+      closes: false,
+      written: [REFUSAL, contextUsageRequest('wigley-1')],
+    },
+    {
+      case: 'host request already refused',
+      goesOn: [
+        HOST_REQUEST_OUT,
+        { dir: 'in', line: REFUSAL },
+        CONTEXT_REQUEST_IN,
+      ],
+      closes: false,
+      written: [],
+    },
+  ] as {
+    case: string;
+    goesOn: { dir: PipeDirection; line: object }[];
+    closes: boolean;
+    written: object[];
+  }[])(
+    'attach_OwedWhileDetached_WritesEachOnce ($case)',
+    async ({ goesOn, closes, written }) => {
+      const host = createFakeSessionHost(clock);
+      const record = host.addRunning(
+        running(logOf([...ENDED_TURN_LOG, ...goesOn])),
+      );
+
+      const attaching = hostHarness(host, clock).attach(
+        request,
+        recordingEvents().events,
+      );
+      if (closes) {
+        host.close('p-1', { code: 0, signal: null, error: null });
+      }
+      await attaching;
+      await settle();
+
+      expect(record.writes).toEqual(
+        written.map((line) => JSON.stringify(line)),
+      );
+    },
+  );
+
+  it.each([
+    {
+      case: 'saved replies read',
+      transcript: SAVED_REPLY_LINE,
+      cacheExpiresAt: 9000 + 3_600_000,
+    },
+    { case: 'transcript missing', transcript: null, cacheExpiresAt: null },
+  ])(
+    'attach_ResumedProcess_SavedRepliesFoldBeforeTheLog ($case)',
+    async ({ transcript, cacheExpiresAt }) => {
+      const cacheReadReply = {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-5-5',
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'ok' }],
+          usage: {
+            input_tokens: 3,
+            cache_read_input_tokens: 40000,
+            output_tokens: 120,
+          },
+        },
+        parent_tool_use_id: null,
+      };
+      const host = createFakeSessionHost(clock);
+      host.addRunning(
+        running(logOf([{ dir: 'out', line: cacheReadReply, at: 9000 }])),
+      );
+      const files = createMemoryFiles();
+      if (transcript !== null) {
+        await files.write(TRANSCRIPT, transcript);
+      }
+      const { heard, events } = recordingEvents();
+
+      const attached = await hostHarness(host, clock, { files }).attach(
+        resumeRequest,
+        events,
+      );
+
+      expect(attached).not.toBeNull();
+      expect(heard.filter(([name]) => name === 'agentEvent').at(-1)).toEqual([
+        'agentEvent',
+        expect.objectContaining({
+          type: 'usage',
+          at: 9000,
+          contextTokens: 40123,
+          cacheExpiresAt,
+        }),
+      ]);
+    },
+  );
+
+  it('attach_LoggedSubagent_DecodesWithItsDefinition', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      '/proj/.claude/agents/mapper.md',
+      '---\nname: mapper\nmodel: sonnet\neffort: high\n---\nYou map.\n',
+    );
+    const host = createFakeSessionHost(clock);
+    host.addRunning(
+      running(
+        logOf([
+          {
+            dir: 'out',
+            line: {
+              type: 'assistant',
+              message: {
+                model: 'claude-opus-5-5',
+                id: 'msg_1',
+                role: 'assistant',
+                content: [
+                  {
+                    type: 'tool_use',
+                    id: 'a1',
+                    name: 'Agent',
+                    input: {
+                      description: 'map',
+                      subagent_type: 'mapper',
+                      prompt: 'x',
+                    },
+                  },
+                ],
+              },
+              parent_tool_use_id: null,
+            },
+          },
+        ]),
+      ),
+    );
+    const { agentEvents, events } = recordingEvents();
+
+    await hostHarness(host, clock, { files }).attach(request, events);
+
+    expect(
+      agentEvents.filter((event) => event.type === 'agentSpawned'),
+    ).toEqual([expect.objectContaining({ model: 'sonnet', effort: 'high' })]);
+  });
+
+  it('attach_DefinitionsReject_DetachesTheHostedProcess', async () => {
+    const host = createFakeSessionHost(clock);
+    const record = host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const paths: Paths = {
+      ...posixPaths,
+      join(...parts) {
+        if (parts.join('/') === '/proj/.claude/agents') {
+          throw new Error('no join');
+        }
+        return posixPaths.join(...parts);
+      },
+    };
+    const { timeline, events } = recordingEvents();
+
+    await expect(
+      hostHarness(host, clock, { paths }).attach(request, events),
+    ).rejects.toThrow('no join');
+    host.output('p-1', 'out', REPLY_LINE);
+    await settle();
+
+    expect(record.detaches).toBe(1);
+    expect(timeline).toEqual([]);
+  });
+
+  it.each([
+    { case: 'no record', arrange: () => {} },
+    {
+      case: 'not current',
+      arrange: (host: FakeSessionHost) =>
+        host.addRunning({ ...running([]), current: false }),
+    },
+    {
+      case: 'closed',
+      arrange: (host: FakeSessionHost) => {
+        host.addRunning(running([]));
+        host.close('p-1', { code: 0, signal: null, error: null });
+      },
+    },
+  ])('attach_Cases_ResolvesByHostState ($case)', async ({ arrange }) => {
+    const host = createFakeSessionHost(clock);
+    arrange(host);
+    const { timeline, events } = recordingEvents();
+
+    const attached = await hostHarness(host, clock).attach(request, events);
+    await settle();
+
+    expect(attached).toBeNull();
+    expect(timeline).toEqual([]);
+  });
+
+  describe('attach_GraceAcrossTheBoundary', () => {
+    const graceLog = [
+      { dir: 'in', line: SEND_LINE, at: 100 },
+      { dir: 'out', line: lifecycleInit, at: 200 },
+      { dir: 'out', line: lifecycle('uuid-1', 'started'), at: 300 },
+      { dir: 'in', line: interruptRequest('wigley-1'), at: 1000 },
+    ] as const;
+    const graceNotices = (timeline: [string, unknown][]) =>
+      entriesOf(timeline).filter(
+        (entry) => entry.kind === 'notice' && entry.text === GRACE_NOTICE,
+      );
+
+    it('attach_GraceAcrossTheBoundary (expired while away)', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const at60 = { now: () => 60000 };
+      const host = createFakeSessionHost(at60);
+      host.addRunning(running(logOf(graceLog)));
+      const { heard, timeline, events } = recordingEvents();
+
+      await hostHarness(host, at60).attach(request, events);
+
+      expect(graceNotices(timeline).map((entry) => entry.at)).toEqual([6000]);
+      expect(lastActivity(heard)).toBe('idle');
+      const heardAtResolve = timeline.length;
+      await settle();
+      vi.advanceTimersByTime(10000);
+      await settle();
+      // The log holds no usage event, so the settings read reports its first.
+      expect(
+        timeline
+          .slice(heardAtResolve)
+          .map(([name, payload]) =>
+            name === 'agentEvent' ? (payload as AgentEvent).type : name,
+          ),
+      ).toEqual(['usage']);
+    });
+
+    it('attach_GraceAcrossTheBoundary (still pending)', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const at3 = { now: () => 3000 };
+      const host = createFakeSessionHost(at3);
+      host.addRunning(running(logOf(graceLog)));
+      const { heard, timeline, events } = recordingEvents();
+
+      await hostHarness(host, at3).attach(request, events);
+
+      expect(graceNotices(timeline)).toEqual([]);
+      expect(lastActivity(heard)).toBe('working');
+      await settle();
+      vi.advanceTimersByTime(2999);
+      await settle();
+      expect(graceNotices(timeline)).toEqual([]);
+      vi.advanceTimersByTime(1);
+      await settle();
+      expect(graceNotices(timeline).map((entry) => entry.at)).toEqual([6000]);
+      expect(lastActivity(heard)).toBe('idle');
+    });
+  });
+
+  it('attach_LineDuringAttach_FoldsOnce', async () => {
+    const host = createFakeSessionHost(clock);
+    host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const lateLine = JSON.stringify({
+      type: 'assistant',
+      message: {
+        id: 'msg_2',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'late' }],
+      },
+      parent_tool_use_id: null,
+    });
+    const deliversDuringAttach: SessionHost = {
+      ...host,
+      async attach(id, hostedEvents) {
+        const result = await host.attach(id, hostedEvents);
+        const lastLine = result?.log.at(-1);
+        if (lastLine !== undefined) {
+          hostedEvents.line(lastLine);
+        }
+        host.output(id, 'out', lateLine);
+        return result;
+      },
+    };
+    const { timeline, agentEvents, events } = recordingEvents();
+
+    await hostHarness(deliversDuringAttach, clock).attach(request, events);
+
+    expect(
+      agentEvents.filter((event) => event.type === 'turnEnded'),
+    ).toHaveLength(1);
+    expect(
+      entriesOf(timeline).filter(
+        (entry) => entry.kind === 'assistant' && entry.text === 'late',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      case: 'taken in while away',
+      logged: [lifecycle('uuid-1', 'started')],
+      live: [],
+      closes: true,
+      drops: 0,
+    },
+    {
+      case: 'dropped while away',
+      logged: [lifecycle('uuid-1', 'cancelled')],
+      live: [],
+      closes: true,
+      drops: 1,
+    },
+    {
+      case: 'dropped once live',
+      logged: [],
+      live: [lifecycle('uuid-1', 'cancelled')],
+      closes: true,
+      drops: 1,
+    },
+    {
+      case: 'still held when the process closes',
+      logged: [],
+      live: [],
+      closes: true,
+      drops: 1,
+    },
+    {
+      case: 'still held, process running',
+      logged: [],
+      live: [],
+      closes: false,
+      drops: 0,
+    },
+  ])(
+    'attach_MessageWrittenBeforeIt_ReportedOnceIfDropped ($case)',
+    async ({ logged, live, closes, drops }) => {
+      const host = createFakeSessionHost(clock);
+      host.addRunning(
+        running(
+          logOf([
+            {
+              dir: 'in',
+              line: userMessage({ text: 'hi', images: [] }, 'uuid-1'),
+            },
+            { dir: 'out', line: lifecycleInit },
+            ...logged.map((line) => ({ dir: 'out' as const, line })),
+          ]),
+        ),
+      );
+      const { timeline, events } = recordingEvents();
+
+      await hostHarness(host, clock).attach(request, events);
+      for (const line of live) {
+        host.output('p-1', 'out', asText(line));
+      }
+      if (closes) {
+        host.close('p-1', { code: 0, signal: null, error: null });
+      }
+      await settle();
+
+      const names = timeline.map(([name]) => name);
+      expect(timeline.filter(([name]) => name === 'messageDropped')).toEqual(
+        Array.from({ length: drops }, () => [
+          'messageDropped',
+          { entryId: 'user-1', message: { text: 'hi', images: [] } },
+        ]),
+      );
+      if (drops === 1) {
+        expect(names.indexOf('messageDropped')).toBeLessThan(
+          closes ? names.indexOf('ended') : names.length,
+        );
+      }
+    },
+  );
+
+  it('attach_ClosedDuringAttach_EndsAfterTheReplay', async () => {
+    const host = createFakeSessionHost(clock);
+    host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const { timeline, events } = recordingEvents();
+
+    const attaching = hostHarness(host, clock).attach(request, events);
+    host.close('p-1', { code: 0, signal: null, error: null });
+    await attaching;
+    await settle();
+
+    expect(timeline[0]).toEqual([
+      'agentEvent',
+      { type: 'sessionStarted', at: 1000 },
+    ]);
+    expect(timeline.slice(-3)).toEqual([
+      ['activity', 'idle'],
+      ['agentEvent', { type: 'sessionEnded', at: 1000 }],
+      ['ended', { code: 0, error: null }],
+    ]);
+  });
+
+  describe('detach', () => {
+    async function startedOnHost() {
+      const host = createFakeSessionHost(clock);
+      const recording = recordingEvents();
+      const agent = hostHarness(host, clock).start(request, recording.events);
+      await settle();
+      const forgetHeard = () => {
+        recording.heard.length = 0;
+        recording.agentEvents.length = 0;
+        recording.timeline.length = 0;
+      };
+      forgetHeard();
+      return {
+        host,
+        agent,
+        record: host.processes[0],
+        forgetHeard,
+        ...recording,
+      };
+    }
+
+    it('detach_ThenOutputAndClose_FiresNothing', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const { host, agent, record, timeline, forgetHeard } =
+        await startedOnHost();
+      agent.send({ text: 'hi', images: [] });
+      agent.interrupt();
+      await settle();
+      forgetHeard();
+
+      agent.detach();
+      agent.detach();
+      host.output('p-1', 'out', REPLY_LINE);
+      host.close('p-1', { code: 0, signal: null, error: null });
+      await settle();
+
+      expect(timeline).toEqual([]);
+      expect(record.detaches).toBe(1);
+      expect(record.kills).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(() => agent.send({ text: 'x', images: [] })).toThrow(
+        'Claude Code process has detached',
+      );
+      expect(() => agent.interrupt()).toThrow(
+        'Claude Code process has detached',
+      );
+      expect(() => agent.setControl('mode', 'plan')).toThrow(
+        'Claude Code process has detached',
+      );
+      await agent.end();
+      agent.kill();
+      expect(record.kills).toEqual([]);
+    });
+
+    it('detach_PendingEnd_Settles', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const { agent, record, heard } = await startedOnHost();
+
+      const ending = agent.end();
+      agent.detach();
+      await ending;
+      vi.advanceTimersByTime(6000);
+      await settle();
+
+      expect(heard.filter(([name]) => name === 'ended')).toEqual([]);
+      expect(record.kills).toEqual([]);
+    });
+
+    it('detach_QueuedEmission_Dropped', async () => {
+      const { host, agent, timeline } = await startedOnHost();
+
+      host.output('p-1', 'out', REPLY_LINE);
+      agent.detach();
+      await settle();
+
+      expect(timeline).toEqual([]);
+    });
+
+    it('attach_AfterDetach_ReplaysAgain', async () => {
+      const { host, agent } = await startedOnHost();
+      agent.send({ text: 'hi', images: [] });
+      for (const line of [
+        lifecycleInit,
+        lifecycle('uuid-1', 'started'),
+        successResult('ok', ['uuid-1']),
+      ]) {
+        host.output('p-1', 'out', asText(line));
+      }
+      await settle();
+      agent.detach();
+      const { timeline, events } = recordingEvents();
+
+      await hostHarness(host, clock).attach(request, events);
+
+      expect(timeline[0]).toEqual([
+        'agentEvent',
+        { type: 'sessionStarted', at: 1000 },
+      ]);
+      expect(entriesOf(timeline).map((entry) => entry.id)).toContain('user-1');
+    });
   });
 });

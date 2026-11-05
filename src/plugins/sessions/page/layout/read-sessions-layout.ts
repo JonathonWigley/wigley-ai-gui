@@ -5,6 +5,8 @@ import type { Layout } from '../../layouts/layout';
 // missed here fails to compile.
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   sideBar: true,
+  section: true,
+  group: true,
   row: true,
   pane: true,
   tabBar: true,

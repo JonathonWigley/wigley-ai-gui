@@ -51,6 +51,7 @@ function startWorkflow() {
         (consumer) =>
           ({
             addComposerPart: noHandle(consumer),
+            addSidePart: noHandle(consumer),
           }) as unknown as ChatPageExports,
       ),
       fakeDependency(

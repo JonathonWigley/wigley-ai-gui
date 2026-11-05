@@ -1,9 +1,11 @@
-import { detailLine, isBusy, type PageStage } from '../../contract';
+import { busyStatus, detailLine, isBusy, type PageStage } from '../../contract';
 
 export const makePageStage: PageStage = {
   id: 'make',
   label: 'Make',
   inStepper: true,
+  stepSlot: 'make',
+  runsTasks: true,
   order: 40,
   actions: [
     {
@@ -35,5 +37,10 @@ export const makePageStage: PageStage = {
       wave,
       progress.title,
     );
+  },
+  status: busyStatus,
+  statusProgress(flow) {
+    const progress = flow.progress;
+    return progress === null ? '' : ` ${progress.checked}/${progress.total}`;
   },
 };

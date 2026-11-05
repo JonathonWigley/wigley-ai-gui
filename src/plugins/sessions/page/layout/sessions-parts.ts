@@ -4,6 +4,7 @@ import {
   type PaneDirection,
 } from '../../../../contracts/panes';
 import type { ShownLayouts } from '../../../../contracts/plugin';
+import { errorText } from '../../../../shared/error-text';
 import {
   type ContributedPartsPlace,
   type PartStore,
@@ -30,13 +31,17 @@ import type {
   CompleteLayout,
   EmptyTextInput,
   EmptyTextKit,
+  GroupInput,
+  GroupKit,
+  GroupPane,
   Layout,
   PaneInput,
   PaneKit,
-  PanePart,
   RenameDialogInput,
   RenameDialogKit,
   RowKit,
+  SectionInput,
+  SectionPane,
   SessionRowInput,
   SessionsKit,
   SessionsPart,
@@ -66,6 +71,19 @@ export interface DrawnSideBar extends SideBarPane {
   sessionEdge: HTMLElement | null;
 }
 
+// A drawn group and the star its kit placed, null when the layout placed none.
+export interface DrawnGroup extends GroupPane {
+  favoriteToggle: HTMLElement | null;
+}
+
+// A drawn pane: its root and body, and `update`, which applies a new input in
+// place, false when the layout has no `update` or it threw.
+export interface DrawnPanePart {
+  element: HTMLElement;
+  body: HTMLElement;
+  update(input: PaneInput): boolean;
+}
+
 // A drawn tab bar and the prompts its kit placed, each null when the layout
 // placed none: the tab and close prompts, and the key inside each pane
 // control.
@@ -84,8 +102,11 @@ export interface DrawnTabBar extends TabBarPane {
 export interface SessionsParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
   sideBar(parent: HTMLElement): DrawnPart<DrawnSideBar>;
+  // Its element carries `is-empty` while `input.isEmpty`.
+  section(parent: HTMLElement, input: SectionInput): DrawnPart<SectionPane>;
+  group(parent: HTMLElement, input: GroupInput): DrawnPart<DrawnGroup>;
   row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
-  pane(parent: HTMLElement, input: PaneInput): DrawnPart<PanePart>;
+  pane(parent: HTMLElement, input: PaneInput): DrawnPart<DrawnPanePart>;
   // `sessionId` is the session whose frame the bar tops.
   tabBar(parent: HTMLElement, sessionId: string): DrawnPart<DrawnTabBar>;
   tab(parent: HTMLElement, input: SessionTabInput): DrawnPart<SessionsPart>;
@@ -140,6 +161,54 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         requireElementIn(pane.element, pane.rows, 'sideBar rows');
         return { element: pane.element, rows: pane.rows, sessionEdge };
       }),
+    section: (parent, input) =>
+      parts.draw('section', parent, (builder, into, rollback) => {
+        const pane = builder(into, input, sessionsKit(rollback));
+        requireElementIn(pane.element, pane.groups, 'section groups');
+        pane.element.classList.toggle('is-empty', input.isEmpty);
+        return { element: pane.element, groups: pane.groups };
+      }),
+    group: (parent, input) =>
+      parts.draw('group', parent, (builder, into, rollback) => {
+        let favoriteToggle: HTMLElement | null = null;
+        let grip: HTMLElement | null = null;
+        const base = sessionsKit(rollback);
+        const kit: GroupKit = {
+          ...base,
+          favoriteToggle(toggleParent) {
+            if (favoriteToggle !== null) {
+              throw new Error('favoriteToggle placed twice');
+            }
+            favoriteToggle = iconButton(
+              input.isFavorite ? 'star-full' : 'star-empty',
+              input.isFavorite ? 'Unfavorite' : 'Favorite',
+              () => undefined,
+              'sm',
+            );
+            favoriteToggle.classList.add('session-group-star');
+            favoriteToggle.classList.toggle('is-active', input.isFavorite);
+            toggleParent.append(favoriteToggle);
+            return favoriteToggle;
+          },
+          dragHandle(gripParent) {
+            if (grip !== null) {
+              throw new Error('dragHandle placed twice');
+            }
+            grip = base.el(gripParent, 'span', 'session-group-grip');
+            base.icon(grip, 'gripper');
+            return grip;
+          },
+        };
+        const pane = builder(into, input, kit);
+        requireElementIn(pane.element, pane.header, 'group header');
+        requireElementIn(pane.element, pane.rows, 'group rows');
+        return {
+          element: pane.element,
+          header: pane.header,
+          rows: pane.rows,
+          favoriteToggle,
+        };
+      }),
     row: (parent, input) =>
       parts.draw('row', parent, (builder, into, rollback) => {
         let isPlaced = false;
@@ -190,7 +259,22 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         };
         const pane = builder(into, input, kit);
         requireElementIn(pane.element, pane.body, 'pane body');
-        return { element: pane.element, body: pane.body };
+        return {
+          element: pane.element,
+          body: pane.body,
+          update(next) {
+            if (pane.update === undefined) {
+              return false;
+            }
+            try {
+              pane.update(next);
+              return true;
+            } catch (error) {
+              deps.log(`pane update failed: ${errorText(error)}`);
+              return false;
+            }
+          },
+        };
       }),
     tabBar: (parent, sessionId) =>
       parts.draw('tabBar', parent, (builder, into, rollback) => {

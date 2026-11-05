@@ -1,13 +1,21 @@
-import type { PlanRow, UsageAgentEvent } from '../../../contracts/agent';
+import type {
+  CompactionTrigger,
+  PlanRow,
+  UsageAgentEvent,
+} from '../../../contracts/agent';
+import { formatTokens } from '../../../shared/format-tokens';
 import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 import type {
+  ContextLineInput,
   DetailsInput,
   DetailsProfileInput,
   DetailsRowInput,
   DetailsSessionInput,
   MeterInput,
+  RowCacheInput,
   RowLineInput,
   SessionLineInput,
+  SpendLineInput,
   StatusLineInput,
   StatusLinePlanInput,
   UsageTone,
@@ -16,7 +24,6 @@ import {
   formatDuration,
   formatMinor,
   formatPercent,
-  formatTokens,
   formatUsd,
 } from './usage-format';
 
@@ -25,6 +32,12 @@ import {
 const CONTEXT_WARNING_PERCENT = 70;
 const CONTEXT_CRITICAL_PERCENT = 90;
 const MINUTE_MS = 60_000;
+
+const COMPACTING_CHIPS: Record<CompactionTrigger, string> = {
+  app: 'compacting · auto',
+  manual: 'compacting',
+  harness: 'compacting · autocompact',
+};
 
 // The status-bar plan line for `shownSessionId` (null while no session
 // shows): the plan of its session's profile, or of the default profile while
@@ -46,34 +59,112 @@ export function statusLineInput(
 
 // `sessionId`'s line: its context, cache and spend; the zero line (context
 // `0k`, no cache or spend) while the snapshot holds no such session or it has
-// no usage yet.
+// no usage yet. Either line carries the chip naming the trigger while the
+// session compacts.
 export function sessionLineInput(
   snapshot: UsageSnapshot,
   sessionId: string,
   now: number,
 ): SessionLineInput {
-  const usage = findSession(snapshot, sessionId)?.usage ?? null;
+  const session = findSession(snapshot, sessionId);
+  const compaction = session?.compaction ?? null;
+  const compacting = {
+    compacting:
+      compaction === null ? null : COMPACTING_CHIPS[compaction.trigger],
+    compactingElapsedMs:
+      compaction === null ? null : now - compaction.startedAt,
+  };
+  const usage = session?.usage ?? null;
   if (usage === null) {
-    return { context: zeroContextMeter(), cache: null, spend: null };
+    return {
+      context: zeroContextMeter(),
+      cache: null,
+      spend: null,
+      ...compacting,
+    };
   }
-  return sessionLine(usage, now);
+  return { ...sessionLine(usage, now), ...compacting };
 }
 
-// `sessionId`'s side-bar row line: its context, `0k` while the snapshot holds
-// no such session or it has no usage yet.
+// `sessionId`'s context line: its session line without the spend.
+export function contextLineInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): ContextLineInput {
+  const { context, cache, compacting, compactingElapsedMs } = sessionLineInput(
+    snapshot,
+    sessionId,
+    now,
+  );
+  return { context, cache, compacting, compactingElapsedMs };
+}
+
+// `sessionId`'s spend, read from its session line.
+export function spendLineInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): SpendLineInput {
+  const { spend } = sessionLineInput(snapshot, sessionId, now);
+  return { spend };
+}
+
+// `sessionId`'s side-bar row line: its context meter with the used tokens alone
+// as its text, `0k` while the snapshot holds no such session or it has no usage
+// yet.
 export function rowLineInput(
   snapshot: UsageSnapshot,
   sessionId: string,
 ): RowLineInput {
   const usage = findSession(snapshot, sessionId)?.usage ?? null;
   return {
-    context: usage === null ? zeroContextMeter() : contextMeter(usage),
+    context:
+      usage === null
+        ? zeroContextMeter()
+        : { ...contextMeter(usage), text: formatTokens(usage.contextTokens) },
   };
 }
 
-// A row line as the page log writes it: `context 180k/300k`.
+// A row line as the page log writes it: `context 180k`.
 export function rowLineText(input: RowLineInput): string {
   return `context ${input.context.text}`;
+}
+
+// `sessionId`'s side-bar cache mark: cold while the session has no usage yet;
+// null while the snapshot holds no such session or its usage has no cache expiry.
+export function rowCacheInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): RowCacheInput | null {
+  const session = findSession(snapshot, sessionId);
+  if (session === null) {
+    return null;
+  }
+  if (session.usage === null) {
+    return { isCold: true, tooltip: 'cache cold' };
+  }
+  const { cacheExpiresAt } = session.usage;
+  if (cacheExpiresAt === null) {
+    return null;
+  }
+  const isCold = cacheExpiresAt <= now;
+  return {
+    isCold,
+    tooltip: isCold
+      ? 'cache cold'
+      : `cache warm · ${formatDuration(cacheExpiresAt - now)} left`,
+  };
+}
+
+// A cache mark as the page log writes it: `cache none`, `cache warm` or
+// `cache cold`.
+export function rowCacheText(input: RowCacheInput | null): string {
+  if (input === null) {
+    return 'cache none';
+  }
+  return input.isCold ? 'cache cold' : 'cache warm';
 }
 
 // The details bar: every profile's plan, and the shown session's usage.
@@ -102,11 +193,26 @@ export function statusLineText(input: StatusLineInput): string {
 }
 
 // A session's line as the page log writes it:
-// `context 180k/300k, cache 42m, spend $1.23`.
+// `compacting · auto, context 180k/300k, cache 42m, spend $1.23`, the chip only
+// while the session compacts.
 export function sessionLineText(input: SessionLineInput): string {
-  const cachePart = input.cache === null ? '' : `, ${input.cache}`;
   const spendPart = input.spend === null ? '' : `, spend ${input.spend}`;
-  return `context ${input.context.text}${cachePart}${spendPart}`;
+  return `${contextLineText(input)}${spendPart}`;
+}
+
+// A context line as the page log writes it:
+// `compacting · autocompact, context 180k/300k, cache 42m`, the chip only while
+// the session compacts.
+export function contextLineText(input: ContextLineInput): string {
+  const compactingPart =
+    input.compacting === null ? '' : `${input.compacting}, `;
+  const cachePart = input.cache === null ? '' : `, ${input.cache}`;
+  return `${compactingPart}context ${input.context.text}${cachePart}`;
+}
+
+// A spend as the page log writes it: `$1.23`, or `none` with null spend.
+export function spendLineText(input: SpendLineInput): string {
+  return input.spend ?? 'none';
 }
 
 // Each profile's state as the page log writes it: `work fresh, personal stale`.
@@ -147,6 +253,7 @@ function shownPlan(
 function statusLinePlan(plan: ProfilePlan | null): StatusLinePlanInput {
   return {
     plans: plan?.usage?.rows.map(rowMeter) ?? [],
+    extraUsage: extraUsageText(plan),
     note: planNote(plan),
     stale: plan !== null && plan.usage !== null && plan.stale,
   };
@@ -162,7 +269,10 @@ function planNote(plan: ProfilePlan | null): string | null {
   return plan.usage.rows.length === 0 ? 'no plan rows' : null;
 }
 
-function sessionLine(usage: UsageAgentEvent, now: number): SessionLineInput {
+function sessionLine(
+  usage: UsageAgentEvent,
+  now: number,
+): Omit<SessionLineInput, 'compacting' | 'compactingElapsedMs'> {
   return {
     context: contextMeter(usage),
     cache: lineCache(usage.cacheExpiresAt, now),
@@ -264,8 +374,8 @@ function ago(ms: number): string {
   return ms < MINUTE_MS ? 'just now' : `${formatDuration(ms)} ago`;
 }
 
-function extraUsageText(plan: ProfilePlan): string | null {
-  const extra = plan.usage?.extraUsage ?? null;
+function extraUsageText(plan: ProfilePlan | null): string | null {
+  const extra = plan?.usage?.extraUsage ?? null;
   if (extra === null) {
     return null;
   }

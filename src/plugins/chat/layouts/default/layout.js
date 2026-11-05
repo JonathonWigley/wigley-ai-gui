@@ -1,10 +1,12 @@
 // @ts-check
 
 // The built-in chat look: the entries, the activity lines (each one summary
-// line, live or finished), the activity dock, the pending messages' rows, the
-// composer, the list rows, the dialogs' bodies and the image viewer. Every
-// collapsible row's body is built on its first open and kept, so an update
-// refills it in place whether it is open or closed.
+// line, live or finished), the activity dock, its one line and that line's place
+// just above the composer's box, the pending messages' rows, the composer, the
+// list rows, the dialogs' bodies, the image viewer, the run time under a session's
+// row, and the session hub's section frames and Session rows. Every collapsible
+// row's body is built on its first open and kept, so an update refills it in
+// place whether it is open or closed.
 
 // The tool calls the activity dock's box lists; a user layout sets its own
 // box's length.
@@ -25,6 +27,14 @@ const WORKING_STATE_WORDS = {
   writing: 'Writing…',
   working: 'Working…',
   waiting: 'Waiting…',
+  compacting: 'Compacting…',
+};
+
+// The divider's word for what started the compaction.
+const COMPACTION_TRIGGER_WORDS = {
+  app: 'auto',
+  manual: 'manual',
+  harness: 'autocompact',
 };
 
 /**
@@ -75,14 +85,26 @@ function toolStatus(input) {
   return input.result.isError ? 'error' : 'success';
 }
 
-/** @param {import('../layout').ResultInput} input */
-function resultLine(input) {
-  const parts = [input.stopReason];
-  if (input.costUsd !== null) {
-    parts.push(`$${input.costUsd.toFixed(2)}`);
-  }
+// Whether the turn stopped because the agent finished, not on a limit or error.
+/** @param {string} stopReason */
+function isFinishedStop(stopReason) {
+  return stopReason === 'end_turn' || stopReason === 'success';
+}
+
+// The turn break's line: how the turn stopped, then its time and steps when known.
+/**
+ * @param {import('../layout').ResultInput} input
+ * @param {import('../layout').ChatKit} kit
+ */
+function resultLine(input, kit) {
+  const parts = [
+    isFinishedStop(input.stopReason) ? 'Turn ended' : input.stopReason,
+  ];
   if (input.durationMs !== null) {
-    parts.push(`${(input.durationMs / 1000).toFixed(1)} s`);
+    parts.push(kit.duration(input.durationMs));
+  }
+  if (input.stepCount > 0) {
+    parts.push(stepCount(input.stepCount));
   }
   return parts.join(' · ');
 }
@@ -100,6 +122,26 @@ function fillUserTurn(turn, input, kit) {
   if (input.images.length > 0) {
     kit.images(turn);
   }
+}
+
+// The sizes known so far, the trigger word, then the time when known.
+/**
+ * @param {import('../layout').CompactionInput} input
+ * @param {import('../layout').ChatKit} kit
+ */
+function compactionLine(input, kit) {
+  const before =
+    input.beforeTokens === null ? '' : ` ${kit.tokens(input.beforeTokens)}`;
+  const after =
+    input.afterTokens === null ? '' : ` → ${kit.tokens(input.afterTokens)}`;
+  const parts = [
+    `Compacted${before}${after}`,
+    COMPACTION_TRIGGER_WORDS[input.trigger],
+  ];
+  if (input.durationMs !== null) {
+    parts.push(kit.duration(input.durationMs));
+  }
+  return parts.join(' · ');
 }
 
 /** @param {'info' | 'error'} tone */
@@ -248,10 +290,8 @@ function workingBox(tools) {
  * @param {import('../layout').BaseKit} kit
  */
 function doneLine(input, kit) {
-  const isFinished =
-    input.stopReason === 'end_turn' || input.stopReason === 'success';
   const parts = [
-    isFinished ? 'Done' : input.stopReason,
+    isFinishedStop(input.stopReason) ? 'Done' : input.stopReason,
     kit.duration(input.endedAt - input.startedAt),
   ];
   if (input.costUsd !== null) {
@@ -263,8 +303,24 @@ function doneLine(input, kit) {
   return parts.join(' · ');
 }
 
-// A finished turn's one line; a running turn's header (time, state), then,
-// once the turn has a tool call, the box and the tool counts.
+// The running turn's or compaction's header: its time, its state, and what
+// started a compaction.
+/** @param {import('../layout').LiveWorkingInput} input */
+function workingHead(input) {
+  const head = el('div', 'chat-working-head');
+  head.append(
+    el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
+    el('span', 'chat-working-state', WORKING_STATE_WORDS[input.state]),
+  );
+  if (input.compaction !== null) {
+    head.append(el('span', 'chat-working-trigger', input.compaction));
+  }
+  return head;
+}
+
+// A finished turn's one line; a compaction's header over its bar; a running
+// turn's header, then, once the turn has a tool call, the box and the tool
+// counts.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
@@ -277,12 +333,11 @@ function fillWorking(block, input, kit) {
     block.append(el('div', 'chat-working-done', doneLine(input, kit)));
     return;
   }
-  const head = el('div', 'chat-working-head');
-  head.append(
-    el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
-    el('span', 'chat-working-state', WORKING_STATE_WORDS[input.state]),
-  );
-  block.append(head);
+  block.append(workingHead(input));
+  if (input.compaction !== null) {
+    block.append(el('div', 'chat-working-bar'));
+    return;
+  }
   /** @type {import('../layout').ToolInput[]} */
   const tools = [];
   for (const step of input.steps) {
@@ -305,18 +360,46 @@ function fillWorking(block, input, kit) {
   );
 }
 
-// `pending`, or `sending` once the row is sent, then its image count:
-// `sending · 2 images`.
+// A finished turn's one line, else the running turn's or compaction's header.
 /**
- * @param {number} imageCount
- * @param {boolean} sent
+ * @param {HTMLElement} line
+ * @param {import('../layout').WorkingInput} input
+ * @param {import('../layout').BaseKit} kit
  */
-function queuedLabel(imageCount, sent) {
-  const state = sent ? 'sending' : 'pending';
-  if (imageCount === 0) {
+function fillWorkingLine(line, input, kit) {
+  line.replaceChildren();
+  line.classList.toggle('is-done', input.state === 'done');
+  line.append(
+    input.state === 'done'
+      ? el('div', 'chat-working-done', doneLine(input, kit))
+      : workingHead(input),
+  );
+}
+
+// What the row waits on: `sending` once it is sent, the compaction it asked
+// for while held, else `pending`.
+/** @param {import('../layout').QueuedMessageInput} input */
+function queuedState(input) {
+  if (input.sent) {
+    return 'sending';
+  }
+  if (input.holdReason === null) {
+    return 'pending';
+  }
+  return input.skipKey === ''
+    ? 'sends after compaction'
+    : `sends after compaction · ${input.skipKey} skips`;
+}
+
+// The row's state, then its image count: `sending · 2 images`.
+/** @param {import('../layout').QueuedMessageInput} input */
+function queuedLabel(input) {
+  const state = queuedState(input);
+  if (input.imageCount === 0) {
     return state;
   }
-  return `${state} · ${imageCount} ${imageCount === 1 ? 'image' : 'images'}`;
+  const noun = input.imageCount === 1 ? 'image' : 'images';
+  return `${state} · ${input.imageCount} ${noun}`;
 }
 
 /**
@@ -325,8 +408,69 @@ function queuedLabel(imageCount, sent) {
  * @param {import('../layout').QueuedMessageInput} input
  */
 function showQueued(label, text, input) {
-  label.textContent = queuedLabel(input.imageCount, input.sent);
+  label.textContent = queuedLabel(input);
   text.textContent = input.text;
+}
+
+/**
+ * @param {HTMLElement} clock
+ * @param {import('../layout').RowClockInput} input
+ */
+function showRowClock(clock, input) {
+  clock.textContent = input.text;
+  clock.classList.toggle('is-running', input.isRunning);
+}
+
+/**
+ * @param {HTMLElement} chevron
+ * @param {HTMLElement} summary
+ * @param {HTMLElement} section
+ * @param {import('../layout').SideSectionInput} input
+ * @param {import('../layout').SideSectionKit} kit
+ */
+function showSideSection(chevron, summary, section, input, kit) {
+  section.classList.toggle('is-collapsed', input.collapsed);
+  chevron.replaceChildren();
+  kit.icon(chevron, input.collapsed ? 'chevron-right' : 'chevron-down');
+  summary.textContent = input.summary ?? '';
+}
+
+/**
+ * @param {string} label
+ */
+function sessionFactRow(label) {
+  const element = el('div', 'chat-session-fact');
+  const value = el('span', 'chat-session-fact-value');
+  element.append(el('span', 'chat-session-fact-label', label), value);
+  return { element, value };
+}
+
+/**
+ * Patches `rows`, by label, to `input`'s facts in their order: an unchanged row
+ * keeps its elements.
+ *
+ * @param {HTMLElement} holder
+ * @param {Map<string, { element: HTMLElement, value: HTMLElement }>} rows
+ * @param {import('../layout').SessionFactsInput} input
+ */
+function showSessionFacts(holder, rows, input) {
+  const labels = new Set(input.facts.map((fact) => fact.label));
+  for (const [label, row] of rows) {
+    if (!labels.has(label)) {
+      row.element.remove();
+      rows.delete(label);
+    }
+  }
+  input.facts.forEach((fact, index) => {
+    const row = rows.get(fact.label) ?? sessionFactRow(fact.label);
+    rows.set(fact.label, row);
+    row.value.textContent = fact.value;
+    row.value.title = fact.value;
+    const placed = holder.children[index] ?? null;
+    if (placed !== row.element) {
+      holder.insertBefore(row.element, placed);
+    }
+  });
 }
 
 const WAITING_TEXT = 'Waiting for the sign-in link…';
@@ -460,16 +604,17 @@ const layout = {
       kit.permissionActions(prompt);
       return { element: entry };
     },
-    result(parent, input) {
+    // A turn break: one line between two rules.
+    result(parent, input, kit) {
       const entry = root(
         parent,
-        'chat-entry chat-result chat-muted',
-        resultLine(input),
+        'chat-entry chat-result',
+        resultLine(input, kit),
       );
       return {
         element: entry,
         update(next) {
-          entry.textContent = resultLine(next);
+          entry.textContent = resultLine(next, kit);
         },
       };
     },
@@ -509,6 +654,20 @@ const layout = {
         },
       };
     },
+    // One line between two rules; the after-size arriving fills it in place.
+    compaction(parent, input, kit) {
+      const entry = root(
+        parent,
+        'chat-entry chat-compaction',
+        compactionLine(input, kit),
+      );
+      return {
+        element: entry,
+        update(next) {
+          entry.textContent = compactionLine(next, kit);
+        },
+      };
+    },
   },
   // The summary line, live or finished, open or closed. Every update draws
   // the line afresh, so a run turning finished or a tick moving `now` redraws
@@ -535,8 +694,20 @@ const layout = {
       },
     };
   },
+  // The dock's one line in the composer; every update draws it afresh.
+  workingLine(parent, input, kit) {
+    const line = root(parent, 'chat-working-line');
+    fillWorkingLine(line, input, kit);
+    return {
+      element: line,
+      update(next) {
+        fillWorkingLine(line, next, kit);
+      },
+    };
+  },
   // The dim label, with the image count when there are images, over the text
-  // as typed.
+  // as typed. A held row's label names the skip key, not the reason: the dock
+  // shows that.
   queuedMessage(parent, input) {
     const row = root(parent, 'chat-queued');
     const label = el('div', 'chat-queued-label');
@@ -547,6 +718,53 @@ const layout = {
       element: row,
       update(next) {
         showQueued(label, text, next);
+      },
+    };
+  },
+  // The dim run time; `is-running` draws the same as paused here, for a user
+  // layout's CSS to tell them apart.
+  rowClock(parent, input) {
+    const clock = el('span', 'chat-row-clock');
+    parent.append(clock);
+    showRowClock(clock, input);
+    return {
+      element: clock,
+      update(next) {
+        showRowClock(clock, next);
+      },
+    };
+  },
+  // A session hub section: the head (chevron, title, summary), then the body.
+  sideSection(parent, input, kit) {
+    const section = el('section', 'chat-side-section');
+    parent.append(section);
+    const head = kit.head(section);
+    const chevron = el('span', 'chat-side-section-chevron');
+    const summary = el('span', 'chat-side-section-summary');
+    head.append(
+      chevron,
+      el('span', 'chat-side-section-title', input.title),
+      summary,
+    );
+    kit.body(section);
+    showSideSection(chevron, summary, section, input, kit);
+    return {
+      element: section,
+      update(next) {
+        showSideSection(chevron, summary, section, next, kit);
+      },
+    };
+  },
+  // The session hub's Session section: a label and a value per fact.
+  sessionFacts(parent, input) {
+    const facts = el('div', 'chat-session-facts');
+    parent.append(facts);
+    const rows = new Map();
+    showSessionFacts(facts, rows, input);
+    return {
+      element: facts,
+      update(next) {
+        showSessionFacts(facts, rows, next);
       },
     };
   },
@@ -564,7 +782,7 @@ const layout = {
   },
   // The repo and branch, the type hint, the model · effort chip, a chip per
   // other control, other plugins' status parts, then the running indicator
-  // and send at the end.
+  // and send as one group that ends the line, on whichever row it wraps to.
   statusLine(parent, input, kit) {
     const line = root(parent, 'chat-status-line');
     line.append(el('span', 'chat-status-repo', input.repo));
@@ -579,8 +797,10 @@ const layout = {
       kit.controlChip(line, control);
     }
     kit.statusParts(line);
-    kit.running(line);
-    kit.sendButton(line);
+    const end = el('div', 'chat-status-end');
+    line.append(end);
+    kit.running(end);
+    kit.sendButton(end);
     return { element: line };
   },
   attachments(parent, input, kit) {

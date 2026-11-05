@@ -35,7 +35,9 @@ const USAGE: UsageAgentEvent = {
 
 const SNAPSHOT: UsageSnapshot = {
   plans: [],
-  sessions: [{ sessionId: 's1', profileDir: null, usage: USAGE }],
+  sessions: [
+    { sessionId: 's1', profileDir: null, usage: USAGE, compaction: null },
+  ],
 };
 
 // Two instances, `a` and `b`, over the default layout and one `latest`

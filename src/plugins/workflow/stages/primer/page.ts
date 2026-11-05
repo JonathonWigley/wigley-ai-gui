@@ -1,4 +1,4 @@
-import type { PageStage } from '../../contract';
+import { busyStatus, type PageStage } from '../../contract';
 
 export const primerPageStage: PageStage = {
   id: 'primer',
@@ -8,4 +8,5 @@ export const primerPageStage: PageStage = {
   order: 10,
   actions: [],
   detail: () => '',
+  status: busyStatus,
 };

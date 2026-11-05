@@ -1,7 +1,8 @@
 // The DOM surface the page builders and plugin views use, for tests that run
-// in `node`: `installFakeDom` stubs `document` and `HTMLElement` with it. A
-// string appended becomes a text node; `click` and `fire` run the listeners.
-// An element is connected while it or an ancestor has `isPageRoot` set.
+// in `node`: `installFakeDom` stubs `document`, `window` and `HTMLElement` with
+// it. A string appended becomes a text node; `click` and `fire` run the
+// listeners. An element is connected while it or an ancestor has `isPageRoot`
+// set.
 // `installFocusFakeDom` opts into focus, text selection and scroll resets.
 export class FakeElement {
   tagName: string;
@@ -185,22 +186,42 @@ export class FakeElement {
     );
   }
 
-  // Takes one class selector such as `.md-fence`; every match under this
+  // Takes one class selector such as `.md-fence` or one data attribute selector
+  // such as `[data-md-lines]`, read from `dataset`; every match under this
   // element, depth first.
   querySelectorAll(selector: string): FakeElement[] {
-    return findAll(this, selector.slice(1));
+    return selector.startsWith('[')
+      ? collectUnder(this, (node) => matchesSelector(node, selector))
+      : findAll(this, selector.slice(1));
+  }
+
+  // Takes a comma list of tag names, class selectors and data attribute
+  // selectors; this element or the nearest one over it matching any of them.
+  closest(selector: string): FakeElement | null {
+    const alternatives = selector.split(',').map((part) => part.trim());
+    const isMatch = (node: FakeElement) =>
+      alternatives.some((part) => matchesSelector(node, part));
+    if (isMatch(this)) {
+      return this;
+    }
+    let node = this.parentNode;
+    while (node !== null && !isMatch(node)) {
+      node = node.parentNode;
+    }
+    return node;
   }
 
   click() {
     this.fire('click');
   }
 
-  // Runs the `type` listeners with one event, carrying `fields` too, and
-  // returns it, so a test reads whether a listener called `preventDefault`.
+  // Runs the `type` listeners with one event, carrying `fields` too (a `target`
+  // among them stands for a bubbled event), and returns it, so a test reads
+  // whether a listener called `preventDefault`.
   fire(type: string, fields: Record<string, unknown> = {}): FakeEvent {
     const event: FakeEvent = {
-      ...fields,
       target: this,
+      ...fields,
       defaultPrevented: false,
       preventDefault() {
         event.defaultPrevented = true;
@@ -214,11 +235,21 @@ export class FakeElement {
 
   // An empty client rect at the client's origin, as an element with no
   // layout box reports.
-  getBoundingClientRect() {
-    return { left: 0, top: 0, width: 0, height: 0 };
+  getBoundingClientRect(): FakeRect {
+    return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   }
 
   scrollIntoView() {}
+}
+
+// A client rect; a fake that sets its own may leave out `right` and `bottom`.
+export interface FakeRect {
+  left: number;
+  top: number;
+  right?: number;
+  bottom?: number;
+  width: number;
+  height: number;
 }
 
 // The event `fire` hands each listener.
@@ -237,10 +268,40 @@ class FakeStyle {
   }
 }
 
+// Whether `node` matches one tag name, class selector or data attribute selector.
+function matchesSelector(node: FakeElement, selector: string): boolean {
+  if (selector.startsWith('.')) {
+    return node.classList.contains(selector.slice(1));
+  }
+  const dataName = /^\[data-([a-z-]+)\]$/.exec(selector)?.[1];
+  if (dataName === undefined) {
+    return node.tagName === selector.toUpperCase();
+  }
+  const key = dataName.replace(/-([a-z])/g, (_dash, letter: string) =>
+    letter.toUpperCase(),
+  );
+  return node.dataset[key] !== undefined;
+}
+
 function textNode(text: string): FakeElement {
   const node = new FakeElement('#text');
   node.textContent = text;
   return node;
+}
+
+// The fake `window`: `getSelection` reports whether the selection is collapsed,
+// which a test sets through `isSelectionCollapsed`.
+export class FakeWindow extends FakeElement {
+  isSelectionCollapsed = true;
+
+  getSelection() {
+    return { isCollapsed: this.isSelectionCollapsed };
+  }
+}
+
+// The `window` `installFakeDom` stubbed.
+export function fakeWindow(): FakeWindow {
+  return (globalThis as unknown as { window: FakeWindow }).window;
 }
 
 // Stubs the DOM globals, a ResizeObserver that never reports included, through
@@ -250,6 +311,7 @@ export function installFakeDom(
   stubGlobal: (name: string, value: unknown) => void,
 ) {
   stubGlobal('HTMLElement', FakeElement);
+  stubGlobal('window', new FakeWindow('window'));
   stubGlobal('document', {
     createElement: (tag: string) => new FakeElement(tag),
   });
@@ -273,11 +335,18 @@ export function asFake(node: HTMLElement): FakeElement {
 
 // Every element under `root`, depth first, whose classes include `className`.
 export function findAll(root: FakeElement, className: string): FakeElement[] {
+  return collectUnder(root, (node) => node.classList.contains(className));
+}
+
+function collectUnder(
+  root: FakeElement,
+  isMatch: (node: FakeElement) => boolean,
+): FakeElement[] {
   const found: FakeElement[] = [];
   const pending = [...root.children].reverse();
   while (pending.length > 0) {
     const node = pending.pop()!;
-    if (node.classList.contains(className)) {
+    if (isMatch(node)) {
       found.push(node);
     }
     pending.push(...[...node.children].reverse());
@@ -298,13 +367,14 @@ function focusDocument(): FocusFakeDocument {
 // The fake DOM with what focus and text boxes use: an `activeElement` that
 // `focus` sets, and that leaves an element as it or an ancestor is removed (as
 // a browser blurs a detached element); an input's value and selection; and a
-// client rect whose `top` is `rectTop`.
+// client rect whose `top` is `rectTop` and whose height is `rectHeight`.
 export class FocusFakeElement extends FakeElement {
   value = '';
   selectionStart: number | null = null;
   selectionEnd: number | null = null;
   selectionDirection: string | null = null;
   rectTop = 0;
+  rectHeight = 0;
 
   focus() {
     focusDocument().activeElement = this;
@@ -326,8 +396,13 @@ export class FocusFakeElement extends FakeElement {
     this.selectionEnd = end;
   }
 
-  override getBoundingClientRect() {
-    return { ...super.getBoundingClientRect(), top: this.rectTop };
+  override getBoundingClientRect(): FakeRect {
+    return {
+      ...super.getBoundingClientRect(),
+      top: this.rectTop,
+      bottom: this.rectTop + this.rectHeight,
+      height: this.rectHeight,
+    };
   }
 
   override remove() {

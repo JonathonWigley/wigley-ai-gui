@@ -6,7 +6,7 @@ import type { Layout } from '../../layouts/layout';
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   chip: true,
   strip: true,
-  flowTab: true,
+  sidePane: true,
 };
 
 // The workflow layout a user's `layout.js` module exports as its default. A

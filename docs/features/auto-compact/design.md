@@ -28,8 +28,9 @@ and after it ends, whatever started it: the user's `/compact`, the harness's own
 - **Auto-compact** — the `auto-compact` plugin. It registers a send gate that holds a send to a session whose cache
   is cold and whose context is above its `minTokens` setting (`"auto-compact": { "minTokens": … }` in
   `settings.json`).
-- **Send gate** — a function a plugin registers through chat main's `addSendGate`. Chat asks every gate before it
-  writes a message to an idle session. A gate answers a hold or nothing.
+- **Send gate** — a function a plugin registers through chat main's `addSendGate`. Chat asks the gates in
+  registration order before it writes a message to an idle session; the first hold wins and no later gate is asked.
+  A gate answers a hold or nothing.
 - **Hold** — chat keeps the message as a pending row, compacts the session, and writes the row when the compaction
   ends. The row carries the gate's reason.
 - **Compaction entry** — the `compaction` chat entry kind: the transcript's `Compacted 182k → 24k · auto · 9s` divider.
@@ -41,7 +42,7 @@ and after it ends, whatever started it: the user's `/compact`, the harness's own
 user sends ─▶ chat main sendMessage ─▶ session idle? ── no ──▶ queue as today
                                           │ yes
                                           ▼
-                              ask each send gate (auto-compact's)
+                              ask the send gates (auto-compact's)
                                 │ null                 │ { action: 'compact', reason }
                                 ▼                      ▼
                          write as today        pending row (holdReason = reason)
@@ -60,12 +61,14 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
   `compactionEnded { at, trigger, outcome: 'done' | 'failed' | 'interrupted', beforeTokens, durationMs }`. They
   replace `compacted`. The adapter sends exactly one `compactionEnded` for each `compactionStarted`: on the
   harness's end line, on a failed result, on an interrupt, and before `sessionEnded` when the process ends mid-way.
+  Chat main drops the events of a process it let go, so on a `/clear` or a failed attach during a compaction it emits
+  that end on `chat.agentEvent` itself: outcome `interrupted`, `beforeTokens` and `durationMs` null.
 - `ChatEntry` kind `compaction { id, at, trigger, beforeTokens, afterTokens, durationMs, raw }`. `afterTokens` is null
   until the next main reply's context is known; the adapter then emits the same entry id again with it set.
-- `AgentProcess.compact()` starts a compaction with trigger `app`. It throws after `end` and while a turn runs. It
+- `AgentProcess.compact()` starts a compaction with trigger `app`. It throws after `end` and while the session is not idle. It
   makes no user entry.
-- Chat main's export `addSendGate(gate: SendGate): () => void`, with
-  `SendGate = (input: SendGateInput) => SendGateVerdict | null`, `SendGateInput { sessionId, hostSessionId, profileDir, text, now }`, and
+- Chat main's export `addSendGate(gate: SendGate): Disposable`, with
+  `SendGate = (input: SendGateInput) => SendGateVerdict | null`, `SendGateInput { sessionId, hostSessionId, text, now }`, and
   `SendGateVerdict { action: 'compact'; reason: string }`.
 - `ChatSessionState.compaction: { trigger, reason, startedAt } | null` and `QueuedMessage.holdReason: string | null`.
 - The usage snapshot's `SessionUsage.compaction: { trigger, startedAt } | null`, and the session line input's
@@ -83,11 +86,16 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
   process and writes the held row when `compactionEnded` arrives. The adapter's interrupt grace makes that arrive
   within 5 s.
 - The process ending during a hold returns the held row to the box, as every pending row is returned today.
+- A held row across a relaunch is saved as a plain pending row, and its reason is not kept.
+- A hold whose process goes from working to idle with no compaction running has no end coming: chat logs it, releases
+  the held row and writes it. A `compactionEnded` after that finds no hold.
+- The `Turn finished` alert skips an idle while a hold is up, and the end of a working stretch that ran only a hold's
+  compaction.
 - Labels by trigger:
 
   | Trigger | Dock (`Compacting…` then) | Usage chip | Divider |
   |---|---|---|---|
-  | `app` | the gate's reason (`auto · cache cold · 182k`) | `compacting · auto` | `auto` |
+  | `app` | the gate's reason (`auto · cache cold · 182k`; `auto` when the compaction has none) | `compacting · auto` | `auto` |
   | `manual` | `/compact` | `compacting` | `manual` |
   | `harness` | `autocompact` | `compacting · autocompact` | `autocompact` |
 
@@ -99,9 +107,9 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
   where the user waits on a send; the chip shows on panes the user is not typing in; the divider explains the drop
   in context.
 - **The trigger is named** — an unexplained pause before a send reads as the app hanging.
-- **The threshold is a setting** (`auto-compact.minTokens`, default 150000; 0 turns it off,
-  and so does disabling the plugin; a plugin setting with a number default cannot be null) — a value the
-  user may tune lives in config, and the same key is the off switch.
+- **The threshold is a setting** (`auto-compact.minTokens`, default 150000; 0 turns the gate off, and so does disabling
+  the plugin; a plugin setting with a number default cannot be null) — a value the user may tune lives in config, and
+  the same key is the gate's off switch. Claude's idle compaction stays on at its own default either way.
 - **Interrupt skips the compaction and sends the message** — a user who interrupts wants the reply now.
 - **Auto-compact is its own plugin behind chat's send gate** — everything is a plugin and hookable; the next
   pre-send rule registers the same way.
@@ -111,10 +119,14 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
 - **The after-size comes from the next main reply** — Claude's `post_tokens` leaves out the system prompt and tools.
 - **The app holds the message itself** rather than writing it behind `/compact` into Claude's input queue.
 
-- **One threshold with Claude's idle compaction** (round 3) — Claude Code 2.1.317 compacts an idle 1-hour-cache
-  session before its cache expires (`idleCompaction`, on by default). The app passes `minTokens` to it as
-  `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` at each process start, through `AgentStart.idleCompactMinTokens`. The app's gate
-  still covers what Claude's misses: a session whose process ended, and a 5-minute-cache session.
+- **One threshold with Claude's idle compaction** (round 3) — by the code of the Claude Code 2.1.317 binary, not by
+  measurement, Claude compacts an idle 1-hour-cache session before its cache expires (`idleCompaction`, on by default).
+  The app passes `minTokens` to it as `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` at each process start, through
+  `AgentStart.idleCompactMinTokens`. A `minTokens` of 0 passes nothing, so Claude's own default stays on: 200k by the
+  binary's code, which also floors the value at 100k. The app's gate still covers what Claude's misses: a session whose
+  process ended, and a 5-minute-cache session. Measured on 2.1.318, two idle processes under stream-json did not compact
+  in 65 minutes, one with the user's settings excluded (`docs/features/agent-chat/claude-stream.md` § Idle compaction),
+  the cause unsettled, so the gate may be all that compacts a cold session; the threshold is passed in case Claude's runs.
 
 ## Rejected
 

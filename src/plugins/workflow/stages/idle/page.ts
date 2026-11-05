@@ -7,4 +7,5 @@ export const idlePageStage: PageStage = {
   order: 0,
   actions: [],
   detail: () => '',
+  status: () => null,
 };

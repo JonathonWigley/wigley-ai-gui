@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessActivity, SessionControl } from '../../../contracts/agent';
+import type { SessionCompaction } from '../contract';
 import { chipKeyCommands, composerInputOf } from './composer-input';
 
 // A control with one choice, picked, whose label is `<label> value`.
@@ -16,6 +17,11 @@ const MODE = control('mode', 'Mode');
 const EFFORT = control('effort', 'Effort');
 const MODEL = control('model', 'Model');
 const VERBOSITY = control('verbosity', 'Verbosity');
+const APP_COMPACTION: SessionCompaction = {
+  trigger: 'app',
+  reason: 'auto · cache cold · 182k',
+  startedAt: 700,
+};
 
 // The control as its chip shows it while the process runs.
 function chipOf(held: SessionControl) {
@@ -32,6 +38,7 @@ describe('composerInputOf', () => {
     {
       running: true,
       activity: 'idle',
+      compaction: null,
       isBoxFocused: false,
       enabled: true,
       working: false,
@@ -39,6 +46,7 @@ describe('composerInputOf', () => {
     {
       running: true,
       activity: 'working',
+      compaction: null,
       isBoxFocused: false,
       enabled: true,
       working: true,
@@ -46,6 +54,7 @@ describe('composerInputOf', () => {
     {
       running: true,
       activity: 'waiting',
+      compaction: null,
       isBoxFocused: false,
       enabled: true,
       working: true,
@@ -53,24 +62,43 @@ describe('composerInputOf', () => {
     {
       running: false,
       activity: 'working',
+      compaction: null,
       isBoxFocused: true,
+      enabled: false,
+      working: false,
+    },
+    {
+      running: true,
+      activity: 'idle',
+      compaction: APP_COMPACTION,
+      isBoxFocused: false,
+      enabled: true,
+      working: true,
+    },
+    {
+      running: false,
+      activity: 'idle',
+      compaction: APP_COMPACTION,
+      isBoxFocused: false,
       enabled: false,
       working: false,
     },
   ] satisfies {
     running: boolean;
     activity: ProcessActivity;
+    compaction: SessionCompaction | null;
     isBoxFocused: boolean;
     enabled: boolean;
     working: boolean;
   }[])(
-    'composerInputOf_SessionStates_EnablesAndShowsWork (running $running, $activity, focused $isBoxFocused)',
-    ({ running, activity, isBoxFocused, enabled, working }) => {
+    'composerInputOf_SessionStates_EnablesAndShowsWork (running $running, $activity, compaction $compaction.trigger, focused $isBoxFocused)',
+    ({ running, activity, compaction, isBoxFocused, enabled, working }) => {
       const input = composerInputOf({
         name: 'tab',
         state: {
           running,
           activity,
+          compaction,
           controls: [EFFORT],
           repo: 'clone',
           branch: 'main',
@@ -120,6 +148,7 @@ describe('composerInputOf', () => {
         state: {
           running: true,
           activity: 'idle',
+          compaction: null,
           controls,
           repo: 'clone',
           branch: null,

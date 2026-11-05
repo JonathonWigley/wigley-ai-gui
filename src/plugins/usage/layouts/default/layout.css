@@ -36,28 +36,96 @@
   text-align: end;
 }
 
+/* Each profile starts its own row, whichever cells a narrow window drops. */
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-profile-name {
+  grid-column: 1;
+}
+
+/* A narrow window drops extra usage, so the profile names and meters still fit. */
+@media (max-width: 640px) {
+  [data-layout-owner='usage'][data-layout='default'].usage-status-line
+    .usage-extra {
+    display: none;
+  }
+}
+
 [data-layout-owner='usage'][data-layout='default'] .usage-profile-name {
   color: var(--wg-fg-secondary);
   font-weight: var(--wg-weight-semibold);
 }
 
-/* A session's line in its Chat status line or tab bar: one row held to one
-   line's height, so an item that does not fit wraps onto the hidden row below
-   and shows whole or not at all, spend first, then cache, then the context
-   text. It shrinks below its content so the drop can happen. */
+/* A session's line in its tab bar: one row held to one line's height, so an
+   item that does not fit wraps onto the hidden row below and shows whole or not
+   at all, spend first, then cache, then the context text; the meter and the
+   compacting chip stay. It shrinks below its content so the drop can happen. */
 [data-layout-owner='usage'][data-layout='default'].usage-session-line {
+  --usage-session-line-gap: var(--wg-space-1_5);
   --usage-session-line-height: calc(var(--wg-text-12) * var(--wg-leading-ui));
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
-  gap: 0 var(--wg-space-1_5);
+  gap: 0 var(--usage-session-line-gap);
   height: var(--usage-session-line-height);
   line-height: var(--wg-leading-ui);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+}
+
+/* The compacting chip always leaves room for the meter beside it, and
+   ellipsizes in what remains: flex wrapping measures the clamped width, so the
+   meter stays on the visible row. The room assumes the meter's width
+   (`src/shared/page/ui/meter.css`); the tab bar's slot keeps the line wide
+   enough for both (`usage.css`). */
+[data-layout-owner='usage'][data-layout='default'].usage-session-line
+  > .ui-tag {
+  max-width: calc(
+    100% - var(--wg-space-8) * 1.5 - var(--usage-session-line-gap)
+  );
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A session's context line above its Chat box: the texts keep their width. As
+   room runs out, the meter narrows to its usual width, the chip then ellipsizes
+   away, and the meter gives up the rest. */
+[data-layout-owner='usage'][data-layout='default'].usage-context-line {
+  align-items: center;
+  display: flex;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-1_5);
+  line-height: var(--wg-leading-ui);
+  white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-context-line
+  > .ui-meter {
+  flex: 1 1 calc(var(--wg-space-8) * 1.5);
+  min-width: 0;
+  width: auto;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-context-line
+  > .ui-tag {
+  flex: 0 9999 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-context-line
+  > .usage-text {
+  flex: none;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-spend-line {
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
 }
 
 [data-layout-owner='usage'][data-layout='default'].usage-row-line {
@@ -71,6 +139,33 @@
   white-space: nowrap;
 }
 
+/* When the row's parts outgrow its line the bar shrinks away first, the used
+   tokens staying whole. The stronger track keeps an empty bar visible on the
+   row's card. */
+[data-layout-owner='usage'][data-layout='default'].usage-row-line > .ui-meter {
+  background: var(--wg-border-strong);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The row's text is short, so it keeps no `100%` floor. */
+[data-layout-owner='usage'][data-layout='default'].usage-row-line
+  .ui-meter
+  + .usage-text::after {
+  content: none;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-row-cache {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  min-height: var(--wg-row-tree);
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-row-cache.is-cold {
+  color: var(--wg-status-error);
+}
+
 /* The meter's row is a full line tall, so a wrapped text starts below it. The
    margin assumes the meter is `space-1` tall (`src/shared/page/ui/meter.css`);
    a shorter meter lets the wrapped text show through. */
@@ -79,6 +174,39 @@
   margin-block: calc(
     (var(--usage-session-line-height) - var(--wg-space-1)) / 2
   );
+}
+
+/* The context meter reports the agent compacting, so it loops at
+   `duration-pulse`, not the transition durations, which pulse fast enough to
+   read as flashing. Each draw builds a new meter, so the layout's elapsed time
+   starts its animation where the compaction has it, and a redraw never jumps
+   the pulse. Under reduced motion it is static. */
+@keyframes usage-meter-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
+  > .ui-meter,
+[data-layout-owner='usage'][data-layout='default'].usage-context-line.is-compacting
+  > .ui-meter {
+  animation: usage-meter-pulse var(--wg-duration-pulse) ease-in-out infinite;
+  animation-delay: calc(var(--usage-compacting-elapsed) * -1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
+    > .ui-meter,
+  [data-layout-owner='usage'][data-layout='default'].usage-context-line.is-compacting
+    > .ui-meter {
+    animation: none;
+  }
 }
 
 [data-layout-owner='usage'][data-layout='default'] .usage-note,

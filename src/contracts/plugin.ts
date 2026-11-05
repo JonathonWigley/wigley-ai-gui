@@ -25,6 +25,7 @@ import type { FocusTarget, OuterPanes, ResizeTarget } from './panes';
 import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
+import type { SessionHost } from './session-host';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
@@ -437,6 +438,8 @@ export interface PageServices {
   paths: Paths;
   // The home folder the served config names, which `paths.tilde` shows as `~`.
   homeDir: string;
+  // How the app was started, as the served config names it.
+  runMode: RunMode;
   // This plugin's own ui state, its keys kept apart from every other plugin's.
   uiState: UiState;
 }
@@ -700,7 +703,8 @@ export interface DriveHost {
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
 // the stable or the dev one. `images` re-encodes an image smaller, as PNG or
-// JPEG only, for `shrinkToFit`.
+// JPEG only, for `shrinkToFit`. `sessionHost` owns every agent process, so a
+// process outlives the app (`docs/features/session-host/design.md`).
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -717,6 +721,7 @@ export interface MainServices {
   alerts: Alerts;
   images: ImageEncoder;
   agentHarnesses: readonly AgentHarness[];
+  sessionHost: SessionHost;
   window: {
     show(): void;
     isFocused(): boolean;

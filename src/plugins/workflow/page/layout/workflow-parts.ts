@@ -1,3 +1,4 @@
+import type { Clock } from '../../../../contracts/ambient';
 import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
@@ -6,8 +7,8 @@ import defaultLayout from '../../layouts/default/layout.js';
 import type {
   ChipInput,
   CompleteLayout,
-  FlowTabInput,
   Layout,
+  SidePaneInput,
   StripInput,
 } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
@@ -23,24 +24,21 @@ export interface Drawn {
 // `run` runs a workflow command for the session the part draws.
 export type RunCommand = (command: string) => void;
 
-// The scope the Flow tab's keys fire in; the chip and the strip take none, so
-// their hints show in every scope.
-const FLOW_TAB_SCOPE = 'flow';
-
 // Draws each workflow part into `parent` with the layouts last set, `default`
 // alone until the first `setLayouts`. Each part picks its own layout and
-// falls back to `default` on a throw. `setLayouts` only stores the set; the
-// view draws again.
+// falls back to `default` on a throw. No part takes a key scope, so its hints
+// show in every scope. `setLayouts` only stores the set; the view draws again.
 export interface WorkflowParts {
   chip(parent: HTMLElement, input: ChipInput, run: RunCommand): Drawn;
   strip(parent: HTMLElement, input: StripInput, run: RunCommand): Drawn;
-  flowTab(parent: HTMLElement, input: FlowTabInput, run: RunCommand): Drawn;
+  sidePane(parent: HTMLElement, input: SidePaneInput, run: RunCommand): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
 
 export function createWorkflowParts(deps: {
   kit: OwnerKitServices;
   log: PluginLog;
+  clock: Clock;
 }): WorkflowParts {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: workflowManifest.id,
@@ -66,22 +64,30 @@ export function createWorkflowParts(deps: {
     chip: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('chip', parent, (chip, slot, rollback) =>
-          chip(slot, input, createWorkflowKit(deps.kit, null, rollback, run)),
+          chip(
+            slot,
+            input,
+            createWorkflowKit(deps.kit, rollback, run, deps.clock),
+          ),
         ),
       ),
     strip: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('strip', parent, (strip, slot, rollback) =>
-          strip(slot, input, createWorkflowKit(deps.kit, null, rollback, run)),
-        ),
-      ),
-    flowTab: (parent, input, run) =>
-      toDrawn(
-        layoutParts.draw('flowTab', parent, (flowTab, slot, rollback) =>
-          flowTab(
+          strip(
             slot,
             input,
-            createWorkflowKit(deps.kit, FLOW_TAB_SCOPE, rollback, run),
+            createWorkflowKit(deps.kit, rollback, run, deps.clock),
+          ),
+        ),
+      ),
+    sidePane: (parent, input, run) =>
+      toDrawn(
+        layoutParts.draw('sidePane', parent, (sidePane, slot, rollback) =>
+          sidePane(
+            slot,
+            input,
+            createWorkflowKit(deps.kit, rollback, run, deps.clock),
           ),
         ),
       ),

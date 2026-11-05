@@ -4,6 +4,7 @@ import type {
   Roster,
   RosterAgent,
   RosterOutcome,
+  RosterSkill,
   RosterTask,
   RosterTool,
 } from './contract';
@@ -12,14 +13,16 @@ import { foldAgentEvent } from './roster';
 const a: RosterAgent = {
   agentId: 'toolu_a',
   agentType: 'Explore',
-  name: 'find-adapters',
+  name: 'kind-fixer',
   description: 'Find adapters',
   startedAt: 1000,
   model: 'claude-sonnet-5-5',
   effort: 'medium',
   spendUsd: null,
+  isBackground: false,
+  contextTokens: null,
+  contextWindow: null,
   tools: [],
-  outcome: 'running',
 };
 const b: RosterAgent = {
   agentId: 'toolu_b',
@@ -30,6 +33,9 @@ const b: RosterAgent = {
   model: null,
   effort: null,
   spendUsd: 0.0031,
+  isBackground: true,
+  contextTokens: 84_000,
+  contextWindow: 200_000,
   tools: [
     {
       toolUseId: 'toolu_b1',
@@ -38,25 +44,36 @@ const b: RosterAgent = {
       outcome: 'done',
     },
   ],
-  outcome: 'running',
 };
 
 // A task the main agent started and one subagent `a` started.
 const mainTask: RosterTask = {
   taskId: 'task_main',
   agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
   description: 'npm run build',
   command: 'npm run build -- --watch',
   startedAt: 1500,
-  outcome: 'running',
 };
 const aTask: RosterTask = {
   taskId: 'task_a',
   agentId: a.agentId,
+  ownerName: 'kind-fixer',
   description: 'Watch the tests',
   command: null,
   startedAt: 3000,
-  outcome: 'running',
+};
+
+// A skill the main agent started and one subagent `a` started, the same skill.
+const mainSkill: RosterSkill = {
+  skill: 'foo',
+  agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
+};
+const aSkill: RosterSkill = {
+  skill: 'foo',
+  agentId: a.agentId,
+  ownerName: 'kind-fixer',
 };
 
 // The tool call every `toolStarted` / `toolFinished` here names, still running.
@@ -71,9 +88,13 @@ function toolWith(outcome: RosterOutcome): RosterTool {
   return { ...runningTool, outcome };
 }
 
-// A roster holding these agents and tasks.
-function roster(agents: RosterAgent[], tasks: RosterTask[] = []): Roster {
-  return { agents, tasks };
+// A roster holding these agents, tasks and skills.
+function roster(
+  agents: RosterAgent[],
+  tasks: RosterTask[] = [],
+  skills: RosterSkill[] = [],
+): Roster {
+  return { agents, tasks, skills };
 }
 
 function spawned(agent: RosterAgent): AgentEvent {
@@ -94,8 +115,22 @@ function replied(
   agentId: string,
   model: string,
   spendUsd: number | null,
+  contextTokens: number | null = null,
+  contextWindow: number | null = null,
 ): AgentEvent {
-  return { type: 'agentReplied', at: 3500, agentId, model, spendUsd };
+  return {
+    type: 'agentReplied',
+    at: 3500,
+    agentId,
+    model,
+    spendUsd,
+    contextTokens,
+    contextWindow,
+  };
+}
+
+function launched(agentId: string): AgentEvent {
+  return { type: 'agentLaunched', at: 3600, agentId };
 }
 
 function toolStarted(agentId: string): AgentEvent {
@@ -144,6 +179,16 @@ function taskFinished(
   return { type: 'taskFinished', at: 5500, taskId, outcome };
 }
 
+function skillStarted(agentId: string): AgentEvent {
+  return {
+    type: 'skillStarted',
+    at: 7000,
+    agentId,
+    skill: 'foo',
+    args: '/p/plan-x',
+  };
+}
+
 const sessionEnded: AgentEvent = { type: 'sessionEnded', at: 6000 };
 const userMessage: AgentEvent = { type: 'userMessage', at: 7000 };
 
@@ -167,7 +212,17 @@ describe('foldAgentEvent', () => {
       case: 'SpawnAppendsInOrder',
       before: roster([a]),
       event: spawned(b),
-      after: roster([a, { ...b, spendUsd: null, tools: [] }]),
+      after: roster([
+        a,
+        {
+          ...b,
+          spendUsd: null,
+          isBackground: false,
+          contextTokens: null,
+          contextWindow: null,
+          tools: [],
+        },
+      ]),
     },
     {
       case: 'SpawnOfListedId',
@@ -176,16 +231,19 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'SpawnOfListedFinishedId',
-      before: roster([{ ...a, outcome: 'done' }]),
-      event: spawned(a),
-      same: true,
-    },
-    {
-      case: 'RepliedSetsModelAndSpend',
+      case: 'RepliedSetsModelSpendAndContext',
       before: roster([a, b]),
-      event: replied(a.agentId, 'claude-haiku-5-5', 0.0019),
-      after: roster([{ ...a, model: 'claude-haiku-5-5', spendUsd: 0.0019 }, b]),
+      event: replied(a.agentId, 'claude-haiku-5-5', 0.0019, 84_000, 200_000),
+      after: roster([
+        {
+          ...a,
+          model: 'claude-haiku-5-5',
+          spendUsd: 0.0019,
+          contextTokens: 84_000,
+          contextWindow: 200_000,
+        },
+        b,
+      ]),
     },
     {
       case: 'RepliedReplacesSpend',
@@ -194,28 +252,49 @@ describe('foldAgentEvent', () => {
       after: roster([{ ...a, model: 'claude-haiku-5-5', spendUsd: 0.0042 }]),
     },
     {
-      case: 'RepliedOnFinishedAgent',
-      before: roster([{ ...a, outcome: 'done' }]),
-      event: replied(a.agentId, 'claude-haiku-5-5', 0.0042),
+      case: 'RepliedReplacesOnlyContextTokens',
+      before: roster([{ ...b, model: 'claude-opus-5-5' }]),
+      event: replied(b.agentId, 'claude-opus-5-5', 0.0031, 90_000, 200_000),
       after: roster([
-        {
-          ...a,
-          model: 'claude-haiku-5-5',
-          spendUsd: 0.0042,
-          outcome: 'done',
-        },
+        { ...b, model: 'claude-opus-5-5', contextTokens: 90_000 },
+      ]),
+    },
+    {
+      case: 'RepliedReplacesOnlyContextWindow',
+      before: roster([{ ...b, model: 'claude-opus-5-5' }]),
+      event: replied(b.agentId, 'claude-opus-5-5', 0.0031, 84_000, 1_000_000),
+      after: roster([
+        { ...b, model: 'claude-opus-5-5', contextWindow: 1_000_000 },
       ]),
     },
     {
       case: 'RepliedSameValues',
       before: roster([{ ...b, model: 'claude-opus-5-5' }]),
-      event: replied(b.agentId, 'claude-opus-5-5', 0.0031),
+      event: replied(b.agentId, 'claude-opus-5-5', 0.0031, 84_000, 200_000),
       same: true,
     },
     {
       case: 'RepliedOnUnlistedId',
       before: roster([a]),
       event: replied('toolu_gone', 'claude-haiku-5-5', 0.0042),
+      same: true,
+    },
+    {
+      case: 'LaunchedMarksBackground',
+      before: roster([a, b]),
+      event: launched(a.agentId),
+      after: roster([{ ...a, isBackground: true }, b]),
+    },
+    {
+      case: 'LaunchedAlreadyBackground',
+      before: roster([b]),
+      event: launched(b.agentId),
+      same: true,
+    },
+    {
+      case: 'LaunchedOnUnlistedId',
+      before: roster([a]),
+      event: launched('toolu_gone'),
       same: true,
     },
     {
@@ -228,12 +307,6 @@ describe('foldAgentEvent', () => {
       case: 'ToolStartedOnMain',
       before: roster([a]),
       event: toolStarted(MAIN_AGENT_ID),
-      same: true,
-    },
-    {
-      case: 'ToolStartedOnFinishedAgent',
-      before: roster([{ ...a, outcome: 'done' }]),
-      event: toolStarted(a.agentId),
       same: true,
     },
     {
@@ -273,18 +346,10 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'FinishedMarksOutcome',
+      case: 'FinishedFailedDropsAgent',
       before: roster([a, b]),
       event: finished(a.agentId, 'failed'),
-      after: roster([{ ...a, outcome: 'failed' }, b]),
-    },
-    {
-      case: 'FinishedFailsItsRunningTools',
-      before: roster([{ ...b, tools: [...b.tools, runningTool] }]),
-      event: finished(b.agentId, 'failed'),
-      after: roster([
-        { ...b, tools: [...b.tools, toolWith('failed')], outcome: 'failed' },
-      ]),
+      after: roster([b]),
     },
     {
       case: 'FinishedDoneDropsAgent',
@@ -299,10 +364,10 @@ describe('foldAgentEvent', () => {
       after: roster([b], [mainTask, aTask]),
     },
     {
-      case: 'FinishedOfFinishedAgent',
-      before: roster([{ ...a, outcome: 'done' }]),
-      event: finished(a.agentId, 'failed'),
-      same: true,
+      case: 'FinishedKeepsItsSkillAndOwnerName',
+      before: roster([a, b], [], [aSkill]),
+      event: finished(a.agentId),
+      after: roster([b], [], [aSkill]),
     },
     {
       case: 'FinishedOnUnlistedId',
@@ -317,16 +382,31 @@ describe('foldAgentEvent', () => {
       after: roster([a], [aTask, mainTask]),
     },
     {
+      case: 'TaskStartedNamesItsListedOwner',
+      before: roster([a, b]),
+      event: taskStarted(aTask),
+      after: roster([a, b], [aTask]),
+    },
+    {
+      case: 'TaskStartedOfUnlistedOwner',
+      before: roster([a]),
+      event: taskStarted({ ...aTask, agentId: 'toolu_gone' }),
+      after: roster(
+        [a],
+        [{ ...aTask, agentId: 'toolu_gone', ownerName: 'subagent' }],
+      ),
+    },
+    {
       case: 'TaskStartedOfListedId',
       before: roster([a], [mainTask]),
       event: taskStarted({ ...mainTask, startedAt: 9000 }),
       same: true,
     },
     {
-      case: 'TaskFinishedMarksOutcome',
+      case: 'TaskFinishedFailedDropsTask',
       before: roster([a], [mainTask, aTask]),
       event: taskFinished(mainTask.taskId, 'failed'),
-      after: roster([a], [{ ...mainTask, outcome: 'failed' }, aTask]),
+      after: roster([a], [aTask]),
     },
     {
       case: 'TaskFinishedDoneDropsTask',
@@ -335,53 +415,26 @@ describe('foldAgentEvent', () => {
       after: roster([a], [aTask]),
     },
     {
-      case: 'TaskFinishedOfFinishedTask',
-      before: roster([a], [{ ...mainTask, outcome: 'done' }]),
-      event: taskFinished(mainTask.taskId, 'failed'),
-      same: true,
-    },
-    {
       case: 'TaskFinishedOnUnlistedId',
       before: roster([a], [mainTask]),
       event: taskFinished('task_gone'),
       same: true,
     },
     {
-      case: 'SessionEndedFailsEveryRunningItem',
+      case: 'SessionEndedEmptiesAgentsAndTasks',
       before: roster([{ ...a, tools: [runningTool] }, b], [mainTask, aTask]),
       event: sessionEnded,
-      after: roster(
-        [
-          { ...a, tools: [toolWith('failed')], outcome: 'failed' },
-          { ...b, outcome: 'failed' },
-        ],
-        [
-          { ...mainTask, outcome: 'failed' },
-          { ...aTask, outcome: 'failed' },
-        ],
-      ),
+      after: roster([]),
     },
     {
-      case: 'SessionEndedKeepsFinishedOutcomes',
-      before: roster(
-        [{ ...a, tools: [toolWith('done')], outcome: 'done' }, b],
-        [{ ...mainTask, outcome: 'done' }],
-      ),
+      case: 'SessionEndedKeepsSkills',
+      before: roster([a], [mainTask], [mainSkill, aSkill]),
       event: sessionEnded,
-      after: roster(
-        [
-          { ...a, tools: [toolWith('done')], outcome: 'done' },
-          { ...b, outcome: 'failed' },
-        ],
-        [{ ...mainTask, outcome: 'done' }],
-      ),
+      after: roster([], [], [mainSkill, aSkill]),
     },
     {
-      case: 'SessionEndedNothingRunning',
-      before: roster(
-        [{ ...b, outcome: 'done' }],
-        [{ ...mainTask, outcome: 'failed' }],
-      ),
+      case: 'SessionEndedWithOnlySkills',
+      before: roster([], [], [mainSkill]),
       event: sessionEnded,
       same: true,
     },
@@ -392,31 +445,10 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'UserMessageDropsFinishedAgentsAndTasks',
-      before: roster(
-        [
-          { ...a, outcome: 'done' },
-          b,
-          { ...b, agentId: 'toolu_c', outcome: 'failed' },
-        ],
-        [{ ...mainTask, outcome: 'failed' }, aTask],
-      ),
-      event: userMessage,
-      after: roster([b], [aTask]),
-    },
-    {
-      case: 'UserMessageKeepsRunningAgentsFinishedTools',
-      before: roster([
-        { ...b, tools: [...b.tools, toolWith('failed'), runningTool] },
-      ]),
+      case: 'UserMessage',
+      before: roster([a, b], [mainTask]),
       event: userMessage,
       same: true,
-    },
-    {
-      case: 'UserMessageKeepsRunningTaskOfFinishedAgent',
-      before: roster([{ ...a, outcome: 'done' }, b], [aTask]),
-      event: userMessage,
-      after: roster([b], [aTask]),
     },
     {
       case: 'Usage',
@@ -434,13 +466,21 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'Compacted',
-      before: roster([a]),
+      case: 'CompactionStarted',
+      before: roster([a], [], [mainSkill]),
+      event: { type: 'compactionStarted', at: 7000, trigger: 'app' },
+      same: true,
+    },
+    {
+      case: 'CompactionEnded',
+      before: roster([a], [], [mainSkill]),
       event: {
-        type: 'compacted',
+        type: 'compactionEnded',
         at: 7000,
+        trigger: 'harness',
+        outcome: 'done',
         beforeTokens: 150_000,
-        afterTokens: 20_000,
+        durationMs: 9000,
       },
       same: true,
     },
@@ -451,16 +491,32 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'SkillStarted',
+      case: 'SkillStartedByMain',
       before: roster([a]),
-      event: {
-        type: 'skillStarted',
-        at: 7000,
-        agentId: a.agentId,
-        skill: 'wigley:make',
-        args: '/p/plan-x',
-      },
+      event: skillStarted(MAIN_AGENT_ID),
+      after: roster([a], [], [mainSkill]),
+    },
+    {
+      case: 'SkillStartedOfListedRow',
+      before: roster([a], [], [mainSkill]),
+      event: skillStarted(MAIN_AGENT_ID),
       same: true,
+    },
+    {
+      case: 'SkillStartedBySecondAgentAppendsItsRow',
+      before: roster([a], [], [mainSkill]),
+      event: skillStarted(a.agentId),
+      after: roster([a], [], [mainSkill, aSkill]),
+    },
+    {
+      case: 'SkillStartedOfUnlistedOwner',
+      before: roster([a]),
+      event: skillStarted('toolu_gone'),
+      after: roster(
+        [a],
+        [],
+        [{ skill: 'foo', agentId: 'toolu_gone', ownerName: 'subagent' }],
+      ),
     },
     {
       case: 'FileWritten',
@@ -483,12 +539,6 @@ describe('foldAgentEvent', () => {
       case: 'TurnEnded',
       before: roster([a]),
       event: { type: 'turnEnded', at: 7000 },
-      same: true,
-    },
-    {
-      case: 'UserMessageNothingFinished',
-      before: roster([a, b], [mainTask]),
-      event: userMessage,
       same: true,
     },
   ])(

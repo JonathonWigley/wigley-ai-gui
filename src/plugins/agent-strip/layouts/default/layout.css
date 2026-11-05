@@ -4,42 +4,63 @@
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-1);
-  width: calc(var(--wg-space-6) * 10);
-  /* Every closed box takes the height of the fullest one — a subagent's head,
-     meta, task, three recent tool lines and the cursor prompt: seven lines
-     (`text-12` at the inherited `leading-ui`) and their six gaps, inside the
-     padding and the Card's hairline border. */
-  min-height: calc(
-    7 * var(--wg-text-12) * var(--wg-leading-ui) + 6 * var(--wg-space-1) + 2 *
-      var(--wg-space-2) + 2 * 1px
-  );
-  padding: var(--wg-space-2);
   font-size: var(--wg-text-12);
   color: var(--wg-fg-secondary);
   cursor: pointer;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.agent-strip-agent {
+  width: calc(var(--wg-space-6) * 10);
+  /* Every closed card takes the height of the fullest one — a subagent's head,
+     description, model line, three recent tool lines, footer and the cursor
+     prompt: eight lines (`text-12` at the inherited `leading-ui`), then five
+     gaps plus the tool block's padding, six `space-1` in all, inside the
+     padding and the Card's hairline border. */
+  min-height: calc(
+    8 * var(--wg-text-12) * var(--wg-leading-ui) + 6 * var(--wg-space-1) + 2 *
+      var(--wg-space-2) + 2 * 1px
+  );
+  padding: var(--wg-space-2);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.agent-strip-task {
+  padding: var(--wg-space-1) var(--wg-space-2);
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-selected {
   border-color: var(--wg-focus-border);
 }
 
-[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-dimmed,
-[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-dimmed
-  .agent-strip-name {
-  color: var(--wg-fg-tertiary);
-}
-
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-head {
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-head,
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-row-line {
   display: flex;
   align-items: center;
   gap: var(--wg-space-1_5);
   min-width: 0;
 }
 
+/* An open row's command wraps; the rest of its line stays at the top. */
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-open
+  .agent-strip-row-line {
+  align-items: flex-start;
+}
+
 [data-layout-owner='agent-strip'][data-layout='default']
-  .agent-strip-task-icon.codicon[class*='codicon-'] {
-  font-size: var(--wg-text-12);
-  color: var(--wg-fg-tertiary);
+  .agent-strip-head
+  > .ui-dot,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-head
+  > .ui-tag,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-line
+  > .ui-dot,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-line
+  > .ui-tag,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-line
+  > .agent-strip-prompt {
+  flex: none;
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-name {
@@ -50,17 +71,40 @@
   color: var(--wg-fg);
 }
 
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-meta,
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-runtime {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--wg-fg-tertiary);
+}
+
 [data-layout-owner='agent-strip'][data-layout='default']
-  .agent-strip-description {
+  .agent-strip-description,
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-model {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-meta {
-  font-variant-numeric: tabular-nums;
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-model {
   color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-recent {
+  padding: var(--wg-space-0_5) var(--wg-space-1);
+  border-radius: var(--wg-radius-sm);
+  background: var(--wg-block-background);
+}
+
+/* Three lines tall inside its padding with fewer or no tools, the lines at the
+   bottom. */
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-recent {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-sizing: content-box;
+  height: calc(3 * var(--wg-text-12) * var(--wg-leading-ui));
+  overflow: hidden;
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-tool,
@@ -69,9 +113,23 @@
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-tool {
+  flex: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The newest tool line reads at full strength, the two before it fade. */
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-recent
+  > .agent-strip-tool:nth-last-child(2) {
+  opacity: 0.7;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-recent
+  > .agent-strip-tool:nth-last-child(3) {
+  opacity: 0.4;
 }
 
 [data-layout-owner='agent-strip'][data-layout='default']
@@ -79,9 +137,60 @@
   color: var(--wg-status-error);
 }
 
-/* A command wraps whole inside its box. */
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-command {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A closed row's command keeps to one line. */
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box:not(
+    .is-open
+  )
+  .agent-strip-command {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An open row's command wraps whole inside its row. */
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-open
+  .agent-strip-command {
   overflow-wrap: anywhere;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-owner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-1_5);
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-footer
+  > .ui-meter {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-context,
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-cost {
+  flex: none;
+}
+
+/* With no bar to fill the row, the cost still ends it. */
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-cost {
+  margin-left: auto;
 }
 
 /* The open box's every tool call, scrolled inside its box past eight `space-6`

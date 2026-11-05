@@ -2,12 +2,18 @@
 
 // The built-in usage look: the status-bar line as every profile stacked, one
 // line each, its name before its meters, each meter in a column shared across
-// profiles; each session's line as one row (its context, cache and spend) in
-// its Chat status line or tab bar that drops whole items from its end when
-// narrow; each session's row line as its context meter and text; and the
-// details as one card per profile, its freshness beside its name. In the status
-// line and the details, the 5h and Week rows always show; any other row (a
-// model-scoped limit) shows only while used, and extra usage only while on and
+// profiles; each session's line as one row (its compacting chip while it
+// compacts, its context, cache and spend) in its tab bar that drops whole items
+// from its end when narrow, its meter pulsing while it compacts; each session's
+// context line as one row above its Chat box (the same chip, ellipsized when
+// narrow, then a meter taking the room left, its context and cache), pulsing the
+// same; its spend
+// as one text in its Chat status line; each session's row line as its context
+// meter and used tokens; each session's row cache as a cache icon, its tooltip
+// the time left; and the details as one card per profile, its freshness beside
+// its name. In the status line and the details, the 5h and Week rows always show;
+// any other row (a model-scoped limit) shows only while used, and extra usage,
+// the status line's last column until the window narrows, only while on and
 // spent.
 
 // Labels the adapter gives the session and weekly limits.
@@ -30,7 +36,12 @@ const layout = {
         ),
       ),
     ];
-    line.style.setProperty('--usage-columns', String(1 + labels.length * 3));
+    const hasExtraUsage = input.profiles.some(
+      (profile) =>
+        profile.note === null && isExtraUsageShown(profile.extraUsage),
+    );
+    const columns = 1 + labels.length * 3 + (hasExtraUsage ? 2 : 0);
+    line.style.setProperty('--usage-columns', String(columns));
     for (const profile of input.profiles) {
       const group = kit.el(line, 'span', 'usage-group usage-profile-line');
       group.classList.toggle('is-stale', profile.stale);
@@ -52,26 +63,46 @@ const layout = {
         kit.meter(group, meter.percent, meter.tone);
         kit.el(group, 'span', 'usage-text', meter.text);
       }
+      if (isExtraUsageShown(profile.extraUsage)) {
+        kit.el(group, 'span', 'usage-label usage-extra', 'Extra');
+        kit.el(group, 'span', 'usage-text usage-extra', profile.extraUsage);
+      } else if (hasExtraUsage) {
+        kit.el(group, 'span', 'usage-label usage-extra');
+        kit.el(group, 'span', 'usage-extra');
+      }
     }
     return line;
   },
   sessionLine(parent, input, kit) {
     const line = kit.el(parent, 'span', 'usage-session-line');
-    kit.meter(line, input.context.percent, input.context.tone);
-    kit.el(line, 'span', 'usage-text', input.context.text);
-    if (input.cache !== null) {
-      kit.el(line, 'span', 'usage-text', input.cache);
-    }
+    drawContextItems(line, input, kit);
     if (input.spend !== null) {
       kit.el(line, 'span', 'usage-text', input.spend);
     }
     return line;
+  },
+  contextLine(parent, input, kit) {
+    const line = kit.el(parent, 'span', 'usage-context-line');
+    drawContextItems(line, input, kit);
+    return line;
+  },
+  spendLine(parent, input, kit) {
+    const text = kit.el(parent, 'span', 'usage-spend-line', input.spend ?? '');
+    text.hidden = input.spend === null;
+    return text;
   },
   rowLine(parent, input, kit) {
     const line = kit.el(parent, 'span', 'usage-row-line');
     kit.meter(line, input.context.percent, input.context.tone);
     kit.el(line, 'span', 'usage-text', input.context.text);
     return line;
+  },
+  rowCache(parent, input, kit) {
+    const mark = kit.el(parent, 'span', 'usage-row-cache');
+    kit.icon(mark, 'database');
+    mark.title = input.tooltip;
+    mark.classList.toggle('is-cold', input.isCold);
+    return mark;
   },
   details(parent, input, kit) {
     const root = kit.el(parent, 'div', 'usage-details');
@@ -108,6 +139,29 @@ const layout = {
   },
 };
 
+// The chip while the session compacts, then the meter and the context and cache
+// texts, into a session's line or context line.
+/**
+ * @param {HTMLElement} line
+ * @param {import('../layout').ContextLineInput} input
+ * @param {import('../layout').UsageKit} kit
+ */
+function drawContextItems(line, input, kit) {
+  line.classList.toggle('is-compacting', input.compacting !== null);
+  if (input.compacting !== null) {
+    kit.tag(line, input.compacting, 'accent');
+    line.style.setProperty(
+      '--usage-compacting-elapsed',
+      `${input.compactingElapsedMs}ms`,
+    );
+  }
+  kit.meter(line, input.context.percent, input.context.tone);
+  kit.el(line, 'span', 'usage-text', input.context.text);
+  if (input.cache !== null) {
+    kit.el(line, 'span', 'usage-text', input.cache);
+  }
+}
+
 /** @param {import('../layout').MeterInput} row */
 function isRowShown(row) {
   return ALWAYS_SHOWN_ROWS.has(row.label) || row.percent > 0;
@@ -119,7 +173,7 @@ function isRowShown(row) {
  * @returns {extraUsage is string}
  */
 function isExtraUsageShown(extraUsage) {
-  if (extraUsage === null || extraUsage === 'off') {
+  if (!extraUsage || extraUsage === 'off') {
     return false;
   }
   const used = extraUsage.split(' / ')[0];

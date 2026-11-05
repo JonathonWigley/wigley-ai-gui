@@ -82,6 +82,14 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+export function textResult(text: string): ToolResult {
+  return { content: [{ type: 'text', text }] };
+}
+
+export function errorResult(text: string): ToolResult {
+  return { content: [{ type: 'text', text }], isError: true };
+}
+
 // `toolUseId` is the host's id for the calling tool use, when it sent one.
 export interface ToolCallContext {
   toolUseId: string | null;
@@ -187,6 +195,10 @@ export interface SessionsMainExports {
   // A copy of the session's titles, kept while its row is closed; null for a
   // session not connected.
   titles(sessionId: string): SessionTitles | null;
+  // Holds each relay's connect until `until` settles, up to a bound, so a
+  // relaunched relay joins the row a plugin is about to open rather than
+  // opening its own. Only a relay's hello waits: `connect` does not.
+  holdConnects(until: Promise<unknown>): void;
 }
 
 export const sessionsMainKey: DependencyKey<
@@ -222,6 +234,10 @@ export interface SessionsMainEvents extends EventShape {
 export interface SessionRow {
   sessionId: string;
   label: string;
+  // The session's project: the origin repo name of its folder, else the
+  // folder's name, else the no-folder label. Set to the fallback at connect and
+  // changed once when the lookup lands.
+  project: string;
   harness: Harness | null;
   marked: boolean;
   projectDir: string | null;
@@ -237,13 +253,15 @@ export interface SessionsState {
 // `closeSession` returns whether the session's row is closed: true when it
 // closed or was already closed, false when a close guard kept it or main knows
 // no such session; the session stays connected either way.
-// `activated` arrives before the `stateChanged` the activation causes.
+// `activate` returns whether it sent a `stateChanged`, which may reach the page
+// after that reply. `activated` arrives before the `stateChanged` the activation
+// causes.
 // `setUserTitle` sets the user title, a string that normalizes to empty or
 // null clearing it; it throws a title past `sessions.titleMaxLength`.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     state(): SessionsState;
-    activate(sessionId: string): void;
+    activate(sessionId: string): boolean;
     closeSession(sessionId: string): boolean;
     setUserTitle(sessionId: string, title: string | null): void;
   };
@@ -307,9 +325,9 @@ export type ActivityTone =
   | 'attention'
   | 'error';
 
-// What a session is doing, as one plugin sees it: the word its row shows
-// beside a dot in `tone`. Of a session's activities its row shows the one of
-// highest `rank`.
+// What a session is doing, as one plugin sees it: the word its row and tooltip
+// show and the `tone` of its label. Of a session's activities its row shows the
+// one of highest `rank`.
 export interface RowActivity {
   word: string;
   tone: ActivityTone;
@@ -332,7 +350,11 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // pane, not main's selection. `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
-// each redraw that surface: the rows or the tab bars. `setActivity` sets the
+// each redraw that surface: the rows or the tab bars. A row part shares one
+// line that never wraps: its wrapper keeps its content's width, an empty
+// wrapper takes no room, and a part may set its own wrapper's `order`. A part
+// whose content can be long sets `flex: 0 1 auto; min-width: 0` on its wrapper,
+// `.session-row-part[data-part='<id>']`. `setActivity` sets the
 // activity `sourceId` (one per plugin or tab) holds for the session, null
 // removing it; the row shows the highest-ranked one, the latest set winning a
 // tie, and redraws only when that changed. An activity set before the

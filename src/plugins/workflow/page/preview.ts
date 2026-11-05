@@ -1,24 +1,29 @@
 // The layout preview's sample flows (`Space z l w`): one per press, through
-// every built-in stage, the plan-ready countdown on the second plan ready.
-// The stage ids are sample data, not stage rules.
+// every built-in stage, make both busy and not, the plan-ready countdown on the
+// second plan ready. The stage ids are sample data, not stage rules.
 import type { Clock } from '../../../contracts/ambient';
 import type { PluginLog } from '../../../contracts/log';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { StageId, SessionFlow } from '../contract';
 import type { PlanProgress, PlanTaskLine } from '../plan-reader';
 
-export const PREVIEW_STAGES: readonly StageId[] = [
-  'idle',
-  'primer',
-  'feature',
-  'planReady',
-  'planReady',
-  'make',
-  'review',
-  'closed',
+// `busy` sets the sample's `turnRunning`; `countdown` starts its auto-start.
+export const PREVIEW_SAMPLES: readonly {
+  stage: StageId;
+  busy: boolean;
+  countdown: boolean;
+}[] = [
+  { stage: 'idle', busy: false, countdown: false },
+  { stage: 'primer', busy: true, countdown: false },
+  { stage: 'feature', busy: false, countdown: false },
+  { stage: 'planReady', busy: false, countdown: false },
+  { stage: 'planReady', busy: false, countdown: true },
+  { stage: 'make', busy: true, countdown: false },
+  { stage: 'make', busy: false, countdown: false },
+  { stage: 'review', busy: true, countdown: false },
+  { stage: 'closed', busy: false, countdown: false },
 ];
 
-const COUNTDOWN_INDEX = 4;
 const PREVIEW_PROJECT = 'Workflow preview';
 const PREVIEW_PLAN_DIR = '~/docs/features/preview/plan-preview';
 const PREVIEW_TITLE = 'Preview plan';
@@ -30,7 +35,7 @@ const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done'>[] = [
   { wave: 1, text: 'Fold the signals' },
   { wave: 2, text: 'Draw the row chip' },
   { wave: 2, text: 'Draw the composer strip' },
-  { wave: 2, text: 'Add the Flow tab' },
+  { wave: 2, text: 'Add the side pane' },
   { wave: 3, text: 'Run the self-test' },
 ];
 
@@ -45,16 +50,14 @@ const PREVIEW_PROGRESS: Readonly<
   closed: { checked: 7, reviewRounds: 1 },
 };
 
-// The sample flow `index` of PREVIEW_STAGES shows, over the preview session.
-// It has left idle in every sample, idle included, so the Flow tab shows from
-// the first press.
+// The sample flow `index` of PREVIEW_SAMPLES shows, over the preview session.
 export function previewFlow(
   index: number,
   sessionId: string,
   now: number,
   autoStartSeconds: number,
 ): SessionFlow {
-  const stage = PREVIEW_STAGES[index];
+  const { stage, busy, countdown } = PREVIEW_SAMPLES[index];
   const progress = previewProgress(stage);
   return {
     sessionId,
@@ -62,11 +65,9 @@ export function previewFlow(
     stage,
     planDir: progress === null ? null : PREVIEW_PLAN_DIR,
     progress,
-    turnRunning: false,
+    turnRunning: busy,
     runningSubagents: [],
-    countdownEndsAt:
-      index === COUNTDOWN_INDEX ? now + autoStartSeconds * 1000 : null,
-    hasLeftIdle: true,
+    countdownEndsAt: countdown ? now + autoStartSeconds * 1000 : null,
   };
 }
 
@@ -92,9 +93,8 @@ function previewProgress(stage: StageId): PlanProgress | null {
 // `openChatPreview` runs chat's preview command, which opens chat's preview
 // session or selects its row, and reports a failure itself.
 // `previewSessionId` is that session's row, null while none is heard of.
-// `showFlow` draws a flow in the view and the Flow tabs; `closed` removes the
-// preview session's Flow tab and draws the session's own flow again.
-// `autoStartSeconds` is the countdown setting the plan-ready sample runs.
+// `showFlow` draws a flow in the view; `closed` draws the session's own flow
+// again. `autoStartSeconds` is the countdown setting the plan-ready sample runs.
 export interface PreviewDeps {
   openChatPreview(): void;
   previewSessionId(): string | null;
@@ -141,7 +141,7 @@ export function createPreview(deps: PreviewDeps): Preview {
     shown = { sessionId, index, flow };
     deps.showFlow(flow);
     log(
-      `workflow preview step ${index + 1} of ${PREVIEW_STAGES.length}: ${PREVIEW_STAGES[index]}`,
+      `workflow preview step ${index + 1} of ${PREVIEW_SAMPLES.length}: ${flow.stage}`,
     );
   };
 
@@ -170,7 +170,7 @@ export function createPreview(deps: PreviewDeps): Preview {
         return;
       }
       const { sessionId, index } = shown;
-      if (index + 1 < PREVIEW_STAGES.length) {
+      if (index + 1 < PREVIEW_SAMPLES.length) {
         showStep(sessionId, index + 1);
       } else {
         close(sessionId);

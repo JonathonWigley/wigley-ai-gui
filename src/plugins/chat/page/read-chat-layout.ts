@@ -17,15 +17,18 @@ const KIND_SET: Record<ChatEntryKind, true> = {
   result: true,
   notice: true,
   raw: true,
+  compaction: true,
 };
 
 // Compile-time checks: each chat entry variant is assignable to its layout
 // input, and the contract's kinds and the layout's kinds are one set. A
 // variant missing or renaming an input's field, or a drifted kind, makes a
 // member `never`, which `true` cannot fill. Without strictNullChecks a field
-// turning nullable is not caught.
+// turning nullable is not caught. A result's input also holds the step count
+// the entry list adds.
 type VariantFitsInput = {
-  [K in ChatEntryKind]: Extract<ChatEntry, { kind: K }> extends EntryInput<K>
+  [K in ChatEntryKind]: Extract<ChatEntry, { kind: K }> &
+    (K extends 'result' ? { stepCount: number } : unknown) extends EntryInput<K>
     ? true
     : never;
 };
@@ -47,6 +50,7 @@ void [
 const PART_SET: Record<ChatPartName, true> = {
   activity: true,
   working: true,
+  workingLine: true,
   queuedMessage: true,
   composer: true,
   statusLine: true,
@@ -56,6 +60,9 @@ const PART_SET: Record<ChatPartName, true> = {
   reasonBox: true,
   closeConfirm: true,
   imageViewer: true,
+  rowClock: true,
+  sideSection: true,
+  sessionFacts: true,
 };
 
 // The chat layout a user's `layout.js` module exports as its default. Every

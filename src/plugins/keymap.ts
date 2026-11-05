@@ -109,6 +109,15 @@ function chatEntryPageBinds() {
     { keys: 'a', scope, command: 'chat.appendBox' as const },
     { keys: 'j', scope, command: 'chat.nextEntry' as const },
     { keys: 'k', scope, command: 'chat.prevEntry' as const },
+    { keys: 'J', scope, command: 'chat.nextMessage' as const },
+    { keys: 'K', scope, command: 'chat.prevMessage' as const },
+    { keys: 'V', scope, command: 'chat.toggleRange' as const },
+    {
+      keys: '<Esc>',
+      scope,
+      command: 'chat.cancelRange' as const,
+      where: 'page' as const,
+    },
     { keys: '<CR>', scope, command: 'chat.toggleEntry' as const },
     { keys: 'G', scope, command: 'chat.latestEntry' as const },
     { keys: 'gg', scope, command: 'chat.firstEntry' as const },
@@ -186,6 +195,7 @@ export const defaultKeymap = {
     '<Leader>n': 'notes',
     '<Leader>w': 'workflow',
     '<Leader>r': 'rename',
+    '<Leader>p': 'projects',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
@@ -202,6 +212,7 @@ export const defaultKeymap = {
       command: 'backlog.toggleAgentReadyOnly',
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
+    { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -210,7 +221,11 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+    { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
     { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
+    { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
+    { keys: '<Leader>pk', scope: 'any', command: 'sessions.moveProjectUp' },
+    { keys: '<Leader>pj', scope: 'any', command: 'sessions.moveProjectDown' },
 
     // ── Workflow ───────────────────────────────────────────────────────────
     { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },
@@ -219,17 +234,11 @@ export const defaultKeymap = {
     { keys: '<Leader>wo', scope: 'any', command: 'workflow.openPlan' },
     { keys: '<Leader>wt', scope: 'any', command: 'workflow.retro' },
     { keys: '<Leader>wd', scope: 'any', command: 'workflow.dismiss' },
-    { keys: '<C-j>', scope: 'workflow.flow', command: 'workflow.lineDown' },
-    { keys: '<C-k>', scope: 'workflow.flow', command: 'workflow.lineUp' },
+    { keys: '<Leader>ws', scope: 'any', command: 'workflow.toggleSidePane' },
     {
-      keys: '<C-S-j>',
-      scope: 'workflow.flow',
-      command: 'workflow.halfPageDown',
-    },
-    {
-      keys: '<C-S-k>',
-      scope: 'workflow.flow',
-      command: 'workflow.halfPageUp',
+      keys: '<Leader>wf',
+      scope: 'any',
+      command: 'workflow.toggleFinishedWaves',
     },
 
     // ── Panes ──────────────────────────────────────────────────────────────
@@ -365,7 +374,7 @@ export const defaultKeymap = {
 
     // ── Chat ───────────────────────────────────────────────────────────────
     ...chatEntryPageBinds(),
-    { keys: 'y', scope: 'chat.chat', command: 'chat.allowPermission' },
+    { keys: 'y', scope: 'chat.chat', command: 'chat.allowOrCopy' },
     { keys: 'n', scope: 'chat.chat', command: 'chat.denyPermission' },
     { keys: '<C-c>', scope: 'chat.chat', command: 'chat.interrupt' },
     { keys: '<D-Enter>', scope: 'chat.chat', command: 'chat.sendNow' },

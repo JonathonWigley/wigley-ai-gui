@@ -188,14 +188,14 @@ means something.
 
 - **Durations:** `duration-fast` (hover, press), `duration-base` (small things opening and
   closing), `duration-slow` (panels, sheets, the composer), `duration-pulse` (one cycle of a looping
-  agent-state pulse, such as a session row's running dot; slow enough to read as breathing, not flashing).
+  agent-state pulse, such as a session row's Working label; slow enough to read as breathing, not flashing).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
-  session row's pulsing running dot, a tool step settling from running to done). Content does not animate in, and nothing moves on its
+  session row's pulsing Working label, a tool step settling from running to done). Content does not animate in, and nothing moves on its
   own.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
   `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator and the
-  pulsing dot are static.
+  pulsing Working label are static.
 - **A floating panel fades in on open** (`openFloatingPanel`) over `duration-base`; showing a page
   or mode that holds an open panel does not fade it again, and closing is instant.
 
@@ -216,8 +216,11 @@ The keyboard is first; the mouse works everywhere.
   colour on a card or an input frame). The user must always see where the keys go.
   - **Chat is the one exception.** While the chat's message box has focus, the caret is the
     cursor: the box draws no focused frame and no entry is marked. Once the box loses focus (Esc),
-    the focused entry shows a thin left bar (`indicator-width`, `focus-border`) in place of the
-    ring.
+    the focused block shows a thin left bar (`indicator-width`, `focus-border`) in place of the
+    ring, on the entry itself when it has no blocks. A range of blocks shows `accent-tint` across each one.
+    The bar sits in a gutter left of the text and of a list item's marker, moving no text. It stays on
+    screen: when the transcript scrolls away from it, it moves to the nearest block wholly in view; a
+    block too tall for the view counts while any of it shows, and with no block wholly in view it moves to the nearest that shows.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
 - **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
   platform. On macOS the modifiers and Return, Tab, Esc, Backspace, Delete and the arrows print
@@ -238,7 +241,8 @@ The keyboard is first; the mouse works everywhere.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
   - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⌃P ⌃N`) or in
-    the pane's header (`/ filter`, `a new`).
+    the pane's header (`/ filter`, `a new`). The chat composer's status line holds the transcript's
+    keys as box hints with no labels (`J K V y`), after the box's labelled `i` and `a`.
 - **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and
   keeps its space, so moving between panes never shifts the layout; a hint for a bind in every
   scope (tabs, sessions) always shows. In a chat pane's tab bar a key with no target takes no
@@ -300,8 +304,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
   `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
   and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
-- **HScroller** (`createHScroller`): a row that scrolls sideways, with an IconButton chevron at each end that scrolls
-  by one item and hides while nothing lies further that way, and a `reveal(item)` that scrolls an item into view.
+- **HScroller** (`createHScroller`): a row that scrolls sideways, with a `sheet-background` IconButton chevron lying over
+  each end, taking no space so overflow moves no item, that scrolls by one item and hides while nothing lies further
+  that way, and a `reveal(item)` that scrolls an item into view.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
@@ -311,9 +316,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
 - **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items
   (`ui-drag-reorder-item`, dragged by a source element inside it); the item where the drop would land carries
-  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`) carries `is-drop-target`, and the
-  dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
-  other items, so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
+  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`), or an ordered one holding no other
+  item, carries `is-drop-target`, and the dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
+  other items (0 in an unordered zone), so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
   pass by. A view that drops it calls its `dispose`.
 
 Icon stays the Codicon builder `icon`.
@@ -345,14 +350,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
-- **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
+- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart: the title and activity on the first line, and a second line holding the status then other
-  plugins' row parts on one line, the run time and the cache mark at its end, gone while empty. Hover
+  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done), and a second line holding the status then other
+  plugins' row parts on one line that never wraps, the run time and the cache mark at its end, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
@@ -367,15 +372,16 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   describes: a form's saved state on its rail header, a config problem on the title bar.
 - **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: every profile stacked, one
   line each, its name in semibold `fg-secondary` before its plan rows, each a label, a meter and its percent in the
-  server's order, each limit in a column shared across the profiles so its meters line up. A Chat session's context bar, cache
-  countdown and spend draw in its Chat status line, in the same items and order as the tab-bar line below. With the
+  server's order, each limit in a column shared across the profiles so its meters line up. A Chat session's context bar and cache
+  countdown draw in the context line above its box, and its spend in its Chat status line. With the
   optional `usage-tab-line` plugin on, each session's line also sits in its own tab bar,
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
   limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
   then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
   with no usage yet draws a zero line, its context `0k`. While the session compacts, the line opens with a
-  `compacting` chip (`compacting · auto`) in `accent-tint`, and its context bar pulses at `duration-pulse`, static under
-  reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
+  `compacting` chip (`compacting · auto`) in `accent-tint`, which ellipsizes when too narrow to fit beside the context
+  bar; in a tab bar the slot keeps room for the bar and a few of the chip's characters, and the strip scrolls instead.
+  Its context bar pulses at `duration-pulse`, unbroken across redraws, static under reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
   `warning`, `critical`); the context bar by its share of the limit
   (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
@@ -396,19 +402,28 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment) or the feature card while the tasks column has focus, an item card (the item, its ToggleMark and its
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
-  the sheet. The transcript shows the messages, permission prompts, notices and pending rows only: the agent's steps
-  (tool calls, thinking, raw events) and the turn results show in the composer's **activity dock**. While the session
+  the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
+  (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
+  a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
+  under `640px` and by `Space v s`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
+  chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
+  `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
+  skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its
+  value ellipsized). While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
+  or its finished line. While the session
   works on a turn, the dock shows a header (the turn's time as `m:ss` in tabular numerals and a state word,
   `1:05 Working…`), a `radius-md` card listing the main agent's latest three tool calls in mono (the newest in `fg`,
   the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim
   (`Read 3 Bash 2 Edit 1`). When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as
   `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, its time compact in tabular numerals, and keeps it until the user sends
   the next message; with no finished turn to show it takes no space. While the session compacts, the dock's header
-  reads `0:06 Compacting…` with the trigger after it in `fg-secondary` (`auto · cache cold · 182k`, `/compact`,
-  `autocompact`) over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
+  reads `0:06 Compacting…` with the trigger after it in `fg-secondary`, ellipsized when narrow (`auto · cache cold · 182k`, `/compact`,
+  `autocompact`), over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
   a pending row reading `sends after compaction · ⌃C skips`. A finished compaction leaves a divider in the
   transcript: a centred dim `text-12` line between two `border-default` rules, `Compacted 182k → 24k · auto · 9s`
-  (`Compacted 182k` until the after-size is known). A chat layout that sets `activityInTranscript`
+  (`Compacted 182k` until the after-size is known). A turn's result leaves the same divider with `space-3` above and
+  below, `Turn ended · 14m 22s · 31 steps`: the stop reason replaces the words unless the turn finished normally, and
+  the time and the steps show when known. A chat layout that sets `activityInTranscript`
   draws the steps in the transcript again, each run between two other entries as one **activity line**: one dim
   `fg-tertiary` line, live or finished: the step count and the tools used, such as
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
@@ -418,15 +433,19 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
-  composer parts (the workflow strip, the agent strip), the activity dock, the strip of attached images' thumbnails, the box (no mode
+  composer parts (the workflow strip, the agent strip, the context line), `space-2` apart, the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
-  type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: context,
-  cache, spend), the running dot, then Send.
-  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`: a subagent box holds a
-  StatusDot, its name, `model · effort · $cost` in `fg-tertiary`, the description, and its latest three tool calls in
-  mono; a task box a terminal icon, the description, its owning agent and the elapsed time. A finished box dims to
-  `fg-tertiary` with a done or failed dot; the selected box takes the focus ring. A user turn shows its sent images as
-  thumbnails under its text.
+  type hint (then `J`, `K`, `V` and `y` with no labels), one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
+  then the running dot and Send as one group that ends the line, on whichever row it wraps to. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
+  `cache 59m` in `text-12` tabular numerals.
+  The **agent strip** holds its subagents as an HScroller of cards, each a `card-background` Card with `radius-md`,
+  heading with a running StatusDot, its name, a kind Tag and its elapsed time, then its description, `model · effort` in
+  `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context Meter
+  (`status-warning` at 80% or more), `84k/200k` and its cost. Its tasks stack under the cards as rows, one `text-12` line
+  each: a running StatusDot, the Shell Tag (Task with no command), the command or else the description in mono, ellipsized (wrapped whole while open), and its elapsed
+  time; past four rows they scroll. A box leaves when its subagent or task ends; the selected box takes the focus ring.
+  A user turn shows its sent images
+  as thumbnails under its text.
 - **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
   `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
   `radius-md` box that clips it, over a bar holding the small expand icon button at its end, the button's `v` hint on
@@ -442,23 +461,23 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
   top.
 - **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
-  The chip is one line under a session row: the stage as an accent Tag, its detail in `fg-tertiary`, the countdown and
-  the main action as a ghost button; an idle session draws no chip. The strip sits above the Chat composer: the stepper
-  (steps ahead in `fg-tertiary`, the current one in `status-running`, done ones and a reached last step in
-  `status-success`), the detail, the countdown and every action as buttons; an idle session draws no strip.
-  The Flow tab holds the stage's label as its header, the stepper, the stage's detail (which
-  carries the plan's title from feature on, once a plan is read, after the progress in make and review so the chip's
-  ellipsis cuts the title first) with the countdown, the plan's tasks under a header per wave (the current wave
-  marked, a task's mark filled once it is done) and the stage's actions; with no plan read it shows the
-  empty state `No plan yet`, and a read plan with no boxes shows none. A disabled action
-  draws disabled.
+  The chip is one line under a session row: the stage and its status as an accent Tag and the countdown; an idle
+  session draws no chip. The strip sits above the Chat composer: the status mark and line, the stepper only until the
+  session has a plan (pending in `fg-tertiary`, running in `status-running`, ready in `accent`, paused in `status-warning`,
+  done in `status-success`), the countdown and the main action as a button; every stage's strip keeps the height of a line
+  holding the action and starts on the composer's left edge; an idle session draws no strip. The side
+  pane sits beside the transcript from the first read of a plan: the status mark and line, the stage's detail, the
+  stepper, a progress meter, the checklist and every action as buttons. The checklist folds finished waves into one
+  toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
+  one row each under `Up next`, all on the pane's left edge. An idle session, a session with no plan read and a hidden pane draw no pane. A
+  disabled action draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
   overlay sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
 - **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and
-  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the app keeps the sizes.
+  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the right bar and the session hub by drag alone; the app keeps the sizes.
 
 ## Icons and copy
 
@@ -480,7 +499,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-strip-*`, `workflow-side-pane-hidden`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

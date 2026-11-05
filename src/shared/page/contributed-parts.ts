@@ -13,13 +13,13 @@ export interface ContributedPart {
 // The parts other plugins added to one surface, in add order. `add` throws on
 // an id already held, and its `Disposable` removes the part; `onChanged` hears
 // each add and each removal.
-export interface PartStore<P extends ContributedPart> {
+export interface PartStore<P extends { id: string }> {
   add(part: P): Disposable;
   parts(): P[];
   onChanged(listener: () => void): Disposable;
 }
 
-export function createPartStore<P extends ContributedPart>(): PartStore<P> {
+export function createPartStore<P extends { id: string }>(): PartStore<P> {
   const held: P[] = [];
   const listeners = new Set<() => void>();
   const notify = () => {
@@ -69,12 +69,9 @@ export interface ContributedPartsPlace {
   wrapperClass: string;
 }
 
-// A `div` of `place.holderClass` at the end of `parent`, holding one `div` of
-// `place.wrapperClass` (`data-part="<id>"`) per part, in add order, each built
-// into its wrapper for `sessionId`. Each built part's dispose is recorded on
-// `rollback`, so it runs before the surface draws again; a dispose that throws
-// is logged and the rest still run. A part whose build throws is logged and
-// its wrapper removed; the rest still draw.
+// A `div` of `place.holderClass` at the end of `parent`, holding one wrapper per
+// part from `placeContributedPart`, in add order; a part whose build throws
+// leaves none, and the rest still draw.
 export function placeContributedParts(
   parent: HTMLElement,
   sessionId: string,
@@ -86,22 +83,40 @@ export function placeContributedParts(
   const holder = element('div', place.holderClass);
   parent.append(holder);
   for (const part of parts) {
-    const wrapper = element('div', place.wrapperClass);
-    wrapper.dataset.part = part.id;
-    holder.append(wrapper);
-    try {
-      const built = part.build(wrapper, sessionId);
-      rollback.recordBox(() => {
-        try {
-          built.dispose?.();
-        } catch (error) {
-          log(`${place.noun} ${part.id} dispose failed: ${errorText(error)}`);
-        }
-      });
-    } catch (error) {
-      wrapper.remove();
-      log(`${place.noun} ${part.id} failed: ${errorText(error)}`);
-    }
+    placeContributedPart(holder, sessionId, part, place, log, rollback);
   }
   return holder;
+}
+
+// A `div` of `place.wrapperClass` (`data-part="<id>"`) at the end of `parent`,
+// with `part` built into it for `sessionId`. The part's dispose is recorded on
+// `rollback`, so it runs before the surface draws again; a dispose that throws
+// is logged and the rest still run. A part whose build throws is logged and its
+// wrapper removed, and the result is null.
+export function placeContributedPart(
+  parent: HTMLElement,
+  sessionId: string,
+  part: ContributedPart,
+  place: ContributedPartsPlace,
+  log: PluginLog,
+  rollback: PartRollback,
+): HTMLElement | null {
+  const wrapper = element('div', place.wrapperClass);
+  wrapper.dataset.part = part.id;
+  parent.append(wrapper);
+  try {
+    const built = part.build(wrapper, sessionId);
+    rollback.recordBox(() => {
+      try {
+        built.dispose?.();
+      } catch (error) {
+        log(`${place.noun} ${part.id} dispose failed: ${errorText(error)}`);
+      }
+    });
+    return wrapper;
+  } catch (error) {
+    wrapper.remove();
+    log(`${place.noun} ${part.id} failed: ${errorText(error)}`);
+    return null;
+  }
 }

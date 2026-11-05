@@ -2,7 +2,7 @@ import { detailLine, isBusy, type PageStage } from '../../contract';
 
 export const closedPageStage: PageStage = {
   id: 'closed',
-  label: 'Closed',
+  label: 'Close',
   inStepper: true,
   order: 60,
   actions: [
@@ -23,4 +23,9 @@ export const closedPageStage: PageStage = {
   ],
   detail: (flow) =>
     flow.progress === null ? '' : detailLine(flow.progress.title, 'done'),
+  status: () => 'done',
+  statusProgress(flow) {
+    const progress = flow.progress;
+    return progress === null ? '' : ` · ${progress.checked}/${progress.total}`;
+  },
 };

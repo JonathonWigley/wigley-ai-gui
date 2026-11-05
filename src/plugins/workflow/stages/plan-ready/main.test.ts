@@ -25,7 +25,6 @@ function flowWith(fields: Partial<SessionFlow>): SessionFlow {
     stage: 'feature',
     planDir: PLAN_DIR,
     progress: progress(3),
-    hasLeftIdle: true,
     ...fields,
   };
 }

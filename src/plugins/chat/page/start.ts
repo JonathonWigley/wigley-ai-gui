@@ -16,7 +16,9 @@ import {
 import type {
   ChatChannel,
   ChatComposerPart,
+  ChatPageEvents,
   ChatPageExports,
+  ChatSidePart,
   ChatStatusPart,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -28,15 +30,19 @@ import {
   chatCommandHandlers,
   createPermissionActions,
   fillComposer,
-  putBack,
 } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
 import { addClearCommands } from './clear-commands';
+import { clipboardWriter } from './clipboard';
 import { mountChatView } from './chat-view';
 import { createImageViewer } from './image-viewer';
+import { createMainAgentPart } from './main-agent-part';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
+import { createRowClock } from './row-clock';
+import { createSessionPart } from './session-part';
+import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
@@ -44,7 +50,7 @@ import { createStartPrompt } from './start-prompt';
 type ChatApi = PageApi<
   typeof chatManifest,
   ChatChannel,
-  Record<never, never>,
+  ChatPageEvents,
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
@@ -60,7 +66,10 @@ type ChatApi = PageApi<
 // the box.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
 // in the page in place of sending it; the exports register more, fill a
-// session's box, and add parts above every composer. Images
+// session's box, and add parts above every composer and sections to every tab's
+// session hub, which `toggleSideParts` hides or shows in every tab; chat's own
+// Main agent section holds the activity dock, and its Session section the
+// session's facts. Images
 // pasted or dropped into a Chat tab attach to its next message, other files go
 // into the box as file chips, and a sent message's images open full size in
 // the image viewer. The picker, the deny
@@ -70,6 +79,8 @@ type ChatApi = PageApi<
 // control picker and the image viewer, and leaves the sign-in dialog and the
 // start prompt open. A resting session's Chat tab keys as a running one's
 // does; its control chips are disabled until a message starts its process.
+// Each session's row shows its run time, and the exports and `activeTimeChanged`
+// offer its clock to other plugins.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -108,6 +119,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       pushScope: () => api.keys.pushScope('confirm'),
     });
+    const writeClipboard = clipboardWriter(services.runMode);
     const signIn = createSignInDialog({
       ...partDeps,
       overlay: api.areas.overlay,
@@ -115,6 +127,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       pushScope: () => api.keys.pushScope('signIn'),
       channel: api.channel,
+      writeClipboard,
       toast: services.toast,
     });
     const slashCommands = createSlashCommands();
@@ -148,9 +161,27 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     };
     const composerParts = createPartStore<ChatComposerPart>();
     const statusParts = createPartStore<ChatStatusPart>();
+    const sideParts = createPartStore<ChatSidePart>();
+    const sideSections = createSideSections({
+      layouts,
+      kit: partDeps,
+      parts: sideParts,
+      uiState: services.uiState,
+      timers: services.timers,
+      log: services.log,
+    });
+    const rowClock = createRowClock({
+      layouts,
+      kit: partDeps,
+      clock: services.clock,
+      timers: services.timers,
+      log: services.log,
+      activeTime: (sessionId) => view.activeTime(sessionId),
+    });
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
+      homeDir: services.homeDir,
       sessions,
       onSessionRemoved: (listener) =>
         api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
@@ -165,6 +196,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           listener(sessionId),
         ),
       onScopeChanged: (listener) => api.keys.onScopeChanged(() => listener()),
+      activeTimeListeners: [
+        (sessionId, activeTime) =>
+          api.events.emit('activeTimeChanged', { sessionId, activeTime }),
+        (sessionId) => rowClock.changed(sessionId),
+      ],
       editor: services.editor,
       markdown: services.markdown,
       keys,
@@ -174,6 +210,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       layouts,
       composerParts,
       statusParts,
+      sideParts,
+      sideSections,
       permissions,
       confirm,
       viewer,
@@ -190,19 +228,18 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       clock: services.clock,
       drops: api.drops,
     });
-    // Messages pulled back out of a session's queue go back into its box.
-    api.channel.on('returned', ({ sessionId, messages }) => {
-      const session = view.session(sessionId);
-      if (session !== undefined) {
-        if (putBack({ tabs: view }, session, messages)) {
-          services.log(
-            `pulled back ${messages.length} message(s) in ${session.name}`,
-          );
-        }
-        return;
-      }
-      services.log(`returned for unknown session ${sessionId} ignored`);
-    });
+    sessions.addRowPart(rowClock.part);
+    sideParts.add(
+      createMainAgentPart({
+        surfaceOf: (sessionId) => view.composerOf(sessionId),
+      }),
+    );
+    sideParts.add(
+      createSessionPart({
+        ...partDeps,
+        sourceOf: (sessionId) => view.sessionFactsSource(sessionId),
+      }),
+    );
     api.layouts.show<ChatLayout>({
       defaultLayout,
       defaultStylesheet,
@@ -227,7 +264,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         fillComposer({ tabs: view, log: services.log }, sessionId, text),
       addComposerPart: (part) => consumer.track(composerParts.add(part)),
       addStatusPart: (part) => consumer.track(statusParts.add(part)),
+      addSidePart: (part) => consumer.track(sideParts.add(part)),
       focusedEntry: () => view.focusedEntry(),
+      focusedBlock: () => view.focusedBlock(),
+      activeTime: (sessionId) => view.activeTime(sessionId),
     });
     return {
       commands: {
@@ -241,12 +281,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           signIn,
           slashCommands,
           viewer,
+          writeClipboard,
           toast: services.toast,
           log: services.log,
         }),
         newSession: () => startPrompt.open(),
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
+        toggleSideParts: () => sideSections.toggleHidden(),
       },
       exports,
       dispose: () => view.dispose(),

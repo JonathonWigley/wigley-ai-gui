@@ -2,8 +2,9 @@ import { detailLine, isBusy, type PageStage } from '../../contract';
 
 export const planReadyPageStage: PageStage = {
   id: 'planReady',
-  label: 'Plan',
+  label: 'Make',
   inStepper: true,
+  stepSlot: 'make',
   order: 30,
   actions: [
     {
@@ -39,4 +40,5 @@ export const planReadyPageStage: PageStage = {
     flow.progress === null
       ? ''
       : detailLine(flow.progress.title, `${flow.progress.total} tasks`),
+  status: () => 'ready',
 };

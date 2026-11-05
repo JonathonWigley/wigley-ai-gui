@@ -156,6 +156,7 @@ function load(
       displayName: 'Auri Dev',
       isDev: true,
     },
+    runMode: 'live',
     log: () => undefined,
     ...overrides,
   });
@@ -247,6 +248,7 @@ describe('loadConfigStore', () => {
       displayName: 'Auri Dev',
       isDev: true,
     });
+    expect(config.runMode).toBe('live');
   });
 
   it('deep-merges settings.json over the defaults', async () => {

@@ -25,7 +25,6 @@ export function newFlow(sessionId: string, projectDir: string): SessionFlow {
     turnRunning: false,
     runningSubagents: [],
     countdownEndsAt: null,
-    hasLeftIdle: false,
   };
 }
 
@@ -51,17 +50,25 @@ export function foldFlow(
   const next: SessionFlow = { ...flow };
   applyBookkeeping(next, signal);
   applyStageRules(next, signal, stages);
-  if (next.stage !== IDLE_STAGE) {
-    next.hasLeftIdle = true;
-  }
   return sameFlow(flow, next) ? flow : next;
 }
 
-function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
+// Applies only what `signal` says about the running turn and subagents: every
+// other field stays, and no stage rule runs. Returns `flow` itself when neither
+// changed.
+export function foldRunningState(
+  flow: SessionFlow,
+  signal: WorkflowSignal,
+): SessionFlow {
+  const next: SessionFlow = { ...flow };
+  applyRunningState(next, signal);
+  return sameFlow(flow, next) ? flow : next;
+}
+
+function applyRunningState(next: SessionFlow, signal: WorkflowSignal): void {
   switch (signal.type) {
     case 'turnStarted':
       next.turnRunning = true;
-      next.countdownEndsAt = null;
       break;
     case 'turnEnded':
       next.turnRunning = false;
@@ -75,6 +82,21 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
       next.runningSubagents = next.runningSubagents.filter(
         (agentId) => agentId !== signal.agentId,
       );
+      break;
+    default:
+      break;
+  }
+}
+
+function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
+  applyRunningState(next, signal);
+  switch (signal.type) {
+    case 'turnStarted':
+      next.countdownEndsAt = null;
+      break;
+    case 'turnEnded':
+    case 'subagentStarted':
+    case 'subagentFinished':
       break;
     case 'fileWritten':
       if (isPlanFile(signal.path)) {
@@ -223,7 +245,6 @@ function sameFlow(a: SessionFlow, b: SessionFlow): boolean {
     a.reviewRoundsAtMake === b.reviewRoundsAtMake &&
     a.turnRunning === b.turnRunning &&
     sameIds(a.runningSubagents, b.runningSubagents) &&
-    a.countdownEndsAt === b.countdownEndsAt &&
-    a.hasLeftIdle === b.hasLeftIdle
+    a.countdownEndsAt === b.countdownEndsAt
   );
 }

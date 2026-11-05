@@ -26,7 +26,7 @@ export interface DriveRunDeps {
   randomHex: RandomHex;
   // Hears each config the app publishes after a settings change.
   configChanged(listener: () => void): Disposable;
-  quit(): void;
+  quit(keepSessions: boolean): void;
   log: Log;
 }
 

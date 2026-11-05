@@ -93,4 +93,4 @@ session.
 - **Docs** — its main exports gain `writeBytes` (a guarded binary write, so images pass the same write guard as
   text) and `trashDoc`.
 - **Chat** — its main part exports `launch` (start a session and send its first message, without selecting the row),
-  `profileNames` and `profileOf` (the profile of a session chat owns).
+  and `defaultProfile` (the profile of a session chat owns, else chat's first).

@@ -17,17 +17,33 @@ import { agentStripPagePart } from './start';
 const SESSION = 's1';
 
 const RUNNING: Roster = {
-  agents: [],
+  agents: [
+    {
+      agentId: 'a1',
+      agentType: 'Explore',
+      name: 'a1',
+      description: 'read the docs',
+      startedAt: 0,
+      model: null,
+      effort: null,
+      spendUsd: null,
+      isBackground: false,
+      contextTokens: null,
+      contextWindow: null,
+      tools: [],
+    },
+  ],
   tasks: [
     {
       taskId: 't1',
       agentId: 'main',
+      ownerName: 'Main',
       description: 'watch the tests',
       command: 'npm test',
       startedAt: 0,
-      outcome: 'running',
     },
   ],
+  skills: [],
 };
 
 // The part on the harness, over fakes that file each handle with

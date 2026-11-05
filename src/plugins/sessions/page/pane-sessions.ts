@@ -220,6 +220,20 @@ export interface PendingEcho {
   sessionId: string;
 }
 
+// The echoes left once main replied to the activation that recorded `echo`,
+// null when it recorded none. The reply can reach the page ahead of the state
+// main sent, so only a reply saying main sent none (an unknown session) drops
+// the echo.
+export function echoesAfterReply(
+  pendingEchoes: readonly PendingEcho[],
+  echo: PendingEcho | null,
+  sentState: boolean,
+): PendingEcho[] {
+  return sentState
+    ? [...pendingEchoes]
+    : pendingEchoes.filter((pending) => pending !== echo);
+}
+
 // A state's selection change, against the echoes the page still waits for.
 export interface SelectionChange {
   before: string | null;
@@ -264,4 +278,40 @@ export function selectionAction(change: SelectionChange): {
     return { action: { kind: 'tellFocused' }, echoes };
   }
   return { action: { kind: 'place', sessionId: next }, echoes };
+}
+
+// What the page holds as a release focuses the pane its press began in.
+export interface PressedPaneFacts {
+  // A selection that is not collapsed is anchored in the pressed pane.
+  hasSelectionInPane: boolean;
+  // The element holding keyboard focus sits inside the pressed pane.
+  isFocusInPane: boolean;
+  // The element holding keyboard focus takes typed text.
+  doesFocusTakeText: boolean;
+  // The pressed pane's visible tab is a Chat tab, whose text box is its box.
+  isChatTabShown: boolean;
+}
+
+// Where that release sends the keys: `keep` leaves them where the press put
+// them; `toBox` has whatever holds focus let go, and the pane's Chat box, when
+// its visible tab has one, take them in insert mode.
+export type PressedFocusAction = 'keep' | 'toBox';
+
+// A selection in the pane stays, and so does the focus it came with. A text
+// box the press focused keeps the keys, the Chat box going through `toBox` to
+// enter insert mode at its caret. Any other focus, or one outside the pane,
+// lets go.
+export function pressedFocusAction(
+  facts: PressedPaneFacts,
+): PressedFocusAction {
+  const {
+    hasSelectionInPane,
+    isFocusInPane,
+    doesFocusTakeText,
+    isChatTabShown,
+  } = facts;
+  const isOnTextBoxInPane = isFocusInPane && doesFocusTakeText;
+  return hasSelectionInPane || (isOnTextBoxInPane && !isChatTabShown)
+    ? 'keep'
+    : 'toBox';
 }

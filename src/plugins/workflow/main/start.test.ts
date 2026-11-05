@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { AgentEvent } from '../../../contracts/agent';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { QualifiedEvents } from '../../../contracts/plugin';
-import { createMemoryFiles } from '../../../shared/memory-files';
+import {
+  createMemoryFiles,
+  type MemoryFiles,
+} from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   noCounts,
@@ -17,6 +20,7 @@ import type {
   SessionsMainExports,
 } from '../../sessions/contract';
 import type { MainStage, SessionFlow, WorkflowMainExports } from '../contract';
+import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { readPlanProgress } from '../plan-reader';
 import { FLOWS_FILE } from './flow-store';
@@ -111,10 +115,15 @@ function session(id: string, hostSessionId: string): AgentSession {
 // data and for the project (`project`), hand-moved time, and a chat fake that
 // records each `clear` and `send`. `silentWatch` gives the project files a
 // watch that reports nothing, as an OS watcher that misses a delete;
-// `sessionLabel` is the side-bar label sessions gives s1 (none by default).
+// `sessionLabel` is the side-bar label sessions gives s1 (none by default);
+// `data` is workflow's data folder as the last run left it.
 function startWorkflowPart(
   settings: WorkflowTestSettings,
-  options: { silentWatch?: boolean; sessionLabel?: string } = {},
+  options: {
+    silentWatch?: boolean;
+    sessionLabel?: string;
+    data?: MemoryFiles;
+  } = {},
 ) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -122,7 +131,7 @@ function startWorkflowPart(
   const logs: string[] = [];
   const chatCalls: unknown[][] = [];
   let settingsListener: (next: WorkflowTestSettings) => void = () => undefined;
-  const data = createMemoryFiles();
+  const data = options.data ?? createMemoryFiles();
   const project = createMemoryFiles();
   const projectFiles: Files =
     options.silentWatch === true
@@ -190,13 +199,34 @@ function startWorkflowPart(
     }
     await settled();
   };
-  const agentEvent = (event: AgentEvent, hostSessionId = 'h1') =>
+  const agentEvent = (
+    event: AgentEvent,
+    hostSessionId = 'h1',
+    replayed = false,
+  ) =>
     emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude',
       hostSessionId,
       event,
+      replayed,
     });
+  // A re-attach's replay: every event in one synchronous run, as the harness
+  // fires them, with no settling between events.
+  const replayBurst = async (replayedEvents: AgentEvent[]) => {
+    for (const event of replayedEvents) {
+      for (const listener of listeners.get('chat.agentEvent') ?? []) {
+        listener({
+          sessionId: 's1',
+          profileDir: '~/.claude',
+          hostSessionId: 'h1',
+          event,
+          replayed: true,
+        });
+      }
+    }
+    await settled();
+  };
   const openS1 = async () => {
     await emit('sessions.connected', session('s1', 'h1'));
     await emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
@@ -215,9 +245,12 @@ function startWorkflowPart(
     chatCalls,
     emit,
     agentEvent,
+    replayBurst,
     openS1,
     lastFlow,
     changeSettings,
+    runAction: (command: string) =>
+      handlers.get('runAction')?.({ sessionId: 's1', command }),
   };
 }
 
@@ -231,21 +264,71 @@ function skill(name: string, args: string): AgentEvent {
   return { type: 'skillStarted', at: 1, agentId: 'main', skill: name, args };
 }
 
-// Opens s1 and runs a wigley:feature turn that writes the plan and ends.
+// A wigley:feature turn's events, in log order, each stamped `at`.
+function featureTurnEvents(at: number): AgentEvent[] {
+  return [
+    { ...skill('wigley:feature', ''), at },
+    { type: 'turnStarted', at },
+    { type: 'fileWritten', at, agentId: 'main', path: PLAN_FILE },
+    { type: 'turnEnded', at },
+  ];
+}
+
+const SUBAGENT_SPAWNED: AgentEvent = {
+  type: 'agentSpawned',
+  at: START - 5_000,
+  agentId: 'a1',
+  parentAgentId: 'main',
+  agentType: 'worker',
+  description: 'd',
+  name: 'worker',
+  model: null,
+  effort: null,
+};
+
+const SAVED_AT = START - 1_000;
+const BEFORE_SAVE = START - 5_000;
+const AFTER_SAVE = START - 500;
+
+// Workflow's data folder holding `flow` as s1's saved flow under h1.
+async function savedFlowData(flow: Partial<SessionFlow>): Promise<MemoryFiles> {
+  const data = createMemoryFiles();
+  await data.write(
+    FLOWS_FILE,
+    JSON.stringify({
+      flows: [
+        {
+          hostSessionId: 'h1',
+          savedAt: SAVED_AT,
+          flow: { ...newFlow('s-old', '/r'), ...flow },
+        },
+      ],
+    }),
+  );
+  return data;
+}
+
+// Opens s1 and runs a wigley:feature turn that writes the plan and ends, its
+// events flagged `replayed` as given.
 async function runFeatureTurn(
   workflow: ReturnType<typeof startWorkflowPart>,
+  replayed = false,
 ): Promise<void> {
   await workflow.openS1();
-  await workflow.agentEvent(skill('wigley:feature', ''));
-  await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+  await workflow.agentEvent(skill('wigley:feature', ''), 'h1', replayed);
+  await workflow.agentEvent({ type: 'turnStarted', at: 1 }, 'h1', replayed);
   await workflow.project.write(PLAN_FILE, PLAN);
-  await workflow.agentEvent({
-    type: 'fileWritten',
-    at: 1,
-    agentId: 'main',
-    path: PLAN_FILE,
-  });
-  await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+  await workflow.agentEvent(
+    {
+      type: 'fileWritten',
+      at: 1,
+      agentId: 'main',
+      path: PLAN_FILE,
+    },
+    'h1',
+    replayed,
+  );
+  await workflow.agentEvent({ type: 'turnEnded', at: 1 }, 'h1', replayed);
 }
 
 // Runs a wigley:feature turn that writes the plan into `project`, over the part
@@ -301,9 +384,11 @@ describe('workflowMainPart', () => {
       });
       await settled();
       const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
-        flows: { hostSessionId: string; flow: SessionFlow }[];
+        flows: { hostSessionId: string; flow: SessionFlow; savedAt: number }[];
       };
-      expect(saved.flows).toEqual([{ hostSessionId: 'h1', flow: ready }]);
+      expect(saved.flows).toEqual([
+        { hostSessionId: 'h1', flow: ready, savedAt: START },
+      ]);
 
       workflow.time.advance(9_999);
       expect(workflow.chatCalls).toEqual([]);
@@ -314,6 +399,193 @@ describe('workflowMainPart', () => {
         ['send', 's1', `/wigley:make ${PLAN_DIR}`],
       ]);
       expect(workflow.logs).toContainEqual(`ran clearAndMake in ${ranIn}`);
+    },
+  );
+
+  it('replayedFeatureTurn_ReachesPlanReady_StartsNoCountdown', async () => {
+    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+
+    await runFeatureTurn(workflow, true);
+
+    expect(workflow.lastFlow()).toMatchObject({
+      stage: 'planReady',
+      planDir: PLAN_DIR,
+      countdownEndsAt: null,
+    });
+    workflow.time.advance(10_000);
+    await settled();
+    expect(workflow.chatCalls).toEqual([]);
+  });
+
+  it('replayBurstOfAFeatureTurn_ItsPlanReadStartsNoCountdown', async () => {
+    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+
+    await workflow.replayBurst(featureTurnEvents(1));
+    await settled();
+
+    expect(workflow.lastFlow()).toMatchObject({
+      stage: 'planReady',
+      planDir: PLAN_DIR,
+      progress: readPlanProgress(PLAN),
+      countdownEndsAt: null,
+    });
+    workflow.time.advance(10_000);
+    await settled();
+    expect(workflow.chatCalls).toEqual([]);
+  });
+
+  it.each<{
+    name: string;
+    saved: Partial<SessionFlow>;
+    actionFirst?: string;
+    replay: AgentEvent[];
+    expected: Partial<SessionFlow>;
+  }>([
+    {
+      name: 'a planReady the user cancelled, an older feature turn',
+      saved: {
+        stage: 'planReady',
+        planDir: PLAN_DIR,
+        progress: readPlanProgress(PLAN),
+      },
+      replay: featureTurnEvents(BEFORE_SAVE),
+      expected: {
+        stage: 'planReady',
+        planDir: PLAN_DIR,
+        progress: readPlanProgress(PLAN),
+      },
+    },
+    {
+      name: 'an idle from a dismissed run, an older make',
+      saved: { stage: 'idle' },
+      replay: [
+        { ...skill('wigley:make', PLAN_DIR), at: BEFORE_SAVE },
+        {
+          type: 'fileWritten',
+          at: BEFORE_SAVE,
+          agentId: 'main',
+          path: PLAN_FILE,
+        },
+      ],
+      expected: { stage: 'idle', planDir: null, progress: null },
+    },
+    {
+      name: 'older events still running, which only the row state takes',
+      saved: { stage: 'idle' },
+      replay: [
+        { ...skill('wigley:feature', ''), at: BEFORE_SAVE },
+        { type: 'turnStarted', at: BEFORE_SAVE },
+        SUBAGENT_SPAWNED,
+      ],
+      expected: {
+        stage: 'idle',
+        turnRunning: true,
+        runningSubagents: ['a1'],
+      },
+    },
+    {
+      name: 'an older turn start, then a turn from after the save',
+      saved: { stage: 'idle' },
+      replay: [
+        { type: 'turnStarted', at: BEFORE_SAVE },
+        { type: 'turnEnded', at: BEFORE_SAVE },
+        ...featureTurnEvents(AFTER_SAVE),
+      ],
+      expected: {
+        stage: 'planReady',
+        planDir: PLAN_DIR,
+        progress: readPlanProgress(PLAN),
+      },
+    },
+    {
+      name: 'a feature flow the open arms before the replay says it runs',
+      saved: { stage: 'feature', planDir: PLAN_DIR },
+      replay: [{ type: 'turnStarted', at: BEFORE_SAVE }],
+      expected: { stage: 'planReady', turnRunning: true },
+    },
+    {
+      name: 'a countdown the user cancelled before the replay, a newer make',
+      saved: { stage: 'feature', planDir: PLAN_DIR },
+      actionFirst: 'cancelCountdown',
+      replay: [{ ...skill('wigley:make', PLAN_DIR), at: AFTER_SAVE }],
+      expected: { stage: 'make', planDir: PLAN_DIR },
+    },
+    {
+      name: 'a make whose plan moved on, the read not hiding a later review',
+      saved: {
+        stage: 'make',
+        planDir: PLAN_DIR,
+        progress: readPlanProgress(PLAN_TICKED),
+      },
+      replay: [{ ...skill('wigley:review', ''), at: AFTER_SAVE }],
+      expected: { stage: 'review', progress: readPlanProgress(PLAN) },
+    },
+  ])(
+    'replayOverASavedFlow_FoldsOnlyPastItsSave_StartsNoCountdown ($name)',
+    async ({ saved, actionFirst, replay, expected }) => {
+      const data = await savedFlowData(saved);
+      const workflow = startWorkflowPart(
+        { ...SETTINGS, autoClearAndMake: true },
+        { data },
+      );
+      await workflow.project.write(PLAN_FILE, PLAN);
+      await workflow.openS1();
+      await settled();
+      if (actionFirst !== undefined) {
+        await workflow.runAction(actionFirst);
+      }
+
+      await workflow.replayBurst(replay);
+      await settled();
+
+      expect(workflow.lastFlow()).toMatchObject({
+        ...expected,
+        countdownEndsAt: null,
+      });
+      workflow.time.advance(10_000);
+      await settled();
+      expect(workflow.chatCalls).toEqual([]);
+    },
+  );
+
+  it.each<{ name: string; live: AgentEvent[] }>([
+    {
+      name: 'a live turn that starts and ends',
+      live: [
+        { type: 'turnStarted', at: START },
+        { type: 'turnEnded', at: START },
+      ],
+    },
+    {
+      name: 'the replayed turn ending live',
+      live: [{ type: 'turnEnded', at: START }],
+    },
+  ])(
+    'afterAReplay_ALiveTurnEnd_StartsTheCountdown ($name)',
+    async ({ live }) => {
+      const workflow = startWorkflowPart({
+        ...SETTINGS,
+        autoClearAndMake: true,
+      });
+      await workflow.project.write(PLAN_FILE, PLAN);
+      await workflow.openS1();
+      await workflow.replayBurst([
+        { type: 'turnStarted', at: 1 },
+        { type: 'turnEnded', at: 1 },
+        ...featureTurnEvents(2).slice(0, 3),
+      ]);
+      await settled();
+
+      for (const event of live) {
+        await workflow.agentEvent(event);
+      }
+
+      expect(workflow.lastFlow()).toMatchObject({
+        stage: 'planReady',
+        countdownEndsAt: START + 10_000,
+      });
     },
   );
 

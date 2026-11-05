@@ -1,4 +1,4 @@
-import type { PageStage } from '../../contract';
+import { busyStatus, type PageStage } from '../../contract';
 
 export const featurePageStage: PageStage = {
   id: 'feature',
@@ -16,4 +16,5 @@ export const featurePageStage: PageStage = {
     },
   ],
   detail: (flow) => (flow.progress === null ? '' : flow.progress.title),
+  status: busyStatus,
 };

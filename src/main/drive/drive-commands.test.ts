@@ -29,6 +29,7 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
   const files = createMemoryFiles();
   const configListeners = new Set<() => void>();
   const logged: string[] = [];
+  const quitCalls: boolean[] = [];
   const commands = createDriveCommands({
     window: fake.window,
     actions: createActionRegistry(),
@@ -45,7 +46,7 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
       configListeners.add(listener);
       return { dispose: () => configListeners.delete(listener) };
     },
-    quit: () => {},
+    quit: (keepSessions) => quitCalls.push(keepSessions),
     log: (source, message) => logged.push(`[${source}] ${message}`),
   });
   const changeConfigOnWrite = () =>
@@ -54,7 +55,7 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
         listener();
       }
     });
-  return { fake, files, commands, changeConfigOnWrite, logged };
+  return { fake, files, commands, changeConfigOnWrite, logged, quitCalls };
 }
 
 // A press target whose centre is at (60, 40), shown and uncovered.
@@ -199,6 +200,26 @@ describe('createDriveCommands', () => {
 
     expect(fake.focused.emulated).toBe(1);
   });
+
+  it.each([
+    { args: {}, outcome: 'ran', quits: [false] },
+    { args: { keepSessions: true }, outcome: 'ran', quits: [true] },
+    { args: { keepSessions: 'yes' }, outcome: 'rejected', quits: [] },
+  ])(
+    'quit_KeepSessions_PassesTheFlag ($args)',
+    async ({ args, outcome, quits }) => {
+      const { commands, quitCalls } = setUp(() => []);
+
+      const ran = await commands.run('quit', args).then(
+        () => 'ran',
+        () => 'rejected',
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(ran).toBe(outcome);
+      expect(quitCalls).toEqual(quits);
+    },
+  );
 
   it('run_AnotherDebuggerHoldsThePage_RunsTheCommandAndLogsWhyFocusIsNotEmulated', async () => {
     const { fake, commands, logged } = setUp(() => []);

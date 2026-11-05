@@ -31,12 +31,19 @@ export interface SessionListDeps {
   stateChanged(state: SessionsState): void;
   // The user activated a session; called before the state it changes is sent.
   activated(sessionId: string): void;
+  // The project of a session in `projectDir`; null when the folder has none.
+  projectName(projectDir: string): Promise<string | null>;
 }
 
 // The session list and its rows. `tools` lists every contributed tool in
 // contribution order; `onToolsChanged` hears each contribution added and each
 // one disposed, once each.
-export interface SessionList extends SessionsMainExports {
+export interface SessionList extends Omit<
+  SessionsMainExports,
+  'holdConnects' | 'activate'
+> {
+  // `SessionsMainExports.activate`; true when it sent the state.
+  activate(sessionId: string): boolean;
   tools(): ToolDefinition[];
   onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
@@ -54,6 +61,8 @@ export interface SessionList extends SessionsMainExports {
   // Ends every session the list holds, connected and owned, each as its own
   // `end()` does, a throw not skipping the rest, then throws the first error.
   endAll(): void;
+  // The plugin's stop: a project lookup landing after it changes nothing.
+  stop(): void;
 }
 
 interface Contribution {
@@ -70,6 +79,9 @@ interface SessionEntry {
   group: string;
   // 1 for the first of its group, which reads without a number.
   number: number;
+  // Starts as `group` and takes the folder's project name when its lookup
+  // lands, kept while the row is closed.
+  project: string;
   toolSessions: Map<Contribution, ToolSession>;
   toolRoutes: Map<string, ToolSession>;
   // Started by `open`; `joinedBy` names the relay handle holding the join,
@@ -122,6 +134,7 @@ function rowOf(entry: SessionEntry): SessionRow {
   return {
     sessionId: id,
     label: labelOf(entry),
+    project: entry.project,
     harness: info.harness,
     marked: false,
     projectDir: info.projectDir,
@@ -226,7 +239,9 @@ function routeCall(
 // whose row is already closed, false otherwise. Every state sent with a
 // selection other than the last sent emits `selected` after it. Each session's
 // titles live on its entry, copied onto its row while it has one, and last
-// while the session does.
+// while the session does; so does its project, which starts as the group and
+// sends the state when its lookup changes the project of a session with a row,
+// until `stop`.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   // Each registration its own object, so one function added twice is two.
@@ -242,6 +257,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // mark that selects another session from none; a release of another
   // selected row replaces it.
   let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
+  let isStopped = false;
 
   const state = (): SessionsState => ({
     rows: rows.map((row) => ({ ...row, titles: { ...row.titles } })),
@@ -310,17 +326,18 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const everyGuardAllows = (sessionId: string) =>
     [...closeGuards].every((guard) => guard.mayClose(sessionId));
 
-  // The user's pick of the row at `index`: reports `activated`, then selects
-  // it and clears its mark.
+  // The user's pick of the row at `index`: reports `activated`, then selects it
+  // and clears its mark. True when that changed the state, which it sends.
   const activateRow = (sessionId: string, index: number) => {
     deps.activated(sessionId);
     reselectOnReturn = null;
     const row = rows[index];
     if (sessionId === selectedSessionId && !row.marked) {
-      return;
+      return false;
     }
     select(row);
     sendState();
+    return true;
   };
 
   // Removes the row, sends the state, then emits `closed`.
@@ -330,8 +347,33 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('closed', { sessionId });
   };
 
-  // Builds and holds the session's entry, adding no row; a throwing
-  // contribution start leaves no entry.
+  // Asks for the project of the entry's folder; a null, a rejection or a landing
+  // after `stop` keeps the fallback.
+  const lookUpProject = (entry: SessionEntry, projectDir: string) => {
+    const appId = entry.session.id;
+    deps.projectName(projectDir).then(
+      (name) => {
+        if (isStopped) {
+          return;
+        }
+        const isNewProject = name !== null && name !== entry.project;
+        if (!isNewProject) {
+          return;
+        }
+        entry.project = name;
+        const index = rowIndex(appId);
+        if (index !== -1) {
+          rows[index].project = name;
+          sendState();
+        }
+      },
+      (error: unknown) =>
+        deps.log(`project of ${projectDir} not read: ${errorText(error)}`),
+    );
+  };
+
+  // Builds and holds the session's entry and starts its project lookup, adding
+  // no row; a throwing contribution start leaves no entry.
   const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
     const session: AgentSession = { id: deps.randomHex(), info };
     const group = groupOf(info);
@@ -339,6 +381,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       session,
       group,
       number: freeNumber(entries.values(), group),
+      project: group,
       ...startToolSessions(contributions, session, deps.log),
       owned,
       joinedBy: null,
@@ -346,6 +389,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       titles: { user: null, agent: null, firstMessage: null },
     };
     entries.set(session.id, entry);
+    if (info.projectDir !== null) {
+      lookUpProject(entry, info.projectDir);
+    }
     return entry;
   };
 
@@ -605,11 +651,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
         deps.log(`activate for unknown session ${sessionId} ignored`);
-        return;
+        return false;
       }
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected like any other.
-      activateRow(sessionId, rowIndexAdding(entry));
+      return activateRow(sessionId, rowIndexAdding(entry));
     },
     activateExistingRow(sessionId) {
       if (!entries.has(sessionId)) {
@@ -691,6 +737,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     state,
     endAll() {
       callEach([...entries.values()], end);
+    },
+    stop() {
+      isStopped = true;
     },
   };
 }

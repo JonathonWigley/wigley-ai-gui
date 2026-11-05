@@ -10,7 +10,7 @@ import {
   type FakeElement,
   findAll,
   installFocusFakeDom,
-  type ScrollerFakeElement,
+  ScrollerFakeElement,
 } from '../../../shared/page/test-dom';
 import defaultLayout from '../layouts/default/layout.js';
 import type { DocHeaderInput, Layout } from '../layouts/layout';
@@ -21,12 +21,7 @@ import {
   type DocView,
   type DocViewDeps,
 } from './doc-view';
-import {
-  fakeDocsParts,
-  fakePushedScope,
-  noAnchor,
-  SourceLineFakeElement,
-} from './docs-page-fakes';
+import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
 import {
   fencePlaceholder,
   installMarkdownDom,
@@ -177,7 +172,7 @@ describe('createDocView', () => {
   beforeEach(() =>
     installFocusFakeDom(
       (name, value) => vi.stubGlobal(name, value),
-      SourceLineFakeElement,
+      ScrollerFakeElement,
     ),
   );
   afterEach(() => {
@@ -611,8 +606,8 @@ function scroller(root: HTMLElement): ScrollerFakeElement {
 
 // A rendered block of the source `line`, its client rect `top` below the
 // scroller's.
-function sourceBlock(line: number, top: number): SourceLineFakeElement {
-  const block = new SourceLineFakeElement('p');
+function sourceBlock(line: number, top: number): ScrollerFakeElement {
+  const block = new ScrollerFakeElement('p');
   block.dataset.sourceLine = String(line);
   block.rectTop = top;
   return block;

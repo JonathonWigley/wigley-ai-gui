@@ -1,11 +1,9 @@
-/* While nothing overflows the chevrons take no space; while the track
-   overflows each keeps its space, and one with nothing further that way
-   hides, so the track's width holds still as it scrolls. */
+/* The chevrons lie over the track's ends and take no space, so overflow
+   starting or ending never moves an item. */
 .ui-h-scroller {
   display: flex;
-  align-items: center;
-  gap: var(--wg-space-1);
   min-width: 0;
+  position: relative;
 }
 
 .ui-h-scroller-track {
@@ -24,7 +22,24 @@
   flex: none;
 }
 
-.ui-h-scroller[data-overflow='false'] > .ui-h-scroller-chevron {
+.ui-h-scroller > .ui-icon-button.ui-h-scroller-chevron {
+  background: var(--wg-sheet-background);
+  border: 1px solid var(--wg-border-default);
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.ui-h-scroller > .ui-h-scroller-chevron:first-child {
+  left: 0;
+}
+
+.ui-h-scroller > .ui-h-scroller-chevron:last-child {
+  right: 0;
+}
+
+.ui-h-scroller[data-overflow='false'] > .ui-icon-button.ui-h-scroller-chevron {
   display: none;
 }
 

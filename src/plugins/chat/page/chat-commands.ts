@@ -17,9 +17,11 @@ import type {
   AppSlashCommand,
   ChatChannel,
   SlashCommandContext,
+  ReturnedMessage,
 } from '../contract';
 import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
+import type { WriteClipboard } from './clipboard';
 import type { EntryListStop } from './entry-list';
 import { controlText, oldestPendingPermission } from './chat-state';
 import type {
@@ -88,6 +90,7 @@ export interface ChatCommandDeps {
   signIn: SignInDialog;
   slashCommands: Pick<SlashCommands, 'match'>;
   viewer: ImageViewer;
+  writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
 }
@@ -95,14 +98,15 @@ export interface ChatCommandDeps {
 type Handler = (context: PageCommandContext) => void;
 
 // Every chat command's handler but the start prompt's (`newSession`,
-// `toggleArchive`, `showArchived`), by short id. A command acting on a
+// `toggleArchive`, `showArchived`) and the session hub's (`toggleSideParts`), by
+// short id. A command acting on a
 // session acts only on the session whose Chat tab is the visible tab, and
 // does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<
   PageStart<typeof chatManifest>['commands'],
-  'newSession' | 'toggleArchive' | 'showArchived'
+  'newSession' | 'toggleArchive' | 'showArchived' | 'toggleSideParts'
 > {
   const { tabs, channel, picker, log } = deps;
   const inSession =
@@ -152,7 +156,9 @@ export function chatCommandHandlers(
     send: inSession((session) => send(deps, session)),
     sendNow: inSession((session) => sendNow(deps, session)),
     interrupt: inRunningSession((session) => {
-      if (session.state.activity === 'idle') {
+      const { activity, compaction, queued } = session.state;
+      const isHoldUp = queued.some((row) => row.holdReason !== null);
+      if (activity === 'idle' && compaction === null && !isHoldUp) {
         log(`nothing to interrupt in ${session.name}`);
         return;
       }
@@ -172,6 +178,22 @@ export function chatCommandHandlers(
       moveEntry(session, 1, log);
     }),
     prevEntry: inSession((session) => moveEntry(session, -1, log)),
+    nextMessage: inSession((session) => moveMessage(session, 1, log)),
+    prevMessage: inSession((session) => moveMessage(session, -1, log)),
+    toggleRange: inSession((session) => {
+      log(
+        session.entries.toggleRange()
+          ? 'toggled the range'
+          : `no entries in ${session.name}`,
+      );
+    }),
+    cancelRange: inSession((session) => {
+      log(
+        session.entries.cancelRange()
+          ? 'cancelled the range'
+          : `no range to cancel in ${session.name}`,
+      );
+    }),
     latestEntry: inSession((session) => {
       session.entries.latest();
       log('following the latest entry');
@@ -224,10 +246,11 @@ export function chatCommandHandlers(
           : `${result} ${kind} entry`,
       );
     }),
-    allowPermission: inSession((session) => {
+    // An open range is intent to copy, so a permission landing on it waits.
+    allowOrCopy: inSession((session) => {
       const pending = oldestPendingPermission(session.state.entries);
-      if (pending === null) {
-        log(`no pending permission in ${session.name}`);
+      if (pending === null || session.entries.isRangeOpen()) {
+        copySelection(deps, session);
         return;
       }
       deps.permissions.allow(session, pending);
@@ -291,6 +314,13 @@ export function chatCommandHandlers(
     pickerClose: () => picker.close(),
     pickerFilter: () => picker.focusFilter(),
     pickerList: () => picker.leaveFilter(),
+    stopAll: () => {
+      log('stopping every session');
+      void channel.invoke('stopAll').catch((error: unknown) => {
+        log(`sessions not stopped: ${errorText(error)}`);
+        deps.toast(`Sessions not stopped: ${errorText(error)}`, 'error');
+      });
+    },
     openPreview: () =>
       void channel.invoke('openPreview').catch((error: unknown) => {
         log(`chat preview not opened: ${errorText(error)}`);
@@ -350,7 +380,8 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
 // Cmd+Enter: with the box unfocused and a pending row focused, sends that row
 // now (see `sendQueuedNow`), leaving the box alone. Otherwise asks main to
 // send the box and every pending row now: into the running turn, or as `send`
-// does when none runs. The box is read, cleared and put back on a refusal as
+// does when none runs; while a hold is up main queues the box instead and skips
+// the compaction. The box is read, cleared and put back on a refusal as
 // `send` does, and an app slash command runs as there. An empty box sends the
 // unsent pending rows alone, leaving the box and entries as they are, and
 // with no unsent row sends nothing.
@@ -462,6 +493,38 @@ export function putBack(
   return true;
 }
 
+// Puts messages main returned into their session's box and tells main they are
+// placed. Main keeps any for a session with no tab, which its tab reads at mount.
+export function placeReturned(
+  deps: Pick<ChatCommandDeps, 'tabs' | 'channel' | 'log'>,
+  sessionId: string,
+  messages: readonly ReturnedMessage[],
+) {
+  if (messages.length === 0) {
+    return;
+  }
+  const session = deps.tabs.session(sessionId);
+  if (session === undefined) {
+    deps.log(`returned for unknown session ${sessionId} ignored`);
+    return;
+  }
+  if (!putBack(deps, session, messages)) {
+    return;
+  }
+  deps.log(`pulled back ${messages.length} message(s) in ${session.name}`);
+  void deps.channel
+    .invoke(
+      'returnedPlaced',
+      sessionId,
+      messages.map((message) => message.id),
+    )
+    .catch((error: unknown) =>
+      deps.log(
+        `returned messages in ${session.name} not reported placed: ${errorText(error)}`,
+      ),
+    );
+}
+
 // Replaces the session's draft with `text`, leaving its attached images, then
 // shows its Chat tab with the box focused in insert mode at the end. An
 // unknown session is logged and left alone.
@@ -496,7 +559,7 @@ export function pullBackQueued(
 
 // Asks main to write the queued message into the running turn now; its row
 // stays, drawn as sending, until the agent takes it in. Main refuses a row
-// already sent.
+// already sent, and on the held row skips the compaction instead.
 export function sendQueuedNow(
   deps: { channel: ChatInvoke; log: PluginLog },
   session: SessionRef,
@@ -535,6 +598,11 @@ function moveEntry(session: ChatSession, step: 1 | -1, log: PluginLog) {
   log(focusedLine(focused, session.name));
 }
 
+function moveMessage(session: ChatSession, step: 1 | -1, log: PluginLog) {
+  const focused = session.entries.moveToMessage(step);
+  log(focusedLine(focused, session.name));
+}
+
 function focusedLine(stop: EntryListStop | null, sessionName: string): string {
   if (stop === null) {
     return `no entries in ${sessionName}`;
@@ -545,6 +613,34 @@ function focusedLine(stop: EntryListStop | null, sessionName: string): string {
   return stop.kind === 'activity'
     ? 'focused activity line'
     : `focused ${stop.entry.kind} entry`;
+}
+
+// Writes the range's source, else the cursor's, to the clipboard. A write that
+// lands ends the range; one that fails leaves it. An open range with nothing to
+// copy stays open and says so; a stop with nothing to copy only logs.
+function copySelection(deps: ChatCommandDeps, session: ChatSession) {
+  const { log } = deps;
+  const selected = session.entries.selectedSource();
+  if (selected === null) {
+    log('nothing to copy');
+    if (session.entries.isRangeOpen()) {
+      deps.toast('Nothing to copy', 'info');
+    }
+    return;
+  }
+  const { text, blockCount } = selected;
+  const blocks = blockCount === 1 ? '1 block' : `${blockCount} blocks`;
+  void deps.writeClipboard(text).then(
+    () => {
+      session.entries.cancelRange();
+      log(`copied ${blocks} in ${session.name}`);
+      deps.toast(`Copied ${blocks}`, 'success');
+    },
+    (error: unknown) => {
+      log(`copy failed: ${errorText(error)}`);
+      deps.toast('Copy failed', 'error');
+    },
+  );
 }
 
 // Logs e.g. `scrolled the transcript up a line; not following`.

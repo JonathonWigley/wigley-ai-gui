@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Files } from '../../contracts/files';
+import type { Paths } from '../../contracts/paths';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
@@ -360,7 +361,11 @@ describe('listPastSessions', () => {
 
 describe('readHistory', () => {
   it.each([
-    { name: 'readHistory_BadId_RejectsBeforeReading', read: readHistory },
+    {
+      name: 'readHistory_BadId_RejectsBeforeReading',
+      read: (files: Files, paths: Paths, folder: string, id: string) =>
+        readHistory(files, paths, folder, id, null),
+    },
     { name: 'readLastUsage_BadId_RejectsBeforeReading', read: readLastUsage },
   ])('$name', async ({ read }) => {
     const stored = createMemoryFiles();
@@ -381,8 +386,36 @@ describe('readHistory', () => {
 
   it('readHistory_Missing_RejectsNamingThePath', async () => {
     await expect(
-      readHistory(createMemoryFiles(), posixPaths, FOLDER, OLD_ID),
+      readHistory(createMemoryFiles(), posixPaths, FOLDER, OLD_ID, null),
     ).rejects.toThrow(`${FOLDER}/${OLD_ID}.jsonl`);
+  });
+
+  it('readHistory_Before_PassesTheCut', async () => {
+    const files = createMemoryFiles();
+    const line = (uuid: string, timestamp: string) =>
+      JSON.stringify({
+        type: 'user',
+        uuid,
+        timestamp,
+        message: { role: 'user', content: uuid },
+      });
+    await files.write(
+      `${FOLDER}/${OLD_ID}.jsonl`,
+      [
+        line('early', '2026-01-01T00:00:00Z'),
+        line('late', '2026-01-01T00:00:02Z'),
+      ].join('\n'),
+    );
+
+    const entries = await readHistory(
+      files,
+      posixPaths,
+      FOLDER,
+      OLD_ID,
+      Date.parse('2026-01-01T00:00:01Z'),
+    );
+
+    expect(entries.map((entry) => entry.id)).toEqual(['history:early']);
   });
 });
 

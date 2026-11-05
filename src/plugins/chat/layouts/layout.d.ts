@@ -11,7 +11,11 @@ export type EntryKind =
   | 'permission'
   | 'result'
   | 'notice'
-  | 'raw';
+  | 'raw'
+  | 'compaction';
+
+// What started a compaction: `app`, the app itself; `manual`, the user's `/compact`; `harness`, the harness on its own.
+export type CompactionTrigger = 'app' | 'manual' | 'harness';
 
 // `images` are the message's attached images, base64 with no `data:` prefix.
 export interface UserInput {
@@ -60,6 +64,9 @@ export interface ResultInput {
   stopReason: string;
   costUsd: number | null;
   durationMs: number | null;
+  // The main agent's steps in the turn this result ends, from its start: the later of the last user message and the
+  // previous result.
+  stepCount: number;
   raw: unknown[];
 }
 export interface NoticeInput {
@@ -74,6 +81,18 @@ export interface RawInput {
   id: string;
   raw: unknown[];
 }
+// A finished compaction. `at` is epoch ms. `beforeTokens` is null when the harness does not report it, `durationMs`
+// likewise. `afterTokens` is null until the next main reply's context is known; the entry then arrives again with it set.
+export interface CompactionInput {
+  kind: 'compaction';
+  id: string;
+  at: number;
+  trigger: CompactionTrigger;
+  beforeTokens: number | null;
+  afterTokens: number | null;
+  durationMs: number | null;
+  raw: unknown[];
+}
 
 export interface EntryInputs {
   user: UserInput;
@@ -84,6 +103,7 @@ export interface EntryInputs {
   result: ResultInput;
   notice: NoticeInput;
   raw: RawInput;
+  compaction: CompactionInput;
 }
 export type EntryInput<K extends EntryKind> = EntryInputs[K];
 
@@ -110,11 +130,18 @@ export interface ActivityInput {
   now: number;
 }
 
-// What the running turn is doing, the first that holds: `waiting` on an unanswered permission, `working` on a tool
-// with no result, `writing` while the last entry is streaming assistant text, else `thinking`.
-export type WorkingState = 'thinking' | 'writing' | 'working' | 'waiting';
+// What the running turn is doing, the first that holds: `compacting` while a compaction runs, whatever the turn does,
+// `waiting` on an unanswered permission, `working` on a tool with no result, `writing` while the last entry is
+// streaming assistant text, else `thinking`.
+export type WorkingState =
+  | 'thinking'
+  | 'writing'
+  | 'working'
+  | 'waiting'
+  | 'compacting';
 
-// The running turn, drawn in the composer's activity dock. Times are epoch ms.
+// The running turn or compaction, drawn in the session hub's activity dock and the composer's activity line. Times are
+// epoch ms.
 export interface LiveWorkingInput {
   // What the turn is doing now.
   state: WorkingState;
@@ -123,14 +150,16 @@ export interface LiveWorkingInput {
   steps: StepInput[];
   // When the turn began: its first entry, the later of the user's last message and the first entry after the last
   // result. While the turn holds no entries, the dock keeps the start it shows; a dock that was hidden or done starts
-  // at `now`.
+  // at `now`. While `state` is `compacting`, when the compaction began.
   startedAt: number;
   // The time of this draw or update; the turn's time is `now - startedAt`.
   now: number;
+  // What started the compaction, as the dock reads it, while `state` is `compacting`; else null.
+  compaction: string | null;
 }
 
-// The finished turn: every entry from the user's last message on; the dock shows it while the session is idle,
-// until the user sends the next message. Times are epoch ms.
+// The finished turn: every entry from the user's last message on; the dock and the activity line show it while the
+// session is idle, until the user sends the next message. Times are epoch ms.
 export interface DoneWorkingInput {
   state: 'done';
   // The turn's steps in entry order, each the step's entry input, leaving out subagents' tool calls (a tool whose
@@ -150,11 +179,41 @@ export interface DoneWorkingInput {
 export type WorkingInput = LiveWorkingInput | DoneWorkingInput;
 
 // One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
-// turn, so it waits only for the agent to take it in.
+// turn, so it waits only for the agent to take it in. `holdReason` is the send gate's reason while the message waits
+// on a compaction it asked for, else null. `skipKey` is the keys that skip that compaction, formatted for the
+// platform; empty when the interrupt command is unbound.
 export interface QueuedMessageInput {
   text: string;
   imageCount: number;
   sent: boolean;
+  holdReason: string | null;
+  skipKey: string;
+}
+
+// A session's run time under its side-bar row: `text` is the time already formatted, and `isRunning` holds while its
+// clock runs.
+export interface RowClockInput {
+  text: string;
+  isRunning: boolean;
+}
+
+// One session hub section's frame: `summary` is the text its part set, null for none; `collapsed` holds while its body
+// is hidden.
+export interface SideSectionInput {
+  title: string;
+  summary: string | null;
+  collapsed: boolean;
+}
+
+// One row of the session hub's Session section.
+export interface SessionFactInput {
+  label: string;
+  value: string;
+}
+
+// The Session section's rows, in the order they show; a fact with nothing to show is left out.
+export interface SessionFactsInput {
+  facts: readonly SessionFactInput[];
 }
 
 export interface EntryView<K extends EntryKind = EntryKind> {
@@ -214,6 +273,8 @@ export interface ChatKit extends BaseKit {
   // Enter on a focused user entry with images opens the viewer at its first image, in place of toggling its expanders.
   // Call it again in `update` for the entry's later images.
   images(parent: HTMLElement): HTMLElement;
+  // `count` tokens as the usage line reads them: `842`, `182k`, `1.3M`, `0k` for none. Appends nothing.
+  tokens(count: number): string;
 }
 
 // What a part other than an entry returns: its root, appended to `parent`, and an optional `update` the app runs with
@@ -247,7 +308,7 @@ export interface ComposerInput {
   isBoxFocused: boolean;
   // The session's process runs.
   running: boolean;
-  // Running, and a turn is in progress.
+  // Running, and a turn or a compaction is in progress.
   working: boolean;
   // The model and effort controls; null when the session declares no model control, and an effort control then stays
   // in `controls`.
@@ -263,8 +324,8 @@ export interface ComposerKit extends BaseKit {
   floatingPanel(parent: HTMLElement): HTMLElement;
   // The message box frame, its editor inside.
   box(parent: HTMLElement): HTMLElement;
-  // The slot the `working` part draws into: the activity dock. The app hides it while there is nothing to show. A
-  // composer that leaves it out gets it just above the box.
+  // The slot the `workingLine` part draws into: the activity line. The app hides it while there is nothing to show, and
+  // the default stylesheet while the session hub is visible. A composer that leaves it out gets it just above the box.
   working(parent: HTMLElement): HTMLElement;
   // The slot the `attachments` part draws into; the app hides it while no image is attached.
   attachments(parent: HTMLElement): HTMLElement;
@@ -279,7 +340,8 @@ export interface ComposerKit extends BaseKit {
 }
 // The status line's pieces. Each piece holding keys places the same element on every draw.
 export interface StatusLineKit extends BaseKit {
-  // The `i` and `a` prompts; hidden, keeping its space, while the box has focus.
+  // The `i` and `a` prompts, then `J`, `K`, `V` and `y` with no labels; hidden, keeping its space, while the box has
+  // focus.
   typeHint(parent: HTMLElement): HTMLElement;
   // One chip for the model and effort: the model control's label, then `<model> · <effort>` (the model alone while
   // `effort` is null). It opens the model picker and holds the model and effort pick keys (the model's alone while
@@ -388,9 +450,20 @@ export interface ImageViewerInput {
   index: number;
   count: number;
 }
+export interface SideSectionKit extends BaseKit {
+  // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus: a click in the
+  // focused pane leaves the focus where it was, and one in another pane moves it to that pane's box.
+  head(parent: HTMLElement): HTMLButtonElement;
+  // `div.chat-side-section-body`, the part's content inside; the same element on every draw. Mounts once per draw;
+  // left out, it ends the part's element.
+  body(parent: HTMLElement): HTMLElement;
+}
 
 // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
-// `parent` and returns it in `element`.
+// `parent` and returns it in `element`. A `user` or `assistant` builder gets one cursor stop per block when it draws
+// the text with `kit.markdown`; an entry with no marked block has one stop, and a body drawn later is not read until
+// the next redraw. Copy reads the entry's source lines by a block's position, so copy per block needs the layout to
+// draw `input.text` itself.
 export type EntryBuilder<K extends EntryKind> = (
   parent: HTMLElement,
   input: EntryInput<K>,
@@ -401,8 +474,8 @@ export type EntryBuilder<K extends EntryKind> = (
 // a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
 // dialog's frame and title.
 export interface ChatLayout {
-  // Whether the entry list draws the agent's steps (activity lines and their step rows) and the `result` entries;
-  // `false` leaves them out of the list and the entry cursor. A user layout that wants the activity lines sets it
+  // Whether the entry list draws the agent's steps (activity lines and their step rows); `false` leaves them out of
+  // the list and the entry cursor. A user layout that wants the activity lines sets it
   // `true`. Left out, the layout takes `default`'s.
   activityInTranscript?: boolean;
   entries?: { [K in EntryKind]?: EntryBuilder<K> };
@@ -413,18 +486,26 @@ export interface ChatLayout {
     input: ActivityInput,
     kit: BaseKit,
   ): PartView<ActivityInput>;
-  // The activity dock, drawn into the composer's working slot (`ComposerKit.working`): a `LiveWorkingInput` while the
-  // turn runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user sends the next
-  // message; a user part receives both and branches on `input.state`. The app sends the input again on each change
-  // and once a second with a new `now` while the turn is live. The slot hides while there is nothing to show; it is
-  // not a cursor stop.
+  // The activity dock, drawn into the session hub's Main agent section: a `LiveWorkingInput` while the turn or a
+  // compaction runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user sends the next
+  // message; a user part receives both and branches on `input.state`. The app sends the input again on each change and
+  // once a second with a new `now` while the dock is live. The slot hides while there is nothing to show, and the
+  // section with it; it is not a cursor stop.
   working?(
     parent: HTMLElement,
     input: WorkingInput,
     kit: BaseKit,
   ): PartView<WorkingInput>;
+  // The dock's one line, drawn into the composer's working slot (`ComposerKit.working`) with the same input at the same
+  // times as `working`, for when the hub is not visible. The slot hides while there is nothing to show; it is not a
+  // cursor stop.
+  workingLine?(
+    parent: HTMLElement,
+    input: WorkingInput,
+    kit: BaseKit,
+  ): PartView<WorkingInput>;
   // One pending message's row, appended to the entry list after the last entry; the app marks the focused row and
-  // handles its click, and sends the input again when the row turns sent.
+  // handles its click, and sends the input again when the row turns sent or its hold ends.
   queuedMessage?(
     parent: HTMLElement,
     input: QueuedMessageInput,
@@ -436,7 +517,8 @@ export interface ChatLayout {
     input: ComposerInput,
     kit: ComposerKit,
   ): PartView<ComposerInput>;
-  // The status line under the box, drawn into the composer's status line slot again on each change.
+  // The status line under the box, drawn into the composer's status line slot again on each change other than
+  // `isBoxFocused`, which the app applies to the type hint in place.
   statusLine?(
     parent: HTMLElement,
     input: ComposerInput,
@@ -475,6 +557,28 @@ export interface ChatLayout {
     input: ImageViewerInput,
     kit: BaseKit,
   ): PartView<ImageViewerInput>;
+  // The run time, drawn into the session row's `chat.rowClock` wrapper; the app orders the wrapper among the row's
+  // parts. The app sends the input again on each change and once a second while the clock runs, and draws nothing for
+  // a session with no time yet.
+  rowClock?(
+    parent: HTMLElement,
+    input: RowClockInput,
+    kit: BaseKit,
+  ): PartView<RowClockInput>;
+  // One section's frame in the session hub, drawn into the side part's wrapper. The app sends the input again when the
+  // section collapses, expands or its summary changes; a part with no `update` draws again, and the body moves over.
+  sideSection?(
+    parent: HTMLElement,
+    input: SideSectionInput,
+    kit: SideSectionKit,
+  ): PartView<SideSectionInput>;
+  // The session hub's Session section body. The app sends the input again after each status line draw; a part with
+  // no `update` draws again.
+  sessionFacts?(
+    parent: HTMLElement,
+    input: SessionFactsInput,
+    kit: BaseKit,
+  ): PartView<SessionFactsInput>;
 }
 
 // The built-in layout: a builder for every entry kind and every part.

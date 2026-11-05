@@ -1,0 +1,32 @@
+.ui-drag-reorder-item {
+  position: relative;
+}
+
+.ui-drag-reorder-item.is-dragging {
+  opacity: 0.5;
+}
+
+/* The drop line sits on the item's edge, over its content, taking no space. */
+.ui-drag-reorder-item.is-drop-before::before,
+.ui-drag-reorder-item.is-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: var(--wg-indicator-width);
+  background: var(--wg-accent);
+  pointer-events: none;
+}
+
+.ui-drag-reorder-item.is-drop-before::before {
+  top: 0;
+}
+
+.ui-drag-reorder-item.is-drop-after::after {
+  bottom: 0;
+}
+
+.ui-drag-reorder-zone.is-drop-target {
+  background: var(--wg-accent-tint);
+}

@@ -10,15 +10,106 @@ import {
 } from '../../../../shared/page/test-dom';
 import type { SessionPart, SessionTabView } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
-import type { Layout } from '../../layouts/layout';
+import type {
+  GroupInput,
+  GroupKit,
+  GroupPane,
+  Layout,
+  SectionInput,
+} from '../../layouts/layout';
 import {
   drawnRows,
   rowNamed,
+  sessionsPartsSetup,
   sessionsViewSetup,
   stateOf,
 } from '../sessions-view-fakes';
+import type { SessionsParts } from './sessions-parts';
 
 type Setup = ReturnType<typeof sessionsViewSetup>;
+
+const FAVORITE: GroupInput = { project: 'gamma', count: 2, isFavorite: true };
+const NON_FAVORITE: GroupInput = {
+  project: 'delta',
+  count: 3,
+  isFavorite: false,
+};
+const RECENT: SectionInput = {
+  kind: 'recent',
+  label: 'Recent',
+  dropHint: 'Drop here',
+  isEmpty: false,
+};
+
+// What a drawn section or group shows: the layout that drew it, what its
+// element (a section) or header (a group) holds in order, each child by its
+// text or else its Codicon, whether its boxes sit inside its element, and a
+// group's star or a section's `is-empty`.
+interface DrawnShape {
+  drawnBy: string;
+  holds: string[];
+  boxesInside: boolean;
+  star?: { icon: string; label: string; isActive: boolean } | null;
+  isMarkedEmpty?: boolean;
+}
+
+function codiconOf(node: FakeElement): string {
+  return findAll(node, 'codicon')[0].className.replace('codicon codicon-', '');
+}
+
+function shownBy(children: FakeElement[]): string[] {
+  return children.map((child) => child.textContent || codiconOf(child));
+}
+
+function sectionShape(parts: SessionsParts, input: SectionInput): DrawnShape {
+  const drawn = parts.section(document.createElement('div'), input);
+  const element = asFake(drawn.built.element);
+  return {
+    drawnBy: drawn.layoutName,
+    holds: element.children.slice(0, -1).map((child) => child.textContent),
+    boxesInside: element.lastElementChild === asFake(drawn.built.groups),
+    isMarkedEmpty: element.classList.contains('is-empty'),
+  };
+}
+
+function groupShape(parts: SessionsParts, input: GroupInput): DrawnShape {
+  const drawn = parts.group(document.createElement('div'), input);
+  const { element, header, rows, favoriteToggle } = drawn.built;
+  const star = favoriteToggle === null ? null : asFake(favoriteToggle);
+  return {
+    drawnBy: drawn.layoutName,
+    holds: shownBy(asFake(header).children),
+    boxesInside:
+      asFake(element).contains(asFake(header)) &&
+      asFake(element).contains(asFake(rows)),
+    star:
+      star === null
+        ? null
+        : {
+            icon: codiconOf(star),
+            label: star.attributes.get('aria-label') ?? '',
+            isActive: star.classList.contains('is-active'),
+          },
+  };
+}
+
+// A user layout's `group`: `placeInHeader` places the kit's parts in its
+// header, and `boxes` replaces its header or rows box.
+function userGroup(
+  placeInHeader: (kit: GroupKit, header: HTMLElement) => void,
+  boxes: () => Partial<Omit<GroupPane, 'element'>> = () => ({}),
+): Layout {
+  return {
+    group(parent, input, kit) {
+      const element = kit.el(parent, 'div', 'mine-group');
+      const header = kit.el(element, 'div', 'mine-header');
+      placeInHeader(kit, header);
+      kit.el(header, 'span', 'mine-name', input.project);
+      const rows = kit.el(element, 'div', 'mine-rows');
+      return { element, header, rows, ...boxes() };
+    },
+  };
+}
 
 function tabView(id: string): SessionTabView {
   return {
@@ -281,6 +372,150 @@ describe('sessions parts', () => {
     },
   );
 
+  const DEFAULT_GROUP_FAVORITE: DrawnShape = {
+    drawnBy: 'default',
+    holds: ['gamma', '2', 'star-full', 'gripper'],
+    boxesInside: true,
+    star: { icon: 'star-full', label: 'Unfavorite', isActive: true },
+  };
+  const DEFAULT_SECTION: DrawnShape = {
+    drawnBy: 'default',
+    holds: ['Recent', 'Drop here'],
+    boxesInside: true,
+    isMarkedEmpty: false,
+  };
+
+  it.each<{
+    case: string;
+    layout: Layout;
+    draw: (parts: SessionsParts) => DrawnShape;
+    expected: DrawnShape;
+    failure: string | null;
+  }>([
+    {
+      case: 'default group, a favorite',
+      layout: {},
+      draw: (parts) => groupShape(parts, FAVORITE),
+      expected: DEFAULT_GROUP_FAVORITE,
+      failure: null,
+    },
+    {
+      case: 'default group, not a favorite',
+      layout: {},
+      draw: (parts) => groupShape(parts, NON_FAVORITE),
+      expected: {
+        drawnBy: 'default',
+        holds: ['delta', '3', 'star-empty', 'gripper'],
+        boxesInside: true,
+        star: { icon: 'star-empty', label: 'Favorite', isActive: false },
+      },
+      failure: null,
+    },
+    {
+      case: 'default section',
+      layout: {},
+      draw: (parts) => sectionShape(parts, RECENT),
+      expected: DEFAULT_SECTION,
+      failure: null,
+    },
+    {
+      case: 'user group returns rows outside its element',
+      layout: userGroup(
+        () => undefined,
+        () => ({ rows: document.createElement('div') }),
+      ),
+      draw: (parts) => groupShape(parts, FAVORITE),
+      expected: DEFAULT_GROUP_FAVORITE,
+      failure: 'group rows',
+    },
+    {
+      case: 'user group returns a header outside its element',
+      layout: userGroup(
+        () => undefined,
+        () => ({ header: document.createElement('div') }),
+      ),
+      draw: (parts) => groupShape(parts, FAVORITE),
+      expected: DEFAULT_GROUP_FAVORITE,
+      failure: 'group header',
+    },
+    {
+      case: 'user group places the star twice',
+      layout: userGroup((kit, header) => {
+        kit.favoriteToggle(header);
+        kit.favoriteToggle(header);
+      }),
+      draw: (parts) => groupShape(parts, FAVORITE),
+      expected: DEFAULT_GROUP_FAVORITE,
+      failure: 'favoriteToggle placed twice',
+    },
+    {
+      case: 'user group places the grip twice',
+      layout: userGroup((kit, header) => {
+        kit.dragHandle(header);
+        kit.dragHandle(header);
+      }),
+      draw: (parts) => groupShape(parts, FAVORITE),
+      expected: DEFAULT_GROUP_FAVORITE,
+      failure: 'dragHandle placed twice',
+    },
+    {
+      case: 'user group leaves the star out',
+      layout: userGroup((kit, header) => {
+        kit.dragHandle(header);
+      }),
+      draw: (parts) => groupShape(parts, FAVORITE),
+      expected: {
+        drawnBy: 'mine',
+        holds: ['gripper', 'gamma'],
+        boxesInside: true,
+        star: null,
+      },
+      failure: null,
+    },
+    {
+      case: 'user section returns groups outside its element',
+      layout: {
+        section: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'mine-section'),
+          groups: document.createElement('div'),
+        }),
+      },
+      draw: (parts) => sectionShape(parts, RECENT),
+      expected: DEFAULT_SECTION,
+      failure: 'section groups',
+    },
+    {
+      case: 'user section with no groups carries is-empty',
+      layout: {
+        section: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-section');
+          kit.el(element, 'p', 'mine-label', input.label);
+          return { element, groups: kit.el(element, 'div', 'mine-groups') };
+        },
+      },
+      draw: (parts) => sectionShape(parts, { ...RECENT, isEmpty: true }),
+      expected: {
+        drawnBy: 'mine',
+        holds: ['Recent'],
+        boxesInside: true,
+        isMarkedEmpty: true,
+      },
+      failure: null,
+    },
+  ])(
+    'groupAndSectionParts_Draw_KeepsTheContract ($case)',
+    ({ layout, draw, expected, failure }) => {
+      const { parts, logged } = sessionsPartsSetup();
+      parts.setLayouts(withUser<Layout>(defaultLayout, layout));
+
+      expect(draw(parts)).toEqual(expected);
+
+      expect(logged).toEqual(
+        failure === null ? [] : [expect.stringContaining(failure)],
+      );
+    },
+  );
+
   it('sessionsParts_RowDrawnByUserLayout_KeepsClickAndSelection', () => {
     const { view, sideBar, activated } = sessionsViewSetup();
     view.setLayouts(
@@ -304,6 +539,34 @@ describe('sessions parts', () => {
     expect(rowNamed(rows, 'first').classList.contains('is-selected')).toBe(
       false,
     );
+  });
+
+  it('sessionsParts_SectionAndGroupDrawnByUserLayout_KeepsRowsAndStar', () => {
+    const { view, sideBar, activated } = sessionsViewSetup();
+    view.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        ...userGroup((kit, header) => {
+          kit.favoriteToggle(header);
+        }),
+        section: (parent, _input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-section');
+          return { element, groups: kit.el(element, 'div', 'mine-groups') };
+        },
+      }),
+    );
+    const projectsBySection = () =>
+      findAll(sideBar, 'mine-groups').map((box) =>
+        findAll(box, 'mine-name').map((name) => name.textContent),
+      );
+
+    view.render(stateOf(['first', 'second'], 'first'));
+    const recentProjects = projectsBySection();
+    rowNamed(findAll(sideBar, 'mine-rows')[0].children, 'second').click();
+    findAll(sideBar, 'session-group-star')[0].click();
+
+    expect(recentProjects).toEqual([[], ['project']]);
+    expect(activated).toEqual(['second']);
+    expect(projectsBySection()).toEqual([['project'], []]);
   });
 
   it('sessionsParts_Redraw_LeavesOneAnchorPerHint', () => {

@@ -28,7 +28,8 @@ or touches their data, so start one whenever a check needs it.
    a second run of the agent's, or a peer agent's — pass `--run <id>` on every command, since
    any newer `start` moves `.drive/current` to its own run. `--user-config` copies the user's
    `~/.config/wigley-ai-gui` into the temp home, so their theme and keys apply; `start` fails
-   when that folder is missing or empty.
+   when that folder is missing or empty. On a run that still holds a home it copies nothing, so
+   the home's config stays: `start` prints that it skipped the copy.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
    `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
@@ -53,17 +54,26 @@ or touches their data, so start one whenever a check needs it.
    the user. When focus cannot be emulated (another debugger, such as DevTools, holds the page),
    the command still runs, unfocused, and the run's log says why. The self-test emulates the same
    focus, so a focus-dependent check can be kept as a self-test step.
+   A `chat.start` row's composer opens in vim NORMAL mode, so a fixture presses `i` before `type`-ing a message;
+   otherwise the first keys are lost and `fake: hold` arrives as `ke: hold`. A session started or resumed through the
+   start prompt is already in insert mode, where `i` types a literal `i`.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
-   recording to finish before the app exits, then deletes the run's `home/` and `user-data/`, so
-   its test repos leave the machine's docs index: `screenshots/`, `videos/` and `app.log` stay for
-   reading back. Every `start` deletes each other run folder untouched for over a day whose app is
-   not running. `.drive/` is git-ignored.
+   recording to finish and ends the run's Claude sessions before the app exits, then deletes the
+   run's `home/` and `user-data/`, so its test repos leave the machine's docs index: `screenshots/`,
+   `videos/` and `app.log` stay for reading back. `quit --keep-sessions` instead keeps the run's
+   Claude sessions running on the session host, and its `home/` and `user-data/`, so `start --run
+   <id>` brings it back and re-attaches them. That start takes the flags in the run's `start.json`
+   when its command line names none, and copies no user config over the kept home. While the host
+   still answers, a plain `quit` of the stopped run refuses and deletes nothing: end it with `start
+   --run <id>`, then `quit`. Every `start` deletes each other run folder untouched for over a day
+   whose app is not running, a kept run's included. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
-survives a restart runs the same way. The docs fixture survives a `restart` as the agent left it;
+survives a restart runs the same way. `restart` also keeps the run's Claude sessions running on
+the session host and re-attaches them. The docs fixture survives a `restart` as the agent left it;
 `docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
@@ -91,10 +101,14 @@ build; the self-test also releases when its child closes, and a packaged drive s
 lock. A start waits while a live pid holds it, printing `Waiting for another dev start (pid
 <pid>) to finish`, clears a dead holder's lock, and after 120 s fails naming the lock's absolute
 path to delete when no start is running. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for
-the app to exit (time for a recording's encode), then terminates it; the app takes that SIGTERM as
-a second quit and exits without waiting further. Terminating skips any recorded pid whose process
-no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot
-check and terminates every live recorded pid.
+the app to exit (time for a recording's encode), then terminates it; an app still holding its quit
+takes that SIGTERM as a second quit and exits without waiting further. An app whose main loop a
+native modal holds, such as Electron's uncaught-exception dialog, takes no SIGTERM: the CLI fails
+naming its pids, and only `kill -9` ends it. Terminating skips any recorded pid whose process no
+longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot
+check and terminates every live recorded pid. `start` refuses while a recorded app pid of the run
+is alive, so one home never holds two apps, even when that app has closed its drive server and
+answers nothing.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
@@ -132,7 +146,9 @@ Conventions:
   the video starts with the window as captured at `record start` and holds the last frame until
   `record stop`, so a still page records too. It encodes with `ffmpeg` from the app's PATH.
 - `fit [width] [selector,…]` lists what the page cuts off at the minimum width, or at a given
-  width; a lone non-numeric argument is the list of selectors that scroll themselves.
+  width; a lone non-numeric argument is the list of selectors that scroll themselves. The width is the
+  window's content width, not a dragged side bar's: to check a row at a side-bar width, drag
+  `.shell-side-bar-handle` and measure with `query`.
 - `start --packaged` drives the packaged build; run `npm run package` first.
 
 ## Checking a screen

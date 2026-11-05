@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channelPath } from '../../../../shared/local-channel/channel-path';
 import {
   type ConnectedSession,
   RELAY_PROTOCOL,
@@ -16,7 +17,6 @@ import {
   type ServeSession,
   startRelayServer,
 } from './relay-server';
-import { channelPath } from './endpoint';
 
 const HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -68,7 +68,14 @@ function echoServe() {
 // The production channel over a test folder: a named pipe on Windows, a
 // socket file elsewhere.
 function testChannel(dir: string): string {
-  return channelPath(process.platform, dir, 'selftest', 'wigley-ai-gui', dir);
+  return channelPath(
+    process.platform,
+    dir,
+    'selftest',
+    'wigley-ai-gui',
+    '',
+    dir,
+  );
 }
 
 const channelIsPipe = testChannel(tmpdir()).startsWith('\\\\.\\pipe\\');
@@ -78,6 +85,8 @@ function start(
   serve: ServeSession,
   connect: RelayServerDeps['connect'],
   leftover = false,
+  ready: RelayServerDeps['ready'] = () => Promise.resolve(),
+  log: RelayServerDeps['log'] = () => {},
 ) {
   const dir = mkdtempSync(path.join(tmpdir(), 'wr-'));
   const channel = testChannel(dir);
@@ -85,7 +94,7 @@ function start(
     mkdirSync(path.dirname(channel), { recursive: true });
     writeFileSync(channel, '');
   }
-  const server = startRelayServer({ channel, connect, serve, log: () => {} });
+  const server = startRelayServer({ channel, ready, connect, serve, log });
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   cleanups.push(() => server.close());
   return channel;
@@ -312,6 +321,92 @@ describe('startRelayServer', () => {
 
     await vi.waitFor(() => expect(fake.ended()).toBe(1));
     expect(echo.closed()).toBe(1);
+  });
+
+  // A `ready` the test resolves itself, and the log it fills.
+  function heldReady() {
+    let release = () => {};
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const logged: string[] = [];
+    const log: RelayServerDeps['log'] = (message) => {
+      logged.push(message);
+    };
+    return { ready: () => ready, release: () => release(), logged, log };
+  }
+
+  it('hello_WhileHeld_RepliesOnceReady', async () => {
+    const fake = fakeSessions();
+    const hold = heldReady();
+    const channel = start(
+      echoServe().serve,
+      fake.connect,
+      false,
+      hold.ready,
+      hold.log,
+    );
+    const { socket, nextLine } = await open(channel);
+    const replied = nextLine();
+
+    socket.write(`${helloLine(HELLO)}first\n`);
+    // The server has no signal for a read it holds; the pause lets the bytes arrive.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    socket.write('second\n');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(fake.started).toEqual([]);
+    hold.release();
+
+    expect(JSON.parse(await replied)).toEqual({ ok: true });
+    expect(fake.started).toHaveLength(1);
+    expect(await nextLine()).toBe('first');
+    expect(await nextLine()).toBe('second');
+  });
+
+  it('hello_ClosedWhileHeld_NeverConnects', async () => {
+    const fake = fakeSessions();
+    const hold = heldReady();
+    const channel = start(
+      echoServe().serve,
+      fake.connect,
+      false,
+      hold.ready,
+      hold.log,
+    );
+    const { socket } = await open(channel);
+
+    socket.write(helloLine(HELLO));
+    socket.end();
+    await once(socket, 'close');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    hold.release();
+
+    await vi.waitFor(() =>
+      expect(hold.logged).toContain('a relay left while its connect was held'),
+    );
+    expect(fake.started).toEqual([]);
+  });
+
+  it('hello_Refused_NotHeld', async () => {
+    const fake = fakeSessions();
+    const hold = heldReady();
+    const channel = start(
+      echoServe().serve,
+      fake.connect,
+      false,
+      hold.ready,
+      hold.log,
+    );
+    const { socket, nextLine } = await open(channel);
+
+    socket.write(helloLine({ ...HELLO, protocol: 99 }));
+
+    expect(JSON.parse(await nextLine())).toEqual({
+      ok: false,
+      error: `relay protocol 99, app protocol ${RELAY_PROTOCOL}`,
+    });
+    expect(fake.started).toEqual([]);
   });
 
   it.skipIf(channelIsPipe)(

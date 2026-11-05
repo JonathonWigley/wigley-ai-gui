@@ -1,6 +1,8 @@
-/* The default Chat layout's look: entry text, activity lines, the activity
-   dock, queued messages, permission heads, the composer and its status line,
-   and the dialog and image viewer parts. */
+/* The default Chat layout's look: entry text, the turn and compaction dividers, activity
+   lines, the activity dock and its one line, queued messages, permission heads,
+   the composer and its status line, the dialog and image viewer parts, the run
+   time under a session's row, the session hub's section heads and Session rows,
+   and the width below which a Chat tab drops its hub for the one line. */
 .chat-assistant {
   color: var(--wg-fg);
 }
@@ -49,6 +51,30 @@
   color: var(--wg-status-error);
 }
 
+/* The turn and compaction dividers: one dim line between two rules. */
+.chat-result,
+.chat-compaction {
+  align-items: center;
+  color: var(--wg-fg-tertiary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-2);
+}
+
+.chat-result::before,
+.chat-result::after,
+.chat-compaction::before,
+.chat-compaction::after {
+  border-top: 1px solid var(--wg-border-default);
+  content: '';
+  flex: 1;
+}
+
+.chat-result {
+  padding-block: var(--wg-space-3);
+}
+
 /* Activity lines: one dim summary per run, live or finished (step count,
    tools, failed count, time). Opened, the step rows sit indented under the
    line as its list. */
@@ -74,24 +100,82 @@
 }
 
 /* The activity dock: while the turn runs, its time and state, a card of its
-   latest tool calls (the newest in fg), then its tool counts, dim; once it
-   ends, one dim line. */
+   latest tool calls (the newest in fg), then its tool counts, dim; while a
+   compaction runs, its time, state and trigger over a sliding bar; once the
+   turn ends, one dim line. The activity line is the composer's one line of it:
+   the time and state, or the finished line. */
+.chat-working,
+.chat-working-line {
+  font-family: var(--wg-font-ui);
+  font-size: var(--wg-text-ui);
+}
+
 .chat-working {
   display: flex;
   flex-direction: column;
-  font-family: var(--wg-font-ui);
-  font-size: var(--wg-text-ui);
   gap: var(--wg-space-1);
+}
+
+.chat-working-line {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .chat-working-head {
   color: var(--wg-fg);
   display: flex;
   gap: var(--wg-space-2);
+  min-width: 0;
 }
 
 .chat-working-time {
   font-variant-numeric: tabular-nums;
+}
+
+.chat-working-trigger {
+  color: var(--wg-fg-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A compaction has no progress to report, so a segment slides across the
+   track. Its cycle is `duration-pulse`, as a running dot's is. Under reduced
+   motion it is static and fills the track. */
+.chat-working-bar {
+  height: var(--wg-indicator-width);
+  overflow: hidden;
+  position: relative;
+}
+
+.chat-working-bar::after {
+  animation: chat-working-bar-slide var(--wg-duration-pulse) ease-in-out
+    infinite;
+  background: var(--wg-status-running);
+  content: '';
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 40%;
+}
+
+@keyframes chat-working-bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-working-bar::after {
+    animation: none;
+    width: 100%;
+  }
 }
 
 .chat-working-box {
@@ -122,7 +206,8 @@
   color: var(--wg-fg-tertiary);
 }
 
-.chat-working.is-done {
+.chat-working.is-done,
+.chat-working-line.is-done {
   color: var(--wg-fg-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -158,7 +243,7 @@
   margin-bottom: var(--wg-space-1);
 }
 
-/* The composer: other plugins' parts, the activity dock, the attached
+/* The composer: other plugins' parts, the activity line, the attached
    images' strip, then the message box over its bar (mode, type hint, control
    chips, running indicator, send). */
 .ui-floating.chat-composer {
@@ -197,6 +282,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
+}
+
+.chat-status-end {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--wg-space-2);
+  margin-left: auto;
 }
 
 .chat-status-repo,
@@ -260,4 +353,72 @@
 
 .chat-image-viewer-count[hidden] {
   display: none;
+}
+
+/* The run time under a session's row. */
+.chat-row-clock {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A session hub section's head: its chevron and title, its summary at the end. */
+.chat-side-section-chevron {
+  color: var(--wg-fg-tertiary);
+  display: inline-flex;
+  flex: none;
+}
+
+.chat-side-section-title {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-weight: var(--wg-weight-semibold);
+}
+
+.chat-side-section-summary {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+/* The hub's Session rows: the labels share one column, each value ellipsized. */
+.chat-session-facts {
+  display: grid;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1) var(--wg-space-2);
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.chat-session-fact {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.chat-session-fact-label {
+  color: var(--wg-fg-tertiary);
+}
+
+.chat-session-fact-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A tab too narrow for its entries beside its hub shows the entries, and the
+   composer's activity line shows only while the hub is not visible. The two
+   queries must keep one threshold. */
+@container chat-tab (width < 640px) {
+  .chat-side-parts {
+    display: none;
+  }
+}
+
+@container chat-tab (width >= 640px) {
+  .chat-tab:not(.is-side-hidden) .chat-working-slot {
+    display: none;
+  }
 }

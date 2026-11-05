@@ -21,6 +21,7 @@ import type {
   ChatLayout,
   ComposerInput,
   ModelEffortInput,
+  WorkingInput,
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { createComposerSurface } from './composer-kit';
@@ -380,6 +381,62 @@ describe('composer surface parts', () => {
     expect(madeFor(chatCommand('send'))).toHaveLength(1);
   });
 
+  it.each<{ case: string; next: Partial<ComposerInput>; isRebuilt: boolean }>([
+    { case: 'same input', next: {}, isRebuilt: false },
+    { case: 'box focus', next: { isBoxFocused: true }, isRebuilt: false },
+    { case: 'branch', next: { branch: 'feature' }, isRebuilt: true },
+    { case: 'repo', next: { repo: 'other' }, isRebuilt: true },
+    { case: 'running', next: { running: false }, isRebuilt: true },
+    { case: 'working', next: { working: true }, isRebuilt: true },
+    {
+      case: 'control value',
+      next: {
+        controls: [{ id: 'mode', label: 'Mode', value: 'Plan', enabled: true }],
+      },
+      isRebuilt: true,
+    },
+    {
+      case: 'model and effort',
+      next: {
+        modelEffort: {
+          model: { id: 'model', label: 'Model', value: 'Big', enabled: true },
+          effort: null,
+        },
+      },
+      isRebuilt: true,
+    },
+  ])(
+    'statusLine_InputChange_RebuildsOnlyWhatItDraws ($case)',
+    ({ next, isRebuilt }) => {
+      const { deps, ran } = surfaceDeps(null);
+      const surface = createComposerSurface(deps, {
+        sessionId: 'row-1',
+        box: asHtml(boxWithEditor()),
+        removeImage: () => undefined,
+      });
+      const panel = asFake(
+        surface.drawComposer(
+          asHtml(new FakeElement('div')),
+          composerInput(false),
+        ),
+      );
+      const pressed = panel.querySelector('.chat-status-line');
+      const send = panel.querySelector('.chat-status-end')?.children.at(-1);
+
+      surface.drawStatusLine({ ...composerInput(false), ...next });
+      send?.click();
+
+      const isKept = panel.querySelector('.chat-status-line') === pressed;
+      expect(isKept).toBe(!isRebuilt);
+      expect(ran).toEqual([chatCommand('send')]);
+      expect(
+        panel
+          .querySelector('.chat-type-hint')
+          ?.classList.contains('is-box-focused'),
+      ).toBe(next.isBoxFocused === true);
+    },
+  );
+
   it('statusLine_StatusParts_BuiltAtComposerDrawOnly', () => {
     const { deps } = surfaceDeps(null);
     const record: string[] = [];
@@ -643,8 +700,8 @@ describe('composer surface activity dock', () => {
     vi.restoreAllMocks();
   });
 
-  // A surface over `user` whose composer is drawn into a fresh tab, and its
-  // working slot.
+  // A surface over `user` whose composer is drawn into a fresh tab, its dock slot
+  // and its working slot, and each part's slot by name.
   function setUpSurface(user: ChatLayout | null) {
     const setUp = surfaceDeps(user);
     const surface = createComposerSurface(setUp.deps, {
@@ -655,17 +712,18 @@ describe('composer surface activity dock', () => {
     const tab = asHtml(new FakeElement('div'));
     const drawComposer = () => surface.drawComposer(tab, composerInput(true));
     const panel = asFake(drawComposer());
-    const slot = panel.querySelector('.chat-working-slot');
-    if (slot === null) {
+    const lineSlot = panel.querySelector('.chat-working-slot');
+    if (lineSlot === null) {
       throw new Error('the composer placed no working slot');
     }
-    return { ...setUp, surface, slot, drawComposer };
+    const slot = asFake(surface.dockSlot);
+    const slotOf = { working: slot, workingLine: lineSlot };
+    return { ...setUp, surface, slot, lineSlot, slotOf, drawComposer };
   }
 
-  // A user `working` part anchoring the `newSession` hint in its root, so its
-  // draw's dispose shows on that anchor; its update throws when
-  // `throwsOnUpdate`.
-  function userWorking(throwsOnUpdate = false): ChatLayout['working'] {
+  // A user part anchoring the `newSession` hint in its root, so its draw's dispose
+  // shows on that anchor; its update throws when `throwsOnUpdate`.
+  function userPart(throwsOnUpdate = false): ChatLayout['working'] {
     return (parent, _input, kit) => {
       const root = rootIn(parent);
       kit.keyHint(root, 'newSession');
@@ -680,8 +738,16 @@ describe('composer surface activity dock', () => {
     };
   }
 
+  const LIVE_TURN = [userEntry('u1', 1000), readEntry('t1', 2000, true)];
+
+  // Each row is one of the dock's two parts; `other` is the part beside it.
+  const DOCK_PARTS = [
+    { part: 'working', other: 'workingLine' },
+    { part: 'workingLine', other: 'working' },
+  ] as const;
+
   it('working_SetTurn_LiveThenDoneThenHidden', () => {
-    const { surface, slot } = setUpSurface(null);
+    const { surface, slot, lineSlot } = setUpSurface(null);
     const asked = [userEntry('u1', 1000), readEntry('t1', 2000, true)];
     const answered = [
       userEntry('u1', 1000),
@@ -690,106 +756,217 @@ describe('composer surface activity dock', () => {
     ];
     const read = () => ({
       hidden: slot.hidden,
+      lineHidden: lineSlot.hidden,
       classes: slot.children.map((child) => child.className),
-      line:
-        slot.querySelector('.chat-working-action')?.textContent ??
-        slot.querySelector('.chat-working-done')?.textContent ??
-        null,
+      lineClasses: lineSlot.children.map((child) => child.className),
+      action: slot.querySelector('.chat-working-action')?.textContent ?? null,
+      done: [slot, lineSlot].map(
+        (held) => held.querySelector('.chat-working-done')?.textContent ?? null,
+      ),
     });
 
-    surface.setTurn(asked, true);
+    surface.setTurn(asked, true, null);
     const live = read();
-    surface.setTurn(answered, false);
+    surface.setTurn(answered, false, null);
     const done = read();
-    surface.setTurn([...answered, userEntry('u2', 70000)], false);
+    surface.setTurn([...answered, userEntry('u2', 70000)], false, null);
     const hidden = read();
 
+    const doneLine = 'Done · 1m 05s · Read 1';
     expect([live, done, hidden]).toEqual([
-      { hidden: false, classes: ['chat-working'], line: 'Read t1.ts' },
       {
         hidden: false,
-        classes: ['chat-working is-done'],
-        line: 'Done · 1m 05s · Read 1',
+        lineHidden: false,
+        classes: ['chat-working'],
+        lineClasses: ['chat-working-line'],
+        action: 'Read t1.ts',
+        done: [null, null],
       },
-      { hidden: true, classes: [], line: null },
+      {
+        hidden: false,
+        lineHidden: false,
+        classes: ['chat-working is-done'],
+        lineClasses: ['chat-working-line is-done'],
+        action: null,
+        done: [doneLine, doneLine],
+      },
+      {
+        hidden: true,
+        lineHidden: true,
+        classes: [],
+        lineClasses: [],
+        action: null,
+        done: [null, null],
+      },
     ]);
   });
 
-  it('working_UserUpdateThrows_RedrawsWithDefault', () => {
-    const { surface, slot, logs } = setUpSurface({
-      working: userWorking(true),
+  it('dock_Tick_UpdatesBothPartsWithOneInputThenTheListeners', () => {
+    const calls: [string, WorkingInput | null][] = [];
+    const recordingPart =
+      (name: string): ChatLayout['working'] =>
+      (parent) => ({
+        element: rootIn(parent),
+        update: (input) => calls.push([name, input]),
+      });
+    const { deps, surface, armed } = setUpSurface({
+      working: recordingPart('working'),
+      workingLine: recordingPart('workingLine'),
     });
+    surface.setTurn(LIVE_TURN, true, null);
+    surface.onDockChanged((input) => calls.push(['listener', input]));
+    deps.clock.now = () => 7000;
 
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
-    const firstLayout = slot.children[0]?.dataset.layout;
-    surface.setTurn(
-      [
-        userEntry('u1', 1000),
-        readEntry('t1', 2000),
-        readEntry('t2', 3000, true),
-      ],
-      true,
-    );
-
-    expect(firstLayout).toBe(USER_LAYOUT);
-    expect(slot.children.map((child) => child.dataset.layout)).toEqual([
-      'default',
-    ]);
-    expect(logs).toContain(
-      `layout ${USER_LAYOUT} working update failed: broken update`,
-    );
-  });
-
-  it('working_LayoutChange_RedrawsFreshWithTheNewLayout', () => {
-    const { deps, surface, slot, drawComposer } = setUpSurface(null);
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
-    const firstLayout = slot.children[0]?.dataset.layout;
-
-    deps.layouts.set(
-      withUser<ChatLayout>(defaultLayout, { working: userWorking() }),
-    );
-    drawComposer();
-
-    expect(firstLayout).toBe('default');
-    expect(slot.children.map((child) => child.dataset.layout)).toEqual([
-      USER_LAYOUT,
-    ]);
-  });
-
-  it('working_DefaultDrawThrows_HidesTheSlotAndLogs', () => {
-    vi.spyOn(defaultLayout, 'working').mockImplementation(() => {
-      throw new Error('broken default');
-    });
-    const { surface, slot, logs, armed, drawComposer } = setUpSurface(null);
-    const failures = () =>
-      logs.filter(
-        (line) => line === 'default layout working failed: broken default',
-      ).length;
-
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
     [...armed.values()].forEach((run) => run());
-    const failuresBeforeComposerDraw = failures();
-    drawComposer();
 
-    expect(slot.hidden).toBe(true);
-    expect(slot.children).toEqual([]);
-    expect([failuresBeforeComposerDraw, failures()]).toEqual([1, 2]);
+    expect(calls.map(([name]) => name)).toEqual([
+      'working',
+      'workingLine',
+      'listener',
+    ]);
+    expect(calls.map(([, input]) => input)).toEqual([
+      surface.dockInput(),
+      surface.dockInput(),
+      surface.dockInput(),
+    ]);
+    expect(calls[0][1]).toMatchObject({ now: 7000 });
   });
 
-  it('working_Dispose_DisposesThePartAndClearsTheTick', () => {
-    const { surface, armed, anchors } = setUpSurface({
-      working: userWorking(),
+  it('dock_ListenerThrows_TheOtherListenersAndBothPartsStillRun', () => {
+    const { surface, slot, lineSlot } = setUpSurface(null);
+    const heard: (WorkingInput | null)[] = [];
+    surface.onDockChanged(() => {
+      throw new Error('broken listener');
     });
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
-    const armedWhileLive = armed.size;
-    const partAnchor = () =>
-      anchors.find((anchor) => anchor.command === chatCommand('newSession'));
-    const disposedWhileLive = partAnchor()?.isDisposed;
+    surface.onDockChanged((input) => heard.push(input));
 
-    surface.dispose();
+    expect(() => surface.setTurn(LIVE_TURN, true, null)).toThrow(
+      'broken listener',
+    );
 
-    expect([armedWhileLive, disposedWhileLive]).toEqual([1, false]);
-    expect(partAnchor()?.isDisposed).toBe(true);
-    expect(armed.size).toBe(0);
+    expect(heard).toEqual([surface.dockInput()]);
+    expect([slot.children.length, lineSlot.children.length]).toEqual([1, 1]);
   });
+
+  it('dock_ListenerDisposed_HearsNoMore', () => {
+    const { surface } = setUpSurface(null);
+    const heard: (WorkingInput | null)[] = [];
+    const subscription = surface.onDockChanged((input) => heard.push(input));
+
+    subscription.dispose();
+    surface.setTurn(LIVE_TURN, true, null);
+
+    expect(heard).toEqual([]);
+  });
+
+  it.each(DOCK_PARTS)(
+    'dockPart_UserUpdateThrows_RedrawsWithDefault ($part)',
+    ({ part }) => {
+      const { surface, slotOf, logs } = setUpSurface({
+        [part]: userPart(true),
+      });
+      const slot = slotOf[part];
+
+      surface.setTurn(LIVE_TURN, true, null);
+      const firstLayout = slot.children[0]?.dataset.layout;
+      surface.setTurn(
+        [
+          userEntry('u1', 1000),
+          readEntry('t1', 2000),
+          readEntry('t2', 3000, true),
+        ],
+        true,
+        null,
+      );
+
+      expect(firstLayout).toBe(USER_LAYOUT);
+      expect(slot.children.map((child) => child.dataset.layout)).toEqual([
+        'default',
+      ]);
+      expect(logs).toContain(
+        `layout ${USER_LAYOUT} ${part} update failed: broken update`,
+      );
+    },
+  );
+
+  it.each(DOCK_PARTS)(
+    'dockPart_LayoutChange_RedrawsFreshWithTheNewLayout ($part)',
+    ({ part }) => {
+      const { deps, surface, slotOf, drawComposer } = setUpSurface(null);
+      const slot = slotOf[part];
+      surface.setTurn(LIVE_TURN, true, null);
+      const firstLayout = slot.children[0]?.dataset.layout;
+
+      deps.layouts.set(
+        withUser<ChatLayout>(defaultLayout, { [part]: userPart() }),
+      );
+      drawComposer();
+
+      expect(firstLayout).toBe('default');
+      expect(slot.children.map((child) => child.dataset.layout)).toEqual([
+        USER_LAYOUT,
+      ]);
+    },
+  );
+
+  it.each(DOCK_PARTS)(
+    'dockPart_DefaultDrawThrows_HidesItsSlotAndLogs ($part)',
+    ({ part, other }) => {
+      vi.spyOn(defaultLayout, part).mockImplementation(() => {
+        throw new Error('broken default');
+      });
+      const { surface, slotOf, logs, armed, drawComposer } = setUpSurface(null);
+      const failures = () =>
+        logs.filter(
+          (line) => line === `default layout ${part} failed: broken default`,
+        ).length;
+
+      surface.setTurn(LIVE_TURN, true, null);
+      [...armed.values()].forEach((run) => run());
+      const failuresBeforeComposerDraw = failures();
+      drawComposer();
+
+      expect(slotOf[part].hidden).toBe(true);
+      expect(slotOf[part].children).toEqual([]);
+      expect(slotOf[other].hidden).toBe(false);
+      expect(slotOf[other].children).toHaveLength(1);
+      expect([failuresBeforeComposerDraw, failures()]).toEqual([1, 2]);
+    },
+  );
+
+  it.each(DOCK_PARTS)(
+    'dockPart_DefaultDrawFailedOnce_TheNextComposerDrawDrawsItAgain ($part)',
+    ({ part }) => {
+      vi.spyOn(defaultLayout, part).mockImplementationOnce(() => {
+        throw new Error('broken default');
+      });
+      const { surface, slotOf, drawComposer } = setUpSurface(null);
+
+      surface.setTurn(LIVE_TURN, true, null);
+      const hiddenAfterFailure = slotOf[part].hidden;
+      drawComposer();
+
+      expect(hiddenAfterFailure).toBe(true);
+      expect(slotOf[part].hidden).toBe(false);
+      expect(slotOf[part].children).toHaveLength(1);
+    },
+  );
+
+  it.each(DOCK_PARTS)(
+    'dockPart_Dispose_DisposesThePartAndClearsTheTick ($part)',
+    ({ part }) => {
+      const { surface, armed, anchors } = setUpSurface({ [part]: userPart() });
+      surface.setTurn(LIVE_TURN, true, null);
+      const armedWhileLive = armed.size;
+      const partAnchor = () =>
+        anchors.find((anchor) => anchor.command === chatCommand('newSession'));
+      const disposedWhileLive = partAnchor()?.isDisposed;
+
+      surface.dispose();
+
+      expect([armedWhileLive, disposedWhileLive]).toEqual([1, false]);
+      expect(partAnchor()?.isDisposed).toBe(true);
+      expect(armed.size).toBe(0);
+    },
+  );
 });

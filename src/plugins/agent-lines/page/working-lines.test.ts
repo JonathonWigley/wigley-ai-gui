@@ -30,8 +30,10 @@ function runningAgent(agentId: string, ageMs: number): RosterAgent {
     model: null,
     effort: null,
     spendUsd: null,
+    isBackground: false,
+    contextTokens: null,
+    contextWindow: null,
     tools: [],
-    outcome: 'running',
   };
 }
 
@@ -40,10 +42,10 @@ function runningTask(taskId: string, ageMs: number): RosterTask {
   return {
     taskId,
     agentId: MAIN_AGENT_ID,
+    ownerName: 'main',
     description: 'npm run build',
     command: null,
     startedAt: NOW - ageMs,
-    outcome: 'running',
   };
 }
 
@@ -52,12 +54,13 @@ function runningTask(taskId: string, ageMs: number): RosterTask {
 const RUNNING: Roster = {
   agents: [runningAgent('agent-1', 42_000), runningAgent('agent-2', 185_000)],
   tasks: [runningTask('task-1', 90_000)],
+  skills: [],
 };
 
 // Lines over a clock at `now` whose timers record each `set` (its handle the
 // set's count) and each `clear`; `nameOf` reads every session as `proj`, and
 // `roster` hands `current` for every session.
-function setUp(current: Roster = { agents: [], tasks: [] }) {
+function setUp(current: Roster = { agents: [], tasks: [], skills: [] }) {
   let now = NOW;
   const sets: { run: () => void; handle: number }[] = [];
   const clears: number[] = [];
@@ -120,14 +123,12 @@ describe('working lines', () => {
   });
 
   // A row built before any `setRoster` named its session draws the roster
-  // `deps.roster` holds: a done subagent counts for nothing.
+  // `deps.roster` holds.
   it('build_NothingSet_DrawsTheDepsRoster', () => {
     const { lines, wrapper, logged } = setUp({
-      agents: [
-        runningAgent('agent-1', 42_000),
-        { ...runningAgent('agent-2', 9_000), outcome: 'done' },
-      ],
+      agents: [runningAgent('agent-1', 42_000)],
       tasks: [],
+      skills: [],
     });
 
     lines.part.build(asHtml(wrapper), SESSION);
@@ -148,7 +149,7 @@ describe('working lines', () => {
     sets[0].run();
     const afterTickText = findAll(wrapper, 'agent-lines-line')[0].textContent;
     const setsAfterTick = sets.length;
-    lines.setRoster(SESSION, { agents: [], tasks: [] });
+    lines.setRoster(SESSION, { agents: [], tasks: [], skills: [] });
 
     expect(afterTickText).toContain('3m 06s');
     expect(setsAfterTick).toBe(2);

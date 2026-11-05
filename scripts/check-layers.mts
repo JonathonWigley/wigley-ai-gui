@@ -103,12 +103,14 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
-  // Its relay's socket and its MCP adapter's SDK sit in sublayers of main.
+  // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the
+  // relay and its channel path use the shared local channel transport.
   sessions: {
     main: {
       layers: [
         'src/plugins/sessions/main/relay',
         'src/plugins/sessions/main/mcp',
+        'src/shared/local-channel',
       ],
       packages: ['node:'],
     },
@@ -117,6 +119,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         layers: [
           'src/contracts',
           'src/shared',
+          'src/shared/local-channel',
           'src/plugins/sessions/contract.ts',
         ],
         packages: ['node:'],
@@ -158,6 +161,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
   'src/shared/followups': { layers: [], packages: [] },
+  // The local channel transport the relay and the session host share.
+  'src/shared/local-channel': {
+    layers: ['src/contracts'],
+    packages: ['node:'],
+  },
   'src/shared/agent-forms': {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
@@ -268,6 +276,16 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
   },
+  // The app's client of the session host, over the local channel.
+  'src/main/session-host': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    packages: ['node:'],
+  },
+  // The session host process: no electron import (`docs/features/session-host/design.md`).
+  'src/session-host': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    packages: ['node:'],
+  },
   'src/main/main.ts': {
     layers: [
       'src/contracts',
@@ -287,6 +305,8 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/git',
       'src/main/data-protocol',
       'src/main/drive',
+      // Starts the session host client.
+      'src/main/session-host',
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',

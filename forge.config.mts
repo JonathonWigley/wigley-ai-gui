@@ -8,6 +8,7 @@ import type {
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { AD_HOC_IDENTITY, macSigningIdentity } from './scripts/mac-signing.mts';
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -45,6 +46,11 @@ const config: ForgeConfig = {
           config: 'vite.preload.config.mts',
           target: 'preload',
         },
+        {
+          entry: 'src/session-host/session-host.ts',
+          config: 'vite.session-host.config.mts',
+          target: 'main',
+        },
       ],
       renderer: [
         {
@@ -57,7 +63,7 @@ const config: ForgeConfig = {
     // at package time, before code signing the application
     new FusesPlugin({
       version: FuseVersion.V1,
-      [FuseV1Options.RunAsNode]: false,
+      [FuseV1Options.RunAsNode]: true,
       [FuseV1Options.EnableCookieEncryption]: true,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
@@ -120,10 +126,16 @@ function showMacBundleAs(
     CFBundleName: displayName,
     CFBundleDisplayName: displayName,
   });
+  const signingIdentity = macSigningIdentity();
+  if (signingIdentity === AD_HOC_IDENTITY) {
+    console.warn(
+      'Signing ad hoc, so this build loses macOS privacy grants; `npm run create-signing-identity` keeps them.',
+    );
+  }
   // Info.plist is sealed into the bundle's signature, and Apple Silicon launches only validly signed apps.
   execFileSync('codesign', [
     '--sign',
-    '-',
+    signingIdentity,
     '--force',
     '--deep',
     '--preserve-metadata=entitlements,requirements,flags,runtime',

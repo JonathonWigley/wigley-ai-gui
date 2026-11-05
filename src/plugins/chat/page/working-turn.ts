@@ -1,7 +1,9 @@
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { SessionCompaction } from '../contract';
 import type {
   DoneWorkingInput,
   LiveWorkingInput,
+  WorkingInput,
   WorkingState,
 } from '../layouts/layout';
 import { isStep, type StepEntry } from './activity-runs';
@@ -11,18 +13,44 @@ type ResultEntry = Extract<ChatEntry, { kind: 'result' }>;
 // The activity dock's input while the session works. The turn starts at the
 // later of the last `user` entry and the first entry after the last `result`
 // entry; with neither, it is every entry. A turn with no entries starts at
-// `now`. Steps leave out subagents' tool calls.
+// `now`. Steps leave out subagents' tool calls. While `compaction` is not null
+// the state is `compacting` and the time counts from the compaction's start,
+// whatever the turn does.
 export function workingInput(
   entries: readonly ChatEntry[],
   now: number,
+  compaction: SessionCompaction | null,
 ): LiveWorkingInput {
   const turn = entries.slice(turnStart(entries));
+  const steps = turn.filter(isDockStep);
+  if (compaction !== null) {
+    return {
+      state: 'compacting',
+      steps,
+      startedAt: compaction.startedAt,
+      now,
+      compaction: compactionLabel(compaction),
+    };
+  }
   return {
     state: turnState(turn),
-    steps: turn.filter(isDockStep),
+    steps,
     startedAt: turn.length > 0 ? turn[0].at : now,
     now,
+    compaction: null,
   };
+}
+
+// What started the compaction, as the dock reads it.
+export function compactionLabel(compaction: SessionCompaction): string {
+  switch (compaction.trigger) {
+    case 'app':
+      return compaction.reason ?? 'auto';
+    case 'manual':
+      return '/compact';
+    case 'harness':
+      return 'autocompact';
+  }
 }
 
 // Whether the running turn holds no entries: the last entry is a `result`,
@@ -54,6 +82,35 @@ export function doneInput(
     stopReason: lastResult.stopReason,
     costUsd: costOf(results),
   };
+}
+
+// How many steps the turn ending at result `resultId` took: the dock's steps from
+// that turn's start, the later of the last `user` entry and the previous result.
+export function resultStepCount(
+  entries: readonly ChatEntry[],
+  resultId: string,
+): number {
+  const before = entries.slice(
+    0,
+    entries.findIndex((entry) => entry.id === resultId),
+  );
+  return before.slice(turnStart(before)).filter(isDockStep).length;
+}
+
+// The Main agent section's summary: a live dock's time as `m:ss`, `h:mm:ss` from
+// one hour, a negative span reading `0:00`; null for a finished turn or no turn.
+export function dockSummary(input: WorkingInput | null): string | null {
+  if (input === null || input.state === 'done') {
+    return null;
+  }
+  const total = Math.floor(Math.max(0, input.now - input.startedAt) / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, '0');
+  if (hours === 0) {
+    return `${minutes}:${seconds}`;
+  }
+  return `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`;
 }
 
 function turnStart(entries: readonly ChatEntry[]): number {

@@ -7,7 +7,7 @@
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
-- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
+- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys, starting a session from an agent.
 - **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A to F each land.
 - **Out of scope** — follow-ups.
@@ -98,7 +98,8 @@ interview on 2026-10-23; this file is the record of both.
 - `src/contracts/agent.ts` holds `AgentHarness`, `AgentProcess`, `ChatEntry` and `SessionControl`, replacing the
   one-shot `AgentClient`. The ACP adapter (`src/main/acp/`), the mock agent (`src/mock-agent/`, its Forge entry) and
   `@agentclientprotocol/sdk` are removed; ACP comes back as an adapter of this contract if a later harness needs it.
-- The Claude adapter is `src/main/claude-code/`, the only place the app spawns `claude`. It runs the installed CLI,
+- The Claude adapter is `src/main/claude-code/`, the only place the app builds the `claude` command; the session host
+  (`docs/features/session-host/design.md`) spawns it. It runs the installed CLI,
   one long-lived process per session, in stream-json mode, with the user's own login, plugins, skills and hooks. It
   is handed to plugins as a main service. The `claude` path is a core setting (`claude.command`) and the profiles a
   chat setting: an app started from the Dock has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
@@ -129,11 +130,9 @@ interview on 2026-10-23; this file is the record of both.
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`), except the
   app slash commands, which the app runs itself (§ Chat plugin).
-- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as `AgentCommand` records
-  (`name`, `description`, `argumentHint`, `aliases`), names without a leading `/`. The Claude adapter reports them
-  from each `init` event's `slash_commands` and `skills`, so the list waits for the first message. Each later `init`
-  replaces the list: a name it lists that matches an earlier record's name or alias keeps that record, and a new name
-  gets a record with empty text.
+- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as names without a leading `/`. The Claude adapter
+  reports them from each `init` event's `slash_commands` and `skills`, so the list waits for the first message. Each
+  later `init` replaces the list.
 - **Messages carry images**: `AgentProcess.send` takes `{ text, images }`, each image `{ mediaType, data }` (base64,
   no `data:` prefix), and the `user` chat entry carries the same `images`. Claude sends them as `image` content blocks
   before the text block (`claude-stream.md` § Images); a resumed transcript's image blocks come back as the user
@@ -171,15 +170,20 @@ interview on 2026-10-23; this file is the record of both.
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the `i`/`a` type hint, the model · effort chip, every other
-  control's chip, the status parts other plugins add (usage: context, cache, spend), the running dot, Send. The box's cursor shape shows
+- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the key prompts (`i`/`a`, then `J`, `K`, `V`, `y`, with no labels), the model · effort chip, every other
+  control's chip, the status parts other plugins add (usage: spend), the running dot, Send. `J`, `K`, `V` and `y` carry no labels because labelled they overflowed the line at minimum width, and hiding them when narrow hid them in the default window. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
-  `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
-  back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
-  (§ Pending messages). The transcript shows the messages, permission prompts, notices and pending rows; the agent's
-  steps and the turn results show in the composer's activity dock (§ Activity dock), and in the transcript as
-  activity lines and result entries only under a layout that sets `activityInTranscript` (§ Activity line). While the box
-  has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
+  `a` focus the box, `j` / `k` move between blocks, `J` / `K` jump between messages, `V` starts or ends a range, `y`
+  copies the range as markdown source while one is open (a range with nothing to copy, on an activity line or a permission card, toasts that and stays open), else allows a waiting permission, else copies the block, page `Esc` cancels the range, and a
+  plain click moves the cursor to the block under it. A block is a paragraph, heading, top-level list item, code block,
+  table or quote of a user or assistant message; any other row is one stop, and the turn and compaction dividers are
+  none. When the transcript scrolls away from the cursor, it moves to the nearest block wholly in view; a block too tall for the view counts while any of it shows; with no such block, it moves to the nearest that shows. `j` or `J` onto the last stop scrolls to the bottom and follows, unless the stop is too tall for the view: then its start shows, and it follows only once a scroll lands on the bottom. A layout gets block stops when it draws the text with `kit.markdown`; an entry with no marked block has one stop; a body drawn later is not read until the next redraw; copy reads source lines by position, so copy per block needs the layout to draw `input.text` itself. `Enter` opens or closes
+  the entry holding the cursor or the focused activity line and pulls back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
+  (§ Pending messages). The transcript shows the messages, permission prompts, notices, turn dividers and pending rows; the agent's
+  steps show in the session hub's activity dock (§ Activity dock), and in the transcript as
+  activity lines only under a layout that sets `activityInTranscript` (§ Activity line). Each `result` entry is a
+  turn divider, its step count the main agent's steps since the last user message or result. While the box
+  has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the cursor's block (the entry, when it has no blocks) shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
   shown session's process exits (the image viewer stays open then; the start prompt and the sign-in dialog, tied to
@@ -187,9 +191,8 @@ interview on 2026-10-23; this file is the record of both.
   same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
   runs.
 - **Activity line**: under a chat layout that sets `activityInTranscript: true`, the entry list groups each run into
-  one slot, a cursor stop, drawn by the layout's `activity` part, and draws each `result` entry as its own row. The
-  default layout sets it `false`: the list then builds no slot and no cursor stop for a run, its steps or a `result`
-  entry, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
+  one slot, a cursor stop, drawn by the layout's `activity` part. The
+  default layout sets it `false`: the list then builds no slot and no cursor stop for a run or its steps, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
   `default`'s. Everything below holds while the flag is `true`.
   - **Time**: each line ends with how long its run took, from the entry before the run (the user message or mid-turn
     assistant text; a run that opens the list starts at its first step) to the entry after it, compact in tabular
@@ -205,19 +208,21 @@ interview on 2026-10-23; this file is the record of both.
     its summary line and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry
     builder; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
     result in place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A cursor
-    following the last activity line stays on it as steps arrive, and `G` lands on that line. A line stays open or
+    following the last activity line stays on it as steps arrive, and `G` lands on that line, until the open run
+    overflows: at the bottom, whether or not the list had to scroll there, the cursor moves to the nearest step in view, and it follows the last step from there. A line stays open or
     closed by itself across a layout reload, a history read and the live run finishing.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
-- **Activity dock**: one row in the floating composer, under the composer parts (the workflow strip, the agent strip)
-  and above the attached images and the box, drawn by the layout's `working` part into the composer's `working` slot. It
-  shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
+- **Activity dock**: the Main agent section of the session hub (`docs/features/chat-bar/design.md` § The session hub),
+  drawn by the layout's `working` part. While the hub is not visible, the layout's `workingLine` part draws its time and
+  state, or its finished line, into the composer's `working` slot, under the composer parts and above the attached images
+  and the box; both read one dock. It shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
   or `waiting`), then the finished turn's one line until the user sends the next message. While the session is idle with
   no finished turn to show, the slot is hidden and takes no space. It is display only: not a cursor stop, and it adds no
   key. It counts only the main agent's tool calls (a `tool` entry's `agentId` is `main`); a subagent's calls show in its
   agent strip box. Settled from the user's sketch in an interview on 2026-11-02, and moved into the composer in a second
-  interview that day (`docs/features/chat-bar/plan-activity-dock/`).
+  interview that day (`docs/features/chat-bar/plan-activity-dock/`), then into the session hub on 2026-11-03.
   - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's first
     entry to now: the later of the last user entry (a queued message from when it was sent) and the entry after the
     last result, so a turn Claude starts on its own after a background task counts from its own start. While the
@@ -286,9 +291,18 @@ interview on 2026-10-23; this file is the record of both.
     sent`. A write that throws leaves the row unsent, logs
     `queued message <id> not sent: <error>` and stops the box call there. When the harness reports the agent dropped a sent message without taking
     it in (`AgentProcessEvents.messageDropped`: Claude's `cancelled`, `discarded` or `refused` with no `started`
-    before it), main returns it to the box and logs `sent message <id> returned: never taken in` (`dropped message
-    <id> not held` for one main does not hold); main holds every message it writes, idle sends included, until its
-    entry arrives, so a dropped idle send returns the same way.
+    before it), main returns it to the box and logs `sent message <id> returned: never taken in`; main holds every
+    message it writes, idle sends included, until its entry arrives, so a dropped idle send returns the same way. The
+    event carries the message, so one written before a relaunch returns too: a drop the re-attach's replay finds, one
+    that comes live after it, and one the replay left held when the process closes. The saved record keeps the ids
+    returned for its process, so a replay of a drop already returned logs `dropped message <id> already returned` and
+    returns nothing.
+  - **Returned messages**: every return (a pull-back, an interrupt, a clear, a process end, a drop) stays with the row
+    until the page puts it in the box, because the `returned` message is lost when no page or tab hears it, as during
+    a re-attach's replay at startup. Main holds each message in `ChatSessionState.returned` (each with an id of its
+    own) and in the saved record. The page puts them in the box when the `returned` message arrives, or when the tab
+    mounts for those its state holds, then calls `returnedPlaced`, and main drops them from the state and the record.
+    A quit before that keeps them: the relaunched row returns them to the box again.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
     `<Leader>cp` in the box, which pulls back the newest unsent. Each logs `pulling back a pending message in
@@ -299,7 +313,7 @@ interview on 2026-10-23; this file is the record of both.
     <session>` for a refused send. A pull-back for a message no longer queued (already written to the agent, returned,
     or pulled back) does nothing and logs `queued message <id> no longer queued`; one for a sent row, which the agent
     already holds, does nothing and logs `queued message <id> already sent`. A `returned` for a session with no tab logs
-    `returned for unknown session <id> ignored`. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
+    `returned for unknown session <id> ignored`, and main holds it for the tab's mount. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
     `following the latest entry` for `G`.
   - **Interrupt and exit**: Ctrl+C returns every unsent queued message, oldest first, then interrupts the running
     turn; the oldest ends at the top of the box. A sent row stays: Claude's interrupt cancels nothing it holds, so the
@@ -311,23 +325,26 @@ interview on 2026-10-23; this file is the record of both.
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
-  and first-message titles; a file without them reads as untitled), its active time in ms (`activeMs`, the session
-  clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
+  and first-message titles; a file without them reads as untitled), its last process's
+  id, the controls and resume flag that process launched with, the controls the row holds and the ids of those the user
+  picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
-  app from it (`docs/features/session-host/design.md`). `chat.stopAll` (`<Leader>:`) ends every owned session's
-  process and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
+  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>:`) ends the process of every owned session chat holds
+  and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
-  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued messages stays in the saved file, so the next start tries it again. A restored
+  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued or returned messages stays in the saved file, so the next start tries it again. A restored
   row that was ever sent to has its earlier conversation read from its transcript once, on the first show of its Chat
   tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting
   row starts its process (`--resume` when a message was ever sent, else `--session-id`); app slash commands run without
-  one, and the controls and the agent's slash commands fill in once it runs. Every process start in a row passes
+  one, its controls show what the record held, and the agent's slash commands and the controls' current values fill in
+  once it runs. Every process start in a row passes
   (`AgentStart.controls`, each carrying the value the row holds for it now) the row's `mode` as `--permission-mode`
   (`auto` when the row holds none), whoever set it, since a mode narrows nothing: a `plan` Claude entered after the user
   approved its `EnterPlanMode` card carries over. It passes `model` as `--model` and `effort` as `--effort` only once
@@ -335,8 +352,10 @@ interview on 2026-10-23; this file is the record of both.
   value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer pick replaced is never
   passed. A model or effort Claude only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a
   pinned id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process
-  exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start; a
-  restored row holds none until its process reports them, and passes no model or effort until the user picks one again.
+  exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start.
+  A restored row, re-attached or resting, keeps them the same way: its record gives it the held controls and which of
+  them the user picked, a replay's report then replaces the values as a live report does, and its next start passes
+  them. A record with no controls opens with none and passes none, so its first start runs in `auto`.
   Every start also passes `AgentStart.instructions`, the text plugins registered through `addInstructions` in
   registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
   registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until
@@ -384,7 +403,7 @@ interview on 2026-10-23; this file is the record of both.
   and written messages not yet taken in, then queued messages, are pulled back into the box, as on an exit; no exit notice shows for the old process and no
   turn-finished alert fires. The old process's later events are no longer live: none reaches the chat, but its
   `agentEvent`s that do emit keep the old host id, and its `sessionEnded` still emits; the agents roster folds each host
-  id apart, so that `sessionEnded` drops only the old process's subagents. The row's entries become one info notice,
+  id apart, so that `sessionEnded` drops only the old process's subagents. The row's active time returns to 0 (`docs/features/session-clock/design.md`). The row's entries become one info notice,
   `Conversation cleared`, followed by whatever the fresh process reports at start (its start step draws under the notice
   as a finished run, such as `1 step · 0s`), and chat logs `conversation cleared in <folder name>`. The row's host id
   moves through the sessions plugin's `OwnedSession.setHostSessionId(newId)`, which keeps the app session id and its
@@ -426,7 +445,7 @@ interview on 2026-10-23; this file is the record of both.
   does not clip the slash completion list.
 - **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
-  and shows as a permission entry. `y` allows, `n` denies and opens a box for an optional reason Claude reads, each
+  and shows as a permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen.
 - **Status**: a row's tab status reads what the chat is doing — working, waiting for a permission — and is empty
   while idle.
@@ -444,16 +463,30 @@ interview on 2026-10-23; this file is the record of both.
   goes first, and the first to return `true` ends the row; a row no draw takes shows the name alone. Chat adds its own
   draw through the same export: the description in a dim column cut to one line, while the `completionDescriptions`
   setting is on (default on), else `false`.
+- **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
+  page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
+  side-bar row (`docs/features/session-clock/design.md`).
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
-  resumed with its earlier conversation read from the transcript. `x` archives the entry under the
+  resumed with its earlier conversation read from the transcript. A resume lists the session host first, so a session
+  never runs two processes: a process of the session running in the current host has the row open and attach to it,
+  its history pending, as a restored row does; a process running in another app version refuses, and a host that
+  cannot be listed rejects, each opening nothing. `x` archives the entry under the
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.
 - **Self-test**: the self-test host takes one script per plugin and runs them in plugin start order, so chat's
   steps live in chat's own script over the fake adapter. The give-back rule is pinned by the tabs unit tests; the
   swap with a real round is a live check in the final verification.
+- **Starting a session from an agent**: the `start_session` MCP tool opens a chat session through the same background
+  launch Notes and Workflow use, so the row appears without taking focus. The tool is the only route from outside
+  the window. A command-line route was rejected because it returns nothing to the caller, needs its own check of who
+  is calling, and has no caller that lacks the relay. The app adds no approval and no cap: the calling session's
+  permission mode gates the call, which has been checked on Claude only since a Codex caller's gate has had no live
+  run, and the new row keeps every start visible. The relay re-sends a pending call after a dropped channel, so an app
+  quit between the launch and the flushed answer can start a second session on return. This is accepted: the window is
+  milliseconds, the extra row is visible, and de-duplicating would need the call id saved across a restart.
 
 ## Layouts
 
@@ -464,7 +497,7 @@ interview on 2026-10-23; this file is the record of both.
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
-  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the activity dock, § Activity
+  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the activity dock in the hub's Main agent section, § Activity
   dock: the running turn's state, its steps and its times `startedAt` and `now`, sent again each second, else the
   finished turn's `done` state with its steps, `startedAt`, `endedAt`, stop reason and cost), `queuedMessage` (one pending message, § Pending
   messages: its text, how many images it carries, and whether it was sent now), `composer`, `statusLine`, `attachments` (the
@@ -475,11 +508,11 @@ interview on 2026-10-23; this file is the record of both.
   user layout formats its own time; the part draws the summary line open or closed, and the app places the step rows
   under it when open. The built-in step builders draw a plain one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
   open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the
-  dialog actions). The composer's kit places the `working` slot the activity dock draws into; a composer that leaves
+  dialog actions). The composer's kit places the `working` slot the layout's `workingLine` part draws into; a composer that leaves
   it out gets it just above the box. The app keeps the composer's box and its draft, the dialogs' frames and titles,
   the keys and the focus; a part a user layout leaves out draws with `default`.
-- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines and the
-  `result` entries in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
+- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines
+  in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
   the same pick as a part: a user layout that leaves it out takes `default`'s, which is `false`.
 
 ## Plans

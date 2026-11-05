@@ -61,55 +61,77 @@ describe('agents preview', () => {
     ]);
     expect(
       sample.agents.map(
-        ({ name, model, effort, spendUsd, tools, outcome }) => ({
+        ({
+          agentId,
           name,
           model,
           effort,
           spendUsd,
+          isBackground,
+          contextTokens,
+          contextWindow,
+          tools,
+        }) => ({
+          agentId,
+          name,
+          model,
+          effort,
+          spendUsd,
+          isBackground,
+          contextTokens,
+          contextWindow,
           tools: tools.map((tool) => `${tool.tool} ${tool.outcome}`),
-          outcome,
         }),
       ),
     ).toEqual([
       {
+        agentId: 'preview-agent-1',
         name: 'map-sessions',
         model: 'claude-sonnet-5-5',
         effort: 'medium',
         spendUsd: 0.0421,
+        isBackground: false,
+        contextTokens: 84_000,
+        contextWindow: 200_000,
         tools: ['Read running'],
-        outcome: 'running',
       },
       {
+        agentId: 'preview-agent-2',
         name: 'Explore',
         model: 'claude-haiku-5-5',
         effort: null,
         spendUsd: 0.0187,
+        isBackground: true,
+        contextTokens: 166_000,
+        contextWindow: 200_000,
         tools: [
           ...Array.from({ length: 11 }, (_, i) =>
             i % 2 === 0 ? 'Grep done' : 'Read done',
           ),
           'Read running',
         ],
-        outcome: 'running',
       },
     ]);
     expect(
-      sample.tasks.map(({ agentId, command, outcome }) => ({
+      sample.tasks.map(({ taskId, agentId, ownerName, command }) => ({
+        taskId,
         agentId,
+        ownerName,
         command,
-        outcome,
       })),
     ).toEqual([
       {
+        taskId: 'preview-task-1',
         agentId: MAIN_AGENT_ID,
+        ownerName: 'main',
         command: 'npm run selftest',
-        outcome: 'running',
       },
       {
-        agentId: sample.agents[1].agentId,
+        taskId: 'preview-task-2',
+        agentId: 'preview-agent-2',
+        ownerName: 'Explore',
         command:
           'npm run test -- --watch src/main/claude-code/stream-decoder.test.ts',
-        outcome: 'running',
       },
     ]);
     expect(afterOpen).toEqual({
@@ -119,7 +141,7 @@ describe('agents preview', () => {
     expect(ends).toEqual(['row-1']);
     expect(rosters[1]).toEqual({
       sessionId: 'row-1',
-      roster: { agents: [], tasks: [] },
+      roster: { agents: [], tasks: [], skills: [] },
     });
     expect(preview.rosters()).toEqual({});
   });
@@ -149,7 +171,7 @@ describe('agents preview', () => {
     expect(rosters).toHaveLength(2);
     expect(rosters[1]).toEqual({
       sessionId: 'row-1',
-      roster: { agents: [], tasks: [] },
+      roster: { agents: [], tasks: [], skills: [] },
     });
     expect(preview.rosters()).toEqual({});
     expect(ends).toEqual([]);

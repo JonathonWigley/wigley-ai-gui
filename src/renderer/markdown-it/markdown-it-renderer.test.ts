@@ -25,8 +25,14 @@ const highlighter: CodeHighlighter = {
 
 const markdown = createMarkdownItRenderer(highlighter);
 
+// The marks `data-md-lines` carries are pinned once, in `cursor block marks`;
+// every other row compares the markup without them.
+function withoutLineMarks(html: string): string {
+  return html.replace(/ data-md-lines="[^"]*"/g, '');
+}
+
 function block(text: string): string {
-  return markdown.block(text);
+  return withoutLineMarks(markdown.block(text));
 }
 
 describe('escaping and disabled syntax', () => {
@@ -90,6 +96,63 @@ describe('headings', () => {
         `<p class="md-h md-h${level}">Title</p>\n`,
       );
     }
+  });
+});
+
+describe('cursor block marks', () => {
+  const markedTags = (html: string) =>
+    html.match(/<[^>]*data-md-lines="[^"]*"[^>]*>/g) ?? [];
+
+  it.each([
+    {
+      name: 'a heading, paragraph, fence and top-level list items',
+      text: '# Title\n\nFirst para\nsecond line\n\n```ts\ncode\n```\n\n- one\n  - nested\n- two',
+      tags: [
+        '<p class="md-h md-h1" data-md-lines="0,1">',
+        '<p data-md-lines="2,4">',
+        '<pre data-md-lines="5,8">',
+        '<li data-md-lines="9,11">',
+        '<li data-md-lines="11,12">',
+      ],
+    },
+    {
+      name: 'an ordered list, by its items',
+      text: '1. one\n2. two',
+      tags: ['<li data-md-lines="0,1">', '<li data-md-lines="1,2">'],
+    },
+    {
+      name: 'a table and a quote of two paragraphs, once each',
+      text: '| a | b |\n| --- | --- |\n| c | d |\n\n> one\n>\n> two',
+      tags: ['<table data-md-lines="0,3">', '<blockquote data-md-lines="4,7">'],
+    },
+    {
+      name: 'a contributed fence on its placeholder',
+      text: '```diff\n+ a\n```',
+      tags: [
+        '<div class="md-fence" data-fence-language="diff" data-fence-closed="true" data-md-lines="0,3">',
+      ],
+    },
+    {
+      name: 'a plain fence and an indented code block on pre, never code',
+      text: '```ts\ncode\n```\n\n    indented',
+      tags: ['<pre data-md-lines="0,3">', '<pre data-md-lines="4,5">'],
+    },
+    {
+      name: 'a fence in a quote, which gets no mark of its own',
+      text: '> ```ts\n> x\n> ```',
+      tags: ['<blockquote data-md-lines="0,3">'],
+    },
+    {
+      name: 'wigley blocks once each, from opener to the line after the closer',
+      text: ':::details S\nbody\n\n- item\n:::\n\n:::changes\n+ a\n:::\n\n:::tree\nroot\n  child\n:::',
+      tags: [
+        '<details class="md-details" data-md-lines="0,5">',
+        '<ul class="md-changes" data-md-lines="6,9">',
+        '<ul class="md-tree" data-md-lines="10,14">',
+      ],
+    },
+  ])('block_marksCursorBlocks: $name', ({ text, tags }) => {
+    expect(markedTags(markdown.block(text))).toEqual(tags);
   });
 });
 
@@ -213,7 +276,7 @@ describe('fence contributions', () => {
       html: placeholder(true, 'x\n'),
     },
   ])('emits a placeholder for $name', ({ text, html }) => {
-    expect(withHtml.block(text)).toBe(html);
+    expect(withoutLineMarks(withHtml.block(text))).toBe(html);
   });
 
   it('emits a placeholder for a closed document fence', async () => {
@@ -239,7 +302,7 @@ describe('fence contributions', () => {
     );
     first.dispose();
     expect(renderer.fence('html')).toBeUndefined();
-    expect(renderer.block('```html\nx\n```')).toBe(
+    expect(withoutLineMarks(renderer.block('```html\nx\n```'))).toBe(
       '<pre><code class="language-html">x\n</code></pre>\n',
     );
     const second = { ...htmlFence };
@@ -537,9 +600,16 @@ describe('document()', () => {
     expect(html).not.toContain('<script>');
   });
 
+  it('holds no cursor block mark', async () => {
+    const html = await render(
+      '# T\n\npara\n\n- a\n\n```ts\nx\n```\n\n:::details S\nbody\n:::',
+    );
+    expect(html).not.toContain('data-md-lines');
+  });
+
   it('marks blocks, list items and tables with their source line', async () => {
     const html = await render(
-      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |',
+      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |\n\n:::details S\nbody\n:::\n\n:::changes\n+ a\n:::\n\n:::tree\nroot\n:::',
     );
     for (const tag of [
       '<h1 data-anchor="t" data-source-line="1">',
@@ -548,6 +618,9 @@ describe('document()', () => {
       '<li data-source-line="5">',
       '<li data-source-line="6">',
       '<table data-source-line="8">',
+      '<details class="md-details" data-source-line="12">',
+      '<ul class="md-changes" data-source-line="16">',
+      '<ul class="md-tree" data-source-line="20">',
     ]) {
       expect(html).toContain(tag);
     }

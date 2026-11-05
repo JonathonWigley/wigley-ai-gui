@@ -2,11 +2,7 @@ import path from 'node:path';
 import type { AgentHarness } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
-import type {
-  SelfTestGroup,
-  SelfTestScript,
-  SelfTestStep,
-} from '../../../contracts/plugin';
+import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   FAKE_WORKFLOW_FEATURE_TEXT,
@@ -61,42 +57,29 @@ const line = (text: string) => `[workflow] ${SELFTEST_PROJECT_NAME} ${text}`;
 // `text` holds no regex metacharacter.
 const anchored = (text: string) =>
   new RegExp(`^\\[workflow\\] ${SELFTEST_PROJECT_NAME} ${text}$`);
-const DOCS_TAB_SHOWN = `[sessions] showed Docs tab in ${SELFTEST_PROJECT_NAME}`;
-
-// The tabs are Chat and Docs in either order, then Flow, so one press of a
-// tab key reaches its target directly or by way of Docs.
-const TAB_STEPS: SelfTestStep[] = [
-  {
-    keys: ['<A-o>'],
-    expect: DOCS_TAB_SHOWN,
-    repeat: {
-      until: `[workflow] Flow tab shown in ${SELFTEST_PROJECT_NAME}`,
-      max: 3,
-    },
-    screenshot: 'flow-tab-plan-ready',
-  },
-  {
-    keys: ['<A-i>'],
-    expect: DOCS_TAB_SHOWN,
-    repeat: {
-      until: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,
-      max: 3,
-    },
-  },
-];
 
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'feature to plan ready',
-    why: 'A wigley:feature turn that writes a plan and ends moves the session to plan ready on the chip and the strip.',
+    why: 'A wigley:feature turn that writes a plan and ends moves the session to plan ready on the chip, the strip and the side pane, and ws hides and shows the pane.',
     steps: [
       {
+        width: 1200,
         keys: FEATURE_KEYS,
         expect: line('shows planReady'),
         alsoExpect: [anchored('progress 0/3 wave 1')],
         screenshot: 'strip-plan-ready',
       },
-      ...TAB_STEPS,
+      {
+        keys: [' ', 'w', 's'],
+        expect: '[workflow] side pane hidden',
+        screenshot: 'side-pane-hidden',
+      },
+      {
+        width: 'start',
+        keys: [' ', 'w', 's'],
+        expect: '[workflow] side pane shown',
+      },
     ],
   },
   {
@@ -296,7 +279,7 @@ export function workflowSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // The strip wraps, and the chip ellipsizes inside its row.
+    // The strip wraps, and the chip's one tag keeps its width.
     scrollsItself: [],
     open() {
       marks = markRun(harnesses);

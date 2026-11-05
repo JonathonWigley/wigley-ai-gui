@@ -116,6 +116,7 @@ describe('primer main part', () => {
       services: {
         homeDir,
         alerts: { announce() {}, setOpenCount() {} },
+        git: { originRepoName: () => Promise.resolve(null) } as never,
       },
     });
     const answers = harness.drive?.actions.get('answers');

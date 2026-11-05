@@ -17,6 +17,22 @@ const TWO_SESSIONS: SavedSessions = {
       sent: true,
       busy: false,
       titles: { user: null, agent: 'Plan review', firstMessage: 'hi there' },
+      processId: 's-alpha-1-1000',
+      queued: [],
+      returned: [],
+      launchControls: { effort: 'high' },
+      launchResume: true,
+      controls: [
+        {
+          id: 'effort',
+          label: 'Effort',
+          choices: [{ value: 'high', label: 'High' }],
+          value: 'high',
+        },
+      ],
+      userSetControls: ['effort'],
+      returnedDrops: [],
+      activeMs: 42000,
     },
     {
       hostSessionId: 's-beta',
@@ -25,6 +41,15 @@ const TWO_SESSIONS: SavedSessions = {
       sent: false,
       busy: true,
       titles: { user: 'Mine', agent: null, firstMessage: null },
+      processId: null,
+      queued: [{ text: 'next', images: [] }],
+      returned: [{ text: 'returned', images: [] }],
+      launchControls: {},
+      launchResume: false,
+      controls: [],
+      userSetControls: [],
+      returnedDrops: [],
+      activeMs: 0,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -39,6 +64,15 @@ const ONE_SESSION: SavedSessions = {
       sent: true,
       busy: true,
       titles: { user: null, agent: null, firstMessage: 'gamma work' },
+      processId: null,
+      queued: [],
+      returned: [],
+      launchControls: {},
+      launchResume: false,
+      controls: [],
+      userSetControls: [],
+      returnedDrops: [],
+      activeMs: 1500,
     },
   ],
   selectedHostSessionId: null,
@@ -90,6 +124,53 @@ describe('createOpenSessions', () => {
             sent: true,
             busy: false,
             titles: { user: null, agent: null, firstMessage: null },
+            processId: null,
+            launchControls: {},
+            launchResume: false,
+            queued: [],
+            returned: [],
+            controls: [],
+            userSetControls: [],
+            returnedDrops: [],
+            activeMs: 0,
+          },
+        ],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without activeMs',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], activeMs: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], activeMs: 0 }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a queued message holding an image',
+      text: withSessions([
+        {
+          ...TWO_SESSIONS.sessions[0],
+          queued: [
+            {
+              text: 'look',
+              images: [{ mediaType: 'image/png', data: 'AAAA' }],
+            },
+          ],
+        },
+      ]),
+      expected: {
+        sessions: [
+          {
+            ...TWO_SESSIONS.sessions[0],
+            queued: [
+              {
+                text: 'look',
+                images: [{ mediaType: 'image/png', data: 'AAAA' }],
+              },
+            ],
           },
         ],
         selectedHostSessionId: null,
@@ -130,6 +211,59 @@ describe('createOpenSessions', () => {
     {
       file: 'busy a string',
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], busy: 'yes' }]),
+    },
+    {
+      file: 'queued holding a message whose text is a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], queued: [{ text: 1 }] },
+      ]),
+    },
+    {
+      file: 'launchControls holding a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], launchControls: { effort: 1 } },
+      ]),
+    },
+    {
+      file: 'controls holding one with no id',
+      text: withSessions([
+        {
+          ...TWO_SESSIONS.sessions[0],
+          controls: [{ label: 'Mode', choices: [], value: null }],
+        },
+      ]),
+    },
+    {
+      file: 'userSetControls holding a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], userSetControls: [1] },
+      ]),
+    },
+    {
+      file: 'returned holding a message whose text is a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], returned: [{ text: 1 }] },
+      ]),
+    },
+    {
+      file: 'returnedDrops a string',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], returnedDrops: 'user-1' },
+      ]),
+    },
+    {
+      file: 'activeMs negative',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], activeMs: -1 }]),
+    },
+    {
+      file: 'activeMs a string',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], activeMs: '42000' }]),
+    },
+    {
+      file: 'launchResume a string',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], launchResume: 'yes' },
+      ]),
     },
     {
       file: 'selectedHostSessionId a number',
