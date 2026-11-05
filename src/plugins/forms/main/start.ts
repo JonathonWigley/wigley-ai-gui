@@ -208,7 +208,13 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       () => api.layouts.register({ layoutTypes }),
       api.services.log,
     );
-    selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
+    selfTest?.run(
+      formsSelfTestScript(
+        sessions,
+        api.services.userConfig,
+        api.services.platform.os,
+      ),
+    );
     if (api.drive !== null) {
       addDriveActions(api.drive, sessions, (listener) =>
         api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),

@@ -220,6 +220,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   session-log/   manifest.ts and main/ only (hears chat's and sessions' lifecycle events, appends each to
                  `session-events.jsonl` in its plugin data, registers the Recently closed resume section through chat's
                  `addResumeSection`, hands its self-test script); `docs/features/session-log/design.md`
+  window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
+                 `services.window.summon`)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,

@@ -693,6 +693,7 @@ function fakeMainApi(
       appInstance: DEV_APP,
       window: {
         show() {},
+        summon: () => false,
         isFocused: () => false,
         chooseFolder: async () => null,
         capture: () =>

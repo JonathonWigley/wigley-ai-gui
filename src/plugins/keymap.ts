@@ -20,10 +20,8 @@ type CorePageCommand =
   | (typeof PANE_RESIZE_COMMANDS)[keyof typeof PANE_RESIZE_COMMANDS]
   | (typeof PANE_FOCUS_COMMANDS)[keyof typeof PANE_FOCUS_COMMANDS];
 
-// A main-process command of a built-in plugin, or the core's.
-type BuiltInMainCommand =
-  | QualifiedCommandId<BuiltInManifest, 'main'>
-  | 'window.summon';
+// A main-process command of a built-in plugin.
+type BuiltInMainCommand = QualifiedCommandId<BuiltInManifest, 'main'>;
 
 type BuiltInAcceleratorBind = Omit<AcceleratorBind, 'command'> & {
   command: BuiltInMainCommand;

@@ -694,9 +694,10 @@ export interface DriveHost {
 // Stopping the plugin also clears its pending `timers`, disposes its live
 // `files` watches and stops its running `processes`, each of which then rejects
 // with `Stopped <command>`. `agentHarnesses` lists every
-// harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
-// native folder dialog over the window and resolves to null when the user
-// cancels; `window.isFocused` is true while the app's window has focus;
+// harness adapter the app runs, found by `id`. `window.summon` brings the app
+// forward from behind another app and returns whether the window came forward.
+// `window.chooseFolder` opens the native folder dialog over the window and
+// resolves to null when the user cancels; `window.isFocused` is true while the app's window has focus;
 // `window.capture` resolves to a PNG of the window's content as the user sees
 // it, at the display's device pixels, and rejects when the capture is empty.
 // `openExternal` opens an http or https URL in the user's default app,
@@ -728,6 +729,7 @@ export interface MainServices {
   sessionHost: SessionHost;
   window: {
     show(): void;
+    summon(): boolean;
     isFocused(): boolean;
     chooseFolder(): Promise<string | null>;
     capture(): Promise<Uint8Array>; // PNG of the window's content, as shown

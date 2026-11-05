@@ -1,4 +1,5 @@
 import type { PageBind } from '../../../contracts/keymap';
+import type { OsName } from '../../../contracts/platform';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type { UserConfig } from '../../../contracts/user-config';
 import { emptyUserFiles } from '../../../shared/empty-user-files';
@@ -59,12 +60,23 @@ const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
-// Two absolute paths a box draws as file chips, on this OS.
-const IS_WINDOWS = process.platform === 'win32';
-const CHIP_ONE = IS_WINDOWS ? 'C:\\chips\\one.md' : '/tmp/chips/one.md';
-const CHIP_TWO = IS_WINDOWS ? 'C:\\chips\\two.md' : '/tmp/chips/two.md';
-// The first path with each letter's case toggled, as vim's `~` leaves it.
-const CHIP_ONE_TOGGLED = IS_WINDOWS ? 'c:\\CHIPS\\ONE.MD' : '/TMP/CHIPS/ONE.MD';
+// Two absolute paths a box draws as file chips on `os`, and the first with each
+// letter's case toggled, as vim's `~` leaves it.
+function chipPaths(os: OsName) {
+  return os === 'windows'
+    ? {
+        one: 'C:\\chips\\one.md',
+        two: 'C:\\chips\\two.md',
+        oneToggled: 'c:\\CHIPS\\ONE.MD',
+      }
+    : {
+        one: '/tmp/chips/one.md',
+        two: '/tmp/chips/two.md',
+        oneToggled: '/TMP/CHIPS/ONE.MD',
+      };
+}
+
+type ChipPaths = ReturnType<typeof chipPaths>;
 
 // A layout whose question card builds through the kit and throws on every
 // update, whose finding card mounts its notes box and then throws, so the
@@ -358,34 +370,36 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
 // again reaches the second, where i types z; visual f into the first chip
 // selects it whole, so ~ toggles the case of the a before it and of the whole
 // path.
-const FILE_CHIPS_STEPS: SelfTestStep[] = [
-  { keys: ['a'], expect: '[forms] focused notes on finding 3' },
-  {
-    keys: [
-      ...`a ${CHIP_ONE} b ${CHIP_TWO}`,
-      'Escape',
-      // w from the first chip lands on b.
-      ...'0ww~',
-      // Visual l from the first chip reaches the space after it.
-      ...'0wvldP',
-      // diw on the first chip cuts into it, and the delete takes it whole.
-      ...'0wdiwP',
-      // $ lands on the last chip.
-      ...'$xp',
-      // The search lands on the first chip, n steps past it, and n again
-      // moves on to the second.
-      ...'0/chips',
-      'Enter',
-      ...'nniz ',
-      'Escape',
-      // f lands inside the first chip, and the selection takes it whole.
-      ...'0vfc~',
-      'Escape',
-    ],
-    expect: '[forms] left the box',
-    why: "The text the keys leave is checked in finding 3's notes once the round is sent.",
-  },
-];
+function fileChipsSteps(chips: ChipPaths): SelfTestStep[] {
+  return [
+    { keys: ['a'], expect: '[forms] focused notes on finding 3' },
+    {
+      keys: [
+        ...`a ${chips.one} b ${chips.two}`,
+        'Escape',
+        // w from the first chip lands on b.
+        ...'0ww~',
+        // Visual l from the first chip reaches the space after it.
+        ...'0wvldP',
+        // diw on the first chip cuts into it, and the delete takes it whole.
+        ...'0wdiwP',
+        // $ lands on the last chip.
+        ...'$xp',
+        // The search lands on the first chip, n steps past it, and n again
+        // moves on to the second.
+        ...'0/chips',
+        'Enter',
+        ...'nniz ',
+        'Escape',
+        // f lands inside the first chip, and the selection takes it whole.
+        ...'0vfc~',
+        'Escape',
+      ],
+      expect: '[forms] left the box',
+      why: "The text the keys leave is checked in finding 3's notes once the round is sent.",
+    },
+  ];
+}
 
 const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
@@ -1028,11 +1042,14 @@ interface FormsSelfTestResult {
   unknownLayout: ToolResult;
 }
 
-function fixtureProblems(result: ToolResult): string[] {
+function fixtureProblems(result: ToolResult, chips: ChipPaths): string[] {
   if (result.isError) {
     return [`ask_round failed: ${result.content[0].text}`];
   }
-  return payloadProblems(result.structuredContent as unknown as AnswersPayload);
+  return payloadProblems(
+    result.structuredContent as unknown as AnswersPayload,
+    chips,
+  );
 }
 
 // The unknown-layout round must fail naming the unknown layout and listing
@@ -1054,7 +1071,7 @@ function unknownLayoutProblems(result: ToolResult): string[] {
 }
 
 // What the fixture's answers must come back as after the steps.
-function payloadProblems(payload: AnswersPayload): string[] {
+function payloadProblems(payload: AnswersPayload, chips: ChipPaths): string[] {
   const [finding, nit, design] = payload.findings;
   const [first, second] = payload.answers;
   const checks: [boolean, string][] = [
@@ -1100,7 +1117,7 @@ function payloadProblems(payload: AnswersPayload): string[] {
     // the file chips group's motions, searches, deletes, pastes and case
     // toggles each took a chip as one character.
     [
-      design?.notes === `A ${CHIP_ONE_TOGGLED} B z ${CHIP_TWO}`,
+      design?.notes === `A ${chips.oneToggled} B z ${chips.two}`,
       `finding 3 notes ${JSON.stringify(design?.notes)}`,
     ],
     [design?.choice === 2, `finding 3 choice ${design?.choice}`],
@@ -1167,7 +1184,9 @@ function payloadProblems(payload: AnswersPayload): string[] {
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect' | 'open'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
+  os: OsName,
 ): SelfTestScript {
+  const chips = chipPaths(os);
   let started: { end(): void }[] = [];
   let latestOpen = 0;
   const connect = (
@@ -1253,7 +1272,7 @@ export function formsSelfTestScript(
       {
         name: 'file chips',
         why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back; a search for text inside a chip lands on its start and n steps past it to the next chip, and a visual f into a chip selects it whole, so ~ toggles the case of the whole path.',
-        steps: FILE_CHIPS_STEPS,
+        steps: fileChipsSteps(chips),
       },
       {
         name: 'question boxes',
@@ -1314,7 +1333,7 @@ export function formsSelfTestScript(
     problems: (result) => {
       const { fixture, unknownLayout } = result as FormsSelfTestResult;
       return [
-        ...fixtureProblems(fixture),
+        ...fixtureProblems(fixture, chips),
         ...unknownLayoutProblems(unknownLayout),
       ];
     },

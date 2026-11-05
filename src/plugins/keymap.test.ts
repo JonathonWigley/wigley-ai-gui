@@ -3,7 +3,11 @@ import {
   requireUnambiguousKeymap,
   requireWellFormedChords,
 } from '../shared/keymap-checks';
-import { mergeKeymap } from '../shared/plugin-manifests';
+import {
+  commandInfos,
+  mergeKeymap,
+  withoutPluginBinds,
+} from '../shared/plugin-manifests';
 import { defaultKeymap } from './keymap';
 import { manifests } from './manifests';
 
@@ -15,5 +19,21 @@ describe('defaultKeymap', () => {
 
     expect(() => requireUnambiguousKeymap(merged)).not.toThrow();
     expect(() => requireWellFormedChords(merged.page)).not.toThrow();
+  });
+
+  it('defaultKeymap_WindowDisabled_DropsTheSummonBind', () => {
+    const merged = mergeKeymap(defaultKeymap, manifests, {});
+    const globalCommands = (keymap: typeof merged) =>
+      keymap.global.map((bind) => bind.command);
+
+    const served = withoutPluginBinds(
+      merged,
+      commandInfos({}, manifests),
+      ['window'],
+      'main',
+    );
+
+    expect(globalCommands(merged)).toContain('window.summon');
+    expect(globalCommands(served)).not.toContain('window.summon');
   });
 });

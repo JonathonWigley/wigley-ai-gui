@@ -19,6 +19,7 @@ import { unityPoolManifest } from './unity-pool/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
+import { windowManifest } from './window/manifest';
 import { workflowManifest } from './workflow/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
@@ -48,6 +49,7 @@ export const builtInManifests = [
   workflowManifest,
   unityPoolManifest,
   visualManifest,
+  windowManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command

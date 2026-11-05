@@ -1,6 +1,6 @@
 # 01 — Platform record
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -311,3 +311,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 1bcd3195 · proof: Diff read; every Produces signature present; typecheck and lint clean; process.platform grep prints the 3 expected lines; start.ts and defaultSettings greps print nothing. · concerns: main.ts lifecycle and alertsFor wiring untested until task 16; os.userInfo, cwd and env now read at module load in every run mode; the served config now carries username and launch to the page; contracts/plugin.ts comment and sessions start.test.ts changed beyond the task's Files.

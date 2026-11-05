@@ -272,7 +272,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Platform record](01-platform-record.md)
+- [x] [Platform record](01-platform-record.md)
 - [x] [Forms takes the timers service](02-forms-timers.md)
 
 ### Wave 2
@@ -321,6 +321,7 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 
 ### Groups
 - 02 · d2d7abad · diff read: Produces present; touched tests pass; compile waits on task 01's landing · concerns: session-host process-table.ts keeps its own copy of the 32-bit timer limit
+- 01 · 1bcd3195 · Diff read; every Produces signature present; typecheck and lint clean; process.platform grep prints the 3 expected lines; start.ts and defaultSettings greps print nothing. · concerns: main.ts lifecycle and alertsFor wiring untested until task 16; os.userInfo, cwd and env now read at module load in every run mode; the served config now carries username and launch to the page; contracts/plugin.ts comment and sessions start.test.ts changed beyond the task's Files.
 ### Contract changes
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead

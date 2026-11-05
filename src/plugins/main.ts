@@ -18,6 +18,7 @@ import { settingsMainPart } from './settings/main/start';
 import { unityPoolMainPart } from './unity-pool/main/start';
 import { usageMainPart } from './usage/main/start';
 import { visualMainPart } from './visual/main/start';
+import { windowMainPart } from './window/main/start';
 import { workflowMainPart } from './workflow/main/start';
 
 // Every built-in plugin's main part, in start order where no dependency says
@@ -43,4 +44,5 @@ export const mainParts: readonly MainPart[] = [
   unityPoolMainPart,
   visualMainPart,
   galleryMainPart,
+  windowMainPart,
 ];

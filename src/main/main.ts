@@ -138,7 +138,6 @@ import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
 import {
   createMainWindow,
   offscreenWindowService,
-  registerWindowCommands,
   windowService,
 } from './window';
 
@@ -874,7 +873,6 @@ function createWindow(
     store.current().settings.plugins.disabled,
   );
   const commands: MainCommands = new CommandRegistry<string>();
-  registerWindowCommands(commands, window, log);
   mainHost = startMainParts(
     window,
     store,
