@@ -535,6 +535,9 @@ export const defaultKeymap = {
     { keys: '<C-S-j>', scope: 'docs.doc', command: 'docs.halfPageDown' },
     { keys: '<C-S-k>', scope: 'docs.doc', command: 'docs.halfPageUp' },
     { keys: 'i', scope: 'docs.doc', command: 'docs.edit' },
+    { keys: 'e', scope: 'docs.doc', command: 'docs.editSection' },
+    { keys: '<C-h>', scope: 'docs.doc', command: 'docs.prevSection' },
+    { keys: '<C-l>', scope: 'docs.doc', command: 'docs.nextSection' },
     // Esc in the editor's normal mode closes it as `:q` does.
     {
       keys: '<Esc>',

@@ -115,6 +115,7 @@ const layout = {
     const head = kit.el(parent, 'div', 'docs-head');
     const header = kit.el(head, 'div', 'docs-header');
     kit.el(header, 'h1', 'docs-title', input.title);
+    kit.sectionHint(header);
     kit.editHint(header);
     const path = kit.el(header, 'div', 'docs-path', input.path);
     path.title = input.fullPath;

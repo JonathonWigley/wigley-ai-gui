@@ -119,6 +119,9 @@ export interface DocHeaderInput {
   loaded: string | null;
 }
 export interface DocHeaderKit extends DocsKit {
+  // The app's `e section` anchor; the app hides it while it hides `editHint` and while the doc has no heading.
+  // Appended at the end when left out.
+  sectionHint(parent: HTMLElement): HTMLElement;
   // The app's `i edit` anchor; the app hides it while the doc is read-only or the editor is open. Appended at the
   // end when left out.
   editHint(parent: HTMLElement): HTMLElement;
@@ -133,8 +136,10 @@ export interface DocBodyInput {
 }
 export interface DocBodyKit extends DocsKit {
   // The app's rendered body `div.md.docs-body`: the markdown, link clicks, source lines and heading anchors.
-  // Appended at the end when left out. The app sets `hidden` on the docBody part's root element while the editor is
-  // open, so a layout's CSS does not set `display` on that element.
+  // Appended at the end when left out. The app sets `hidden` on the docBody part's root element while the whole-file
+  // editor is open, so a layout's CSS does not set `display` on that element. While a section edits, that root stays
+  // shown, the section's blocks hide, and the app places the editor's frame and the banner and prompt slots inside
+  // the body, where those blocks sat.
   body(parent: HTMLElement): HTMLElement;
 }
 // The editor's frame: the file's name and full path as the editor opened. The editor never moves while open, so a
@@ -144,7 +149,8 @@ export interface EditorFrameInput {
   path: string;
 }
 export interface EditorFrameKit extends DocsKit {
-  // The app's editor host `div.docs-editor`. Appended at the end when left out.
+  // The app's editor host `div.docs-editor`, with `is-section` while a section edits, when the frame's slot sits
+  // inside the rendered body. Appended at the end when left out.
   editor(parent: HTMLElement): HTMLElement;
 }
 

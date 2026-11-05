@@ -160,6 +160,7 @@ describe('createDocsParts', () => {
       withUser(defaultLayout, hinted),
     );
     const editHint = element('span');
+    const sectionHint = element('span');
     const slot = slotElement();
     const drawn = parts.draw(
       'docHeader',
@@ -167,6 +168,7 @@ describe('createDocsParts', () => {
       headerInput(),
       (kit, slotFor) => ({
         ...kit,
+        sectionHint: slotFor(sectionHint, 'sectionHint').place,
         editHint: slotFor(editHint, 'editHint').place,
       }),
     );

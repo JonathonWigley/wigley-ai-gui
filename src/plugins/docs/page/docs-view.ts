@@ -90,6 +90,9 @@ export interface DocsViewCommands {
   halfPageDown(): void;
   halfPageUp(): void;
   edit(): void;
+  editSection(): void;
+  prevSection(): void;
+  nextSection(): void;
   quitEditor(): void;
   conflictReload(): void;
   conflictOverwrite(): void;
@@ -670,6 +673,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       next !== null,
     );
     showWikiTree();
+    doc.setEntries(next?.entries ?? []);
     doc.refreshChips();
   };
 
@@ -1014,6 +1018,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     halfPageDown: () => doc.scrollBy('halfPage', 1),
     halfPageUp: () => doc.scrollBy('halfPage', -1),
     edit: () => doc.edit(),
+    editSection: () => doc.editSection(),
+    prevSection: () => doc.moveSection(-1),
+    nextSection: () => doc.moveSection(1),
     quitEditor: () => doc.quitEditor(),
     conflictReload: () => doc.conflictReload(),
     conflictOverwrite: () => doc.conflictOverwrite(),

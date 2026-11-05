@@ -39,7 +39,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
   the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, on a
   doc it focuses the docs tree, and in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
-  `y`/`n` confirm (in chat `y` copies with a range open, else allows a waiting permission, else copies), `i`/`a` enter the box. Letters are mnemonic verbs.
+  `y`/`n` confirm (in chat `y` copies with a range open, else allows a waiting permission, else copies), `i`/`a` enter the box, `e` edits the doc's section at the top of sight. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `J`/`K` by message beside `j`/`k` by block, `R` rescan. Chat's `V` is vim's line select
   instead, since `v` opens visuals.
@@ -55,7 +55,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
   views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind
   neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, the rows of the focused
-  primer column, and on the primer card the rows of the column the card came from). A chord
+  primer column, on the primer card the rows of the column the card came from, and a doc's sections). A chord
   bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
   the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
 - **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in

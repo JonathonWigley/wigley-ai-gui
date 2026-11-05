@@ -33,7 +33,13 @@ import type {
 } from '../layouts/layout';
 import { linkedFrom } from '../linked-from';
 import { resolveLink } from '../links';
-import { type DocSection, sectionsOf } from '../sections';
+import {
+  type DocSection,
+  sectionAt,
+  sectionsOf,
+  sectionText,
+  spliceSection,
+} from '../sections';
 import { docLinkOf, docLinksText, pastedImagePath } from './doc-links';
 import {
   type Chip,
@@ -44,6 +50,11 @@ import {
   topVisibleLine,
   UNSAVED_TEXT,
 } from './docs-state';
+import {
+  hiddenBlockFlags,
+  relocateSection,
+  sectionMoveTarget,
+} from './section-edit';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import { type DocsParts, type DrawnPart } from './layout/docs-parts';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
@@ -53,6 +64,7 @@ const CONFLICT_TEXT = 'File changed on disk';
 const EMPTY_TEXT = 'Open a doc from the tree';
 const ON_THIS_PAGE_TEXT = 'On this page';
 const LINKED_FROM_TEXT = 'Linked from';
+const NOT_SECTIONED_TEXT = 'Only a markdown doc has sections';
 
 // The file a detail view's `i` edits, read, and the 1-based line it opens at.
 export interface DetailFile {
@@ -123,19 +135,23 @@ export interface DocViewDeps {
 // `pageFrame`, which stays for the view's life and places the article and the
 // right column. The article holds one slot per doc part, each drawn by the
 // layout: the header with its chips (load states, then plugin-source statuses,
-// then the last-loaded line), the `i edit` hint while the doc may be edited
-// and no editor is open, and the read-only line; the changed-on-disk banner;
-// the changed-on-disk prompt with its keys; the frontmatter table and the
-// rendered body (a detail's field table), hidden while the document editor's
-// frame shows on `edit`; the editor's `:q` returns to them. The right column,
-// drawn by the layout's `pageAside`, holds On this page, the headings of the
-// text the body shows, and Linked from, the docs among the entries that link
-// to this one; it hides for a detail, for a file that is not markdown and for
-// a doc with neither section. While the editor is open, files dropped or
-// pasted on the scroller go in at its cursor as markdown links relative to the
-// doc, a pasted file saved first under `images/` beside the doc. Opening
-// another doc is refused while the editor holds unsaved edits. `open` resolves
-// to whether the doc opened.
+// then the last-loaded line), the `e section` and `i edit` hints while the doc
+// may be edited and no editor is open, and the read-only line; the
+// changed-on-disk banner; the changed-on-disk prompt with its keys; the
+// frontmatter table and the rendered body (a detail's field table), hidden
+// while the document editor's frame shows on `edit`; the editor's `:q` returns
+// to them. A section's editor instead opens inside the rendered body: only the
+// section's blocks hide, the editor's frame and the banner and prompt slots
+// take their place, the right column stays, and `:q` puts them back. Each
+// top-level heading of an editable markdown doc holds an `edit` control. The
+// right column, drawn by the layout's `pageAside`, holds On this page, the
+// headings of the text the body shows, and Linked from, the docs among the
+// entries that link to this one; it hides for a detail, for a file that is not
+// markdown and for a doc with neither section. While the editor is open, files
+// dropped or pasted on the scroller go in at its cursor as markdown links
+// relative to the doc, a pasted file saved first under `images/` beside the
+// doc. Opening another doc is refused while the editor holds unsaved edits.
+// `open` resolves to whether the doc opened.
 export interface DocView {
   element: HTMLElement;
   open(target: DocTarget): Promise<boolean>;
@@ -152,6 +168,12 @@ export interface DocView {
   diskChanged(path: string): void;
   // Opens the editor at `line`, else at the top visible line.
   edit(line?: number): void;
+  // Opens the section at the top of sight in the editor, or the whole file
+  // when no section holds that line; only focuses an editor already open.
+  editSection(): void;
+  // Scrolls to the next or previous heading in the file's order, logging where
+  // it landed or why it stayed.
+  moveSection(direction: 1 | -1): void;
   // Closes the open editor as `:q` does, refusing while it holds unsaved
   // edits; nothing while no editor is open.
   quitEditor(): void;
@@ -174,7 +196,8 @@ export interface DocView {
   // Draws the pane's parts again when a layout pick changed for one of them,
   // keeping the scroll of the pane and the right column, and the focus. While
   // the editor is open the pane's frame, the page frame and the editor's frame
-  // stay, and the first two draw again once the editor closes.
+  // stay, and the first two draw again once the editor closes; a section's
+  // editor keeps the body part too, which also draws then.
   redraw(): void;
   // Ends the prompt, destroys the editor and its drop target, stops the watch
   // and disposes the pane's anchors, drawn parts and fence views, a throw not
@@ -211,6 +234,33 @@ interface AsideRow {
 }
 
 type AfterWrite = 'stay' | 'close';
+
+// The open editor's section, null while it edits the whole file.
+interface EditingSection {
+  // The file text as the editor opened, which `section`'s lines count in. Every
+  // `:w` splices into it, so a write replaces all the last write put there,
+  // however many lines that was.
+  openedText: string;
+  section: DocSection;
+  // The section's text as last read or written.
+  savedText: string;
+  // The direct children of the body hidden for this edit.
+  hidden: HTMLElement[];
+}
+
+// A `Ctrl+h` or `Ctrl+l` move's heading, which holds while the pane stays at
+// the scroll the move left it at: the last headings cannot reach the top of
+// sight, so the scroll alone would not say which one the move landed on.
+interface HeldSection {
+  line: number;
+  scrollTop: number;
+}
+
+// One heading's `edit` control and the slot it draws into.
+interface SectionControl {
+  part: DrawnPart;
+  slot: HTMLElement;
+}
 
 interface Conflict {
   diskText: string;
@@ -285,17 +335,31 @@ function topIn(scroller: HTMLElement, block: HTMLElement): number {
   );
 }
 
-// The rendered blocks' source lines and tops, measured from the scroller.
+// The rendered blocks' source lines and tops, measured from the scroller,
+// without the blocks inside `hidden`.
 function sourceBlocks(
   body: HTMLElement,
   scroller: HTMLElement,
+  hidden: readonly HTMLElement[] = [],
 ): { line: number; top: number }[] {
-  return [...body.querySelectorAll<HTMLElement>('[data-source-line]')].map(
-    (block) => ({
+  return [...body.querySelectorAll<HTMLElement>('[data-source-line]')]
+    .filter((block) => !hidden.some((child) => child.contains(block)))
+    .map((block) => ({
       line: Number(block.dataset.sourceLine),
       top: topIn(scroller, block),
-    }),
-  );
+    }));
+}
+
+// A rendered block's source line, counted from the body's first line; null
+// when it has none.
+function sourceLineOf(block: HTMLElement): number | null {
+  const { sourceLine } = block.dataset;
+  return sourceLine === undefined ? null : Number(sourceLine);
+}
+
+// `text.split` counts a last empty line, which `spliceSection` writes.
+function lineCount(text: string): number {
+  return text.split('\n').length;
 }
 
 // A slot one doc part draws into; it adds no box of its own.
@@ -324,10 +388,14 @@ export function createDocView(deps: DocViewDeps): DocView {
   // takes focus.
   const pane = element('div', 'docs-doc');
   pane.tabIndex = -1;
-  // The anchor the `i edit` hint names, for the view's life.
+  // The anchors the `i edit` and `e section` hints name, for the view's life.
   const anchors: Disposable[] = [];
   const editHint = element('span');
   anchors.push(deps.anchor(editHint, 'edit', { scope: 'doc', label: 'edit' }));
+  const sectionHint = element('span');
+  anchors.push(
+    deps.anchor(sectionHint, 'editSection', { scope: 'doc', label: 'section' }),
+  );
   const emptySlot = partSlot();
   const frameSlot = partSlot();
   const headerSlot = partSlot();
@@ -363,6 +431,9 @@ export function createDocView(deps: DocViewDeps): DocView {
   // A layout reload while the editor was open left the pane's frame and the
   // page frame to draw once the editor closes.
   let isPaneRedrawDeferred = false;
+  // A layout reload while a section edited left the body part to draw once the
+  // editor closes, since the body holds the editor.
+  let isBodyRedrawDeferred = false;
   // The pane's scroll as the editor opened, set back once it closes.
   let scrollTopBeforeEdit = 0;
 
@@ -371,7 +442,10 @@ export function createDocView(deps: DocViewDeps): DocView {
   let entries: readonly IndexEntry[] = [];
   // The sections of the text the rendered body shows.
   let shownSections: DocSection[] = [];
+  let sectionControls: SectionControl[] = [];
+  let heldSection: HeldSection | null = null;
   let editor: DocumentEditor | null = null;
+  let editingSection: EditingSection | null = null;
   // The scroller's drop target, registered while the editor is open.
   let dropTarget: Disposable | null = null;
   // The stamp the last pasted file was named by, and the index the next
@@ -430,10 +504,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       shown === null ? 'none' : editor === null ? 'open' : 'editing';
   };
 
-  // `i` refuses on a read-only doc, and inside the editor `i` is vim's.
+  // `i` and `e` refuse on a read-only doc, and inside the editor both are
+  // vim's. `e` has nothing of its own to open in a doc with no heading.
   const showEditHint = () => {
     editHint.hidden =
       shown === null || shown.target.readOnly !== null || editor !== null;
+    sectionHint.hidden = editHint.hidden || shownSections.length === 0;
   };
 
   const headerInput = (target: DocTarget): DocHeaderInput => {
@@ -474,9 +550,10 @@ export function createDocView(deps: DocViewDeps): DocView {
       headerSlot,
       headerInput(shown.target),
       (kit, slotFor) => {
+        const section = slotFor(sectionHint, 'sectionHint');
         const hint = slotFor(editHint, 'editHint');
-        placing = [hint];
-        return { ...kit, editHint: hint.place };
+        placing = [section, hint];
+        return { ...kit, sectionHint: section.place, editHint: hint.place };
       },
     );
     for (const part of placing) {
@@ -495,9 +572,19 @@ export function createDocView(deps: DocViewDeps): DocView {
     );
   };
 
+  // A section's editor sits at the top of sight, so a notice drawn above it
+  // lands out of sight, the browser's scroll anchoring holding the editor still.
+  const scrollToSectionNotice = () => {
+    const notice = drawnBanner ?? drawnPrompt;
+    if (editingSection !== null && notice !== null) {
+      pane.scrollTop = topIn(pane, notice.element);
+    }
+  };
+
   const showBanner = (isShown: boolean) => {
     if (isShown && drawnBanner === null) {
       drawBanner();
+      scrollToSectionNotice();
     } else if (!isShown) {
       drawnBanner?.dispose();
       drawnBanner = null;
@@ -514,8 +601,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     );
   };
 
-  // Draws the body part around the rendered body, hidden while the editor
-  // is open.
+  // Draws the body part around the rendered body, hidden while the whole-file
+  // editor is open.
   const drawBodyPart = () => {
     drawnBody?.dispose();
     let placing: AppSlot[] = [];
@@ -532,7 +619,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     for (const part of placing) {
       part.placeIfLeftOut(drawnBody.element);
     }
-    drawnBody.element.hidden = editor !== null;
+    drawnBody.element.hidden = editor !== null && editingSection === null;
   };
 
   const disposeAside = () => {
@@ -610,14 +697,61 @@ export function createDocView(deps: DocViewDeps): DocView {
     aside.scrollTop = scrollTop;
   };
 
+  const disposeSectionControls = () => {
+    for (const { part, slot } of sectionControls) {
+      part.dispose();
+      slot.remove();
+    }
+    sectionControls = [];
+  };
+
+  // The section whose heading is `heading`, a rendered block of `doc`.
+  const sectionOfHeading = (doc: ShownDoc, heading: HTMLElement) => {
+    const line = sourceLineOf(heading);
+    return line === null
+      ? undefined
+      : shownSections.find(
+          ({ startLine }) => startLine === line + doc.bodyStartLine - 1,
+        );
+  };
+
+  // Draws an `edit` control into each direct child of the body that heads a
+  // section, while the shown doc may be edited by section.
+  const drawSectionControls = () => {
+    disposeSectionControls();
+    const doc = shown;
+    if (!hasAside(doc) || doc.target.readOnly !== null) {
+      return;
+    }
+    for (const heading of [...body.children] as HTMLElement[]) {
+      const { anchor } = heading.dataset;
+      const section = sectionOfHeading(doc, heading);
+      if (anchor === undefined || section === undefined) {
+        continue;
+      }
+      const slot = element('span', 'docs-slot');
+      heading.append(slot);
+      const part = parts.draw(
+        'sectionEditControl',
+        slot,
+        { title: section.title },
+        (kit) => ({ ...kit, openSection: () => clickSection(anchor) }),
+      );
+      sectionControls.push({ part, slot });
+    }
+  };
+
   const drawBody = (rendered: Rendered) => {
+    heldSection = null;
     bodyFields = rendered.fields;
     bodyMount.draw(body, rendered.html, { liveFences: rendered.liveFences });
-    drawBodyPart();
     if (hasAside(shown)) {
       shownSections = sectionsOf(shown.text);
     }
     drawAside();
+    drawSectionControls();
+    drawBodyPart();
+    showEditHint();
   };
 
   const drawEditorFrame = (doc: ShownDoc) => {
@@ -641,7 +775,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   // Of the blocks at any depth, the one whose whole-file line is the
   // greatest at or before `line`.
   const scrollToLine = (line: number, bodyStartLine: number) => {
-    const blocks = sourceBlocks(body, pane).filter(
+    const blocks = sourceBlocks(body, pane, editingSection?.hidden).filter(
       (block) => block.line + bodyStartLine - 1 <= line,
     );
     const target = blocks.reduce<{ line: number; top: number } | null>(
@@ -652,7 +786,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     pane.scrollTop = target?.top ?? 0;
   };
 
-  // Scrolls to the heading's top; false when this doc has none.
+  // Scrolls to the heading's top, or to the section's editor while it hides
+  // the heading; false when this doc has none.
   const scrollToHeading = (fragment: string): boolean => {
     const heading = body.querySelector<HTMLElement>(
       `[data-anchor="${CSS.escape(fragment)}"]`,
@@ -660,7 +795,13 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (heading === null) {
       return false;
     }
-    pane.scrollTop = topIn(pane, heading);
+    const isHiddenForEdit = editingSection?.hidden.some((child) =>
+      child.contains(heading),
+    );
+    pane.scrollTop = topIn(
+      pane,
+      isHiddenForEdit ? (drawnEditorFrame?.element ?? heading) : heading,
+    );
     return true;
   };
 
@@ -721,6 +862,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     });
     conflict = { diskText, after, scope };
     drawPrompt();
+    scrollToSectionNotice();
   };
 
   const watchFile = (path: string | null, name: string) => {
@@ -738,8 +880,21 @@ export function createDocView(deps: DocViewDeps): DocView {
     watchFile(null, doc.name);
   };
 
-  // Destroys the editor and removes its frame; the pane's frame and the page
-  // frame a reload left for later draw now.
+  // Puts back what a section's editor moved or hid.
+  const restoreSectionLayout = ({ hidden }: EditingSection) => {
+    for (const block of hidden) {
+      block.hidden = false;
+    }
+    article.insertBefore(bannerSlot, bodySlot);
+    article.insertBefore(promptSlot, bodySlot);
+    article.append(editorSlot);
+    editorBox.classList.remove('is-section');
+    // An empty value removes the property.
+    editorBox.style.setProperty('--docs-section-rows', '');
+  };
+
+  // Destroys the editor and removes its frame; the pane's frame, the page frame
+  // and the body part a reload left for later draw now.
   const dropEditor = () => {
     endConflict(false);
     editor?.destroy();
@@ -750,6 +905,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     drawnEditorFrame?.dispose();
     drawnEditorFrame = null;
     pane.classList.remove('is-editing');
+    if (editingSection !== null) {
+      restoreSectionLayout(editingSection);
+      editingSection = null;
+    }
     if (drawnBody !== null) {
       drawnBody.element.hidden = false;
     }
@@ -761,12 +920,20 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawPane();
       drawFrame();
     }
+    if (isBodyRedrawDeferred) {
+      isBodyRedrawDeferred = false;
+      drawBodyPart();
+    }
   };
 
   // Destroys the editor and shows the rendered doc from the text last read
   // or written, or the detail view it was opened from, at the scroll the
-  // pane had as the editor opened, set again once the body draws.
-  const closeEditor = (doc: ShownDoc) => {
+  // pane had as the editor opened, set again once the body draws. `after` runs
+  // once it has; a failed render logs and skips it. `shownSections` empties until
+  // then, since `doc.text` may be newer than the body: a section read from them
+  // would splice the wrong lines.
+  const closeEditor = (doc: ShownDoc, after?: () => void) => {
+    shownSections = [];
     dropEditor();
     deps.log(`closed the editor on ${doc.name}`);
     pane.focus();
@@ -775,6 +942,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (doc.target.detail !== null) {
       showDetail(doc, doc.target.detail);
       pane.scrollTop = scrollTop;
+      after?.();
       return;
     }
     renderText(deps.markdown, doc.filePath, doc.text, deps.paths)
@@ -783,6 +951,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           doc.bodyStartLine = rendered.bodyStartLine;
           drawBody(rendered);
           pane.scrollTop = scrollTop;
+          after?.();
         }
       })
       .catch((error) => deps.log(`not rendered: ${errorText(error)}`));
@@ -794,7 +963,12 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (doc === null || writing === null) {
       return;
     }
-    const text = writing.text();
+    const edited = writing.text();
+    const editing = editingSection;
+    const text =
+      editing === null
+        ? edited
+        : spliceSection(editing.openedText, editing.section, edited);
     writingText = text;
     deps.channel
       .invoke('writeDoc', doc.filePath, text, overwrite ? null : doc.text)
@@ -808,6 +982,9 @@ export function createDocView(deps: DocViewDeps): DocView {
           return;
         }
         doc.text = text;
+        if (editing !== null) {
+          editing.savedText = edited;
+        }
         showBanner(false);
         deps.toast(`Wrote ${doc.name}`, 'success');
         deps.log(`wrote ${doc.name}`);
@@ -824,26 +1001,38 @@ export function createDocView(deps: DocViewDeps): DocView {
       });
   };
 
+  const hasUnsaved = () =>
+    editor !== null &&
+    shown !== null &&
+    editor.text() !== (editingSection?.savedText ?? shown.text);
+
   const quitEditor = (force: boolean) => {
     if (shown === null || editor === null) {
       return;
     }
-    const hasUnsaved = editor.text() !== shown.text;
-    if (hasUnsaved && !force) {
+    const isUnsaved = hasUnsaved();
+    if (isUnsaved && !force) {
       deps.toast(UNSAVED_TEXT, 'error');
       deps.log(
         `refused to close the editor with unsaved edits on ${shown.name}`,
       );
       return;
     }
-    if (hasUnsaved) {
+    if (isUnsaved) {
       deps.log(`dropped edits on ${shown.name}`);
     }
     closeEditor(shown);
   };
 
+  const showSectionRows = (text: string) =>
+    editorBox.style.setProperty('--docs-section-rows', String(lineCount(text)));
+
   const editorEvents: DocumentEditorEvents = {
-    changed: () => undefined,
+    changed: (text) => {
+      if (editingSection !== null) {
+        showSectionRows(text);
+      }
+    },
     write: () => writeEditor(false, 'stay'),
     quit: quitEditor,
     writeQuit: () => writeEditor(false, 'close'),
@@ -965,6 +1154,22 @@ export function createDocView(deps: DocViewDeps): DocView {
     deps.log(`linked ${String(links.length)} in ${doc.name}`);
   };
 
+  // What every editor does once it exists: takes drops, and takes focus.
+  const startEditing = (doc: ShownDoc, focusing: DocumentEditor) => {
+    dropTarget = deps.drops.addTarget({
+      element: pane,
+      take: (files) => {
+        takeFiles(files).catch((error) =>
+          deps.log(`not linked: ${errorText(error)}`),
+        );
+      },
+    });
+    showEditHint();
+    showDocState();
+    focusing.focus();
+    deps.log(`editing ${doc.name}`);
+  };
+
   // The frame draws first, so the editor mounts into an attached host.
   const openEditor = (doc: ShownDoc, line: number) => {
     pane.classList.add('is-editing');
@@ -980,19 +1185,125 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (drawnBody !== null) {
       drawnBody.element.hidden = true;
     }
-    dropTarget = deps.drops.addTarget({
-      element: pane,
-      take: (files) => {
-        takeFiles(files).catch((error) =>
-          deps.log(`not linked: ${errorText(error)}`),
-        );
-      },
-    });
-    showEditHint();
-    showDocState();
-    editor.focus();
-    deps.log(`editing ${doc.name}`);
+    startEditing(doc, editor);
   };
+
+  // Opens `section` in place: its rendered blocks hide, and the editor's frame,
+  // with the banner and prompt slots above it, takes their place in the body.
+  const openSectionEditor = (
+    doc: ShownDoc,
+    section: DocSection,
+    line: number,
+  ) => {
+    const blocks = [...body.children] as HTMLElement[];
+    const flags = hiddenBlockFlags(
+      blocks.map(sourceLineOf),
+      section,
+      doc.bodyStartLine,
+    );
+    const hidden = blocks.filter((_block, index) => flags[index]);
+    const text = sectionText(doc.text, section);
+    scrollTopBeforeEdit = pane.scrollTop;
+    for (const block of hidden) {
+      block.hidden = true;
+    }
+    const firstHidden = hidden.at(0) ?? null;
+    body.insertBefore(bannerSlot, firstHidden);
+    body.insertBefore(promptSlot, firstHidden);
+    body.insertBefore(editorSlot, firstHidden);
+    editingSection = {
+      openedText: doc.text,
+      section,
+      savedText: text,
+      hidden,
+    };
+    editorBox.classList.add('is-section');
+    showSectionRows(text);
+    drawEditorFrame(doc);
+    editor = deps.editor.createDocument(
+      editorBox,
+      text,
+      { fileName: doc.name, readOnly: false, line },
+      editorEvents,
+    );
+    if (drawnEditorFrame !== null) {
+      pane.scrollTop = topIn(pane, drawnEditorFrame.element);
+    }
+    startEditing(doc, editor);
+  };
+
+  // Opens the section the heading at `anchor` starts, in the body drawn now.
+  const openSectionAt = (doc: ShownDoc, anchor: string) => {
+    const heading = ([...body.children] as HTMLElement[]).find(
+      (child) => child.dataset.anchor === anchor,
+    );
+    const section =
+      heading === undefined ? undefined : sectionOfHeading(doc, heading);
+    if (section === undefined) {
+      deps.log(`no heading #${anchor} to edit`);
+      return;
+    }
+    openSectionEditor(doc, section, 1);
+  };
+
+  // A section's `edit` control. An open editor with edits stays; a clean one
+  // closes first, so the section is read from a body drawn from the file's text.
+  function clickSection(anchor: string) {
+    const doc = shown;
+    if (doc === null || view.refuseWithUnsavedEdits()) {
+      return;
+    }
+    if (editor === null) {
+      openSectionAt(doc, anchor);
+      return;
+    }
+    closeEditor(doc, () => openSectionAt(doc, anchor));
+  }
+
+  // Replaces the file's text with the disk's, then closes and opens again, so
+  // the page and the editor both show it. The section is found again by its
+  // heading; gone, only the page stays.
+  const reloadSection = (
+    doc: ShownDoc,
+    section: DocSection,
+    diskText: string,
+  ) => {
+    endConflict(false);
+    const moved = relocateSection(doc.text, section.startLine, diskText);
+    doc.text = diskText;
+    showBanner(false);
+    deps.log(`reloaded ${doc.name}`);
+    if (moved !== null) {
+      closeEditor(doc, () => openSectionEditor(doc, moved, 1));
+      return;
+    }
+    closeEditor(doc);
+    deps.toast(
+      `The section "${section.title}" is no longer in the file`,
+      'info',
+    );
+  };
+
+  // Toasts and logs the refusal when the doc is read-only.
+  const refuseReadOnly = (doc: ShownDoc): boolean => {
+    const { readOnly } = doc.target;
+    if (readOnly === null) {
+      return false;
+    }
+    deps.toast(readOnlyText(readOnly), 'info');
+    deps.log(
+      readOnly.type === 'downloaded'
+        ? `refused to edit ${doc.name}, a downloaded copy`
+        : `refused to edit ${doc.name} in the plugin cache`,
+    );
+    return true;
+  };
+
+  // The heading the last move landed on, while the pane stays where it left it.
+  const heldLine = () =>
+    heldSection !== null && pane.scrollTop === heldSection.scrollTop
+      ? heldSection.line
+      : null;
 
   // Opens the file the detail finds in the editor, watched while it edits.
   const editDetail = async (doc: ShownDoc, detail: DocDetail) => {
@@ -1009,7 +1320,7 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   // Every drawn part of the pane draws again; while the editor is open the
   // pane's frame and the page frame wait for it to close, and the editor's
-  // frame stays.
+  // frame stays. The body part waits too while it holds a section's editor.
   const redrawParts = () => {
     if (editor === null) {
       drawPane();
@@ -1029,12 +1340,15 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (drawnPrompt !== null) {
       drawPrompt();
     }
-    if (drawnBody !== null) {
+    if (drawnBody !== null && editingSection === null) {
       drawBodyPart();
+    } else if (drawnBody !== null) {
+      isBodyRedrawDeferred = true;
     }
     if (!aside.hidden) {
       drawAside();
     }
+    drawSectionControls();
   };
 
   const view: DocView = {
@@ -1154,14 +1468,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (doc === null) {
         return;
       }
-      const { readOnly } = doc.target;
-      if (readOnly !== null) {
-        deps.toast(readOnlyText(readOnly), 'info');
-        deps.log(
-          readOnly.type === 'downloaded'
-            ? `refused to edit ${doc.name}, a downloaded copy`
-            : `refused to edit ${doc.name} in the plugin cache`,
-        );
+      if (refuseReadOnly(doc)) {
         return;
       }
       if (editor !== null) {
@@ -1183,6 +1490,67 @@ export function createDocView(deps: DocViewDeps): DocView {
             doc.bodyStartLine,
           ),
       );
+    },
+    editSection() {
+      const doc = shown;
+      if (doc === null || refuseReadOnly(doc)) {
+        return;
+      }
+      if (editor !== null) {
+        editor.focus();
+        return;
+      }
+      if (!hasAside(doc)) {
+        deps.toast(NOT_SECTIONED_TEXT, 'info');
+        return;
+      }
+      const line =
+        heldLine() ??
+        topVisibleLine(
+          sourceBlocks(body, pane),
+          pane.scrollTop,
+          doc.bodyStartLine,
+        );
+      const section = sectionAt(shownSections, line);
+      if (section === null) {
+        view.edit();
+        return;
+      }
+      openSectionEditor(doc, section, line - section.startLine + 1);
+    },
+    moveSection(direction) {
+      const doc = shown;
+      if (doc === null || shownSections.length === 0) {
+        deps.log('no section to move to');
+        return;
+      }
+      if (editor !== null) {
+        deps.log('not moved: the editor is open');
+        return;
+      }
+      const blocks = sourceBlocks(body, pane);
+      const headings = shownSections.flatMap(({ title, startLine }) => {
+        const block = blocks.find(
+          ({ line }) => line + doc.bodyStartLine - 1 === startLine,
+        );
+        return block === undefined
+          ? []
+          : [{ title, startLine, top: block.top }];
+      });
+      const line = sectionMoveTarget(
+        headings,
+        pane.scrollTop,
+        direction,
+        heldLine(),
+      );
+      const heading = headings.find(({ startLine }) => startLine === line);
+      if (heading === undefined) {
+        deps.log(direction === 1 ? 'no next section' : 'no previous section');
+        return;
+      }
+      pane.scrollTop = heading.top;
+      heldSection = { line: heading.startLine, scrollTop: pane.scrollTop };
+      deps.log(`section ${heading.title}`);
     },
     quitEditor: () => quitEditor(false),
     scroll(by) {
@@ -1216,8 +1584,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         pane.focus();
       }
     },
-    hasUnsavedEdits: () =>
-      editor !== null && shown !== null && editor.text() !== shown.text,
+    hasUnsavedEdits: hasUnsaved,
     refuseWithUnsavedEdits() {
       if (!view.hasUnsavedEdits()) {
         return false;
@@ -1229,6 +1596,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     conflictReload() {
       const held = conflict;
       if (held === null || editor === null || shown === null) {
+        return;
+      }
+      if (editingSection !== null) {
+        reloadSection(shown, editingSection.section, held.diskText);
         return;
       }
       endConflict(true);
@@ -1260,9 +1631,9 @@ export function createDocView(deps: DocViewDeps): DocView {
         return;
       }
       // While the editor is open, `redrawParts` leaves the pane's frame, the
-      // page frame and the editor's undrawn, so their picks leave the compared
-      // set: the first two draw once the editor closes, the editor's at the
-      // next edit.
+      // page frame and the editor's undrawn, and the body part under a section's
+      // editor, so their picks leave the compared set: all but the editor's draw
+      // once the editor closes, the editor's at the next edit.
       parts.redrawIfChanged(() =>
         keepingFocusAndScroll(root, [pane, aside], redrawParts),
       );
@@ -1290,6 +1661,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           () => watchFile(null, shown?.name ?? 'the doc'),
           () => disposeAnchors(anchors),
           () => bodyMount.dispose(),
+          () => disposeSectionControls(),
           ...drawn.map((part) => () => part?.dispose()),
         ],
         (step) => step(),

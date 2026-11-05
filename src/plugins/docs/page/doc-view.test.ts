@@ -23,7 +23,8 @@ import {
   type DocView,
   type DocViewDeps,
 } from './doc-view';
-import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
+import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
+import { readOnlyText, UNSAVED_TEXT } from './docs-state';
 import {
   fencePlaceholder,
   installMarkdownDom,
@@ -72,6 +73,17 @@ function asideLayout() {
 const ASIDE_HEADING = 'test-aside-heading';
 const ASIDE_LINK = 'test-aside-link';
 
+// A body part marked `marker` that places the rendered body.
+function bodyLayout(marker: string): Layout {
+  return {
+    docBody(parent, _input, kit) {
+      const root = kit.el(parent, 'div', marker);
+      kit.body(root);
+      return { element: root };
+    },
+  };
+}
+
 // A drop target the view registered, and whether it has been disposed.
 interface RecordedTarget {
   target: DropTarget;
@@ -82,7 +94,9 @@ interface RecordedTarget {
 // layouts `layouts` returns, its editor host recording each editor it makes
 // and each text inserted, rendering through `markdown`. `replies` answers the
 // channel by call name. `writeBytes` answers the channel's `writeBytes`, each
-// call recorded in `writes`; `targets` holds each drop target.
+// call recorded in `writes`; each `writeDoc` is recorded in `docWrites`;
+// `targets` holds each drop target; `anchored` holds the element each view
+// anchor names, by command.
 function docViewOver(
   layouts: () => ShownLayouts<Layout>,
   chipsOf: DocViewDeps['chipsOf'] = () => {
@@ -101,6 +115,8 @@ function docViewOver(
     line: number;
     events: DocumentEditorEvents;
     destroy: ReturnType<typeof vi.fn>;
+    text(): string;
+    change(next: string): void;
   }[] = [];
   const replies: Record<string, unknown> = {
     readDoc: '# Doc',
@@ -109,6 +125,8 @@ function docViewOver(
   const inserts: string[] = [];
   const toasts: string[] = [];
   const writes: [string, number[]][] = [];
+  const docWrites: { text: string; expected: string | null }[] = [];
+  const anchored: Record<string, HTMLElement> = {};
   const targets: RecordedTarget[] = [];
   const io = {
     writeBytes: async (): Promise<unknown> => ({ type: 'written' }),
@@ -118,6 +136,10 @@ function docViewOver(
     viewId: 'view',
     channel: {
       invoke: async (name: string, ...args: unknown[]) => {
+        if (name === 'writeDoc') {
+          const [, text, expected] = args as [string, string, string | null];
+          docWrites.push({ text, expected });
+        }
         if (name !== 'writeBytes') {
           return replies[name] ?? null;
         }
@@ -135,9 +157,20 @@ function docViewOver(
         events: DocumentEditorEvents,
       ) {
         const destroy = vi.fn();
-        editors.push({ parent, line: options.line, events, destroy });
+        let current = text;
+        const readText = () => current;
+        editors.push({
+          parent,
+          line: options.line,
+          events,
+          destroy,
+          text: readText,
+          change: (next) => {
+            current = next;
+          },
+        });
         return {
-          text: () => text,
+          text: readText,
           focus: () => undefined,
           blur: () => undefined,
           insert: (inserted: string) => inserts.push(inserted),
@@ -167,7 +200,10 @@ function docViewOver(
     loadedOf: () => null,
     followFile: () => undefined,
     pushConflictScope: fakePushedScope,
-    anchor: noAnchor,
+    anchor: (anchoring: HTMLElement, command: string) => {
+      anchored[command] = anchoring;
+      return { dispose: () => undefined };
+    },
     parts,
     openChanged: () => undefined,
   } as unknown as DocViewDeps;
@@ -179,7 +215,9 @@ function docViewOver(
     inserts,
     toasts,
     writes,
+    docWrites,
     targets,
+    anchored,
     io,
   };
 }
@@ -882,7 +920,556 @@ describe('createDocView', () => {
       toasts: row.toasts,
     });
   });
+
+  describe('editSection', () => {
+    it('editSection_TopOfSightInASection_OpensThatSectionsText', async () => {
+      const { view, editors } = await sectionDoc(TWO_SECTIONS);
+      scroller(view.element).scrollTop = 100;
+      addBlocks(view, block(1, -100), block(3, -60), block(6, 0), block(7, 40));
+
+      view.editSection();
+
+      expect(editors.map(({ text, line }) => [text(), line])).toEqual([
+        ['## B\ny', 1],
+      ]);
+    });
+
+    it.each([
+      {
+        name: 'text above the first heading',
+        text: 'intro\n\n## A\nx',
+        lineAtTop: 1,
+      },
+      { name: 'a doc with no heading', text: 'plain\ntext', lineAtTop: 1 },
+    ])(
+      'editSection_AboveTheFirstHeading_OpensTheWholeFile $name',
+      async ({ text, lineAtTop }) => {
+        const { view, editors } = await sectionDoc(text);
+        const pane = scroller(view.element);
+        pane.scrollTop = 100;
+        addBlocks(view, block(lineAtTop, 0));
+
+        view.editSection();
+
+        expect({
+          text: editors[0].text(),
+          isWholeFile: pane.classList.contains('is-editing'),
+        }).toEqual({ text, isWholeFile: true });
+      },
+    );
+
+    it.each([
+      {
+        name: 'a file that is not markdown',
+        doc: target(null, '/home/a.json'),
+        toast: 'Only a markdown doc has sections',
+      },
+      {
+        name: 'a detail',
+        doc: { ...target(null), detail: hookDetail },
+        toast: 'Only a markdown doc has sections',
+      },
+      {
+        name: 'a read-only doc',
+        doc: {
+          ...target(null),
+          readOnly: { type: 'downloaded', plugin: null },
+        } as DocTarget,
+        toast: readOnlyText({ type: 'downloaded', plugin: null }),
+      },
+    ])(
+      'editSection_Refuses_ToastsAndOpensNothing $name',
+      async ({ doc, toast }) => {
+        const { view, editors, toasts } = await sectionDoc(TWO_SECTIONS, doc);
+
+        view.editSection();
+
+        expect({ toasts, editors: editors.length }).toEqual({
+          toasts: [toast],
+          editors: 0,
+        });
+      },
+    );
+
+    it.each([
+      { opens: 'edit', second: 'editSection' },
+      { opens: 'editSection', second: 'editSection' },
+      { opens: 'editSection', second: 'edit' },
+    ] as const)(
+      'editSection_EditorOpen_OnlyFocusesIt $opens then $second',
+      async ({ opens, second }) => {
+        const { view, editors } = await sectionDoc(TWO_SECTIONS);
+        scroller(view.element).scrollTop = 100;
+        addBlocks(view, block(3, 0));
+        view[opens]();
+        const { destroy } = editors[0];
+
+        view[second]();
+
+        expect({
+          editors: editors.length,
+          destroys: destroy.mock.calls.length,
+        }).toEqual({ editors: 1, destroys: 0 });
+      },
+    );
+
+    it('editSection_WhileTheClosedEditorsBodyRenders_OpensTheWholeFile', async () => {
+      const shown = await openSection(TWO_SECTIONS);
+      const { view, deps, editors } = shown;
+      deps.markdown.document = () => new Promise(() => undefined);
+      editors[0].change('## A\nnew heading\n\n## C\nz\n');
+      editors[0].events.writeQuit();
+      await settled();
+
+      view.editSection();
+
+      expect(scroller(view.element).classList.contains('is-editing')).toBe(
+        true,
+      );
+    });
+
+    it('openSection_HidesTheSectionsBlocksAndNotTheBody', async () => {
+      const { view, blocks } = await openSection(TWO_SECTIONS);
+      const pane = scroller(view.element);
+
+      expect({
+        hidden: blocks.map(({ hidden }) => hidden),
+        isBodyHidden: findAll(asFake(view.element), 'docs-doc-body')[0].hidden,
+        isWholeFile: pane.classList.contains('is-editing'),
+        state: view.element.dataset.doc,
+      }).toEqual({
+        hidden: [false, true, true, false, false],
+        isBodyHidden: false,
+        isWholeFile: false,
+        state: 'editing',
+      });
+    });
+
+    it('clickOnThisPage_HiddenSection_LandsOnTheBlockAboveTheEditor', async () => {
+      const { view } = await openSection(TWO_SECTIONS);
+      const pane = scroller(view.element);
+      pane.scrollTop = 0;
+
+      findAll(asFake(view.element), 'ui-row')[1].click();
+
+      // The block of line 1, two pixels above `## A`'s.
+      expect(pane.scrollTop).toBe(-2);
+    });
+  });
+
+  describe('section editor', () => {
+    it.each([
+      {
+        name: 'text that adds a heading',
+        doc: TWO_SECTIONS,
+        firstLine: 3,
+        first: '## A\na\n\n## N\nn\n',
+        second: '## A\nb\n',
+        writes: [
+          {
+            text: '# T\n\n## A\na\n\n## N\nn\n\n## B\ny',
+            expected: TWO_SECTIONS,
+          },
+          {
+            text: '# T\n\n## A\nb\n\n## B\ny',
+            expected: '# T\n\n## A\na\n\n## N\nn\n\n## B\ny',
+          },
+        ],
+      },
+      {
+        name: 'text ending in a new line, in a file with no last line ending',
+        doc: '# T\n\n## A\nx',
+        firstLine: 3,
+        first: '## A\na\n',
+        second: '## A\nb',
+        writes: [
+          { text: '# T\n\n## A\na\n', expected: '# T\n\n## A\nx' },
+          { text: '# T\n\n## A\nb', expected: '# T\n\n## A\na\n' },
+        ],
+      },
+      {
+        name: 'emptied text at the end of a file with no last line ending',
+        doc: '# T\n\n## A\nx',
+        firstLine: 3,
+        first: '',
+        second: '## A\nb',
+        writes: [
+          { text: '# T\n\n', expected: '# T\n\n## A\nx' },
+          { text: '# T\n\n## A\nb', expected: '# T\n\n' },
+        ],
+      },
+    ])(
+      'write_SectionEditor_WritesTheSplicedFileTwice $name',
+      async ({ doc, firstLine, first, second, writes }) => {
+        const { editors, docWrites } = await openSection(doc, firstLine);
+
+        for (const next of [first, second]) {
+          editors[0].change(next);
+          editors[0].events.write();
+          await settled();
+        }
+
+        expect(docWrites).toEqual(writes);
+      },
+    );
+
+    it('hasUnsavedEdits_SectionEditor_ComparesWithTheSectionsSavedText', async () => {
+      const { view, editors } = await openSection(TWO_SECTIONS);
+      const atOpen = view.hasUnsavedEdits();
+      editors[0].change('## A\nchanged\n');
+      const afterChange = view.hasUnsavedEdits();
+
+      editors[0].events.write();
+      await settled();
+
+      expect([atOpen, afterChange, view.hasUnsavedEdits()]).toEqual([
+        false,
+        true,
+        false,
+      ]);
+    });
+
+    it.each([
+      { name: ':q with edits', act: 'quit', isClosed: false },
+      { name: ':q! with edits', act: 'forceQuit', isClosed: true },
+      { name: ':wq with edits', act: 'writeQuit', isClosed: true },
+    ] as const)(
+      'quit_SectionEditor_ActsAsTheWholeFileEditor $name',
+      async ({ act, isClosed }) => {
+        const { view, editors, toasts, blocks } =
+          await openSection(TWO_SECTIONS);
+        const pane = scroller(view.element);
+        const host = asFake(editors[0].parent);
+        pane.scrollTop = 0;
+        editors[0].change('## A\nchanged\n');
+
+        if (act === 'writeQuit') {
+          editors[0].events.writeQuit();
+        } else {
+          editors[0].events.quit(act === 'forceQuit');
+        }
+        await settled();
+
+        expect({
+          destroys: editors[0].destroy.mock.calls.length,
+          toastsUnsaved: toasts.includes(UNSAVED_TEXT),
+          isHostSized: host.classList.contains('is-section'),
+          isBlockHidden: blocks[1].hidden,
+          scrollTop: pane.scrollTop,
+        }).toEqual({
+          destroys: isClosed ? 1 : 0,
+          toastsUnsaved: !isClosed,
+          isHostSized: !isClosed,
+          isBlockHidden: !isClosed,
+          scrollTop: isClosed ? SCROLL_BEFORE_OPEN : 0,
+        });
+      },
+    );
+
+    it('conflictReload_SectionStillThere_OpensItWithTheDiskText', async () => {
+      const disk = '# T\n\nnew\n\n## A\ndisk\n\n## B\ny';
+      const shown = await openSection(TWO_SECTIONS);
+      const { view, editors, deps } = shown;
+      const render = vi.spyOn(deps.markdown, 'document');
+      await hitConflict(shown, disk);
+
+      view.conflictReload();
+      await settled();
+
+      expect({
+        first: editors[0].destroy.mock.calls.length,
+        reopened: editors.map(({ text }) => text()).at(-1),
+        rendered: render.mock.calls.at(-1)?.[0],
+      }).toEqual({ first: 1, reopened: '## A\ndisk\n', rendered: disk });
+    });
+
+    it('conflictReload_SectionGone_ClosesAndToasts', async () => {
+      const disk = '# T\n\n## B\ny';
+      const shown = await openSection(TWO_SECTIONS);
+      const { view, editors, deps, toasts } = shown;
+      const render = vi.spyOn(deps.markdown, 'document');
+      await hitConflict(shown, disk);
+
+      view.conflictReload();
+      await settled();
+
+      expect({
+        editors: editors.length,
+        destroys: editors[0].destroy.mock.calls.length,
+        rendered: render.mock.calls.at(-1)?.[0],
+        namesTheSection: toasts.some((toast) => toast.includes('"A"')),
+      }).toEqual({
+        editors: 1,
+        destroys: 1,
+        rendered: disk,
+        namesTheSection: true,
+      });
+    });
+
+    it('conflictOverwrite_SectionEditor_WritesWithNoExpectedText', async () => {
+      const shown = await openSection(TWO_SECTIONS);
+      await hitConflict(shown, 'other');
+      shown.replies.writeDoc = { type: 'written' };
+
+      shown.view.conflictOverwrite();
+      await settled();
+
+      expect(shown.docWrites.at(-1)).toEqual({
+        text: '# T\n\n## A\nchanged\n\n## B\ny',
+        expected: null,
+      });
+    });
+
+    it('drop_SectionEditor_InsertsAtTheCursor', async () => {
+      const { targets, inserts } = await openSection(TWO_SECTIONS);
+
+      targets[0].target.take([dropped('/home/b.md', 'text/markdown')]);
+      await settled();
+
+      expect(inserts).toEqual(['[b.md](b.md)']);
+    });
+
+    it('redraw_SectionEditor_DrawsTheBodyPartOnClose', async () => {
+      let layouts = withUser(defaultLayout, bodyLayout('body-1'));
+      const shown = await sectionDoc(TWO_SECTIONS, target(null), () => layouts);
+      const { view, editors } = shown;
+      scroller(view.element).scrollTop = 100;
+      addBlocks(view, block(3, 0));
+      view.editSection();
+
+      layouts = withUser(defaultLayout, bodyLayout('body-2'));
+      view.redraw();
+      const whileEditing = {
+        old: findAll(asFake(view.element), 'body-1').length,
+        destroys: editors[0].destroy.mock.calls.length,
+      };
+      view.quitEditor();
+
+      expect(whileEditing).toEqual({ old: 1, destroys: 0 });
+      expect(findAll(asFake(view.element), 'body-2').length).toBe(1);
+    });
+  });
+
+  describe('section controls', () => {
+    // A doc whose two headings carry anchors, with their controls drawn.
+    async function controlledDoc() {
+      let layouts = withUser(defaultLayout, paneLayout('pane-1'));
+      const shown = await sectionDoc(TWO_SECTIONS, target(null), () => layouts);
+      const headings = [heading(3, 'a'), heading(6, 'b')];
+      addBlocks(shown.view, ...headings);
+      const redrawParts = (marker: string) => {
+        layouts = withUser(defaultLayout, paneLayout(marker));
+        shown.view.redraw();
+      };
+      redrawParts('pane-2');
+      const controls = () =>
+        findAll(asFake(shown.view.element), 'docs-section-edit');
+      return { ...shown, headings, redrawParts, controls };
+    }
+
+    it('clickEdit_OtherSection_RefusesWithUnsavedEdits', async () => {
+      const { controls, editors, toasts } = await controlledDoc();
+      controls()[0].click();
+      editors[0].change('## A\nchanged\n');
+
+      controls()[1].click();
+      await settled();
+
+      expect({
+        toasts,
+        editors: editors.length,
+        destroys: editors[0].destroy.mock.calls.length,
+      }).toEqual({ toasts: [UNSAVED_TEXT], editors: 1, destroys: 0 });
+    });
+
+    it('clickEdit_OtherSection_SwitchesWhenClean', async () => {
+      const { controls, editors } = await controlledDoc();
+      controls()[0].click();
+
+      controls()[1].click();
+      await settled();
+
+      expect({
+        destroys: editors[0].destroy.mock.calls.length,
+        opened: editors.map(({ text }) => text()),
+      }).toEqual({ destroys: 1, opened: ['## A\nx\n', '## B\ny'] });
+    });
+
+    it.each([
+      {
+        name: 'a read-only doc',
+        doc: {
+          ...target(null),
+          readOnly: { type: 'downloaded', plugin: null },
+        } as DocTarget,
+      },
+      { name: 'a detail', doc: { ...target(null), detail: hookDetail } },
+      {
+        name: 'a file that is not markdown',
+        doc: target(null, '/home/a.json'),
+      },
+    ])('sectionControls_ReadOnlyOrDetail_DrawNone $name', async ({ doc }) => {
+      let layouts = withUser(defaultLayout, paneLayout('pane-1'));
+      const { view } = await sectionDoc(TWO_SECTIONS, doc, () => layouts);
+      addBlocks(view, heading(3, 'a'), heading(6, 'b'));
+
+      layouts = withUser(defaultLayout, paneLayout('pane-2'));
+      view.redraw();
+
+      expect(findAll(asFake(view.element), 'docs-section-edit')).toEqual([]);
+    });
+
+    it('sectionControls_Redraw_LeavesOneSlotPerHeading', async () => {
+      const { headings, redrawParts } = await controlledDoc();
+
+      redrawParts('pane-3');
+
+      expect(
+        headings.map(
+          (shownHeading) => findAll(shownHeading, 'docs-slot').length,
+        ),
+      ).toEqual([1, 1]);
+    });
+
+    it('sectionHint_OpenAfterOpen_FollowsTheDrawnDocsHeadings', async () => {
+      const { view, replies, anchored } = await sectionDoc('## A\nx');
+      const withHeadings = anchored['editSection'].hidden;
+      replies.readDoc = 'plain';
+
+      await view.open(target(null, '/home/plain.md'));
+
+      expect([withHeadings, anchored['editSection'].hidden]).toEqual([
+        false,
+        true,
+      ]);
+    });
+  });
+
+  describe('moveSection', () => {
+    // A doc whose three headings sit at content tops 0, 100 and 200 in a pane
+    // that scrolls no further than `maxScroll`.
+    async function movingDoc(maxScroll: number) {
+      const shown = await sectionDoc('## A\nx\n\n## B\ny\n\n## C\nz');
+      const pane = scroller(shown.view.element);
+      let scrollTop = 0;
+      Object.defineProperty(pane, 'scrollTop', {
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = Math.min(value, maxScroll);
+        },
+      });
+      addBlocks(
+        shown.view,
+        ...[
+          { line: 1, top: 0 },
+          { line: 4, top: 100 },
+          { line: 7, top: 200 },
+        ].map(({ line, top }) => {
+          const moving = block(line, 0);
+          Object.defineProperty(moving, 'rectTop', {
+            get: () => top - scrollTop,
+          });
+          return moving;
+        }),
+      );
+      return { ...shown, pane };
+    }
+
+    it('moveSection_EditorOpen_ScrollsNothing', async () => {
+      const { view, pane } = await movingDoc(1000);
+      view.moveSection(1);
+      view.editSection();
+      const atOpen = pane.scrollTop;
+
+      view.moveSection(1);
+
+      expect(pane.scrollTop).toBe(atOpen);
+    });
+
+    it('moveSection_AtTheLastHeading_StaysAndKeepsTheScroll', async () => {
+      const { view, pane } = await movingDoc(1000);
+      view.moveSection(1);
+      view.moveSection(1);
+      const atLast = pane.scrollTop;
+
+      view.moveSection(1);
+
+      expect({ atLast, scrollTop: pane.scrollTop }).toEqual({
+        atLast: 200,
+        scrollTop: 200,
+      });
+    });
+
+    it('moveSection_ThenEdit_OpensTheHeldSection', async () => {
+      const { view, editors } = await movingDoc(120);
+      view.moveSection(1);
+      view.moveSection(1);
+
+      view.editSection();
+
+      expect(editors.map(({ text }) => text())).toEqual(['## C\nz']);
+    });
+  });
 });
+
+const TWO_SECTIONS = '# T\n\n## A\nx\n\n## B\ny';
+
+// The pane's scroll as `openSection` opens its editor.
+const SCROLL_BEFORE_OPEN = 100;
+
+// A doc view showing `text`, read at `doc`.
+async function sectionDoc(
+  text: string,
+  doc: DocTarget = target(null),
+  layouts: () => ShownLayouts<Layout> = () =>
+    withUser(defaultLayout, paneLayout('pane')),
+) {
+  const shown = docViewOver(layouts);
+  shown.replies.readDoc = text;
+  await shown.view.open(doc);
+  return shown;
+}
+
+// A section editor on `text`'s section at file line `line`, its blocks in
+// `blocks`: the file's lines 1, 3, 4, 6 and 7, with the block of `line` at the
+// top of sight.
+async function openSection(text: string, line = 3) {
+  const shown = await sectionDoc(text);
+  scroller(shown.view.element).scrollTop = SCROLL_BEFORE_OPEN;
+  const lines = [1, 3, 4, 6, 7];
+  const blocks = lines.map((sourceLine) =>
+    block(sourceLine, sourceLine - line),
+  );
+  addBlocks(shown.view, ...blocks);
+  shown.view.editSection();
+  return { ...shown, blocks };
+}
+
+// Runs `:w` in the first editor against a disk that holds `diskText`.
+async function hitConflict(
+  { editors, replies }: Awaited<ReturnType<typeof openSection>>,
+  diskText: string,
+) {
+  replies.writeDoc = { type: 'changedOnDisk', diskText };
+  editors[0].change('## A\nchanged\n');
+  editors[0].events.write();
+  await settled();
+}
+
+function addBlocks(view: DocView, ...blocks: FakeElement[]) {
+  findAll(asFake(view.element), 'docs-body')[0].append(...blocks);
+}
+
+function block(line: number, top: number): ScrollerFakeElement {
+  return sourceBlock(line, top);
+}
+
+// A rendered heading of the source `line`, its anchor `anchor`.
+function heading(line: number, anchor: string): ScrollerFakeElement {
+  const shownHeading = sourceBlock(line, line);
+  shownHeading.dataset.anchor = anchor;
+  return shownHeading;
+}
 
 // What a row of the late-work table acts on.
 interface LateDocView {

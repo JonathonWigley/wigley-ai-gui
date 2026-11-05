@@ -153,12 +153,13 @@
   min-height: 0;
 }
 
-/* The title, its line ending in the `i edit` hint, over the path and chips. */
+/* The title, its line ending in the `e section` and `i edit` hints, over the
+   path and chips. */
 .docs-header {
   align-items: baseline;
   column-gap: var(--wg-space-3);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   margin-bottom: var(--wg-space-3);
   min-width: 0;
 }
@@ -327,6 +328,7 @@
   margin-inline-start: var(--wg-space-2);
   opacity: 0;
   transition: opacity var(--wg-duration-fast) var(--wg-ease-out);
+  user-select: none;
 }
 
 .md :is(h1, h2, h3, h4, h5, h6):hover .docs-section-edit,

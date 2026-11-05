@@ -75,6 +75,9 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     edit: { label: 'edit the doc', group: 'doc', runsIn: 'page' },
+    editSection: { label: 'edit this section', group: 'doc', runsIn: 'page' },
+    prevSection: { label: 'previous section', group: 'doc', runsIn: 'page' },
+    nextSection: { label: 'next section', group: 'doc', runsIn: 'page' },
     quitEditor: { label: 'close the editor', group: 'doc', runsIn: 'page' },
     conflictReload: {
       label: 'reload from disk',

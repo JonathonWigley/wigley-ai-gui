@@ -141,6 +141,19 @@
   min-height: 0;
 }
 
+/* A section's editor sizes to its lines, the `+ 2` leaving room for the mode
+   line; a longer section scrolls inside the box. */
+.docs-editor.is-section {
+  flex: none;
+  height: min(
+    60vh,
+    calc(
+      (var(--docs-section-rows) + 2) * var(--wg-text-prose) *
+        var(--wg-leading-prose)
+    )
+  );
+}
+
 /* The path box's completion list, under the box. */
 .docs-completion {
   list-style: none;
