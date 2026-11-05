@@ -5,6 +5,7 @@ import type { AppInstance } from '../contracts/app-instance';
 import type { Disposable, Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
+import type { FuzzyMatcher } from '../contracts/fuzzy';
 import type { Git } from '../contracts/git';
 import type { ImageEncoder } from '../contracts/images';
 import type { Keymap } from '../contracts/keymap';
@@ -1049,6 +1050,7 @@ function fakePageApi(
         fakeLayoutShow(record.shows, options.setLayouts, register),
     },
     services: {
+      fuzzy: notFaked<FuzzyMatcher>('fuzzy'),
       markup: notFaked<MarkupEditor>('markup'),
       visualFrames: notFaked<VisualFrames>('visualFrames'),
       toast(text, tone) {

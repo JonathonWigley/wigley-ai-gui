@@ -50,6 +50,7 @@
     "@vscode/codicons": "0.0.46-24",
     "codemirror": "^6.0.2",
     "fabric": "7.4.0",
+    "fzf": "0.5.2",
     "markdown-it": "15.0.3"
   }
 }

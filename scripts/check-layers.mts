@@ -411,6 +411,10 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts'],
     packages: ['markdown-it'],
   },
+  'src/renderer/fzf': {
+    layers: ['src/contracts'],
+    packages: ['fzf'],
+  },
   'src/renderer/fabric': {
     layers: ['src/contracts', 'src/shared'],
     packages: ['fabric'],
@@ -437,6 +441,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/renderer',
       'src/renderer/codemirror-vim',
       'src/renderer/markdown-it',
+      'src/renderer/fzf',
       'src/renderer/fabric',
       'src/renderer/visual-frames',
       'src/plugins/page.ts',

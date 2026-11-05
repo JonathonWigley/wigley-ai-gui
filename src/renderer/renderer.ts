@@ -38,6 +38,7 @@ import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { createDropTargets } from './drop-targets';
 import { editorBindInForce } from './editor-binds';
 import { createFabricMarkupEditor } from './fabric/fabric-markup-editor';
+import { createFzfMatcher } from './fzf/fzf-matcher';
 import { createLiveConfig } from './live-config';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
@@ -203,6 +204,7 @@ async function start() {
   // An insert-mode key with no bind in force types as it would unbound, so
   // only a normal-mode miss is logged.
   const paths = config.platform === 'windows' ? windowsPaths : posixPaths;
+  const fuzzy = createFzfMatcher();
   const editor = createCodeMirrorVimHost(
     keymap.editor,
     (binds, fired) => {
@@ -224,6 +226,7 @@ async function start() {
   const services: PageApiServices = {
     editor,
     markdown,
+    fuzzy,
     markup: createFabricMarkupEditor(),
     visualFrames,
     toast: (text, tone) => toasts.show(text, tone),

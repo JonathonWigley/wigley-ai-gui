@@ -7,6 +7,7 @@ import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
+import type { FuzzyMatcher } from './fuzzy';
 import type { Git } from './git';
 import type { ImageEncoder } from './images';
 import type {
@@ -425,6 +426,7 @@ export interface PageCommandContext {
 export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  fuzzy: FuzzyMatcher;
   markup: MarkupEditor;
   // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
   visualFrames: VisualFrames;
