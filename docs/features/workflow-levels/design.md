@@ -54,7 +54,9 @@ stage rules, so two workflows may both have a `build` stage. Each plugin owns it
 
 - **The level** comes from the skill that started: each workflow claims its skills. Moving up is
   loading the next skill. This is one source of truth, and the edit gate reads the same thing.
-- **The stage** comes from the workflow's own rules, including `set_workflow_step`.
+- **The stage** comes from the flow's current workflow's own rules, including `set_workflow_step`.
+  The tool accepts the step words of every workflow, and the current workflow's rules answer it, so
+  a word outside that workflow's stages is ignored.
 - **The checklist** comes from `set_workflow_checklist`, each call replacing the whole list, so a
   missed call cannot leave the app out of step. Heavy never calls it: Heavy's skills are unchanged.
 
@@ -84,8 +86,11 @@ user asks to tune `workflows.md`, and it is the evidence for judging Heavy's age
   for. It covers the main agent's edit tools, not edits through a shell, and only Claude Code.
 - **No hook blocks finishing until tests pass.** The suites here run past fifteen minutes, and the
   project rules run them filtered to the change.
-- **Sessions outside the app draw nothing.** A tool call with the app closed would start the app, so
-  only the note in app-started sessions tells an agent to call the tools.
+- **Light and Medium report only in sessions the app started.** A tool call with the app closed would
+  start the app, so only the note in app-started sessions tells an agent to call the tools, and
+  `wigley:light` and `wigley:medium` report only there. Heavy's skills do not change: `wigley:feature`
+  and `wigley:make` call `set_workflow_step` on any host that has the tool, so a terminal Heavy run
+  can start a closed app.
 
 ## Out of scope
 

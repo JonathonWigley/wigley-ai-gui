@@ -24,7 +24,7 @@ The user drives several agents from one Chat tab and wants, beside the box they 
 are doing and the session's vital numbers: each running subagent as a card and each background task as a one-line row
 the cursor can reach, the context used and the cache countdown directly over the box, and one status line with the
 repo, the branch, the model and effort and the money spent. Beside the transcript, the session hub collects what the
-user checks about the session: the main agent's live activity, the plan, the skills loaded and the session's facts.
+user checks about the session: the main agent's live activity, the plan or checklist, the skills loaded and the session's facts.
 The sidebar's working line (shown while a session runs a subagent or task) and the tab bar's usage line stay available as plugins the user switches on.
 
 ## Vocabulary
@@ -81,7 +81,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ├── .chat-main        entries + floating composer
 └── .chat-side-parts  264 px wide until the user drags it
       ▾ Main agent   2:05     chat: the activity dock
-      ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws)
+      ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Light and Medium
       ▾ Skills       4        agent-skills: each skill the main agent started
       ▾ Session               chat: project, branch, folder, harness, model · effort
 ```
@@ -101,12 +101,14 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   it has none. A section whose part draws nothing hides.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
-  the plan's side pane.
+  the workflow's side pane.
 - **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
   session, kept in `uiState` as `hub-width` across a relaunch. No key moves it: `Alt+Shift+h`/`l` stay with the chat panes'
   dividers.
-- **Plan:** the section is the workflow plugin's side pane, unchanged in what it draws. It draws from the first read of
-  a plan until Dismiss or a new plan, so the section hides at every other time.
+- **Plan or Checklist:** the section is the workflow plugin's side pane, one section for each workflow, drawn only while
+  a session's flow is of that workflow. It is titled `Plan` for Heavy, which draws it from the first read of a plan until
+  Dismiss or a new plan, and `Checklist` for Light and Medium, which draw it once the agent has set a checklist
+  (`workflow/design.md` § Where it draws). The section hides at every other time.
 - **Skills:** the skills the main agent started in this row's session, by a Skill call or a typed slash command (the
   `skillStarted` agent event): one row per skill, in start order, showing only its name, a project-scoped skill's without
   its folder path; the summary counts skills. A subagent's skills stay in the roster and are not listed. A skill's row

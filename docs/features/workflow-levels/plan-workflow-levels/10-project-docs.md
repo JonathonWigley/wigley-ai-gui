@@ -1,6 +1,6 @@
 # 10 — Project docs and follow-ups
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 8 · Depends on: 08, 09
 Plan: [plan.md](plan.md)
@@ -103,3 +103,4 @@ Commit:    one commit for the group on `workflow-levels` of wigley-ai-gui, by pa
 
 ## Proof
 
+Commit 4d1a706d · proof: Diff read; six pinned greps print 0,1,0,0,0,5; lint clean; ~/.agents/AGENTS.local.md edited, uncommitted by rule; ~/.claude-personal/settings.json is a symlink · concerns: docs/features/chat-bar/design.md:108 describes the Plan section as the workflow plugin's side pane (handed to task 11); AGENTS.local.md workflow-gate lines are ahead of the machine until task 12
