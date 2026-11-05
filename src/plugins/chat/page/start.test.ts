@@ -9,7 +9,6 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -73,14 +72,6 @@ function startChatPage(
             setActivity() {},
             selectedSessionId: () => null,
           }) as unknown as SessionsPageExports,
-      ),
-      fakeDependency(
-        keysPageKey,
-        (consumer) =>
-          ({
-            anchor: () => consumer.track({ dispose() {} }),
-            keysFor: () => null,
-          }) as unknown as KeysPageExports,
       ),
     ],
   });

@@ -11,7 +11,6 @@ import {
   type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -44,14 +43,6 @@ function startNotes() {
   const harness = startPagePart(notesPagePart, {
     dependencies: [
       fakeDependency(sessionsPageKey, () => ({}) as SessionsPageExports),
-      fakeDependency(
-        keysPageKey,
-        (consumer) =>
-          ({
-            anchor: () => consumer.track({ dispose: () => undefined }),
-            keysFor: () => null,
-          }) as unknown as KeysPageExports,
-      ),
     ],
     services: { editor },
     invoke(method) {

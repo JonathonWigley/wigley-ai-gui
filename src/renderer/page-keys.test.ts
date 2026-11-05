@@ -262,8 +262,9 @@ describe('createPendingTimeout', () => {
 });
 
 describe('installPageKeys', () => {
-  // Installs `bind` over stubbed page globals; `press` sends its key.
-  function installed(bind: PageBind, has: boolean) {
+  // Installs the engine over stubbed page globals, with no binds; `press` sends a
+  // key.
+  function installed(has = true) {
     const keydowns: ((event: unknown) => void)[] = [];
     const target = {
       addEventListener: (type: string, listener: (event: unknown) => void) => {
@@ -277,8 +278,7 @@ describe('installPageKeys', () => {
     vi.stubGlobal('window', target);
     const runs: unknown[][] = [];
     const logs: string[] = [];
-    installPageKeys(
-      [bind],
+    const engine = installPageKeys(
       TIMEOUT_MS,
       () => 'any',
       {
@@ -295,12 +295,12 @@ describe('installPageKeys', () => {
       },
       (source, message) => void logs.push(`${source}: ${message}`),
       fakeTimers().timers,
-      () => {},
+      { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
     );
-    const press = () => {
+    const press = (key: string) => {
       for (const keydown of keydowns) {
         keydown({
-          key: bind.keys[0],
+          key,
           target: null,
           timeStamp: 0,
           preventDefault: () => {},
@@ -308,16 +308,33 @@ describe('installPageKeys', () => {
         });
       }
     };
-    return { press, runs, logs };
+    return { engine, press, runs, logs };
   }
 
+  it('setBinds_FirstCall_KeysStartFiring', () => {
+    const { engine, press, runs } = installed();
+
+    press('x');
+    expect(runs).toEqual([]);
+
+    engine.setBinds(
+      [{ keys: ['x'], scope: 'any', command: 'p.x' }],
+      TIMEOUT_MS,
+    );
+    press('x');
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([['p.x', undefined, {}]]);
+  });
+
   it('runBind_Arg_PassesItToTheRun', () => {
-    const { press, runs, logs } = installed(
-      { keys: ['1'], scope: 'any', command: 'forms.choose', arg: 1 },
-      true,
+    const { engine, press, runs, logs } = installed();
+    engine.setBinds(
+      [{ keys: ['1'], scope: 'any', command: 'forms.choose', arg: 1 }],
+      TIMEOUT_MS,
     );
 
-    press();
+    press('1');
     vi.unstubAllGlobals();
 
     expect(runs).toEqual([['forms.choose', 1, {}]]);
@@ -325,12 +342,13 @@ describe('installPageKeys', () => {
   });
 
   it('runBind_RuntimeCommandGone_LogsAndRunsNothing', () => {
-    const { press, runs, logs } = installed(
-      { keys: ['r'], scope: 'any', command: 'r.gone' },
-      false,
+    const { engine, press, runs, logs } = installed(false);
+    engine.setBinds(
+      [{ keys: ['r'], scope: 'any', command: 'r.gone' }],
+      TIMEOUT_MS,
     );
 
-    press();
+    press('r');
     vi.unstubAllGlobals();
 
     expect(runs).toEqual([]);

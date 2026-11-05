@@ -5,6 +5,7 @@ import type { ImageEncoder } from '../../../contracts/images';
 import type { OsName } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
+  KeyHints,
   PageChannel,
   PageServices,
   PluginAreas,
@@ -26,7 +27,6 @@ import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../shared/page/ui/key-anchors';
 import { pngDataUrl } from '../../../shared/png-data-url';
-import type { KeysPageExports } from '../../keys/contract';
 import type {
   FollowupRequest,
   NoteDraft,
@@ -95,7 +95,7 @@ export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
   matcher: FuzzyMatcher;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   overlay: PluginAreas['overlay'];
   // The commands a layout's kit runs and checks.
   commands: KitCommands;
@@ -172,9 +172,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
-  // A new element the keys plugin draws the keys of `command` into, then
+  // A new element the core draws the keys of `command` into, then
   // `label` when given, while `scope` is in force. Each is made once: the
-  // keys plugin disposes the anchor when notes stops.
+  // anchor is disposed when notes stops.
   const anchored = (
     command: NotesPageCommand,
     scope: NotesScope,

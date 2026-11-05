@@ -11,6 +11,7 @@ import {
 import type { CommandId } from '../../../contracts/commands';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import type { AnchorOptions } from '../../../contracts/keymap';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
@@ -25,7 +26,6 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
-import type { AnchorOptions } from '../../keys/contract';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { PrimerEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';

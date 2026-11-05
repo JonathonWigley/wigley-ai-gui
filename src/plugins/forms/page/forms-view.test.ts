@@ -128,7 +128,7 @@ function formTabSetup(others: string[] = []) {
     },
     keys: {
       keysFor: () => null,
-      onChanged: () => ({ dispose: () => undefined }),
+      onKeymapChanged: () => ({ dispose: () => undefined }),
       anchor: () => ({ dispose: () => undefined }),
     },
     run: () => undefined,

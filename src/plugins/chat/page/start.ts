@@ -9,7 +9,6 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { createPartStore } from '../../../shared/page/contributed-parts';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -95,14 +94,13 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         services.log(`chat page load not sent: ${errorText(error)}`),
       );
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
     const run = (command: string) => api.commands.run(command);
     const layouts = createChatLayouts(services.log);
     // What every surface's layout kit reads.
     const partDeps = {
       layouts,
       markdown: services.markdown,
-      keys,
+      keys: api.keys,
       commands: {
         exists: (id: string) => api.keys.command(id) !== undefined,
         run: (id: string) => api.commands.run(id),
@@ -210,7 +208,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       ],
       editor: services.editor,
       markdown: services.markdown,
-      keys,
+      keys: api.keys,
       run,
       commands: partDeps.commands,
       platform: api.platform.os,

@@ -4,7 +4,7 @@ import {
   type OuterPanes,
   type PaneDirection,
 } from '../../../contracts/panes';
-import type { ShownLayouts } from '../../../contracts/plugin';
+import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
@@ -15,7 +15,6 @@ import {
   type SplitAxis,
 } from '../../../shared/page/pane-tree/pane-tree';
 import { createPaneTreeView } from '../../../shared/page/pane-tree/pane-tree-view';
-import type { KeysPageExports } from '../../keys/contract';
 import {
   type RowActivity,
   type SessionPart,
@@ -62,7 +61,7 @@ export interface SessionsViewDeps extends Omit<
   activate(sessionId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   timers: Timers;
   panesChanged(): void;
   paneFocused(paneId: string): void;

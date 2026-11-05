@@ -307,7 +307,7 @@ function keyPromptCells(platform: OsName): SampleCell[][] {
 }
 
 // The parts views build around anchors. Each sample anchor is a span holding
-// a KeyPrompt, as the keys plugin draws it; an unbound one is empty.
+// a KeyPrompt, as the core draws it; an unbound one is empty.
 function keyAnchorsCells(platform: OsName): SampleCell[][] {
   const shown = (keys: string, label?: string) => {
     const node = element('span', 'ui-key-anchor');

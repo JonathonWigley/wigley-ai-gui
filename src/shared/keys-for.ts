@@ -1,9 +1,8 @@
-import type { CommandArg, CommandId } from '../../../contracts/commands';
-import type { Keymap, ViewScope } from '../../../contracts/keymap';
-import type { OsName } from '../../../contracts/platform';
-import { isSameJson } from '../../../shared/json';
-import { formatKeys, formatVimKeys } from '../../../shared/key-hints';
-import type { HintWhere } from '../contract';
+import type { CommandArg, CommandId } from '../contracts/commands';
+import type { HintWhere, Keymap, ViewScope } from '../contracts/keymap';
+import type { OsName } from '../contracts/platform';
+import { isSameJson } from './json';
+import { formatKeys, formatVimKeys } from './key-hints';
 import { isVimKeys, pageVimKeys } from './vim-keys';
 
 // Whether a bind runs `command` in `scope`, `any` binds included, or in any

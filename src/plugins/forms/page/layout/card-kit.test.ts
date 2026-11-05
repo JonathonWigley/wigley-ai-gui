@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AnchorOptions } from '../../../../contracts/keymap';
 import type {
   DefectFinding,
   FindingChoice,
@@ -24,7 +25,6 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
-import type { AnchorOptions } from '../../../keys/contract';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };

@@ -15,7 +15,6 @@ import {
   chatPageKey,
   type ChatSidePart,
 } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import { agentSkillsPagePart } from './start';
 
 const SESSION = 's1';
@@ -50,11 +49,6 @@ function startOnHarness() {
       fakeDependency(agentsPageKey, (consumer) => ({
         roster: () => ROSTER,
         onRosterChanged: () => consumer.track({ dispose() {} }),
-      })),
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
       })),
     ],
   });

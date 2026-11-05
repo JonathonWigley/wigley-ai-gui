@@ -252,8 +252,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  to visual, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
-  keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
-                 the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
+  keys/          manifest.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
+                 the title bar's Keys button, and the placement check over the core's anchors), layouts/
                  (the keys Layout contract and the built-in `default` layout)
   gallery/       manifest.ts, main/ (registers the layouts only), page/ (Gallery mode: every primitive in every state,
                  a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
@@ -345,7 +345,7 @@ round; primer: an open primer), since main, not the page, decides.
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
   events it hears there. A plugin reads a dependency with `api.dependency(key)`, where the key is the typed
-  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `keysPageKey`). The
+  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `sessionsPageKey`). The
   compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on or
   reads, which types that plugin's exports, keys and events.
@@ -483,7 +483,7 @@ round; primer: an open primer), since main, not the page, decides.
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the
-  keys `shell.setKeys` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
+  keys `mountShell` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
   the drag listeners and disposes the prompt's anchors; a view that drops a split calls it.
 - **A drop target** is how files dropped or pasted reach a plugin's text box: the view registers its element and
   `take(files)` with `api.drops.addTarget`, which returns a `Disposable`. The page core routes a drop to the innermost
@@ -497,17 +497,19 @@ round; primer: an open primer), since main, not the page, decides.
   `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no
   bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
   (`docs/features/key-hints/design.md`).
-  - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through the `keys`
-    page export `anchor`, which returns a Disposable. The keys plugin draws the KeyPrompt primitive into it, redraws
-    it on each keymap change, draws nothing when the command is unbound or the keys plugin's `showHints` setting
-    (`"keys": { "showHints": false }` in `settings.json`) is off, so the anchor takes no space, and hides it, keeping
-    its space, while its scope is not the one in force (an anchor with no scope always shows). A plugin draws no key
+  - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through
+    `api.keys.anchor`, which returns a Disposable. The core (`src/renderer/key-anchors.ts`) draws the KeyPrompt
+    primitive into it, redraws it on each keymap change, draws nothing when the command is unbound or the keys plugin's
+    `showHints` setting (`"keys": { "showHints": false }` in `settings.json`, which the plugin hands the core through
+    `keys.setHintsShown`) is off, so the anchor takes no space, and hides it, keeping its space, until the page parts
+    have started and while its scope is not the one in force (an anchor with no scope always shows). With the keys
+    plugin stopped or disabled, hints show. A plugin draws no key
     hint of its own.
   - **The view places and styles each anchor** by one of four placement kinds (`DESIGN.md` § Keys and focus): an edge
     prompt, a cursor prompt, a control hint or a box hint. The parts around anchors — chevrons, edge prompts, box
     hints, stacks of one command's anchors, and recording and disposing anchors — come from
     `src/shared/page/ui/key-anchors.ts`.
-  - **Vim's own keys** — the key sequences listed in the keys plugin (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
+  - **Vim's own keys** — the key sequences listed in `src/shared/vim-keys.ts` (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
     keys and the like), in any spelling of them (`<esc>`, `<Return>`, `<c-j>`) — need no anchor and show in help
     only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
     not one of vim's own keys, or its first bind when every bind is; the user's binds come before the defaults. Leader
@@ -522,8 +524,7 @@ round; primer: an open primer), since main, not the page, decides.
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.
   - Every layout's `keyHint` and `keysFor` kit calls (`BaseKit`) keep their shape and route through anchors. The
-    shell's kit takes any plugin's qualified command id; the core cannot reach the keys plugin before the plugins
-    start, so the shell's anchors draw when the chrome draws again once they have (`setKeys` in `renderer.ts`).
+    shell's kit takes any plugin's qualified command id, and its anchors show once the page parts have started.
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names: on macOS the modifiers and Return, Tab, Esc,

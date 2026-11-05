@@ -1,10 +1,9 @@
-import type { CommandArg, CommandId } from '../../../contracts/commands';
-import type { Disposable } from '../../../contracts/disposable';
-import type { ViewScope } from '../../../contracts/keymap';
-import type { OsName } from '../../../contracts/platform';
-import { commandTarget } from '../../../shared/command-args';
-import { keyPrompt } from '../../../shared/page/ui/key-prompt';
-import type { AnchorOptions, HintWhere } from '../contract';
+import type { CommandArg, CommandId } from '../contracts/commands';
+import type { Disposable } from '../contracts/disposable';
+import type { AnchorOptions, HintWhere, ViewScope } from '../contracts/keymap';
+import type { OsName } from '../contracts/platform';
+import { commandTarget } from '../shared/command-args';
+import { keyPrompt } from '../shared/page/ui/key-prompt';
 
 const HIDDEN = 'is-hint-hidden';
 const ANCHOR = 'ui-key-anchor';
@@ -18,13 +17,15 @@ export interface AnchorDeps {
   ): string | null;
   label(id: CommandId): string;
   scope(): ViewScope;
-  showHints(): boolean;
   platform: OsName;
 }
 
 // The anchor registry. `redraw` draws every live anchor's keys again, and none
-// while hints are off, so the anchors take no space; `applyVisibility` hides
-// each live anchor whose scope is not in force, keeping its space. `placedIn`
+// while `setShown` holds false, so the anchors take no space; `applyVisibility`
+// hides, keeping its space, each live anchor before `reveal`, while `setShown`
+// holds false, or whose scope is not in force. `holdShown` is
+// `setShown` with a handle: the latest handle's `dispose` sets true, and an older
+// handle's does nothing. `placedIn`
 // is the `commandTarget` of every command and argument anchored in
 // `scope` or with no scope during the page load, disposed anchors included,
 // whose element was seen on the page: when it was drawn, hidden or shown,
@@ -37,6 +38,9 @@ export interface Anchors {
   ): Disposable;
   redraw(): void;
   applyVisibility(): void;
+  setShown(shown: boolean): void;
+  holdShown(shown: boolean): Disposable;
+  reveal(): void;
   placedIn(scope: ViewScope): ReadonlySet<string>;
 }
 
@@ -64,13 +68,14 @@ export function createAnchors(deps: AnchorDeps): Anchors {
   const live = new Set<LiveAnchor>();
   const placedByScope = new Map<ViewScope, Set<string>>();
   const placedUnscoped = new Set<string>();
+  let isRevealed = false;
+  let isShown = true;
+  let latestHold: Disposable | null = null;
 
   const draw = (held: LiveAnchor) => {
     recordIfPlaced(held);
     const { scope, where = 'page', label, arg } = held.options;
-    const keys = deps.showHints()
-      ? deps.keysFor(held.command, scope, where, arg)
-      : null;
+    const keys = isShown ? deps.keysFor(held.command, scope, where, arg) : null;
     if (keys === null) {
       held.element.replaceChildren();
       return;
@@ -84,7 +89,10 @@ export function createAnchors(deps: AnchorDeps): Anchors {
     recordIfPlaced(held);
     const { scope } = held.options;
     const isOutOfScope = scope !== undefined && scope !== deps.scope();
-    held.element.classList.toggle(HIDDEN, isOutOfScope);
+    held.element.classList.toggle(
+      HIDDEN,
+      !isRevealed || !isShown || isOutOfScope,
+    );
   };
 
   // Records `held` as placed the first time its element is on the page.
@@ -102,6 +110,13 @@ export function createAnchors(deps: AnchorDeps): Anchors {
     const placed = placedByScope.get(scope) ?? new Set<string>();
     placed.add(target);
     placedByScope.set(scope, placed);
+  };
+
+  const applyVisibility = () => live.forEach(applyTo);
+  const setShown = (shown: boolean) => {
+    isShown = shown;
+    live.forEach(draw);
+    applyVisibility();
   };
 
   return {
@@ -130,8 +145,24 @@ export function createAnchors(deps: AnchorDeps): Anchors {
     redraw() {
       live.forEach(draw);
     },
-    applyVisibility() {
-      live.forEach(applyTo);
+    applyVisibility,
+    setShown,
+    holdShown(shown) {
+      setShown(shown);
+      const hold: Disposable = {
+        dispose() {
+          if (latestHold === hold) {
+            latestHold = null;
+            setShown(true);
+          }
+        },
+      };
+      latestHold = hold;
+      return hold;
+    },
+    reveal() {
+      isRevealed = true;
+      applyVisibility();
     },
     placedIn(scope) {
       live.forEach(recordIfPlaced);

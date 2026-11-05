@@ -12,7 +12,6 @@ import {
 import { agentsPageKey, type Roster } from '../../agents/contract';
 import { sessionsPageKey } from '../../sessions/contract';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import { agentStripPagePart } from './start';
 
 const SESSION = 's1';
@@ -72,11 +71,6 @@ function startOnHarness() {
       })),
       fakeDependency(sessionsPageKey, () => ({
         cutToTitleLimit: (text: string) => text,
-      })),
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
       })),
     ],
   });

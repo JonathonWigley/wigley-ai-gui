@@ -9,18 +9,10 @@ import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-suppor
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
-  fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import { settingsPagePart } from './start';
-
-const fakeKeys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
-  keysFor: () => null,
-  onChanged: () => consumer.track({ dispose: () => undefined }),
-  anchor: () => consumer.track({ dispose: () => undefined }),
-}));
 
 const SCHEMA: UserConfigSchema = {
   sections: [
@@ -63,7 +55,6 @@ describe('settings page part', () => {
 
   it('stops with nothing live and starts again', async () => {
     const harness = startPagePart(settingsPagePart, {
-      dependencies: [fakeKeys],
       firstModeTaken: true,
     });
 
@@ -77,7 +68,6 @@ describe('settings page part', () => {
   it('a write landing after stop closes the open box with no toast', async () => {
     let land: (result: ConfigWriteResult) => void = () => undefined;
     const harness = startPagePart(settingsPagePart, {
-      dependencies: [fakeKeys],
       firstModeTaken: true,
       invoke: async (method) => {
         if (method === 'schema') {

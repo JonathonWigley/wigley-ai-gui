@@ -100,9 +100,9 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 
 Landed as one page-only `keys` plugin (depends on no plugin) holding which-key and the help overlay; it has since gained a
 main part that only registers its layouts (`src/plugins/keys/main/start.ts`). Key
-hints in place later replaced the plugin's bottom key list: the plugin now also exports `anchor`, which draws a command's
-keys into an element a view names, and the plugin's `showHints` setting (`"keys": { "showHints": false }` in
-`settings.json`) turns the hints off. The title bar's Keys button, which opens help, is the plugin's too
+hints in place later replaced the plugin's bottom key list: the core keys API's `anchor` (`PageApi['keys']`) draws a
+command's keys into an element a view names, and the plugin's `showHints` setting (`"keys": { "showHints": false }` in
+`settings.json`) tells the core to turn the hints off; with the plugin stopped or disabled, hints show. The title bar's Keys button, which opens help, is the plugin's too
 (`docs/features/key-hints/design.md`).
 
 - Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a panel docked full width just above

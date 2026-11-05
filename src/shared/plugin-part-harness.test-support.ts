@@ -14,7 +14,7 @@ import type { Files } from '../contracts/files';
 import type { FuzzyMatcher } from '../contracts/fuzzy';
 import type { Git } from '../contracts/git';
 import type { ImageEncoder } from '../contracts/images';
-import type { Keymap } from '../contracts/keymap';
+import type { AnchorOptions, HintWhere, Keymap } from '../contracts/keymap';
 import type {
   FenceContribution,
   MarkdownRenderer,
@@ -59,6 +59,8 @@ import { createListeners, type Listeners } from './listeners';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
 import { fakePlatform } from './platform.test-support';
+import { commandTarget } from './command-args';
+import { keysFor } from './keys-for';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
 import { commandInfos, qualify } from './plugin-manifests';
@@ -162,7 +164,16 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
 // `send` tells the channel listeners of the part under test. `fireWindow` calls
 // each live `window` listener of `type` in added order, with `{ type }` when
 // `event` is left out. `fences` holds the fences live through the default
-// `services.markdown`.
+// `services.markdown`. `anchors` holds each anchor named through the fake
+// `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
+// tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
+// `pushSettings` tells the `onSettingsChanged` listeners of the part under test.
+export interface HarnessAnchor {
+  element: HTMLElement;
+  command: CommandId;
+  options: AnchorOptions;
+}
+
 export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   PageStart<M>
 > {
@@ -170,7 +181,11 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   fireWindow(type: string, event?: unknown): void;
   showLayouts(shown: ShownLayouts<unknown>): void;
   pushKeymap(keymap: Keymap): void;
+  pushSettings(settings: M['settings']): void;
   readonly fences: readonly FenceContribution[];
+  readonly anchors: readonly HarnessAnchor[];
+  setWhere(where: HintWhere): void;
+  hintsShown(): boolean;
 }
 
 // `services` replaces the named default services, and a replaced service counts
@@ -193,6 +208,8 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 // the app's own first part would add, so no mode the part adds shows as it is
 // added. `parts` and `state` are as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
+  // Runs at each fake anchor's `dispose`, to make one throw.
+  anchorDispose?(): void;
   dependencies?: readonly FakeDependency<'page'>[];
   settings?: M['settings'];
   services?: Partial<Omit<PageServices, 'timers' | 'log'>>;
@@ -906,6 +923,7 @@ interface PageRecord {
   channelListeners: Map<string, Listeners<unknown>>;
   shows: Listeners<ShownLayouts<unknown>>;
   uiState: Map<string, unknown>;
+  settingsListeners: Listeners<object>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
 }
 
@@ -918,6 +936,7 @@ function newPageRecord(
     channelListeners: new Map(),
     shows: createListeners(),
     uiState: new Map(),
+    settingsListeners: createListeners(),
     invoke,
   };
 }
@@ -932,6 +951,12 @@ interface PageWorld extends HarnessWorld {
   // The qualified ids of the live modes, in add order; the first one shows.
   liveModes: string[];
   fences: FenceContribution[];
+  anchors: HarnessAnchor[];
+  where: HintWhere;
+  whereListeners: Listeners<HintWhere>;
+  hintsShown: boolean;
+  latestHintsHandle: Disposable | null;
+  anchorDispose?(): void;
 }
 
 function createPageWorld(
@@ -956,6 +981,11 @@ function createPageWorld(
     transparency: null,
     liveModes: firstModeTaken ? ['part-harness.first-mode'] : [],
     fences: [],
+    anchors: [],
+    where: 'page',
+    whereListeners: createListeners(),
+    hintsShown: true,
+    latestHintsHandle: null,
   };
 }
 
@@ -1149,6 +1179,36 @@ function fakePageApi(
       command: (id) => ownCommand(manifest, id),
       scopes: [],
       bind: pluginCommands.bind,
+      keysFor: (command, scope, where, arg) =>
+        keysFor(world.keymap, command, scope, 'macos', where, arg),
+      anchor(element, command, options = {}) {
+        world.anchors.push({ element, command, options });
+        return register<Disposable>({
+          dispose: world.anchorDispose ?? (() => undefined),
+        });
+      },
+      where: () => world.where,
+      onWhereChanged: (listener) =>
+        register(world.whereListeners.add(listener)),
+      setHintsShown(shown) {
+        world.hintsShown = shown;
+        const handle = register<Disposable>({
+          dispose() {
+            if (world.latestHintsHandle === handle) {
+              world.latestHintsHandle = null;
+              world.hintsShown = true;
+            }
+          },
+        });
+        world.latestHintsHandle = handle;
+        return handle;
+      },
+      placedIn: (scope) =>
+        new Set(
+          world.anchors
+            .filter(({ options }) => [scope, undefined].includes(options.scope))
+            .map(({ command, options }) => commandTarget(command, options.arg)),
+        ),
     },
     modes: fakeModes(manifest, world, common),
     shell: { setLayout: liveHandle },
@@ -1165,7 +1225,8 @@ function fakePageApi(
     },
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
     settings: common.settings,
-    onSettingsChanged: common.onSettingsChanged,
+    onSettingsChanged: (listener) =>
+      register(record.settingsListeners.add(listener)),
     platform: fakePlatform('macos'),
     commands: pluginCommands.commands,
     dependency: common.dependency as PageApi<
@@ -1370,6 +1431,7 @@ export function startPagePart<M extends PluginManifest>(
     options.state,
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
+  world.anchorDispose = options.anchorDispose;
   const record = newPageRecord(zeroCounts(), options.invoke);
   const fireWindowListeners = stubPageGlobals(record.counts);
   const beginOn = (
@@ -1403,6 +1465,12 @@ export function startPagePart<M extends PluginManifest>(
   return {
     ...baseHarness(lifecycle, world, record.counts),
     fences: world.fences,
+    anchors: world.anchors,
+    setWhere(where) {
+      world.where = where;
+      world.whereListeners.tell(where);
+    },
+    hintsShown: () => world.hintsShown,
     send(message, data) {
       record.channelListeners.get(message)?.tell(data);
     },
@@ -1410,6 +1478,7 @@ export function startPagePart<M extends PluginManifest>(
       fireWindowListeners(type, event);
     },
     showLayouts: record.shows.tell,
+    pushSettings: record.settingsListeners.tell,
     pushKeymap(keymap) {
       world.keymap = keymap;
       world.keymapListeners.tell(keymap);

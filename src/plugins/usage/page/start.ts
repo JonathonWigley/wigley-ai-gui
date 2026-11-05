@@ -9,7 +9,6 @@ import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -75,12 +74,11 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
     const chat = api.dependency(chatPageKey);
-    const keys = api.dependency(keysPageKey);
     const parts = createUsageParts({
       defaultLayout,
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),

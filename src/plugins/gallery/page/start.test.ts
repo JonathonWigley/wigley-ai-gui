@@ -1,19 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
-  fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { galleryPagePart } from './start';
-
-const fakeKeys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
-  keysFor: () => null,
-  onChanged: () => consumer.track({ dispose: () => undefined }),
-  anchor: () => consumer.track({ dispose: () => undefined }),
-}));
 
 describe('gallery page part', () => {
   beforeEach(() => {
@@ -24,9 +16,7 @@ describe('gallery page part', () => {
   });
 
   it('stops with nothing live and starts again', async () => {
-    const harness = startPagePart(galleryPagePart, {
-      dependencies: [fakeKeys],
-    });
+    const harness = startPagePart(galleryPagePart, {});
 
     await harness.stop();
     expect(harness.counts()).toEqual(noCounts);
@@ -36,9 +26,7 @@ describe('gallery page part', () => {
   });
 
   it('stop disconnects every HScroller sample observer', async () => {
-    const harness = startPagePart(galleryPagePart, {
-      dependencies: [fakeKeys],
-    });
+    const harness = startPagePart(galleryPagePart, {});
     // The harness stubs `ResizeObserver` as it starts, so this fake goes in after
     // it and watches the samples the new layouts draw.
     const observers: { observed: number; disconnected: number }[] = [];

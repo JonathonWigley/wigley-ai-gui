@@ -288,7 +288,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 - [x] [Core slots and events](06-core-slots.md) — after 05
 
 ### Wave 6
-- [ ] [Runtime command API](07-command-api.md) — after 06
+- [x] [Runtime command API](07-command-api.md) — after 06
 
 ### Wave 7
 - [ ] [keysFor, anchor and box focus in core](08-core-keys.md) — after 07
@@ -326,7 +326,13 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 04 · 0d2a93f4 · Diff read; installWindowKeybindings signature present; typecheck and lint clean; the id-label grep prints nothing. · concerns: main.ts's id fallback runs only in the app; task 16 carries the runtime check.
 - 05 · c0704474 · Diff read; state.ts, slot-store, slot-holder, page-state, bridge members and 22 manifests' reads present; typecheck and lint clean. · concerns: main.ts serveSlots and renderer createPageState have no test (task 16); kind-mismatch throw in applyPageWrite surfaces as main's uncaught exception; contracts/state.ts and plugin.ts import each other's types; onWrite throwing leaves the page store updated and skips local listeners; applyPageWrite steps seq on any unrefused change.
 - 06 · dd6d5088 · Diff read; core-state, startPageCoreSlots, startWindowFocusSlot, the definePlugin throw and the callers' moves present; typecheck and lint clean; the hooks grep prints nothing. · concerns: core.mode stays '' after the first mode shows until the first switch, and keeps the old id when the last mode is disposed, because createModes.add tells no change: a layout reading core.mode through task 10 sees this; renderer and main wiring reach no test (task 16); three stateWrites at each page load.
+- 07 · 59acab31 · Report and core diffs read; the new modules and PluginCommands present; typecheck and lint clean; the choose and chord greps as required. · concerns: main.ts and renderer.ts wiring first runs at task 16; 'declared twice' logs each re-serve during the race; a user layout naming choose through the forms kit's commandNamed gets no arg and throws at the click, where choose1 used to work; a Settings write naming an unknown id is now written, with the problem appearing once both processes started.
 ### Contract changes
+- 07 CommandRouter gains intercept(id, wrap, owner); KeyCommands<Context> is exported from shared/command-router.ts.
+- 07 new shared/runtime-commands.ts (createRuntimeCommands, RuntimeCommands, EMPTY_RUNTIME_CATALOG); createPageApi and createMainApi take commands: RuntimeCommands, and the page's run dep is gone.
+- 07 ConfigStore gains runtime(); checkKeymapText also returns layer; new exports checkUserKeymap, CheckedKeymap, RuntimeCatalogs; RuntimeWiringDeps.config is structural.
+- 07 ScopedAnchor's third param is options?: { arg?; label? }; installWindowKeybindings gains trailing log; chordName moves to interceptChordText in shared/accelerator.ts; PartHarness gains commandRuns.
+- 07 configSchema_DefaultBindBadArg_Throws sits in main/config/config-store.test.ts; helpSections_FormsChooseDigits_OneMergedLine builds its binds in the test; renderer/editor-binds.ts is unchanged.
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
 - Task 03: keymap.test's commandInfos takes {} for core commands, not coreCommands: the layer rule forbids the import and the bind's plugin comes from the manifest. · group 03
@@ -335,5 +341,9 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 05: a keyed change with value undefined is a delete on writers and through applyRemote. · group 05
 - Task 05: AGENTS.md's plugin-talks and npm-run-lint entries name reads; preload holds its one stateChanged listener from module load. · group 05
 - Task 06: coreModeSlot's comment says '' means no change has been told yet, not 'no mode shows yet', which is untrue once the first mode is added. · group 06
+- Task 07: a refused or unreadable keymap.json re-merges the last good parsed user layer, held-back binds included, with the current runtime layers. · group 07
+- Task 07: a command's dispose also removes the catalog's binds naming it; wireRuntime feeds setRuntime once at wiring; one tick's burst batches through a microtask. · group 07
+- Task 07: the registry's promise waits for the handler even when a wrap does not await next; register throws on an id in either catalog or a served non-runtime id. · group 07
+- Task 07: the harness has no fake-command option, since no harness test failed once run became real. · group 07
 ### Review rounds
 ### Test gate

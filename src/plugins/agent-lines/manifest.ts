@@ -7,7 +7,7 @@ export const agentLinesManifest = definePlugin({
   id: 'agent-lines',
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['agents', 'sessions', 'keys'],
+    page: ['agents', 'sessions'],
   },
   reads: { main: [], page: [] },
   commands: {},

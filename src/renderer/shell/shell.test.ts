@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../contracts/ambient';
 import { PANE_RESIZE_COMMANDS } from '../../contracts/panes';
-import type { ShellLayout } from '../../contracts/plugin';
+import type { KeyHints, ShellLayout } from '../../contracts/plugin';
 import type { UiState } from '../../contracts/ui-state';
 import { recordingAnchors } from '../../shared/page/layout-host/test-layouts';
 import {
@@ -248,6 +248,7 @@ function mountMeasuredShell(
     stored?: number;
     rightStored?: number;
     edges?: Partial<Edges>;
+    keys?: KeyHints;
   } = {},
 ) {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
@@ -277,6 +278,7 @@ function mountMeasuredShell(
     measuredLayout(edges),
     stateOver(values),
     NO_TIMERS,
+    options.keys ?? recordingAnchors().keys,
   );
   const rightHandle = () => root.querySelector('.shell-right-bar-handle');
   const drawnRightWidth = () => root.style['--shell-right-bar-width'];
@@ -348,6 +350,7 @@ describe('mountShell', () => {
       measuredLayout(DEFAULT_EDGES),
       stateOver(new Map()),
       NO_TIMERS,
+      recordingAnchors().keys,
     );
     shell.setChromeLayout('mine');
     const mine = Array(5).fill(['mine', 'shell']);
@@ -431,6 +434,7 @@ describe('mountShell', () => {
         ),
         stateOver(new Map()),
         NO_TIMERS,
+        recordingAnchors().keys,
       );
       const scrollTops = () =>
         ['shell-side-bar', 'shell-main'].map(
@@ -934,28 +938,23 @@ describe('mountShell', () => {
     [PANE_RESIZE_COMMANDS.right, isDisposed],
   ];
 
-  it("anchors only the side bar handle's prompt, again on each setKeys", () => {
-    const { shell } = mountMeasuredShell();
-    const first = recordingAnchors();
-    const second = recordingAnchors();
+  it("anchors only the side bar handle's prompt", () => {
+    const recorded = recordingAnchors();
 
-    shell.setKeys(first.keys);
-    const afterFirst = anchored(first);
-    shell.setKeys(second.keys);
+    mountMeasuredShell({ keys: recorded.keys });
 
-    expect(afterFirst).toEqual(sidePrompts(false));
-    expect(anchored(first)).toEqual(sidePrompts(true));
-    expect(anchored(second)).toEqual(sidePrompts(false));
+    expect(anchored(recorded)).toEqual(sidePrompts(false));
   });
 
   it('disposes both bar dividers and removes their handles', () => {
-    const { shell, handle, rightHandle } = mountMeasuredShell();
-    const first = recordingAnchors();
-    shell.setKeys(first.keys);
+    const recorded = recordingAnchors();
+    const { shell, handle, rightHandle } = mountMeasuredShell({
+      keys: recorded.keys,
+    });
 
     shell.dispose();
 
-    expect(anchored(first)).toEqual(sidePrompts(true));
+    expect(anchored(recorded)).toEqual(sidePrompts(true));
     expect([handle(), rightHandle()]).toEqual([null, null]);
   });
 });

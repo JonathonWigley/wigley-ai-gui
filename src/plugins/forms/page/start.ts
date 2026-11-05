@@ -18,7 +18,6 @@ import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import { keysPageKey } from '../../keys/contract';
 import type {
   FormsChannel,
   FormsPageEvents,
@@ -165,7 +164,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       store,
       boxes,
       markdown: services.markdown,
-      keys: api.dependency(keysPageKey),
+      keys: api.keys,
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,

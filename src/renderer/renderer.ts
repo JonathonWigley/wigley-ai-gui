@@ -16,17 +16,20 @@ import {
   PANE_FOCUS_COMMANDS,
   PANE_RESIZE_COMMANDS,
 } from '../contracts/panes';
-import type { CommandHandler, PageCommandContext } from '../contracts/plugin';
+import type {
+  CommandHandler,
+  KeyHints,
+  PageCommandContext,
+} from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
-import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
+import { promptKeysFor } from '../shared/keys-for';
 import { focusOutOfFrame } from '../shared/page/dom';
-import type { BaseKitDeps } from '../shared/page/layout-host/base-kit';
 import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { icon } from '../shared/page/ui/icon';
 import { startPlugins } from '../shared/plugin-host';
@@ -38,22 +41,29 @@ import {
   createRuntimeCommands,
   EMPTY_RUNTIME_CATALOG,
 } from '../shared/runtime-commands';
+import { wireAnchors } from './anchor-wiring';
+import { createBoxFocus } from './box-focus';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { createDropTargets } from './drop-targets';
-import { editorBindInForce } from './editor-binds';
+import { runEditorBind } from './editor-binds';
 import { createFabricMarkupEditor } from './fabric/fabric-markup-editor';
 import { createFzfMatcher } from './fzf/fzf-matcher';
-import { createLiveConfig } from './live-config';
+import { createAnchors } from './key-anchors';
+import { createLiveConfig, onChangedPart } from './live-config';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
-import { createPageApi, type PageApiServices } from './plugins/page-api';
+import {
+  createPageApi,
+  liveKeysFor,
+  type PageApiServices,
+} from './plugins/page-api';
 import defaultChromeLayout from './shell/layouts/default/layout.js';
 import defaultChromeStylesheet from './shell/layouts/default/layout.css?url';
 import type { Layout as ChromeLayout } from './shell/layouts/layout';
@@ -73,9 +83,6 @@ import { createVisualFrames } from './visual-frames/visual-frames';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
-
-// The plugin whose exports anchor the shell chrome's key hints.
-const KEYS_PLUGIN_ID = 'keys';
 
 const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),
@@ -165,11 +172,30 @@ async function start() {
   themeApplier.apply(config.theme, settings);
 
   document.documentElement.dataset.platform = config.platform.os;
+  const scopeStack = createScopeStack(INITIAL_SCOPE);
+  // Anchors use `promptKeysFor`: a prompt skips vim's own keys.
+  const anchors = createAnchors({
+    keysFor: (command, scope, where, arg) => {
+      const { keymap, platform } = live.current();
+      return promptKeysFor(keymap, command, scope, platform.os, where, arg);
+    },
+    label: (id) => live.current().commands[id]?.label ?? id,
+    scope: () => scopeStack.current(),
+    platform: live.current().platform.os,
+  });
+  wireAnchors({ live, scopeStack, anchors });
+  const keyHints: KeyHints = {
+    keysFor: liveKeysFor(live),
+    anchor: anchors.anchor,
+    onKeymapChanged: (listener) =>
+      onChangedPart(live, (served) => served.keymap, listener),
+  };
   const shell = mountShell(
     document.getElementById('app') as HTMLElement,
     defaultShellLayout,
     uiState.scoped('shell'),
     timers,
+    keyHints,
   );
   const { areas } = shell;
   const markdown = createMarkdownItRenderer(createCodeMirrorHighlighter());
@@ -178,6 +204,7 @@ async function start() {
     defaultLayout: defaultChromeLayout,
     services: {
       markdown,
+      keys: keyHints,
       platform: config.platform.os,
       commands: {
         exists: hasHandler,
@@ -213,7 +240,6 @@ async function start() {
   const toasts = createToasts(toastLayer, timers);
   chrome.showProblems(config.problems);
 
-  const scopeStack = createScopeStack(INITIAL_SCOPE);
   const coreSlots = startPageCoreSlots(state, {
     scope: scopeStack,
     modes,
@@ -247,33 +273,28 @@ async function start() {
   }
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
-  // An insert-mode key with no bind in force types as it would unbound, so
-  // only a normal-mode miss is logged.
   const paths = config.platform.os === 'windows' ? windowsPaths : posixPaths;
   const fuzzy = createFzfMatcher();
   const editor = createCodeMirrorVimHost(
     keymap.editor,
-    (binds, fired) => {
-      const choice = editorBindInForce(binds, scopeStack.current());
-      if (choice.kind === 'run') {
-        const { command, arg } = choice.bind;
-        // A runtime command disposed since the last push has no handler until the next.
-        if (hasHandler(command)) {
-          void commands.router.run(command, arg, { editor: fired });
-        } else {
-          log('page', `${choice.bind.keys} names no command ${command}`);
-        }
-        return true;
-      }
-      if (editorBindMode(binds[0]) === 'normal') {
-        log('page', choice.message);
-      }
-      return false;
-    },
+    (binds, fired) =>
+      runEditorBind(binds, fired, {
+        scope: () => scopeStack.current(),
+        run({ command, arg, keys }, editorFired) {
+          // A runtime command disposed since the last push has no handler until the next.
+          if (hasHandler(command)) {
+            void commands.router.run(command, arg, { editor: editorFired });
+          } else {
+            log('page', `${keys} names no command ${command}`);
+          }
+        },
+        log,
+      }),
     log,
     { paths, fileIcon: () => icon('file') },
     fuzzy,
   );
+  const boxFocus = createBoxFocus(document, editor);
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
   const services: PageApiServices = {
@@ -290,10 +311,19 @@ async function start() {
     homeDir: config.homeDir,
     runMode: config.runMode,
   };
-  // Filled once the page keys are installed; no key reaches the engine before.
-  let pageKeys: ReturnType<typeof installPageKeys> | null = null;
+  // Listens from here with no binds: a key pressed while the parts start matches
+  // nothing and reaches nothing.
+  const pageKeys = installPageKeys(
+    settings.keySequenceTimeoutMs,
+    () => scopeStack.current(),
+    editor,
+    commands.keyCommands,
+    log,
+    timers,
+    boxFocus,
+  );
   const pendingKeys = createPendingKeys({
-    page: { hold: () => pageKeys?.hold(), cancel: () => pageKeys?.cancel() },
+    page: pageKeys,
     editor,
     scope: () => scopeStack.current(),
   });
@@ -316,7 +346,7 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  const host = startPlugins(
+  startPlugins(
     pageParts,
     'page',
     (part, context) => {
@@ -342,6 +372,8 @@ async function start() {
           paneTargets,
           drops,
           state,
+          anchors,
+          boxFocus,
         }),
       );
       const handlers: Record<
@@ -359,15 +391,7 @@ async function start() {
     pageLoadList,
     log,
   );
-  // The core's own store for the chrome's view of keys, kept for the page load.
-  const shellRegistrations = createRegistrations();
-  const keysExports = host.started
-    .get(KEYS_PLUGIN_ID)
-    ?.exports?.(shellRegistrations);
-  if (keysExports !== undefined) {
-    chrome.setKeys(keysExports as BaseKitDeps['keys']);
-    shell.setKeys(keysExports as BaseKitDeps['keys']);
-  }
+  anchors.reveal();
   registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
@@ -376,17 +400,7 @@ async function start() {
     started: true,
   });
   // Building the matcher rejects a page key bound twice in one scope.
-  const installed = installPageKeys(
-    keymap.page,
-    settings.keySequenceTimeoutMs,
-    () => scopeStack.current(),
-    editor,
-    commands.keyCommands,
-    log,
-    timers,
-    (keys, scope) => pendingKeys.reportPage(keys, scope),
-  );
-  pageKeys = installed;
+  pageKeys.setBinds(keymap.page, settings.keySequenceTimeoutMs);
 
   announceNewProblems(config.problems, [], toasts, log);
   const applyStartedPush = createConfigPush(
@@ -408,7 +422,7 @@ async function start() {
       },
       editor,
       commands: registry,
-      pageKeys: installed,
+      pageKeys,
       problems: { show: (next) => chrome.showProblems(next) },
       toasts,
       log,

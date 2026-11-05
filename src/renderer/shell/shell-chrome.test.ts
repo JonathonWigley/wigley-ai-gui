@@ -7,7 +7,7 @@ import {
   type Mock,
   vi,
 } from 'vitest';
-import type { Area, Mode, ModeHandle } from '../../contracts/plugin';
+import type { Area, KeyHints, Mode, ModeHandle } from '../../contracts/plugin';
 import type { ConfigProblem } from '../../contracts/settings';
 import {
   recordingAnchors,
@@ -81,7 +81,7 @@ function handle(): ModeHandle & { show: Mock<() => void> } {
 }
 
 // The chrome over fake title and activity bars, in the dev app.
-function mountChrome() {
+function mountChrome(keys: KeyHints = recordingAnchors().keys) {
   const titleBar = fakeArea();
   const activityBar = fakeArea();
   const chrome = mountShellChrome({
@@ -94,6 +94,7 @@ function mountChrome() {
         document: async (text) => text,
         ...NO_FENCES,
       },
+      keys,
       commands: { exists: (id) => id === REGISTERED, run: () => undefined },
       platform: 'macos',
     },
@@ -193,19 +194,17 @@ describe('mountShellChrome', () => {
     },
     { row: 'an unregistered command', hinted: 'docs.missing', anchors: [] },
   ])(
-    'setKeys_UserItemHint_AnchorsOnlyARegisteredCommandAndDisposesTheLastDraw: $row',
+    'setLayouts_UserItemHint_AnchorsOnlyARegisteredCommandAndDisposesTheLastDraw: $row',
     ({ hinted, anchors }) => {
-      const { chrome } = mountChrome();
+      const recorded = recordingAnchors();
+      const { chrome } = mountChrome(recorded.keys);
       chrome.addMode(mode('docs', 'Docs'), handle());
-      chrome.setLayouts(shownMine(hinted));
-      const first = recordingAnchors();
-      const second = recordingAnchors();
 
-      chrome.setKeys(first.keys);
-      chrome.setKeys(second.keys);
+      chrome.setLayouts(shownMine(hinted));
+      chrome.setLayouts(shownMine(hinted));
 
       expect(
-        [...first.anchors, ...second.anchors].map((anchor) => [
+        recorded.anchors.map((anchor) => [
           anchor.command,
           anchor.scope,
           anchor.isDisposed,

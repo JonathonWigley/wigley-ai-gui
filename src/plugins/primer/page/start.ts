@@ -13,7 +13,6 @@ import {
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
 import { activeForm } from '../../../shared/page/session-forms';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   type SessionsPageExports,
@@ -165,7 +164,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       store,
       boxes,
       markdown: services.markdown,
-      keys: api.dependency(keysPageKey),
+      keys: api.keys,
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,

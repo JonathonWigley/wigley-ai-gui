@@ -8,7 +8,6 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
 import { docsPageKey } from '../../docs/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -75,7 +74,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     const chat = api.dependency(chatPageKey);
     const docs = api.dependency(docsPageKey);
-    const keys = api.dependency(keysPageKey);
     const heard = new Map<string, HeardSession>();
     const flows = new Map<string, SessionFlow>();
     const stages = createStageList<PageStage>();
@@ -91,7 +89,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const view = createWorkflowView({
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),

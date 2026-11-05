@@ -7,6 +7,7 @@ import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
 import type {
+  KeyHints,
   PageChannel,
   PushedScope,
   ShownLayouts,
@@ -39,7 +40,6 @@ import {
 import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
-import type { KeysPageExports } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -177,7 +177,7 @@ export interface SettingsViewDeps {
   matcher: FuzzyMatcher;
   platform: OsName;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   commands: KitCommands;
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;

@@ -20,7 +20,7 @@ import {
 import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 import type { FormsItemRef, FormsView } from '../../contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
@@ -81,7 +81,7 @@ export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: OsName;
   log: PluginLog;
-  keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;

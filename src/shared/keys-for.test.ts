@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EditorBind, Keymap, PageBind } from '../../../contracts/keymap';
+import type { EditorBind, Keymap, PageBind } from '../contracts/keymap';
 import { keysFor, promptKeysFor } from './keys-for';
 
 function keymap(page: PageBind[], box: EditorBind[] = []): Keymap {

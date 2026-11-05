@@ -5,7 +5,7 @@ import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
+import type { KeyHints } from '../../../contracts/plugin';
 import type {
   SessionsState,
   SessionTabHandle,
@@ -87,7 +87,7 @@ interface DrawnPane {
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeyHints, 'anchor'>;
   parts: SessionsParts;
 }
 

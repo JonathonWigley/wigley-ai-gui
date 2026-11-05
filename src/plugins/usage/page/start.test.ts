@@ -12,7 +12,6 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -61,11 +60,6 @@ function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
             addRowPart: () => consumer.track({ dispose() {} }),
           }) as unknown as SessionsPageExports,
       ),
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
-      })),
     ],
   });
 }

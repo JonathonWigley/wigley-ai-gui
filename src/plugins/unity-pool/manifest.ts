@@ -6,7 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // `keys` for its layout's anchors, and `chat` for its self-test's launch.
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
-  dependsOn: { main: ['sessions', 'chat'], page: ['sessions', 'keys'] },
+  dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {},
   scopes: {},

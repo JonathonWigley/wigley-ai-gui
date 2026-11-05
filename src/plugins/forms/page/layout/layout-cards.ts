@@ -5,7 +5,7 @@ import {
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 import type { ItemKind } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { CardAnswer, LayoutCard } from '../../layouts/layout';
@@ -103,7 +103,7 @@ export function buildLayoutCard(
 interface MountingDeps {
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeyHints, 'anchor'>;
   recordMount(mount: MarkdownMount): void;
 }
 
@@ -125,7 +125,7 @@ export function recordingDeps<D extends MountingDeps>(
     },
     keys: {
       ...deps.keys,
-      anchor(...args: Parameters<KeysPageExports['anchor']>) {
+      anchor(...args: Parameters<KeyHints['anchor']>) {
         const anchor = deps.keys.anchor(...args);
         rollback.recordAnchor(anchor);
         return anchor;

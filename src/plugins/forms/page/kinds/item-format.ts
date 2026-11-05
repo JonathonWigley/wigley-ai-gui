@@ -1,7 +1,7 @@
 import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { OsName } from '../../../../contracts/platform';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
@@ -28,7 +28,7 @@ export interface CardDeps {
   destroyBox(target: TextTarget): void;
   dispatch(action: FormsAction): void;
   toggleDontAsk(): void;
-  keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   platform: OsName;
   log: PluginLog;
   commands: KitCommands;

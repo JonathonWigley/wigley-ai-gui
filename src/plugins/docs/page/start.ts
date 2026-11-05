@@ -20,7 +20,6 @@ import { sheet } from '../../../shared/page/ui/sheet';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionTabHandle,
   type SessionsPageEvents,
@@ -121,7 +120,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const { services } = api;
     const { log } = services;
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
@@ -142,7 +140,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
-      keys,
+      keys: api.keys,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),
@@ -205,7 +203,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         now: () => services.clock.now(),
         log,
         anchor: (element, command, options) =>
-          keys.anchor(element, qualify(docsManifest.id, command), {
+          api.keys.anchor(element, qualify(docsManifest.id, command), {
             ...options,
             scope: qualify(docsManifest.id, options.scope),
           }),
@@ -370,7 +368,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         ...SESSION_TREE_SPLIT,
         uiState: services.uiState,
         stateKey: 'sessionTree',
-        anchor: keys.anchor,
+        anchor: api.keys.anchor,
         timers: services.timers,
       });
       const added: AddedView = {

@@ -6,7 +6,6 @@ import type {
 } from '../../../contracts/plugin';
 import { agentsPageKey } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import type { SessionsPageEvents } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -32,13 +31,12 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
     const { services } = api;
     const agents = api.dependency(agentsPageKey);
     const chat = api.dependency(chatPageKey);
-    const keys = api.dependency(keysPageKey);
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const list = createSkillList({
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),

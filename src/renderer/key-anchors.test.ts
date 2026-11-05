@@ -1,24 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommandArg, CommandId } from '../../../contracts/commands';
-import type { ViewScope } from '../../../contracts/keymap';
+import type { CommandArg, CommandId } from '../contracts/commands';
+import type { HintWhere, ViewScope } from '../contracts/keymap';
 import {
   asHtml,
   FakeElement,
   findAll,
   installFakeDom,
-} from '../../../shared/page/test-dom';
-import type { HintWhere } from '../contract';
-import { createAnchors } from './anchors';
+} from '../shared/page/test-dom';
+import { createAnchors } from './key-anchors';
 
 const LABELS: Record<CommandId, string> = { 'a.trash': 'trash' };
 
-// A registry over mutable keys, scope and hint setting; `keysForCalls`
-// records each keys read.
+// A revealed registry over mutable keys and scope; `keysForCalls` records each
+// keys read.
 function anchorsSetup() {
   const state = {
     keys: { 'a.trash': 'd' } as Record<CommandId, string | null>,
     scope: 'a.list' as ViewScope,
-    showHints: true,
   };
   const keysForCalls: [
     CommandId,
@@ -37,10 +35,19 @@ function anchorsSetup() {
     },
     label: (id) => LABELS[id] ?? id,
     scope: () => state.scope,
-    showHints: () => state.showHints,
     platform: 'macos',
   });
+  anchors.reveal();
   return { anchors, state, keysForCalls };
+}
+
+function unrevealedAnchors() {
+  return createAnchors({
+    keysFor: () => 'd',
+    label: (id) => id,
+    scope: () => 'a.list',
+    platform: 'macos',
+  });
 }
 
 function anchorElement(): FakeElement {
@@ -60,7 +67,7 @@ function isHidden(node: FakeElement): boolean {
   return node.classList.contains('is-hint-hidden');
 }
 
-describe('anchors', () => {
+describe('createAnchors', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -170,27 +177,61 @@ describe('anchors', () => {
     expect(isHidden(node)).toBe(false);
   });
 
-  it('redraw_ShowHintsOff_EmptiesEveryAnchorUntilOn', () => {
-    const { anchors, state } = anchorsSetup();
+  it('setShown_False_HidesEveryAnchor', () => {
+    const { anchors } = anchorsSetup();
     const scoped = anchorElement();
     const unscoped = anchorElement();
     anchors.anchor(asHtml(scoped), 'a.trash', { scope: 'a.list' });
     anchors.anchor(asHtml(unscoped), 'a.trash');
 
-    state.showHints = false;
-    anchors.redraw();
+    anchors.setShown(false);
     const anchoredWhileOff = anchorElement();
     anchors.anchor(asHtml(anchoredWhileOff), 'a.trash');
 
-    expect(scoped.children.length).toBe(0);
-    expect(unscoped.children.length).toBe(0);
-    expect(anchoredWhileOff.children.length).toBe(0);
+    const nodes = [scoped, unscoped, anchoredWhileOff];
+    expect(nodes.map(isHidden)).toEqual([true, true, true]);
+    expect(nodes.map((node) => node.children.length)).toEqual([0, 0, 0]);
+  });
 
-    state.showHints = true;
-    anchors.redraw();
+  it('setShown_True_ShowsAnchorsInScopeOnly', () => {
+    const { anchors } = anchorsSetup();
+    const inScope = anchorElement();
+    const otherScope = anchorElement();
+    anchors.anchor(asHtml(inScope), 'a.trash', { scope: 'a.list' });
+    anchors.anchor(asHtml(otherScope), 'a.trash', { scope: 'a.other' });
 
-    expect(scoped.textContent).toBe('d');
-    expect(anchoredWhileOff.textContent).toBe('d');
+    anchors.setShown(false);
+    anchors.setShown(true);
+
+    expect(isHidden(inScope)).toBe(false);
+    expect(isHidden(otherScope)).toBe(true);
+    expect(inScope.textContent).toBe('d');
+  });
+
+  it('anchor_BeforeReveal_DrawsKeysAndStaysHidden', () => {
+    const anchors = unrevealedAnchors();
+    const node = placedElement();
+
+    anchors.anchor(asHtml(node), 'a.trash');
+
+    expect(node.textContent).toBe('d');
+    expect(isHidden(node)).toBe(true);
+    expect(anchors.placedIn('a.list')).toEqual(new Set(['a.trash']));
+
+    anchors.reveal();
+
+    expect(isHidden(node)).toBe(false);
+  });
+
+  it('reveal_ShownFalse_StaysHidden', () => {
+    const anchors = unrevealedAnchors();
+    const node = anchorElement();
+    anchors.anchor(asHtml(node), 'a.trash');
+
+    anchors.setShown(false);
+    anchors.reveal();
+
+    expect(isHidden(node)).toBe(true);
   });
 
   it('dispose_RemovesThePromptAndKeepsThePlacement', () => {

@@ -2,7 +2,6 @@ import './settings.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { qualify } from '../../../shared/plugin-manifests';
-import { keysPageKey } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -25,14 +24,13 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
   start(api: SettingsApi) {
     const { services } = api;
     const { log } = services;
-    const keys = api.dependency(keysPageKey);
     const view = createSettingsView({
       channel: api.channel,
       editor: services.editor,
       matcher: services.fuzzy,
       platform: api.platform.os,
       markdown: services.markdown,
-      keys,
+      keys: api.keys,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),
@@ -45,7 +43,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       pushScope: (scope) => api.keys.pushScope(scope),
       addOverlay: (element) => api.areas.overlay.contribute(element),
       anchor: (element, command, scope, label) =>
-        keys.anchor(element, qualify(settingsManifest.id, command), {
+        api.keys.anchor(element, qualify(settingsManifest.id, command), {
           scope: qualify(settingsManifest.id, scope),
           label,
         }),

@@ -1,12 +1,11 @@
-// The parts a view builds around the anchors the keys plugin fills: chevrons,
+// The parts a view builds around the anchors the core keys API fills: chevrons,
 // edge prompts, box hints and stacks, and the anchors' disposal.
 import './key-anchors.css';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import { element } from '../dom';
 
-// Names an anchor for `command` in `element`; the keys plugin's page `anchor`
-// fits.
+// Names an anchor for `command` in `element`; `KeyHints['anchor']` fits.
 export type AnchorNamer<Options> = (
   element: HTMLElement,
   command: CommandId,

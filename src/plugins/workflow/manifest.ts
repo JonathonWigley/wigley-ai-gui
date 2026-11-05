@@ -13,7 +13,7 @@ export const workflowManifest = definePlugin({
   id: 'workflow',
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['chat', 'sessions', 'docs', 'keys'],
+    page: ['chat', 'sessions', 'docs'],
   },
   reads: { main: [], page: [] },
   commands: {

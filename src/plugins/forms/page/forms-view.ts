@@ -8,6 +8,7 @@ import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
 import type {
+  KeyHints,
   PluginAreas,
   PushedScope,
   ShownLayouts,
@@ -29,7 +30,6 @@ import {
   formOfSession,
   sessionPaneView,
 } from '../../../shared/page/session-forms';
-import type { KeysPageExports } from '../../keys/contract';
 import {
   NEEDS_YOU_ACTIVITY,
   type SessionsPageExports,
@@ -68,7 +68,7 @@ export interface FormsViewDeps {
   store: FormsStore;
   boxes: EditorBoxes<BoxRef>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'>;
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;

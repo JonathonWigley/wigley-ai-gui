@@ -29,13 +29,13 @@ a glance.
   sessions): the same filter the bar used, so the screen shows exactly the keys that fire now.
 - **Vim's own keys show in help only.** They work the same everywhere and the user knows them
   from nvim, Rider and tmux, so a hint for them is noise. Being vim's own is a property of the key
-  sequence, not the command (`forms.nextItem` is `j` and `⌃L`), so the keys plugin holds a list of
+  sequence, not the command (`forms.nextItem` is `j` and `⌃L`), so `src/shared/vim-keys.ts` holds a list of
   key sequences rather than marking commands.
-- **Views name anchors; the keys plugin draws.** One module owns how a hint looks, when it shows,
-  the on/off setting, and the check that every bind has a place. A plugin from outside the repo
+- **Views name anchors; the core draws.** One module owns how a hint looks and when it shows, and
+  the `keys` plugin owns the on/off setting and the check that every bind has a place. A plugin from outside the repo
   gets the same hints by naming anchors.
-- **Anchors are a `keys` plugin export,** beside `keysFor`. The core stays the key engine only, and
-  the whole hint presentation is one plugin that can be replaced.
+- **Anchors are in the core keys API,** beside `keysFor`, so the chrome's hints do not vanish with the `keys` plugin,
+  which keeps which-key, help and the `showHints` setting.
 - **A hint out of scope hides and keeps its space,** cursor prompts included, so rows and boxes
   never shift when focus moves. A hint whose command has no key takes no space at all, and so does a key with
   no target in a chat pane's tab bar, so unfocused panes' bars stay short.

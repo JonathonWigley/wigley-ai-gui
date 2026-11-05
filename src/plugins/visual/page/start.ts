@@ -2,7 +2,6 @@ import './visual.css';
 import type { PagePart, PageApi } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import type { VisualChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -27,7 +26,6 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
   manifest: visualManifest,
   start(api: VisualApi) {
     const { services } = api;
-    const keys = api.dependency(keysPageKey);
     const chat = api.dependency(chatPageKey);
     const layoutsChanged: (() => void)[] = [];
     const registry = createVisualRegistry();
@@ -35,7 +33,7 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
       defaultLayout,
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),

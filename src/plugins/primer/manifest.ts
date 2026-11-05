@@ -3,7 +3,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // The primer's scopes are its view's places, each titled for the key help.
 export const primerManifest = definePlugin({
   id: 'primer',
-  dependsOn: { main: ['sessions', 'chat'], page: ['sessions', 'keys'] },
+  dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {
     nextRow: { label: 'next row', group: 'rows', runsIn: 'page' },

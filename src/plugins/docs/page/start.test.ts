@@ -8,7 +8,6 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -56,14 +55,9 @@ function startDocsPage() {
   installFocusFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
   const throwsNext: ThrowsNext = { anchor: false, tab: false };
-  const keys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
-    keysFor: () => null,
-    onChanged: () => consumer.track({ dispose: () => undefined }),
-    anchor: () =>
-      consumer.track({ dispose: disposeThrowingOn(throwsNext, 'anchor') }),
-  }));
   const harness = startPagePart(docsPagePart, {
-    dependencies: [keys, fakeSessions(tabs, throwsNext)],
+    dependencies: [fakeSessions(tabs, throwsNext)],
+    anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
     firstModeTaken: true,
   });
   const exportsTo = (consumer: Registrations) =>

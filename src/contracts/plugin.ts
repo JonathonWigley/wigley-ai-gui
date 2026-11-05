@@ -18,6 +18,8 @@ import type { FuzzyMatcher } from './fuzzy';
 import type { Git } from './git';
 import type { ImageEncoder } from './images';
 import type {
+  AnchorOptions,
+  HintWhere,
   InterceptBind,
   KeyBind,
   KeyGroups,
@@ -578,6 +580,30 @@ export interface PageTransparency {
   overridden(): 'full' | 'reduced' | null;
 }
 
+// What a view needs to show keys. `keysFor` reads the keys that run the
+// qualified `command`, as the user reads them: the first such bind in the merged
+// keymap firing in the qualified `scope` (an `any` bind included), or in any scope
+// when `scope` is left out, on the page or, for `where` `box`, inside a text box;
+// null when none is bound. With `arg`, only a bind carrying that argument counts.
+// `anchor` draws the keys of `command` into `element`, which the view places and
+// leaves empty, and keeps them drawn and shown or hidden by scope until its
+// `dispose`. `onKeymapChanged` hears each change to the merged keymap, after which
+// `keysFor` reads the new keys, until its `dispose`. PageApi['keys'] extends it.
+export interface KeyHints {
+  keysFor(
+    command: CommandId,
+    scope?: ViewScope,
+    where?: HintWhere,
+    arg?: CommandArg,
+  ): string | null;
+  anchor(
+    element: HTMLElement,
+    command: CommandId,
+    options?: AnchorOptions,
+  ): Disposable;
+  onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
+}
+
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
 // `keys.scope` is the qualified scope keys fire in now, and a part hears each
@@ -596,7 +622,15 @@ export interface PageTransparency {
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
 // `keys.label` falls back to the id for a command with no label;
 // `keys.command` reads a command by its qualified id; `keys.scopes` lists
-// every scope as main serves them.
+// every scope as main serves them. `keysFor`, `anchor` and `onKeymapChanged` are as
+// `KeyHints` says, each handle filed in the part's registrations.
+// `keys.where` reads whether focus is in a text box now, and `keys.onWhereChanged`
+// hears it move between the page and a box, until its `dispose`.
+// `keys.setHintsShown` hides or shows every anchored hint. The latest handle's
+// `dispose` shows them again, and an older handle's `dispose` does nothing, so
+// a new call then the old handle's `dispose` keeps the new value.
+// `keys.placedIn` is the placement check's source: the command targets anchored in
+// `scope` or with no scope during this page load.
 // `settings` reads the plugin's settings as the user config now sets them, and
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
 // `platform` is the OS the app runs on, fixed for the page load.
@@ -644,7 +678,7 @@ export interface PageApi<
   areas: PluginAreas;
   channel: PageChannel<Ch>;
   events: PluginEvents<Ev, Heard>;
-  keys: {
+  keys: KeyHints & {
     setScope(scope: keyof M['scopes'] & string): void;
     pushScope(scope: keyof M['scopes'] & string): PushedScope;
     scope(): ViewScope;
@@ -652,11 +686,14 @@ export interface PageApi<
     holdPending(): void;
     cancelPending(): void;
     keymap(): Keymap;
-    onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
     label(id: CommandId): string;
     command(id: CommandId): CommandInfo | undefined;
     scopes: readonly ScopeInfo[];
     bind(bind: RuntimeBind<'page'>): Disposable;
+    where(): HintWhere;
+    onWhereChanged(listener: (where: HintWhere) => void): Disposable;
+    setHintsShown(shown: boolean): Disposable;
+    placedIn(scope: ViewScope): ReadonlySet<string>;
   };
   modes: PageModes;
   shell: { setLayout(layout: ShellLayout): Disposable };

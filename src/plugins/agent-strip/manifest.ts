@@ -8,7 +8,7 @@ export const agentStripManifest = definePlugin({
   id: 'agent-strip',
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['agents', 'chat', 'sessions', 'keys'],
+    page: ['agents', 'chat', 'sessions'],
   },
   reads: { main: [], page: [] },
   commands: {

@@ -6,7 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // registers the layout contract. Names only `keys`, for its key hints.
 export const galleryManifest = definePlugin({
   id: 'gallery',
-  dependsOn: { main: [], page: ['keys'] },
+  dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
     showMode: { label: 'gallery', group: 'modes', runsIn: 'page' },

@@ -56,7 +56,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
-      // Starts the real sessions and keys pages, whose exports forms files under.
+      // Starts the real sessions page, whose exports forms files under.
       'src/plugins/forms/page/start.test.ts': {
         layers: [
           'src/contracts',
@@ -65,7 +65,6 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/forms/contract.ts',
           'src/plugins/forms/page',
           'src/plugins/sessions/page',
-          'src/plugins/keys/page',
         ],
         packages: [],
       },
@@ -89,7 +88,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
-      // Starts the real sessions and keys pages, whose exports primer files under.
+      // Starts the real sessions page, whose exports primer files under.
       'src/plugins/primer/page/start.test.ts': {
         layers: [
           'src/contracts',
@@ -98,7 +97,6 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/primer/contract.ts',
           'src/plugins/primer/page',
           'src/plugins/sessions/page',
-          'src/plugins/keys/page',
         ],
         packages: [],
       },
@@ -351,6 +349,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',
     ],
+    packages: [],
+  },
+  // Checks the order the built-in page parts start in.
+  'src/plugins/page.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/page.ts'],
     packages: [],
   },
   // Checks the built-in manifests' setting declarations, and that the default

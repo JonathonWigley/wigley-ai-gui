@@ -12,6 +12,7 @@ import type {
   AreaName,
   ChannelShape,
   DependencyKey,
+  KeyHints,
   PageChannel,
   Modes,
   PageApi,
@@ -28,6 +29,7 @@ import type { AppConfig } from '../../contracts/settings';
 import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
+import { keysFor } from '../../shared/keys-for';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
 import { qualify } from '../../shared/plugin-manifests';
@@ -42,8 +44,10 @@ import {
 } from '../../shared/state/slot-store';
 import type { RuntimeCommands } from '../../shared/runtime-commands';
 import { trackedTimers } from '../../shared/tracked-timers';
+import type { BoxFocus } from '../box-focus';
+import type { Anchors } from '../key-anchors';
 import type { ScopeStack } from '../key-scope';
-import type { LiveConfig } from '../live-config';
+import { type LiveConfig, onChangedPart } from '../live-config';
 import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
 
@@ -68,6 +72,8 @@ export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
 // drop registry. `registrations` is the part's own store, which the host
 // disposes when the part stops. `state` is the page load's slot store, and
 // `commands` the page's commands, which each plugin reaches under its id.
+// `anchors` holds every key hint of the page load, and `boxFocus` tells whether
+// focus is in a text box.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -90,6 +96,18 @@ export interface PageApiDeps {
   >;
   drops: PageDrops;
   state: SlotStore;
+  anchors: Anchors;
+  boxFocus: BoxFocus;
+}
+
+// `KeyHints['keysFor']` over the config served now, read at each call.
+export function liveKeysFor(
+  config: Pick<LiveConfig, 'current'>,
+): KeyHints['keysFor'] {
+  return (command, scope, where, arg) => {
+    const { keymap, platform } = config.current();
+    return keysFor(keymap, command, scope, platform.os, where, arg);
+  };
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
@@ -150,6 +168,13 @@ export function createPageApi(
         return config.current().scopes;
       },
       bind: pluginCommands.bind,
+      keysFor: liveKeysFor(config),
+      anchor: (element, command, options) =>
+        track(deps.anchors.anchor(element, command, options)),
+      where: () => deps.boxFocus.where(),
+      onWhereChanged: (listener) => track(deps.boxFocus.onChanged(listener)),
+      setHintsShown: (shown) => track(deps.anchors.holdShown(shown)),
+      placedIn: (scope) => deps.anchors.placedIn(scope),
     },
     modes: {
       add: (mode) =>
@@ -192,21 +217,6 @@ export function createPageApi(
       forLayouts: layoutState(deps.state, manifest.id, track),
     },
   };
-}
-
-// Calls `listener` with the part of each new config `part` reads, only when
-// it differs from the previous config's, compared as JSON.
-function onChangedPart<T>(
-  config: LiveConfig,
-  part: (served: AppConfig) => T,
-  listener: (changed: T) => void,
-): Disposable {
-  return config.onChanged((next, previous) => {
-    const changed = part(next);
-    if (JSON.stringify(changed) !== JSON.stringify(part(previous))) {
-      listener(changed);
-    }
-  });
 }
 
 // A pushed scope the store forgets at its `pop`: the stack's `pop` throws on a

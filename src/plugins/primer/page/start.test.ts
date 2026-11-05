@@ -9,7 +9,6 @@ import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { keysPagePart } from '../../keys/page/start';
 import { sessionsPagePart } from '../../sessions/page/start';
 import type { PresentedPrimer } from '../contract';
 import { primerPagePart } from './start';
@@ -29,7 +28,7 @@ describe('primer page part', () => {
   it('stops with nothing live and starts again', async () => {
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
     harness.send('formShown', presentedPrimer('p1'));
@@ -46,7 +45,7 @@ describe('primer page part', () => {
     const read = deferred<PresentedPrimer[]>();
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: () => read.promise,
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
@@ -63,7 +62,7 @@ describe('primer page part', () => {
     const drafts: unknown[] = [];
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: (method, ...args) => {
         if (method === 'draft') {
           drafts.push(args);
@@ -92,7 +91,7 @@ describe('primer page part', () => {
     const finishing = deferred<void>();
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: (method) =>
         method === 'finish' ? finishing.promise : new Promise(() => undefined),
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
@@ -119,7 +118,7 @@ describe('primer page part', () => {
   it('an open-primers read that lands before stop shows its primer', async () => {
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: async () => [presentedPrimer('p1')],
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });

@@ -6,7 +6,6 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { agentsPageKey } from '../../agents/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -36,13 +35,12 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
     const { services } = api;
     const agents = api.dependency(agentsPageKey);
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const lines = createWorkingLines({
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),

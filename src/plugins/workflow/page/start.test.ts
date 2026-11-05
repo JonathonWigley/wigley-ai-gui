@@ -10,7 +10,6 @@ import {
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
 import { type DocsPageExports, docsPageKey } from '../../docs/contract';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -58,14 +57,6 @@ function startWorkflow() {
       fakeDependency(
         docsPageKey,
         () => ({ openDoc: () => undefined }) as unknown as DocsPageExports,
-      ),
-      fakeDependency(
-        keysPageKey,
-        (consumer) =>
-          ({
-            anchor: noHandle(consumer),
-            keysFor: () => null,
-          }) as unknown as KeysPageExports,
       ),
     ],
     invoke: () => Promise.resolve([]),

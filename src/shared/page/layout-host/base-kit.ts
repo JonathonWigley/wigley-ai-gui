@@ -23,8 +23,7 @@ import { tag as tagPart } from '../ui/tag';
 import type { RollbackDeps } from './draw-part';
 import type { BaseKit } from './kit';
 
-// What the base kit reads. `keys` restates the keys plugin's page exports,
-// which `src/shared/page` may not import. `scope` is the qualified scope the
+// What the base kit reads. `keys` is the part of `KeyHints` a kit calls. `scope` is the qualified scope the
 // part's keys fire in; null anchors with no scope, so a hint shows in every
 // scope, and reads keys in any scope. `commandNamed` turns the owner's short
 // command name into its qualified id, null for a name the owner lacks.

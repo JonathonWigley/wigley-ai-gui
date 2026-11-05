@@ -6,7 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // is found through the wigley plugin's install in each Claude config folder.
 export const docsManifest = definePlugin({
   id: 'docs',
-  dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
+  dependsOn: { main: ['sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {
     showMode: {

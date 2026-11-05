@@ -33,6 +33,24 @@ export interface EditorKeymap {
 // plugin's scopes reach the keymap qualified as `<pluginId>.<scope>`.
 export type ViewScope = string;
 
+// Which keys a hint reads: the page's, or those inside a text box.
+export type HintWhere = 'page' | 'box';
+
+export interface AnchorOptions {
+  // The qualified scope the hint shows in; left out, the hint shows in every scope.
+  // The keys come from the first bind of `command` in this scope (`any` binds included) whose keys
+  // are not vim's own keys; when every bind is a vim key, from the first bind.
+  scope?: ViewScope;
+  // 'page' (default) reads page binds; 'box' reads binds inside a text box.
+  where?: HintWhere;
+  // Draws the command's label after the keys (cursor prompts, edge prompts with words).
+  // A string draws that text in place of the command's label.
+  label?: boolean | string;
+  // The argument the anchored bind carries: the keys of that argument's bind, and a
+  // placement of that argument alone. Left out, the command's first bind is drawn.
+  arg?: CommandArg;
+}
+
 // The keys of an unfinished sequence with the scope they were typed in: on the
 // page, as KeyboardEvent.key values (`[' ', 'a']`); in an editor, as vim names
 // them (`['<Space>', 'a']`).

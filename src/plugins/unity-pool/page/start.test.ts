@@ -6,7 +6,6 @@ import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -50,11 +49,6 @@ function startOnHarness(
             addRowPart: () => consumer.track({ dispose() {} }),
           }) as unknown as SessionsPageExports,
       ),
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
-      })),
     ],
   });
 }

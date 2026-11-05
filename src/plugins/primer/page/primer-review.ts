@@ -3,7 +3,7 @@ import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import type { PrimerEntry, PrimerNeed } from '../contract';
-import type { KeysPageExports } from '../../keys/contract';
+import type { KeyHints } from '../../../contracts/plugin';
 import { type PrimerCommandName, primerCommand, primerScope } from '../ids';
 import type { ReviewInput, ReviewTaskInput } from '../layouts/layout';
 import {
@@ -24,7 +24,7 @@ export interface ReviewTallies {
 // `keys` anchors each footer button's keys in the review scope; `run` runs a
 // button's command.
 export interface ReviewDeps {
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeyHints, 'anchor'>;
   run(command: CommandId): void;
 }
 

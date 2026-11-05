@@ -4,7 +4,7 @@ import { element } from '../dom';
 import { kbd } from './kbd';
 
 // The Kbd of `keys` for `platform`, then `label` after it when given: the one
-// thing the keys plugin draws into an anchor.
+// thing the core draws into an anchor.
 export function keyPrompt(
   keys: string,
   platform: OsName,

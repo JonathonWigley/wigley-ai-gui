@@ -1,14 +1,15 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // Key hints over the merged keymap: which-key while a sequence is pending,
-// the help overlay listing every key, the title bar's Keys button, and the
-// prompts drawn into the anchors views name, each surface drawn through the
-// `layout` setting's keys layout. Its main part only registers that layout
+// the help overlay listing every key and the title bar's Keys button, each
+// surface drawn through the `layout` setting's keys layout, and the placement
+// check over the anchors the core holds. Its main part only registers that layout
 // contract, and it names no other plugin.
 // `whichKeyDelayMs` is how long a pending sequence waits before the panel
 // opens; `whichKeyTimeoutMs`, when set, ends a sequence the panel has shown
 // that long, and `null` lets it wait for the next key or Esc. `showHints`
-// off hides every anchored hint.
+// off asks the core to hide every anchored hint, and with this plugin stopped
+// or disabled hints show.
 export const keysManifest = definePlugin({
   id: 'keys',
   dependsOn: { main: [], page: [] },

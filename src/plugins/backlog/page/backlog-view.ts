@@ -15,6 +15,7 @@ import type { Paths } from '../../../contracts/paths';
 import type { OsName } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
+  KeyHints,
   PageChannel,
   PushedScope,
   ShownLayouts,
@@ -54,7 +55,6 @@ import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogEdit, BacklogHome } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -145,7 +145,7 @@ export interface BacklogViewDeps {
   toast(text: string, tone: ToastTone): void;
   // Makes the follow-up editor's slot a drop target.
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
-  keys: KeysPageExports;
+  keys: KeyHints;
   platform: OsName;
   // The commands a layout's kit runs by qualified id.
   commands: KitCommands;
@@ -200,7 +200,7 @@ export interface BacklogView {
 export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const { channel, paths, homeDir } = deps;
   const tilde = (path: string) => paths.tilde(path, homeDir);
-  // A new element, made once for the view's life, that the keys plugin draws
+  // A new element, made once for the view's life, that the core draws
   // the keys of `command` in `scope` into, then `label` when given. The keys
   // plugin disposes the anchor when backlog stops.
   const anchored = (

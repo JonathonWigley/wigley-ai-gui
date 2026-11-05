@@ -10,7 +10,6 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { keysPagePart } from '../../keys/page/start';
 import { sessionsPagePart } from '../../sessions/page/start';
 import type { FormsPageExports } from '../contract';
 import { formsPagePart } from './start';
@@ -44,7 +43,7 @@ describe('forms page part', () => {
   it('stops with nothing live and starts again', async () => {
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
     harness.send('formShown', openForm());
@@ -61,7 +60,7 @@ describe('forms page part', () => {
     const read = deferred<ReturnType<typeof openForm>[]>();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: () => read.promise,
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
@@ -76,7 +75,7 @@ describe('forms page part', () => {
   it('an open-rounds read that lands before stop shows its round', async () => {
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: async () => [openForm()],
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
@@ -93,7 +92,7 @@ describe('forms page part', () => {
     const drafts: unknown[] = [];
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: (method, ...args) => {
         if (method === 'draft') {
           drafts.push(args);
@@ -122,7 +121,7 @@ describe('forms page part', () => {
     const finishing = deferred<void>();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: (method) =>
         method === 'finish' ? finishing.promise : new Promise(() => undefined),
       services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
@@ -167,7 +166,7 @@ describe('forms page part', () => {
     "a dependent's contribution leaves when the dependent stops ($member)",
     async ({ add }) => {
       const harness = startPagePart(formsPagePart, {
-        parts: [sessionsPagePart, keysPagePart],
+        parts: [sessionsPagePart],
       });
       const started = harness.started();
       const dependent = createRegistrations();

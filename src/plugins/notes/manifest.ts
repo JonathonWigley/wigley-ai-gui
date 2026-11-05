@@ -7,7 +7,7 @@ export const notesManifest = definePlugin({
   id: 'notes',
   dependsOn: {
     main: ['sessions', 'chat', 'backlog'],
-    page: ['sessions', 'keys'],
+    page: ['sessions'],
   },
   reads: { main: [], page: [] },
   commands: {

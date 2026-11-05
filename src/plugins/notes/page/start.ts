@@ -5,7 +5,6 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -34,7 +33,6 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
   start(api: NotesApi) {
     const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
     const rows = new Map<string, NoteSession>();
 
     api.events.on('sessions.sessionAdded', (row) => {
@@ -67,7 +65,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       channel: api.channel,
       services,
       matcher: services.fuzzy,
-      keys,
+      keys: api.keys,
       overlay: api.areas.overlay,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,

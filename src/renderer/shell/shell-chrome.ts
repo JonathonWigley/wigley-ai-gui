@@ -13,7 +13,6 @@ import type {
 import type { ConfigProblem } from '../../contracts/settings';
 import { element } from '../../shared/page/dom';
 import {
-  type BaseKitDeps,
   createBaseKit,
   type OwnerKitServices,
 } from '../../shared/page/layout-host/base-kit';
@@ -21,49 +20,37 @@ import type { RollbackDeps } from '../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../shared/page/layout-host/layout-parts';
 import type { CompleteLayout, Layout, ShellKit } from './layouts/layout';
 
-// `services` are what the shell kit reads besides the keys.
+// `services` are what the shell kit reads, the keys fixed for the mount.
 export interface ShellChromeDeps {
   areas: Pick<Record<AreaName, Area>, 'titleBar' | 'activityBar'>;
   defaultLayout: CompleteLayout;
-  services: Omit<OwnerKitServices, 'keys'>;
+  services: OwnerKitServices;
   instance: AppInstance;
   log: Log;
 }
-
-type ShellKeys = BaseKitDeps['keys'];
 
 // The chrome the core draws through the shell layout. `showContext` and
 // `showProblems` draw the title bar's context and config problems again for
 // a new value; `addMode` adds the mode's activity item, which shows the mode
 // on a click, until the returned handle's `dispose`; `markMode` marks the shown mode's item, logging only when the
-// marked mode changed; `setLayouts` draws every part again with new layouts;
-// `setKeys` draws every part again with the keys plugin's keys.
+// marked mode changed; `setLayouts` draws every part again with new layouts.
 export interface ShellChrome {
   showContext(context: ModeContext | null): void;
   showProblems(problems: readonly ConfigProblem[]): void;
   addMode(mode: Mode, handle: ModeHandle): Disposable;
   markMode(modeId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
-  setKeys(keys: ShellKeys): void;
 }
-
-// The keys before `setKeys`: no anchor draws and no command is bound.
-const NO_KEYS: ShellKeys = {
-  anchor: () => ({ dispose: () => undefined }),
-  keysFor: () => null,
-};
 
 // The shell kit of one drawing attempt. The shell owns no command, so a
 // command name is any plugin's qualified id, null while no plugin registers
 // it; anchors take no scope.
 function createShellKit(
-  services: Omit<OwnerKitServices, 'keys'>,
-  keys: ShellKeys,
+  services: OwnerKitServices,
   rollback: Pick<RollbackDeps, 'recordAnchor'>,
 ): ShellKit {
   return createBaseKit({
     ...services,
-    keys,
     scope: null,
     commandNamed: (name) => (services.commands.exists(name) ? name : null),
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
@@ -93,8 +80,7 @@ const NO_DRAWN = () => undefined;
 // Contributes one slot per part, once: the context at the title bar's
 // centre, the Dev tag at its start in the dev app, the problems at its end,
 // and each mode's item to the activity bar in add order. Every part draws
-// with `default` until the first `setLayouts`, and anchors no key until the
-// first `setKeys`. A redraw replaces only a slot's children, so the modes,
+// with `default` until the first `setLayouts`. A redraw replaces only a slot's children, so the modes,
 // plugin contributions and focus stay. The
 // context slot hides while the context is null, and the problems slot while
 // the list is empty; neither draws a part then.
@@ -106,7 +92,6 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     defaultLayout,
     log: shellLog,
   });
-  let keys = NO_KEYS;
   let context: ModeContext | null = null;
   let problems: readonly ConfigProblem[] = [];
   let markedId: string | null = null;
@@ -131,7 +116,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
         element: build(
           builder,
           parent,
-          createShellKit({ ...services, log: shellLog }, keys, rollback),
+          createShellKit({ ...services, log: shellLog }, rollback),
         ),
       }),
     );
@@ -247,10 +232,6 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     },
     setLayouts(next) {
       parts.setLayouts(next);
-      drawAll();
-    },
-    setKeys(next) {
-      keys = next;
       drawAll();
     },
   };

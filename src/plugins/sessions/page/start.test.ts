@@ -3,21 +3,13 @@ import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   dataEmitted,
   deferred,
-  fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import type { SessionsPageExports, SessionsState } from '../contract';
 import { sessionRow, stateOf } from './sessions-view-fakes';
 import { sessionsPagePart } from './start';
-
-const fakeKeys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
-  keysFor: () => null,
-  onChanged: () => consumer.track({ dispose: () => undefined }),
-  anchor: () => consumer.track({ dispose: () => undefined }),
-}));
 
 // Lets a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -41,7 +33,6 @@ describe('sessions page part', () => {
     'stops with nothing live and starts again: $case',
     async ({ state, barPartDisposes }) => {
       const harness = startPagePart(sessionsPagePart, {
-        dependencies: [fakeKeys],
         invoke: async () => state,
       });
       await settle();
@@ -64,7 +55,6 @@ describe('sessions page part', () => {
     const read = deferred<SessionsState>();
     const written = vi.fn();
     const harness = startPagePart(sessionsPagePart, {
-      dependencies: [fakeKeys],
       invoke: () => read.promise,
       services: { uiState: { get: () => undefined, set: written } },
     });
@@ -82,7 +72,6 @@ describe('sessions page part', () => {
   it('a state read that lands before stop applies', async () => {
     const written = vi.fn();
     const harness = startPagePart(sessionsPagePart, {
-      dependencies: [fakeKeys],
       invoke: async () => ({
         rows: [sessionRow('s1')],
         selectedSessionId: 's1',

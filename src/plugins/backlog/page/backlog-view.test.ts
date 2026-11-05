@@ -21,7 +21,6 @@ import {
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogRead } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
@@ -143,10 +142,7 @@ async function backlogSetup() {
   const overlays: FakeElement[] = [];
   const recorded = recordingAnchors();
   const anchors = recorded.anchors;
-  const keys: KeysPageExports = {
-    ...recorded.keys,
-    onChanged: () => ({ dispose: () => undefined }),
-  };
+  const { keys } = recorded;
   const channel = {
     invoke: async (method: string) => (method === 'load' ? READ : ''),
   } as unknown as PageChannel<BacklogChannel>;

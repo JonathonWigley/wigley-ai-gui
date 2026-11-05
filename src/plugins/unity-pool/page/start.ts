@@ -17,7 +17,6 @@ import type {
   RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -84,10 +83,9 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     const { services } = api;
     const log = services.log;
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
-      keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+      keys: api.keys,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
         run: (id) => api.commands.run(id),

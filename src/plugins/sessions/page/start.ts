@@ -19,7 +19,6 @@ import {
   type SplitAxis,
 } from '../../../shared/page/pane-tree/pane-tree';
 import { qualify } from '../../../shared/plugin-manifests';
-import { keysPageKey } from '../../keys/contract';
 import type {
   SessionPart,
   SessionRow,
@@ -175,7 +174,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   start(api: SessionsApi) {
     const { log } = api.services;
     const { uiState } = api.services;
-    const keys = api.dependency(keysPageKey);
     let state: SessionsState = { rows: [], selectedSessionId: null };
     // Undefined until the first state is published.
     let published: string | null | undefined;
@@ -264,7 +262,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         api.services.toast(
           roundToastText(
             labelOf(sessionId),
-            keys.keysFor(qualify(sessionsManifest.id, 'showMode')),
+            api.keys.keysFor(qualify(sessionsManifest.id, 'showMode')),
           ),
           'info',
         );
@@ -350,7 +348,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       isModeShown: () => isModeShown,
       tabsChanged: () => checkVisible(),
-      keys,
+      keys: api.keys,
       timers: api.services.timers,
       panesChanged() {
         waiting = liveWaits(waiting, view.panes.sessions());

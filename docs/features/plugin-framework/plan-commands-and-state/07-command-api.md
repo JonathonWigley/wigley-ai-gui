@@ -1,6 +1,6 @@
 # 07 — Runtime command API, with one argument per command and routing across processes
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -512,3 +512,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 59acab31 · proof: Report and core diffs read; the new modules and PluginCommands present; typecheck and lint clean; the choose and chord greps as required. · concerns: main.ts and renderer.ts wiring first runs at task 16; 'declared twice' logs each re-serve during the race; a user layout naming choose through the forms kit's commandNamed gets no arg and throws at the click, where choose1 used to work; a Settings write naming an unknown id is now written, with the problem appearing once both processes started.

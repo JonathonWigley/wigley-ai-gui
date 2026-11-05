@@ -50,7 +50,7 @@ import {
   statusLabel,
 } from '../kinds/card-parts';
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 
 type TextBoxField = Parameters<Kit['textBox']>[1];
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
@@ -306,7 +306,7 @@ export type ScopedAnchor = (
 
 // The anchor `keys` names in `scope`, the scope of the part drawing.
 export function scopedAnchor(
-  keys: Pick<KeysPageExports, 'anchor'>,
+  keys: Pick<KeyHints, 'anchor'>,
   scope: ViewScope,
 ): ScopedAnchor {
   return (element, command, options) => {

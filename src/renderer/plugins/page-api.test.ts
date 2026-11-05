@@ -41,6 +41,7 @@ import type { SlotKey } from '../../contracts/state';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
+import { asHtml, FakeElement } from '../../shared/page/test-dom';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { createRegistrations } from '../../shared/registrations';
 import {
@@ -48,6 +49,7 @@ import {
   EMPTY_RUNTIME_CATALOG,
 } from '../../shared/runtime-commands';
 import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
+import { createAnchors } from '../key-anchors';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
 import { createPageUiState } from '../ui-state';
@@ -189,11 +191,58 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       savePasted: async () => '',
     },
     state: createSlotStore(() => {}),
+    anchors: createAnchors({
+      keysFor: () => null,
+      label: (id) => id,
+      scope: () => 'any',
+      platform: 'macos',
+    }),
+    boxFocus: { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
     ...overrides,
   };
 }
 
 describe('createPageApi', () => {
+  // An API over real anchors, one revealed anchor in them, and its hidden state.
+  function hintsApi() {
+    const anchors = createAnchors({
+      keysFor: () => null,
+      label: (id) => id,
+      scope: () => 'any',
+      platform: 'macos',
+    });
+    const span = new FakeElement('span');
+    const registrations = createRegistrations();
+    anchors.reveal();
+    anchors.anchor(asHtml(span), 'p.x');
+    const api = createPageApi(manifest, deps({ anchors, registrations }));
+    const isHidden = () => span.classList.contains('is-hint-hidden');
+    return { api, isHidden, registrations };
+  }
+
+  it('setHintsShown_PartStops_ShowsHintsAgain', () => {
+    const { api, isHidden, registrations } = hintsApi();
+
+    api.keys.setHintsShown(false);
+    expect(isHidden()).toBe(true);
+
+    registrations.dispose();
+
+    expect(isHidden()).toBe(false);
+  });
+
+  it('setHintsShown_OldHandleDisposedAfterNewCall_KeepsTheNewValue', () => {
+    const { api, isHidden } = hintsApi();
+    const first = api.keys.setHintsShown(true);
+    const second = api.keys.setHintsShown(false);
+
+    first.dispose();
+    expect(isHidden()).toBe(true);
+
+    second.dispose();
+    expect(isHidden()).toBe(false);
+  });
+
   it('qualifies the scope a plugin sets', () => {
     const scopeStack = createScopeStack('any');
     const api = createPageApi(manifest, deps({ scopeStack }));

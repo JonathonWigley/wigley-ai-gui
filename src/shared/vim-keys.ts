@@ -1,5 +1,5 @@
-import { normalVimKeys } from '../../../shared/key-hints';
-import { vimTokenForPageKey } from '../../../shared/key-notation';
+import { normalVimKeys } from './key-hints';
+import { vimTokenForPageKey } from './key-notation';
 
 // Vim's own key sequences, in vim notation: they work the same on every list
 // and pane, so they need no anchor and a prompt shows another bind first.

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
-import type { AnchorOptions } from '../../keys/contract';
+import type { AnchorOptions } from '../../../contracts/keymap';
 import { activeForm } from '../../../shared/page/session-forms';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import type { PrimerEntry } from '../contract';

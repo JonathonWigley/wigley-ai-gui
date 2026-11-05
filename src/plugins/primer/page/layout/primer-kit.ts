@@ -52,7 +52,7 @@ import {
   type TextTarget,
 } from '../primer-state';
 
-// What every primer kit reads: the keys plugin's `anchor` and `keysFor`, the
+// What every primer kit reads: the core keys API's `anchor` and `keysFor`, the
 // commands a kit's `command` reaches, and the platform its key hints draw for.
 export type PrimerKitDeps = OwnerKitServices;
 

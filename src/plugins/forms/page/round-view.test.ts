@@ -123,7 +123,7 @@ function roundViewSetup(
     {
       markdown,
       boxes,
-      keys: { ...keys, onChanged: () => ({ dispose: () => undefined }) },
+      keys: { ...keys, onKeymapChanged: () => ({ dispose: () => undefined }) },
       dispatch: vi.fn(),
       getState: () => state,
       run: vi.fn(),

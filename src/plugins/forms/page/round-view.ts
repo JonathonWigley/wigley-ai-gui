@@ -9,7 +9,6 @@ import type { OsName } from '../../../contracts/platform';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
-import type { KeysPageExports } from '../../keys/contract';
 import type { FormsView } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
@@ -18,7 +17,7 @@ import {
   type EditorBoxes,
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
-import type { ShownLayouts } from '../../../contracts/plugin';
+import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import type {
   BaseKitDeps,
   KitCommands,
@@ -86,7 +85,7 @@ export interface RoundViewDeps {
     | 'focus'
     | 'formIdOf'
   >;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;
@@ -266,12 +265,12 @@ export function createRoundView(
       keysChange.dispose();
     },
   };
-  const keysChange = deps.keys.onChanged(() => parts.redrawLayoutHead());
+  const keysChange = deps.keys.onKeymapChanged(() => parts.redrawLayoutHead());
   return view;
 }
 
 // The anchor keys a build hands its parts.
-type AnchorKeys = Pick<KeysPageExports, 'keysFor' | 'anchor'>;
+type AnchorKeys = Pick<KeyHints, 'keysFor' | 'anchor'>;
 
 // `keys`, keeping each anchor it names in `anchors`.
 function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {

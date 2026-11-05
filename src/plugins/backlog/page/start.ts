@@ -2,7 +2,6 @@ import '../../../shared/page/markdown.css';
 import './backlog.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
-import { keysPageKey } from '../../keys/contract';
 import type { BacklogChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -24,7 +23,6 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services } = api;
-    const keys = api.dependency(keysPageKey);
     const docs = api.dependency(docsPageKey);
     let isShown = false;
     const view = createBacklogView({
@@ -39,7 +37,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       log: services.log,
       toast: services.toast,
       drops: api.drops,
-      keys,
+      keys: api.keys,
       platform: api.platform.os,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,

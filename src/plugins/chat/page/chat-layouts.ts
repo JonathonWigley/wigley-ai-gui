@@ -1,7 +1,7 @@
 import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
-import type { ShownLayouts } from '../../../contracts/plugin';
+import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   createBaseKit,
@@ -20,7 +20,6 @@ import {
   type LayoutParts,
 } from '../../../shared/page/layout-host/layout-parts';
 import { pickLayout } from '../../../shared/page/layout-host/pick';
-import type { KeysPageExports } from '../../keys/contract';
 import type { ChatScopeName } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -155,7 +154,7 @@ export function chatPartDraws<K extends ChatPartName>(
 // What every surface's kit reads beside its own parts; `keys` also anchors
 // the app's own key hints.
 export interface SurfaceKitDeps extends OwnerKitServices {
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
 }
 
 // The base kit for a part drawing in chat's `scope`, each key anchor its

@@ -4,7 +4,7 @@ import { commandTarget } from '../../../shared/command-args';
 import { vimTokens } from '../../../shared/key-hints';
 import { pageKeysFor } from '../../../shared/key-notation';
 import { UNPLACED_MESSAGE_START } from '../../../shared/placement-check';
-import { isVimKeys, pageVimKeys } from './vim-keys';
+import { isVimKeys, pageVimKeys } from '../../../shared/vim-keys';
 
 // A bind with no anchor: its keys in vim notation and the command they run, with
 // its argument.

@@ -3,7 +3,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
-import type { ViewScope } from '../../../contracts/keymap';
+import type { AnchorOptions, ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
 import type {
+  KeyHints,
   PluginAreas,
   PushedScope,
   ShownLayouts,
@@ -62,7 +63,6 @@ import {
   recordingAnchor,
 } from '../../../shared/page/ui/key-anchors';
 import { createSplit } from '../../../shared/page/ui/split';
-import type { AnchorOptions, KeysPageExports } from '../../keys/contract';
 import {
   NEEDS_YOU_ACTIVITY,
   type SessionsPageExports,
@@ -150,7 +150,7 @@ export interface PrimerViewDeps {
   store: PrimerStore;
   boxes: EditorBoxes<PrimerBox>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   run(command: CommandId): void;
   commands: KitCommands;
   platform: OsName;
@@ -219,7 +219,7 @@ interface DrawnCard {
   dispose(): void;
 }
 
-type AnchorKeys = Pick<KeysPageExports, 'anchor'>;
+type AnchorKeys = Pick<KeyHints, 'anchor'>;
 
 // The parts of a column a primer view builds once: the column, its header's
 // row pair, the body its layout part fills, and the row prompt `drawColumn`

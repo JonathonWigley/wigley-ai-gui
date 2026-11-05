@@ -8,7 +8,6 @@ import type {
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
 import { agentsPageKey } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
   sessionsPageKey,
@@ -36,13 +35,12 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
   start(api: AgentStripApi) {
     const { services } = api;
     const chat = api.dependency(chatPageKey);
-    const keys = api.dependency(keysPageKey);
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const strip = createAgentStrip({
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
           run: (id) => api.commands.run(id),
