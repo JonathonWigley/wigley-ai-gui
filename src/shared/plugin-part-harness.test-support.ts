@@ -168,7 +168,8 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
 // `services.markdown`. `anchors` holds each anchor named through the fake
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
-// `pushSettings` tells the `onSettingsChanged` listeners of the part under test.
+// `pushSettings` replaces what `settings()` reads for the part under test and tells
+// its `onSettingsChanged` listeners.
 export interface HarnessAnchor {
   element: HTMLElement;
   command: CommandId;
@@ -424,7 +425,6 @@ function createWorld(
         commandRuns.push({ id, arg });
         return Promise.resolve();
       },
-      log,
     }),
   };
 }
@@ -933,11 +933,13 @@ interface PageRecord {
   channelListeners: Map<string, Listeners<unknown>>;
   shows: Listeners<ShownLayouts<unknown>>;
   uiState: Map<string, unknown>;
+  settings: object;
   settingsListeners: Listeners<object>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
 }
 
 function newPageRecord(
+  settings: object,
   counts: PartCounts = zeroCounts(),
   invoke?: PageRecord['invoke'],
 ): PageRecord {
@@ -946,6 +948,7 @@ function newPageRecord(
     channelListeners: new Map(),
     shows: createListeners(),
     uiState: new Map(),
+    settings,
     settingsListeners: createListeners(),
     invoke,
   };
@@ -1137,14 +1140,13 @@ function fakePageApi(
   context: PartContext,
   world: PageWorld,
   record: PageRecord,
-  settings: object,
 ): PageApi<PluginManifest, any, any, any> {
   const common = commonApi(
     manifest,
     context,
     world,
     record.counts,
-    settings,
+    record.settings,
     'page',
   );
   const { register, liveHandle } = common;
@@ -1236,7 +1238,7 @@ function fakePageApi(
       setOuterPanes() {},
     },
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
-    settings: common.settings,
+    settings: () => record.settings,
     onSettingsChanged: (listener) =>
       register(record.settingsListeners.add(listener)),
     platform: fakePlatform('macos'),
@@ -1447,31 +1449,28 @@ export function startPagePart<M extends PluginManifest>(
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
   world.anchorDispose = options.anchorDispose;
-  const record = newPageRecord(zeroCounts(), options.invoke);
+  const record = newPageRecord(
+    options.settings ?? part.manifest.settings,
+    zeroCounts(),
+    options.invoke,
+  );
   const fireWindowListeners = stubPageGlobals(record.counts);
   const beginOn = (
     each: { manifest: PluginManifest; start(api: never): HostedStart },
     partRecord: PageRecord,
-    settings: object,
   ): HostedPart => ({
     manifest: each.manifest,
     begin: (context) =>
       each.start(
-        fakePageApi(
-          each.manifest,
-          context,
-          world,
-          partRecord,
-          settings,
-        ) as never,
+        fakePageApi(each.manifest, context, world, partRecord) as never,
       ),
   });
   const lifecycle = partLifecycle<PageStart<M>>(
     'page',
-    beginOn(part, record, options.settings ?? part.manifest.settings),
+    beginOn(part, record),
     dependencies,
     realParts.map((real) =>
-      beginOn(real, newPageRecord(), real.manifest.settings),
+      beginOn(real, newPageRecord(real.manifest.settings)),
     ),
     record.counts,
     world.commands.registry,
@@ -1493,7 +1492,10 @@ export function startPagePart<M extends PluginManifest>(
       fireWindowListeners(type, event);
     },
     showLayouts: record.shows.tell,
-    pushSettings: record.settingsListeners.tell,
+    pushSettings(settings) {
+      record.settings = settings;
+      record.settingsListeners.tell(settings);
+    },
     pushKeymap(keymap) {
       world.keymap = keymap;
       world.keymapListeners.tell(keymap);

@@ -147,7 +147,6 @@ async function start() {
         log('commands', `command ${id} failed: ${errorText(error)}`);
       }
     },
-    log,
   });
   bridge.onRunCommand(async (id, arg) => {
     try {

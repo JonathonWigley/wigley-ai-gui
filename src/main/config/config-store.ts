@@ -65,11 +65,12 @@ export interface ConfigStoreDeps extends ConfigCheckDeps {
 const THEME_FILE = /^themes\/[^/]+\.json$/;
 
 // The last good value of each slice, which a broken file leaves in place. The
-// keymap's is its parsed user layer, since the runtime layers under it keep changing
-// and a bind held back now can apply later.
+// keymap's is the user layer that last merged, without the binds held back then. It
+// is checked again over the runtime layers, which keep changing, and always merges:
+// a bind leaving it uncovers only binds on its own keys.
 interface Slices {
   settings: UserSettings;
-  userKeymap: UserKeymap;
+  keptKeymap: UserKeymap;
   theme: Theme;
 }
 
@@ -92,8 +93,9 @@ function inServedOrder(problems: ConfigProblem[]): ConfigProblem[] {
 
 // Reads the user config folder into the served config, keeping each slice's
 // last good value when its file is broken. Rejects when the default keys
-// clash, a built-in theme is broken, or a plugin declaring settings has a core
-// setting's name for its id: each is a bug in the app, not in the user's files.
+// clash, a default bind's `arg` does not fit its command, a built-in theme is
+// broken, or a plugin declaring settings has a core setting's name for its id:
+// each is a bug in the app, not in the user's files.
 export async function loadConfigStore(
   deps: ConfigStoreDeps,
 ): Promise<ConfigStore> {
@@ -108,7 +110,7 @@ export async function loadConfigStore(
   );
   let slices: Slices = {
     settings: { settings: deps.defaults, pluginSettings: fixed.pluginDefaults },
-    userKeymap: {},
+    keptKeymap: {},
     theme: defaultTheme,
   };
   let runtime: RuntimeCatalogs = {
@@ -142,10 +144,11 @@ export async function loadConfigStore(
   const checkedKeymap = (
     read: ConfigFileText,
     problems: ConfigProblem[],
-  ): { user: UserKeymap; checked: CheckedKeymap } => {
+    catalogs: RuntimeCatalogs,
+  ): { kept: UserKeymap; checked: CheckedKeymap } => {
     const lastGood = () => ({
-      user: slices.userKeymap,
-      checked: checkUserKeymap(slices.userKeymap, deps, fixed, runtime),
+      kept: slices.keptKeymap,
+      checked: checkUserKeymap(slices.keptKeymap, deps, fixed, catalogs),
     });
     if ('problem' in read) {
       problems.push(read.problem);
@@ -153,14 +156,15 @@ export async function loadConfigStore(
     }
     try {
       const user = read.text === null ? {} : parseUserKeymap(read.text, fixed);
-      return { user, checked: checkUserKeymap(user, deps, fixed, runtime) };
+      const checked = checkUserKeymap(user, deps, fixed, catalogs);
+      return { kept: checked.kept, checked };
     } catch (error) {
       problems.push({ file: KEYMAP_FILE, message: errorText(error) });
       return lastGood();
     }
   };
 
-  // Each drop is logged once, and again only after the bind came back.
+  // Each drop is logged once, and again only after what it dropped came back.
   const logNewDrops = (dropped: readonly string[]) => {
     for (const line of dropped) {
       if (!loggedDrops.has(line)) {
@@ -197,17 +201,26 @@ export async function loadConfigStore(
   };
 
   const rebuild = async (isFirstRead: boolean): Promise<AppConfig> => {
+    const catalogs = runtime;
     const problems: ConfigProblem[] = [];
     const readFile = (relative: string) =>
       readConfigFile(deps.files, deps.folder, relative);
     const settings = settingsSlice(await readFile(SETTINGS_FILE), problems);
-    const { user, checked } = checkedKeymap(
+    const { kept, checked } = checkedKeymap(
       await readFile(KEYMAP_FILE),
       problems,
+      catalogs,
     );
     runtimeLayer = checked.layer;
-    logNewDrops(checked.dropped);
-    if (runtime.main.started && runtime.page.started) {
+    const declaredTwice: string[] = [];
+    const commands = commandInfos(
+      deps.coreCommands,
+      deps.manifests,
+      [...catalogs.main.commands, ...catalogs.page.commands],
+      (_source, line) => declaredTwice.push(line),
+    );
+    logNewDrops([...checked.dropped, ...declaredTwice]);
+    if (catalogs.main.started && catalogs.page.started) {
       problems.push(
         ...checked.heldBack.map((message) => ({ file: KEYMAP_FILE, message })),
       );
@@ -220,16 +233,11 @@ export async function loadConfigStore(
       isFirstRead,
       problems,
     );
-    slices = { settings, userKeymap: user, theme };
+    slices = { settings, keptKeymap: kept, theme };
     return {
       settings: settings.settings,
       keymap: checked.keymap,
-      commands: commandInfos(
-        deps.coreCommands,
-        deps.manifests,
-        [...runtime.main.commands, ...runtime.page.commands],
-        deps.log,
-      ),
+      commands,
       scopes: fixed.scopes,
       pluginSettings: settings.pluginSettings,
       theme,

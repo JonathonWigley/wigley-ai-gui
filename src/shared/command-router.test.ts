@@ -23,7 +23,6 @@ function setup(infos: CommandInfo[]) {
     registry,
     infoOf: (id) => infos.find((each) => each.id === id),
     remote,
-    log: () => {},
   });
   return { registry, remote, router };
 }

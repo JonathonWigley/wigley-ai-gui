@@ -739,9 +739,9 @@ function serveLayouts(
 // own host from `driveRun` (null outside a drive run), its data folder under
 // `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
 // as it starts, tracked in its registrations, so stopping the part unregisters
-// them, and each part's API reaches `commands` under its id. Outside the user's app, the host's lines also go to stderr, which the
-// drive CLI keeps in the run's `app.log`, as the page has gone by the time a
-// quit stops the parts.
+// them, and each part's API reaches `commands` under its id. Outside the user's
+// app, the host's lines also go to stderr, which the drive CLI keeps in the run's
+// `app.log`, as the page has gone by the time a quit stops the parts.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
@@ -935,7 +935,6 @@ function createWindow(
     served: () => store.current().commands,
     leader: () => store.current().keymap.editor.leader,
     remote: pageCommands.run,
-    log,
   });
   ipcMain.handle(
     BRIDGE_CHANNELS.commandRun,

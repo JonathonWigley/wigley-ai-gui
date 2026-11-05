@@ -233,11 +233,12 @@ export function keptRuntimeLayer(
 }
 
 // What a keymap check gives. `heldBack` is a problem for each user bind no command
-// can run yet, `layer` the runtime binds in force, and `dropped` a line for each
-// runtime bind left out.
+// can run yet, `kept` the user layer without those binds, `layer` the runtime binds
+// in force, and `dropped` a line for each runtime bind left out.
 export interface CheckedKeymap {
   keymap: Keymap;
   heldBack: string[];
+  kept: UserKeymap;
   layer: DefaultKeyLayer;
   dropped: string[];
 }
@@ -263,6 +264,7 @@ export function checkUserKeymap(
   return {
     keymap: mergeKeymap(deps.defaultKeymap, deps.manifests, kept, layer),
     heldBack: problems,
+    kept,
     layer,
     dropped,
   };

@@ -896,19 +896,52 @@ describe('loadConfigStore', () => {
       expect(pageCommands(store.current())).toContain('x r.later');
     });
 
-    it('setRuntime_NoKeymapFile_ServesTheRuntimeLayer', async () => {
-      const store = await load(createMemoryFiles());
+    it('setRuntime_HeldBackBindCanRunBesideALongerOne_ReportsItAndKeepsServing', async () => {
+      const files = createMemoryFiles();
+      await files.write(
+        `${FOLDER}/keymap.json`,
+        JSON.stringify({
+          binds: [
+            { keys: 'g', scope: 'p.list', command: 'r.later' },
+            { keys: 'gg', scope: 'p.list', command: 'p.up' },
+          ],
+        }),
+      );
+      const store = await load(files);
 
       await setRuntimeAndWait(
         store,
-        catalog({
-          commands: [runtimeInfo('r.go')],
-          binds: [{ keys: 'r', scope: 'any', command: 'r.go' }],
-        }),
+        catalog({ commands: [runtimeInfo('r.later')] }),
         'r.marker',
       );
 
-      expect(pageCommands(store.current())).toContain('r r.go');
+      expect(store.current().problems).toEqual([
+        { file: 'keymap.json', message: expect.stringContaining('r.later') },
+      ]);
+      expect(pageCommands(store.current())).toContain('g g p.up');
+
+      const config = await writeAndWait(
+        files,
+        store,
+        'settings.json',
+        '{"window":{"width":1200}}',
+      );
+
+      expect(config.settings.window.width).toBe(1200);
+    });
+
+    it('setRuntime_BurstInOneTick_RebuildsOnce', async () => {
+      const held = heldReads(createMemoryFiles());
+      const store = await load(held.files);
+      const settingsReads = () =>
+        held.reads.filter((path) => path.endsWith('/settings.json')).length;
+      const readsAtLoad = settingsReads();
+
+      store.setRuntime({ main: NO_CATALOG, page: NO_CATALOG });
+      store.setRuntime({ main: NO_CATALOG, page: NO_CATALOG });
+      await setRuntimeAndWait(store, NO_CATALOG, 'r.marker');
+
+      expect(settingsReads() - readsAtLoad).toBe(1);
     });
 
     it('setRuntime_PageBind_ServedInKeymapAndCommands', async () => {
@@ -970,6 +1003,24 @@ describe('loadConfigStore', () => {
       await setRuntimeAndWait(store, page, 'r.marker2', main);
 
       expect(logs.filter(isDropLine)).toHaveLength(1);
+
+      await setRuntimeAndWait(store, page, 'r.marker3');
+      await setRuntimeAndWait(store, page, 'r.marker4', main);
+
+      expect(logs.filter(isDropLine)).toHaveLength(2);
+    });
+
+    it('setRuntime_CommandInBothCatalogs_LogsOnce', async () => {
+      const logs: string[] = [];
+      const store = await load(createMemoryFiles(), {
+        log: (source, message) => logs.push(`${source}: ${message}`),
+      });
+      const twice = catalog({ commands: [runtimeInfo('r.twice')] });
+
+      await setRuntimeAndWait(store, twice, 'r.marker', twice);
+      await setRuntimeAndWait(store, twice, 'r.marker2', twice);
+
+      expect(logs).toEqual(['config: command r.twice declared twice']);
     });
 
     it('setRuntime_RuntimeBindPrefixOfUserBind_DropsItAndKeepsTheUserFile', async () => {

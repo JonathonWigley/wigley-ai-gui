@@ -787,12 +787,31 @@ describe('createUserConfig', () => {
       },
     };
 
+    const main = {
+      ...EMPTY_RUNTIME_CATALOG,
+      commands: [
+        {
+          id: 'p.away',
+          plugin: 'p',
+          label: 'Away',
+          group: 'g',
+          runsIn: 'main' as const,
+          runtime: true as const,
+        },
+      ],
+      binds: {
+        binds: [],
+        app: [{ accelerator: 'Alt+L', command: 'p.away' }],
+        intercept: [],
+      },
+    };
+
     it('schema_RuntimeCommands_AreListed', async () => {
       const files = createMemoryFiles();
       const store = await storeOver(files);
       const userConfig = await create(files, CHECK_DEPS.manifests, store);
 
-      store.setRuntime({ main: EMPTY_RUNTIME_CATALOG, page });
+      store.setRuntime({ main, page });
       await vi.waitFor(() => {
         expect(store.current().commands['p.later']).toBeDefined();
       });
@@ -802,6 +821,34 @@ describe('createUserConfig', () => {
       expect(schema.defaultBindLayers.flat()).toContainEqual(
         page.binds.binds[0],
       );
+      expect(schema.defaultAccelerators.app).toEqual([
+        ...DEFAULT_KEYMAP.app,
+        main.binds.app[0],
+      ]);
+    });
+
+    it('writeKeymap_UnknownCommandBothStarted_WritesAndTheStoreHoldsItBack', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const started = { ...EMPTY_RUNTIME_CATALOG, started: true };
+      store.setRuntime({ main: started, page: { ...page, started: true } });
+      await vi.waitFor(() => {
+        expect(store.current().commands['p.later']).toBeDefined();
+      });
+      const layer = {
+        binds: [{ keys: 'x', scope: 'p.list', command: 'p.gone' }],
+      };
+
+      const result = await userConfig.writeKeymap(layer, null);
+
+      expect(result).toEqual({ type: 'written' });
+      expect((await userConfig.read()).keymap.state).toBe('ok');
+      await vi.waitFor(() => {
+        expect(store.current().problems).toEqual([
+          { file: 'keymap.json', message: expect.stringContaining('p.gone') },
+        ]);
+      });
     });
 
     it('onChanged_SetRuntimeChangesCommands_Fires', async () => {

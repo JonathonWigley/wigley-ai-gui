@@ -2,7 +2,6 @@ import type { CommandId } from '../contracts/commands';
 import type { RuntimeCatalog } from '../contracts/core-state';
 import type { Disposable } from '../contracts/disposable';
 import type { KeyBind, RuntimeBind } from '../contracts/keymap';
-import type { Log } from '../contracts/log';
 import type {
   CommandDecl,
   CommandHandler,
@@ -11,6 +10,7 @@ import type {
   ProcessName,
 } from '../contracts/plugin';
 import type { SlotReader, SlotWriter } from '../contracts/state';
+import { acceleratorProblem } from './accelerator';
 import { checkCommandArg } from './command-args';
 import { CommandRegistry } from './command-registry';
 import {
@@ -37,7 +37,6 @@ export interface RuntimeCommandsDeps<Context extends { arg: unknown }> {
   served(): Readonly<Record<CommandId, CommandInfo>>;
   leader(): string;
   remote(id: CommandId, arg: unknown): Promise<void>;
-  log: Log;
 }
 
 // One process's commands: the registry of its handlers, the router every run takes,
@@ -79,7 +78,6 @@ export function createRuntimeCommands<Context extends { arg: unknown }>(
     registry,
     infoOf,
     remote: deps.remote,
-    log: deps.log,
   });
   const update = (change: (catalog: RuntimeCatalog) => RuntimeCatalog) =>
     writer.set(change(own()));
@@ -132,6 +130,11 @@ export function createRuntimeCommands<Context extends { arg: unknown }>(
     const leader = deps.leader();
     if (isPageBind(bind)) {
       expandBind(bind, leader);
+    } else if (bind.kind === 'app') {
+      const problem = acceleratorProblem(bind.bind.accelerator);
+      if (problem !== null) {
+        throw new Error(`Bind of ${entry.command}: ${problem}`);
+      }
     }
     const everyBind = withBindEntry(
       {

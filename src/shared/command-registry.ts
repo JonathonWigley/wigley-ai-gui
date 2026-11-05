@@ -122,7 +122,9 @@ export class CommandRegistry<Context extends { arg: unknown }> {
     });
   }
 
-  // Wraps every later run of `id` here; the last registered is outermost.
+  // Wraps every later run of `id` here; the last registered is outermost. A wrap
+  // calls `next` before its own promise settles: a later `next` still runs the
+  // handler, but `run` has resolved and `onDidRun` hears nothing of it.
   intercept(id: CommandId, wrap: Wrap, owner: string): Disposable {
     const entry = { value: wrap, owner };
     const wraps = this.wraps.get(id) ?? [];

@@ -4,7 +4,6 @@ import type {
   CommandRunContext,
 } from '../contracts/commands';
 import type { Disposable } from '../contracts/disposable';
-import type { Log } from '../contracts/log';
 import type { CommandInfo, ProcessName } from '../contracts/plugin';
 import { checkCommandArg } from './command-args';
 import type { CommandRegistry } from './command-registry';
@@ -16,14 +15,14 @@ export interface CommandRouterDeps<Context extends { arg: unknown }> {
   registry: CommandRegistry<Context>;
   infoOf(id: CommandId): CommandInfo | undefined;
   remote(id: CommandId, arg: unknown): Promise<void>;
-  log: Log;
 }
 
 // The one path a run takes. `run` throws at the call for an unknown id, for a bad
 // argument and for this process's command with no handler; otherwise it starts the
 // handler here before it returns, or hands the run to `remote`, and resolves once
 // the run settles. `intercept` wraps a run here, and throws for a command the
-// catalog knows as the other process's; an id it does not know yet is accepted.
+// catalog knows as the other process's; an id it does not know yet is accepted. A
+// wrap has the limit `CommandRegistry.intercept` states.
 export interface CommandRouter<Context extends { arg: unknown }> {
   run(
     command: CommandId | CommandKey<unknown>,

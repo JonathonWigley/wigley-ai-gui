@@ -555,8 +555,8 @@ export function defaultBindLines(
 // layer's bind on the same keys in the same scope (the same chord, however its
 // accelerator is spelled, for app and global binds, the same key and modifiers
 // for intercepts), taking its place; any other appends. The user layer first
-// removes each bind its `unbind` names from the default and plugin layers, and
-// its `leader` replaces the default's, on the page and in a box, and each of
+// removes each bind its `unbind` names from the default, plugin and runtime
+// layers, and its `leader` replaces the default's, on the page and in a box, and each of
 // its page and editor binds moves ahead of the other binds of its command, so
 // a command's first bind is the user's. Group names layer the same way, by
 // their keys.
