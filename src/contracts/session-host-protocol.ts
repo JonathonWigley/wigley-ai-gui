@@ -2,7 +2,7 @@ import type { HostedExit, HostedSpawn, PipeLine } from './session-host';
 
 // The version of the wire between an app and its session host, newline JSON. Any
 // shape change below that an app and a host both read needs a bump, once one has shipped.
-export const SESSION_HOST_PROTOCOL = 1;
+export const SESSION_HOST_PROTOCOL = 2;
 
 // Frozen: never change this shape. Asks a host for its protocol version.
 export interface HelloMessage {

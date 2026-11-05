@@ -260,6 +260,7 @@ function spawnRequest(id: string): HostedSpawn {
       busyStdoutValues: [],
       busyStdinValues: [],
     },
+    droppedOutKeys: [],
   };
 }
 
@@ -684,12 +685,16 @@ describe('createSessionHostClient', () => {
       processes: [listed('b', 2)],
     });
     const newerHost = await startScriptedHost(newer, {
-      protocol: 2,
+      protocol: SESSION_HOST_PROTOCOL + 1,
       processes: [listed('c', 3)],
     });
     const rig = clientRig(dir, channel);
     writeRecord(rig.folder, 0, older);
-    const newerRecord = writeRecord(rig.folder, 2, newer);
+    const newerRecord = writeRecord(
+      rig.folder,
+      SESSION_HOST_PROTOCOL + 1,
+      newer,
+    );
     const client = rig.create();
 
     const merged = await client.list();

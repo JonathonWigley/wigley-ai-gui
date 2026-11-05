@@ -23,6 +23,7 @@ function spawnRequest(id: string): HostedSpawn {
       busyStdoutValues: [],
       busyStdinValues: [],
     },
+    droppedOutKeys: [],
   };
 }
 

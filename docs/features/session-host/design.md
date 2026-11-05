@@ -49,10 +49,14 @@ session under it.
 ## The host
 
 - The host spawns a command with args, folder and environment, writes lines to its stdin, closes its stdin, kills
-  it, and logs every pipe line. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
+  it, and logs every pipe line, less the dropped keys below. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
   and one **idle rule**: a top-level JSON key, the value that marks a stdout line as the end of a turn (for Claude
   `"type": "result"`), and the values of that key that start a turn on each pipe (for Claude `user` on stdin,
   `assistant` and `stream_event` on stdout, the last for a turn Claude starts by itself after a background task).
+- The adapter also hands it **dropped keys**: JSON key paths from a stdout line's root (for Claude, the settings copies
+  in one control reply, which hold the profile's `env` values). The host drops them from the line before it logs or
+  delivers it, so a replay reads what a live subscriber read. It searches each line for the quoted last key and parses
+  only on a hit; a line that holds no such path or is not JSON passes byte for byte.
 - A process starts **idle**, reads busy on a line that starts a turn, and turns idle on a stdout line that ends one.
   Every other line leaves the state alone, on any pipe and whatever its shape, so a `system` line after a mode change
   or from a start hook, or the context request and its answer, keeps no process alive. While no app is connected, an

@@ -482,7 +482,8 @@ stdout {"type":"result","subtype":"success","is_error":false,"result":"Usage: /e
   with no model call, and its reply's `response.response` holds `effective`, `sources` and `applied`. Read only
   `applied`: `effective.effortLevel` is the settings file's value and is wrong for Opus 5.5, which ignores a top-level
   `effortLevel`. `effective` and each `sources` entry's `settings` carry the settings file's `env` block, values
-  included, and the reply is written to the pipe log whole. The request is not in the Agent SDK's TypeScript reference,
+  included, so the adapter's spawn rule (`droppedOutKeys`) drops `effective` and `sources` from the line the host logs
+  and delivers. The request is not in the Agent SDK's TypeScript reference,
   so it is a measured reading like the rest of this file. The reply was 8.8 KB on this profile. Measured on 2.1.318,
   profile `effortLevel` `high`, with no `CLAUDE_CODE_EFFORT_LEVEL`:
 

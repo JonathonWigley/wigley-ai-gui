@@ -2,6 +2,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  hostLogFile,
+  previousHostLogFile,
+  SESSION_HOST_PROTOCOL,
+} from '../contracts/session-host-protocol';
 import { createDiagnosticLog } from './diagnostic-log';
 
 const clock = { now: () => 0 };
@@ -17,9 +22,15 @@ describe('createDiagnosticLog', () => {
   it('setAsidePrevious_TwoHosts_KeepsOnlyTheLastHostsLog', () => {
     const folder = mkdtempSync(path.join(tmpdir(), 'diagnostic-log-'));
     folders.push(folder);
-    const previous = path.join(folder, 'host-v1.previous.log');
+    const previous = path.join(
+      folder,
+      previousHostLogFile(SESSION_HOST_PROTOCOL),
+    );
     writeFileSync(previous, 'older\n');
-    writeFileSync(path.join(folder, 'host-v1.log'), 'crash\n');
+    writeFileSync(
+      path.join(folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+      'crash\n',
+    );
 
     createDiagnosticLog(folder, clock).setAsidePrevious();
 

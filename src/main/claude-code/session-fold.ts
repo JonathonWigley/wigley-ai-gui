@@ -22,6 +22,7 @@ import {
   CONTROL_COMMAND,
   controlValue,
   isChoice,
+  launchMode,
 } from './claude-controls';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import {
@@ -204,11 +205,16 @@ export interface FoldStep {
   effects: FoldEffect[];
 }
 
-// `request.resume` must be the value the process was launched with. A new
-// session knows its context from the start; a resumed one waits for its
-// transcript or its first live reply.
+// `request.resume` and `request.controls` must be what the process was launched
+// with. A new session knows its context from the start; a resumed one waits for
+// its transcript or its first live reply. Mode starts at the mode the launch
+// passes; model and effort at the request's value, else null.
 export function createSessionFoldState(request: AgentStart): SessionFoldState {
   const pendingRequests = new Map<string, PendingRequest>();
+  const launchedControls: Readonly<Record<string, string>> = {
+    ...request.controls,
+    mode: launchMode(request.controls),
+  };
   const state: SessionFoldState = {
     // The adapter's own `get_context_usage` and `get_settings` replies stay out
     // of the chat.
@@ -223,7 +229,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     definitions: new Map(),
     controls: CLAUDE_CONTROLS.map((control) => ({
       ...control,
-      value: request.controls[control.id] ?? null,
+      value: launchedControls[control.id] ?? null,
     })),
     activity: 'idle',
     sendCount: 0,

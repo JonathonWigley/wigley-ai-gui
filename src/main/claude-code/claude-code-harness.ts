@@ -21,6 +21,7 @@ import type {
   HostedProcess,
   HostedProcessEvents,
   IdleRule,
+  KeyPath,
   PipeLine,
   SessionHost,
 } from '../../contracts/session-host';
@@ -110,6 +111,12 @@ export const CLAUDE_IDLE_RULE: IdleRule = {
   busyStdoutValues: ['assistant', 'stream_event'],
   busyStdinValues: ['user'],
 };
+// A `get_settings` reply's settings-file copies, which hold the `env` block's
+// values. The fold reads only the reply's `applied`.
+export const CLAUDE_DROPPED_OUT_KEYS: readonly KeyPath[] = [
+  ['response', 'response', 'effective'],
+  ['response', 'response', 'sources'],
+];
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.
 const END_GRACE_MS = 3000;
@@ -721,6 +728,7 @@ function startClaudeProcess(
       cwd: launch.cwd,
       env: definedEnv(launch.env),
       idleRule: CLAUDE_IDLE_RULE,
+      droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
     },
     withSpawnHint(forwarder.events, command, launch.cwd),
   );

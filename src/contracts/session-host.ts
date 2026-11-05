@@ -15,6 +15,8 @@ export interface IdleRule {
   busyStdoutValues: readonly string[];
   busyStdinValues: readonly string[];
 }
+// The keys leading from a JSON line's root to one value, the last key naming the value.
+export type KeyPath = readonly string[];
 export interface HostedSpawn {
   id: string;
   command: string;
@@ -22,6 +24,9 @@ export interface HostedSpawn {
   cwd: string;
   env: Readonly<Record<string, string>>;
   idleRule: IdleRule;
+  // Dropped from each stdout line before the host logs or delivers it, so a replay reads what a live subscriber read.
+  // A line holding none of them, or not JSON, passes byte for byte; a key is matched as `JSON.stringify` writes it.
+  droppedOutKeys: readonly KeyPath[];
 }
 export interface HostedExit {
   code: number | null;

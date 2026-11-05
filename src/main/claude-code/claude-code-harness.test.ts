@@ -402,7 +402,7 @@ const SAVED_REPLY_LINE = JSON.stringify({
 });
 
 describe('createClaudeCodeHarness', () => {
-  it('start_EmitsNullControlsThenIdle', async () => {
+  it('start_EmitsLaunchedControlsThenIdle', async () => {
     const run = started();
     expect(run.heard).toEqual([]);
 
@@ -411,29 +411,55 @@ describe('createClaudeCodeHarness', () => {
     expect(run.heard[0][0]).toBe('controls');
     const controls = run.heard[0][1] as { id: string; value: unknown }[];
     expect(controls.map((control) => [control.id, control.value])).toEqual([
-      ['mode', null],
+      ['mode', 'auto'],
       ['effort', null],
       ['model', null],
     ]);
     expect(run.heard[1]).toEqual(['activity', 'idle']);
   });
 
-  it('start_RequestControls_SeedStartingValues', async () => {
-    const run = started(fakeChild(), createMemoryFiles(), clock, {
-      ...request,
+  it.each([
+    {
+      case: 'a resume holding no mode',
+      resume: true,
+      controls: {},
+      seeded: { mode: 'auto', effort: null, model: null },
+    },
+    {
+      case: 'a held model',
+      resume: false,
       controls: { model: 'sonnet' },
-    });
+      seeded: { mode: 'auto', effort: null, model: 'sonnet' },
+    },
+    {
+      case: 'a held mode',
+      resume: false,
+      controls: { mode: 'plan', effort: 'low' },
+      seeded: { mode: 'plan', effort: 'low', model: null },
+    },
+  ] as {
+    case: string;
+    resume: boolean;
+    controls: Record<string, string>;
+    seeded: Record<string, string | null>;
+  }[])(
+    'start_RequestControls_SeedStartingValues ($case)',
+    async ({ resume, controls, seeded }) => {
+      const run = started(fakeChild(), createMemoryFiles(), clock, {
+        ...request,
+        resume,
+        controls,
+      });
 
-    await settle();
+      await settle();
 
-    expect(run.heard[0][0]).toBe('controls');
-    const controls = run.heard[0][1] as { id: string; value: unknown }[];
-    expect(controls.map((control) => [control.id, control.value])).toEqual([
-      ['mode', null],
-      ['effort', null],
-      ['model', 'sonnet'],
-    ]);
-  });
+      expect(run.heard[0][0]).toBe('controls');
+      const heard = run.heard[0][1] as { id: string; value: unknown }[];
+      expect(
+        Object.fromEntries(heard.map(({ id, value }) => [id, value])),
+      ).toEqual(seeded);
+    },
+  );
 
   it('start_Opens_WritesContextThenSettingsRequest', async () => {
     const run = started();
@@ -3129,6 +3155,10 @@ describe('createClaudeCodeHarness on the session host', () => {
         busyStdoutValues: expect.arrayContaining(['assistant', 'stream_event']),
         busyStdinValues: expect.arrayContaining(['user']),
       },
+      droppedOutKeys: [
+        ['response', 'response', 'effective'],
+        ['response', 'response', 'sources'],
+      ],
     });
     expect(host.processes[0].writes[0]).toBe(
       JSON.stringify(contextUsageRequest('wigley-1')),
@@ -3416,13 +3446,13 @@ describe('createClaudeCodeHarness on the session host', () => {
         },
       ],
       written: [],
-      controls: { mode: null, effort: 'low', model: 'sonnet' },
+      controls: { mode: 'auto', effort: 'low', model: 'sonnet' },
     },
     {
       case: 'a log with no request',
       goesOn: [],
       written: [settingsRequest('wigley-1')],
-      controls: { mode: null, effort: null, model: null },
+      controls: { mode: 'auto', effort: null, model: null },
     },
     {
       case: 'a log holding the request with its reply still to come',
@@ -3431,13 +3461,13 @@ describe('createClaudeCodeHarness on the session host', () => {
         { dir: 'in', line: settingsRequest('wigley-2') },
       ],
       written: [],
-      controls: { mode: null, effort: null, model: null },
+      controls: { mode: 'auto', effort: null, model: null },
       live: {
         reply: settingsReply('wigley-2', {
           model: 'claude-sonnet-5-5',
           effort: 'low',
         }),
-        controls: { mode: null, effort: 'low', model: 'sonnet' },
+        controls: { mode: 'auto', effort: 'low', model: 'sonnet' },
       },
     },
   ] as {

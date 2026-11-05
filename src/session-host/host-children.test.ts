@@ -18,6 +18,7 @@ import {
   type HostChildrenRecord,
   hostChildrenFile,
   type RecordedHostChild,
+  SESSION_HOST_PROTOCOL,
 } from '../contracts/session-host-protocol';
 import { createHostChildren } from './host-children';
 import {
@@ -29,12 +30,12 @@ import { type FakeChild, fakeChild } from './session-host-test-doubles';
 
 const REPORT: ProcessReport = { startedAt: 'then', command: '/bin/agent' };
 const OWN_PID = 4242;
-const OWN_FILE = hostChildrenFile(1, OWN_PID);
+const OWN_FILE = hostChildrenFile(SESSION_HOST_PROTOCOL, OWN_PID);
 const LAST_HOST: HostChildrenRecord['writer'] = {
   pid: 99,
   startedAt: 'earlier',
 };
-const LAST_HOST_FILE = hostChildrenFile(1, LAST_HOST.pid);
+const LAST_HOST_FILE = hostChildrenFile(SESSION_HOST_PROTOCOL, LAST_HOST.pid);
 // The real `ps` gives this test's own process another start time, so its pid reads as reused.
 const REUSED_WRITER: HostChildrenRecord['writer'] = {
   pid: process.pid,
@@ -242,7 +243,10 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
   it('killAll_RunningChildren_SendsEachSIGTERMAndKeepsTheRecord', async () => {
     const { processes, signals } = realProcesses();
     const folder = tempFolder();
-    const file = path.join(folder, hostChildrenFile(1, process.pid));
+    const file = path.join(
+      folder,
+      hostChildrenFile(SESSION_HOST_PROTOCOL, process.pid),
+    );
     const children = createHostChildren({
       folder,
       pid: process.pid,
@@ -515,7 +519,7 @@ describe('the children record', () => {
     ]);
     const newerGone = writeRecord(
       folder,
-      hostChildrenFile(2, 97),
+      hostChildrenFile(SESSION_HOST_PROTOCOL + 1, 97),
       { pid: 97, startedAt: 'newer' },
       [{ pid: 9, startedAt: 'nine', command: '/bin/agent' }],
     );

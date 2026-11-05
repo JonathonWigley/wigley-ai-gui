@@ -4,6 +4,7 @@ import type {
   HostedExit,
   HostedSpawn,
   IdleRule,
+  KeyPath,
   PipeDirection,
   PipeLine,
 } from '../contracts/session-host';
@@ -69,11 +70,17 @@ export interface ProcessTable {
   stopAll(done: () => void): void;
 }
 
+interface DroppedKey {
+  path: KeyPath;
+  quotedKey: string;
+}
+
 interface TableProcess {
   id: string;
   child: ChildProcessWithoutNullStreams;
   log: PipeLog;
   idleRule: IdleRule;
+  droppedOutKeys: readonly DroppedKey[];
   startedAt: number;
   subscriber: ProcessSubscriber | null;
   isIdle: boolean;
@@ -108,6 +115,73 @@ function requireIdleRule({ id, idleRule }: HostedSpawn) {
   if (!isWellFormed) {
     throw new Error(`process ${id} has no well-formed idle rule`);
   }
+}
+
+// A bad one would otherwise throw on a stdout line, far from the request that carried it.
+function requireDroppedOutKeys({ id, droppedOutKeys }: HostedSpawn) {
+  const isWellFormed =
+    Array.isArray(droppedOutKeys) &&
+    droppedOutKeys.every(
+      (path) =>
+        Array.isArray(path) &&
+        path.length > 0 &&
+        path.every((key) => typeof key === 'string'),
+    );
+  if (!isWellFormed) {
+    throw new Error(`process ${id} has no well-formed dropped keys`);
+  }
+}
+
+function droppedKeysOf(paths: readonly KeyPath[]): DroppedKey[] {
+  return paths.map((path) => ({
+    path,
+    quotedKey: JSON.stringify(path[path.length - 1]),
+  }));
+}
+
+// True when `root` held the value at `path`, now gone.
+function deleteAtPath(root: unknown, path: KeyPath): boolean {
+  let parent = root;
+  for (const key of path.slice(0, -1)) {
+    if (typeof parent !== 'object' || parent === null) {
+      return false;
+    }
+    parent = (parent as Record<string, unknown>)[key];
+  }
+  const lastKey = path[path.length - 1];
+  const holdsKey =
+    typeof parent === 'object' &&
+    parent !== null &&
+    Object.hasOwn(parent, lastKey);
+  if (!holdsKey) {
+    return false;
+  }
+  delete (parent as Record<string, unknown>)[lastKey];
+  return true;
+}
+
+function withoutDroppedKeys(
+  text: string,
+  droppedKeys: readonly DroppedKey[],
+): string {
+  // Every stdout line comes here; only a line naming a dropped key is worth parsing.
+  const mayHoldKey = droppedKeys.some(({ quotedKey }) =>
+    text.includes(quotedKey),
+  );
+  if (!mayHoldKey) {
+    return text;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  let droppedAny = false;
+  for (const { path } of droppedKeys) {
+    droppedAny = deleteAtPath(parsed, path) || droppedAny;
+  }
+  return droppedAny ? JSON.stringify(parsed) : text;
 }
 
 export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
@@ -183,7 +257,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
   }
 
   function childLine(hosted: TableProcess, dir: PipeDirection, text: string) {
-    const line = hosted.log.append(dir, text);
+    const delivered =
+      dir === 'out' ? withoutDroppedKeys(text, hosted.droppedOutKeys) : text;
+    const line = hosted.log.append(dir, delivered);
     hosted.subscriber?.line(hosted.id, line);
     if (dir !== 'out') {
       return;
@@ -284,6 +360,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       let log: PipeLog | null = null;
       try {
         requireIdleRule(request);
+        requireDroppedOutKeys(request);
         log = createPipeLog(deps.logsFolder, request.id, clock, (message) =>
           diagnostics.append(message),
         );
@@ -297,6 +374,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
           child,
           log,
           idleRule: request.idleRule,
+          droppedOutKeys: droppedKeysOf(request.droppedOutKeys),
           startedAt,
           subscriber,
           isIdle: true,

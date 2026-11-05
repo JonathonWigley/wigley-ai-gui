@@ -81,6 +81,82 @@ describe('process table', () => {
     expect(lines).toEqual([{ seq: 2, dir: 'out', at: 1000, text: 'ok' }]);
   });
 
+  it.each([
+    {
+      label: 'both named keys, keeping their siblings',
+      dir: 'out',
+      text: '{"type":"reply","reply":{"body":{"secret":{"env":{"TOKEN":"s3cret"}},"copies":[{"TOKEN":"s3cret"}],"kept":{"a":1}}}}',
+      delivered: '{"type":"reply","reply":{"body":{"kept":{"a":1}}}}',
+    },
+    {
+      label: 'one named key',
+      dir: 'out',
+      text: '{"reply":{"body":{"secret":"s3cret","kept":2}}}',
+      delivered: '{"reply":{"body":{"kept":2}}}',
+    },
+    {
+      label: 'the key at another path',
+      dir: 'out',
+      text: '{ "secret" : 1 , "reply" : { "secret" : 2 } }',
+      delivered: '{ "secret" : 1 , "reply" : { "secret" : 2 } }',
+    },
+    {
+      label: 'the key named as a value on the path',
+      dir: 'out',
+      text: '{ "reply" : { "body" : "secret" } }',
+      delivered: '{ "reply" : { "body" : "secret" } }',
+    },
+    {
+      label: 'no named key',
+      dir: 'out',
+      text: '{ "type" : "assistant" }',
+      delivered: '{ "type" : "assistant" }',
+    },
+    {
+      label: 'not JSON, naming the key',
+      dir: 'out',
+      text: 'not json "secret"',
+      delivered: 'not json "secret"',
+    },
+    {
+      label: 'a JSON string equal to the key',
+      dir: 'out',
+      text: '"secret"',
+      delivered: '"secret"',
+    },
+    {
+      label: 'an err line',
+      dir: 'err',
+      text: '{"reply":{"body":{"secret":"s3cret"}}}',
+      delivered: '{"reply":{"body":{"secret":"s3cret"}}}',
+    },
+  ])(
+    'droppedOutKeys_LineCases_LogAndSubscriberAgree: $label',
+    async ({ dir, text, delivered }) => {
+      const { table, children, logRecords } = setUp();
+      const { subscriber, lines } = recordingSubscriber();
+      table.spawn(
+        {
+          ...spawnRequest('a'),
+          droppedOutKeys: [
+            ['reply', 'body', 'secret'],
+            ['reply', 'body', 'copies'],
+          ],
+        },
+        subscriber,
+      );
+
+      (dir === 'out' ? children[0].stdout : children[0].stderr).write(
+        `${text}\n`,
+      );
+      await streamsDelivered();
+
+      const logged = JSON.parse(logRecords('a.jsonl')) as { text: string };
+      expect(logged.text).toBe(delivered);
+      expect(lines.map((line) => line.text)).toEqual([delivered]);
+    },
+  );
+
   it('write_ToAProcess_SendsTheTextWithItsNewline', async () => {
     const { table, children } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
@@ -549,6 +625,18 @@ describe('process table', () => {
       spawnFails: () => fakeChild().child,
       request: { ...spawnRequest('a'), idleRule: undefined as never },
       error: 'idle rule',
+    },
+    {
+      label: 'the dropped keys are missing',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), droppedOutKeys: undefined as never },
+      error: 'dropped keys',
+    },
+    {
+      label: 'a dropped key has an empty path',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), droppedOutKeys: [[]] },
+      error: 'dropped keys',
     },
   ])(
     'spawn_Throws_ClosesWithTheMessageAndKeepsNoEntry: $label',

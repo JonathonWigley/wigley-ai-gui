@@ -1,5 +1,6 @@
 import type { AgentStart } from '../../contracts/agent';
 import type { Paths } from '../../contracts/paths';
+import { launchMode } from './claude-controls';
 
 export interface ClaudeLaunch {
   args: string[];
@@ -70,7 +71,7 @@ function defaultConfigFolder(homeDir: string, paths: Paths): string {
 
 // The arguments, folder and environment `claude` runs one session with:
 // stream-json both ways, partial messages streamed, the request's `mode`
-// control as the permission mode (auto without one) with what it would still
+// control as the permission mode (`launchMode`) with what it would still
 // prompt sent to `permissionTool`, its `model` and `effort` controls as
 // `--model` and `--effort`, and the request's `instructions`, when there are
 // any, as one `--append-system-prompt` joined with a blank line, and
@@ -84,7 +85,7 @@ export function claudeLaunch(
   paths: Paths,
 ): ClaudeLaunch {
   const sessionFlag = request.resume ? '--resume' : '--session-id';
-  const { model, effort, mode } = request.controls;
+  const { model, effort } = request.controls;
   const modelArgs = model === undefined ? [] : ['--model', model];
   const effortArgs = effort === undefined ? [] : ['--effort', effort];
   const instructionArgs =
@@ -109,7 +110,7 @@ export function claudeLaunch(
       sessionFlag,
       request.sessionId,
       '--permission-mode',
-      mode ?? 'auto',
+      launchMode(request.controls),
       '--permission-prompt-tool',
       permissionTool,
       ...modelArgs,

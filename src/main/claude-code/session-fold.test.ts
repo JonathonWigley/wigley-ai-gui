@@ -492,7 +492,7 @@ describe('session-fold', () => {
       const { effects } = foldPipeLine(state, outLine(reply));
 
       expect(effects.map((effect) => effect.kind)).toEqual(kinds);
-      expect(controlValues(state)).toEqual({ mode: null, ...controls });
+      expect(controlValues(state)).toEqual({ mode: 'auto', ...controls });
       for (const effect of effects) {
         if (effect.kind === 'controls') {
           expect(effect.controls).toEqual(state.controls);
@@ -817,7 +817,7 @@ describe('session-fold', () => {
     expect(controls).toEqual({
       kind: 'controls',
       controls: expect.arrayContaining([
-        expect.objectContaining({ id: 'mode', value: null }),
+        expect.objectContaining({ id: 'mode', value: 'auto' }),
         expect.objectContaining({ id: 'effort', value: null }),
         expect.objectContaining({ id: 'model', value: null }),
       ]),

@@ -11,7 +11,13 @@ import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HostMessage } from '../contracts/session-host-protocol';
+import {
+  type HostMessage,
+  hostLogFile,
+  hostRecordFile,
+  previousHostLogFile,
+  SESSION_HOST_PROTOCOL,
+} from '../contracts/session-host-protocol';
 import { channelPath } from '../shared/local-channel/channel-path';
 import { jsonLine, readLines } from '../shared/local-channel/line-framing';
 import {
@@ -126,7 +132,11 @@ async function runningHost(
   const running = host(existing, endLeftovers);
   cleanups.push(() => stopHost(running));
   await vi.waitFor(() =>
-    expect(existsSync(path.join(running.folder, 'host-v1.json'))).toBe(true),
+    expect(
+      existsSync(
+        path.join(running.folder, hostRecordFile(SESSION_HOST_PROTOCOL)),
+      ),
+    ).toBe(true),
   );
   return running;
 }
@@ -228,7 +238,11 @@ describe('host protocol', () => {
 
     const reply = await replyTo(connection, { type: 'hello', requestId: 1 });
 
-    expect(reply).toEqual({ type: 'hello', requestId: 1, protocol: 1 });
+    expect(reply).toEqual({
+      type: 'hello',
+      requestId: 1,
+      protocol: SESSION_HOST_PROTOCOL,
+    });
   });
 
   it.each([
@@ -413,7 +427,10 @@ describe('host protocol', () => {
     hostSide.destroy(reset);
     await vi.waitFor(() =>
       expect(
-        readFileSync(path.join(running.folder, 'host-v1.log'), 'utf8'),
+        readFileSync(
+          path.join(running.folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+          'utf8',
+        ),
       ).toContain('ECONNRESET'),
     );
 
@@ -447,7 +464,7 @@ describe('host protocol', () => {
     await vi.waitFor(() => expect(connection.linesOf()).toEqual(['later']));
 
     const diagnostics = readFileSync(
-      path.join(running.folder, 'host-v1.log'),
+      path.join(running.folder, hostLogFile(SESSION_HOST_PROTOCOL)),
       'utf8',
     );
     expect(diagnostics.trim().split('\n')).toHaveLength(1);
@@ -467,7 +484,10 @@ describe('host protocol', () => {
     await settled(connection);
 
     expect(
-      readFileSync(path.join(running.folder, 'host-v1.log'), 'utf8'),
+      readFileSync(
+        path.join(running.folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+        'utf8',
+      ),
     ).toContain(line);
     // Not being a message, the line made no client: the first-client wait still ends the host.
     running.time.advanceTo(30_000);
@@ -484,7 +504,10 @@ describe('host messages with bad fields', () => {
     await settled(connection);
 
     expect(
-      readFileSync(path.join(running.folder, 'host-v1.log'), 'utf8'),
+      readFileSync(
+        path.join(running.folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+        'utf8',
+      ),
     ).toContain('message spawn');
     expect(running.exits).toEqual([]);
     await spawned(running, connection, 'a');
@@ -544,7 +567,11 @@ describe('host lifetime', () => {
 
     busy.close();
     await vi.waitFor(() => expect(running.exits).toEqual([0]));
-    expect(existsSync(path.join(running.folder, 'host-v1.json'))).toBe(false);
+    expect(
+      existsSync(
+        path.join(running.folder, hostRecordFile(SESSION_HOST_PROTOCOL)),
+      ),
+    ).toBe(false);
   });
 
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: the last client disconnects', async () => {
@@ -568,7 +595,11 @@ describe('host lifetime', () => {
 
     running.time.advanceTo(30_000);
     await vi.waitFor(() => expect(running.exits).toEqual([0]));
-    expect(existsSync(path.join(running.folder, 'host-v1.json'))).toBe(false);
+    expect(
+      existsSync(
+        path.join(running.folder, hostRecordFile(SESSION_HOST_PROTOCOL)),
+      ),
+    ).toBe(false);
   });
 
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: a probe leaves inside the wait', async () => {
@@ -656,20 +687,35 @@ describe('host start', () => {
   it('start_RecordAndSweep: no other host writes the record, sets the last log aside and sweeps', async () => {
     const seeded = tempFolder();
     seedOldLog(seeded.folder);
-    writeFileSync(path.join(seeded.folder, 'host-v1.log'), 'previous\n');
+    writeFileSync(
+      path.join(seeded.folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+      'previous\n',
+    );
 
     const running = await runningHost(seeded);
     await running.started;
 
     expect(
       JSON.parse(
-        readFileSync(path.join(running.folder, 'host-v1.json'), 'utf8'),
+        readFileSync(
+          path.join(running.folder, hostRecordFile(SESSION_HOST_PROTOCOL)),
+          'utf8',
+        ),
       ),
-    ).toEqual({ protocol: 1, channel: running.channel, pid: 4242 });
+    ).toEqual({
+      protocol: SESSION_HOST_PROTOCOL,
+      channel: running.channel,
+      pid: 4242,
+    });
     expect(
-      readFileSync(path.join(running.folder, 'host-v1.previous.log'), 'utf8'),
+      readFileSync(
+        path.join(running.folder, previousHostLogFile(SESSION_HOST_PROTOCOL)),
+        'utf8',
+      ),
     ).toBe('previous\n');
-    expect(existsSync(path.join(running.folder, 'host-v1.log'))).toBe(false);
+    expect(
+      existsSync(path.join(running.folder, hostLogFile(SESSION_HOST_PROTOCOL))),
+    ).toBe(false);
     expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
       false,
     );
@@ -823,10 +869,15 @@ describe('host start', () => {
     await running.started;
 
     expect(running.exits).toEqual([1]);
-    expect(existsSync(path.join(folder, 'host-v1.json'))).toBe(false);
-    expect(readFileSync(path.join(folder, 'host-v1.log'), 'utf8')).toContain(
-      'listen',
-    );
+    expect(
+      existsSync(path.join(folder, hostRecordFile(SESSION_HOST_PROTOCOL))),
+    ).toBe(false);
+    expect(
+      readFileSync(
+        path.join(folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+        'utf8',
+      ),
+    ).toContain('listen');
   });
 
   it.each([
@@ -840,7 +891,10 @@ describe('host start', () => {
     async ({ replyProtocol }) => {
       const seeded = tempFolder();
       seedOldLog(seeded.folder);
-      const liveLog = path.join(seeded.folder, 'host-v1.log');
+      const liveLog = path.join(
+        seeded.folder,
+        hostLogFile(SESSION_HOST_PROTOCOL),
+      );
       writeFileSync(liveLog, 'live\n');
       const live = liveListener(seeded.channel, replyProtocol);
       await live.listening;
@@ -855,7 +909,11 @@ describe('host start', () => {
 
       expect(second.exits).toEqual([0]);
       expect(endLeftovers).not.toHaveBeenCalled();
-      expect(existsSync(path.join(seeded.folder, 'host-v1.json'))).toBe(false);
+      expect(
+        existsSync(
+          path.join(seeded.folder, hostRecordFile(SESSION_HOST_PROTOCOL)),
+        ),
+      ).toBe(false);
       expect(readFileSync(liveLog, 'utf8')).toBe('live\n');
       expect(existsSync(path.join(seeded.folder, 'logs', 'old.jsonl'))).toBe(
         true,

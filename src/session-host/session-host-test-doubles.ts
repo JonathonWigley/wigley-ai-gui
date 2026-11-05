@@ -24,6 +24,7 @@ export function spawnRequest(id: string): HostedSpawn {
     cwd: '/work',
     env: {},
     idleRule: IDLE_RULE,
+    droppedOutKeys: [],
   };
 }
 

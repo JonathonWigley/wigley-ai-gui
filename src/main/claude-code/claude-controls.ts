@@ -1,4 +1,8 @@
-import type { ControlChoice, UserMessage } from '../../contracts/agent';
+import type {
+  AgentStart,
+  ControlChoice,
+  UserMessage,
+} from '../../contracts/agent';
 import { asJson, asString, type Json } from './json-fields';
 
 export type ClaudeControlId = 'mode' | 'effort' | 'model';
@@ -45,6 +49,11 @@ export const CLAUDE_CONTROLS: readonly {
     choices: MODEL_CHOICES,
   },
 ];
+
+// The permission mode a process launches with: the request's, else `auto`.
+export function launchMode(controls: AgentStart['controls']): string {
+  return controls.mode ?? 'auto';
+}
 
 // A typed `/effort <value>` or `/model <value>` sets that control.
 export const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
