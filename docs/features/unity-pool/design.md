@@ -55,7 +55,9 @@ Main watches `~/.local/state/unity-pool/` and reads `<pool>/state.json` in each 
 
 - Only version 1 is read. A file with any other `version` shows nothing for that pool, and main logs the version
   once.
-- A file that does not parse keeps the pool's last good state, since a read can meet a half-written file.
+- A file that does not parse, or holds a field in a shape version 1 does not allow, keeps the pool's last good
+  state, since a read can meet a half-written file; main logs the first field it could not read. An editor word it
+  does not know reads as `unknown`. The `sessions` map is not read.
 - Main converts every time from Unix seconds to epoch milliseconds, so the page compares them with its clock.
 - While the folder is missing, main checks for it once a minute and creates nothing: a machine with no pool keeps
   no empty folder.
@@ -101,8 +103,10 @@ The panel redraws on each state change, each change of the shown session, and on
 - **Release** shows on a clone the user holds. It runs `unity-pool release <pool> <n> --json`.
 
 Main runs the CLI as `python3 -X utf8 <script> …`, the script being the `unity-pool.scriptPath` setting
-(`~/.local/bin/unity-pool` by default). The button is disabled while its run is in flight, and the clone then shows
-the result: `Held Unity 3`, `Released Unity 3`, or the CLI's error message. The panel offers no release of an
+(`~/.local/bin/unity-pool` by default). A run times out after 30 seconds. The button is disabled while its run is in
+flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`, or the CLI's
+error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
+with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an
 agent's claim or a stranded mark: those take `release --force`, which runs only on the user's word in a terminal.
 
 The panel takes no keys: the buttons and holders are clicks.
