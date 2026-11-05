@@ -17,9 +17,15 @@ export interface PoolFixture {
 // What each step shows:
 // - `opening`: clone 1 claimed by the session's row, clone 2 free but dirty, no queue;
 // - `panel`: clone 2 clean;
+// - `tiles`: `panel` with clone 2's warm-up failed, clone 3 stranded and clone 4 warming up;
 // - `longWait`: clone 2 held by the user and one ticket waiting past the long-wait mark;
 // - `unknownVersion`: `longWait` under version 2, which the app does not read.
-export type PoolStage = 'opening' | 'panel' | 'longWait' | 'unknownVersion';
+export type PoolStage =
+  | 'opening'
+  | 'panel'
+  | 'tiles'
+  | 'longWait'
+  | 'unknownVersion';
 
 // The queued session's id: a session the app has no row for.
 const QUEUED_SESSION = 'c0ffee00-5e1f-7e57-0000-000000000000';
@@ -42,22 +48,34 @@ export function poolStateText(fixture: PoolFixture, stage: PoolStage): string {
         since: t - 120,
         renewedAt: t - 30,
       }),
-      '2': clone(
-        secondPath,
-        'main',
-        stage === 'opening',
-        'closed',
-        t,
-        isLongWait
-          ? {
-              kind: 'hold',
-              session: null,
-              row: null,
-              since: t - 60,
-              renewedAt: t - 60,
-            }
-          : null,
-      ),
+      '2': {
+        ...clone(
+          secondPath,
+          'main',
+          stage === 'opening',
+          'closed',
+          t,
+          isLongWait
+            ? {
+                kind: 'hold',
+                session: null,
+                row: null,
+                since: t - 60,
+                renewedAt: t - 60,
+              }
+            : null,
+        ),
+        warmup:
+          stage === 'tiles'
+            ? {
+                state: 'failed',
+                startedAt: t - 90,
+                finishedAt: t - 60,
+                error: 'refresh_assets failed',
+              }
+            : null,
+      },
+      ...(stage === 'tiles' ? tilesStageClones(firstPath, t) : {}),
     },
     queue: isLongWait
       ? [
@@ -73,6 +91,30 @@ export function poolStateText(fixture: PoolFixture, stage: PoolStage): string {
       : [],
   };
   return `${JSON.stringify(state, null, 2)}\n`;
+}
+
+// Clones 3 and 4 of the `tiles` stage, whose folders nothing reads.
+function tilesStageClones(firstPath: string, t: number) {
+  return {
+    '3': {
+      ...clone(`${firstPath}-3`, 'feat/stranded', true, 'closed', t, null),
+      stranded: {
+        session: QUEUED_SESSION,
+        row: null,
+        since: t - 600,
+        reason: 'session-ended-dirty',
+      },
+    },
+    '4': {
+      ...clone(`${firstPath}-4`, 'feat/warming', false, 'busy', t, null),
+      warmup: {
+        state: 'running',
+        startedAt: t - 10,
+        finishedAt: null,
+        error: null,
+      },
+    },
+  };
 }
 
 function clone(

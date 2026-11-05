@@ -1,442 +1,424 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
-  IDLE_STAGE,
+  checklistCount,
   isBusy,
   type MainStage,
+  type MainWorkflow,
   type SessionFlow,
-  type StageId,
+  startsSkill,
   type WorkflowSignal,
 } from './contract';
-import { foldFlow, isPlanFile, newFlow } from './flow';
-import type { PlanProgress } from './plan-reader';
+import { foldFlow, markMissedLevel, newFlow } from './flow';
 
 function flowWith(fields: Partial<SessionFlow>): SessionFlow {
   return { ...newFlow('s1', '/r'), ...fields };
 }
 
-function fake(
-  id: StageId,
-  order: number,
-  enter: MainStage['enter'],
-  flags: Pick<MainStage, 'clearsPlan' | 'recordsReviewRounds'> = {},
-): MainStage {
-  return { id, order, enter, ...flags };
+function skill(name: string): WorkflowSignal {
+  return { type: 'skillStarted', skill: name, args: '', argsPath: null };
 }
 
-function skill(name: string, argsPath: string | null): WorkflowSignal {
+const reportedBuild: MainStage['enter'] = (_flow, signal) =>
+  signal.type === 'stepReported' && signal.step === 'build' ? 'build' : null;
+
+function workflow(
+  id: string,
+  order: number,
+  claimed: string,
+  firstStage: string,
+  stages: readonly MainStage[] = [
+    { id: 'build', order: 10, enter: reportedBuild },
+  ],
+): MainWorkflow {
   return {
-    type: 'skillStarted',
-    skill: name,
-    args: argsPath ?? '',
-    argsPath,
+    id,
+    order,
+    claims: (signal) => startsSkill(signal, claimed),
+    firstStage,
+    stages,
   };
 }
 
-const STAGES: readonly MainStage[] = [
-  fake(IDLE_STAGE, 0, (_f, s) => (s.type === 'handedOff' ? IDLE_STAGE : null)),
-  fake('a', 10, (_f, s) => (s.type === 'dismissed' ? 'a' : null)),
-  fake('b', 20, (_f, s) =>
-    s.type === 'skillStarted' && s.skill === 'x:b' ? 'b' : null,
-  ),
-  fake('c', 30, (f, s) => {
-    const startedB = s.type === 'skillStarted' && s.skill === 'x:b';
-    const endedWithPlan = s.type === 'turnEnded' && f.planDir !== null;
-    return startedB || endedWithPlan ? 'c' : null;
-  }),
-  fake(
-    'e',
-    40,
-    (_f, s) => {
-      const startedE = s.type === 'skillStarted' && s.skill === 'x:e';
-      const reportedE = s.type === 'stepReported' && s.step === 'e';
-      return startedE || reportedE ? 'e' : null;
-    },
-    { clearsPlan: true },
-  ),
-  fake(
-    'm',
-    50,
-    (_f, s) => (s.type === 'skillStarted' && s.skill === 'x:m' ? 'm' : null),
-    { recordsReviewRounds: true },
-  ),
-];
+const NO_RULE: MainStage['enter'] = () => null;
 
-const WITH_PLAN_WATCHER: readonly MainStage[] = [
-  fake('d', 5, (f, s) =>
-    s.type === 'fileWritten' && f.planDir !== null ? 'd' : null,
-  ),
-  ...STAGES,
-];
+// Both hold a stage `done`; only Light's finishes its workflow.
+const LIGHT = workflow('light', 10, 'wigley:light', 'scope', [
+  { id: 'build', order: 10, enter: reportedBuild },
+  { id: 'done', order: 20, finishes: true, enter: NO_RULE },
+]);
+const MEDIUM = workflow('medium', 20, 'wigley:medium', 'interview', [
+  { id: 'build', order: 10, enter: reportedBuild },
+  { id: 'done', order: 20, enter: NO_RULE },
+]);
+const WORKFLOWS = [LIGHT, MEDIUM];
 
-const PROGRESS: PlanProgress = {
-  checked: 1,
-  total: 3,
-  wave: 2,
-  reviewRounds: 1,
-  title: 'Plan A',
-  tasks: [
-    { wave: 1, text: 'first', done: true },
-    { wave: 2, text: 'second', done: false },
-    { wave: 2, text: 'third', done: false },
-  ],
-};
-const PROGRESS_RETITLED_TASK: PlanProgress = {
-  ...PROGRESS,
-  tasks: [
-    PROGRESS.tasks[0],
-    { ...PROGRESS.tasks[1], text: 'renamed' },
-    PROGRESS.tasks[2],
-  ],
-};
-
-const PLAN_X = '/r/docs/features/x/plan-a';
+const CHECKLIST = [{ text: 'a', done: false }];
 const UNCHANGED = 'unchanged';
 
-interface FoldRow {
+const LIGHT_AT_BUILD = { workflow: 'light', stage: 'build' };
+
+const WORKFLOW_ROWS: {
   name: string;
   flow: SessionFlow;
   signal: WorkflowSignal;
-  expected: SessionFlow | typeof UNCHANGED;
-  stages?: readonly MainStage[];
-}
-
-const IN_C = { stage: 'c' } as const;
-
-const FOLD_ROWS: FoldRow[] = [
+  expected: Partial<SessionFlow> | typeof UNCHANGED;
+}[] = [
   {
-    name: 'turnStarted sets turnRunning and stops the countdown',
-    flow: flowWith({ ...IN_C, countdownEndsAt: 5000 }),
-    signal: { type: 'turnStarted' },
-    expected: flowWith({ ...IN_C, turnRunning: true }),
-  },
-  {
-    name: 'turnEnded clears turnRunning and keeps running subagents',
-    flow: flowWith({ turnRunning: true, runningSubagents: ['a1'] }),
-    signal: { type: 'turnEnded' },
-    expected: flowWith({ runningSubagents: ['a1'] }),
-  },
-  {
-    name: 'subagentStarted adds the agent',
-    flow: flowWith({}),
-    signal: { type: 'subagentStarted', agentId: 'a1' },
-    expected: flowWith({ runningSubagents: ['a1'] }),
-  },
-  {
-    name: 'subagentStarted for a listed agent changes nothing',
-    flow: flowWith({ runningSubagents: ['a1'] }),
-    signal: { type: 'subagentStarted', agentId: 'a1' },
-    expected: UNCHANGED,
-  },
-  {
-    name: 'subagentFinished removes the agent',
-    flow: flowWith({ runningSubagents: ['a1', 'a2'] }),
-    signal: { type: 'subagentFinished', agentId: 'a1' },
-    expected: flowWith({ runningSubagents: ['a2'] }),
-  },
-  {
-    name: 'subagentFinished for an unlisted agent changes nothing',
-    flow: flowWith({ runningSubagents: ['a1', 'a2'] }),
-    signal: { type: 'subagentFinished', agentId: 'a9' },
-    expected: UNCHANGED,
-  },
-  {
-    name: 'fileWritten of a new plan moves planDir and drops progress and reviewRoundsAtMake',
-    flow: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 1,
-    }),
-    signal: { type: 'fileWritten', path: '/r/docs/features/y/plan-b/plan.md' },
-    expected: flowWith({
-      planDir: '/r/docs/features/y/plan-b',
-      reviewRoundsAtMake: null,
-    }),
-  },
-  {
-    name: 'fileWritten of the same plan keeps progress',
-    flow: flowWith({ planDir: PLAN_X, progress: PROGRESS }),
-    signal: { type: 'fileWritten', path: `${PLAN_X}/plan.md` },
-    expected: UNCHANGED,
-  },
-  {
-    name: 'fileWritten of a non-plan file changes nothing',
-    flow: flowWith({ planDir: PLAN_X, progress: PROGRESS }),
-    signal: { type: 'fileWritten', path: '/r/src/a.ts' },
-    expected: UNCHANGED,
-  },
-  {
-    name: 'fileWritten with backslash separators',
-    flow: flowWith({}),
-    signal: { type: 'fileWritten', path: 'C:\\r\\plan-a\\plan.md' },
-    expected: flowWith({ planDir: 'C:\\r\\plan-a', reviewRoundsAtMake: null }),
-  },
-  {
-    name: 'wigley:make of a plan folder moves planDir and drops progress',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: skill('wigley:make', '/r/plan-a'),
-    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
-  },
-  {
-    name: 'make typed by its bare name moves planDir too',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: skill('make', '/r/plan-a/plan.md'),
-    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
-  },
-  {
-    name: 'wigley:make of a plan folder with a trailing separator',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: skill('wigley:make', '/r/plan-a/'),
-    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
-  },
-  {
-    name: 'wigley:make of a plan.md',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: skill('wigley:make', '/r/plan-a/plan.md'),
-    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
-  },
-  {
-    name: 'wigley:make of a folder that is no plan changes nothing',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: skill('wigley:make', '/r/docs/x'),
-    expected: UNCHANGED,
-  },
-  {
-    name: 'wigley:make reads argsPath, never args',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: {
-      type: 'skillStarted',
-      skill: 'wigley:make',
-      args: 'plan-a',
-      argsPath: null,
+    name: 'a claim of a new flow goes to the first stage and clears missedLevel',
+    flow: flowWith({ missedLevel: true }),
+    signal: skill('wigley:light'),
+    expected: {
+      workflow: 'light',
+      stage: 'scope',
+      movedUpFrom: null,
+      missedLevel: false,
     },
+  },
+  {
+    name: 'a claim by another workflow moves up and starts over',
+    flow: flowWith({
+      ...LIGHT_AT_BUILD,
+      checklist: [{ text: 'a', done: true }],
+      state: { n: 1 },
+    }),
+    signal: skill('wigley:medium'),
+    expected: {
+      workflow: 'medium',
+      stage: 'interview',
+      movedUpFrom: 'light',
+      state: null,
+      checklist: null,
+    },
+  },
+  {
+    name: "the current workflow's own claim with no list changes nothing",
+    flow: flowWith({ ...LIGHT_AT_BUILD, movedUpFrom: 'medium' }),
+    signal: skill('wigley:light'),
     expected: UNCHANGED,
   },
   {
-    name: 'another skill naming a plan changes nothing',
-    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
-    signal: skill('other:skill', '/r/plan-a'),
+    name: "the current workflow's own claim mid-run empties the list and keeps the rest",
+    flow: flowWith({
+      ...LIGHT_AT_BUILD,
+      movedUpFrom: 'medium',
+      checklist: CHECKLIST,
+      state: { n: 1 },
+    }),
+    signal: skill('wigley:light'),
+    expected: {
+      workflow: 'light',
+      stage: 'build',
+      movedUpFrom: 'medium',
+      state: { n: 1 },
+      checklist: null,
+    },
+  },
+  {
+    name: "the current workflow's own claim from a finished stage starts a new run",
+    flow: flowWith({
+      workflow: 'light',
+      stage: 'done',
+      movedUpFrom: 'medium',
+      checklist: CHECKLIST,
+    }),
+    signal: skill('wigley:light'),
+    expected: { workflow: 'light', movedUpFrom: null, checklist: null },
+  },
+  {
+    name: "another workflow's claim from a finished stage starts a new run",
+    flow: flowWith({ workflow: 'light', stage: 'done', movedUpFrom: 'heavy' }),
+    signal: skill('wigley:medium'),
+    expected: { workflow: 'medium', stage: 'interview', movedUpFrom: null },
+  },
+  {
+    name: 'a stage of that id finishing in the claiming workflow alone moves up',
+    flow: flowWith({ workflow: 'medium', stage: 'done' }),
+    signal: skill('wigley:light'),
+    expected: { workflow: 'light', stage: 'scope', movedUpFrom: 'medium' },
+  },
+  {
+    name: 'a skill no workflow claims changes nothing',
+    flow: flowWith(LIGHT_AT_BUILD),
+    signal: skill('wigley:review'),
     expected: UNCHANGED,
   },
   {
-    name: 'planChanged sets progress',
-    flow: flowWith({ planDir: PLAN_X, reviewRoundsAtMake: 0 }),
-    signal: { type: 'planChanged', progress: PROGRESS },
-    expected: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 0,
-    }),
-  },
-  {
-    name: 'planChanged with a changed task line replaces progress',
-    flow: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 0,
-    }),
-    signal: { type: 'planChanged', progress: PROGRESS_RETITLED_TASK },
-    expected: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS_RETITLED_TASK,
-      reviewRoundsAtMake: 0,
-    }),
-  },
-  {
-    name: 'planChanged with an equal progress changes nothing',
-    flow: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 0,
-    }),
-    signal: { type: 'planChanged', progress: structuredClone(PROGRESS) },
+    name: 'a report on a flow with no workflow changes nothing',
+    flow: flowWith({}),
+    signal: { type: 'stepReported', step: 'build' },
     expected: UNCHANGED,
   },
   {
-    name: 'cleared stops the turn, the subagents and the countdown',
-    flow: flowWith({
-      ...IN_C,
-      turnRunning: true,
-      runningSubagents: ['a1'],
-      countdownEndsAt: 5000,
-    }),
+    name: 'a checklist replaces the list',
+    flow: flowWith(LIGHT_AT_BUILD),
+    signal: { type: 'checklistReported', items: CHECKLIST },
+    expected: { checklist: CHECKLIST },
+  },
+  {
+    name: 'an equal checklist keeps the flow',
+    flow: flowWith({ ...LIGHT_AT_BUILD, checklist: CHECKLIST }),
+    signal: { type: 'checklistReported', items: structuredClone(CHECKLIST) },
+    expected: UNCHANGED,
+  },
+  {
+    name: 'a checklist on a flow with no workflow changes nothing',
+    flow: flowWith({}),
+    signal: { type: 'checklistReported', items: CHECKLIST },
+    expected: UNCHANGED,
+  },
+  {
+    name: 'cleared clears missedLevel and keeps the workflow, stage and state',
+    flow: flowWith({ ...LIGHT_AT_BUILD, missedLevel: true, state: { n: 1 } }),
     signal: { type: 'cleared' },
-    expected: flowWith(IN_C),
+    expected: {
+      workflow: 'light',
+      stage: 'build',
+      state: { n: 1 },
+      missedLevel: false,
+    },
   },
   {
-    name: 'the first stage rule in order wins',
-    flow: flowWith({}),
-    signal: skill('x:b', null),
-    expected: flowWith({ stage: 'b' }),
-  },
-  {
-    name: 'no rule answering keeps the stage',
-    flow: flowWith({ stage: 'b', turnRunning: true }),
-    signal: { type: 'turnEnded' },
-    expected: flowWith({ stage: 'b' }),
-  },
-  {
-    name: 'a rule answering moves the stage',
-    flow: flowWith({
-      stage: 'b',
-      turnRunning: true,
-      planDir: PLAN_X,
-    }),
-    signal: { type: 'turnEnded' },
-    expected: flowWith({ ...IN_C, planDir: PLAN_X }),
-  },
-  {
-    name: 'the rules see the flow after bookkeeping',
-    flow: flowWith({}),
-    signal: { type: 'fileWritten', path: `${PLAN_X}/plan.md` },
-    stages: WITH_PLAN_WATCHER,
-    expected: flowWith({
-      stage: 'd',
-      planDir: PLAN_X,
-      reviewRoundsAtMake: null,
-    }),
-  },
-  {
-    name: 'a stage change stops the countdown',
-    flow: flowWith({
-      stage: 'b',
-      planDir: PLAN_X,
-      countdownEndsAt: 5000,
-    }),
-    signal: { type: 'turnEnded' },
-    expected: flowWith({ ...IN_C, planDir: PLAN_X }),
-  },
-  {
-    name: 'entering a clearsPlan stage drops the plan',
-    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
-    signal: skill('x:e', null),
-    expected: flowWith({ stage: 'e' }),
-  },
-  {
-    name: 'a report entering a clearsPlan stage keeps the plan',
-    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
-    signal: { type: 'stepReported', step: 'e' },
-    expected: flowWith({ stage: 'e', planDir: PLAN_X, progress: PROGRESS }),
-  },
-  {
-    name: 're-entering a clearsPlan stage drops the plan',
-    flow: flowWith({
-      stage: 'e',
-      planDir: PLAN_X,
-      progress: PROGRESS,
-    }),
-    signal: skill('x:e', null),
-    expected: flowWith({ stage: 'e' }),
-  },
-  {
-    name: "entering a recordsReviewRounds stage records the plan's review rounds",
-    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
-    signal: skill('x:m', null),
-    expected: flowWith({
-      stage: 'm',
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 1,
-    }),
-  },
-  {
-    name: 're-entering a recordsReviewRounds stage records the rounds again',
-    flow: flowWith({
-      stage: 'm',
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 0,
-    }),
-    signal: skill('x:m', null),
-    expected: flowWith({
-      stage: 'm',
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 1,
-    }),
-  },
-  {
-    name: 'entering a recordsReviewRounds stage with the plan unread records null',
-    flow: flowWith({ ...IN_C, planDir: PLAN_X }),
-    signal: skill('x:m', null),
-    expected: flowWith({
-      stage: 'm',
-      planDir: PLAN_X,
-      reviewRoundsAtMake: null,
-    }),
-  },
-  {
-    name: 'planChanged fills a null reviewRoundsAtMake',
-    flow: flowWith({ planDir: PLAN_X, reviewRoundsAtMake: null }),
-    signal: { type: 'planChanged', progress: PROGRESS },
-    expected: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 1,
-    }),
-  },
-  {
-    name: 'planChanged fills a reviewRoundsAtMake left out (a flow saved before the field)',
-    flow: flowWith({ planDir: PLAN_X }),
-    signal: { type: 'planChanged', progress: PROGRESS },
-    expected: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 1,
-    }),
-  },
-  {
-    name: 'planChanged keeps a recorded reviewRoundsAtMake',
-    flow: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS,
-      reviewRoundsAtMake: 0,
-    }),
-    signal: { type: 'planChanged', progress: PROGRESS_RETITLED_TASK },
-    expected: flowWith({
-      planDir: PLAN_X,
-      progress: PROGRESS_RETITLED_TASK,
-      reviewRoundsAtMake: 0,
-    }),
-  },
-  {
-    name: 'returning to idle drops the plan',
-    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
-    signal: { type: 'handedOff' },
-    expected: flowWith({}),
-  },
-  {
-    name: 'a signal nothing answers changes nothing',
-    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
-    signal: { type: 'planGone' },
-    expected: UNCHANGED,
+    name: 'a saved workflow with no plugin folds the running state only',
+    flow: flowWith({ workflow: 'gone', stage: 'build' }),
+    signal: { type: 'turnStarted' },
+    expected: { turnRunning: true, stage: 'build' },
   },
 ];
 
 describe('foldFlow', () => {
-  it.each(FOLD_ROWS)('$name', ({ flow, signal, expected, stages }) => {
-    const before = structuredClone(flow);
+  it.each(WORKFLOW_ROWS)(
+    'foldFlow_Workflows: $name',
+    ({ flow, signal, expected }) => {
+      const before = structuredClone(flow);
 
-    const folded = foldFlow(flow, signal, stages ?? STAGES);
+      const folded = foldFlow(flow, signal, WORKFLOWS);
+
+      if (expected === UNCHANGED) {
+        expect(folded).toBe(flow);
+      } else {
+        expect(folded).toMatchObject(expected);
+      }
+      expect(flow).toEqual(before);
+    },
+  );
+
+  it('foldFlow_Workflows: two workflows claiming a skill give the lower order', () => {
+    const lower = workflow('lower', 10, 'wigley:both', 'scope');
+    const higher = workflow('higher', 20, 'wigley:both', 'interview');
+
+    const folded = foldFlow(flowWith({}), skill('wigley:both'), [
+      lower,
+      higher,
+    ]);
+
+    expect(folded.workflow).toBe('lower');
+  });
+
+  it("foldFlow_Workflows: a report runs only the current workflow's rule", () => {
+    const lightEnter = vi.fn(reportedBuild);
+    const light = workflow('light', 10, 'wigley:light', 'scope', [
+      { id: 'build', order: 10, enter: lightEnter },
+    ]);
+    const flow = flowWith({ workflow: 'medium', stage: 'interview' });
+
+    const folded = foldFlow(flow, { type: 'stepReported', step: 'build' }, [
+      light,
+      MEDIUM,
+    ]);
+
+    expect(folded.stage).toBe('build');
+    expect(lightEnter).not.toHaveBeenCalled();
+  });
+
+  it('the first stage rule in array order wins', () => {
+    const answers = (id: string): MainStage => ({
+      id,
+      order: 10,
+      enter: () => id,
+    });
+    const stub = workflow('stub', 10, 'x:stub', 'first', [
+      answers('b'),
+      answers('a'),
+    ]);
+
+    const folded = foldFlow(
+      flowWith({ workflow: 'stub', stage: 'first' }),
+      { type: 'turnEnded' },
+      [stub],
+    );
+
+    expect(folded.stage).toBe('b');
+  });
+
+  it.each<{
+    name: string;
+    flow: SessionFlow;
+    signal: WorkflowSignal;
+    expected: Partial<SessionFlow> | typeof UNCHANGED;
+  }>([
+    {
+      name: 'turnEnded clears turnRunning and keeps running subagents',
+      flow: flowWith({ turnRunning: true, runningSubagents: ['a1'] }),
+      signal: { type: 'turnEnded' },
+      expected: { turnRunning: false, runningSubagents: ['a1'] },
+    },
+    {
+      name: 'subagentStarted adds the agent',
+      flow: flowWith({}),
+      signal: { type: 'subagentStarted', agentId: 'a1' },
+      expected: { runningSubagents: ['a1'] },
+    },
+    {
+      name: 'subagentStarted for a listed agent changes nothing',
+      flow: flowWith({ runningSubagents: ['a1'] }),
+      signal: { type: 'subagentStarted', agentId: 'a1' },
+      expected: UNCHANGED,
+    },
+    {
+      name: 'subagentFinished removes the agent',
+      flow: flowWith({ runningSubagents: ['a1', 'a2'] }),
+      signal: { type: 'subagentFinished', agentId: 'a1' },
+      expected: { runningSubagents: ['a2'] },
+    },
+    {
+      name: 'subagentFinished for an unlisted agent changes nothing',
+      flow: flowWith({ runningSubagents: ['a1', 'a2'] }),
+      signal: { type: 'subagentFinished', agentId: 'a9' },
+      expected: UNCHANGED,
+    },
+    {
+      name: 'cleared stops the turn and the subagents',
+      flow: flowWith({ turnRunning: true, runningSubagents: ['a1'] }),
+      signal: { type: 'cleared' },
+      expected: { turnRunning: false, runningSubagents: [] },
+    },
+  ])('the running state: $name', ({ flow, signal, expected }) => {
+    const folded = foldFlow(flow, signal, []);
 
     if (expected === UNCHANGED) {
       expect(folded).toBe(flow);
     } else {
-      expect(folded).toEqual(expected);
+      expect(folded).toMatchObject(expected);
     }
-    expect(flow).toEqual(before);
   });
 });
 
-describe('isPlanFile', () => {
+describe('foldFlow_FoldState', () => {
+  const claimsStub = (signal: WorkflowSignal) => startsSkill(signal, 'x:stub');
+
+  it('runs before the stage rules', () => {
+    const stub: MainWorkflow = {
+      id: 'stub',
+      order: 10,
+      claims: claimsStub,
+      firstStage: 'a',
+      foldState: () => ({ n: 2 }),
+      stages: [
+        {
+          id: 'b',
+          order: 10,
+          enter: (flow) => ((flow.state as { n: number }).n === 2 ? 'b' : null),
+        },
+      ],
+    };
+
+    const folded = foldFlow(
+      flowWith({ workflow: 'stub', stage: 'a', state: { n: 1 } }),
+      { type: 'turnEnded' },
+      [stub],
+    );
+
+    expect(folded).toMatchObject({ stage: 'b', state: { n: 2 } });
+  });
+
+  it('on a new claim sees the first stage and a null state', () => {
+    const foldState = vi.fn((flow: SessionFlow) => flow.state);
+    const stub: MainWorkflow = {
+      id: 'stub',
+      order: 10,
+      claims: claimsStub,
+      firstStage: 'a',
+      foldState,
+      stages: [],
+    };
+
+    foldFlow(
+      flowWith({ workflow: 'old', stage: 'z', state: { n: 1 } }),
+      skill('x:stub'),
+      [stub],
+    );
+
+    expect(foldState.mock.calls[0][0]).toMatchObject({
+      stage: 'a',
+      state: null,
+    });
+  });
+
+  it('a sameState answering true gives the same flow', () => {
+    const stub: MainWorkflow = {
+      id: 'stub',
+      order: 10,
+      claims: claimsStub,
+      firstStage: 'a',
+      foldState: () => ({ n: 2 }),
+      sameState: () => true,
+      stages: [],
+    };
+    const flow = flowWith({ workflow: 'stub', stage: 'a', state: { n: 1 } });
+
+    expect(foldFlow(flow, { type: 'turnEnded' }, [stub])).toBe(flow);
+  });
+
+  it('a foldState returning undefined gives a null state', () => {
+    const stub: MainWorkflow = {
+      id: 'stub',
+      order: 10,
+      claims: claimsStub,
+      firstStage: 'a',
+      foldState: () => undefined,
+      stages: [],
+    };
+
+    const folded = foldFlow(
+      flowWith({ workflow: 'stub', stage: 'a', state: { n: 1 } }),
+      { type: 'turnEnded' },
+      [stub],
+    );
+
+    expect(folded.state).toBeNull();
+  });
+});
+
+describe('markMissedLevel', () => {
+  it('sets the flag on a flow with no workflow', () => {
+    expect(markMissedLevel(flowWith({})).missedLevel).toBe(true);
+  });
+
   it.each([
-    { path: '/a/plan-x/plan.md', expected: true },
-    { path: 'C:\\a\\plan-x\\plan.md', expected: true },
-    { path: '/a/plan-/plan.md', expected: false },
-    { path: '/a/x/plan.md', expected: false },
-    { path: '/a/plan-x/notes.md', expected: false },
-    { path: '/a/plan-x/plan.md.bak', expected: false },
-  ])('$path → $expected', ({ path, expected }) => {
-    expect(isPlanFile(path)).toBe(expected);
+    { name: 'already set', fields: { missedLevel: true } },
+    { name: 'a workflow', fields: { workflow: 'light' } },
+  ])('keeps the same flow with $name', ({ fields }) => {
+    const flow = flowWith(fields);
+
+    expect(markMissedLevel(flow)).toBe(flow);
+  });
+});
+
+describe('checklistCount', () => {
+  it.each([
+    { name: 'no list', checklist: null, count: null },
+    { name: 'an empty list', checklist: [], count: null },
+    {
+      name: 'one of three',
+      checklist: [
+        { text: 'a', done: true },
+        { text: 'b', done: false },
+        { text: 'c', done: false },
+      ],
+      count: '1/3',
+    },
+  ])('$name → $count', ({ checklist, count }) => {
+    expect(checklistCount(flowWith({ checklist }))).toBe(count);
   });
 });
 

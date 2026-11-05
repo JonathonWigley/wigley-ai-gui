@@ -243,7 +243,8 @@ export interface SessionsMainEvents extends EventShape {
 }
 
 // One session's sidebar row; a connected session's row exists only while
-// marked, activated or holding a form. `marked` is a form not yet opened;
+// marked, activated or holding a form. `marked` is a form not yet opened or a
+// turn that finished while the user was elsewhere, cleared when selected;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
 // when the session connects, `hostSessionId` also changed by the owner through
 // `setHostSessionId`. `titles` are the session's titles, kept across a host id

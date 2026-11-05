@@ -32,4 +32,37 @@ describe('manifests', () => {
       ),
     ).toBeNull();
   });
+
+  it('manifests_WorkflowHeavy_ListsItsCommandsAndSettings', () => {
+    const heavy = manifests.find(({ id }) => id === 'workflow-heavy');
+
+    expect(Object.keys(heavy?.commands ?? {}).sort()).toEqual(
+      [
+        'clearAndMake',
+        'cancelCountdown',
+        'makeInNewSession',
+        'resumeMake',
+        'openPlan',
+        'retro',
+        'dismiss',
+      ].sort(),
+    );
+    expect(Object.keys(heavy?.settings ?? {}).sort()).toEqual(
+      ['layout', 'autoClearAndMake', 'autoStartSeconds'].sort(),
+    );
+  });
+
+  it('manifests_WorkflowLight_HasItsLayoutSettingAndBadgeToken', () => {
+    const light = manifests.find(({ id }) => id === 'workflow-light');
+
+    expect(Object.keys(light?.settings ?? {})).toEqual(['layout']);
+    expect(light?.themeTokens?.badge.default).toBe('var(--wg-status-info)');
+  });
+
+  it('manifests_WorkflowMedium_HasItsLayoutSettingAndBadgeToken', () => {
+    const medium = manifests.find(({ id }) => id === 'workflow-medium');
+
+    expect(Object.keys(medium?.settings ?? {})).toEqual(['layout']);
+    expect(medium?.themeTokens?.badge.default).toBe('var(--wg-accent)');
+  });
 });

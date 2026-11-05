@@ -8,6 +8,7 @@ import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part
 import { appended, element } from '../../../../shared/page/dom';
 import { qualify } from '../../../../shared/plugin-manifests';
 import { textButton } from '../../../../shared/page/ui/button';
+import type { PluginManifest } from '../../../../contracts/plugin';
 import type { MarkState, WorkflowKit } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
 
@@ -31,20 +32,23 @@ function placePulse(pulsing: HTMLElement, clock: Clock): void {
   pulsing.style.setProperty('--workflow-mark-clock', `${clock.now()}ms`);
 }
 
-// The kit one part draw builds with: the base kit with no key scope, naming
-// workflow's own commands by their short names, plus the action button, the
-// stepper, the countdown, the status mark, the finished waves' fold and the
-// side pane's list. `run` runs a workflow command for the session the part
-// draws; the main action's button runs `mainAction`, as `<Leader>ww` does. Each anchor it names is recorded in `rollback`. Each status
+// The kit one part draw builds with: the base kit with no key scope, naming the
+// commands of the drawing plugin of `manifest` by their short names, plus the action
+// button, the stepper, the countdown, the badge, the status mark, the finished
+// groups' fold and the side pane's list. `run` runs a command for the session the
+// part draws; the main action's button runs `mainAction`, as `<Leader>ww` does. The
+// main action's and the fold's key hints name the engine's commands, every other
+// action's its plugin's. Each anchor it names is recorded in `rollback`. Each status
 // mark and running step carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
   run: (command: string) => void,
   clock: Clock,
+  manifest: Pick<PluginManifest, 'id' | 'commands'>,
 ): WorkflowKit {
   const base = createBaseKit(
-    ownerBaseKitDeps(workflowManifest, services, null, rollback),
+    ownerBaseKitDeps(manifest, services, null, rollback),
   );
   const kit: WorkflowKit = {
     ...base,
@@ -59,7 +63,8 @@ export function createWorkflowKit(
       button.addEventListener('click', (event) => event.stopPropagation());
       button.disabled = !action.enabled;
       if (options.anchor !== false) {
-        base.keyHint(button, qualify(workflowManifest.id, command));
+        const hintOwner = action.main ? workflowManifest.id : manifest.id;
+        base.keyHint(button, qualify(hintOwner, command));
       }
       return button;
     },
@@ -82,6 +87,15 @@ export function createWorkflowKit(
     },
     countdown: (parent, text) =>
       appended(parent, element('span', 'workflow-countdown', text)),
+    badge(parent, letter, label) {
+      const badge = appended(parent, element('span', 'workflow-badge', letter));
+      badge.title = label;
+      badge.style.setProperty(
+        '--workflow-badge-color',
+        `var(--wg-${manifest.id}-badge)`,
+      );
+      return badge;
+    },
     statusMark(parent, state) {
       const mark = appended(parent, element('span', 'workflow-mark'));
       mark.dataset.state = state;

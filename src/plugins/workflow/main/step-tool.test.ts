@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ToolCallContext } from '../../sessions/contract';
-import type { MainStage } from '../contract';
+import type { MainStage, MainWorkflow } from '../contract';
 import { startStepTool, stepToolDefinition } from './step-tool';
 
 const NO_CALL_CONTEXT: ToolCallContext = {
@@ -12,15 +12,26 @@ function stage(id: string, reportedAs?: string): MainStage {
   return { id, order: 0, enter: () => null, reportedAs };
 }
 
-const STAGES = [stage('a'), stage('coldRead', 'cold_read'), stage('z', 'z')];
+function workflow(id: string, stages: MainStage[]): MainWorkflow {
+  return { id, order: 0, claims: () => false, firstStage: 'a', stages };
+}
 
-// The tool over `STAGES`, recording each report; `applies` is what each resolves.
+const WORKFLOWS = [
+  workflow('one', [
+    stage('quiet'),
+    stage('build', 'build'),
+    stage('c', 'check'),
+  ]),
+  workflow('two', [stage('building', 'build'), stage('review', 'review')]),
+];
+
+// The tool over `WORKFLOWS`, recording each report; `applies` is what each resolves.
 function toolWith(applies: boolean) {
   const reports: [string, string][] = [];
   const tool = startStepTool({
-    stages: () => STAGES,
-    reportStep: async (sessionId, reported) => {
-      reports.push([sessionId, reported]);
+    workflows: () => WORKFLOWS,
+    reportStep: async (sessionId, step) => {
+      reports.push([sessionId, step]);
       return applies;
     },
   })({ id: 's1' });
@@ -30,49 +41,51 @@ function toolWith(applies: boolean) {
 }
 
 describe('set_workflow_step', () => {
-  it('definition_ListsEachStagesReportedValue', () => {
-    const { inputSchema } = stepToolDefinition(STAGES);
+  it('definition_ListsTheUnionOnce', () => {
+    const { inputSchema } = stepToolDefinition(WORKFLOWS);
 
     expect(inputSchema).toMatchObject({
       required: ['step'],
-      properties: { step: { enum: ['cold_read', 'z'] } },
+      properties: { step: { enum: ['build', 'check', 'review'] } },
     });
   });
 
-  it('call_ReportedValue_ReportsThatStageForTheSession', async () => {
+  it('call_ListedStep_ReportsTheStepForTheSession', async () => {
     const { call, reports } = toolWith(true);
 
-    const result = await call({ step: 'cold_read' });
+    const result = await call({ step: 'review' });
 
-    expect(reports).toEqual([['s1', 'coldRead']]);
+    expect(reports).toEqual([['s1', 'review']]);
     expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toBe('Step set to review.');
   });
 
   it('call_RuleIgnoresIt_SucceedsSayingIgnored', async () => {
     const { call } = toolWith(false);
 
-    const result = await call({ step: 'z' });
+    const result = await call({ step: 'review' });
 
     expect(result.isError).toBeUndefined();
-    expect(result.content[0].text).toContain('Ignored');
+    expect(result.content[0].text).toBe(
+      'Ignored review: this session is not at a place in the workflow that takes it.',
+    );
   });
 
   it.each([
     { name: 'an unknown value', args: { step: 'nope' } },
-    { name: 'a stage id with no reported value', args: { step: 'a' } },
-    {
-      name: 'the stage id of another reported value',
-      args: { step: 'coldRead' },
-    },
+    { name: 'a stage id with no reported value', args: { step: 'quiet' } },
+    { name: 'the stage id of another reported value', args: { step: 'c' } },
     { name: 'no step', args: {} },
     { name: 'no arguments', args: undefined },
-  ])('call_IsAnErrorNamingTheAcceptedValues ($name)', async ({ args }) => {
+  ])('call_UnknownStep_ListsTheUnion ($name)', async ({ args }) => {
     const { call, reports } = toolWith(true);
 
     const result = await call(args);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('cold_read, z');
+    expect(result.content[0].text).toBe(
+      'Unknown step. Use one of: build, check, review.',
+    );
     expect(reports).toEqual([]);
   });
 

@@ -1,3 +1,4 @@
+import { isJsonObject } from '../../../shared/json';
 import type {
   CloneClaim,
   CloneFacts,
@@ -39,7 +40,7 @@ export function readStateFile(text: string): StateFileRead {
   } catch {
     return { kind: 'invalid', reason: 'not JSON' };
   }
-  if (!isRecord(parsed)) {
+  if (!isJsonObject(parsed)) {
     return { kind: 'invalid', reason: 'not a JSON object' };
   }
   if (parsed.version !== 1) {
@@ -169,10 +170,6 @@ function readTicket(ticket: Fields, at: string): QueueTicket {
   };
 }
 
-function isRecord(value: unknown): value is Fields {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function unread(value: unknown, at: string, expected: string): UnreadField {
   return new UnreadField(
     value === undefined ? `${at} is missing` : `${at} is not ${expected}`,
@@ -180,7 +177,7 @@ function unread(value: unknown, at: string, expected: string): UnreadField {
 }
 
 function requireRecord(value: unknown, at: string): Fields {
-  if (!isRecord(value)) {
+  if (!isJsonObject(value)) {
     throw unread(value, at, 'an object');
   }
   return value;

@@ -399,13 +399,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   its loop in `codemirror-vim-host.ts`.
 - **Plugin editor remaps** — *agent-ready*: a plugin manifest's `keys` gains remaps beside its binds and groups
   (today only the user keymap layer has remaps, `src/contracts/keymap.ts`).
-- **Workflow stage actions as commands** — *agent-ready*: a stage's actions (`StageActionSpec.command`,
-  `src/plugins/workflow/contract.ts`) are a private string namespace sent over workflow's `runAction`, not commands,
-  so a stage's buttons take no key, no palette entry and no intercept. Page-side actions are a closed switch
-  (`switch (spec.command)` in `src/plugins/workflow/page/workflow-view.ts`), so a stage registered through `addStage`
-  cannot add one. Each stage registers its actions as commands, main and page. With it, the shared flow fold stops
-  naming one stage's skill (`MAKE_SKILL = 'wigley:make'`, `src/plugins/workflow/flow.ts`): the stage that owns it
-  declares it.
 - **Setting control kinds as registrations** — *agent-ready*: `SettingKind` (`'string' | 'number' | 'boolean'`,
   `src/contracts/plugin.ts`) and the settings layout's row `control` union (`src/plugins/settings/layouts/layout.d.ts`)
   are closed, and Settings mode switches over them (`setting-rows.ts`, `setting-rows-view.ts`). A plugin with a
@@ -514,6 +507,14 @@ User-facing features, those other work builds on first.
 - **Usage's cache mark has no preview route** — *needs a feature plan*: `rowCache` draws nothing without a cache expiry,
   and no `Space z l` sample holds usage, so a usage layout author cannot see the mark in the app. Decide between a usage
   preview and seeding chat's preview session (`AGENTS.md`: a view needing agent data has a preview sample).
+- **Judge Heavy's agent count from the run log** — *needs a feature plan*: does Heavy use more agents than its results
+  earn? The evidence is `runs.jsonl` in the `workflow` plugin's data folder of the stable app (`plugins/workflow/` in the
+  app's user data folder), one JSON object per finished workflow with `at`, `sessionId`, `projectDir`, `workflow`,
+  `movedUpFrom`, `activeMs`, `costUsd` and `fixCycles`: compare Heavy's lines against Medium's. Plan it when the file
+  holds 20 Heavy lines, so that one odd run does not set the answer. The options: keep Heavy's agents as they are;
+  reduce the plan drafters and cold readers in `wigley:feature`; reduce the review lanes in `wigley:review`. It waited
+  because of `docs/features/workflow-levels/design.md` § Decisions, "Heavy stays exactly as it was": published guidance
+  against many agents on coding work is vendor evidence, and the log gives the user's own.
 
 ## Code cleanup
 
@@ -720,10 +721,9 @@ because the earlier items rewrite many of these tests anyway.
   `layout-loader.test.ts`, `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`,
   `help-sections.test.ts` and `docs-state.test.ts`.
 - **`$name_<suffix>` vitest titles lose their case name** — *agent-ready*: vitest reads `$name_BadId…` as one key
-  `name_BadId…`, so each row's title loses its name (the repo's own note, `src/shared/fake-agent-harness.test.ts:875`).
-  Six sites: `src/plugins/usage/main/drive-actions.test.ts:101`, `src/plugins/workflow/page/workflow-view.test.ts:484`,
-  `src/plugins/workflow/layouts/default/layout.test.ts:117`, `src/plugins/workflow/main/flow-store.test.ts:87` and
-  `src/main/drive/drive-commands.test.ts:131` and `:152`. Fix as the note says: each row carries its whole name, and
+  `name_BadId…`, so each row's title loses its name (the repo's own note, `src/shared/fake-agent-harness.test.ts:999`).
+  Three sites: `src/plugins/usage/main/drive-actions.test.ts:101` and
+  `src/main/drive/drive-commands.test.ts:132` and `:153`. Fix as the note says: each row carries its whole name, and
   the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
 - **Hosted process reads busy with no way out** — *needs a feature plan*: a process that reads busy leaves only on a
   `result`. Reached by a background subagent's `assistant` line after `result`, then an interrupt that prints no

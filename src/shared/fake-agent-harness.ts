@@ -292,6 +292,20 @@ export const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
     pastSessionCalls: harness.pastSessionCalls.length,
   }));
 
+// This run's fake records for `project`, in start order.
+export function projectRecords(
+  marks: readonly RunMark[],
+  project: string,
+): FakeAgentProcessRecord[] {
+  return marks
+    .flatMap((mark) => mark.harness.processes.slice(mark.processes))
+    .filter((record) => record.request.projectDir === project);
+}
+
+// The texts a record's process was sent, in order.
+export const sendTexts = (record: FakeAgentProcessRecord): string[] =>
+  record.calls.flatMap((call) => (call.method === 'send' ? [call.text] : []));
+
 // One control for each pick key, and one no pick key reaches; a value in
 // `launchValues` replaces that control's fixed starting value.
 function startingControls(

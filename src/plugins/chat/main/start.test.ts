@@ -550,6 +550,17 @@ describe('chat main part', () => {
     },
   );
 
+  it('exports_ActiveTime_ReadsAHeldSessionsClock', () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    expect(chat.exports.activeTime('row-1')).toEqual({
+      totalMs: 0,
+      since: null,
+    });
+    expect(chat.exports.activeTime('none')).toBeNull();
+  });
+
   it('exports_Send_WritesToTheProcess', async () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });

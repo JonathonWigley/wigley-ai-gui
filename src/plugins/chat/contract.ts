@@ -444,6 +444,8 @@ export interface ChatMainExports {
   profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
+  // The clock of a session chat owns; null for any other session id.
+  activeTime(sessionId: string): ActiveTime | null;
   // The profile a launch takes when its caller names none: the profile of a
   // session chat owns, else chat's first; null when chat has no profiles.
   // `sessionId` is null when the launch comes from no session.

@@ -1,0 +1,103 @@
+import type { UserMessage } from '../../../contracts/agent';
+import type { PluginLog } from '../../../contracts/log';
+import type { ChatMainExports } from '../../chat/contract';
+import {
+  isBusy,
+  type SessionFlow,
+  type WorkflowSignal,
+} from '../../workflow/contract';
+import { heavySignal, heavyStateOf } from '../contract';
+
+export interface WorkflowActionsDeps {
+  chat: Pick<ChatMainExports, 'send' | 'clear' | 'launch' | 'profileOf'>;
+  log: PluginLog;
+  flowOf(sessionId: string): SessionFlow | null;
+  signal(sessionId: string, signal: WorkflowSignal): void;
+  cancelCountdown(sessionId: string): void;
+}
+
+type Action = (sessionId: string, flow: SessionFlow) => Promise<void>;
+
+// The commands that never run while the flow is busy.
+const IDLE_ONLY_COMMANDS = new Set(['clearAndMake', 'resumeMake', 'retro']);
+
+// The main-side workflow commands. `run` rejects, with the text the page
+// toasts, for an unknown command, a session with no flow, a plan command on a
+// flow with no plan, and a chat call that rejects; a plan command checks the
+// plan before any chat call. It resolves true once the command ran; an
+// idle-only command on a busy flow is logged and resolves false, having done
+// nothing.
+export function createWorkflowActions(deps: WorkflowActionsDeps): {
+  run(sessionId: string, command: string): Promise<boolean>;
+} {
+  const { chat } = deps;
+
+  const clearAndMake: Action = async (sessionId, flow) => {
+    const planDir = requirePlanDir(flow);
+    await chat.clear(sessionId);
+    await chat.send(sessionId, message(makeText(planDir)));
+  };
+
+  const actions: Record<string, Action> = {
+    clearAndMake,
+    resumeMake: clearAndMake,
+    makeInNewSession: async (sessionId, flow) => {
+      const planDir = requirePlanDir(flow);
+      const profile = chat.profileOf(sessionId);
+      if (profile === null) {
+        throw new Error('The session is not a chat session');
+      }
+      await chat.launch({
+        projectDir: flow.projectDir,
+        profile,
+        message: message(makeText(planDir)),
+      });
+      deps.signal(sessionId, heavySignal({ type: 'handedOff' }));
+    },
+    retro: (sessionId) => chat.send(sessionId, message('/wigley:retro')),
+    dismiss: async (sessionId) => {
+      deps.signal(sessionId, heavySignal({ type: 'dismissed' }));
+    },
+    cancelCountdown: async (sessionId) => {
+      deps.cancelCountdown(sessionId);
+    },
+  };
+
+  return {
+    async run(sessionId, command) {
+      const action = Object.hasOwn(actions, command) ? actions[command] : null;
+      if (action === null) {
+        throw new Error(`Unknown workflow command ${command}`);
+      }
+      const flow = deps.flowOf(sessionId);
+      if (flow === null) {
+        throw new Error(`No workflow flow for session ${sessionId}`);
+      }
+      if (IDLE_ONLY_COMMANDS.has(command) && isBusy(flow)) {
+        deps.log(
+          `${command} not run in session ${sessionId}: the session is busy`,
+        );
+        return false;
+      }
+      await action(sessionId, flow);
+      return true;
+    },
+  };
+}
+
+function requirePlanDir(flow: SessionFlow): string {
+  const { planDir } = heavyStateOf(flow);
+  if (planDir === null) {
+    throw new Error('The session has no plan');
+  }
+  return planDir;
+}
+
+// The plan folder goes unquoted, as the user types it.
+function makeText(planDir: string): string {
+  return `/wigley:make ${planDir}`;
+}
+
+function message(text: string): UserMessage {
+  return { text, images: [] };
+}

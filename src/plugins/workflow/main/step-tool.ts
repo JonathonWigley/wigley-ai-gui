@@ -6,16 +6,20 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
-import type { MainStage, StageId } from '../contract';
+import type { MainWorkflow } from '../contract';
 
 export const SET_WORKFLOW_STEP_TOOL = 'set_workflow_step';
 
-function reportedSteps(stages: readonly MainStage[]): string[] {
-  return stages.flatMap((stage) => stage.reportedAs ?? []);
+// Each `reportedAs` once, in the order of `workflows` and then of their stages.
+export function reportedSteps(workflows: readonly MainWorkflow[]): string[] {
+  const steps = workflows.flatMap((workflow) =>
+    workflow.stages.flatMap((stage) => stage.reportedAs ?? []),
+  );
+  return [...new Set(steps)];
 }
 
 export function stepToolDefinition(
-  stages: readonly MainStage[],
+  workflows: readonly MainWorkflow[],
 ): ToolDefinition {
   return {
     name: SET_WORKFLOW_STEP_TOOL,
@@ -26,7 +30,7 @@ export function stepToolDefinition(
       properties: {
         step: {
           type: 'string',
-          enum: reportedSteps(stages),
+          enum: reportedSteps(workflows),
           description: 'The step the session moves to.',
         },
       },
@@ -37,32 +41,30 @@ export function stepToolDefinition(
 }
 
 export interface StepToolDeps {
-  // Read on each call, so a stage added later is accepted at once.
-  stages(): readonly MainStage[];
-  // Folds the report; resolves whether the flow is now in `stage`.
-  reportStep(sessionId: string, stage: StageId): Promise<boolean>;
+  // Read on each call, so a workflow added later is accepted at once.
+  workflows(): readonly MainWorkflow[];
+  // Folds the report; resolves whether the flow is now in the stage its own
+  // workflow reports as `step`.
+  reportStep(sessionId: string, step: string): Promise<boolean>;
 }
 
-// An unknown step is an error naming the accepted ones. A report the flow's stage
-// rules ignore, or from a session with no flow, succeeds with text saying so.
+// A step no workflow lists is an error naming the accepted ones. A report the
+// flow's own workflow does not take, or from a session with no flow, succeeds with
+// text saying so.
 async function setWorkflowStep(
   deps: StepToolDeps,
   sessionId: string,
   args: unknown,
 ): Promise<ToolResult> {
   const step = (args as { step?: unknown } | null | undefined)?.step;
-  const stage =
-    typeof step === 'string'
-      ? deps.stages().find((held) => held.reportedAs === step)
-      : undefined;
-  if (stage === undefined) {
-    const accepted = reportedSteps(deps.stages()).join(', ');
-    return errorResult(`Unknown step. Use one of: ${accepted}.`);
+  const accepted = reportedSteps(deps.workflows());
+  if (typeof step !== 'string' || !accepted.includes(step)) {
+    return errorResult(`Unknown step. Use one of: ${accepted.join(', ')}.`);
   }
-  return (await deps.reportStep(sessionId, stage.id))
-    ? textResult(`Step set to ${stage.reportedAs}.`)
+  return (await deps.reportStep(sessionId, step))
+    ? textResult(`Step set to ${step}.`)
     : textResult(
-        `Ignored ${stage.reportedAs}: this session is not at a place in the workflow that takes it.`,
+        `Ignored ${step}: this session is not at a place in the workflow that takes it.`,
       );
 }
 

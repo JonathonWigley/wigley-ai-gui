@@ -6,7 +6,7 @@
 // grip) over its rows,
 // each row a compact card of two lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
-// activity, a needs you label for its `marked` round, a status edge for an
+// activity, a needs you label while `marked`, a status edge for an
 // activity with an emphasis, and its on-screen mark,
 // over a footer line that never wraps, holding other plugins' row parts
 // (`contributedParts`); its status shows only in the row's tooltip,

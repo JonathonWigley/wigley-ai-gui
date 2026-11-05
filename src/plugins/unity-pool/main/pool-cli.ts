@@ -5,6 +5,7 @@ import type {
   ProcessRunner,
 } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
+import { isJsonObject } from '../../../shared/json';
 import { SESSION_IDENTITY_ENV } from '../../../shared/session-env';
 import type { PoolAction, PoolActionResult } from '../contract';
 
@@ -27,7 +28,7 @@ export function readActionResult(result: ProcessResult): PoolActionResult {
     return { ok: false, error: 'cli-failed', message: 'unity-pool timed out' };
   }
   const answer = parseJson(lastLine(result.stdout));
-  if (isRecord(answer)) {
+  if (isJsonObject(answer)) {
     const { pool, clone } = answer;
     if (
       answer.ok === true &&
@@ -114,8 +115,4 @@ function parseJson(text: string | null): unknown {
   } catch {
     return null;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

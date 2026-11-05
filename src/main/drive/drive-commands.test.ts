@@ -108,15 +108,15 @@ describe('createDriveCommands', () => {
       value: 'reduced',
       written: {
         transparency: 'reduced',
-        workflow: { autoClearAndMake: true },
+        'workflow-heavy': { autoClearAndMake: true },
       },
     },
     {
-      name: 'workflow.autoStartSeconds',
+      name: 'workflow-heavy.autoStartSeconds',
       value: 5,
       written: {
         transparency: 'full',
-        workflow: { autoClearAndMake: true, autoStartSeconds: 5 },
+        'workflow-heavy': { autoClearAndMake: true, autoStartSeconds: 5 },
       },
     },
     {
@@ -124,7 +124,7 @@ describe('createDriveCommands', () => {
       value: 50,
       written: {
         transparency: 'full',
-        workflow: { autoClearAndMake: true },
+        'workflow-heavy': { autoClearAndMake: true },
         keys: { whichKeyTimeoutMs: 50 },
       },
     },
@@ -134,7 +134,7 @@ describe('createDriveCommands', () => {
       const { files, commands, changeConfigOnWrite } = setUp(() => []);
       await files.write(
         SETTINGS,
-        '{ "transparency": "full", "workflow": { "autoClearAndMake": true } }',
+        '{ "transparency": "full", "workflow-heavy": { "autoClearAndMake": true } }',
       );
       changeConfigOnWrite();
 

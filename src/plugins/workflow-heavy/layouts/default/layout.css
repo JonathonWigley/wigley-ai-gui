@@ -1,0 +1,94 @@
+/* The default layout's workflow parts: the chip under a session row, the
+   strip above the Chat composer and the side pane beside the transcript. */
+
+[data-layout-owner='workflow-heavy'].workflow-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-height: var(--wg-row-tree);
+  white-space: nowrap;
+  font-size: var(--wg-text-12);
+}
+
+/* A chip with nothing to say gives its row part's room back. */
+.session-row-part[data-part='workflow.chip']:has(
+    > [data-layout-owner='workflow-heavy'].workflow-chip:empty
+  ) {
+  display: none;
+}
+
+[data-layout-owner='workflow-heavy'].workflow-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wg-space-2);
+  /* The height of a line holding the main action, so a stage with no action
+     moves nothing below it. */
+  min-height: calc(var(--wg-icon-button) + 2 * var(--wg-space-1) + 1px);
+  padding: var(--wg-space-1) 0;
+  border-bottom: 1px solid var(--wg-border-subtle);
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='workflow-heavy'].workflow-strip .ui-button {
+  height: var(--wg-icon-button);
+}
+
+[data-layout-owner='workflow-heavy'] .workflow-status-line {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='workflow-heavy'].workflow-side-pane {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  min-height: 0;
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='workflow-heavy'] .workflow-side-status {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='workflow-heavy'] .workflow-side-detail {
+  margin: 0;
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='workflow-heavy'] .workflow-side-detail:empty {
+  display: none;
+}
+
+[data-layout-owner='workflow-heavy'].workflow-side-pane .ui-meter {
+  display: block;
+  width: 100%;
+}
+
+/* The checklist's rows share the pane's left edge. */
+[data-layout-owner='workflow-heavy'].workflow-side-pane .ui-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+[data-layout-owner='workflow-heavy'] .workflow-side-tasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The buttons stay in view while the list above them gives up height, over the
+   section body's block padding. A body shorter than the buttons pins their top. */
+[data-layout-owner='workflow-heavy'] .workflow-side-actions {
+  background: var(--wg-block-background);
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  margin-bottom: calc(-1 * var(--wg-space-2));
+  padding-bottom: var(--wg-space-2);
+  position: sticky;
+  top: 0;
+}

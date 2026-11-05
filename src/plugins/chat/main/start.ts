@@ -260,8 +260,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
-// exports to other plugins a background launch, a send and clear on the
-// sessions it holds, a close of every session in a folder, a registration of
+// exports to other plugins a background launch, a send, clear and active time
+// read on the sessions it holds, a close of every session in a folder, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, and one of the resume
 // sections the start prompt lists.
@@ -504,6 +504,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       launch: async (request) => chat.launch(request),
       profiles,
       profileOf,
+      activeTime: (sessionId) => chat.activeTimeOf(sessionId),
       defaultProfile,
       send: async (sessionId, message) => {
         requireHeld(sessionId);

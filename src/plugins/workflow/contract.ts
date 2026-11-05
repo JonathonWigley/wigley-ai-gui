@@ -1,36 +1,66 @@
-// The workflow plugin's records, its stage extension points, its flows slot and
-// its channel between its main and page parts.
+// The workflow plugin's records, its workflow and stage extension points and its
+// flows slot.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  PageApi,
+  PluginManifest,
+} from '../../contracts/plugin';
 import type { KeyedSlotKey } from '../../contracts/state';
 import type { RowActivity } from '../sessions/contract';
-import type { PlanProgress } from './plan-reader';
+import type {
+  ChipInput,
+  CompleteLayout,
+  SidePaneInput,
+  StripInput,
+} from './layouts/layout';
 
-// A stage module's id: 'idle', 'primer', 'explore', 'interview', 'plan',
-// 'coldRead', 'planReady', 'make', 'review', 'fix', 'closed'.
+export type {
+  ActionInput,
+  ChipInput,
+  CompleteLayout,
+  Layout,
+  MarkState,
+  SideGroupInput,
+  SideItemInput,
+  SidePaneInput,
+  StepInput,
+  StripInput,
+  WorkflowKit,
+  WorkflowPart,
+} from './layouts/layout';
+
+// A registered workflow's id. Each workflow names its own.
+export type WorkflowId = string;
+
+// A stage module's id, unique within its workflow.
 export type StageId = string;
 
 export const IDLE_STAGE: StageId = 'idle';
 
+export interface ChecklistItem {
+  text: string;
+  done: boolean;
+}
+
 export interface SessionFlow {
   sessionId: string;
   projectDir: string;
+  // Null until a workflow claims a skill.
+  workflow: WorkflowId | null;
+  movedUpFrom: WorkflowId | null;
   stage: StageId;
-  // The plan folder (holding plan.md), full path.
-  planDir: string | null;
-  // Null until the plan folder is read.
-  progress: PlanProgress | null;
-  // The plan's review rounds when make was last entered: review lights only on
-  // a round above it. Null when make was entered before the plan was read, or
-  // the plan folder changed since; left out on a flow saved before this field.
-  // Either way the next read fills it.
-  reviewRoundsAtMake?: number | null;
+  // From `checklistReported`.
+  checklist: readonly ChecklistItem[] | null;
+  // The current workflow's own; null on a new claim.
+  state: unknown;
+  // A live turn with agent work ended with `workflow` null.
+  missedLevel: boolean;
   turnRunning: boolean;
   // Agent ids the main agent spawned that have not finished.
   runningSubagents: readonly string[];
-  // Epoch ms; non-null only while the auto-start counts down.
-  countdownEndsAt: number | null;
 }
 
 export type WorkflowSignal =
@@ -44,6 +74,8 @@ export type WorkflowSignal =
   | { type: 'fileWritten'; path: string }
   // From `set_workflow_step`: the agent says the session moved to this stage.
   | { type: 'stepReported'; step: StageId }
+  // The agent's whole list of work items.
+  | { type: 'checklistReported'; items: readonly ChecklistItem[] }
   | { type: 'turnStarted' }
   // Also from a sessionEnded of the flow's current host session (a crash
   // mid-turn).
@@ -54,40 +86,44 @@ export type WorkflowSignal =
   | { type: 'subagentFinished'; agentId: string }
   // Resets turnRunning and runningSubagents: a fresh process runs nothing.
   | { type: 'cleared' }
-  | { type: 'planChanged'; progress: PlanProgress }
-  | { type: 'planGone' }
-  // Make in new session gave this session's plan away.
-  | { type: 'handedOff' }
-  | { type: 'dismissed' };
+  // A workflow's own event, which the engine does not read.
+  | { type: 'custom'; event: unknown };
 
 export interface MainStage {
   id: StageId;
-  // Stage order: idle 0, primer 10, explore 20, interview 22, plan 24,
-  // coldRead 26, planReady 30, make 40, review 50, fix 55, closed 60.
+  // The stage's place in its workflow's `stages`, ascending.
   order: number;
   // The stage this signal moves the flow to, or null to leave the decision to
-  // the next stage. Pure. `flow` is the flow after the fold's bookkeeping for
-  // this signal (see foldFlow).
+  // the next stage. Pure. `flow` is the flow after the fold's running state and
+  // the workflow's `foldState` for this signal (see foldFlow).
   enter(flow: SessionFlow, signal: WorkflowSignal): StageId | null;
-  // A main-side command the auto-start runs when a flow enters this stage
-  // while `workflow.autoClearAndMake` is on, after `workflow.autoStartSeconds`;
-  // left out, entering the stage starts no countdown.
-  autoCommand?: string;
-  // True for a stage whose skill starts a new plan (primer, explore): a
-  // `skillStarted` answered with this stage clears planDir and progress, and a
-  // reported step back to it clears neither.
-  clearsPlan?: boolean;
   // The value `set_workflow_step` names this stage by; left out, no report can
   // name it. The stage's own `enter` rule answers the `stepReported` signal.
   reportedAs?: string;
-  // True for the stage that starts a make run (make): entering it, or entering
-  // it again, records the plan's review rounds as reviewRoundsAtMake.
-  recordsReviewRounds?: boolean;
+  // True for a stage whose entry finishes the workflow's run.
+  finishes?: boolean;
 }
 
-// A flow is busy while a turn runs or a main-agent subagent runs (wigley:make
-// and wigley:feature dispatch in the background, and their results arrive in
-// turns with no user message).
+export interface MainWorkflow {
+  id: WorkflowId;
+  // Light 10, medium 20, heavy 30. The lowest order's claim wins a skill two
+  // workflows claim.
+  order: number;
+  claims(signal: WorkflowSignal): boolean;
+  firstStage: StageId;
+  stages: readonly MainStage[];
+  // The workflow's own bookkeeping; returns the new state, or `flow.state` for
+  // no change.
+  foldState?(flow: SessionFlow, signal: WorkflowSignal): unknown;
+  // Compares states for the fold's same-flow check. Left out: by reference.
+  sameState?(a: unknown, b: unknown): boolean;
+  // Review fix cycles for the run log. Left out: 0.
+  fixCycles?(flow: SessionFlow): number;
+}
+
+// A flow is busy while a turn runs or a main-agent subagent runs (a skill may
+// dispatch in the background, and its results arrive in turns with no user
+// message).
 export function isBusy(flow: SessionFlow): boolean {
   return flow.turnRunning || flow.runningSubagents.length > 0;
 }
@@ -125,58 +161,52 @@ export function statusText(label: string, status: StageStatus | null): string {
   return detailLine(label, status ?? '');
 }
 
-// A stage's status text, then what its stage adds: 'Make · running 3/9'.
+// A stage's status text, then what its stage adds: 'Build · running 3/9'.
 export function statusLine(stage: PageStage, flow: SessionFlow): string {
   const text = statusText(stage.label, stage.status(flow));
   return text + (stage.statusProgress?.(flow) ?? '');
 }
 
 export interface StageActionSpec {
-  // The workflow command id it runs, without the 'workflow.' prefix:
-  // 'clearAndMake'.
+  // The owner plugin's short command id.
   command: string;
-  // The button's text: 'Clear & make'.
+  // The button's text.
   label: string;
-  // 'page': the page runs it (openPlan); 'main': through
-  // runAction.
-  side: 'page' | 'main';
   // Runs from its own `<Leader>w` key only: no button, and never the main action.
   keyOnly?: true;
-  // Whether the action shows for this flow, beyond the stage match: Resume
-  // make shows only with open boxes.
+  // Whether the action shows for this flow, beyond the stage match.
   available(flow: SessionFlow): boolean;
-  // Whether the shown action can run now: Clear & make, Resume make and Retro
-  // are drawn disabled while isBusy.
+  // Whether the shown action can run now; a shown action that cannot is drawn
+  // disabled.
   enabled(flow: SessionFlow): boolean;
 }
 
 export interface PageStage {
   id: StageId;
-  // The step's word: 'Make'.
+  // The step's word: 'Build'.
   label: string;
   // Idle is false.
   inStepper: boolean;
   // Stages sharing a slot take one place in the stepper: the one the flow is
-  // in, otherwise the slot's last by order ('start': primer, explore; 'make':
-  // planReady, make).
+  // in, otherwise the slot's last by order.
   stepSlot?: string;
-  // Equal to the main half's order (page-stages.test.ts pins it); the stepper
-  // sorts on it.
+  // Equal to the main half's order (page-stages.test.ts pins it); addWorkflow
+  // sorts the workflow's stages on it, for the stepper.
   order: number;
   // Actions in order, the main action first. `ww` and the main action's button
   // run the first available one that is not `keyOnly`; when that one is
   // disabled, they run nothing and log `nothing to run`.
   actions: readonly StageActionSpec[];
-  // The side pane's detail line: '3/7 · wave 2 · Claim grants'; '' for none.
+  // The side pane's detail line; '' for none.
   // The chip's input and the strip's input still carry it for a user layout.
   detail(flow: SessionFlow): string;
   // What the stage is doing for this flow; null for a stage with no status.
   status(flow: SessionFlow): StageStatus | null;
   // What follows the status text in the status line and the label of the
-  // stepper's current step, its separator included: ' 3/9', ' · round 2',
-  // ' · cycle 1', ' · 9/9'. Left out, nothing follows.
+  // stepper's current step, its separator included: ' 3/9', ' · round 2'. Left
+  // out, nothing follows.
   statusProgress?(flow: SessionFlow): string;
-  // True when the current wave's open tasks draw the stage's status; left out,
+  // True when the current group's open items draw the stage's status; left out,
   // they draw `pending`.
   runsTasks?: boolean;
   // What the session's row says while the stage waits on the user and the flow
@@ -197,8 +227,63 @@ export function shownRowActivity(
   return isBusy(flow) ? null : (stage.rowActivity ?? null);
 }
 
+// Where a fold's signal came from. 'live' is a live event or a workflow's action;
+// only it stamps the flow's save time, which a replayed event is compared against.
+// 'observed' is something a workflow read for itself, as a file.
+export type SignalOrigin = 'live' | 'replay' | 'observed';
+
+export interface FoldEvent {
+  sessionId: string;
+  before: SessionFlow;
+  after: SessionFlow;
+  signal: WorkflowSignal;
+  origin: SignalOrigin;
+  // False: a replayed event at or before the save time, running state only.
+  whole: boolean;
+}
+
+export interface WorkflowObserver {
+  // After every apply, also when the flow did not change.
+  folded(event: FoldEvent): void;
+  // After the store opened the session's flow.
+  opened(flow: SessionFlow): void;
+  // The session ended, or forgetFlows forgot it.
+  closed(sessionId: string): void;
+  // A replayed agent event arrived, before its signals fold.
+  replaying(sessionId: string): void;
+}
+
+// What the self-test script drives main through. `forgetFlows` drops every
+// flow in the folder, saved ones included, and tells the observers each open one
+// closed, for a run that closed the folder's sessions; `onMainTurnEnded` hears
+// each main-agent `turnEnded` once main applied it, whether or not the flow
+// changed; `callStepTool` makes a `set_workflow_step` call from the session and
+// `callChecklistTool` a `set_workflow_checklist` call, since the fake harness calls
+// no MCP tool.
+export interface WorkflowSelfTestHooks {
+  forgetFlows(projectDir: string): void;
+  onMainTurnEnded(listener: (sessionId: string) => void): Disposable;
+  callStepTool(sessionId: string, step: string): void;
+  callChecklistTool(sessionId: string, items: readonly ChecklistItem[]): void;
+}
+
 export interface WorkflowMainExports {
-  addStage(stage: MainStage): Disposable;
+  addWorkflow(workflow: MainWorkflow): Disposable;
+  // The load of flows.json settled.
+  ready: Promise<void>;
+  signal(
+    sessionId: string,
+    signal: WorkflowSignal,
+    origin: 'live' | 'observed',
+  ): void;
+  flowOf(sessionId: string): SessionFlow | null;
+  flows(): readonly SessionFlow[];
+  // Replaces the current workflow's state with no fold, keeping the save time.
+  setState(sessionId: string, state: unknown): void;
+  observe(observer: WorkflowObserver): Disposable;
+  // The engine's layout.d.ts, raw.
+  layoutTypes: string;
+  selfTestHooks: WorkflowSelfTestHooks | null;
 }
 
 export const workflowMainKey: DependencyKey<
@@ -207,8 +292,120 @@ export const workflowMainKey: DependencyKey<
   'workflow'
 > = { id: 'workflow', process: 'main' };
 
+export interface ChecklistGroup {
+  title: string;
+  items: readonly ChecklistItem[];
+}
+
+// What the side pane's checklist reads; the engine takes `checked` and `total` as
+// given.
+export interface ChecklistView {
+  title: string;
+  checked: number;
+  total: number;
+  groups: readonly ChecklistGroup[];
+}
+
+// The checklist of a workflow with no `checklist` of its own: one `Tasks` group
+// from `flow.checklist`; null while that is null.
+export function defaultChecklist(flow: SessionFlow): ChecklistView | null {
+  const items = flow.checklist;
+  if (items === null) {
+    return null;
+  }
+  return {
+    title: '',
+    checked: items.filter((item) => item.done).length,
+    total: items.length,
+    groups: items.length === 0 ? [] : [{ title: 'Tasks', items }],
+  };
+}
+
+// `<checked>/<total>` of the flow's checklist; null with no list or an empty one.
+export function checklistCount(flow: SessionFlow): string | null {
+  const checklist = defaultChecklist(flow);
+  return checklist === null || checklist.total === 0
+    ? null
+    : `${checklist.checked}/${checklist.total}`;
+}
+
+// A drawn part. `dispose` removes the element and disposes every anchor the part
+// named.
+export interface Drawn {
+  element: HTMLElement;
+  dispose(): void;
+}
+
+// Runs a command of the drawing plugin, by its short id, for the session the part
+// draws.
+export type RunCommand = (command: string) => void;
+
+// One workflow plugin's parts: each draws into `parent` with the plugin's layouts
+// as last shown, falling back to its `default` on a throw. No part takes a key
+// scope. `sideTitle` is the title of the workflow's side part.
+export interface WorkflowDraw {
+  sideTitle: string;
+  chip(parent: HTMLElement, input: ChipInput, run: RunCommand): Drawn;
+  strip(parent: HTMLElement, input: StripInput, run: RunCommand): Drawn;
+  sidePane(parent: HTMLElement, input: SidePaneInput, run: RunCommand): Drawn;
+}
+
+// A workflow's page half.
+export interface PageWorkflow {
+  id: WorkflowId;
+  // Its word: 'Light'.
+  label: string;
+  // Its letter on the session row: 'L'.
+  badge: string;
+  stages: readonly PageStage[];
+  // From `createWorkflowDraw`, called with the plugin's own api.
+  draw: WorkflowDraw;
+  // Left out: `defaultChecklist`.
+  checklist?(flow: SessionFlow): ChecklistView | null;
+  // Runs one of its stages' action commands; a reject is logged and toasted.
+  runAction(
+    sessionId: string,
+    command: string,
+    flow: SessionFlow,
+  ): Promise<void>;
+  // The countdown's text, null while none runs; the chip and strip tick while it
+  // is not null.
+  countdownText?(flow: SessionFlow, now: number): string | null;
+  // What the log's `<name> progress <text>` line reads; null logs none.
+  progressText?(flow: SessionFlow): string | null;
+  // Whether the strip counts a checklist. Left out: `checklist(flow) !== null`.
+  hasPlan?(flow: SessionFlow): boolean;
+  // Its samples for the layout preview, each run per preview step.
+  previewFlows?(sessionId: string, now: number): readonly SessionFlow[];
+}
+
+// The part of a plugin's page api `createWorkflowDraw` shows its layouts through.
+export type PagePluginApi = Pick<
+  PageApi<PluginManifest, ChannelShape>,
+  'layouts'
+>;
+
+// `manifest` names the owner of the plugin's layouts and its commands' key hints;
+// `userLayout` reads the plugin's `layout` setting.
+export interface WorkflowDrawOptions {
+  manifest: Pick<PluginManifest, 'id' | 'commands'>;
+  defaultLayout: CompleteLayout;
+  defaultStylesheet: string;
+  userLayout(): string;
+  sideTitle: string;
+}
+
+// `addWorkflow` throws on an id already added. `createWorkflowDraw` shows the
+// plugin's layouts through its `api`, which owns the show's life. `runCommand` runs
+// a command for a session through the flow's workflow, logging when there is
+// nothing to run.
 export interface WorkflowPageExports {
-  addStage(stage: PageStage): Disposable;
+  addWorkflow(workflow: PageWorkflow): Disposable;
+  createWorkflowDraw(
+    api: PagePluginApi,
+    options: WorkflowDrawOptions,
+  ): WorkflowDraw;
+  runCommand(sessionId: string, command: string): Promise<void>;
 }
 
 export const workflowPageKey: DependencyKey<
@@ -217,22 +414,7 @@ export const workflowPageKey: DependencyKey<
   'workflow'
 > = { id: 'workflow', process: 'page' };
 
-export interface WorkflowActionRequest {
-  sessionId: string;
-  command: string;
-}
-
 // Each open session's flow, keyed by the row's sessionId. A store change writes or
 // deletes the one flow it touched.
 export const workflowFlowsSlot: KeyedSlotKey<SessionFlow, 'main', 'workflow'> =
   { id: 'workflow.flows', process: 'main', kind: 'keyed' };
-
-// The page invokes runAction.
-export interface WorkflowChannel extends ChannelShape {
-  invoke: {
-    // Runs a main-side command (a StageActionSpec.command with side 'main')
-    // on the session's flow; rejects with main's error text.
-    runAction(request: WorkflowActionRequest): Promise<void>;
-  };
-  messages: Record<never, never>;
-}

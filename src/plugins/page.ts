@@ -18,6 +18,9 @@ import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
 import { workflowPagePart } from './workflow/page/start';
+import { workflowHeavyPagePart } from './workflow-heavy/page/start';
+import { workflowLightPagePart } from './workflow-light/page/start';
+import { workflowMediumPagePart } from './workflow-medium/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise. `keys` starts first, so its Keys button contributes to the title
@@ -31,6 +34,9 @@ export const pageParts: readonly PagePart[] = [
   agentsPagePart,
   agentLinesPagePart,
   workflowPagePart,
+  workflowHeavyPagePart,
+  workflowLightPagePart,
+  workflowMediumPagePart,
   unityPoolPagePart,
   agentStripPagePart,
   agentSkillsPagePart,

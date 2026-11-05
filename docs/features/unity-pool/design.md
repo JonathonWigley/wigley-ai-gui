@@ -80,14 +80,18 @@ them.
 The right bar shows the pool panel while the shown session (the focused pane's) is in a pooled repo: its folder is
 inside a clone path of a pool, or its folder's origin repo name is a pool's name. Otherwise the panel is gone.
 
-The panel lists every clone of that pool by number, each with:
+A summary line under the header counts the clones: free always, then held, stranded and queued while not zero
+(`3 free · 1 held`). Below it, the panel lists every clone of that pool by number as a tile in a two-column grid, each
+with:
 
+- a dot for its state: free, a session's, the user's hold, or stuck (stranded, or dirty with no holder)
 - its branch, a dirty mark, and the editor's state in words (`editor ready`, `editor busy`, `in Play Mode`,
   `editor closed`, `editor state unknown`)
-- its holder: a session's row label, which selects that row on a click; `Held by you` for a user hold; or
-  `session <id start>` for a session the app has no row for
+- who has it: `Free` on a clean clone no one has; a session's row label, which selects that row on a click; `Held by
+  you` for a user hold; or `session <id start>` for a session the app has no row for; a stranded clone adds `Stranded`
 - an open handoff with its time left, a stranded mark with its reason (`claim expired with changes`,
-  `session ended with changes`) and age, and a warm-up while it runs or after it failed, with its error
+  `session ended with changes`) and age, and a warm-up while it runs, or `not warmed` after it failed, with the error
+  in its tooltip since a failed warm-up blocks no claim
 - its Hold or Release button (below)
 
 Under the clones it lists the queue in order: position, the waiting session, its branch and how long it has waited.

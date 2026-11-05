@@ -45,7 +45,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none, which `default` draws as `New Chat`; `label` is the session's folder label (`gamma 2`); `harness` is
-// the harness's name, '' for none; `marked` is true while a round waits unopened; `activity` is what the session is
+// the harness's name, '' for none; `marked` is true while a round waits unopened or a turn that finished elsewhere waits unviewed, and never on the selected row; `activity` is what the session is
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
 // and draws a needs you label for `marked` only while no activity is set; `status` is the row's status text, null for none, which `default` shows only in the tooltip, and the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than

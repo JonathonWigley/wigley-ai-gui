@@ -1,56 +1,50 @@
-// The one place a flow changes: the shared bookkeeping a signal applies, then
-// the stage rules. Pure: no I/O, no clock, no DOM.
+// The one place a flow changes: the running state, the claim, then the current
+// workflow's checklist, state and stage rules. Pure: no I/O, no clock, no DOM.
 
-import type { PlanProgress } from './plan-reader';
 import {
+  type ChecklistItem,
   IDLE_STAGE,
-  type MainStage,
+  type MainWorkflow,
   type SessionFlow,
-  startsSkill,
   type WorkflowSignal,
 } from './contract';
-
-const PLAN_FILE = /[\\/]plan-[^\\/]+[\\/]plan\.md$/;
-const PLAN_FOLDER_NAME = /^plan-./;
-const TRAILING_SEPARATORS = /[\\/]+$/;
-const MAKE_SKILL = 'wigley:make';
 
 export function newFlow(sessionId: string, projectDir: string): SessionFlow {
   return {
     sessionId,
     projectDir,
+    workflow: null,
+    movedUpFrom: null,
     stage: IDLE_STAGE,
-    planDir: null,
-    progress: null,
+    checklist: null,
+    state: null,
+    missedLevel: false,
     turnRunning: false,
     runningSubagents: [],
-    countdownEndsAt: null,
   };
 }
 
-// A path ending in /plan-<name>/plan.md, either separator.
-export function isPlanFile(path: string): boolean {
-  return PLAN_FILE.test(path);
-}
-
-// The folder that holds that plan.md.
-export function planDirOf(path: string): string {
-  return path.slice(0, lastSeparatorIndex(path));
-}
-
-// Applies `signal` to `flow`: the bookkeeping first, then each stage's `enter`
-// in the order `stages` gives (the caller keeps them sorted by `order`), the
-// first non-null answer winning. Returns `flow` itself when no field changed,
-// otherwise a new flow; never mutates `flow`.
+// Applies `signal` to `flow`: the running state, the claim of the first of
+// `workflows` that claims it (the caller keeps them sorted by `order`), then, of
+// the current workflow alone, the checklist, `foldState`, and each stage's `enter`
+// in array order, the first non-null answer winning. A flow whose workflow has no
+// entry in `workflows` takes the running state and the claim only. Returns `flow`
+// itself when no field changed, otherwise a new flow; never mutates `flow`.
 export function foldFlow(
   flow: SessionFlow,
   signal: WorkflowSignal,
-  stages: readonly MainStage[],
+  workflows: readonly MainWorkflow[],
 ): SessionFlow {
   const next: SessionFlow = { ...flow };
   applyBookkeeping(next, signal);
-  applyStageRules(next, signal, stages);
-  return sameFlow(flow, next) ? flow : next;
+  applyClaim(next, signal, workflows);
+  const current = workflows.find((workflow) => workflow.id === next.workflow);
+  if (current !== undefined) {
+    applyChecklist(next, signal);
+    applyFoldState(next, signal, current);
+    applyStageRules(next, signal, current);
+  }
+  return sameFlow(flow, next, current) ? flow : next;
 }
 
 // Applies only what `signal` says about the running turn and subagents: every
@@ -62,7 +56,14 @@ export function foldRunningState(
 ): SessionFlow {
   const next: SessionFlow = { ...flow };
   applyRunningState(next, signal);
-  return sameFlow(flow, next) ? flow : next;
+  return sameFlow(flow, next, undefined) ? flow : next;
+}
+
+// A copy with `missedLevel` set when no workflow holds the flow; otherwise `flow`.
+export function markMissedLevel(flow: SessionFlow): SessionFlow {
+  return flow.workflow === null && !flow.missedLevel
+    ? { ...flow, missedLevel: true }
+    : flow;
 }
 
 function applyRunningState(next: SessionFlow, signal: WorkflowSignal): void {
@@ -90,162 +91,124 @@ function applyRunningState(next: SessionFlow, signal: WorkflowSignal): void {
 
 function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
   applyRunningState(next, signal);
-  switch (signal.type) {
-    case 'turnStarted':
-      next.countdownEndsAt = null;
-      break;
-    case 'turnEnded':
-    case 'subagentStarted':
-    case 'subagentFinished':
-      break;
-    case 'fileWritten':
-      if (isPlanFile(signal.path)) {
-        setPlanDir(next, planDirOf(signal.path));
-      }
-      break;
-    case 'skillStarted': {
-      const planDir = startsSkill(signal, MAKE_SKILL)
-        ? planDirOfArgsPath(signal.argsPath)
-        : null;
-      if (planDir !== null) {
-        setPlanDir(next, planDir);
-      }
-      break;
-    }
-    case 'planChanged':
-      if (!sameProgress(next.progress, signal.progress)) {
-        next.progress = signal.progress;
-      }
-      next.reviewRoundsAtMake ??= signal.progress.reviewRounds;
-      break;
-    case 'cleared':
-      next.countdownEndsAt = null;
-      next.turnRunning = false;
-      next.runningSubagents = [];
-      break;
-    case 'stepReported':
-    case 'planGone':
-    case 'handedOff':
-    case 'dismissed':
-      break;
+  if (signal.type === 'cleared') {
+    next.turnRunning = false;
+    next.runningSubagents = [];
+    next.missedLevel = false;
+  }
+}
+
+// Every claim empties the checklist. A claim from a stage that finishes its
+// workflow starts a new run, which moved up from nothing. Mid-run, another
+// workflow's claim moved up from the current one, and the current workflow's own
+// claim continues the run. Another workflow's claim starts it over at its first
+// stage.
+function applyClaim(
+  next: SessionFlow,
+  signal: WorkflowSignal,
+  workflows: readonly MainWorkflow[],
+): void {
+  const claimer = workflows.find((workflow) => workflow.claims(signal));
+  if (claimer === undefined) {
+    return;
+  }
+  const isOwnClaim = claimer.id === next.workflow;
+  next.checklist = null;
+  if (stageFinishes(next, workflows)) {
+    next.movedUpFrom = null;
+  } else if (!isOwnClaim) {
+    next.movedUpFrom = next.workflow;
+  }
+  if (isOwnClaim) {
+    return;
+  }
+  next.workflow = claimer.id;
+  next.stage = claimer.firstStage;
+  next.state = null;
+  next.missedLevel = false;
+}
+
+function stageFinishes(
+  flow: SessionFlow,
+  workflows: readonly MainWorkflow[],
+): boolean {
+  const current = workflows.find((workflow) => workflow.id === flow.workflow);
+  const stage = current?.stages.find((held) => held.id === flow.stage);
+  return stage?.finishes === true;
+}
+
+// An equal list keeps the current array, so the fold reads as no change.
+function applyChecklist(next: SessionFlow, signal: WorkflowSignal): void {
+  if (
+    signal.type === 'checklistReported' &&
+    !sameChecklist(next.checklist, signal.items)
+  ) {
+    next.checklist = signal.items;
+  }
+}
+
+// JSON drops `undefined`, and a flow with no `state` fails the next load.
+function applyFoldState(
+  next: SessionFlow,
+  signal: WorkflowSignal,
+  current: MainWorkflow,
+): void {
+  if (current.foldState !== undefined) {
+    next.state = current.foldState(next, signal) ?? null;
   }
 }
 
 function applyStageRules(
   next: SessionFlow,
   signal: WorkflowSignal,
-  stages: readonly MainStage[],
+  current: MainWorkflow,
 ): void {
-  const entered = enteredStage(next, signal, stages);
-  if (entered === null) {
-    return;
-  }
-  if (entered.id !== next.stage) {
-    next.stage = entered.id;
-    next.countdownEndsAt = null;
-    if (entered.id === IDLE_STAGE) {
-      clearPlan(next);
+  for (const stage of current.stages) {
+    const entered = stage.enter(next, signal);
+    if (entered !== null) {
+      next.stage = entered;
+      return;
     }
   }
-  if (entered.stage?.clearsPlan === true && signal.type === 'skillStarted') {
-    clearPlan(next);
-  }
-  if (entered.stage?.recordsReviewRounds === true) {
-    next.reviewRoundsAtMake = next.progress?.reviewRounds ?? null;
-  }
 }
 
-// The first stage rule's answer, with the stage of that id in `stages` when it
-// names one there.
-function enteredStage(
-  flow: SessionFlow,
-  signal: WorkflowSignal,
-  stages: readonly MainStage[],
-): { id: string; stage: MainStage | undefined } | null {
-  for (const stage of stages) {
-    const id = stage.enter(flow, signal);
-    if (id !== null) {
-      return { id, stage: stages.find((candidate) => candidate.id === id) };
-    }
-  }
-  return null;
-}
-
-// The plan folder a `wigley:make` argument names: a plan.md, or a folder whose
-// name starts `plan-`. Null when it names no plan.
-function planDirOfArgsPath(argsPath: string | null): string | null {
-  if (argsPath === null) {
-    return null;
-  }
-  if (isPlanFile(argsPath)) {
-    return planDirOf(argsPath);
-  }
-  const folder = argsPath.replace(TRAILING_SEPARATORS, '');
-  const folderName = folder.slice(lastSeparatorIndex(folder) + 1);
-  return PLAN_FOLDER_NAME.test(folderName) ? folder : null;
-}
-
-// A new plan folder drops the old plan's progress and review rounds; the
-// folder's first read fills both.
-function setPlanDir(next: SessionFlow, planDir: string): void {
-  if (planDir !== next.planDir) {
-    next.planDir = planDir;
-    next.progress = null;
-    next.reviewRoundsAtMake = null;
-  }
-}
-
-function clearPlan(next: SessionFlow): void {
-  next.planDir = null;
-  next.progress = null;
-}
-
-function lastSeparatorIndex(path: string): number {
-  return Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-}
-
-function sameProgress(
-  current: PlanProgress | null,
-  incoming: PlanProgress,
+function sameChecklist(
+  current: readonly ChecklistItem[] | null,
+  incoming: readonly ChecklistItem[],
 ): boolean {
-  if (current === null) {
-    return false;
-  }
-  const sameScalars =
-    current.checked === incoming.checked &&
-    current.total === incoming.total &&
-    current.wave === incoming.wave &&
-    current.reviewRounds === incoming.reviewRounds &&
-    current.title === incoming.title;
-  const sameTasks =
-    current.tasks.length === incoming.tasks.length &&
-    current.tasks.every((task, index) => {
-      const other = incoming.tasks[index];
-      return (
-        task.wave === other.wave &&
-        task.text === other.text &&
-        task.done === other.done
-      );
-    });
-  return sameScalars && sameTasks;
+  return (
+    current !== null &&
+    current.length === incoming.length &&
+    current.every((item, index) => {
+      const other = incoming[index];
+      return item.text === other.text && item.done === other.done;
+    })
+  );
 }
 
 function sameIds(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
-// `progress` compares by reference: the bookkeeping keeps the current object
-// whenever the incoming one is equal.
-function sameFlow(a: SessionFlow, b: SessionFlow): boolean {
+// `checklist` compares by reference: the fold keeps the current array whenever the
+// incoming one is equal.
+function sameFlow(
+  a: SessionFlow,
+  b: SessionFlow,
+  current: MainWorkflow | undefined,
+): boolean {
+  const sameState =
+    current?.sameState?.(a.state, b.state) ?? a.state === b.state;
   return (
     a.sessionId === b.sessionId &&
     a.projectDir === b.projectDir &&
+    a.workflow === b.workflow &&
+    a.movedUpFrom === b.movedUpFrom &&
     a.stage === b.stage &&
-    a.planDir === b.planDir &&
-    a.progress === b.progress &&
-    a.reviewRoundsAtMake === b.reviewRoundsAtMake &&
+    a.checklist === b.checklist &&
+    sameState &&
+    a.missedLevel === b.missedLevel &&
     a.turnRunning === b.turnRunning &&
-    sameIds(a.runningSubagents, b.runningSubagents) &&
-    a.countdownEndsAt === b.countdownEndsAt
+    sameIds(a.runningSubagents, b.runningSubagents)
   );
 }

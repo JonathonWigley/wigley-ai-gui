@@ -38,9 +38,10 @@
    `margin-left: auto` takes the free room, so it and the parts after it sit at
    the line's end. The cache mark's slot keeps its width while it draws nothing,
    so the bars line up from row to row. Under the default layout the wrapper
-   gives up width when the parts outgrow the line, which the line passes on to
-   its meter's bar (`layout.css`); a user layout's wrapper stays at least its
-   content's width, as only the default layout's content shrinks. */
+   gives up width ahead of any other part when the parts outgrow the line, which
+   the line passes on to its meter's bar (`layout.css`); a user layout's wrapper
+   stays at least its content's width, as only the default layout's content
+   shrinks. */
 .session-row-part[data-part='usage.rowLine'] {
   margin-left: auto;
   order: 2;
@@ -49,7 +50,8 @@
 .session-row-part[data-part='usage.rowLine']:has(
     > [data-layout-owner='usage'][data-layout='default'].usage-row-line
   ) {
-  flex: 0 1 auto;
+  /* Large enough that another part's share of the shrink rounds to nothing. */
+  flex: 0 1000000 auto;
   min-width: calc(var(--wg-space-8) + var(--wg-space-1_5));
 }
 

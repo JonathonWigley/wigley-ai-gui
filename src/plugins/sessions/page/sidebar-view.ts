@@ -254,7 +254,7 @@ function drawRow(
     title,
     label: session.label,
     harness: harnessText(session.harness),
-    marked: session.marked,
+    marked: session.marked && !isSelected,
     activity:
       activity === null
         ? null
