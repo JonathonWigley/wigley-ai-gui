@@ -68,7 +68,8 @@ interview on 2026-10-23; this file is the record of both.
  Space k n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
                  │                     newest first, or the folder dialog), then profile (skipped with one profile),
                  │                     then sign-in when that profile is signed out, then a new session or one of the
-                 │                     folder's saved sessions to resume
+                 │                     folder's saved sessions to resume; a registered resume section sits at the top of
+                 │                     the folder and session steps (`docs/features/session-log/design.md`)
                  ▼
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
