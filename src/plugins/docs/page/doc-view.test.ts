@@ -11,9 +11,11 @@ import {
   findAll,
   installFocusFakeDom,
   ScrollerFakeElement,
+  ShrinkingScrollerFakeElement,
 } from '../../../shared/page/test-dom';
+import type { IndexEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
-import type { DocHeaderInput, Layout } from '../layouts/layout';
+import type { AsideLinkInput, DocHeaderInput, Layout } from '../layouts/layout';
 import {
   createDocView,
   type DocDetail,
@@ -39,6 +41,37 @@ function paneLayout(marker: string): Layout {
   };
 }
 
+// A page frame marked `marker` that places the article and the right column.
+function frameLayout(marker: string): Layout {
+  return {
+    pageFrame(parent, _input, kit) {
+      const frame = kit.el(parent, 'div', marker);
+      kit.article(frame);
+      kit.aside(frame);
+      return { element: frame };
+    },
+  };
+}
+
+// A layout drawing the right column's headings and rows as plain lines that
+// hold their titles, `links` recording each row's input.
+function asideLayout() {
+  const links: AsideLinkInput[] = [];
+  const layout: Layout = {
+    asideHeading(parent, input, kit) {
+      return { element: kit.el(parent, 'div', ASIDE_HEADING, input.title) };
+    },
+    asideLink(parent, input, kit) {
+      links.push(input);
+      return { element: kit.el(parent, 'div', ASIDE_LINK, input.title) };
+    },
+  };
+  return { layout, links };
+}
+
+const ASIDE_HEADING = 'test-aside-heading';
+const ASIDE_LINK = 'test-aside-link';
+
 // A drop target the view registered, and whether it has been disposed.
 interface RecordedTarget {
   target: DropTarget;
@@ -47,9 +80,9 @@ interface RecordedTarget {
 
 // A doc view over a channel reading every doc as `# Doc`, drawing with the
 // layouts `layouts` returns, its editor host recording each editor it makes
-// and each text inserted, rendering through `markdown`. `writeBytes` answers
-// the channel's `writeBytes`, each call recorded in `writes`; `targets` holds
-// each drop target.
+// and each text inserted, rendering through `markdown`. `replies` answers the
+// channel by call name. `writeBytes` answers the channel's `writeBytes`, each
+// call recorded in `writes`; `targets` holds each drop target.
 function docViewOver(
   layouts: () => ShownLayouts<Layout>,
   chipsOf: DocViewDeps['chipsOf'] = () => {
@@ -142,6 +175,7 @@ function docViewOver(
     view: createDocView(deps),
     editors,
     deps,
+    replies,
     inserts,
     toasts,
     writes,
@@ -167,6 +201,39 @@ const hookDetail: DocDetail = {
   fields: [['Event', 'Stop']],
   editFile: async () => ({ path: '/home/hook.md', text: '# Hook', line: 1 }),
 };
+
+// An own doc at `source`, whose link on `line` leads to `linkTarget`.
+function linkingEntry(
+  source: string,
+  linkTarget: string,
+  line: number,
+): IndexEntry {
+  return {
+    id: source,
+    kind: 'skill-file',
+    source: 'repo',
+    owner: 'mine',
+    repo: null,
+    root: null,
+    plugin: null,
+    path: source,
+    line: null,
+    title: 'Source',
+    meta: {},
+    walked: [],
+    headings: [],
+    links: [
+      {
+        form: 'markdown',
+        raw: linkTarget,
+        target: linkTarget,
+        line,
+        targetLine: null,
+      },
+    ],
+    lastLoaded: null,
+  };
+}
 
 describe('createDocView', () => {
   beforeEach(() =>
@@ -203,6 +270,257 @@ describe('createDocView', () => {
       pane: ['pane-1'],
     });
     expect(paneClasses(view.element)).toEqual(['pane-2']);
+  });
+
+  it.each([
+    {
+      path: '/home/a.md',
+      text: '# A\n## B',
+      detail: null,
+      linkedRows: 1,
+      headings: ['On this page', 'Linked from'],
+      isHidden: false,
+    },
+    {
+      path: '/home/a.md',
+      text: 'plain',
+      detail: null,
+      linkedRows: 1,
+      headings: ['Linked from'],
+      isHidden: false,
+    },
+    {
+      path: '/home/a.md',
+      text: '# A',
+      detail: null,
+      linkedRows: 0,
+      headings: ['On this page'],
+      isHidden: false,
+    },
+    {
+      path: '/home/a.md',
+      text: 'plain',
+      detail: null,
+      linkedRows: 0,
+      headings: [],
+      isHidden: true,
+    },
+    {
+      path: '/home/a.json',
+      text: '{}',
+      detail: null,
+      linkedRows: 1,
+      headings: [],
+      isHidden: true,
+    },
+    {
+      path: '/home/a.md',
+      text: '# A',
+      detail: hookDetail,
+      linkedRows: 1,
+      headings: [],
+      isHidden: true,
+    },
+  ])(
+    'open_DocKind_DrawsTheAsideSectionsItHas $path $text $linkedRows',
+    async ({ path, text, detail, linkedRows, headings, isHidden }) => {
+      const { view, replies } = docViewOver(() =>
+        withUser(defaultLayout, asideLayout().layout),
+      );
+      replies.readDoc = text;
+      view.setEntries(
+        Array.from({ length: linkedRows }, () =>
+          linkingEntry('/home/source.md', path, 5),
+        ),
+      );
+
+      await view.open({ ...target(null, path), detail });
+
+      expect({
+        headings: titlesOf(view, ASIDE_HEADING),
+        openSections: findAll(
+          asFake(view.element),
+          'docs-aside-section',
+        ).filter((section) => !section.hidden).length,
+        isHidden: asideOf(view).hidden,
+      }).toEqual({ headings, openSections: headings.length, isHidden });
+    },
+  );
+
+  it('open_ReadOnlyDoc_KeepsTheAside', async () => {
+    const { view } = docViewOver(() =>
+      withUser(defaultLayout, paneLayout('pane')),
+    );
+
+    await view.open({
+      ...target(null),
+      readOnly: { type: 'downloaded', plugin: null },
+    });
+
+    expect(asideOf(view).hidden).toBe(false);
+  });
+
+  it('asideLink_NestedHeadings_IndentsFromTheLeastLevel', async () => {
+    const { layout, links } = asideLayout();
+    const { view, replies } = docViewOver(() =>
+      withUser(defaultLayout, layout),
+    );
+    replies.readDoc = '## A\n### B';
+
+    await view.open(target(null));
+
+    expect(links.map(({ depth }) => depth)).toEqual([0, 1]);
+  });
+
+  it('asideLink_OnThisPage_RootTitleIsTheSectionTitle', async () => {
+    const { view, replies } = docViewOver(() =>
+      withUser(defaultLayout, asideLayout().layout),
+    );
+    replies.readDoc = '## A';
+
+    await view.open(target(null));
+
+    expect(rowsOf(view)[0].title).toBe('A');
+  });
+
+  it('asideLink_LinkedFrom_RootTitleIsTheTildePath', async () => {
+    const { view, replies } = docViewOver(() =>
+      withUser(defaultLayout, asideLayout().layout),
+    );
+    replies.readDoc = 'plain';
+    view.setEntries([linkingEntry('/home/source.md', '/home/notes.md', 5)]);
+
+    await view.open(target(null));
+
+    expect(rowsOf(view)[0].title).toBe('~/source.md');
+  });
+
+  it('clickOnThisPage_ScrollsToTheHeadingsBlock', async () => {
+    const { view, replies } = docViewOver(() =>
+      withUser(defaultLayout, asideLayout().layout),
+    );
+    replies.readDoc = '---\nname: a\n---\n## A\n\n## B\n\n## C';
+    await view.open(target(null));
+    const body = findAll(asFake(view.element), 'docs-body')[0];
+    body.append(sourceBlock(1, 40), sourceBlock(3, 200), sourceBlock(5, 400));
+
+    rowsOf(view)[1].click();
+
+    expect(scroller(view.element).scrollTop).toBe(200);
+  });
+
+  it('clickLinkedFrom_FollowsToTheLinkingLine', async () => {
+    const { view, deps, replies } = docViewOver(() =>
+      withUser(defaultLayout, asideLayout().layout),
+    );
+    const followFile = vi.spyOn(deps, 'followFile');
+    replies.readDoc = 'plain';
+    view.setEntries([linkingEntry('/home/source.md', '/home/notes.md', 5)]);
+    await view.open(target(null));
+
+    rowsOf(view)[0].click();
+
+    expect(followFile.mock.calls).toEqual([['/home/source.md', 5, null]]);
+  });
+
+  it('setEntries_DocOpen_DrawsLinkedFromAgain', async () => {
+    const { view } = docViewOver(() =>
+      withUser(defaultLayout, asideLayout().layout),
+    );
+    await view.open(target(null));
+    const pane = scroller(view.element);
+    pane.scrollTop = 120;
+
+    view.setEntries([linkingEntry('/home/source.md', '/home/notes.md', 5)]);
+
+    expect({
+      headings: titlesOf(view, ASIDE_HEADING),
+      links: titlesOf(view, ASIDE_LINK),
+      scrollTop: pane.scrollTop,
+    }).toEqual({
+      headings: ['On this page', 'Linked from'],
+      links: ['Doc', 'Source'],
+      scrollTop: 120,
+    });
+  });
+
+  it('diskChanged_DocScrolled_KeepsBothScrollsAndShowsNewHeadings', async () => {
+    installFocusFakeDom(
+      (name, value) => vi.stubGlobal(name, value),
+      ShrinkingScrollerFakeElement,
+    );
+    const { view, replies } = docViewOver(() =>
+      withUser(defaultLayout, asideLayout().layout),
+    );
+    await view.open(target(null));
+    const pane = scroller(view.element);
+    pane.scrollTop = 120;
+    asideOf(view).scrollTop = 40;
+    replies.readDoc = '# New\n## Newer';
+
+    view.diskChanged('/home/notes.md');
+    await settled();
+
+    expect({
+      links: titlesOf(view, ASIDE_LINK),
+      paneScrollTop: pane.scrollTop,
+      asideScrollTop: asideOf(view).scrollTop,
+    }).toEqual({
+      links: ['New', 'Newer'],
+      paneScrollTop: 120,
+      asideScrollTop: 40,
+    });
+  });
+
+  it('redraw_NewFrameLayout_KeepsScrollAndFocus', async () => {
+    let shown = withUser(defaultLayout, frameLayout('frame-1'));
+    const { view } = docViewOver(() => shown);
+    await view.open(target(null));
+    const pane = scroller(view.element);
+    pane.scrollTop = 120;
+    asideOf(view).scrollTop = 40;
+    view.focus();
+
+    shown = withUser(defaultLayout, frameLayout('frame-2'));
+    view.redraw();
+
+    expect({
+      frames: frameCounts(view),
+      paneScrollTop: pane.scrollTop,
+      asideScrollTop: asideOf(view).scrollTop,
+      isFocused: document.activeElement === asHtml(pane),
+    }).toEqual({
+      frames: { old: 0, new: 1 },
+      paneScrollTop: 120,
+      asideScrollTop: 40,
+      isFocused: true,
+    });
+  });
+
+  it('redraw_EditorOpen_DrawsTheFrameOnClose', async () => {
+    let shown = withUser(defaultLayout, frameLayout('frame-1'));
+    const { view, editors } = docViewOver(() => shown);
+    await view.open(target(null));
+    view.edit(1);
+    const [editor] = editors;
+    const host = asFake(editor.parent);
+    const hostParent = host.parentNode;
+
+    shown = withUser(defaultLayout, frameLayout('frame-2'));
+    view.redraw();
+    const whileEditing = {
+      isHostInPlace: host.parentNode === hostParent,
+      destroys: editor.destroy.mock.calls.length,
+      frames: frameCounts(view),
+    };
+    view.quitEditor();
+
+    expect(whileEditing).toEqual({
+      isHostInPlace: true,
+      destroys: 0,
+      frames: { old: 1, new: 0 },
+    });
+    expect(frameCounts(view)).toEqual({ old: 0, new: 1 });
   });
 
   it('open_DocNoEntryNames_DrawsNoChips', async () => {
@@ -393,6 +711,7 @@ describe('createDocView', () => {
     },
     { name: 'a clear', late: ({ view }) => view.clear() },
     { name: 'a chip refresh', late: ({ view }) => view.refreshChips() },
+    { name: 'an entries change', late: ({ view }) => view.setEntries([]) },
     {
       name: 'a layout change',
       late: ({ view, changeLayouts }) => {
@@ -597,6 +916,33 @@ function pasted(bytes: number[]): DroppedFile {
 // The classes of the doc pane part's root.
 function paneClasses(root: HTMLElement): string[] {
   return asFake(root).children.map((child: FakeElement) => child.className);
+}
+
+// The right column, `div.docs-aside`.
+function asideOf(view: DocView): FakeElement {
+  return findAll(asFake(view.element), 'docs-aside')[0];
+}
+
+// The right column's drawn rows, as `asideLayout` draws them.
+function rowsOf(view: DocView): FakeElement[] {
+  return findAll(asFake(view.element), ASIDE_LINK);
+}
+
+// The texts of the elements drawn with `className`, as `asideLayout` draws
+// them.
+function titlesOf(view: DocView, className: string): string[] {
+  return findAll(asFake(view.element), className).map(
+    (node) => node.textContent,
+  );
+}
+
+// How many of `frameLayout`'s `frame-1` and `frame-2` frames the view holds.
+function frameCounts(view: DocView): { old: number; new: number } {
+  const root = asFake(view.element);
+  return {
+    old: findAll(root, 'frame-1').length,
+    new: findAll(root, 'frame-2').length,
+  };
 }
 
 // The pane's scroller, `div.docs-doc`.
