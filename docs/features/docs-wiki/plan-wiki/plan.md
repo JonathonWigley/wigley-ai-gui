@@ -130,7 +130,7 @@ wigley-ai-gui, git:
 - [x] [Wiki sidebar and All pages](08-wiki-sidebar.md) — after 03, 04, 05, 06
 
 ### Wave 5
-- [ ] [Section editing](09-section-editing.md) — after 03, 07, 08
+- [x] [Section editing](09-section-editing.md) — after 03, 07, 08
 
 ### Wave 6
 - [ ] [Section links and history](10-links-history.md) — after 03, 09
@@ -160,6 +160,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 05 · f2d0ccb5 · diff read; ten parts in layout.d.ts, PART_SCOPES, LAYOUT_PARTS, default builders, token, container and DESIGN.md entries present; tsc clean; oxfmt on docs/keymap.md committed as 883116bf (lead tooling) for the lint gate · concerns: eight of ten default builders run in no test until tasks 07, 08 and 11; container docs-doc / size is live in every docs view and needs its live check at 07, stacked session tab included; sectionEditControl passes kit.openSection unbound, so task 09's kit must not use this
 - 07 · 061c3e1b · diff read, every Produces present, tests pass per worker, no compile error in its files with task 08 in the tree; the live run follows task 08's landing (Rulings) · concerns: aside scroll resets across the whole-file editor; empty-state centring and editor height rest on CSS only; 100cqh needs the docs-doc container; retarget does not redraw the column, so it goes stale after a move or an extension change; linkedFrom runs on every drawAside
 - 08 · d7270be4 · diff read, every Produces present by search, tsc and lint clean, Done-when greps hold (one <Leader>vw line, no setEntries in docs-view.ts) · concerns: Space v w with the filter box focused leaves focus on a hidden input; an unstar elsewhere can also move the wiki cursor; with no entries a wiki filter shows No pages in Main.md; dangling and label row colours unseen on screen; wikiRowActions anchors are built in session views too; Docs mode opens on the wiki, so self-test groups expecting All pages fail until task 12
+- 09 · ce659133 · diff read, every Produces present, tsc clean; worker ran the task tests (123 pass), lint and the live run: all 6 steps pass after scrollToSectionNotice; the 950px breakpoint held the body at 670px down to where the column goes; the switch click focuses the tree · concerns: self-test anchor check has not seen the three new binds; short section has about 36px spare below its text, the height using prose metrics; On this page clicks use old lines after a :w until the editor closes; scrollToSectionNotice has no unit test; section editor logs editing <name>, the same as whole-file
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -193,5 +194,10 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - Task 07's live run (/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/667dda66-db61-4226-a883-9de5428c1db2/scratchpad/reports/07-live.md): steps 1, 3, 4 pass; step 2 failed at 920px, so the breakpoint is 950px (1e87a69e), the plan's width plus 264 plus the 15px scrollbar, and the article no longer shrinks by the sum; not re-measured · lead
 - A selected dangling or label row draws fg rather than fg-tertiary, because the cursor's .is-selected rules outrank them; left as is, the cursor reads the same on every row; goes to the review · lead
 - Space v w inside the filter box types into it, as a leader sequence does in a box, so the worker's focus concern arose only by a click on the switch, fixed in 1e87a69e · lead
+- every :w splices into openedText, the text as the editor opened, rather than growing endLine: the task's form throws on the next :w in a file with no last line ending, and spliceSection requires a section from the same text · group 09
+- closeEditor empties shownSections until the body redraws, so e cannot splice stale lines · group 09
+- scrollToSectionNotice brings a banner or prompt into sight in section mode, from a live-run failure · group 09
+- scrollToHeading lands on the editor's frame for a heading hidden for the edit · group 09
+- docs-parts.test.ts beyond Files: sectionHint wiring; .docs-section-edit gets user-select none; after also runs on closeEditor's detail path; clickSection compares dataset.anchor among body.children · group 09
 ### Review rounds
 ### Test gate

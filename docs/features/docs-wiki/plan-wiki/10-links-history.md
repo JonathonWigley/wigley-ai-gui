@@ -1,6 +1,6 @@
 # 10 — Section links and history
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 03, 09
 Plan: [plan.md](plan.md)

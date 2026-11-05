@@ -1,6 +1,6 @@
 # 09 — Section editing
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 03, 07, 08
 Plan: [plan.md](plan.md)
@@ -230,3 +230,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit ce659133 · proof: diff read, every Produces present, tsc clean; worker ran the task tests (123 pass), lint and the live run: all 6 steps pass after scrollToSectionNotice; the 950px breakpoint held the body at 670px down to where the column goes; the switch click focuses the tree · concerns: self-test anchor check has not seen the three new binds; short section has about 36px spare below its text, the height using prose metrics; On this page clicks use old lines after a :w until the editor closes; scrollToSectionNotice has no unit test; section editor logs editing <name>, the same as whole-file
