@@ -169,9 +169,10 @@ export type ChatTabScope = 'chat';
 // `onActiveChanged` the focused pane's session change and
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in; `sessions` also takes each
-// row's activity and names the focused pane's session. `slots` holds chat's
-// slots, and `onPageReady` hears that every page part has started: the view reads
-// the sessions already held and follows the slots from then. `activeTimeListeners`
+// row's activity, and `activeSessionId` names the focused pane's session.
+// `slots` holds chat's slots, and `onPageReady` hears that every page part has
+// started: the view reads the sessions already held and follows the slots from
+// then. `activeTimeListeners`
 // run when a session arrives and on each change of a held session's `activeTime`
 // in `chat.session`, a throw skipping none of them. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
@@ -363,7 +364,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     for (const { id } of fresh) {
       tab.placedReturned.add(id);
     }
-    placeReturned({ tabs: view, channel, log }, tab.sessionId, fresh);
+    // `tabs` holds a tab once `createTab` mounted its box.
+    const session = sessionOf(tab, tab.box!, deps.composerParts);
+    placeReturned({ tabs: view, channel, log }, session, fresh);
   };
 
   const add = (info: ChatSessionInfo) => {

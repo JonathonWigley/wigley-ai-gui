@@ -2291,7 +2291,7 @@ describe('createChatSessions', () => {
       box: true,
       written: ['box'],
       queuedRows: [],
-      changesQueue: false,
+      queueWrites: 0,
       log: null,
     },
     {
@@ -2305,7 +2305,7 @@ describe('createChatSessions', () => {
         ['second', true],
         ['box', true],
       ],
-      changesQueue: true,
+      queueWrites: 4,
       log: null,
     },
     {
@@ -2318,7 +2318,7 @@ describe('createChatSessions', () => {
         ['first', true],
         ['second', true],
       ],
-      changesQueue: true,
+      queueWrites: 2,
       log: null,
     },
     {
@@ -2328,7 +2328,7 @@ describe('createChatSessions', () => {
       box: false,
       written: [],
       queuedRows: [],
-      changesQueue: false,
+      queueWrites: 0,
       log: /nothing to send now in row-1/,
     },
     {
@@ -2342,7 +2342,7 @@ describe('createChatSessions', () => {
         [REFUSED_TEXT, false],
         ['box', false],
       ],
-      changesQueue: true,
+      queueWrites: 2,
       log: /queued message queued-2 not sent: write refused/,
     },
   ])('sendAllNow_WritesInTheOrderWritten: $case', async (row) => {
@@ -2368,7 +2368,7 @@ describe('createChatSessions', () => {
       .queued.map((queued) => [queued.text, queued.sentEntryId !== null]);
     expect(written).toEqual(row.written);
     expect(queuedRows).toEqual(row.queuedRows);
-    expect(test.sent('queued').length > queuedBefore).toBe(row.changesQueue);
+    expect(test.sent('queued').length - queuedBefore).toBe(row.queueWrites);
     if (row.log !== null) {
       expect(test.logged).toContainEqual(expect.stringMatching(row.log));
     }
@@ -2611,23 +2611,37 @@ describe('createChatSessions', () => {
     );
   });
 
-  it('permission_restingSession_answersCancelledWithNoEntry', async () => {
-    const test = await started();
-    test.process.events.ended({ code: 0, error: null });
-    const entriesBefore = test.sent('entry').length;
+  it.each([
+    {
+      case: 'a resting session',
+      arrange: (test: Awaited<ReturnType<typeof started>>) =>
+        test.process.events.ended({ code: 0, error: null }),
+    },
+    {
+      case: 'after detachAll',
+      arrange: (test: Awaited<ReturnType<typeof started>>) =>
+        void test.chat.detachAll(),
+    },
+  ])(
+    'permission_NoLiveRow_answersCancelledWithNoEntry ($case)',
+    async ({ arrange }) => {
+      const test = await started();
+      arrange(test);
+      const entriesBefore = test.sent('entry').length;
 
-    const result = await test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+      const result = await test.chat
+        .permissionToolSession(test.agentSession)
+        .call('permission_prompt', BASH_ARGS, {
+          toolUseId: 'tu-1',
+          signal: signal().signal,
+        });
 
-    expect(replyText(result)).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry')).toHaveLength(entriesBefore);
-  });
+      expect(replyText(result)).toBe(
+        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+      );
+      expect(test.sent('entry')).toHaveLength(entriesBefore);
+    },
+  );
 
   it('permission_rowCloses_answersCancelledWithNoEntry', async () => {
     const test = await started();
@@ -3444,22 +3458,35 @@ describe('createChatSessions saved sessions', () => {
     expect(test.harness.processes).toEqual([]);
   });
 
-  it('loadHistory_RowClosedWhileReading_SendsNothing', async () => {
-    const test = setUp();
-    test.chat.restore(
-      {
-        sessions: [record(PAST_ONE.sessionId, { sent: true })],
-        selectedHostSessionId: null,
-      },
-      [],
-    );
+  it.each([
+    {
+      case: 'the row closed',
+      stop: (test: ReturnType<typeof setUp>) =>
+        test.chat.closed(ROW_ID, 'user'),
+    },
+    {
+      case: 'detachAll',
+      stop: (test: ReturnType<typeof setUp>) => void test.chat.detachAll(),
+    },
+  ])(
+    'loadHistory_StoppedWhileReading_SendsNothing ($case)',
+    async ({ stop }) => {
+      const test = setUp();
+      test.chat.restore(
+        {
+          sessions: [record(PAST_ONE.sessionId, { sent: true })],
+          selectedHostSessionId: null,
+        },
+        [],
+      );
 
-    const reading = test.chat.loadHistory(ROW_ID);
-    test.chat.closed(ROW_ID, 'user');
-    await reading;
+      const reading = test.chat.loadHistory(ROW_ID);
+      stop(test);
+      await reading;
 
-    expect(test.sent('entries')).toEqual([]);
-  });
+      expect(test.sent('entries')).toEqual([]);
+    },
+  );
 
   it.each([
     {
@@ -3591,6 +3618,18 @@ describe('createChatSessions branch', () => {
         reads: ((branch: string) => void)[],
       ) => {
         test.chat.closed(ROW_ID, 'user');
+        reads[0]('main');
+      },
+      sent: [],
+      shown: null,
+    },
+    {
+      case: 'read settles after detachAll',
+      settle: async (
+        test: Awaited<ReturnType<typeof started>>,
+        reads: ((branch: string) => void)[],
+      ) => {
+        test.chat.detachAll();
         reads[0]('main');
       },
       sent: [],
@@ -7077,6 +7116,26 @@ describe('createChatSessions message and turn events', () => {
     },
   );
 
+  it.each([
+    { case: "the row's first process", exits: 0 },
+    { case: "the row's second process", exits: 1 },
+  ])('messageSent_EntryId_NamesTheRowsEntry ($case)', async ({ exits }) => {
+    const test = await started();
+    for (let exit = 0; exit < exits; exit += 1) {
+      test.process.events.ended({ code: 0, error: null });
+    }
+
+    await test.chat.send(ROW_ID, MESSAGE);
+    await flush();
+
+    const [{ entryId }] = emittedOf(test, 'messageSent') as {
+      entryId: string;
+    }[];
+    expect(test.chat.sessions()[0].entries.map(({ id }) => id)).toContain(
+      entryId,
+    );
+  });
+
   // Each turn event, with the row's activity and clock as a listener reads them.
   function turnEventsHeard(test: ReturnType<typeof setUp>) {
     const heard: unknown[] = [];
@@ -7131,6 +7190,11 @@ describe('createChatSessions message and turn events', () => {
       rest: [finishedHeard('idle', { totalMs: 3000, since: null })],
     },
     {
+      case: '/clear mid-turn',
+      act: (test) => test.chat.clear(ROW_ID),
+      rest: [finishedHeard('rested', { totalMs: 3000, since: null })],
+    },
+    {
       case: 'idle with background work running',
       act: (test) => {
         test.process.events.agentEvent({
@@ -7172,35 +7236,43 @@ describe('createChatSessions message and turn events', () => {
 
   it.each<{
     case: string;
-    replay: (events: AgentProcessEvents) => void;
+    script: Parameters<ReturnType<typeof setUp>['harness']['scriptAttach']>[1];
   }>([
     {
-      case: 'a turn that ran and ended',
-      replay: (events) => {
-        events.activity('working');
-        events.activity('idle');
+      case: 'a replayed turn that ran and ended',
+      script: {
+        outcome: 'process',
+        replay: (events) => {
+          events.activity('working');
+          events.activity('idle');
+        },
       },
     },
     {
-      case: 'a turn the replayed exit ended',
-      replay: (events) => {
-        events.activity('working');
-        events.ended({ code: 0, error: null });
+      case: 'a replayed turn the replayed exit ended',
+      script: {
+        outcome: 'process',
+        replay: (events) => {
+          events.activity('working');
+          events.ended({ code: 0, error: null });
+        },
       },
     },
-  ])(
-    'turnEvents_ActivityCrossesIdle_FireOncePerCrossing (replay: $case)',
-    async ({ replay }) => {
-      const test = setUp();
-      const heard = turnEventsHeard(test);
-      test.harness.scriptAttach('p1', { outcome: 'process', replay });
-
-      restoreOne(test, hostedRecord(), [hostedP1()]);
-      await flush();
-
-      expect(heard).toEqual([]);
+    { case: 'an attach finding no process', script: { outcome: 'null' } },
+    {
+      case: 'an attach that rejects',
+      script: { outcome: 'reject', message: 'host gone' },
     },
-  );
+  ])('turnEvents_Attach_FireNothing ($case)', async ({ script }) => {
+    const test = setUp();
+    const heard = turnEventsHeard(test);
+    test.harness.scriptAttach('p1', script);
+
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(heard).toEqual([]);
+  });
 
   it('turnEvents_ReplayEndsWorking_TheLiveIdleFiresTheFinish', async () => {
     const test = setUp();

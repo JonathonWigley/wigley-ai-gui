@@ -44,7 +44,7 @@ interface Tab {
 
 // A session's frame: its session, its tab bar over the sheet holding its
 // tabs' body and the text saying why no tab shows; its tab ids and selection,
-// and its tabs by id in add order.
+// and its tabs by id, both in strip order.
 interface Frame {
   sessionId: string;
   element: HTMLElement;
@@ -124,7 +124,7 @@ export interface SessionTabsView {
   // Drops every frame as `drop` does, then every pane with its part and text,
   // a throw not skipping the rest.
   dropAll(): void;
-  // The session's tabs, in add order.
+  // The session's tabs, in strip order.
   tabsOf(sessionId: string): SessionTabView[];
   statusesOf(sessionId: string): string[];
   selectedTabOf(sessionId: string): SessionTabView | null;
@@ -143,7 +143,9 @@ export interface SessionTabsView {
 // tab's element fills its frame's sheet, and a frame moves between panes, the
 // holder and a pane part drawn again as the same element, by a connected move that
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
-// (`vacate`) before its slot leaves the document. A frame no pane shows, a
+// (`vacate`) before its slot leaves the document. The strip holds the tabs of
+// LEADING_TAB_IDS first, whichever of them was added first, and every other tab
+// after them in add order. A frame no pane shows, a
 // session's with no row yet included, waits in the hidden holder.
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, its tooltip and the active tab's mark.
@@ -487,9 +489,10 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     add(sessionId, view) {
       const frame = frameOf(sessionId);
-      frame.tabs = tabsAfterAdd(frame.tabs, sessionId, view.id);
+      const added = tabsAfterAdd(frame.tabs, sessionId, view.id);
       const tab: Tab = { view, status: '' };
-      frame.entries.set(view.id, tab);
+      frame.entries = inStripOrder(new Map(frame.entries).set(view.id, tab));
+      frame.tabs = { ...added, tabIds: [...frame.entries.keys()] };
       frame.body.append(view.element);
       changed();
       let latestTakeOver: { release(): void } | null = null;
@@ -568,6 +571,19 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     select,
   };
+}
+
+// The tabs every session gets, in strip order: a page load and a live session
+// add them in different orders.
+const LEADING_TAB_IDS: readonly string[] = ['docs', 'chat'];
+
+function stripRank(tabId: string): number {
+  const rank = LEADING_TAB_IDS.indexOf(tabId);
+  return rank === -1 ? LEADING_TAB_IDS.length : rank;
+}
+
+function inStripOrder(tabs: ReadonlyMap<string, Tab>): Map<string, Tab> {
+  return new Map([...tabs].sort(([a], [b]) => stripRank(a) - stripRank(b)));
 }
 
 function removeChildrenExcept(parent: HTMLElement, kept: HTMLElement): void {

@@ -105,8 +105,8 @@ const returnedTwo: ReturnedMessage = {
 // mounts, `tab` its element, `tabElements` each session's tab element, `invoked`
 // each call to main, `activities` each row activity word set, and `toasts` each
 // toast. `sideParts` and `composerParts` are the view's part stores, `layouts` its
-// chat layouts, and `removeSession` closes a session's tab as the sessions plugin
-// does.
+// chat layouts, `removeSession` closes a session's tab as the sessions plugin
+// does, and `setActive` names the focused pane's session.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -167,6 +167,7 @@ function mounted(
   // What `activeTime` read while `addTab` ran, as a row drawn then reads it.
   const readDuringAddTab: (ActiveTime | null)[] = [];
   let removeSession: (sessionId: string) => void = noEvent;
+  let activeSessionId: string | null = null;
   const view = mountChatView({
     channel,
     slots: {
@@ -203,7 +204,7 @@ function mounted(
         activity: { word: string } | null,
       ) => activities.push(activity?.word),
     },
-    activeSessionId: () => null,
+    activeSessionId: () => activeSessionId,
     onSessionRemoved: (listener: (sessionId: string) => void) => {
       removeSession = listener;
     },
@@ -257,6 +258,9 @@ function mounted(
     activeTimeCalls,
     readDuringAddTab,
     removeSession: (sessionId: string) => removeSession(sessionId),
+    setActive: (sessionId: string | null) => {
+      activeSessionId = sessionId;
+    },
     box,
     tab,
     tabElements,
@@ -746,7 +750,6 @@ describe('mountChatView slots', () => {
     ]);
 
     expect([...view.tabElements.keys()]).toEqual(['row-1', 'row-2']);
-    expect(view.invoked.map(([method]) => method)).not.toContain('sessions');
   });
 
   it('chatView_SessionKeyAfterLists_BuildsTabWithThem', () => {
@@ -862,6 +865,13 @@ describe('mountChatView slots', () => {
       workingDraws: 0,
       clockCalls: 0,
     },
+    {
+      block: 'repo',
+      change: { repo: 'other' },
+      lines: ['app is in other on main'],
+      workingDraws: 0,
+      clockCalls: 0,
+    },
   ])(
     'chatView_SessionWrite_RunsOnlyChangedBlock: $block',
     ({ opening, change, lines, workingDraws, clockCalls }) => {
@@ -921,5 +931,18 @@ describe('mountChatView slots', () => {
     view.setInfo('row-1', { activity: 'idle' });
 
     expect(view.activities.at(-1)).toBe('error');
+  });
+
+  it.each<{ case: string; active: string | null; word: string | undefined }>([
+    { case: 'SessionElsewhere_ShowsDone', active: 'row-2', word: 'done' },
+    { case: 'SessionFocused_ShowsNothing', active: 'row-1', word: undefined },
+  ])('chatView_TurnEnd_$case', ({ active, word }) => {
+    const view = mounted();
+    view.open(stateOf([], { running: true, activity: 'working' }));
+    view.setActive(active);
+
+    view.setInfo('row-1', { activity: 'idle' });
+
+    expect(view.activities.at(-1)).toBe(word);
   });
 });

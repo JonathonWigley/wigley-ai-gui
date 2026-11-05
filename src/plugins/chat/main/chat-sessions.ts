@@ -433,11 +433,14 @@ function exitNoticeText(code: number | null, error: string | null): string {
 
 // A harness numbers entry ids per process, so a row's later processes reuse
 // its first process's ids; each start after the first gets its own prefix.
+function rowEntryId(harnessEntryId: string, processStart: number): string {
+  return processStart === 1
+    ? harnessEntryId
+    : `process-${processStart}:${harnessEntryId}`;
+}
+
 function rowEntryOf(entry: ChatEntry, processStart: number): ChatEntry {
-  if (processStart === 1) {
-    return entry;
-  }
-  return { ...entry, id: `process-${processStart}:${entry.id}` };
+  return { ...entry, id: rowEntryId(entry.id, processStart) };
 }
 
 // A held mode narrows nothing, so a start passes it whoever set it.
@@ -1483,7 +1486,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Reads the row's repo and branch, and writes them when either changed.
   // A read that a later one started after, or that settles after the row
-  // closed, changes nothing.
+  // closed or `detachAll`, changes nothing.
   function readBranch(session: HeldSession) {
     session.branchReads += 1;
     const read = session.branchReads;
@@ -1496,7 +1499,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           session.branchReads === read;
         const info = session.slots.info();
         const changed = repo !== info.repo || branch !== info.branch;
-        if (!isLatestRead || !changed) {
+        if (isDetached || !isLatestRead || !changed) {
           return;
         }
         session.slots.setInfo({ repo, branch });
@@ -2200,21 +2203,24 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session.heldCount;
   }
 
-  // Writes `message` to the agent and returns the id of the entry the agent
-  // adds when it takes it in.
+  // Writes `message` to the agent and returns the harness's id of the entry the
+  // agent adds when it takes it in, which `takeIn` matches.
   function deliver(session: HeldSession, message: UserMessage): string {
     const { process } = session;
     if (process === null) {
       throw new Error(`session ${session.sessionId} has no running process`);
     }
     const entryId = process.send(message);
-    deps.emit('messageSent', { sessionId: session.sessionId, entryId });
     session.isOnlyAHoldsCompaction = false;
     if (!session.sent) {
       session.sent = true;
       setFirstMessageTitle(session, message.text);
       save();
     }
+    deps.emit('messageSent', {
+      sessionId: session.sessionId,
+      entryId: rowEntryId(entryId, session.processStarts),
+    });
     return entryId;
   }
 
@@ -2540,7 +2546,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       profileDirOf(profile),
       session.historyBefore,
     );
-    if (isClosedOrCleared(session, sessionId, hostId)) {
+    if (isDetached || isClosedOrCleared(session, sessionId, hostId)) {
       return;
     }
     session.slots.replaceEntries([...history, ...session.slots.entries()]);
@@ -2740,7 +2746,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     } catch (error) {
       return errorResult(errorText(error));
     }
-    if (signal.aborted || !session.slots.info().running) {
+    if (isDetached || signal.aborted || !session.slots.info().running) {
       return textResult(
         permissionReplyText(
           { allowed: false, reason: CANCELLED_REASON },

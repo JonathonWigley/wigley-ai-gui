@@ -67,8 +67,9 @@ export interface ResumeRequest {
 
 // A message sent while its session's turn ran, held by chat main until the
 // turn ends or the user sends it now; `id` is unique within its session.
-// `sentEntryId` is null while it waits, and once sent now the id of the user
-// entry the agent adds when it takes the message in, which drops the row.
+// `sentEntryId` is null while it waits, and once sent now the harness's id of
+// the user entry the agent adds when it takes the message in, which drops the
+// row; on a row's later processes that entry's id in `chat.entries` differs.
 // `holdReason` is non-null on a held row, a send gate's reason: the row waits
 // for its session's compaction and is written when the compaction ends. A
 // session has at most one held row.
@@ -368,7 +369,8 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // chat never sends.
 // `sessionOpened`: a session chat now owns, with the profile it opened under,
 // its host id and folder, and how it came to open; a row whose profile is not
-// in chat's profiles setting fires none.
+// in chat's profiles setting fires none. It fires before the session's slots
+// exist and before chat's exports know the row.
 // `sessionClosed`: chat closing a row it holds, before its state goes, with the
 // titles and `sent` it had. A quit or relaunch fires none.
 // `sessionCleared`: a clear moving a row to a new host id, with the titles it
@@ -377,14 +379,16 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // `hostSessionId` is the id it started under.
 // `sessionArchived`: a saved session's archived flag, once written.
 // `messageSent`: a message written to the row's process, at the write: a queued
-// message fires when it goes out, not when it queues. `entryId` is the entry the
-// agent adds when it takes the message in.
+// message fires when it goes out, not when it queues. `entryId` is the id in
+// `chat.entries` of the entry the agent adds when it takes the message in.
 // `turnStarted`, `turnFinished`: the row's shown `activity` leaving or reaching
 // idle outside a replay, once per crossing. Hear these for "the row's work began
 // or ended": they cover a compaction with no harness turn, a stopped turn, and an
-// exit with no `turnEnded` (`how: 'rested'`). `agentEvent`'s `turnStarted` and
-// `turnEnded` report the harness stream instead, replays included. A listener
-// reading `chatSessionSlot` finds the new `activity` and a current `activeTime`.
+// exit with no `turnEnded` (`how: 'rested'`). They do not pair, since a crossing
+// in a replay fires none: `chatSessionSlot` holds the state. `agentEvent`'s
+// `turnStarted` and `turnEnded` report the harness stream instead, replays
+// included. A listener reading `chatSessionSlot` finds the new `activity` and a
+// current `activeTime`.
 export interface ChatMainEvents extends EventShape {
   agentEvent: ChatAgentEvent;
   planUsage: { profileDir: string | null; update: PlanRowUpdate };

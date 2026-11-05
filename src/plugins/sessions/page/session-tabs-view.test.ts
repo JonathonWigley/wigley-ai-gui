@@ -135,6 +135,45 @@ describe('session tabs view', () => {
     }
   });
 
+  it.each([
+    { added: ['docs', 'chat'], strip: ['docs', 'chat'] },
+    { added: ['chat', 'docs'], strip: ['docs', 'chat'] },
+    {
+      added: ['form', 'chat', 'primer', 'docs'],
+      strip: ['docs', 'chat', 'form', 'primer'],
+    },
+    { added: ['primer', 'form'], strip: ['primer', 'form'] },
+  ])(
+    'sessionTabs_AnyAddOrder_DrawsOneStripOrder: $added',
+    ({ added, strip }) => {
+      const { view, area } = sessionsViewSetup();
+      for (const id of added) {
+        view.tabs.add('s', tabView(id));
+      }
+      view.render(stateOf(['s'], 's'));
+      view.panes.restore(
+        { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
+        new Map([['pane-1', 's']]),
+      );
+
+      expect(view.tabs.tabsOf('s').map((tab) => tab.id)).toEqual(strip);
+      expect(findAll(area, 'ui-tab').map((tab) => tab.title)).toEqual(
+        strip.map((id) => `title ${id}`),
+      );
+    },
+  );
+
+  it('sessionTabs_SelectedTabRemoved_SelectsItsStripNeighbour', () => {
+    const { view } = sessionsViewSetup();
+    const chat = view.tabs.add('s', tabView('chat'));
+    view.tabs.add('s', tabView('docs'));
+    view.tabs.add('s', tabView('form'));
+
+    chat.dispose();
+
+    expect(view.tabs.selectedTabOf('s')?.id).toBe('form');
+  });
+
   it('releases a live takeover when the tab handle is disposed', () => {
     const { view } = sessionsViewSetup();
     const a = tabView('a');
