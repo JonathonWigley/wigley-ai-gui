@@ -142,7 +142,7 @@ Boundary rules:
 - [x] [The session-log plugin](07-session-log-plugin.md) — after 01, 02, 03
 
 ### Wave 5
-- [ ] [Self-test group](08-selftest-group.md) — after 06, 07
+- [x] [Self-test group](08-selftest-group.md) — after 06, 07
 
 ### Wave 6
 - [ ] [Final verification](10-final-verification.md) — after 08
@@ -162,6 +162,7 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - 03 · 415c67bf · diff read; typecheck and lint pass · concerns: the send gate's consumer.track has no consumer-disposed test, unlike the new section's; the single archivedIdsOrNone read has no test; isResumable reads archived ids from a snapshot at the top of the call and held and open rows live
 - 07 · 94e631e5 · diff read; typecheck and lint pass · concerns: a crash's partial tail has no newline, so the next start's first append joins it and that line is lost; isSessionLogEntry checks only event, so a known event with a missing field makes recentlyClosed throw; contracts/plugin.ts:786 says the app may exit before dispose settles, so the last appends before a quit may be lost; the terminal row map lives only as long as the part
 - 06 · 53c8025f · diff read; typecheck and lint pass · concerns: chat's ARCHIVE_STEPS at selftest-script.ts:641 use relative moves from the Session step's start, which a live section in a self-test folder can shift; x on a section row logs the first-message title, not closed.title; Folder step rows show only the folder base, so two folders with one base look alike; a cancelled sign-in from a section row logs no session started
+- 08 · cdc253fd · diff read; typecheck and lint pass; the group's own run is in task 10 · concerns: step 1 waits on a line the launch reply logs, which may log before the step begins waiting; task 10's run settles it
 ### Contract changes
 - pickerHeading input: inline { title: string } → named PickerHeadingInput, with PickerHeadingKit = BaseKit · why: the file names each part's input · consumers: none need a change · group 05
 ### Rulings

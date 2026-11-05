@@ -1,6 +1,6 @@
 # 08 — Self-test group
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -28,3 +28,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit cdc253fd · proof: diff read; typecheck and lint pass; the group's own run is in task 10 · concerns: step 1 waits on a line the launch reply logs, which may log before the step begins waiting; task 10's run settles it

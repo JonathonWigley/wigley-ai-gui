@@ -24,8 +24,8 @@ type SessionLogApi = MainApi<
 
 // Writes one log line for each lifecycle event, gives chat the Recently closed
 // section over the log, which reads the file and `recentlyClosedCount` at each
-// ask, and hands the self-test its script. A quit writes no close: this part stops before chat, and chat's stop
-// closes nothing.
+// ask, and hands the self-test its script. A quit writes no close: this part
+// stops before chat, and chat's stop closes nothing.
 export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
   manifest: sessionLogManifest,
   start(api: SessionLogApi) {

@@ -22,13 +22,9 @@ const GROUPS: SelfTestGroup[] = [
     why: 'A closed session lists at the top of the start prompt, and a pick reopens it.',
     steps: [
       {
-        keys: [],
-        expect: `[chat] result entry added in ${SELFTEST_PROJECT_NAME}`,
-        why: 'The turn has ended, so Cmd+W does not ask.',
-      },
-      {
         keys: ['<D-w>'],
         expect: `[chat] session closed: ${SELFTEST_PROJECT_NAME}`,
+        why: '`open` waited for the idle line, so the turn has ended and Cmd+W does not ask.',
       },
       {
         keys: [' ', 'k', 'n'],
@@ -48,7 +44,9 @@ const GROUPS: SelfTestGroup[] = [
 
 // Each run closes the sessions an earlier run left in the project folder, since
 // `open` runs on each page load, launches a chat session there with a plain
-// first message, and activates its row so that a pane shows its Chat tab.
+// first message, and activates its row so that a pane shows its Chat tab. The
+// fake ends that turn before the row activates, so the page logs its idle line
+// around the shown line, before any step began waiting.
 export function sessionLogSelfTestScript(
   deps: SessionLogSelfTestDeps,
 ): SelfTestScript {
@@ -84,6 +82,7 @@ export function sessionLogSelfTestScript(
       });
       return {
         shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,
+        alsoShown: [/^\[chat\] session-log-selftest is idle$/],
         result,
       };
     },
