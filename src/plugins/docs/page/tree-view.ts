@@ -61,8 +61,8 @@ export interface TreeViewDeps {
   switchView(): void;
   // Pushes `docs.box` while the filter box is open.
   pushBoxScope(): PushedScope;
-  // Runs once an accepted or cancelled filter box has closed and focus is
-  // back on the tree.
+  // Runs once an accepted or cancelled filter box, or one holding focus through
+  // `showView`, has closed and focus is back on the tree.
   filterClosed(): void;
   anchor: DocsAnchor;
   // The node's status mark and detail, as the plugin-source statuses read now.
@@ -121,8 +121,9 @@ export interface TreeView {
     filterTree: TreeNode[],
     hasIndex: boolean,
   ): void;
-  // Closes the filter box, keeping its filter, as `dismissFilter` does, then
-  // draws `view`.
+  // Closes the filter box, keeping its filter, then draws `view`. A box holding
+  // focus returns it to the tree and hears `filterClosed`; any other switch
+  // moves no focus.
   showView(view: SidebarView): void;
   shownView(): SidebarView;
   down(): void;
@@ -591,7 +592,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       }
     },
     showView(next) {
-      view.dismissFilter();
+      if (filterScope !== null) {
+        closeFilter(document.activeElement === filterBox);
+      }
       shownView = next;
       drawSwitch();
       draw();

@@ -108,11 +108,13 @@ function wikiSetUp(overrides: { hasWiki?: boolean } = {}) {
   const { parts } = fakeDocsParts(() => withUser(defaultLayout, rowLayout));
   const openWikiLink = vi.fn();
   const switchView = vi.fn();
+  const filterClosed = vi.fn();
   const tree = createTreeView({
     ...treeDeps(parts),
     hasWiki: true,
     openWikiLink,
     switchView,
+    filterClosed,
     anchor: (element, command) => {
       commands.set(element, command);
       return { dispose: () => undefined };
@@ -127,6 +129,7 @@ function wikiSetUp(overrides: { hasWiki?: boolean } = {}) {
     commands,
     openWikiLink,
     switchView,
+    filterClosed,
     titles: () => findAll(root, 'test-row').map((row) => row.textContent),
     selected: () => findAll(root, 'is-selected').map((row) => row.textContent),
     type: (filter: string) => {
@@ -260,6 +263,28 @@ describe('createTreeView', () => {
     tree.showView('all');
     expect(titles()).toEqual(['Mine', 'alpha']);
   });
+
+  it.each([
+    { name: 'BoxHoldsFocus', isFocusElsewhere: false, closedCalls: 1 },
+    { name: 'FocusElsewhere', isFocusElsewhere: true, closedCalls: 0 },
+  ])(
+    'showView_FilterOpen_FocusEndsOnThePaneOnlyFromTheBox_$name',
+    ({ isFocusElsewhere, closedCalls }) => {
+      const { tree, filterClosed, type } = wikiSetUp();
+      type('alpha');
+      const elsewhere = document.createElement('button');
+      if (isFocusElsewhere) {
+        elsewhere.focus();
+      }
+
+      tree.showView('all');
+
+      expect(document.activeElement).toBe(
+        isFocusElsewhere ? elsewhere : tree.element,
+      );
+      expect(filterClosed).toHaveBeenCalledTimes(closedCalls);
+    },
+  );
 
   it('wikiFilter_DocOutsideMain_ShowsUnderItsGroups', () => {
     const { tree, titles, type } = wikiSetUp();

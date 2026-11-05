@@ -400,8 +400,9 @@
 }
 
 /* The right column hides before the article gives up width: the article's
-   `76ch` measure at `text-prose`, the `space-6` gap and the default column. */
-@container docs-doc (width < 920px) {
+   `76ch` measure at `text-prose` (670px), the `space-6` gap (24px), the default
+   column (240px) and a scrollbar (15px). */
+@container docs-doc (width < 950px) {
   .docs-aside {
     display: none;
   }

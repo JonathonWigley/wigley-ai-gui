@@ -178,7 +178,7 @@ means something.
   dialogs and the composer. One radius on everything flattens the hierarchy.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
-- **Breakpoints** (raw in `@media` and `@container`): `920px` on the `docs-doc` container hides the docs page's right
+- **Breakpoints** (raw in `@media` and `@container`): `950px` on the `docs-doc` container hides the docs page's right
   column; `800px` tightens content padding; `680px` lays the side bar
   over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
