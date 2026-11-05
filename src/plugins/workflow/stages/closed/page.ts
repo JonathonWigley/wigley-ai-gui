@@ -15,14 +15,12 @@ export const closedPageStage: PageStage = {
     {
       command: 'retro',
       label: 'Retro',
-      side: 'main',
       available: () => true,
       enabled: (flow) => !isBusy(flow),
     },
     {
       command: 'dismiss',
       label: 'Dismiss',
-      side: 'main',
       keyOnly: true,
       available: () => true,
       enabled: () => true,

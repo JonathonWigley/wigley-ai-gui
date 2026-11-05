@@ -135,9 +135,15 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   // Its root and parts share the plan reader and stages; main uses `node:path`.
+  // Heavy's page workflow in `stages` reads the page's countdown and preview samples.
   workflow: {
     root: { layers: WORKFLOW_SUBLAYERS },
-    contract: { layers: ['src/plugins/workflow/plan-reader.ts'] },
+    contract: {
+      layers: [
+        'src/plugins/workflow/plan-reader.ts',
+        'src/plugins/workflow/layouts',
+      ],
+    },
     main: { layers: WORKFLOW_SUBLAYERS, packages: ['node:'] },
     page: { layers: WORKFLOW_SUBLAYERS },
     sublayers: {
@@ -148,6 +154,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/workflow',
           'src/plugins/workflow/contract.ts',
           'src/plugins/workflow/plan-reader.ts',
+          'src/plugins/workflow/page',
         ],
         packages: [],
       },

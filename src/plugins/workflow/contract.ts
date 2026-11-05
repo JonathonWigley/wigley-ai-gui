@@ -2,8 +2,34 @@
 // channel between its main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  PageApi,
+  PluginManifest,
+} from '../../contracts/plugin';
 import type { RowActivity } from '../sessions/contract';
+import type {
+  ChipInput,
+  CompleteLayout,
+  SidePaneInput,
+  StripInput,
+} from './layouts/layout';
+
+export type {
+  ActionInput,
+  ChipInput,
+  CompleteLayout,
+  Layout,
+  MarkState,
+  SideGroupInput,
+  SideItemInput,
+  SidePaneInput,
+  StepInput,
+  StripInput,
+  WorkflowKit,
+  WorkflowPart,
+} from './layouts/layout';
 
 // A registered workflow's id. Each workflow names its own.
 export type WorkflowId = string;
@@ -141,14 +167,10 @@ export function statusLine(stage: PageStage, flow: SessionFlow): string {
 }
 
 export interface StageActionSpec {
-  // The workflow command id it runs, without the 'workflow.' prefix:
-  // 'clearAndMake'.
+  // The owner plugin's short command id: 'clearAndMake'.
   command: string;
   // The button's text: 'Clear & make'.
   label: string;
-  // 'page': the page runs it (openPlan); 'main': through
-  // runAction.
-  side: 'page' | 'main';
   // Runs from its own `<Leader>w` key only: no button, and never the main action.
   keyOnly?: true;
   // Whether the action shows for this flow, beyond the stage match: Resume
@@ -169,8 +191,8 @@ export interface PageStage {
   // in, otherwise the slot's last by order ('start': primer, explore; 'make':
   // planReady, make).
   stepSlot?: string;
-  // Equal to the main half's order (page-stages.test.ts pins it); the stepper
-  // sorts on it.
+  // Equal to the main half's order (page-stages.test.ts pins it); addWorkflow
+  // sorts the workflow's stages on it, for the stepper.
   order: number;
   // Actions in order, the main action first. `ww` and the main action's button
   // run the first available one that is not `keyOnly`; when that one is
@@ -185,7 +207,7 @@ export interface PageStage {
   // stepper's current step, its separator included: ' 3/9', ' · round 2',
   // ' · cycle 1', ' · 9/9'. Left out, nothing follows.
   statusProgress?(flow: SessionFlow): string;
-  // True when the current wave's open tasks draw the stage's status; left out,
+  // True when the current group's open items draw the stage's status; left out,
   // they draw `pending`.
   runsTasks?: boolean;
   // What the session's row says while the stage waits on the user and the flow
@@ -270,8 +292,112 @@ export const workflowMainKey: DependencyKey<
   'workflow'
 > = { id: 'workflow', process: 'main' };
 
+export interface ChecklistGroup {
+  title: string;
+  items: readonly ChecklistItem[];
+}
+
+// What the side pane's checklist reads; the engine takes `checked` and `total` as
+// given.
+export interface ChecklistView {
+  title: string;
+  checked: number;
+  total: number;
+  groups: readonly ChecklistGroup[];
+}
+
+// The checklist of a workflow with no `checklist` of its own: one `Tasks` group
+// from `flow.checklist`; null while that is null.
+export function defaultChecklist(flow: SessionFlow): ChecklistView | null {
+  const items = flow.checklist;
+  if (items === null) {
+    return null;
+  }
+  return {
+    title: '',
+    checked: items.filter((item) => item.done).length,
+    total: items.length,
+    groups: items.length === 0 ? [] : [{ title: 'Tasks', items }],
+  };
+}
+
+// A drawn part. `dispose` removes the element and disposes every anchor the part
+// named.
+export interface Drawn {
+  element: HTMLElement;
+  dispose(): void;
+}
+
+// Runs a command of the drawing plugin, by its short id, for the session the part
+// draws.
+export type RunCommand = (command: string) => void;
+
+// One workflow plugin's parts: each draws into `parent` with the plugin's layouts
+// as last shown, falling back to its `default` on a throw. No part takes a key
+// scope. `sideTitle` is the title of the workflow's side part.
+export interface WorkflowDraw {
+  sideTitle: string;
+  chip(parent: HTMLElement, input: ChipInput, run: RunCommand): Drawn;
+  strip(parent: HTMLElement, input: StripInput, run: RunCommand): Drawn;
+  sidePane(parent: HTMLElement, input: SidePaneInput, run: RunCommand): Drawn;
+}
+
+// A workflow's page half.
+export interface PageWorkflow {
+  id: WorkflowId;
+  // Its word: 'Light'.
+  label: string;
+  // Its letter on the session row: 'L'.
+  badge: string;
+  stages: readonly PageStage[];
+  // From `createWorkflowDraw`, called with the plugin's own api.
+  draw: WorkflowDraw;
+  // Left out: `defaultChecklist`.
+  checklist?(flow: SessionFlow): ChecklistView | null;
+  // Runs one of its stages' action commands; a reject is logged and toasted.
+  runAction(
+    sessionId: string,
+    command: string,
+    flow: SessionFlow,
+  ): Promise<void>;
+  // The countdown's text, null while none runs; the chip and strip tick while it
+  // is not null.
+  countdownText?(flow: SessionFlow, now: number): string | null;
+  // What the log's `<name> progress <text>` line reads; null logs none.
+  progressText?(flow: SessionFlow): string | null;
+  // Whether the strip counts a checklist. Left out: `checklist(flow) !== null`.
+  hasPlan?(flow: SessionFlow): boolean;
+  // Its samples for the layout preview, each run per preview step.
+  previewFlows?(sessionId: string, now: number): readonly SessionFlow[];
+}
+
+// The part of a plugin's page api `createWorkflowDraw` shows its layouts through.
+export type PagePluginApi = Pick<
+  PageApi<PluginManifest, ChannelShape>,
+  'layouts'
+>;
+
+// `manifest` names the owner of the plugin's layouts and its commands' key hints;
+// `userLayout` reads the plugin's `layout` setting.
+export interface WorkflowDrawOptions {
+  manifest: Pick<PluginManifest, 'id' | 'commands'>;
+  defaultLayout: CompleteLayout;
+  defaultStylesheet: string;
+  userLayout(): string;
+  sideTitle: string;
+}
+
+// `addWorkflow` throws on an id already added. `createWorkflowDraw` shows the
+// plugin's layouts through its `api`, which owns the show's life. `runCommand` runs
+// a command for a session through the flow's workflow, logging when there is
+// nothing to run.
 export interface WorkflowPageExports {
-  addStage(stage: PageStage): Disposable;
+  addWorkflow(workflow: PageWorkflow): Disposable;
+  createWorkflowDraw(
+    api: PagePluginApi,
+    options: WorkflowDrawOptions,
+  ): WorkflowDraw;
+  runCommand(sessionId: string, command: string): Promise<void>;
 }
 
 export const workflowPageKey: DependencyKey<
@@ -291,8 +417,8 @@ export interface WorkflowChannel extends ChannelShape {
   invoke: {
     // Every flow main holds, once main has read flows.json.
     flows(): Promise<SessionFlow[]>;
-    // Runs a main-side command (a StageActionSpec.command with side 'main')
-    // on the session's flow; rejects with main's error text.
+    // Runs a main-side command (a StageActionSpec.command) on the session's flow;
+    // rejects with main's error text.
     runAction(request: WorkflowActionRequest): Promise<void>;
   };
   messages: {

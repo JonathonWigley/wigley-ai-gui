@@ -6,7 +6,6 @@ import { heavyStateOf } from './heavy-contract';
 export const OPEN_PLAN_ACTION: StageActionSpec = {
   command: 'openPlan',
   label: 'Open plan',
-  side: 'page',
   keyOnly: true,
   available: (flow) => heavyStateOf(flow).planDir !== null,
   enabled: () => true,
@@ -15,7 +14,6 @@ export const OPEN_PLAN_ACTION: StageActionSpec = {
 export const RESUME_MAKE_ACTION: StageActionSpec = {
   command: 'resumeMake',
   label: 'Resume make',
-  side: 'main',
   keyOnly: true,
   available(flow) {
     const { progress } = heavyStateOf(flow);

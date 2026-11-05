@@ -17,21 +17,18 @@ export const planReadyPageStage: PageStage = {
     {
       command: 'cancelCountdown',
       label: 'Cancel',
-      side: 'main',
       available: (flow) => heavyStateOf(flow).countdownEndsAt !== null,
       enabled: () => true,
     },
     {
       command: 'clearAndMake',
       label: 'Clear & make',
-      side: 'main',
       available: () => true,
       enabled: (flow) => !isBusy(flow),
     },
     {
       command: 'makeInNewSession',
       label: 'Make in new session',
-      side: 'main',
       available: () => true,
       enabled: () => true,
     },

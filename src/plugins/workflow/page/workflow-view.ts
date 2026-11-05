@@ -1,11 +1,10 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
-import type { Paths } from '../../../contracts/paths';
-import type { ShownLayouts, ToastTone } from '../../../contracts/plugin';
+import type { ToastTone } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
-import type { OwnerKitServices } from '../../../shared/page/layout-host/base-kit';
+import { tag } from '../../../shared/page/ui/tag';
 import type {
   ChatComposerPart,
   ChatSidePart,
@@ -13,90 +12,78 @@ import type {
 } from '../../chat/contract';
 import type { RowActivity, SessionPart } from '../../sessions/contract';
 import {
+  type ActionInput,
+  type ChecklistGroup,
+  type ChecklistView,
+  type ChipInput,
+  defaultChecklist,
+  type Drawn,
   IDLE_STAGE,
+  type MarkState,
   type PageStage,
+  type PageWorkflow,
+  type RunCommand,
   type SessionFlow,
+  type SideGroupInput,
+  type SidePaneInput,
   shownRowActivity,
   type StageActionSpec,
   type StageStatus,
   statusLine,
   statusText,
-  type WorkflowActionRequest,
+  type StepInput,
+  type StripInput,
+  type WorkflowId,
 } from '../contract';
-import type {
-  ActionInput,
-  ChipInput,
-  Layout,
-  MarkState,
-  SidePaneInput,
-  SideWaveInput,
-  StepInput,
-  StripInput,
-} from '../layouts/layout';
-import type { PlanProgress } from '../plan-reader';
-import { heavyStateOf } from '../stages/heavy-contract';
-import { countdownText } from './countdown';
 import {
   MAIN_ACTION,
   SIDE_LIST_CLASS,
   TOGGLE_FINISHED_WAVES,
 } from './layout/workflow-kit';
-import {
-  createWorkflowParts,
-  type Drawn,
-  type RunCommand,
-} from './layout/workflow-parts';
 
-// The registered page halves of the stages, in stage order.
-export interface PageStages {
-  all(): readonly PageStage[];
-}
-
-// `flowOf` is the flow a session draws (the preview's sample while it shows,
-// else the pushed flow or a new idle one); `nameOf` names the session in the
-// log; `isPreview` is whether the session shows the preview, which runs
-// nothing. `setRowActivity` sets what the session's row says for its stage, null
-// for nothing. The rest run the actions: `openDoc` the page one, `runAction`
-// main's.
+// `workflows` holds each workflow's page half, its stages in stage order. `flowOf`
+// is the flow a session draws (the preview's sample while it shows, else the
+// pushed flow or a new one); `nameOf` names the session in the log; `isPreview` is
+// whether the session shows the preview, which runs nothing. `setRowActivity` sets
+// what the session's row says for its stage, null for nothing.
 export interface WorkflowViewDeps {
-  kit: OwnerKitServices;
   log: PluginLog;
   clock: Clock;
   timers: Timers;
   toast(text: string, tone: ToastTone): void;
-  paths: Pick<Paths, 'join'>;
-  stages: PageStages;
+  workflows: { all(): readonly PageWorkflow[] };
   flowOf(sessionId: string): SessionFlow;
   nameOf(sessionId: string): string;
   isPreview(sessionId: string): boolean;
   setRowActivity(sessionId: string, activity: RowActivity | null): void;
-  openDoc(path: string): void;
-  runAction(request: WorkflowActionRequest): Promise<void>;
 }
 
 // `chipPart` draws a session's chip under its row, `stripPart` its strip above
-// its Chat composer, and `sidePart` its side pane in the session hub's Plan
-// section. Every held part draws again on `setFlow` for its session, on
-// `setLayouts` and on `redraw`, and each second while it shows a countdown, the
-// side pane aside. `setFlow`, and `redraw` for each session with a chip, also
-// set the session's row activity. Each side pane draw sets the section's summary:
-// `<checked>/<total>` while it draws a plan with boxes, else null. The side
-// pane's list keeps its scroll across those draws, and while the pane has no
-// layout box. `setFlow` also logs the session's stage, progress and countdown
-// when each changes; `forget` drops what it logged for a session that left and
-// its finished waves' fold. `setSidePaneHidden` shows or hides the side pane in
-// every session, and `toggleFinishedWaves` opens or folds one session's finished
-// waves, logging `nothing to run` and changing nothing while the pane would draw
-// no fold. `mainAction` is the spec the main action runs, and `runFor` the one
-// path that runs a workflow command for a session; only `toggleFinishedWaves`
-// runs in the preview.
+// its Chat composer, each through the `draw` of the flow's workflow, and
+// `sidePartFor` makes one workflow's section of the session hub, which draws a
+// session's side pane only while its flow is of that workflow. A flow with no
+// workflow draws nothing, but for the chip's `No workflow` tag after a missed
+// level; a workflow or stage with no page half does the same and logs its name
+// once. Every held part draws again on `setFlow` for its session and on `redraw`,
+// and each second while it shows a countdown, the side pane aside. `setFlow`, and
+// `redraw` for each session with a chip, also set the session's row activity. Each
+// side pane draw sets the section's summary: `<checked>/<total>` while it draws a
+// checklist with items, else null. The side pane's list keeps its scroll across
+// those draws, and while the pane has no layout box. `setFlow` also logs the
+// session's stage, progress and countdown when each changes; `forget` drops what
+// it logged for a session that left and its finished groups' fold.
+// `setSidePaneHidden` shows or hides the side pane in every session, and
+// `toggleFinishedWaves` opens or folds one session's finished groups, logging
+// `nothing to run` and changing nothing while the pane would draw no fold.
+// `mainAction` is the spec the main action runs, and `runFor` the one path that
+// runs a workflow command for a session, through the flow's `runAction`; only
+// `toggleFinishedWaves` runs in the preview.
 export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
-  sidePart: ChatSidePart;
+  sidePartFor(workflow: PageWorkflow): ChatSidePart;
   setFlow(flow: SessionFlow): void;
   forget(sessionId: string): void;
-  setLayouts(shown: ShownLayouts<Layout>): void;
   redraw(): void;
   setSidePaneHidden(hidden: boolean): void;
   toggleFinishedWaves(sessionId: string): void;
@@ -107,13 +94,14 @@ export interface WorkflowView {
 type PartKind = 'chip' | 'strip' | 'sidePane';
 
 // One wrapper a part was built into, and what it drew there last. A side pane
-// also holds its section, the scroll its list last reported in a `scroll` event
-// with a layout box, and the observer that hands it back when the wrapper gets a
-// box again.
+// also holds the workflow it draws for, its section, the scroll its list last
+// reported in a `scroll` event with a layout box, and the observer that hands it
+// back when the wrapper gets a box again.
 interface HeldPart {
   kind: PartKind;
   sessionId: string;
   wrapper: HTMLElement;
+  sideWorkflow: WorkflowId | null;
   section: ChatSideSection | null;
   drawn: Drawn | null;
   showsCountdown: boolean;
@@ -121,15 +109,9 @@ interface HeldPart {
   paneBox: ResizeObserver | null;
 }
 
-// The boxes of one wave of the plan, or of its `Tasks` group.
-interface PlanWave {
-  title: string;
-  tasks: readonly { text: string; done: boolean }[];
-}
-
 const TICK_MS = 1000;
-const PLAN_FILE = 'plan.md';
-const TASKS_GROUP_TITLE = 'Tasks';
+const SIDE_PART_ORDER = 20;
+const NO_WORKFLOW_TEXT = 'No workflow';
 const PENDING: MarkState = 'pending';
 
 // Each wrapper outlives none of its builds: a row redraw or a composer draw
@@ -139,37 +121,59 @@ const PENDING: MarkState = 'pending';
 // while any does.
 export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const { log, clock, timers } = deps;
-  const parts = createWorkflowParts({ kit: deps.kit, log, clock });
   const held = new Set<HeldPart>();
   const loggedStages = new Map<string, string>();
   const loggedProgress = new Map<string, string>();
   const countdownShown = new Set<string>();
+  const missingWorkflowsLogged = new Set<string>();
   const missingStagesLogged = new Set<string>();
   const finishedOpen = new Set<string>();
   let isSidePaneHidden = false;
   let pendingTick: number | null = null;
 
-  // The page half that draws `flow`: its stage's, or idle's for a stage no
-  // page half is registered for.
-  const pageStageOf = (flow: SessionFlow): PageStage => {
-    const stages = deps.stages.all();
-    const stage = stages.find((each) => each.id === flow.stage);
+  // The workflow that draws `flow`; null for a flow of none, or of one no plugin
+  // holds.
+  const pageWorkflowOf = (flow: SessionFlow): PageWorkflow | null => {
+    if (flow.workflow === null) {
+      return null;
+    }
+    const workflow = deps.workflows
+      .all()
+      .find((each) => each.id === flow.workflow);
+    if (workflow !== undefined) {
+      return workflow;
+    }
+    logOnce(
+      missingWorkflowsLogged,
+      flow.workflow,
+      `no page workflow ${flow.workflow}`,
+      log,
+    );
+    return null;
+  };
+
+  // The page half of `flow`'s stage in its workflow; null when pageWorkflowOf is,
+  // or the workflow has no such stage.
+  const pageStageOf = (flow: SessionFlow): PageStage | null => {
+    const workflow = pageWorkflowOf(flow);
+    if (workflow === null) {
+      return null;
+    }
+    const stage = workflow.stages.find((each) => each.id === flow.stage);
     if (stage !== undefined) {
       return stage;
     }
-    if (!missingStagesLogged.has(flow.stage)) {
-      missingStagesLogged.add(flow.stage);
-      log(`no page stage ${flow.stage}`);
-    }
-    const idle = stages.find((each) => each.id === IDLE_STAGE);
-    if (idle === undefined) {
-      throw new Error(`no page stage ${IDLE_STAGE}`);
-    }
-    return idle;
+    logOnce(
+      missingStagesLogged,
+      flow.stage,
+      `no page stage ${flow.stage}`,
+      log,
+    );
+    return null;
   };
 
   const availableActions = (flow: SessionFlow) =>
-    pageStageOf(flow).actions.filter((spec) => spec.available(flow));
+    (pageStageOf(flow)?.actions ?? []).filter((spec) => spec.available(flow));
 
   const buttonActions = (flow: SessionFlow) =>
     availableActions(flow).filter((spec) => spec.keyOnly !== true);
@@ -186,11 +190,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     }));
 
   const steps = (
+    workflow: PageWorkflow,
     stage: PageStage,
     flow: SessionFlow,
     status: StageStatus | null,
   ): StepInput[] => {
-    const shown = stepperStages(deps.stages.all(), stage);
+    const shown = stepperStages(workflow.stages, stage);
     const current = shown.indexOf(stage);
     return shown.map((step, index) => ({
       id: step.id,
@@ -200,17 +205,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     }));
   };
 
-  const countdown = (flow: SessionFlow): string | null => {
-    const { countdownEndsAt } = heavyStateOf(flow);
-    return countdownEndsAt === null
-      ? null
-      : countdownText(countdownEndsAt, clock.now());
-  };
+  const countdown = (flow: SessionFlow): string | null =>
+    pageWorkflowOf(flow)?.countdownText?.(flow, clock.now()) ?? null;
 
-  const chipInput = (flow: SessionFlow): ChipInput => {
-    const stage = pageStageOf(flow);
+  const chipInput = (
+    workflow: PageWorkflow,
+    stage: PageStage,
+    flow: SessionFlow,
+  ): ChipInput => {
     const status = stage.status(flow);
     return {
+      badge: workflow.badge,
+      workflowLabel: workflow.label,
       stage: stage.id,
       label: stage.label,
       status,
@@ -222,14 +228,19 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     };
   };
 
-  const showRowActivity = (flow: SessionFlow) =>
+  const showRowActivity = (flow: SessionFlow) => {
+    const stage = pageStageOf(flow);
     deps.setRowActivity(
       flow.sessionId,
-      shownRowActivity(pageStageOf(flow), flow),
+      stage === null ? null : shownRowActivity(stage, flow),
     );
+  };
 
-  const stripInput = (flow: SessionFlow): StripInput => {
-    const stage = pageStageOf(flow);
+  const stripInput = (
+    workflow: PageWorkflow,
+    stage: PageStage,
+    flow: SessionFlow,
+  ): StripInput => {
     const status = stage.status(flow);
     return {
       stage: stage.id,
@@ -239,30 +250,40 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       statusLine: statusLine(stage, flow),
       detail: stage.detail(flow),
       countdown: countdown(flow),
-      steps: steps(stage, flow, status),
+      steps: steps(workflow, stage, flow, status),
       actions: actionInputs(flow),
-      hasPlan: heavyStateOf(flow).progress !== null,
+      hasChecklist:
+        workflow.hasPlan?.(flow) ?? checklistOf(workflow, flow) !== null,
     };
   };
 
-  // What the side pane draws for `flow`; null while it draws nothing: idle, no
-  // plan read, or hidden.
+  // What the side pane draws for `flow`; null while it draws nothing: no stage,
+  // idle, no checklist, or hidden.
   const sidePaneInput = (flow: SessionFlow): SidePaneInput | null => {
+    const workflow = pageWorkflowOf(flow);
     const stage = pageStageOf(flow);
-    const { progress } = heavyStateOf(flow);
-    if (stage.id === IDLE_STAGE || progress === null || isSidePaneHidden) {
+    if (
+      workflow === null ||
+      stage === null ||
+      stage.id === IDLE_STAGE ||
+      isSidePaneHidden
+    ) {
       return null;
     }
-    const openTaskState = stage.runsTasks
+    const checklist = checklistOf(workflow, flow);
+    if (checklist === null) {
+      return null;
+    }
+    const openItemState = stage.runsTasks
       ? (stage.status(flow) ?? PENDING)
       : PENDING;
     return {
-      ...stripInput(flow),
-      planTitle: progress.title,
-      checked: progress.checked,
-      total: progress.total,
+      ...stripInput(workflow, stage, flow),
+      checklistTitle: checklist.title,
+      checked: checklist.checked,
+      total: checklist.total,
       finishedOpen: finishedOpen.has(flow.sessionId),
-      ...groupedWaves(progress, openTaskState),
+      ...partitionedGroups(checklist.groups, openItemState),
     };
   };
 
@@ -275,31 +296,40 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   // returns whether a countdown shows there.
   const drawPart = (part: HeldPart): boolean => {
     const flow = deps.flowOf(part.sessionId);
+    const workflow = pageWorkflowOf(flow);
+    const stage = pageStageOf(flow);
     const run = runCommand(part.sessionId);
+    const drawsStage =
+      workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
     switch (part.kind) {
       case 'chip': {
-        const input = chipInput(flow);
-        if (input.stage === IDLE_STAGE) {
+        if (flow.workflow === null && flow.missedLevel) {
+          part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
           return false;
         }
-        part.drawn = parts.chip(part.wrapper, input, run);
+        if (!drawsStage) {
+          return false;
+        }
+        const input = chipInput(workflow, stage, flow);
+        part.drawn = workflow.draw.chip(part.wrapper, input, run);
         return input.countdown !== null;
       }
       case 'strip': {
-        const input = stripInput(flow);
-        if (input.stage === IDLE_STAGE) {
+        if (!drawsStage) {
           return false;
         }
-        part.drawn = parts.strip(part.wrapper, input, run);
+        const input = stripInput(workflow, stage, flow);
+        part.drawn = workflow.draw.strip(part.wrapper, input, run);
         return input.countdown !== null;
       }
       case 'sidePane': {
-        const input = sidePaneInput(flow);
+        const input =
+          part.sideWorkflow === flow.workflow ? sidePaneInput(flow) : null;
         part.section?.setSummary(sidePaneSummary(input));
-        if (input === null) {
+        if (workflow === null || input === null) {
           return false;
         }
-        part.drawn = parts.sidePane(part.wrapper, input, run);
+        part.drawn = workflow.draw.sidePane(part.wrapper, input, run);
         // The default pane draws no countdown, so the tick leaves it.
         return false;
       }
@@ -381,13 +411,14 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     kind: PartKind,
     wrapper: HTMLElement,
     sessionId: string,
-    section: ChatSideSection | null,
+    side: { workflow: WorkflowId; section: ChatSideSection } | null,
   ): Disposable => {
     const part: HeldPart = {
       kind,
       sessionId,
       wrapper,
-      section,
+      sideWorkflow: side?.workflow ?? null,
+      section: side?.section ?? null,
       drawn: null,
       showsCountdown: false,
       listScroll: 0,
@@ -417,44 +448,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedStages.set(flow.sessionId, flow.stage);
       log(`${name} shows ${flow.stage}`);
     }
-    const heavy = heavyStateOf(flow);
-    if (heavy.progress !== null) {
-      const progress = progressText(heavy.progress);
-      if (loggedProgress.get(flow.sessionId) !== progress) {
-        loggedProgress.set(flow.sessionId, progress);
-        log(`${name} progress ${progress}`);
-      }
+    const progress = pageWorkflowOf(flow)?.progressText?.(flow) ?? null;
+    if (progress !== null && loggedProgress.get(flow.sessionId) !== progress) {
+      loggedProgress.set(flow.sessionId, progress);
+      log(`${name} progress ${progress}`);
     }
-    const hasCountdown = heavy.countdownEndsAt !== null;
+    const hasCountdown = countdown(flow) !== null;
     if (hasCountdown && !countdownShown.has(flow.sessionId)) {
       countdownShown.add(flow.sessionId);
       log(`countdown shown in ${name}`);
     } else if (!hasCountdown && countdownShown.has(flow.sessionId)) {
       countdownShown.delete(flow.sessionId);
       log(`countdown stopped in ${name}`);
-    }
-  };
-
-  const runSpec = async (
-    sessionId: string,
-    flow: SessionFlow,
-    spec: StageActionSpec,
-  ): Promise<void> => {
-    if (spec.side === 'main') {
-      await deps.runAction({ sessionId, command: spec.command });
-      return;
-    }
-    switch (spec.command) {
-      case 'openPlan': {
-        const { planDir } = heavyStateOf(flow);
-        if (planDir === null) {
-          throw new Error('the session has no plan');
-        }
-        deps.openDoc(deps.paths.join(planDir, PLAN_FILE));
-        return;
-      }
-      default:
-        throw new Error(`no page action ${spec.command}`);
     }
   };
 
@@ -467,13 +472,16 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       id: 'workflow.strip',
       build: (wrapper, sessionId) => hold('strip', wrapper, sessionId, null),
     },
-    sidePart: {
-      id: 'workflow.sidePane',
-      title: 'Plan',
-      order: 20,
+    sidePartFor: (workflow) => ({
+      id: `${workflow.id}.sidePane`,
+      title: workflow.draw.sideTitle,
+      order: SIDE_PART_ORDER,
       build: (wrapper, sessionId, section) =>
-        hold('sidePane', wrapper, sessionId, section),
-    },
+        hold('sidePane', wrapper, sessionId, {
+          workflow: workflow.id,
+          section,
+        }),
+    }),
     setFlow(flow) {
       try {
         logFlow(flow);
@@ -487,10 +495,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedProgress.delete(sessionId);
       countdownShown.delete(sessionId);
       finishedOpen.delete(sessionId);
-    },
-    setLayouts(shown) {
-      parts.setLayouts(shown);
-      drawAll();
     },
     redraw() {
       const rowSessions = new Set(
@@ -510,7 +514,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     toggleFinishedWaves(sessionId) {
       const name = deps.nameOf(sessionId);
       const input = sidePaneInput(deps.flowOf(sessionId));
-      const isFoldDrawn = input !== null && input.finishedWaves.length > 0;
+      const isFoldDrawn = input !== null && input.finishedGroups.length > 0;
       if (!isFoldDrawn) {
         log(`nothing to run for ${TOGGLE_FINISHED_WAVES} in ${name}`);
         return;
@@ -534,17 +538,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       }
       const flow = deps.flowOf(sessionId);
       const name = deps.nameOf(sessionId);
+      const workflow = pageWorkflowOf(flow);
       const spec =
         command === MAIN_ACTION
           ? mainAction(flow)
           : (availableActions(flow).find((each) => each.command === command) ??
             null);
-      if (spec === null || !spec.enabled(flow)) {
+      if (workflow === null || spec === null || !spec.enabled(flow)) {
         log(`nothing to run for ${command} in ${name}`);
         return;
       }
       try {
-        await runSpec(sessionId, flow, spec);
+        await workflow.runAction(sessionId, spec.command, flow);
       } catch (error) {
         log(`${spec.command} not run in ${name}: ${errorText(error)}`);
         deps.toast(`Workflow: ${errorText(error)}`, 'error');
@@ -609,64 +614,64 @@ function reapplyListScroll(part: HeldPart): void {
   }
 }
 
-// The Plan section's summary for what the pane draws: null while it draws nothing
-// or a plan with no boxes.
+// The side section's summary for what the pane draws: null while it draws nothing
+// or a checklist with no items.
 function sidePaneSummary(input: SidePaneInput | null): string | null {
   return input !== null && input.total > 0
     ? `${input.checked}/${input.total}`
     : null;
 }
 
-// `<checked>/<total>`, then ` wave <n>` while a wave is open and
-// ` review <r>` once a review round is logged.
-function progressText(progress: PlanProgress): string {
-  const wave = progress.wave === null ? '' : ` wave ${progress.wave}`;
-  const review =
-    progress.reviewRounds > 0 ? ` review ${progress.reviewRounds}` : '';
-  return `${progress.checked}/${progress.total}${wave}${review}`;
+function checklistOf(
+  workflow: PageWorkflow,
+  flow: SessionFlow,
+): ChecklistView | null {
+  return workflow.checklist === undefined
+    ? defaultChecklist(flow)
+    : workflow.checklist(flow);
 }
 
-// The plan's boxes grouped by the wave each sits under, in the order the
-// waves first appear; boxes under no wave heading are the `Tasks` group.
-function waves(progress: PlanProgress): PlanWave[] {
-  const groups = new Map<number | null, PlanWave['tasks'][number][]>();
-  for (const task of progress.tasks) {
-    const group = groups.get(task.wave) ?? [];
-    group.push({ text: task.text, done: task.done });
-    groups.set(task.wave, group);
-  }
-  return [...groups].map(([wave, tasks]) => ({
-    title: wave === null ? TASKS_GROUP_TITLE : `Wave ${wave}`,
-    tasks,
-  }));
-}
-
-// The plan's groups in file order: each with every task done is finished, the
-// first other is the current wave, whose open tasks show `openTaskState`, and
+// The checklist's groups in order: each with every item done is finished, the
+// first other is the current group, whose open items show `openItemState`, and
 // the rest are later.
-function groupedWaves(
-  progress: PlanProgress,
-  openTaskState: MarkState,
-): Pick<SidePaneInput, 'finishedWaves' | 'currentWave' | 'laterWaves'> {
-  const groups = waves(progress);
-  const isFinished = (wave: PlanWave) => wave.tasks.every((task) => task.done);
-  const [current, ...later] = groups.filter((wave) => !isFinished(wave));
+function partitionedGroups(
+  groups: readonly ChecklistGroup[],
+  openItemState: MarkState,
+): Pick<SidePaneInput, 'finishedGroups' | 'currentGroup' | 'laterGroups'> {
+  const isFinished = (group: ChecklistGroup) =>
+    group.items.every((item) => item.done);
+  const [current, ...later] = groups.filter((group) => !isFinished(group));
   return {
-    finishedWaves: groups
+    finishedGroups: groups
       .filter(isFinished)
-      .map((wave) => sideWave(wave, PENDING)),
-    currentWave:
-      current === undefined ? null : sideWave(current, openTaskState),
-    laterWaves: later.map((wave) => sideWave(wave, PENDING)),
+      .map((group) => sideGroup(group, PENDING)),
+    currentGroup:
+      current === undefined ? null : sideGroup(current, openItemState),
+    laterGroups: later.map((group) => sideGroup(group, PENDING)),
   };
 }
 
-function sideWave(wave: PlanWave, openTaskState: MarkState): SideWaveInput {
+function sideGroup(
+  group: ChecklistGroup,
+  openItemState: MarkState,
+): SideGroupInput {
   return {
-    title: wave.title,
-    tasks: wave.tasks.map((task) => ({
-      text: task.text,
-      state: task.done ? 'done' : openTaskState,
+    title: group.title,
+    items: group.items.map((item) => ({
+      text: item.text,
+      state: item.done ? 'done' : openItemState,
     })),
   };
+}
+
+function logOnce(
+  logged: Set<string>,
+  name: string,
+  line: string,
+  log: PluginLog,
+): void {
+  if (!logged.has(name)) {
+    logged.add(name);
+    log(line);
+  }
 }

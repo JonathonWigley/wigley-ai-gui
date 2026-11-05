@@ -14,20 +14,22 @@ import {
   sessionsPageKey,
 } from '../../sessions/contract';
 import type {
-  PageStage,
+  PageWorkflow,
   SessionFlow,
   WorkflowChannel,
+  WorkflowId,
   WorkflowPageExports,
 } from '../contract';
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
-import type { Layout } from '../layouts/layout';
 import { workflowManifest } from '../manifest';
-import { createStageList } from '../stage-list';
-import { BUILT_IN_PAGE_STAGES } from '../stages';
-import { readWorkflowLayout } from './layout/read-workflow-layout';
-import { createPreview } from './preview';
+import { heavyPageWorkflow } from '../stages/heavy-page-workflow';
+import {
+  createWorkflowDraw,
+  type WorkflowDrawDeps,
+} from './layout/workflow-draw';
+import { createPreview } from './preview-steps';
 import { createWorkflowView } from './workflow-view';
 
 type WorkflowApi = PageApi<
@@ -60,13 +62,14 @@ interface HeardSession {
 }
 
 // Draws each session's flow as a chip under its row, a strip above its Chat
-// composer and a side pane beside its transcript, through the
-// `workflow.layout` layout. Holds every flow main pushes, filled in by one
-// `flows` read, and the page halves of the stages, which `addStage` extends.
-// Each workflow command runs on the selected session; each button on the
-// session it draws. `toggleSidePane` shows or hides the pane in every session,
-// kept in `uiState`. `openPreview` steps chat's preview session through a
-// sample of every stage (`createPreview`).
+// composer and a side pane beside its transcript, through the `draw` of the
+// flow's workflow, each workflow plugin's over its own layouts. Holds every flow
+// main pushes, filled in by one `flows` read, and the page half of each workflow,
+// which `addWorkflow` extends; each workflow takes one side part. Each workflow
+// command runs on the selected session; each button on the session it draws.
+// `toggleSidePane` shows or hides the pane in every session, kept in `uiState`.
+// `openPreview` steps chat's preview session through every workflow's samples
+// (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -78,7 +81,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const keys = api.dependency(keysPageKey);
     const heard = new Map<string, HeardSession>();
     const flows = new Map<string, SessionFlow>();
-    const stages = createStageList<PageStage>();
+    const workflows = new Map<WorkflowId, PageWorkflow>();
 
     const nameOf = (sessionId: string) =>
       heard.get(sessionId)?.name ?? sessionId;
@@ -89,28 +92,16 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       newFlow(sessionId, heard.get(sessionId)?.projectDir ?? '');
 
     const view = createWorkflowView({
-      kit: {
-        markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          run: (id) => api.commands.run(id),
-        },
-        platform: api.platform,
-      },
       log: services.log,
       clock: services.clock,
       timers: services.timers,
       toast: (text, tone) => services.toast(text, tone),
-      paths: services.paths,
-      stages,
+      workflows: { all: () => [...workflows.values()] },
       flowOf,
       nameOf,
       isPreview,
       setRowActivity: (sessionId, activity) =>
         sessions.setActivity(sessionId, workflowManifest.id, activity),
-      openDoc: (path) => docs.openDoc(path),
-      runAction: (request) => api.channel.invoke('runAction', request),
     });
     view.setSidePaneHidden(services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true);
 
@@ -123,27 +114,72 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       showFlow: view.setFlow,
       closed: (sessionId) => view.setFlow(flowOf(sessionId)),
       clock: services.clock,
-      autoStartSeconds: () => api.settings().autoStartSeconds,
+      samples: (sessionId, now) =>
+        [...workflows.values()].flatMap(
+          (workflow) => workflow.previewFlows?.(sessionId, now) ?? [],
+        ),
       log: services.log,
     });
 
-    const addStage = (stage: PageStage): Disposable => {
-      const added = stages.add(stage);
+    const drawDeps: WorkflowDrawDeps = {
+      kit: {
+        markdown: services.markdown,
+        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        commands: {
+          exists: (id) => api.keys.command(id) !== undefined,
+          run: (id) => api.commands.run(id),
+        },
+        platform: api.platform,
+      },
+      log: services.log,
+      clock: services.clock,
+      redraw: () => view.redraw(),
+    };
+
+    // Holds a copy whose stages are in stage order; its dispose does nothing once
+    // the copy is gone.
+    const addWorkflow = (workflow: PageWorkflow): Disposable => {
+      if (workflows.has(workflow.id)) {
+        throw new Error(`${workflow.id} is already added`);
+      }
+      const added: PageWorkflow = {
+        ...workflow,
+        stages: [...workflow.stages].sort((a, b) => a.order - b.order),
+      };
+      workflows.set(added.id, added);
+      const sidePart = chat.addSidePart(view.sidePartFor(added));
       view.redraw();
       return {
         dispose() {
-          added.dispose();
+          if (workflows.get(added.id) !== added) {
+            return;
+          }
+          workflows.delete(added.id);
+          sidePart.dispose();
           view.redraw();
         },
       };
     };
-    for (const stage of BUILT_IN_PAGE_STAGES) {
-      addStage(stage);
-    }
 
     sessions.addRowPart(view.chipPart);
     chat.addComposerPart(view.stripPart);
-    chat.addSidePart(view.sidePart);
+
+    addWorkflow(
+      heavyPageWorkflow({
+        draw: createWorkflowDraw(drawDeps, api, {
+          manifest: workflowManifest,
+          defaultLayout,
+          defaultStylesheet,
+          userLayout: () => api.settings().layout,
+          sideTitle: 'Plan',
+        }),
+        runMainAction: (sessionId, command) =>
+          api.channel.invoke('runAction', { sessionId, command }),
+        openDoc: (path) => docs.openDoc(path),
+        join: (a, b) => services.paths.join(a, b),
+        autoStartSeconds: () => api.settings().autoStartSeconds,
+      }),
+    );
 
     api.events.on(
       'sessions.sessionAdded',
@@ -210,14 +246,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         changedSinceRead = null;
       });
 
-    api.layouts.show<Layout>({
-      defaultLayout,
-      defaultStylesheet,
-      read: readWorkflowLayout,
-      userLayout: () => api.settings().layout,
-      setLayouts: (shown) => view.setLayouts(shown),
-    });
-
     const runOnSelected = (command: SessionCommand) => () => {
       const sessionId = sessions.selectedSessionId();
       if (sessionId === null) {
@@ -248,7 +276,10 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         openPreview: () => preview.press(),
       },
       exports: (consumer): WorkflowPageExports => ({
-        addStage: (stage) => consumer.track(addStage(stage)),
+        addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
+        createWorkflowDraw: (pluginApi, options) =>
+          createWorkflowDraw(drawDeps, pluginApi, options),
+        runCommand: view.runFor,
       }),
     };
   },

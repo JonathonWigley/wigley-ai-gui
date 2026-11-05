@@ -1,5 +1,6 @@
 /* The workflow parts the kit draws: the stepper's trail of step words, the status
-   marks, the side pane's list and the fold over it, and the countdown. The default
+   marks, the side pane's list and the fold over it, the countdown and the level's
+   badge, whose colour the kit sets from the drawing plugin's token. The default
    layout's chip, strip and side pane are in its `layout.css`. */
 
 .workflow-stepper {
@@ -121,4 +122,8 @@
 .workflow-countdown {
   font-variant-numeric: tabular-nums;
   color: var(--wg-status-warning);
+}
+
+.workflow-badge {
+  color: var(--workflow-badge-color);
 }

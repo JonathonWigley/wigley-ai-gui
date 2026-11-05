@@ -206,7 +206,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Engine: workflows in main](01-engine-main.md)
+- [x] [Engine: workflows in main](01-engine-main.md)
 - [x] [Edit gate hook](09-edit-gate.md)
 
 ### Wave 2
@@ -242,11 +242,17 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 
 ### Groups
 - 09 · wigley-agents 70a4e4e · diff read against the spec; Produces all present (hook, install, level_skill_started, LEVEL_SKILLS, README); 14 unittest tests pass · concerns: argparse exits 2 on a hand-mistyped wired command; write_settings near-copies unity-pool's; /resume unchecked; Windows stop untested; tests go past the spec's tables
+- 01 · a5b319c0 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: TurnWork.worked survives cleared, so a sessionEnded right after a clear on a null workflow re-marks missedLevel; private isRecord copies in heavy-contract; check-layers still allows contract to import plan-reader; step-tool enum may repeat a value until task 03; a self-test hello turn sets missedLevel until the skill claims
 ### Contract changes
+- heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 ### Rulings
 - A settings file of the wrong shape stops install with exit 1, as a parse failure does — merging into it would traceback — such a file blocks install until fixed · group 09 · group 09
 - A transcript line that parses but is not a pinned shape counts as no match, not a hook failure — one odd line should not disable the gate — a Claude Code shape change denies rather than fails open · group 09 · group 09
 - An OSError between install's writes exits 1, and a second run finishes — stops are planned, a disk failure is not — a link with some profiles unwired until rerun · group 09 · group 09
 - Review bases per repo: wigley-ai-gui 52a66bfa, wigley-agents ee97ed1, wigley-ai-marketplace c8e7abb — the plan spans three repos and plan.py holds one base — review ranges name each · lead
+- checklistReported runs in its own fold step, not applyBookkeeping — Fold order is pinned and needs a checklist on a null workflow to change nothing — one call moves · group 01 · group 01
+- The runtime's opened is guarded to Heavy flows, plan watch included — heavyStateOf ignores flow.workflow — nothing visible · group 01 · group 01
+- closed fires before store.drop on sessions.ended and after the store forgot on forgetFlows — the store returns ids only then — an observer reading the flow in closed sees null on the self-test path · group 01 · group 01
+- turnWork.note runs only for a session the store holds — turns never gains an orphan entry — work before chat.sessionOpened does not count toward missedLevel · group 01 · group 01
 ### Review rounds
 ### Test gate

@@ -56,5 +56,7 @@ export const workflowManifest = definePlugin({
         'Seconds the plan-ready countdown runs before Clear & make starts by itself; at least 1.',
     },
   },
-  themeTokens: {},
+  themeTokens: {
+    badge: { kind: 'color', default: 'var(--wg-status-warning)' },
+  },
 });

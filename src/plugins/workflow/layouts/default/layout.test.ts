@@ -3,7 +3,7 @@ import type {
   ActionInput,
   ChipInput,
   SidePaneInput,
-  SideWaveInput,
+  SideGroupInput,
   StripInput,
   WorkflowKit,
 } from '../layout';
@@ -57,6 +57,7 @@ function fakeKit(): WorkflowKit {
     actionButton: (parent, action) =>
       part(parent, `action:${action.label}`) as HTMLButtonElement,
     tag: (parent, text) => part(parent, `tag:${text}`),
+    badge: (parent, letter, label) => part(parent, `badge:${letter}:${label}`),
     meter: (parent, percent) => part(parent, `meter:${percent}`),
     statusMark: (parent, state) => part(parent, `mark:${state}`),
     sideList: (parent) => part(parent, 'list'),
@@ -81,6 +82,8 @@ const OTHER_ACTION: ActionInput = {
 
 function chipInput(): ChipInput {
   return {
+    badge: 'H',
+    workflowLabel: 'Heavy',
     stage: 'make',
     label: 'Make',
     status: 'running',
@@ -92,35 +95,35 @@ function chipInput(): ChipInput {
   };
 }
 
-function stripInput(hasPlan: boolean): StripInput {
+function stripInput(hasChecklist: boolean): StripInput {
   return {
     ...chipInput(),
     statusLine: 'Make · running 3/9',
     steps: [],
     actions: [MAIN_ACTION, OTHER_ACTION],
-    hasPlan,
+    hasChecklist,
   };
 }
 
 function sidePaneInput(fields: Partial<SidePaneInput> = {}): SidePaneInput {
   return {
     ...stripInput(true),
-    planTitle: 'Plan x',
+    checklistTitle: 'Plan x',
     checked: 1,
     total: 3,
-    finishedWaves: [],
+    finishedGroups: [],
     finishedOpen: false,
-    currentWave: null,
-    laterWaves: [],
+    currentGroup: null,
+    laterGroups: [],
     ...fields,
   };
 }
 
-// A wave titled `title` of `tasks` done tasks named after it.
-function doneWave(title: string, tasks: number): SideWaveInput {
+// A wave titled `title` of `tasks` done items named after it.
+function doneWave(title: string, tasks: number): SideGroupInput {
   return {
     title,
-    tasks: Array.from({ length: tasks }, (_, index) => ({
+    items: Array.from({ length: tasks }, (_, index) => ({
       text: `${title} task ${index + 1}`,
       state: 'done' as const,
     })),
@@ -134,13 +137,17 @@ function drawPane(fields: Partial<SidePaneInput> = {}): string[] {
   );
 }
 
+function withoutBadge(parts: string[]): string[] {
+  return parts.filter((part) => !part.startsWith('badge:'));
+}
+
 describe('default layout chip', () => {
   it('chip_RunningStage_TagReadsTheStatusText', () => {
     const parent = new FakeElement('parent');
 
     const chip = layout.chip(asHtml(parent), chipInput(), fakeKit());
 
-    expect(drawn(chip)).toEqual(['tag:Make · running']);
+    expect(withoutBadge(drawn(chip))).toEqual(['tag:Make · running']);
   });
 
   it('chip_StateOnRowLabel_DrawsOnlyTheCountdown', () => {
@@ -152,40 +159,58 @@ describe('default layout chip', () => {
       fakeKit(),
     );
 
-    expect(drawn(chip)).toEqual(['countdown:9s']);
+    expect(withoutBadge(drawn(chip))).toEqual(['countdown:9s']);
   });
+
+  it.each([
+    { onRowLabel: false, parts: ['badge:H:Heavy', 'tag:Make · running'] },
+    { onRowLabel: true, parts: ['badge:H:Heavy'] },
+  ])(
+    'chip_DrawsTheBadgeFirst onRowLabel $onRowLabel',
+    ({ onRowLabel, parts }) => {
+      const parent = new FakeElement('parent');
+
+      const chip = layout.chip(
+        asHtml(parent),
+        { ...chipInput(), onRowLabel },
+        fakeKit(),
+      );
+
+      expect(drawn(chip)).toEqual(parts);
+    },
+  );
 });
 
 describe('default layout strip', () => {
   it.each([
     {
       name: 'no plan, stage in the stepper',
-      hasPlan: false,
+      hasChecklist: false,
       stepId: 'make',
       parts: ['stepper'],
     },
     {
       name: 'a plan, stage in the stepper',
-      hasPlan: true,
+      hasChecklist: true,
       stepId: 'make',
       parts: ['stepper'],
     },
     {
       name: 'no plan, stage outside the stepper',
-      hasPlan: false,
+      hasChecklist: false,
       stepId: 'review',
       parts: ['mark:running', 'el:workflow-status-line', 'stepper'],
     },
     {
       name: 'a plan, stage outside the stepper',
-      hasPlan: true,
+      hasChecklist: true,
       stepId: 'review',
       parts: ['mark:running', 'el:workflow-status-line'],
     },
-  ])('strip_DrawsThePinnedParts ($name)', ({ hasPlan, stepId, parts }) => {
+  ])('strip_DrawsThePinnedParts ($name)', ({ hasChecklist, stepId, parts }) => {
     const parent = new FakeElement('parent');
     const input: StripInput = {
-      ...stripInput(hasPlan),
+      ...stripInput(hasChecklist),
       steps: [{ id: stepId, label: stepId, state: 'running', progress: '' }],
     };
 
@@ -218,7 +243,7 @@ describe('default layout sidePane', () => {
     },
     { name: 'two tasks read a count', tasks: 2, line: 'row:Wave 4|2 tasks' },
   ])('sidePane_LaterWave_$name', ({ tasks, line }) => {
-    const parts = drawPane({ laterWaves: [doneWave('Wave 4', tasks)] });
+    const parts = drawPane({ laterGroups: [doneWave('Wave 4', tasks)] });
 
     expect(parts).toContain('section:Up next');
     expect(parts).toContain(line);
@@ -242,7 +267,7 @@ describe('default layout sidePane', () => {
       fold: 'fold:3 waves · 4 done:false',
     },
   ])('sidePane_FinishedWaves_FoldReads $fold', ({ waves, fold }) => {
-    expect(drawPane({ finishedWaves: waves })).toContain(fold);
+    expect(drawPane({ finishedGroups: waves })).toContain(fold);
   });
 
   it('sidePane_NoFinishedWaves_LeavesOutTheFold', () => {
@@ -258,7 +283,7 @@ describe('default layout sidePane', () => {
     'sidePane_FinishedOpen$finishedOpen_DrawsFinishedTasksOnlyWhenOpen',
     ({ finishedOpen, tasks }) => {
       const parts = drawPane({
-        finishedWaves: [doneWave('Wave 1', 1)],
+        finishedGroups: [doneWave('Wave 1', 1)],
         finishedOpen,
       });
 
@@ -307,12 +332,12 @@ describe('default layout sidePane', () => {
 
   it('sidePane_EveryPart_DrawsInThePinnedOrder', () => {
     const parts = drawPane({
-      finishedWaves: [doneWave('Wave 1', 1)],
-      currentWave: {
+      finishedGroups: [doneWave('Wave 1', 1)],
+      currentGroup: {
         title: 'Wave 2',
-        tasks: [{ text: 'open task', state: 'running' }],
+        items: [{ text: 'open task', state: 'running' }],
       },
-      laterWaves: [doneWave('Wave 3', 2)],
+      laterGroups: [doneWave('Wave 3', 2)],
     });
 
     expect(parts).toEqual([

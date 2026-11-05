@@ -60,6 +60,12 @@ function flowWith(fields: Partial<SessionFlow & HeavyState>): SessionFlow {
 const FEATURE_GROUP = ['explore', 'interview', 'plan', 'coldRead'] as const;
 
 describe('BUILT_IN_PAGE_STAGES', () => {
+  it('actions_HoldNoSide', () => {
+    const actions = BUILT_IN_PAGE_STAGES.flatMap((stage) => stage.actions);
+
+    expect(actions.filter((action) => 'side' in action)).toEqual([]);
+  });
+
   it.each<{ name: string; stage: string; flow: SessionFlow; detail: string }>([
     { name: 'idle', stage: 'idle', flow: flowWith({}), detail: '' },
     { name: 'primer', stage: 'primer', flow: flowWith({}), detail: '' },

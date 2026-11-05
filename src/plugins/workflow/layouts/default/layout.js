@@ -1,16 +1,16 @@
 // @ts-check
 
 // The built-in workflow look: a one-line chip under the session row (the
-// stage and its status as an accent tag, unless the row's label says it, and
-// the countdown), a strip above the
+// level's badge, the stage and its status as an accent tag, unless the row's
+// label says it, and the countdown), a strip above the
 // composer (the stepper's trail while it shows the stage; for a stage outside
-// it, the status mark and line, with the trail until a plan is read; the
+// it, the status mark and line, with the trail until a checklist exists; the
 // countdown and the main action), and the
 // side pane beside the transcript (the
 // status mark and line, the detail, the progress bar, the
 // checklist and every action).
 
-/** @typedef {import('../layout').SideWaveInput} SideWaveInput */
+/** @typedef {import('../layout').SideGroupInput} SideGroupInput */
 /** @typedef {import('../layout').SidePaneInput} SidePaneInput */
 /** @typedef {import('../layout').StripInput} StripInput */
 /** @typedef {import('../layout').WorkflowKit} WorkflowKit */
@@ -29,76 +29,76 @@ function drawStatusLine(parent, input, kit) {
 }
 
 /**
- * `<n> waves · <m> done`, `<m>` counting the tasks in `waves`.
- * @param {readonly SideWaveInput[]} waves
+ * `<n> waves · <m> done`, `<m>` counting the items in `groups`.
+ * @param {readonly SideGroupInput[]} groups
  * @returns {string}
  */
-function foldText(waves) {
-  const count = waves.length === 1 ? '1 wave' : `${waves.length} waves`;
-  const tasks = waves.reduce((sum, wave) => sum + wave.tasks.length, 0);
-  return `${count} · ${tasks} done`;
+function foldText(groups) {
+  const count = groups.length === 1 ? '1 wave' : `${groups.length} waves`;
+  const items = groups.reduce((sum, group) => sum + group.items.length, 0);
+  return `${count} · ${items} done`;
 }
 
 /**
- * A wave's title over its tasks, each with its mark.
+ * A group's title over its items, each with its mark.
  * @param {HTMLElement} parent
- * @param {SideWaveInput} wave
+ * @param {SideGroupInput} group
  * @param {WorkflowKit} kit
  */
-function drawWave(parent, wave, kit) {
-  kit.sectionHeader(parent, wave.title);
-  const tasks = kit.el(parent, 'ul', 'workflow-side-tasks');
-  for (const task of wave.tasks) {
-    const mark = kit.statusMark(tasks, task.state);
-    kit.row(tasks, {
+function drawGroup(parent, group, kit) {
+  kit.sectionHeader(parent, group.title);
+  const items = kit.el(parent, 'ul', 'workflow-side-tasks');
+  for (const item of group.items) {
+    const mark = kit.statusMark(items, item.state);
+    kit.row(items, {
       density: 'list',
       tag: 'li',
-      label: task.text,
+      label: item.text,
       leading: mark,
     });
   }
 }
 
 /**
- * A later wave's one line: its title, then its one task's text or its count.
+ * A later group's one line: its title, then its one item's text or its count.
  * @param {HTMLElement} parent
- * @param {SideWaveInput} wave
+ * @param {SideGroupInput} group
  * @param {WorkflowKit} kit
  */
-function drawLaterWave(parent, wave, kit) {
+function drawLaterGroup(parent, group, kit) {
   kit.row(parent, {
     density: 'list',
-    label: wave.title,
+    label: group.title,
     detail:
-      wave.tasks.length === 1
-        ? wave.tasks[0].text
-        : `${wave.tasks.length} tasks`,
+      group.items.length === 1
+        ? group.items[0].text
+        : `${group.items.length} tasks`,
   });
 }
 
 /**
- * The scrolling checklist: the fold, the current wave and the later waves.
+ * The scrolling checklist: the fold, the current group and the later groups.
  * @param {HTMLElement} parent
  * @param {SidePaneInput} input
  * @param {WorkflowKit} kit
  */
 function drawChecklist(parent, input, kit) {
   const list = kit.sideList(parent);
-  if (input.finishedWaves.length > 0) {
-    kit.finishedFold(list, foldText(input.finishedWaves), input.finishedOpen);
+  if (input.finishedGroups.length > 0) {
+    kit.finishedFold(list, foldText(input.finishedGroups), input.finishedOpen);
   }
   if (input.finishedOpen) {
-    for (const wave of input.finishedWaves) {
-      drawWave(list, wave, kit);
+    for (const group of input.finishedGroups) {
+      drawGroup(list, group, kit);
     }
   }
-  if (input.currentWave !== null) {
-    drawWave(list, input.currentWave, kit);
+  if (input.currentGroup !== null) {
+    drawGroup(list, input.currentGroup, kit);
   }
-  if (input.laterWaves.length > 0) {
+  if (input.laterGroups.length > 0) {
     kit.sectionHeader(list, 'Up next');
-    for (const wave of input.laterWaves) {
-      drawLaterWave(list, wave, kit);
+    for (const group of input.laterGroups) {
+      drawLaterGroup(list, group, kit);
     }
   }
 }
@@ -107,6 +107,7 @@ function drawChecklist(parent, input, kit) {
 const layout = {
   chip(parent, input, kit) {
     const chip = kit.el(parent, 'div', 'workflow-chip');
+    kit.badge(chip, input.badge, input.workflowLabel);
     if (!input.onRowLabel) {
       kit.tag(chip, input.statusText, 'accent');
     }
@@ -124,7 +125,7 @@ const layout = {
     if (!stepperShowsStage) {
       drawStatusLine(strip, input, kit);
     }
-    if (stepperShowsStage || !input.hasPlan) {
+    if (stepperShowsStage || !input.hasChecklist) {
       kit.stepper(strip, input.steps);
     }
     if (input.countdown !== null) {
