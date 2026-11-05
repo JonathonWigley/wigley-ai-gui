@@ -1,6 +1,6 @@
 # 05 — Chat completion, descriptions setting and row hook
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -38,3 +38,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d907ce67 · proof: diff read; every Produces present; typecheck no errors; lint exit 0 per worker; five test files 133 pass; selftest --plugin chat 195 pass, no fail · concerns: one full selftest run had three unexplained chat close failures that did not reproduce; agent-lines session-row fit failure, same as task 04, unconfirmed as the peer's; descriptions follow each name so do not line up as a column; DESIGN.md has no line for completion descriptions; the long-description ellipsis was not seen on screen, check in 07; drawRow rebuilds the command list per row
