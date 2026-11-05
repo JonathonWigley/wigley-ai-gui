@@ -6,8 +6,15 @@ import {
   isKnownSource,
   metaString,
 } from './index-document';
+import { resolveLink } from './links';
+import type { WikiItem, WikiShelf, WikiTarget } from './wiki-main';
 
-export type TreeNode = TreeGroup | TreeLeaf;
+export type TreeNode =
+  | TreeGroup
+  | TreeLeaf
+  | TreeWikiLink
+  | TreeWikiLabel
+  | TreeHeadingMatch;
 
 // Node ids stay the same across rebuilds of the same index.
 export interface TreeGroup {
@@ -38,6 +45,35 @@ export interface TreeLeaf {
   id: string;
   title: string;
   entryId: string;
+}
+
+// A `Main.md` link that is not a page row: a `wiki:` link, or a page the index
+// does not list (`isDangling`). `count` is the size of a kind or owner list.
+export interface TreeWikiLink {
+  type: 'wikiLink';
+  id: string;
+  title: string;
+  target: WikiTarget;
+  count: number | null;
+  isDangling: boolean;
+}
+
+export interface TreeWikiLabel {
+  type: 'wikiLabel';
+  id: string;
+  title: string;
+}
+
+// A section heading the filter matched, shown under its doc's leaf `leafId`.
+// Only `visibleRows` makes one: no tree holds one and no builder returns one.
+export interface TreeHeadingMatch {
+  type: 'headingMatch';
+  id: string;
+  title: string;
+  entryId: string;
+  line: number;
+  docTitle: string;
+  leafId: string;
 }
 
 export const KIND_TITLES: Record<DocKind, string> = {
@@ -614,4 +650,176 @@ function featureSlug(entry: IndexEntry, paths: Paths): string | null {
   // A file directly in the root has one segment below it.
   const inSubfolder = below.length > 1;
   return inSubfolder && below[0] !== 'followups' ? below[0] : null;
+}
+
+// One root group per shelf of `Main.md`, in file order, an empty one included,
+// ids `shelf:<title>` and for a repeated title `shelf:<title>#<n>`. A shelf's
+// children are its items in file order, ids carrying the item's index: a label
+// `<shelfId>/label:<index>`, a link `<shelfId>/link:<index>`. A page the index
+// lists is a leaf titled the link's text, id `entry:<entryId>` for the entry's
+// first leaf, as `buildTree` names it, and `<shelfId>/<index>/entry:<entryId>`
+// for a later one.
+export function buildWikiTree(
+  shelves: readonly WikiShelf[],
+  entries: readonly IndexEntry[],
+  mainFolder: string,
+  homeDir: string,
+  paths: Paths,
+): TreeNode[] {
+  const mainFile = paths.join(mainFolder, 'Main.md');
+  const shelfIds = new Set<string>();
+  const placedEntryIds = new Set<string>();
+  return shelves.map((shelf) => {
+    const shelfId = unusedShelfId(shelf.title, shelfIds);
+    shelfIds.add(shelfId);
+    const leafEntries: IndexEntry[] = [];
+    const children = shelf.items.map((item, index): TreeNode => {
+      if (item.type === 'label') {
+        const id = `${shelfId}/label:${index}`;
+        return { type: 'wikiLabel', id, title: item.title };
+      }
+      const page = pageEntry(item, entries, mainFile, homeDir, paths);
+      if (page === null) {
+        return wikiLink(item, `${shelfId}/link:${index}`, entries);
+      }
+      const isFirstLeaf = !placedEntryIds.has(page.id);
+      placedEntryIds.add(page.id);
+      leafEntries.push(page);
+      return {
+        type: 'entry',
+        id: isFirstLeaf
+          ? `entry:${page.id}`
+          : `${shelfId}/${index}/entry:${page.id}`,
+        title: item.title,
+        entryId: page.id,
+      };
+    });
+    return leafEntries.length === 0
+      ? {
+          type: 'group',
+          id: shelfId,
+          title: shelf.title,
+          folder: null,
+          role: OTHER_ROLE,
+          children,
+        }
+      : group(shelfId, shelf.title, leafEntries, children, paths);
+  });
+}
+
+function unusedShelfId(title: string, used: ReadonlySet<string>): string {
+  let id = `shelf:${title}`;
+  for (let nth = 2; used.has(id); nth++) {
+    id = `shelf:${title}#${nth}`;
+  }
+  return id;
+}
+
+type WikiPageItem = Extract<WikiItem, { type: 'page' }>;
+
+// The entry a page item's `path` or `skill` target names; null for any other
+// target and for one no entry answers.
+function pageEntry(
+  { target }: WikiPageItem,
+  entries: readonly IndexEntry[],
+  mainFile: string,
+  homeDir: string,
+  paths: Paths,
+): IndexEntry | null {
+  if (target.type === 'path') {
+    return pathEntry(target.path, entries, mainFile, homeDir, paths);
+  }
+  if (target.type === 'skill') {
+    return skillEntry(target.name, entries);
+  }
+  return null;
+}
+
+// The whole-file entry at the path `href` resolves to, else the one that walks
+// through that path.
+function pathEntry(
+  href: string,
+  entries: readonly IndexEntry[],
+  mainFile: string,
+  homeDir: string,
+  paths: Paths,
+): IndexEntry | null {
+  const resolved = resolveLink(href, mainFile, homeDir, paths);
+  if (resolved.type !== 'file') {
+    return null;
+  }
+  const wholeFiles = entries.filter((entry) => entry.id === entry.path);
+  const atPath = wholeFiles.filter((entry) =>
+    paths.samePath(entry.path, resolved.path),
+  );
+  const walkedThrough = wholeFiles.filter((entry) =>
+    entry.walked.some((walked) => paths.samePath(walked, resolved.path)),
+  );
+  return preferredEntry(atPath.length > 0 ? atPath : walkedThrough);
+}
+
+const WIKI_SKILL_PLUGIN_PREFIX = 'wigley@';
+
+// The skill titled `name` in the plugin the `wigley:` link form names.
+function skillEntry(
+  name: string,
+  entries: readonly IndexEntry[],
+): IndexEntry | null {
+  return preferredEntry(
+    entries.filter(
+      (entry) =>
+        entry.kind === 'skill' &&
+        entry.title === name &&
+        entry.plugin?.startsWith(WIKI_SKILL_PLUGIN_PREFIX) === true,
+    ),
+  );
+}
+
+// `owner` `mine` first, then `source` `repo` first, then `id` in code-unit
+// order, so the pick never depends on index order.
+function preferredEntry(candidates: readonly IndexEntry[]): IndexEntry | null {
+  const rankOf = (entry: IndexEntry) =>
+    (entry.owner === 'mine' ? 0 : 2) + (entry.source === 'repo' ? 0 : 1);
+  const [first] = [...candidates].sort(
+    (a, b) => rankOf(a) - rankOf(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  return first ?? null;
+}
+
+function wikiLink(
+  { title, target }: WikiPageItem,
+  id: string,
+  entries: readonly IndexEntry[],
+): TreeWikiLink {
+  // `pageEntry` found no entry for it.
+  const isDangling = target.type === 'path' || target.type === 'skill';
+  const count =
+    target.type === 'kind' || target.type === 'owner'
+      ? wikiListEntries(target, entries).length
+      : null;
+  return { type: 'wikiLink', id, title, target, count, isDangling };
+}
+
+// The docs a `kind` or `owner` link's list page shows, in input order: the
+// user's own docs of that kind, or the third-party docs.
+export function wikiListEntries(
+  target: Extract<WikiTarget, { type: 'kind' | 'owner' }>,
+  entries: readonly IndexEntry[],
+): IndexEntry[] {
+  return target.type === 'kind'
+    ? entries.filter(
+        (entry) => entry.owner === 'mine' && entry.kind === target.kind,
+      )
+    : entries.filter((entry) => entry.owner === target.owner);
+}
+
+// The tree the wiki view's filter searches, since the shelves hold only the
+// pages `Main.md` links: the user's own docs under their usual groups.
+export function buildWikiFilterTree(
+  entries: readonly IndexEntry[],
+  homeDir: string,
+  paths: Paths,
+): TreeNode[] {
+  const mine = entries.filter((entry) => entry.owner === 'mine');
+  return buildTree(mine, homeDir, paths, new Set());
 }

@@ -4,11 +4,17 @@ import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { IndexEntry } from './contract';
 import {
   buildTree,
+  buildWikiFilterTree,
+  buildWikiTree,
   isStarredLeafId,
+  MINE_ROOT_ID,
   titleFromId,
   type TreeGroup,
+  type TreeLeaf,
   type TreeNode,
+  type TreeWikiLink,
 } from './tree';
+import type { WikiShelf, WikiTarget } from './wiki-main';
 
 const HOME = '/Users/u';
 const NO_STARS: ReadonlySet<string> = new Set();
@@ -1037,5 +1043,281 @@ describe('buildTree on Windows', () => {
     const repo = child(mineChildren(entries, WINDOWS_HOME, windowsPaths), 'r');
 
     expect(titles(repo.children)).toEqual(['~\\dev\\r', '~\\src\\r']);
+  });
+});
+
+describe('buildWikiTree', () => {
+  const MAIN = '/dev/agents/wiki';
+  const SHELF_ID = 'shelf:Shelf A';
+  const AT_A = '/dev/agents/a.md';
+
+  function shelfWith(target: WikiTarget): WikiShelf[] {
+    const items = [{ type: 'page' as const, title: 'Link text', target }];
+    return [{ title: 'Shelf A', items }];
+  }
+
+  function onlyChild(tree: readonly TreeNode[]): TreeNode {
+    const [shelf] = tree;
+    if (shelf.type !== 'group') {
+      throw new Error(`${shelf.id} is no group`);
+    }
+    return shelf.children[0];
+  }
+
+  function leafTo(entryId: string): TreeLeaf {
+    return {
+      type: 'entry',
+      id: `entry:${entryId}`,
+      title: 'Link text',
+      entryId,
+    };
+  }
+
+  function danglingTo(target: WikiTarget): TreeWikiLink {
+    return {
+      type: 'wikiLink',
+      id: `${SHELF_ID}/link:0`,
+      title: 'Link text',
+      target,
+      count: null,
+      isDangling: true,
+    };
+  }
+
+  const makeSkill = (path: string, plugin: string) =>
+    entry({ path, kind: 'skill', title: 'make', plugin });
+  const SKILL_MAKE: WikiTarget = { type: 'skill', name: 'make' };
+  const pathTo = (path: string): WikiTarget => ({ type: 'path', path });
+
+  it.each<{
+    given: string;
+    target: WikiTarget;
+    entries: IndexEntry[];
+    expected: TreeNode;
+  }>([
+    {
+      given: '~/ through walked',
+      target: pathTo('~/agents/a.md'),
+      entries: [entry({ path: AT_A, walked: ['/Users/u/agents/a.md'] })],
+      expected: leafTo(AT_A),
+    },
+    {
+      given: 'relative to the main folder',
+      target: pathTo('../a.md'),
+      entries: [entry({ path: AT_A })],
+      expected: leafTo(AT_A),
+    },
+    {
+      given: 'relative, fragment dropped',
+      target: pathTo('../a.md#part'),
+      entries: [entry({ path: AT_A })],
+      expected: leafTo(AT_A),
+    },
+    {
+      given: 'absolute',
+      target: pathTo(AT_A),
+      entries: [entry({ path: AT_A })],
+      expected: leafTo(AT_A),
+    },
+    {
+      given: 'real path beats a walked path',
+      target: pathTo(AT_A),
+      entries: [
+        entry({ path: '/x/b.md', walked: [AT_A] }),
+        entry({ path: AT_A }),
+      ],
+      expected: leafTo(AT_A),
+    },
+    {
+      given: 'two walking entries: code-unit order, whatever the index order',
+      target: pathTo(AT_A),
+      entries: [
+        entry({ path: '/z/a.md', walked: [AT_A] }),
+        entry({ path: '/b/a.md', walked: [AT_A] }),
+      ],
+      expected: leafTo('/b/a.md'),
+    },
+    {
+      given: 'skill of the wigley plugin',
+      target: SKILL_MAKE,
+      entries: [
+        makeSkill('/m/make/SKILL.md', 'ng@n'),
+        makeSkill('/w/make/SKILL.md', 'wigley@w'),
+      ],
+      expected: leafTo('/w/make/SKILL.md'),
+    },
+    {
+      given: 'skill: clone before an install',
+      target: SKILL_MAKE,
+      entries: [
+        { ...makeSkill('/i/make/SKILL.md', 'wigley@w'), source: 'plugin' },
+        { ...makeSkill('/w/make/SKILL.md', 'wigley@w'), source: 'repo' },
+      ],
+      expected: leafTo('/w/make/SKILL.md'),
+    },
+    {
+      given: "skill: the user's own before a clone of a third party's",
+      target: SKILL_MAKE,
+      entries: [
+        {
+          ...makeSkill('/a/make/SKILL.md', 'wigley@w'),
+          owner: 'third-party',
+          source: 'repo',
+        },
+        { ...makeSkill('/w/make/SKILL.md', 'wigley@w'), source: 'plugin' },
+      ],
+      expected: leafTo('/w/make/SKILL.md'),
+    },
+    {
+      given: 'skill of another plugin only',
+      target: SKILL_MAKE,
+      entries: [makeSkill('/m/make/SKILL.md', 'ng@n')],
+      expected: danglingTo(SKILL_MAKE),
+    },
+    {
+      given: 'no entry',
+      target: pathTo('../gone.md'),
+      entries: [],
+      expected: danglingTo(pathTo('../gone.md')),
+    },
+    {
+      given: 'only a follow-up item at that path',
+      target: pathTo('../f.md'),
+      entries: [
+        entry({
+          id: '/dev/agents/f.md#L3',
+          path: '/dev/agents/f.md',
+          line: 3,
+        }),
+      ],
+      expected: danglingTo(pathTo('../f.md')),
+    },
+    {
+      given: 'URL',
+      target: pathTo('https://x.test'),
+      entries: [],
+      expected: danglingTo(pathTo('https://x.test')),
+    },
+    {
+      given: 'empty path',
+      target: pathTo(''),
+      entries: [entry({ path: `${MAIN}/Main.md` })],
+      expected: danglingTo(pathTo('')),
+    },
+  ])('buildWikiTree_PageTarget ($given)', ({ target, entries, expected }) => {
+    const tree = buildWikiTree(
+      shelfWith(target),
+      entries,
+      MAIN,
+      HOME,
+      posixPaths,
+    );
+
+    expect(onlyChild(tree)).toEqual(expected);
+  });
+
+  it('buildWikiTree_WindowsPath_ComparedAsSamePath', () => {
+    const tree = buildWikiTree(
+      shelfWith(pathTo('C:\\Dev\\a.md')),
+      [entry({ path: 'c:\\dev\\a.md' })],
+      'C:\\Dev\\wiki',
+      'C:\\Users\\u',
+      windowsPaths,
+    );
+
+    expect(onlyChild(tree)).toEqual(leafTo('c:\\dev\\a.md'));
+  });
+
+  it.each<{ target: WikiTarget; count: number | null }>([
+    { target: { type: 'kind', kind: 'skill' }, count: 2 },
+    { target: { type: 'kind', kind: 'followup' }, count: 2 },
+    { target: { type: 'kind', kind: 'made-up' }, count: 0 },
+    { target: { type: 'owner', owner: 'third-party' }, count: 1 },
+    { target: { type: 'all' }, count: null },
+  ])('buildWikiTree_WikiLinkCount ($target)', ({ target, count }) => {
+    const entries = [
+      entry({ path: '/s/a/SKILL.md', kind: 'skill' }),
+      entry({ path: '/s/b/SKILL.md', kind: 'skill' }),
+      entry({ path: '/t/c/SKILL.md', kind: 'skill', owner: 'third-party' }),
+      entry({ path: '/h.json', kind: 'hook' }),
+      entry({ id: '/f.md#L1', path: '/f.md', kind: 'followup', line: 1 }),
+      entry({ id: '/f.md#L2', path: '/f.md', kind: 'followup', line: 2 }),
+    ];
+
+    const tree = buildWikiTree(
+      shelfWith(target),
+      entries,
+      MAIN,
+      HOME,
+      posixPaths,
+    );
+
+    expect(onlyChild(tree)).toEqual({
+      ...danglingTo(target),
+      count,
+      isDangling: false,
+    });
+  });
+
+  it('buildWikiTree_Shape', () => {
+    const page = {
+      type: 'page' as const,
+      title: 'A',
+      target: pathTo('/a.md'),
+    };
+    const kindLink = {
+      type: 'page' as const,
+      title: 'Skills',
+      target: { type: 'kind' as const, kind: 'skill' },
+    };
+    const shelves: WikiShelf[] = [
+      {
+        title: 'S',
+        items: [{ type: 'label', title: 'L' }, page, kindLink],
+      },
+      { title: 'S', items: [page] },
+      { title: 'Empty', items: [] },
+    ];
+
+    const tree = buildWikiTree(
+      shelves,
+      [entry({ path: '/a.md' })],
+      MAIN,
+      HOME,
+      posixPaths,
+    );
+
+    const groups = tree.filter((node) => node.type === 'group');
+    expect(
+      groups.map(({ id, folder, children }) => ({
+        id,
+        folder,
+        children: ids(children),
+      })),
+    ).toEqual([
+      {
+        id: 'shelf:S',
+        folder: '/',
+        children: ['shelf:S/label:0', 'entry:/a.md', 'shelf:S/link:2'],
+      },
+      { id: 'shelf:S#2', folder: '/', children: ['shelf:S#2/0/entry:/a.md'] },
+      { id: 'shelf:Empty', folder: null, children: [] },
+    ]);
+  });
+
+  it('buildWikiFilterTree_MineOnly', () => {
+    const tree = buildWikiFilterTree(
+      [
+        entry({ path: '/mine.md' }),
+        entry({ path: '/theirs/SKILL.md', owner: 'third-party' }),
+      ],
+      HOME,
+      posixPaths,
+    );
+
+    expect(ids(tree)).toEqual([MINE_ROOT_ID]);
+    const shown = flattenedIds(tree);
+    expect(shown).toContain('entry:/mine.md');
+    expect(shown).not.toContain('entry:/theirs/SKILL.md');
   });
 });

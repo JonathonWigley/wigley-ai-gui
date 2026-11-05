@@ -8,8 +8,17 @@ import type {
   IndexContext,
   IndexDocument,
   IndexEntry,
+  IndexHeading,
 } from '../contract';
-import type { GroupRole, TreeGroup, TreeLeaf, TreeNode } from '../tree';
+import type {
+  GroupRole,
+  TreeGroup,
+  TreeHeadingMatch,
+  TreeLeaf,
+  TreeNode,
+  TreeWikiLabel,
+  TreeWikiLink,
+} from '../tree';
 import {
   applyChange,
   changeableEntry,
@@ -102,6 +111,33 @@ const PATHS: Record<string, string> = {
 
 const pathOf = (entryId: string) => PATHS[entryId] ?? '';
 
+const noHeadings = (): readonly IndexHeading[] => [];
+
+const WIKI_LINK: TreeWikiLink = {
+  type: 'wikiLink',
+  id: 'link',
+  title: 'Link',
+  target: { type: 'all' },
+  count: null,
+  isDangling: false,
+};
+
+const WIKI_LABEL: TreeWikiLabel = {
+  type: 'wikiLabel',
+  id: 'label',
+  title: 'Label',
+};
+
+const HEADING_MATCH: TreeHeadingMatch = {
+  type: 'headingMatch',
+  id: 'page/heading:9',
+  title: 'Heading',
+  entryId: 'e:page',
+  line: 9,
+  docTitle: 'Page',
+  leafId: 'page',
+};
+
 function context(folder: string): IndexContext {
   return { folder, sessionId: null, loadedPlugins: {}, states: {} };
 }
@@ -112,6 +148,7 @@ describe('visibleRows', () => {
       NESTED,
       state({ expanded: new Set(['a']) }),
       pathOf,
+      noHeadings,
       fakeFuzzyMatcher,
     );
 
@@ -126,6 +163,7 @@ describe('visibleRows', () => {
       FILTER_TREE,
       state({ filter: 'STYLE' }),
       pathOf,
+      noHeadings,
       fakeFuzzyMatcher,
     );
 
@@ -141,6 +179,7 @@ describe('visibleRows', () => {
       FILTER_TREE,
       state({ filter: 'rules/' }),
       pathOf,
+      noHeadings,
       fakeFuzzyMatcher,
     );
 
@@ -156,6 +195,7 @@ describe('visibleRows', () => {
       FILTER_TREE,
       state({ filter }),
       pathOf,
+      noHeadings,
       fakeFuzzyMatcher,
     );
 
@@ -176,6 +216,7 @@ describe('visibleRows', () => {
       tree,
       state({ filter: 'clstr' }),
       pathOf,
+      noHeadings,
       fakeFuzzyMatcher,
     );
 
@@ -191,6 +232,7 @@ describe('visibleRows', () => {
       FILTER_TREE,
       state({ expanded: new Set(['root']), filter: '   ' }),
       pathOf,
+      noHeadings,
       fakeFuzzyMatcher,
     );
 
@@ -199,6 +241,132 @@ describe('visibleRows', () => {
       { id: 'rules', depth: 1, isExpanded: false },
       { id: 'other', depth: 1, isExpanded: false },
     ]);
+  });
+
+  describe('heading matches', () => {
+    const HEADINGS: Record<string, IndexHeading[]> = {
+      'e:b': [{ level: 2, text: 'Alpha notes', line: 4 }],
+      'e:a': [
+        { level: 1, text: 'Alpha', line: 1 },
+        { level: 2, text: 'Alpha two', line: 9 },
+      ],
+      'e:c': [{ level: 1, text: 'Delta', line: 1 }],
+    };
+    const headingsOf = (entryId: string) => HEADINGS[entryId] ?? [];
+    const treeTitling = (cTitle: string) => [
+      group('root', 'Root', [
+        leaf('b', 'Beta', 'e:b'),
+        leaf('a', 'Alpha', 'e:a'),
+        leaf('c', cTitle, 'e:c'),
+      ]),
+    ];
+
+    it.each<{
+      filter: string;
+      cTitle: string;
+      expected: [string, number][];
+    }>([
+      {
+        filter: 'alpha',
+        cTitle: 'Gamma',
+        expected: [
+          ['root', 0],
+          ['a', 1],
+          ['a/heading:9', 2],
+          ['b', 1],
+          ['b/heading:4', 2],
+        ],
+      },
+      {
+        filter: 'notes',
+        cTitle: 'Gamma',
+        expected: [
+          ['root', 0],
+          ['b', 1],
+          ['b/heading:4', 2],
+        ],
+      },
+      {
+        filter: 'gamma',
+        cTitle: 'Gamma',
+        expected: [
+          ['root', 0],
+          ['c', 1],
+        ],
+      },
+      {
+        filter: 'delta',
+        cTitle: '`Delta`',
+        expected: [
+          ['root', 0],
+          ['c', 1],
+        ],
+      },
+      {
+        filter: '',
+        cTitle: 'Gamma',
+        expected: [
+          ['root', 0],
+          ['b', 1],
+          ['a', 1],
+          ['c', 1],
+        ],
+      },
+    ])('visibleRows_HeadingMatch ($filter)', ({ filter, cTitle, expected }) => {
+      const rows = visibleRows(
+        treeTitling(cTitle),
+        state({ expanded: new Set(['root']), filter }),
+        pathOf,
+        headingsOf,
+        fakeFuzzyMatcher,
+      );
+
+      expect(rows.map((row) => [row.node.id, row.depth])).toEqual(expected);
+    });
+
+    it('visibleRows_HeadingMatch_NamesTitleAndDoc', () => {
+      const rows = visibleRows(
+        treeTitling('Gamma'),
+        state({ filter: 'alpha' }),
+        pathOf,
+        headingsOf,
+        fakeFuzzyMatcher,
+      );
+
+      expect(rows.find((row) => row.node.id === 'a/heading:9')?.node).toEqual({
+        type: 'headingMatch',
+        id: 'a/heading:9',
+        title: 'Alpha two',
+        entryId: 'e:a',
+        line: 9,
+        docTitle: 'Alpha',
+        leafId: 'a',
+      });
+    });
+  });
+
+  it.each([
+    { filter: '', expected: ['shelf', 'label', 'link', 'page'] },
+    { filter: 'page', expected: ['shelf', 'page'] },
+    { filter: 'zzz', expected: [] },
+  ])('visibleRows_WikiRows ($filter)', ({ filter, expected }) => {
+    const tree = [
+      group('shelf', 'Shelf', [
+        WIKI_LABEL,
+        WIKI_LINK,
+        leaf('page', 'Page', 'e:page'),
+      ]),
+    ];
+
+    const rows = visibleRows(
+      tree,
+      state({ expanded: new Set(['shelf']), filter }),
+      pathOf,
+      noHeadings,
+      fakeFuzzyMatcher,
+    );
+
+    expect(rows.map((row) => row.node.id)).toEqual(expected);
   });
 });
 
@@ -250,6 +418,7 @@ describe('treeRowAction', () => {
       tree,
       state({ expanded: new Set(expanded), filter }),
       String,
+      noHeadings,
       fakeFuzzyMatcher,
     );
   const actionOf = (
@@ -352,6 +521,7 @@ describe('treeRowAction', () => {
       withEmpty,
       state({ expanded: new Set(['a', 'b']) }),
       String,
+      noHeadings,
       fakeFuzzyMatcher,
     );
     const [, emptyGroup] = rows;
@@ -359,6 +529,73 @@ describe('treeRowAction', () => {
     expect(treeRowAction(withEmpty, rows, emptyGroup, '', 'open')).toEqual({
       type: 'none',
     });
+  });
+
+  it.each<{
+    given: string;
+    node: TreeNode;
+    key: TreeRowKey;
+    expected: TreeRowAction;
+  }>([
+    {
+      given: 'link on open',
+      node: WIKI_LINK,
+      key: 'open',
+      expected: { type: 'openWikiLink', focusDoc: false },
+    },
+    {
+      given: 'link on toggle',
+      node: WIKI_LINK,
+      key: 'toggle',
+      expected: { type: 'openWikiLink', focusDoc: true },
+    },
+    {
+      given: 'dangling link on toggle',
+      node: { ...WIKI_LINK, isDangling: true },
+      key: 'toggle',
+      expected: { type: 'openWikiLink', focusDoc: true },
+    },
+    {
+      given: 'link on close',
+      node: WIKI_LINK,
+      key: 'close',
+      expected: { type: 'select', id: 'shelf' },
+    },
+    {
+      given: 'label on open',
+      node: WIKI_LABEL,
+      key: 'open',
+      expected: { type: 'none' },
+    },
+    {
+      given: 'label on close',
+      node: WIKI_LABEL,
+      key: 'close',
+      expected: { type: 'select', id: 'shelf' },
+    },
+    {
+      given: 'heading on toggle',
+      node: HEADING_MATCH,
+      key: 'toggle',
+      expected: { type: 'openHeading', focusDoc: true },
+    },
+    {
+      given: 'heading on close',
+      node: HEADING_MATCH,
+      key: 'close',
+      expected: { type: 'select', id: 'page' },
+    },
+  ])('treeRowAction_WikiRows ($given)', ({ node, key, expected }) => {
+    const shelves = [
+      group('shelf', 'Shelf', [
+        WIKI_LABEL,
+        WIKI_LINK,
+        leaf('page', 'Page', 'e:page'),
+      ]),
+    ];
+    const row = { node, depth: 1, isExpanded: false };
+
+    expect(treeRowAction(shelves, [row], row, '', key)).toEqual(expected);
   });
 });
 
@@ -396,6 +633,15 @@ describe('defaultExpandedIds', () => {
     expect(expanded.has('owner:mine')).toBe(true);
     expect(expanded.has('global')).toBe(true);
     expect(expanded.has('owner:third-party')).toBe(false);
+  });
+
+  it('defaultExpandedIds_WikiShelves_EachExpanded', () => {
+    const tree = [
+      group('shelf:A', 'A', [WIKI_LABEL, WIKI_LINK]),
+      group('shelf:B', 'B', []),
+    ];
+
+    expect([...defaultExpandedIds(tree)]).toEqual(['shelf:A', 'shelf:B']);
   });
 });
 
@@ -1087,19 +1333,27 @@ describe('changeableEntry', () => {
     expect(check('/r/gone.md')).toBe(null);
   });
 
-  it('changeableEntry_Group_RefusedWithGroupText', () => {
-    const checked = changeableEntry(
-      group('group:/r', 'r', []),
-      (id) => byId.get(id),
-      'Select a doc to rename',
-      [],
-      posixPaths,
-    );
+  it.each<{ node: TreeNode }>([
+    { node: group('group:/r', 'r', []) },
+    { node: WIKI_LINK },
+    { node: WIKI_LABEL },
+    { node: HEADING_MATCH },
+  ])(
+    'changeableEntry_NotALeaf_RefusedWithGroupText ($node.type)',
+    ({ node }) => {
+      const checked = changeableEntry(
+        node,
+        (id) => byId.get(id),
+        'Select a doc to rename',
+        [],
+        posixPaths,
+      );
 
-    expect(checked).toEqual({
-      refusal: { text: 'Select a doc to rename', tone: 'info' },
-    });
-  });
+      expect(checked).toEqual({
+        refusal: { text: 'Select a doc to rename', tone: 'info' },
+      });
+    },
+  );
 
   it('changeableEntry_ItemInsideFile_Refused', () => {
     const refusedText = (id: string) => {
@@ -1816,6 +2070,16 @@ describe('treeRowStatus', () => {
     expect(
       treeRowStatus(starredGroup, noTexts, uncommittedA, [], asIs, posixPaths),
     ).toEqual({ mark: null, detail: null });
+  });
+
+  it.each<{ node: TreeNode; detail: string | null }>([
+    { node: HEADING_MATCH, detail: 'Page' },
+    { node: WIKI_LINK, detail: null },
+    { node: WIKI_LABEL, detail: null },
+  ])('treeRowStatus_WikiRows ($node.type)', ({ node, detail }) => {
+    expect(
+      treeRowStatus(node, noTexts, uncommittedA, [], asIs, posixPaths),
+    ).toEqual({ mark: null, detail });
   });
 
   it('treeRowStatus_LeafWithTexts_MarkJoined', () => {

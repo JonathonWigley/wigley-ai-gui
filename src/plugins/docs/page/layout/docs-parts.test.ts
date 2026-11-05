@@ -190,6 +190,7 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     parts,
     isMachine: true,
     openLeaf: () => undefined,
+    openHeading: () => undefined,
     pushBoxScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,

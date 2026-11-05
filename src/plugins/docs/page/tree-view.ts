@@ -8,8 +8,9 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import { textBoxInput } from '../../../shared/page/text-box';
+import type { IndexHeading } from '../contract';
 import type { TreeRowInput } from '../layouts/layout';
-import type { TreeLeaf, TreeNode } from '../tree';
+import type { TreeHeadingMatch, TreeLeaf, TreeNode } from '../tree';
 import {
   type DocsAnchor,
   defaultExpandedIds,
@@ -39,6 +40,9 @@ export interface TreeViewDeps {
   // What `l` or Enter does on a leaf: open its doc, and for Enter
   // (`focusDoc`) move focus to it.
   openLeaf(leaf: TreeLeaf, focusDoc: boolean): void;
+  // What `l` or Enter does on a heading row: open its doc at the heading's
+  // line, and for Enter (`focusDoc`) move focus to it.
+  openHeading(match: TreeHeadingMatch, focusDoc: boolean): void;
   // Pushes `docs.box` while the filter box is open.
   pushBoxScope(): PushedScope;
   // Runs once an accepted or cancelled filter box has closed and focus is
@@ -68,6 +72,8 @@ export interface LeafMarks {
 // `defaultExpandedIds` and selects its first row; a later tree that first
 // shows the Starred group expands it. A row gets its status: a leaf's mark
 // and a group's rollup as its detail, and a leaf's star and last-loaded time.
+// A filter also shows the section headings it matches, each a row under its
+// doc's leaf with the doc's title as its detail.
 // The selected row draws as the keyboard cursor while focus is inside the
 // pane, and a selected leaf ends in the `s star  r rename  d trash` cursor
 // prompt.
@@ -79,19 +85,21 @@ export interface TreeView {
   setTree(
     tree: TreeNode[],
     pathOf: (entryId: string) => string,
+    headingsOf: (entryId: string) => readonly IndexHeading[],
     hasIndex: boolean,
   ): void;
   down(): void;
   up(): void;
   // `l`, `h` and Enter act on the selected row as `treeRowAction` says; a
   // step into a group or up to the parent logs the row it selects.
-  // `l`: opens a leaf, expands a collapsed group, steps into an expanded
-  // one.
+  // `l`: opens a leaf or a heading row's doc, expands a collapsed group, steps
+  // into an expanded one.
   open(): void;
-  // `h`: collapses an expanded group, else selects the parent.
+  // `h`: collapses an expanded group, else selects the parent; a heading row's
+  // parent is its leaf.
   close(): void;
-  // Enter: opens a leaf and focuses its doc, expands a collapsed group,
-  // collapses an expanded one; under a filter, steps into it.
+  // Enter: opens a leaf or a heading row's doc and focuses it, expands a
+  // collapsed group, collapses an expanded one; under a filter, steps into it.
   toggle(): void;
   // Selects the first or last visible row, logging its title; nothing on an
   // empty tree.
@@ -177,6 +185,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
 
   let tree: TreeNode[] = [];
   let pathOf: (entryId: string) => string = () => '';
+  let headingsOf: (entryId: string) => readonly IndexHeading[] = () => [];
   let state: TreeState = { expanded: new Set(), selectedId: null, filter: '' };
   let rows: TreeRow[] = [];
   let hasRows = false;
@@ -229,7 +238,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
 
   const draw = () => {
     pane.classList.toggle('is-pane-inactive', !hasFocus);
-    rows = visibleRows(tree, state, pathOf, deps.matcher);
+    rows = visibleRows(tree, state, pathOf, headingsOf, deps.matcher);
     for (const drawn of drawnRows) {
       drawn.dispose();
     }
@@ -264,7 +273,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     const { mark, detail } = deps.rowStatus(node);
     return {
       id: node.id,
-      type: node.type,
+      type: node.type === 'group' ? 'group' : 'entry',
       title: node.title,
       depth: row.depth,
       isExpanded: row.isExpanded,
@@ -328,6 +337,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     if (action.type === 'openLeaf' && node.type === 'entry') {
       draw();
       deps.openLeaf(node, action.focusDoc);
+    } else if (action.type === 'openHeading' && node.type === 'headingMatch') {
+      draw();
+      deps.openHeading(node, action.focusDoc);
     } else if (action.type === 'expand' || action.type === 'collapse') {
       const isExpanding = action.type === 'expand';
       setExpanded(node.id, isExpanding);
@@ -375,16 +387,17 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       status.textContent = text ?? '';
       status.title = text ?? '';
     },
-    setTree(next, nextPathOf, hasIndex) {
+    setTree(next, nextPathOf, nextHeadingsOf, hasIndex) {
       const previous = tree;
       tree = next;
       pathOf = nextPathOf;
+      headingsOf = nextHeadingsOf;
       hasTree = hasIndex;
       const isFirstTree = !hasRows && next.length > 0;
       if (isFirstTree) {
         hasRows = true;
         state = { ...state, expanded: defaultExpandedIds(next) };
-        rows = visibleRows(tree, state, pathOf, deps.matcher);
+        rows = visibleRows(tree, state, pathOf, headingsOf, deps.matcher);
         state = { ...state, selectedId: rows[0]?.node.id ?? null };
       } else {
         const expanded = expandNewStarred(previous, next, state.expanded);

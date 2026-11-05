@@ -20,6 +20,7 @@ import type {
   IndexDocument,
   IndexEntry,
   IndexHarness,
+  IndexHeading,
   LoadState,
   LoadStateRecord,
   PluginStatusRead,
@@ -36,6 +37,7 @@ import {
   STARRED_ROOT_ID,
   THIRD_PARTY_ROOT_ID,
   type TreeGroup,
+  type TreeHeadingMatch,
   type TreeLeaf,
   type TreeNode,
 } from '../tree';
@@ -98,43 +100,104 @@ export function expandNewStarred(
 }
 
 // Unfiltered, a group's children show while it is expanded; a filter of only
-// spaces is none. Filtered, only leaves whose title the filter fuzzily matches
-// or whose path holds the trimmed filter, ignoring case, show, in the tree's
-// order, under every group above them, each such group expanded: a fuzzy match
-// over a full path matches almost any query. `pathOf` reads a leaf's entry
-// path, for the filter.
+// spaces is none. Filtered, only leaves whose title the filter fuzzily matches,
+// whose path holds the trimmed filter, ignoring case, or with a matching
+// section heading show, in the tree's order, under every group above them, each
+// such group expanded: a fuzzy match over a full path or a doc's many headings
+// matches almost any query. Each matching heading is a row after its leaf, one
+// level deeper, and among a group's children a leaf that matches only by a
+// heading comes last. A wiki link or label shows only unfiltered. `pathOf` and
+// `headingsOf` read a leaf's entry, for the filter.
 export function visibleRows(
   tree: readonly TreeNode[],
   state: TreeState,
   pathOf: (entryId: string) => string,
+  headingsOf: (entryId: string) => readonly IndexHeading[],
   matcher: FuzzyMatcher,
 ): TreeRow[] {
   const { filter } = state;
-  const isFiltered = filter.trim() !== '';
-  const matches = (node: TreeLeaf) =>
+  const matchesByName = (node: TreeLeaf) =>
     matcher.matches(filter, node.title) ||
     matchesSubstring(filter, pathOf(node.entryId));
+  const shownRows = (nodes: readonly TreeNode[], depth: number): TreeRow[] =>
+    nodes.flatMap((node) => {
+      const isExpanded = node.type === 'group' && state.expanded.has(node.id);
+      const children =
+        node.type === 'group' && isExpanded
+          ? shownRows(node.children, depth + 1)
+          : [];
+      return [{ node, depth, isExpanded }, ...children];
+    });
   // Recursive: a filtered group's row shows only once its children are known
   // to hold a match.
-  const rowsOf = (node: TreeNode, depth: number): TreeRow[] => {
-    if (node.type === 'entry') {
-      return !isFiltered || matches(node)
-        ? [{ node, depth, isExpanded: false }]
-        : [];
+  const matchedRows = (
+    nodes: readonly TreeNode[],
+    depth: number,
+  ): TreeRow[] => {
+    const rows: TreeRow[] = [];
+    const headingOnlyRows: TreeRow[] = [];
+    for (const node of nodes) {
+      if (node.type === 'group') {
+        const children = matchedRows(node.children, depth + 1);
+        if (children.length > 0) {
+          rows.push({ node, depth, isExpanded: true }, ...children);
+        }
+      } else if (node.type === 'entry') {
+        const headings = headingMatches(
+          node,
+          headingsOf(node.entryId),
+          filter,
+        ).map((match) => ({
+          node: match,
+          depth: depth + 1,
+          isExpanded: false,
+        }));
+        const isNamed = matchesByName(node);
+        if (isNamed || headings.length > 0) {
+          (isNamed ? rows : headingOnlyRows).push(
+            { node, depth, isExpanded: false },
+            ...headings,
+          );
+        }
+      }
     }
-    if (!isFiltered) {
-      const isExpanded = state.expanded.has(node.id);
-      const children = isExpanded
-        ? node.children.flatMap((child) => rowsOf(child, depth + 1))
-        : [];
-      return [{ node, depth, isExpanded }, ...children];
-    }
-    const children = node.children.flatMap((child) => rowsOf(child, depth + 1));
-    return children.length === 0
-      ? []
-      : [{ node, depth, isExpanded: true }, ...children];
+    return [...rows, ...headingOnlyRows];
   };
-  return tree.flatMap((node) => rowsOf(node, 0));
+  return filter.trim() === '' ? shownRows(tree, 0) : matchedRows(tree, 0);
+}
+
+// The leaf's headings holding the trimmed filter, ignoring case, in file order,
+// less those that only repeat the leaf's title.
+function headingMatches(
+  leaf: TreeLeaf,
+  headings: readonly IndexHeading[],
+  filter: string,
+): TreeHeadingMatch[] {
+  const leafTitle = foldedTitle(leaf.title);
+  return headings
+    .filter(
+      (heading) =>
+        matchesSubstring(filter, heading.text) &&
+        foldedTitle(heading.text) !== leafTitle,
+    )
+    .map((heading) => ({
+      type: 'headingMatch',
+      id: `${leaf.id}/heading:${heading.line}`,
+      title: heading.text,
+      entryId: leaf.entryId,
+      line: heading.line,
+      docTitle: leaf.title,
+      leafId: leaf.id,
+    }));
+}
+
+// A doc's title holds its raw `# ` line and a heading has the markers removed;
+// lower-cased and with the markers removed, the two compare equal.
+function foldedTitle(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[`*]/g, '')
+    .replace(/\s*#+\s*$/, '');
 }
 
 // The row id `by` rows from `selectedId` (clamped at both ends); the first
@@ -194,18 +257,20 @@ export type TreeRowKey = 'open' | 'close' | 'toggle';
 
 export type TreeRowAction =
   | { type: 'openLeaf'; focusDoc: boolean }
+  | { type: 'openWikiLink'; focusDoc: boolean }
+  | { type: 'openHeading'; focusDoc: boolean }
   | { type: 'expand' }
   | { type: 'collapse' }
   | { type: 'select'; id: string }
   | { type: 'none' };
 
-// What `key` does on `row`, one of the visible `rows`. A leaf opens on open
-// or toggle, and toggle focuses the doc it opens. Open expands a collapsed
-// group and steps into an expanded one's first shown child, the row after it.
-// Close collapses an expanded group, else selects the row's parent. Toggle
-// expands a collapsed group and collapses an expanded one. A filter shows
-// every group expanded, so it collapses none: there toggle steps in as open
-// does.
+// What `key` does on `row`, one of the visible `rows`. A leaf, a wiki link and
+// a heading row open on open or toggle, and toggle focuses the doc; a label
+// does nothing. Open expands a collapsed group and steps into an expanded one's
+// first shown child, the row after it. Close collapses an expanded group,
+// selects a heading row's leaf, else selects the row's parent. Toggle expands a
+// collapsed group and collapses an expanded one. A filter shows every group
+// expanded, so it collapses none: there toggle steps in as open does.
 export function treeRowAction(
   tree: readonly TreeNode[],
   rows: readonly TreeRow[],
@@ -220,11 +285,23 @@ export function treeRowAction(
     if (isCollapsible) {
       return { type: 'collapse' };
     }
+    if (node.type === 'headingMatch') {
+      return { type: 'select', id: node.leafId };
+    }
     const parent = parentId(tree, node.id);
     return parent === null ? { type: 'none' } : { type: 'select', id: parent };
   }
   if (node.type === 'entry') {
     return { type: 'openLeaf', focusDoc: key === 'toggle' };
+  }
+  if (node.type === 'wikiLink') {
+    return { type: 'openWikiLink', focusDoc: key === 'toggle' };
+  }
+  if (node.type === 'headingMatch') {
+    return { type: 'openHeading', focusDoc: key === 'toggle' };
+  }
+  if (node.type === 'wikiLabel') {
+    return { type: 'none' };
   }
   if (!row.isExpanded) {
     return { type: 'expand' };
@@ -521,9 +598,9 @@ export interface ChangeRefusal {
 }
 
 // The selected doc when it may be renamed or trashed, else why not; null when
-// nothing is selected or its entry is gone. Refused: a group (`groupText`),
-// an item inside a file (a line, a hook or a plugin), a read-only doc, and a
-// doc whose file, or skill folder, holds a file in `unsavedPaths`.
+// nothing is selected or its entry is gone. Refused: any row but a leaf
+// (`groupText`), an item inside a file (a line, a hook or a plugin), a read-only
+// doc, and a doc whose file, or skill folder, holds a file in `unsavedPaths`.
 export function changeableEntry(
   node: TreeNode | null,
   entryOf: (entryId: string) => IndexEntry | undefined,
@@ -534,7 +611,7 @@ export function changeableEntry(
   if (node === null) {
     return null;
   }
-  if (node.type === 'group') {
+  if (node.type !== 'entry') {
     return { refusal: { text: groupText, tone: 'info' } };
   }
   const entry = entryOf(node.entryId);
@@ -915,7 +992,7 @@ export function fetchText(
 
 // A tree row's status: a leaf's mark, its status texts joined; a plugin,
 // repo or clone group's detail, its leaves' rollup then its clone's origin
-// line.
+// line; a heading row's detail, its doc's title.
 export interface TreeRowStatus {
   mark: string | null;
   detail: string | null;
@@ -933,6 +1010,12 @@ export function treeRowStatus(
     const texts = textsOf(node.entryId);
     const mark = texts.length === 0 ? null : texts.join(' · ');
     return { mark, detail: null };
+  }
+  if (node.type === 'headingMatch') {
+    return { mark: null, detail: node.docTitle };
+  }
+  if (node.type !== 'group') {
+    return { mark: null, detail: null };
   }
   const { role } = node;
   if (role.type === 'other') {
@@ -964,6 +1047,9 @@ function statusCounts(
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (node.type === 'group') {
       pending.push(...node.children);
+      continue;
+    }
+    if (node.type !== 'entry') {
       continue;
     }
     const status = files.get(node.entryId);

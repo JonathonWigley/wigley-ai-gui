@@ -33,6 +33,7 @@ import { isIndexedPath } from '../path-guard';
 import {
   buildTree,
   isStarredLeafId,
+  type TreeHeadingMatch,
   type TreeLeaf,
   type TreeNode,
 } from '../tree';
@@ -202,7 +203,8 @@ export interface DocsViewDeps {
   revealTree(): void;
   // Whether the tree's container shows it now.
   isTreeShown(): boolean;
-  // Hears each doc opened from the tree, by a leaf's click, `l` or Enter.
+  // Hears each doc opened from the tree, by a leaf's or heading row's click,
+  // `l` or Enter.
   leafOpened(): void;
   // Places a dialog element over the window, until the handle's `dispose`.
   addOverlay(element: HTMLElement): Disposable;
@@ -413,6 +415,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     };
   };
 
+  const openedFromTree = (focusesDoc: boolean) => {
+    deps.leafOpened();
+    if (focusesDoc) {
+      focusDocAndLog();
+    }
+  };
+
   const tree = createTreeView({
     log,
     matcher: deps.matcher,
@@ -438,12 +447,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       void doc
         .open(targetFor(entry.path, entry, entry.line, null))
         .then((opened) => {
-          if (!opened) {
-            return;
+          if (opened) {
+            openedFromTree(focusesDoc);
           }
-          deps.leafOpened();
-          if (focusesDoc) {
-            focusDocAndLog();
+        });
+    },
+    openHeading: (match: TreeHeadingMatch, focusesDoc: boolean) => {
+      const entry = entriesById.get(match.entryId);
+      if (entry === undefined) {
+        return;
+      }
+      void doc
+        .open(targetFor(entry.path, entry, match.line, null))
+        .then((opened) => {
+          if (opened) {
+            openedFromTree(focusesDoc);
           }
         });
     },
@@ -627,6 +645,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       (entryId) => {
         return entriesById.get(entryId)?.path ?? '';
       },
+      (entryId) => entriesById.get(entryId)?.headings ?? [],
       next !== null,
     );
     doc.refreshChips();
@@ -822,8 +841,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return checked.entry;
   };
 
-  // The folder `A` starts in: the selected doc's, the selected group's, or
-  // null for the home folder.
+  // The folder `A` starts in: the selected leaf's doc's, the selected group's,
+  // or null for the home folder.
   const selectedFolder = (): string | null => {
     const node = tree.selected();
     if (node === null) {
@@ -831,6 +850,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     if (node.type === 'group') {
       return node.folder;
+    }
+    if (node.type !== 'entry') {
+      return null;
     }
     const entry = entriesById.get(node.entryId);
     return entry === undefined ? null : deps.paths.parent(entry.path);
