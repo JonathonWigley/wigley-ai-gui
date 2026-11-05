@@ -895,6 +895,13 @@ U(two)):
 10.66 command_lifecycle -0001 completed                ← after the result
 ```
 
+**Reaching the model** (measured against local session-host logs; the CLI version was not recorded with the sample).
+Every message a main `requesting` line named was followed by a main `message_start`: 14 of 14 messages (15 messages from 6
+sessions), then 36 of 36 over 10 logs, 5 of them `/wigley:*` commands. A typed `/compact` had neither line.
+
+- `message_start` does not always carry a folded message's uuid, so the `requesting` line is the only source of it.
+- A `notReceived` end has no real-log evidence yet.
+
 **A message with its own turn** (queued behind the count turn): `started` comes right after the earlier turn's
 `result` and is followed by `system/init`, and its `completed` comes after its own `result`, whose
 `user_message_uuids` lists only it.

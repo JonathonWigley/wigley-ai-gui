@@ -293,6 +293,15 @@ interview on 2026-10-23; this file is the record of both.
     entry on the message's `started` lifecycle line (claude-stream.md § Message lifecycle), or at the write when the
     CLI's init has reported no lifecycle; a message sent before that init joins on it. `AgentProcess.send` returns
     the id that entry will carry.
+    - A user entry's delivery says how far the message got toward the model. `Received` shows only on the latest user
+      message holding a delivery, by the default layout's choice through `isLatestDelivery`, so a user layout can draw
+      its own rule; `Sent` and `Not received` stay.
+    - Slash text that no `requesting` line named ends with no delivery: a local command never reaches the model, so
+      `Not received` would be a false alarm. Slash text a request named ends as plain text does.
+    - Fallback mode claims nothing, since it has no uuid evidence.
+    - A `Not received` message has no retry and does not change how a message returns to the composer.
+    - A bare `message_start` was rejected as the signal: it would mark a folded message received one request early. A
+      real main `assistant` line with no `message_start` counts as a response.
   - **Send now**: two routes write a message to the agent at once, ahead of the rest of the queue. Cmd+Enter on the
     focused pending row, with the box unfocused, sends that row only (`chat.sendNow`, bound to `<D-Enter>` in
     `chat.chat`); the rest of the queue keeps waiting in order. Cmd+Enter in the box, while the harness reports the turn
