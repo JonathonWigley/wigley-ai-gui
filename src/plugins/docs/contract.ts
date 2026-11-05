@@ -309,6 +309,7 @@ export interface RecentChange {
 }
 
 export interface DocChange {
+  // The watch id `watchDoc` was given: a view's id, or `<viewId>:main`.
   viewId: string;
   path: string;
 }
@@ -321,6 +322,8 @@ export interface DocsChannel extends ChannelShape {
     // Runs the source's `rebuild`, or its `load` when it has none.
     rebuildIndex(sourceId: string): Promise<SourceRead>;
     readDoc(path: string): Promise<string>;
+    // The wiki's `Main.md` with every link resolved, whether or not it exists.
+    wikiMainPath(): Promise<string>;
     // `expectedText` null overwrites whatever is on disk.
     writeDoc(
       path: string,
@@ -344,7 +347,7 @@ export interface DocsChannel extends ChannelShape {
     // that stopped the rest.
     trashDoc(path: string): Promise<TrashResult>;
     listFolder(folder: string): Promise<FolderEntry[]>;
-    // One watched file per view; `path` null stops that view's watch.
+    // One watched file per watch id; `path` null stops that watch.
     watchDoc(viewId: string, path: string | null): Promise<void>;
     unwatchAll(): Promise<void>;
     openExternal(url: string): Promise<void>;

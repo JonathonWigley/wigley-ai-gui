@@ -8,8 +8,14 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import defaultLayout from '../layouts/default/layout.js';
-import type { Layout } from '../layouts/layout';
-import type { TreeLeaf } from '../tree';
+import type { Layout, TreeRowInput } from '../layouts/layout';
+import type {
+  TreeGroup,
+  TreeLeaf,
+  TreeNode,
+  TreeWikiLabel,
+  TreeWikiLink,
+} from '../tree';
 import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
 import { createTreeView } from './tree-view';
 
@@ -33,8 +39,11 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     matcher: fakeFuzzyMatcher,
     parts,
     isMachine: true,
+    hasWiki: false,
     openLeaf: () => undefined,
     openHeading: () => undefined,
+    openWikiLink: () => undefined,
+    switchView: () => undefined,
     pushBoxScope: fakePushedScope,
     filterClosed: () => undefined,
     anchor: noAnchor,
@@ -42,6 +51,95 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     leafMarks: () => ({ time: null, isStarred: false }),
   };
 }
+
+function shelf(title: string, children: TreeNode[]): TreeGroup {
+  return {
+    type: 'group',
+    id: `shelf:${title}`,
+    title,
+    folder: null,
+    role: { type: 'other' },
+    children,
+  };
+}
+
+function page(title: string): TreeLeaf {
+  return {
+    type: 'entry',
+    id: `entry:e:${title}`,
+    title,
+    entryId: `e:${title}`,
+  };
+}
+
+function wikiLink(overrides: Partial<TreeWikiLink>): TreeWikiLink {
+  return {
+    type: 'wikiLink',
+    id: 'link',
+    title: 'Link',
+    target: { type: 'kind', kind: 'skill' },
+    count: null,
+    isDangling: false,
+    ...overrides,
+  };
+}
+
+const WIKI_LABEL: TreeWikiLabel = {
+  type: 'wikiLabel',
+  id: 'label',
+  title: 'Label',
+};
+
+// A wiki-capable tree whose rows draw `li.test-row` holding only the title and
+// the prompt, its last input per row id in `inputs`, and the command each
+// prompt element anchors in `commands`.
+function wikiSetUp(overrides: { hasWiki?: boolean } = {}) {
+  const inputs = new Map<string, TreeRowInput>();
+  const commands = new Map<unknown, string>();
+  const rowLayout: Layout = {
+    ...paneLayout('pane'),
+    treeRow(parent, input, kit) {
+      inputs.set(input.id, input);
+      const row = kit.el(parent, 'li', 'test-row', input.title);
+      kit.cursorPrompt(row);
+      return { element: row };
+    },
+  };
+  const { parts } = fakeDocsParts(() => withUser(defaultLayout, rowLayout));
+  const openWikiLink = vi.fn();
+  const switchView = vi.fn();
+  const tree = createTreeView({
+    ...treeDeps(parts),
+    hasWiki: true,
+    openWikiLink,
+    switchView,
+    anchor: (element, command) => {
+      commands.set(element, command);
+      return { dispose: () => undefined };
+    },
+    ...overrides,
+  });
+  const root = asFake(tree.element);
+  return {
+    tree,
+    root,
+    inputs,
+    commands,
+    openWikiLink,
+    switchView,
+    titles: () => findAll(root, 'test-row').map((row) => row.textContent),
+    selected: () => findAll(root, 'is-selected').map((row) => row.textContent),
+    type: (filter: string) => {
+      tree.openFilter();
+      const box = findAll(root, 'docs-box')[0] as FocusFakeElement;
+      box.value = filter;
+      box.fire('input');
+    },
+  };
+}
+
+const NOTHING = () => '';
+const NO_HEADINGS = () => [];
 
 describe('createTreeView', () => {
   beforeEach(() =>
@@ -123,4 +221,244 @@ describe('createTreeView', () => {
       true,
     );
   });
+
+  it('showView_AwayAndBack_KeepsTheSelectionAndTheCollapsedGroup', () => {
+    const { tree, titles, selected } = wikiSetUp();
+    tree.setWikiTree(
+      [shelf('One', [page('a')]), shelf('Two', [page('b')])],
+      [],
+      true,
+    );
+    tree.down();
+    tree.down();
+    tree.close();
+    tree.up();
+
+    tree.showView('all');
+    tree.showView('wiki');
+
+    expect(titles()).toEqual(['One', 'a', 'Two']);
+    expect(selected()).toEqual(['a']);
+  });
+
+  it('showView_AllHoldsAFilter_WikiUnfilteredAndTheFilterReturns', () => {
+    const { tree, titles, type } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [page('wiki page')])], [], true);
+    tree.setTree(
+      [shelf('Mine', [page('alpha'), page('beta')])],
+      NOTHING,
+      NO_HEADINGS,
+      true,
+    );
+    tree.showView('all');
+    type('alpha');
+    tree.acceptFilter();
+
+    tree.showView('wiki');
+    expect(titles()).toEqual(['One', 'wiki page']);
+
+    tree.showView('all');
+    expect(titles()).toEqual(['Mine', 'alpha']);
+  });
+
+  it('wikiFilter_DocOutsideMain_ShowsUnderItsGroups', () => {
+    const { tree, titles, type } = wikiSetUp();
+    tree.setWikiTree(
+      [shelf('One', [page('listed')])],
+      [shelf('Repo', [shelf('Rules', [page('outside')])])],
+      true,
+    );
+
+    type('outside');
+
+    expect(titles()).toEqual(['Repo', 'Rules', 'outside']);
+  });
+
+  it('wikiFilter_NoMainPage_StillFindsTheDocs', () => {
+    const { tree, titles, type, root } = wikiSetUp();
+    tree.setWikiTree([], [shelf('Repo', [page('outside')])], true);
+    expect(findAll(root, 'docs-line-slot')[0].textContent).toContain('Main.md');
+
+    type('outside');
+
+    expect(titles()).toEqual(['Repo', 'outside']);
+  });
+
+  it('wikiFilter_EndsOnARowTheShelvesDoNotHold_SelectsTheFirstRow', () => {
+    const { tree, selected, type } = wikiSetUp();
+    tree.setWikiTree(
+      [shelf('One', [page('listed')])],
+      [shelf('Repo', [page('outside')])],
+      true,
+    );
+    type('outside');
+    tree.acceptFilter();
+    tree.down();
+    tree.down();
+    expect(selected()).toEqual(['outside']);
+
+    tree.openFilter();
+    tree.cancelFilter();
+
+    expect(selected()).toEqual(['One']);
+  });
+
+  it('setWikiTree_DropsTheSelectedRow_SelectsTheFirstRow', () => {
+    const { tree, selected } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [page('a'), page('b')])], [], true);
+    tree.down();
+    tree.down();
+    expect(selected()).toEqual(['b']);
+
+    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+
+    expect(selected()).toEqual(['One']);
+  });
+
+  it('setWikiTree_AddsAGroup_ExpandsItAndTheCollapsedGroupStays', () => {
+    const { tree, titles } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+    tree.close();
+
+    tree.setWikiTree(
+      [shelf('One', [page('a')]), shelf('Two', [page('b')])],
+      [],
+      true,
+    );
+
+    expect(titles()).toEqual(['One', 'Two', 'b']);
+  });
+
+  it.each<{
+    name: string;
+    node: TreeNode;
+    expected: Partial<TreeRowInput>;
+  }>([
+    {
+      name: 'DanglingLink',
+      node: wikiLink({ isDangling: true }),
+      expected: {
+        type: 'wikiLink',
+        isDangling: true,
+        count: null,
+        isPrompted: false,
+      },
+    },
+    {
+      name: 'LinkWithACount',
+      node: wikiLink({ count: 7 }),
+      expected: {
+        type: 'wikiLink',
+        isDangling: false,
+        count: 7,
+        isPrompted: false,
+      },
+    },
+    {
+      name: 'Label',
+      node: WIKI_LABEL,
+      expected: {
+        type: 'wikiLabel',
+        isDangling: false,
+        count: null,
+        isPrompted: false,
+      },
+    },
+  ])('rowInput_$name_SelectedRowHoldsItsFields', ({ node, expected }) => {
+    const { tree, inputs, selected } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [node])], [], true);
+    tree.down();
+    expect(selected()).toEqual([node.title]);
+
+    expect(inputs.get(node.id)).toMatchObject(expected);
+  });
+
+  it('prompt_PageRowInTheWiki_OffersRenameAndTrashAndNoStar', () => {
+    const { tree, root, commands } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+    tree.setTree([shelf('Mine', [page('a')])], NOTHING, NO_HEADINGS, true);
+    const promptCommands = () =>
+      findAll(root, 'docs-row-actions')
+        .flatMap((actions) => actions.children)
+        .map((action) => commands.get(action));
+    tree.down();
+
+    expect(promptCommands()).toEqual(['rename', 'trash']);
+
+    tree.showView('all');
+    tree.down();
+    expect(promptCommands()).toEqual(['toggleStar', 'rename', 'trash']);
+  });
+
+  it('selectEntry_InBothViews_EachSelectsItWhileTheWikiShows', () => {
+    const { tree, selected } = wikiSetUp();
+    tree.setWikiTree(
+      [shelf('One', [page('other')]), shelf('Two', [page('both')])],
+      [],
+      true,
+    );
+    tree.setTree(
+      [shelf('Mine', [page('other'), page('both')])],
+      NOTHING,
+      NO_HEADINGS,
+      true,
+    );
+
+    tree.selectEntry('e:both');
+
+    expect(selected()).toEqual(['both']);
+    expect(tree.selectedIn('all')).toEqual(page('both'));
+  });
+
+  it('selectEntry_OnlyInAllPages_WikiKeepsItsSelection', () => {
+    const { tree, selected } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [page('other')])], [], true);
+    tree.setTree([shelf('Mine', [page('alone')])], NOTHING, NO_HEADINGS, true);
+
+    tree.selectEntry('e:alone');
+
+    expect(selected()).toEqual(['One']);
+    expect(tree.selectedIn('all')).toEqual(page('alone'));
+  });
+
+  it('sessionTree_NoWiki_DrawsNoSwitchAndShowsItsTree', () => {
+    const { tree, root, titles } = wikiSetUp({ hasWiki: false });
+
+    tree.setTree([shelf('Mine', [page('a')])], NOTHING, NO_HEADINGS, true);
+
+    expect(findAll(root, 'docs-sidebar-switch')).toEqual([]);
+    expect(findAll(root, 'docs-switch-slot')[0].hidden).toBe(true);
+    expect(titles()).toEqual(['Mine', 'a']);
+  });
+
+  it('sidebarSwitch_DrawnForTheShownViewAndItsClickSwitches', () => {
+    const { tree, root, switchView } = wikiSetUp();
+    const activeOption = () =>
+      findAll(root, 'is-active').map((option) => option.textContent);
+    expect(activeOption()).toEqual(['Wiki']);
+
+    tree.showView('all');
+
+    expect(activeOption()).toEqual(['All pages']);
+    const control = findAll(root, 'docs-sidebar-switch')[0] as FocusFakeElement;
+    control.fire('click');
+    expect(switchView).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { key: 'open', focusDoc: false },
+    { key: 'toggle', focusDoc: true },
+  ] as const)(
+    '$key_WikiLinkRow_CallsOpenWikiLinkWithFocusDoc_$focusDoc',
+    ({ key, focusDoc }) => {
+      const { tree, openWikiLink } = wikiSetUp();
+      const link = wikiLink({});
+      tree.setWikiTree([shelf('One', [link])], [], true);
+      tree.down();
+
+      tree[key]();
+
+      expect(openWikiLink).toHaveBeenCalledExactlyOnceWith(link, focusDoc);
+    },
+  );
 });

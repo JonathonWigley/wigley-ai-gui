@@ -46,6 +46,8 @@ export interface DocFilesDeps {
 // links, stays. A trash also takes every link the index walked to what goes.
 export interface DocFiles {
   read(path: string): Promise<string>;
+  // The wiki's `Main.md` with every link resolved, whether or not it exists.
+  wikiMainPath(): Promise<string>;
   // `expectedText` non-null: writes only while the disk (missing reads as
   // '') still holds it, else returns what the disk holds.
   write(
@@ -327,6 +329,12 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
 
   return {
     read: async (path) => files.read(absolute(path)),
+    wikiMainPath: () =>
+      realTarget(
+        files,
+        paths.join(homeDir, WIGLEY_AGENTS_FOLDER, 'wiki', 'Main.md'),
+        paths,
+      ),
     write,
     writeBytes,
     create,

@@ -2,14 +2,15 @@ import type { FileWatch } from '../../../contracts/files';
 import type { DocChange } from '../contract';
 
 export interface ViewWatches {
-  // Closes the view's watch, then watches `path` unless it is null; a later
-  // call for the view wins over one still starting.
+  // Closes the watch id's watch, then watches `path` unless it is null; a later
+  // call for the id wins over one still starting.
   watch(viewId: string, path: string | null): Promise<void>;
   // Closes every watch, and each one still starting once it starts.
   closeAll(): void;
 }
 
-// One watched file per view, each change sent as that view's `DocChange`.
+// One watched file per watch id (a view's id, or `<viewId>:main`), each change
+// sent as that id's `DocChange`.
 export function createViewWatches(
   watchFile: (path: string, changed: () => void) => Promise<FileWatch>,
   send: (change: DocChange) => void,

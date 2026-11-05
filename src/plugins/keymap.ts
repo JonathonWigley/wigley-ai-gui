@@ -223,6 +223,7 @@ export const defaultKeymap = {
     })),
     { keys: '<Leader>kd', scope: 'any', command: 'docs.showMode' },
     { keys: '<Leader>vt', scope: 'any', command: 'docs.toggleTree' },
+    { keys: '<Leader>vw', scope: 'any', command: 'docs.toggleWikiView' },
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
     { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },

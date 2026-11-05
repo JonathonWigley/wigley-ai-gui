@@ -99,6 +99,36 @@ export function expandNewStarred(
   return isStarredNew ? new Set([...expanded, STARRED_ROOT_ID]) : expanded;
 }
 
+// The id of every group in `tree`, at any depth.
+function groupIds(tree: readonly TreeNode[]): Set<string> {
+  const ids = new Set<string>();
+  const pending = [...tree];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'group') {
+      ids.add(node.id);
+      pending.push(...node.children);
+    }
+  }
+  return ids;
+}
+
+// `expanded` plus each group of `next` that `previous` does not hold, so a
+// collapsed group stays collapsed and a new one starts expanded.
+export function expandNewGroups(
+  previous: readonly TreeNode[],
+  next: readonly TreeNode[],
+  expanded: ReadonlySet<string>,
+): Set<string> {
+  const previousIds = groupIds(previous);
+  const result = new Set(expanded);
+  for (const id of groupIds(next)) {
+    if (!previousIds.has(id)) {
+      result.add(id);
+    }
+  }
+  return result;
+}
+
 // Unfiltered, a group's children show while it is expanded; a filter of only
 // spaces is none. Filtered, only leaves whose title the filter fuzzily matches,
 // whose path holds the trimmed filter, ignoring case, or with a matching
@@ -671,6 +701,7 @@ export interface TreeLineState {
   filter: string;
   rowCount: number;
   isFilterOpen: boolean;
+  isWikiView: boolean;
 }
 
 // The line the tree pane shows for its state; null for none.
@@ -681,7 +712,7 @@ export function treeLine(state: TreeLineState): TreeLine | null {
   if (state.isIndexEmpty) {
     return {
       placement: 'empty',
-      text: 'No docs in this index',
+      text: state.isWikiView ? 'No pages in Main.md' : 'No docs in this index',
       hint: { command: 'rescan', words: 'to rescan' },
     };
   }

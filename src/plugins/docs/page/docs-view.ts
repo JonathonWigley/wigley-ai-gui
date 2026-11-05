@@ -32,10 +32,13 @@ import { loadedAgo, loadedAt, loadedLine } from '../loaded-time';
 import { isIndexedPath } from '../path-guard';
 import {
   buildTree,
+  buildWikiFilterTree,
+  buildWikiTree,
   isStarredLeafId,
   type TreeHeadingMatch,
   type TreeLeaf,
   type TreeNode,
+  type TreeWikiLink,
 } from '../tree';
 import { type DocDetail, type DocTarget, createDocView } from './doc-view';
 import { createDocsDialogs } from './docs-dialogs';
@@ -60,6 +63,7 @@ import {
 import { createDocsParts, type DocsScope } from './layout/docs-parts';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
+import { createWikiMainSource } from './wiki-main-source';
 
 // The scopes a docs view pushes over its pane's scope.
 export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
@@ -77,6 +81,7 @@ export interface DocsViewCommands {
   rescan(): void;
   pickContext(): void;
   toggleStar(): void;
+  toggleWikiView(): void;
   backToTree(): void;
   scrollDown(): void;
   scrollUp(): void;
@@ -112,10 +117,11 @@ export interface DocsView {
   // The first call loads the source's index, then reads its plugin-source
   // statuses, again after a fetch, and rebuilds the index when the source
   // can; later calls do nothing. Every rebuild reads the statuses again once
-  // it settles.
+  // it settles. The machine view's first call also starts reading `Main.md`,
+  // and each index run that lands reads it again.
   showFirstTime(): void;
   // Rebuilds the source's index, then reads its statuses and reads them
-  // again after a fetch: `R`.
+  // again after a fetch, and reads `Main.md` again in the machine view: `R`.
   rescan(): void;
   // Another view made `change`. A view not shown yet does nothing; else a
   // rename or trash shows at once, the doc pane following its file, and the
@@ -159,7 +165,7 @@ export interface DocsView {
   // throw from the tree, the doc pane or the dialogs skips none of the others.
   layoutsChanged(): void;
   // Closes the overlays, takes the dialogs off the window, stops the view's
-  // watch, its `docChanged` listener and its following of star changes,
+  // watches, its `docChanged` listener and its following of star changes,
   // disposes its anchors, and destroys its editor.
   dispose(): void;
   commands: DocsViewCommands;
@@ -219,6 +225,8 @@ export interface DocsViewDeps {
 const SESSION_CONTEXT_TEXT =
   "A session's Docs tab uses the session's own load states";
 
+const SESSION_SWITCH_TEXT = "A session's Docs tab keeps its own tree";
+
 type IndexRun = 'loadIndex' | 'rebuildIndex';
 
 const BUSY_TEXT: Record<IndexRun, string> = {
@@ -272,7 +280,8 @@ interface AppliedChange {
 
 // One docs view over an index source: the tree pane and the doc pane, its
 // dialogs placed over the window through `addOverlay`. It reads nothing until
-// its first show. A change made here shows at once and its paths stay pending
+// its first show. The machine source's view alone has the wiki view in its
+// tree, built from `Main.md`. A change made here shows at once and its paths stay pending
 // until an index run asked after it lands; every other view hears it through
 // `changed`.
 export function createDocsView(deps: DocsViewDeps): DocsView {
@@ -422,11 +431,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
+  const wikiMain = isMachine
+    ? createWikiMainSource({
+        viewId: deps.viewId,
+        channel: deps.channel,
+        log,
+        changed: () => showWikiTree(),
+      })
+    : null;
+
   const tree = createTreeView({
     log,
     matcher: deps.matcher,
     parts: newParts(),
     isMachine,
+    hasWiki: isMachine,
     openLeaf: (leaf: TreeLeaf, focusesDoc: boolean) => {
       const entry = entriesById.get(leaf.entryId);
       if (entry === undefined) {
@@ -465,6 +484,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           }
         });
     },
+    openWikiLink: (link: TreeWikiLink) => openWikiLink(link),
+    switchView: () => toggleWikiView(),
     pushBoxScope: () => deps.pushScope('box'),
     filterClosed: () => {
       focused = 'tree';
@@ -648,7 +669,65 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       (entryId) => entriesById.get(entryId)?.headings ?? [],
       next !== null,
     );
+    showWikiTree();
     doc.refreshChips();
+  };
+
+  // Rebuilds the wiki's trees. No shelves show until both the index and
+  // `Main.md` have been read, so no row dangles over an empty entry list.
+  const showWikiTree = () => {
+    if (wikiMain === null) {
+      return;
+    }
+    const entries = document?.entries ?? [];
+    const mainPath = wikiMain.path();
+    tree.setWikiTree(
+      document === null || mainPath === null
+        ? []
+        : buildWikiTree(
+            wikiMain.shelves(),
+            entries,
+            deps.paths.parent(mainPath),
+            deps.homeDir,
+            deps.paths,
+          ),
+      buildWikiFilterTree(entries, deps.homeDir, deps.paths),
+      document !== null && wikiMain.isRead(),
+    );
+  };
+
+  const showAllPages = () => {
+    tree.showView('all');
+    log('sidebar shows All pages');
+  };
+
+  const refuseMissingPage = (title: string) => {
+    toast(`Not in the docs index: ${title}`, 'info');
+    log(`refused ${title}: not in the index`);
+  };
+
+  const openWikiLink = (link: TreeWikiLink) => {
+    if (link.isDangling) {
+      refuseMissingPage(link.title);
+    } else if (link.target.type === 'all') {
+      showAllPages();
+    } else {
+      toast('This list page is not drawn yet', 'info');
+    }
+  };
+
+  const toggleWikiView = () => {
+    if (!isMachine) {
+      toast(SESSION_SWITCH_TEXT, 'info');
+      return;
+    }
+    deps.revealTree();
+    if (tree.shownView() === 'wiki') {
+      showAllPages();
+    } else {
+      tree.showView('wiki');
+      log('sidebar shows the wiki');
+    }
   };
 
   // Runs `run` on the view's source, showing its busy line while it runs,
@@ -664,6 +743,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       .invoke(run, deps.sourceId)
       .then((result) => {
         firstRead.resolve();
+        void wikiMain?.reread();
         if (number < shownLoad) {
           return result;
         }
@@ -889,8 +969,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // Stars or unstars the selected doc and logs it; nothing on a group, with
-  // no row selected, or for an entry gone from the index.
+  // no row selected, or for an entry gone from the index. The wiki view
+  // refuses it on every row.
   const toggleStar = () => {
+    if (tree.shownView() === 'wiki') {
+      toast('Stars stay in All pages', 'info');
+      log('stars stay in All pages');
+      return;
+    }
     const node = tree.selected();
     if (node?.type !== 'entry') {
       return;
@@ -916,6 +1002,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     rescan: () => view.rescan(),
     pickContext,
     toggleStar,
+    toggleWikiView,
     backToTree: () => {
       deps.revealTree();
       focusTreePaneAndLog();
@@ -972,12 +1059,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (document === null) {
       return;
     }
-    const before = tree.selected();
+    const before = tree.selectedIn('all');
     showDocument(document);
     const isStarredRowDropped =
       before?.type === 'entry' &&
       isStarredLeafId(before.id) &&
-      tree.selected() === null;
+      tree.selectedIn('all') === null;
     if (isStarredRowDropped) {
       tree.selectEntry(before.entryId);
     }
@@ -987,6 +1074,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (change.viewId === deps.viewId) {
       doc.diskChanged(change.path);
     }
+    wikiMain?.diskChanged(change);
   });
 
   const view: DocsView = {
@@ -997,6 +1085,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       hasRun = true;
+      void wikiMain?.start();
       const runs = runIndex('loadIndex').then((result) => {
         readStatuses(true);
         return result?.canRebuild === true ? rebuild(false) : null;
@@ -1008,6 +1097,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     rescan() {
       hasRun = true;
+      void wikiMain?.reread();
       void rebuild(true);
     },
     outsideChange(change) {
@@ -1064,6 +1154,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       view.closeOverlays();
       listening.dispose();
       starChange.dispose();
+      wikiMain?.dispose();
       for (const overlay of overlays) {
         overlay.dispose();
       }

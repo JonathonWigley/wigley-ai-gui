@@ -577,6 +577,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         rescan: onActiveView('rescan'),
         pickContext: onActiveView('pickContext'),
         toggleStar: onActiveView('toggleStar'),
+        toggleWikiView: onActiveView('toggleWikiView'),
         backToTree: onActiveView('backToTree'),
         scrollDown: onActiveView('scrollDown'),
         scrollUp: onActiveView('scrollUp'),

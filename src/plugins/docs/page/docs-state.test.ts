@@ -29,6 +29,7 @@ import {
   defaultExpandedIds,
   detailFields,
   edgeSelection,
+  expandNewGroups,
   expandNewStarred,
   fetchText,
   fileStatuses,
@@ -673,6 +674,51 @@ describe('expandNewStarred', () => {
     const before = new Set(['owner:mine']);
 
     expect(expandNewStarred([starred, mine], [mine], before)).toBe(before);
+  });
+});
+
+describe('expandNewGroups', () => {
+  const kept = group('shelf:Kept', 'Kept', []);
+  const collapsed = group('shelf:Shut', 'Shut', []);
+  const added = group('shelf:New', 'New', []);
+  const nestedAdded = group('shelf:Outer', 'Outer', [
+    group('shelf:Inner', 'Inner', []),
+  ]);
+
+  it.each<{
+    name: string;
+    previous: TreeNode[];
+    next: TreeNode[];
+    expected: string[];
+  }>([
+    {
+      name: 'NewGroup_ExpandedAndCollapsedStays',
+      previous: [kept, collapsed],
+      next: [kept, collapsed, added],
+      expected: ['shelf:Kept', 'shelf:New'],
+    },
+    {
+      name: 'NestedNewGroup_BothExpanded',
+      previous: [kept],
+      next: [kept, nestedAdded],
+      expected: ['shelf:Inner', 'shelf:Kept', 'shelf:Outer'],
+    },
+    {
+      name: 'GroupGone_KeepsTheIds',
+      previous: [kept, collapsed],
+      next: [collapsed],
+      expected: ['shelf:Kept'],
+    },
+    {
+      name: 'NewLeaf_AddsNothing',
+      previous: [kept],
+      next: [kept, leaf('page', 'Page', 'e:page')],
+      expected: ['shelf:Kept'],
+    },
+  ])('expandNewGroups_$name', ({ previous, next, expected }) => {
+    const expanded = expandNewGroups(previous, next, new Set(['shelf:Kept']));
+
+    expect([...expanded].sort()).toEqual(expected);
   });
 });
 
@@ -1439,6 +1485,7 @@ describe('treeLine', () => {
         filter: '   ',
         rowCount: 0,
         isFilterOpen: false,
+        isWikiView: false,
       },
       expected: null,
     },
@@ -1449,6 +1496,7 @@ describe('treeLine', () => {
         filter: 'neat',
         rowCount: 0,
         isFilterOpen: false,
+        isWikiView: false,
       },
       expected: null,
     },
@@ -1459,6 +1507,7 @@ describe('treeLine', () => {
         filter: 'neat',
         rowCount: 0,
         isFilterOpen: false,
+        isWikiView: false,
       },
       expected: {
         placement: 'empty',
@@ -1469,10 +1518,26 @@ describe('treeLine', () => {
     {
       lineState: {
         hasTree: true,
+        isIndexEmpty: true,
+        filter: '',
+        rowCount: 0,
+        isFilterOpen: false,
+        isWikiView: true,
+      },
+      expected: {
+        placement: 'empty',
+        hint: { command: 'rescan', words: 'to rescan' },
+        mentions: 'Main.md',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
         isIndexEmpty: false,
         filter: 'zqzq',
         rowCount: 0,
         isFilterOpen: false,
+        isWikiView: false,
       },
       expected: {
         placement: 'empty',
@@ -1487,6 +1552,7 @@ describe('treeLine', () => {
         filter: 'zqzq',
         rowCount: 0,
         isFilterOpen: true,
+        isWikiView: false,
       },
       expected: {
         placement: 'empty',
@@ -1501,6 +1567,7 @@ describe('treeLine', () => {
         filter: 'neat',
         rowCount: 3,
         isFilterOpen: false,
+        isWikiView: false,
       },
       expected: {
         placement: 'above',
@@ -1515,6 +1582,7 @@ describe('treeLine', () => {
         filter: 'neat',
         rowCount: 3,
         isFilterOpen: true,
+        isWikiView: false,
       },
       expected: null,
     },
@@ -1525,6 +1593,7 @@ describe('treeLine', () => {
         filter: '',
         rowCount: 3,
         isFilterOpen: false,
+        isWikiView: false,
       },
       expected: null,
     },

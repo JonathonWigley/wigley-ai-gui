@@ -90,7 +90,8 @@
   color: var(--wg-fg-secondary);
 }
 
-/* A leaf's end: its last-loaded time, then its status dot. */
+/* A row's end: a wiki link's count, a leaf's last-loaded time, then its status
+   dot. */
 .docs-row-end {
   align-items: center;
   display: inline-flex;
@@ -101,6 +102,21 @@
 .docs-row-time {
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
+}
+
+.docs-row-count {
+  font-size: var(--wg-text-12);
+}
+
+/* A wiki link the docs index does not hold. */
+.docs-row--dangling {
+  color: var(--wg-fg-tertiary);
+}
+
+/* A label in the wiki's list: a heading, not a page. */
+.docs-row--label {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
 }
 
 /* The default doc pane: a column holding its `‹ tree ⌥H` row above the

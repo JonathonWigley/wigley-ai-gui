@@ -859,6 +859,56 @@ describe('trash', () => {
   });
 });
 
+describe('wikiMainPath', () => {
+  const CLONE = '/Users/u/src/wa';
+
+  it.each<{
+    name: string;
+    links: [string, string][];
+    folders: string[];
+    written: string | null;
+    expected: string;
+  }>([
+    {
+      name: 'PlainHomeFolder',
+      links: [],
+      folders: [],
+      written: `${HOME}/wigley-agents/wiki/Main.md`,
+      expected: '/Users/u/wigley-agents/wiki/Main.md',
+    },
+    {
+      name: 'LinkedFolder_FilePresent',
+      links: [[`${HOME}/wigley-agents`, CLONE]],
+      folders: [CLONE],
+      written: `${CLONE}/wiki/Main.md`,
+      expected: '/Users/u/src/wa/wiki/Main.md',
+    },
+    {
+      name: 'LinkedFolder_WikiFolderMissing',
+      links: [[`${HOME}/wigley-agents`, CLONE]],
+      folders: [CLONE],
+      written: null,
+      expected: '/Users/u/src/wa/wiki/Main.md',
+    },
+  ])(
+    'wikiMainPath_$name_ReturnsTheRealPath',
+    async ({ links, folders, written, expected }) => {
+      const test = setUp();
+      for (const folder of folders) {
+        await test.files.makeFolder(folder);
+      }
+      if (written !== null) {
+        await test.files.write(written, 'text');
+      }
+      const files = withLinks(test.files, new Map(links));
+
+      const path = await setUp({ files }).docFiles.wikiMainPath();
+
+      expect(path).toBe(expected);
+    },
+  );
+});
+
 describe('pluginConfigFile', () => {
   it('pluginConfigFile_ClaudeSecondDir_KeyLine', async () => {
     const test = setUp();

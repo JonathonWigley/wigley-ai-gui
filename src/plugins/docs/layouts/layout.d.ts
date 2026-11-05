@@ -21,12 +21,15 @@ export interface LayoutPart {
 export interface DocsKit extends BaseKit {}
 
 // The tree pane, scope `docs.tree`. Each app part mounts once per draw. One the pane leaves out the app appends at
-// the end of the pane's element, in the order status, filterBox, line, rows.
+// the end of the pane's element, in the order sidebarSwitch, status, filterBox, line, rows.
 export interface TreePaneInput {
   // True in Docs mode's tree, false in a session's Docs tab.
   isMachine: boolean;
 }
 export interface TreePaneKit extends DocsKit {
+  // `div.docs-switch-slot`: the slot the app draws `sidebarSwitch` into. The app sets `hidden` on it in a session's
+  // Docs tab, which has no switch.
+  sidebarSwitch(parent: HTMLElement): HTMLElement;
   // `div.docs-status`: the app sets its text and hides it while it is empty.
   status(parent: HTMLElement): HTMLElement;
   // `div.docs-filter`: the InputFrame holding the app's filter input; the app shows it while the filter is open.
@@ -49,7 +52,8 @@ export interface TreeLineInput {
 // mouse from taking focus there.
 export interface TreeRowInput {
   id: string;
-  type: 'group' | 'entry';
+  // `wikiLink` is a link in the wiki's `Main.md` that opens no doc as a leaf does, `wikiLabel` a heading in that list.
+  type: 'group' | 'entry' | 'wikiLink' | 'wikiLabel';
   title: string;
   depth: number;
   // False on a leaf.
@@ -63,10 +67,15 @@ export interface TreeRowInput {
   isStarred: boolean;
   // The selected leaf: it ends in the cursor prompt.
   isPrompted: boolean;
+  // A `wikiLink` whose target the index does not hold; false on every other row.
+  isDangling: boolean;
+  // The size of a `wikiLink`'s kind or owner list; null on every other row.
+  count: number | null;
 }
 export interface TreeRowKit extends DocsKit {
-  // On a prompted row: places the app's `span.docs-row-actions` (`s star  r rename  d trash`) and returns it. On any
-  // other row: places nothing and returns null. A prompted row that leaves it out gets it appended at its end.
+  // On a prompted row: places the app's `span.docs-row-actions` (`s star  r rename  d trash`; the wiki view leaves out
+  // `s star`) and returns it. On any other row: places nothing and returns null. A prompted row that leaves it out
+  // gets it appended at its end.
   cursorPrompt(parent: HTMLElement): HTMLElement | null;
 }
 

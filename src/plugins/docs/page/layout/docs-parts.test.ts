@@ -110,6 +110,7 @@ describe('createDocsParts', () => {
     const pane = asFake(tree.element).children[0];
     expect(pane.classList.contains('bare-pane')).toBe(true);
     expect(pane.children.map((child) => child.className)).toEqual([
+      'docs-switch-slot',
       'docs-status',
       'ui-input docs-filter',
       'docs-line-slot',
@@ -284,8 +285,11 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     matcher: fakeFuzzyMatcher,
     parts,
     isMachine: true,
+    hasWiki: false,
     openLeaf: () => undefined,
     openHeading: () => undefined,
+    openWikiLink: () => undefined,
+    switchView: () => undefined,
     pushBoxScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,

@@ -38,6 +38,7 @@ const layout = {
       label: 'doc',
     });
     edge.classList.add('docs-edge', 'docs-edge--end');
+    kit.sidebarSwitch(pane);
     kit.status(pane);
     kit.filterBox(pane);
     kit.line(pane);
@@ -82,6 +83,12 @@ const layout = {
       leading: caret,
       trailing: end,
     });
+    if (input.isDangling) {
+      row.classList.add('docs-row--dangling');
+    }
+    if (input.type === 'wikiLabel') {
+      row.classList.add('docs-row--label');
+    }
     if (input.isPrompted) {
       row.classList.add('docs-row--prompted');
       kit.cursorPrompt(row);
@@ -319,8 +326,8 @@ function listRowTime(parent, input, kit) {
   return time;
 }
 
-// A leaf's row end: its time, then its status dot; the dot alone with no
-// time; null with neither. Drawn into `parent` and moved into the row by
+// A row's end: its count, then its time, then its status dot; the dot alone
+// with neither; null with none. Drawn into `parent` and moved into the row by
 // `kit.row`.
 /**
  * @param {HTMLElement} parent
@@ -329,8 +336,11 @@ function listRowTime(parent, input, kit) {
  * @returns {HTMLElement | null}
  */
 function rowEnd(parent, input, kit) {
-  const hasTime = input.time !== null;
-  const end = hasTime ? kit.el(parent, 'span', 'docs-row-end') : null;
+  const hasEnd = input.time !== null || input.count !== null;
+  const end = hasEnd ? kit.el(parent, 'span', 'docs-row-end') : null;
+  if (input.count !== null && end !== null) {
+    kit.el(end, 'span', 'docs-row-count', String(input.count));
+  }
   if (input.time !== null && end !== null) {
     kit.el(end, 'span', 'docs-row-time', input.time.text).title =
       input.time.title;

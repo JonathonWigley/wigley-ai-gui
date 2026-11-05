@@ -38,7 +38,11 @@ export const docsManifest = definePlugin({
       group: 'tree',
       runsIn: 'page',
     },
-    filter: { label: 'filter by title or path', group: 'tree', runsIn: 'page' },
+    filter: {
+      label: 'filter by title, path or heading',
+      group: 'tree',
+      runsIn: 'page',
+    },
     rescan: { label: 'rescan the docs', group: 'tree', runsIn: 'page' },
     pickContext: {
       label: 'pick the load-state folder',
@@ -48,6 +52,11 @@ export const docsManifest = definePlugin({
     toggleStar: {
       label: 'star or unstar the doc',
       group: 'tree',
+      runsIn: 'page',
+    },
+    toggleWikiView: {
+      label: 'switch the sidebar between the wiki and All pages',
+      group: 'view',
       runsIn: 'page',
     },
     backToTree: { label: 'back to the tree', group: 'focus', runsIn: 'page' },
