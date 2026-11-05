@@ -6,8 +6,8 @@ export type FuzzyTiers = readonly (readonly string[])[];
 export interface FuzzyMatcher {
   // The items that match `query`, each once, best first: a match in an earlier
   // tier outranks any match in a later one, inside a tier an item takes its
-  // best text's score, and the shorter text then input order break ties. An
-  // empty query returns every item in input order.
+  // best text's score, and input order breaks ties. An empty query returns
+  // every item in input order.
   rank<T>(
     items: readonly T[],
     query: string,

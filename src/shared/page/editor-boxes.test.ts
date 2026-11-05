@@ -65,7 +65,7 @@ function fakeHost() {
       throw new Error('not used by editor boxes');
     },
     contains: () => false,
-    takesKey: () => false,
+    takesChordKey: () => false,
     typeInto: () => {},
     onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},

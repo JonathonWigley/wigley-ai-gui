@@ -985,7 +985,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     },
     contains: (element) =>
       hosted.some(({ view }) => view.dom.contains(element)),
-    takesKey(event) {
+    takesChordKey(event) {
       const target = hosted.find(({ view }) =>
         view.dom.contains(event.target as Element),
       );

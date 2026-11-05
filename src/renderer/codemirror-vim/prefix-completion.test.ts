@@ -37,10 +37,10 @@ function items(...words: string[]): CompletionItem[] {
 
 describe('prefixMatch', () => {
   it('prefixMatch_EmptyTyped_OffersAllInOrder', () => {
-    expect(prefixMatch('/', '/', items('model', 'compact'), matcher)).toEqual({
+    expect(prefixMatch('/', '/', items('compact', 'model'), matcher)).toEqual({
       from: 0,
       to: 1,
-      words: ['model', 'compact'],
+      words: ['compact', 'model'],
     });
   });
 
@@ -86,10 +86,26 @@ describe('prefixMatch', () => {
     ]);
   });
 
+  it('prefixMatch_EqualMatches_ShortestTextFirst', () => {
+    const named = [
+      { word: 'publish-feature-catalog', aliases: [] },
+      { word: 'wigley:feature-primer', aliases: ['feature-primer'] },
+      { word: 'wigley:feature-spec', aliases: ['feature-spec'] },
+      { word: 'wigley:feature', aliases: ['feature'] },
+    ];
+
+    expect(prefixMatch('/feature', '/', named, matcher)?.words).toEqual([
+      'wigley:feature',
+      'wigley:feature-spec',
+      'wigley:feature-primer',
+      'publish-feature-catalog',
+    ]);
+  });
+
   it('prefixMatch_RepeatedWord_KeptOnce', () => {
     expect(
-      prefixMatch('/m', '/', items('model', 'model', 'mcp'), matcher)?.words,
-    ).toEqual(['model', 'mcp']);
+      prefixMatch('/m', '/', items('mcp', 'model', 'model'), matcher)?.words,
+    ).toEqual(['mcp', 'model']);
   });
 
   it('prefixMatch_RanksOverOneTier_KeepsMatcherOrder', () => {
@@ -160,16 +176,29 @@ describe('completionRowRender', () => {
 });
 
 describe('popupActionOf', () => {
+  const NO_MODIFIERS = {
+    code: '',
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+  };
+
   it.each([
-    { key: 'Tab', ctrlKey: false, expected: 'accept' },
-    { key: 'ArrowDown', ctrlKey: false, expected: 'down' },
-    { key: 'n', ctrlKey: true, expected: 'down' },
-    { key: 'ArrowUp', ctrlKey: false, expected: 'up' },
-    { key: 'p', ctrlKey: true, expected: 'up' },
-    { key: 'n', ctrlKey: false, expected: null },
-    { key: 'p', ctrlKey: false, expected: null },
-    { key: 'h', ctrlKey: true, expected: null },
-  ])('$key ctrl=$ctrlKey → $expected', ({ key, ctrlKey, expected }) => {
-    expect(popupActionOf({ key, ctrlKey })).toBe(expected);
+    { key: 'Tab', expected: 'accept' },
+    { key: 'ArrowDown', expected: 'down' },
+    { key: 'n', code: 'KeyN', ctrlKey: true, expected: 'down' },
+    { key: 'т', code: 'KeyN', ctrlKey: true, expected: 'down' },
+    { key: 'ArrowUp', expected: 'up' },
+    { key: 'p', code: 'KeyP', ctrlKey: true, expected: 'up' },
+    { key: 'n', code: 'KeyN', expected: null },
+    { key: 'p', code: 'KeyP', expected: null },
+    { key: 'h', code: 'KeyH', ctrlKey: true, expected: null },
+    { key: 'n', code: 'KeyN', ctrlKey: true, altKey: true, expected: null },
+    { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true, expected: null },
+    { key: 'n', code: 'KeyN', ctrlKey: true, metaKey: true, expected: null },
+    { key: 'n', code: 'KeyB', ctrlKey: true, expected: null },
+  ])('$key $code → $expected', ({ expected, ...event }) => {
+    expect(popupActionOf({ ...NO_MODIFIERS, ...event })).toBe(expected);
   });
 });

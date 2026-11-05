@@ -263,16 +263,19 @@ describe('list picker', () => {
 
   it('open_Name_FilterRanksItAheadOfLabels', () => {
     const { picker, type } = filteredPickerSetup();
+    const chosen = vi.fn();
     picker.open({
       title: 'Target',
       items: ['b/a', 'a/b'],
       label: (item) => item,
       name: (item) => item.split('/')[0],
-      chosen: () => undefined,
+      chosen,
     });
 
     type('a');
 
     expect(picker.cursorIndex()).toBe(1);
+    picker.choose();
+    expect(chosen).toHaveBeenCalledWith('a/b');
   });
 });

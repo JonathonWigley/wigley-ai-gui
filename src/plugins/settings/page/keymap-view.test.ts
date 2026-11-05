@@ -8,7 +8,7 @@ import type {
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { keymapRows } from './keymap-rows';
-import { keyRowInput } from './keymap-view';
+import { keymapSection, keyRowInput } from './keymap-view';
 import type { RowContext } from './settings-view';
 
 function command(id: string, runsIn: 'page' | 'main' = 'page'): CommandInfo {
@@ -56,6 +56,18 @@ function context(given: UserConfigSchema, layer: UserKeymap): RowContext {
     toast: unread,
   };
 }
+
+describe('keymapSection', () => {
+  it.each([
+    { query: '', isShown: true },
+    { query: '   ', isShown: true },
+    { query: 'zzz', isShown: false },
+  ])('advanced row with filter "$query" → $isShown', ({ query, isShown }) => {
+    const { rows } = keymapSection(context(schema([], []), {}), query);
+
+    expect(rows.some((row) => row.key === 'advanced')).toBe(isShown);
+  });
+});
 
 describe('keyRowInput', () => {
   const given = schema(

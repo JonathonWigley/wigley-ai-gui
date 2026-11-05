@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { asFake, asHtml, FakeElement } from '../../../shared/page/test-dom';
 import type { CompletionCommand, CompletionRowDraw } from '../contract';
 import { createCompletionRows, descriptionDraw } from './completion-rows';
 
@@ -11,7 +12,7 @@ const COMMAND: CompletionCommand = {
 };
 
 function fakeRow(): HTMLElement {
-  return {} as HTMLElement;
+  return asHtml(new FakeElement('span'));
 }
 
 // A registry whose draws record their name in `calls`, each answering with the
@@ -77,17 +78,38 @@ describe('completion rows', () => {
 
   it('draw_ThrowingDraw_LogsAndFallsThrough', () => {
     const { rows, calls, logged, drawOf } = recordingRows({ a: true });
-    rows.add(drawOf('a'));
-    rows.add(() => {
+    const row = fakeRow();
+    let childrenSeen = -1;
+    rows.add((...args) => {
+      childrenSeen = asFake(row).childNodes.length;
+      return drawOf('a')(...args);
+    });
+    rows.add((_command, drawn) => {
+      drawn.append(asHtml(new FakeElement('span')));
       throw new Error('broken draw');
     });
 
-    rows.draw(COMMAND, fakeRow());
+    rows.draw(COMMAND, row);
 
     expect(calls).toEqual(['a']);
+    expect(childrenSeen).toBe(0);
     expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('/feature');
     expect(logged[0]).toContain('broken draw');
+  });
+
+  it('draw_FalseDrawThatAppended_LeavesRowEmpty', () => {
+    const { rows, logged } = recordingRows({});
+    const row = fakeRow();
+    rows.add((_command, drawn) => {
+      drawn.append(asHtml(new FakeElement('span')));
+      return false;
+    });
+
+    rows.draw(COMMAND, row);
+
+    expect(asFake(row).childNodes).toEqual([]);
+    expect(logged).toEqual([]);
   });
 });
 

@@ -84,11 +84,10 @@ Core seams that most items below assume.
   redrawn composer), but a page reload starts the box empty (`docs/features/layouts/design.md`). Forms: focus, review
   row and view (review, confirm) go into the draft or the slot; pending autosaves flush on `pagehide`; restored rounds
   do not take over their session again.
-- **Picker ranks recent targets higher** — *needs a feature plan*: the user's ranking requirement has two parts.
-  `docs/features/agent-chat/plan-slash-completion/` (not started) lands the first: the `FuzzyMatcher` page service,
-  every list picker ranked, and a row's name outranking its path, so `gui` in the Notes target picker puts
-  `wigley-ai-gui` first. This item is the second: a recently updated target ranks higher. Build it after that plan.
-  `NoteHome` has no updated time, and "updated" still needs a definition (for example the home's latest commit).
+- **Picker ranks recent targets higher** — *needs a feature plan*: every list picker ranks with the `FuzzyMatcher` page
+  service, and a row's name outranks its path, so `gui` in the Notes target picker puts `wigley-ai-gui` first. What
+  remains is recency: a recently updated target ranks higher. `NoteHome` has no updated time, and "updated" still needs
+  a definition (for example the home's latest commit).
 - **Core picker and folder services** — *agent-ready*: core page services for what plugins duplicate:
   `services.picker` (chat-private today, `src/plugins/chat/page/picker.ts`; docs needs it), and `chooseFolder()` and
   `openExternal(url)` on `PageServices` with the scheme check inside (both are `MainServices` only today), deleting
@@ -853,3 +852,7 @@ because the earlier items rewrite many of these tests anyway.
   the new one. The pool then misses the handoff, and the claim falls back to the expiry rules
   (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id. To
   decide: keep a row's app id across relaunch, or have `/clear` pass the old row id to the new process.
+- **Backlog `/` with no home open does nothing and leaves the letters as commands** — *agent-ready*: `openFilter` in
+  `src/plugins/backlog/page/backlog-view.ts` returns silently when no home is open, so `backlog.filter` logs, no box
+  opens, and the following letters run as `backlog.list` commands. Source session: Claude Code
+  a65d02f6-eab9-453b-be96-34ac71d33876 in wigley-ai-gui.

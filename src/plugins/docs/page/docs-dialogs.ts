@@ -514,7 +514,6 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       items: places,
       drawRow: pickerRow(title),
       label: (place) => place.title,
-      name: (place) => place.owner,
       selected: 0,
       chosen: (place) => nameDoc(kind, place),
       cancelled: () => {

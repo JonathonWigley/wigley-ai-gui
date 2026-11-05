@@ -33,6 +33,7 @@ describe('matchesSetting', () => {
   it.each([
     { query: 'tpt', isMatch: false },
     { query: ' TRANSPARENT ', isMatch: true },
+    { query: '   ', isMatch: true },
   ])(
     'matchesSetting_DescriptionIsSubstringOnly "$query" → $isMatch',
     ({ query, isMatch }) => {
@@ -64,6 +65,7 @@ describe('matchesCommand', () => {
     { given: 'an accelerator', query: 'c+p', isMatch: true },
     { given: 'an intercept key', query: 'a+q', isMatch: true },
     { given: 'nothing', query: 'zzz', isMatch: false },
+    { given: 'only spaces', query: '   ', isMatch: true },
   ])(
     'matchesCommand_FuzzyKeys_Matches through $given → $isMatch',
     ({ query, isMatch }) => {
@@ -77,6 +79,7 @@ describe('matchesLeader', () => {
     { given: 'the word', query: 'ldr', isMatch: true },
     { given: 'a key', query: 'spc', isMatch: true },
     { given: 'nothing', query: 'zzz', isMatch: false },
+    { given: 'only spaces', query: '   ', isMatch: true },
   ])(
     'matchesLeader_WordOrKey_Matches through $given → $isMatch',
     ({ query, isMatch }) => {

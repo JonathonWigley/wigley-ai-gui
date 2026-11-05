@@ -67,15 +67,40 @@ describe('rank', () => {
     expect(rankedIds(rows, 'feat')).toEqual(['two texts', 'scattered']);
   });
 
-  it('rank_EqualScores_KeepInputOrder', () => {
-    const rows = [
-      row('third', ['feature']),
-      row('first', ['feature']),
-      row('second', ['feature']),
-    ];
-
-    expect(rankedIds(rows, 'feat')).toEqual(['third', 'first', 'second']);
-  });
+  it.each([
+    {
+      query: 'feat',
+      rows: [
+        row('third', ['feature-catalog']),
+        row('first', ['feature']),
+        row('second', ['feature-spec']),
+      ],
+      expected: ['third', 'first', 'second'],
+    },
+    {
+      query: 'feature',
+      rows: [
+        row('wigley:feature', ['wigley:feature', 'feature']),
+        row('wigley:feature-spec', ['wigley:feature-spec', 'feature-spec']),
+        row('wigley:feature-primer', [
+          'wigley:feature-primer',
+          'feature-primer',
+        ]),
+        row('publish-feature-catalog', ['publish-feature-catalog']),
+      ],
+      expected: [
+        'wigley:feature',
+        'wigley:feature-spec',
+        'wigley:feature-primer',
+        'publish-feature-catalog',
+      ],
+    },
+  ])(
+    'rank_EqualScores_KeepInputOrder ($query)',
+    ({ query, rows, expected }) => {
+      expect(rankedIds(rows, query)).toEqual(expected);
+    },
+  );
 
   it('rank_BetterMatchFirst', () => {
     const rows = [
@@ -84,22 +109,6 @@ describe('rank', () => {
     ];
 
     expect(rankedIds(rows, 'feat')).toEqual(['feature', 'fix-each-attribute']);
-  });
-
-  it('rank_ExactAliasOutranksLongerNames', () => {
-    const rows = [
-      row('publish-feature-catalog', ['publish-feature-catalog']),
-      row('wigley:feature-primer', ['wigley:feature-primer', 'feature-primer']),
-      row('wigley:feature-spec', ['wigley:feature-spec', 'feature-spec']),
-      row('wigley:feature', ['wigley:feature', 'feature']),
-    ];
-
-    expect(rankedIds(rows, 'feature')).toEqual([
-      'wigley:feature',
-      'wigley:feature-spec',
-      'wigley:feature-primer',
-      'publish-feature-catalog',
-    ]);
   });
 
   it('rank_EarlierTierOutranksLaterTier', () => {

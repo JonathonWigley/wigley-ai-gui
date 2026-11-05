@@ -855,7 +855,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       title,
       items: choices,
       label: (choice) => deps.paths.tilde(choice.folder, homeDir),
-      name: (choice) => deps.paths.base(choice.folder),
       drawRow: dialogs.pickerRow(title),
       selected: choices.findIndex((choice) => choice.folder === contextFolder),
       chosen: (choice) => {

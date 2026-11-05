@@ -11,6 +11,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
+import { matchesSubstring } from '../../../shared/matches-substring';
 import type {
   CloneStatus,
   DocKind,
@@ -110,10 +111,9 @@ export function visibleRows(
 ): TreeRow[] {
   const { filter } = state;
   const isFiltered = filter.trim() !== '';
-  const lowered = filter.trim().toLowerCase();
   const matches = (node: TreeLeaf) =>
     matcher.matches(filter, node.title) ||
-    pathOf(node.entryId).toLowerCase().includes(lowered);
+    matchesSubstring(filter, pathOf(node.entryId));
   // Recursive: a filtered group's row shows only once its children are known
   // to hold a match.
   const rowsOf = (node: TreeNode, depth: number): TreeRow[] => {

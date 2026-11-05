@@ -1,4 +1,5 @@
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import { matchesSubstring } from '../../../shared/matches-substring';
 import type { CommandRow } from './keymap-rows';
 import type { SettingRow } from './setting-rows';
 
@@ -14,7 +15,7 @@ export function matchesSetting(
   return (
     matcher.matches(query, label) ||
     matcher.matches(query, path) ||
-    description.toLowerCase().includes(query.trim().toLowerCase())
+    matchesSubstring(query, description)
   );
 }
 

@@ -46,21 +46,9 @@ export function createSlashCommands(): SlashCommands {
   };
 }
 
-// An agent command's aliases plus its name after its plugin's `:`, without
-// those that equal an app name.
-function completionAliases(
-  command: AgentCommand,
-  appNames: ReadonlySet<string>,
-): string[] {
-  const colon = command.name.indexOf(':');
-  const nameAfterPlugin = colon === -1 ? [] : [command.name.slice(colon + 1)];
-  return [...command.aliases, ...nameAfterPlugin].filter(
-    (alias) => !appNames.has(alias),
-  );
-}
-
 // The `/` completion's commands: the app's first, then each agent command the
-// app holds no name of, since an app name wins over the agent's.
+// app holds no name of, without an alias that equals an app name, since an app
+// name wins over the agent's.
 export function completionCommands(
   app: readonly AppSlashCommand[],
   agent: readonly AgentCommand[],
@@ -78,7 +66,7 @@ export function completionCommands(
       .filter((command) => !appNames.has(command.name))
       .map((command): CompletionCommand => ({
         ...command,
-        aliases: completionAliases(command, appNames),
+        aliases: command.aliases.filter((alias) => !appNames.has(alias)),
         source: 'agent',
       })),
   ];

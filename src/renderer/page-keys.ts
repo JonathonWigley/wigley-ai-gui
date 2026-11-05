@@ -200,7 +200,7 @@ export function installPageKeys(
   document.addEventListener(
     'keydown',
     (event) => {
-      if (editors.takesKey(event)) {
+      if (editors.takesChordKey(event)) {
         return;
       }
       const isConsumed = feedChordKey(chords, matcher, event, {

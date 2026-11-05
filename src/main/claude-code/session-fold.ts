@@ -16,7 +16,11 @@ import type { EntryDraft } from '../../shared/entry-stamp';
 import { isSameJson } from '../../shared/json';
 import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
 import type { AgentDefinitions } from './agent-definitions';
-import { commandRecordsOf, mergeInitNames } from './claude-commands';
+import {
+  commandRecordsOf,
+  mergeInitNames,
+  withNameAfterPlugin,
+} from './claude-commands';
 import {
   appliedControlsOf,
   CLAUDE_CONTROLS,
@@ -1035,7 +1039,10 @@ function foldInitializeAnswer(
     return;
   }
   state.commandRecords = commandRecordsOf(response.response);
-  effects.push({ kind: 'commands', commands: state.commandRecords });
+  effects.push({
+    kind: 'commands',
+    commands: withNameAfterPlugin(state.commandRecords),
+  });
 }
 
 // An `init` with no names leaves the held list, so a malformed line cannot empty
@@ -1049,7 +1056,10 @@ function foldInitNames(
     return;
   }
   state.commandRecords = mergeInitNames(state.commandRecords, names);
-  effects.push({ kind: 'commands', commands: state.commandRecords });
+  effects.push({
+    kind: 'commands',
+    commands: withNameAfterPlugin(state.commandRecords),
+  });
 }
 
 function answerControlResponse(

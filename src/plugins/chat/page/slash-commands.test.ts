@@ -79,31 +79,24 @@ describe('slash commands', () => {
         name: 'wigley:feature',
         description: "the agent's wigley:feature",
         argumentHint: '<wigley:feature args>',
-        aliases: ['f', 'feature'],
+        aliases: ['f'],
         source: 'agent',
       },
     ]);
   });
 
-  it('completionCommands_AliasEqualToAppName_Dropped', () => {
-    const [, kept] = completionCommands(
-      [command('status')],
-      [agentCommand('x', ['status', 'y'])],
-    );
+  it.each([{ name: 'x' }, { name: 'wigley:status' }])(
+    'completionCommands_AliasEqualToAppName_Dropped: $name',
+    ({ name }) => {
+      const [, kept] = completionCommands(
+        [command('status')],
+        [agentCommand(name, ['status', 'y'])],
+      );
 
-    expect(kept.name).toBe('x');
-    expect(kept.aliases).toEqual(['y']);
-  });
-
-  it('completionCommands_NameAfterPluginEqualToAppName_Dropped', () => {
-    const [, kept] = completionCommands(
-      [command('status')],
-      [agentCommand('wigley:status', ['y'])],
-    );
-
-    expect(kept.name).toBe('wigley:status');
-    expect(kept.aliases).toEqual(['y']);
-  });
+      expect(kept.name).toBe(name);
+      expect(kept.aliases).toEqual(['y']);
+    },
+  );
 });
 
 // The account commands over a channel whose every invoke resolves with

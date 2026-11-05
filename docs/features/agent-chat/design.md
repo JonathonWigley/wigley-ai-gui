@@ -144,9 +144,11 @@ interview on 2026-10-23; this file is the record of both.
   `AgentCommand` records each time: `name` and `aliases` without a leading `/`, and `description` and `argumentHint`
   (`''` when none). The Claude adapter writes an `initialize` control request as the first stdin line of a started
   process, because `init` waits for the first message (`claude-stream.md` § Initialize), and reads the answer's
-  `commands` as the records. Each `init` then replaces the list: an `init` name that matches a held record's name or
-  alias keeps that record, once; a name that matches none becomes a record with empty text; a record no name matches
-  drops. An `init` with no names leaves the list. The session fold owns the records, so a failed `initialize` answer
+  `commands` as the records. Each `init` then replaces the list: an `init` name takes the held record of that exact
+  name; a name with none then takes the first record left that holds it as an alias; a name that matches none becomes a
+  record with empty text; a record no name took drops. An `init` with no names leaves the list. The list reported adds
+  the name after a `plugin:name` record's first `:` to its aliases, and the held records stay as the CLI listed them, so
+  the merge never matches on it. The session fold owns the records, so a failed `initialize` answer
   only logs and leaves the list to `init`, the answer stays out of the chat entries, and a re-attach rebuilds the
   records from the pipe log and writes no `initialize`. A process that started before the request existed has no such
   line in its log, so its list comes from `init`.
@@ -476,18 +478,20 @@ interview on 2026-10-23; this file is the record of both.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
   the row is marked.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
-  and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name,
-  aliases and name after its plugin's `:` through the app's fuzzy matcher (fzf), best match first, the shorter text and
-  then the list's own order breaking ties; a row shows and inserts the full name, so `/feature` offers
-  `/wigley:feature` first. It runs through CodeMirror's completion
+  and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name
+  and aliases through the app's fuzzy matcher (fzf), best match first; with text typed, the completion hands the
+  matcher the commands shortest text first, so the shorter text and then the list's own order break ties. A row shows
+  and inserts the full name, so `/feature` offers `/wigley:feature` first. It runs through CodeMirror's completion
   (`@codemirror/autocomplete` 6.20.3, already on disk, added as a direct dependency) inside the editor adapter,
   behind an option on the editor contract. While the popup is open its keys (`Ctrl+n` and `Ctrl+p` among them) run
   ahead of the page's chord binds.
 - **Completion rows**: chat's page exports `addCompletionRow(draw)`, returning a `Disposable`. `draw(command, row)`
   gets the row's command (name, description, argument hint, aliases, and whether it is the app's or the agent's)
-  and the row's element, which holds the drawn name, and returns `true` when it drew. The most recently added draw
-  goes first, and the first to return `true` ends the row; a row no draw takes shows the name alone. Chat adds its own
-  draw through the same export: the description after the name in a dim box cut to one line, to the width the name leaves, so a long name still shows as much description as fits (the `completionDescription` chat layout part), while the `completionDescriptions`
+  and the row's element, an element inside the row after the name, empty at first and cut to the width the name
+  leaves, and returns `true` when it drew. The most recently added draw goes first, and the first to return `true` ends
+  the row; a draw that returns `false` or throws has the element cleared for the next; a row no draw takes shows the
+  name alone. Chat adds its own
+  draw through the same export: the description in a dim column after the name: most names fit one width, so their descriptions line up, a longer name pushes only its own, and each is cut to one line, to the width the name leaves, so a long name still shows as much description as fits (the `completionDescription` chat layout part), while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
@@ -552,7 +556,7 @@ interview on 2026-10-23; this file is the record of both.
   the merged folder list, pasted images with previews, and the completion popup drawn outside the composer.
 - **Plan D — slash completion** (`plan-slash-completion/`, settled in a four-round interview on 2026-10-23): the
   command list from `initialize` at start, alias and fuzzy matching on the fzf matcher (shared with every list picker
-  and the Settings, keymap and Docs filters), descriptions behind a setting, and the completion row hook.
+  and the Settings, keymap, Docs and Backlog filters), descriptions behind a setting, and the completion row hook.
 - **Plan E — activity line** (`plan-activity-line/`, settled in an interview on 2026-10-30): the activity line, the
   chat focus outlines, and the `text-prose` token with its `fonts.proseSize` setting.
 - **Plan F — clear command** (`plan-clear-command/`, settled in an interview on 2026-10-31): `/clear` as an app

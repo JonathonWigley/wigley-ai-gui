@@ -179,7 +179,10 @@ src/renderer/    core page; renderer.ts is its composition root
   visual-frames/ the visual frames service plugins open a visual through: the sandboxed frame on the `wigley-visual:`
                  scheme, the theme posted in on load and on each change, and the height and `Esc` it posts out
   fzf/           fuzzy matcher adapter behind FuzzyMatcher: the `/` filters match with it and keep their order, while
-                 the list pickers and the slash completion rank with it                                       → the only fzf import
+                 the list pickers and the slash completion rank with it. Long free text (a description, a one-line
+                 summary, a full path) goes by plain substring (`src/shared/matches-substring.ts`) in a filter that
+                 hides rows; a list picker's label tier stays fuzzy over paths, because a picker ranks and name tiers
+                 win                                                                                          → the only fzf import
   codemirror-vim/ editor (with fuzzy slash completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
                  and the code colours
                  → the only codemirror, @codemirror, @lezer and @replit import
@@ -426,7 +429,7 @@ round; primer: an open primer), since main, not the page, decides.
   each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`; its key is a lowercase letter, a digit, `;`, `'` or Enter, as in `<A-'>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
-  too, in every vim mode, ahead of the editor, except a key the editor takes itself (`EditorHost.takesKey`: an open completion popup's). A plugin's own text box may keep typed keys from the page keys while
+  too, in every vim mode, ahead of the editor, except a key the editor takes itself (`EditorHost.takesChordKey`: an open completion popup's). A plugin's own text box may keep typed keys from the page keys while
   Tab, Enter, Escape and chords still reach its scope's binds (`textBoxInput`, `src/shared/page/text-box.ts`, which docs and settings share). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,
   or in insert mode with `mode: 'insert'` (one key the host can type unbound, today only `<CR>`, as in the chat

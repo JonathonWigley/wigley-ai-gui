@@ -111,9 +111,9 @@ does not hold. The editor adapter ranks the items by the typed word against each
 rows registry runs the newest draw first. Chat's own draw adds the description through its layout part while
 `chat.completionDescriptions` is on. Tab inserts `/<name> `.
 
-Every later `init` replaces the list. An init name that matches an earlier record's `name` or one of its `aliases` keeps
-that record, once. An init name that matches no record becomes
-`{ name, description: '', argumentHint: '', aliases: [] }`. A record that no init name matches drops.
+Every later `init` replaces the list. An init name first takes the record of that exact `name`. An init name with no such
+record then takes the first record left that holds it in its `aliases`. An init name that matches no record becomes
+`{ name, description: '', argumentHint: '', aliases: [] }`. A record that no init name took drops.
 
 **Re-attach.** The fold is a pure function of the pipe log, so a re-attach rebuilds the records from the logged
 `initialize` line and answer. A re-attach writes no `initialize`. A process that started before this plan landed has no
@@ -138,9 +138,9 @@ such line: its list comes from `init`, as today.
 - Fuzzy matching goes through the `fzf` npm package (round 4), behind a `FuzzyMatcher` contract with one adapter folder
   (Decided). It ranks by fzf's score, and the list's own order breaks ties (Decided).
 - `rank` takes each item's texts as **tiers**: a match in an earlier tier always outranks a match in a later tier, and
-  inside a tier an item takes its best text's score, the shorter text then input order breaking ties. The slash completion puts name and aliases in one tier (Decided).
-- **A row's name outranks its path** in the pickers whose labels hold a name and a path: the Notes target, chat's Folder
-  step, and Docs' place and `Load states for` pickers (the user, 2026-11-04, from `followups.md`). With a filter typed, a
+  inside a tier an item takes its best text's score, input order breaking ties. The slash completion puts name and aliases in one tier, and with text typed it hands `rank` the items shortest text first, so `/feature` then Tab inserts `/wigley:feature ` (Decided).
+- **A row's name outranks its path** in the filtered pickers whose labels hold a name and a path: the Notes target and
+  chat's Folder step. Docs' place and `Load states for` pickers have no filter box, so they give no name (the user, 2026-11-04, from `followups.md`). With a filter typed, a
   picker's cursor goes to the first ranked row, so Enter picks the best match (Decided 2026-11-04). Recency stays a follow-up: `NoteHome` has no updated time, and "updated"
   has no definition yet.
 - Every list picker ranks with the matcher, best first (rounds 2 and 3), so all six `createListPicker` callers take it

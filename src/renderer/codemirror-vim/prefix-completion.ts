@@ -25,10 +25,18 @@ export interface PrefixMatch {
 
 const WHITESPACE = /\s/;
 
+function shortestTextLength(item: CompletionItem): number {
+  return Math.min(
+    item.word.length,
+    ...item.aliases.map(({ length }) => length),
+  );
+}
+
 // The words of the items that `matcher` matches, by word or alias, against
-// what follows `prefix` in `textBeforeCursor`, best first and each once; every
-// item in input order with nothing typed. Null when the text does not start
-// with `prefix`, holds whitespace after it, or no item matches.
+// what follows `prefix` in `textBeforeCursor`, best first and each once, the
+// item with the shorter text first among equal matches; every item in input
+// order with nothing typed. Null when the text does not start with `prefix`,
+// holds whitespace after it, or no item matches.
 export function prefixMatch(
   textBeforeCursor: string,
   prefix: string,
@@ -42,7 +50,13 @@ export function prefixMatch(
   if (WHITESPACE.test(typed)) {
     return null;
   }
-  const ranked = matcher.rank(items, typed, (item) => [
+  const candidates =
+    typed === ''
+      ? items
+      : [...items].sort(
+          (a, b) => shortestTextLength(a) - shortestTextLength(b),
+        );
+  const ranked = matcher.rank(candidates, typed, (item) => [
     [item.word, ...item.aliases],
   ]);
   if (ranked.length === 0) {
@@ -107,17 +121,23 @@ const POPUP_COMMANDS: Record<PopupAction, Command> = {
 };
 
 // What `event` does to an open popup: Tab accepts, Ctrl+n and ArrowDown move
-// down, Ctrl+p and ArrowUp move up.
+// down, Ctrl+p and ArrowUp move up. The Ctrl forms read the physical key and
+// exact modifiers, as the page's chords do.
 export function popupActionOf(
-  event: Pick<KeyboardEvent, 'key' | 'ctrlKey'>,
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
+  >,
 ): PopupAction | null {
+  const isCtrlAlone =
+    event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
   if (event.key === 'Tab') {
     return 'accept';
   }
-  if (event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n')) {
+  if (event.key === 'ArrowDown' || (isCtrlAlone && event.code === 'KeyN')) {
     return 'down';
   }
-  if (event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p')) {
+  if (event.key === 'ArrowUp' || (isCtrlAlone && event.code === 'KeyP')) {
     return 'up';
   }
   return null;
@@ -155,9 +175,9 @@ function popupKeys() {
 // Completion of `completions.items()` after `completions.prefix` in vim's
 // insert mode (not replace mode), ranked by `matcher`, reporting each newly
 // offered list once until the popup closes. `filter: false` keeps the ranked
-// order. Each word keeps one `Completion` for the life of the
-// extension, so a word still listed after a keystroke keeps the popup's
-// selection. The result's `update` reruns the match on every keystroke, so the
+// order. Each word keeps one `Completion` for the life of the extension, so a
+// word selected below the first row stays selected while it is listed; otherwise
+// the first row is. The result's `update` reruns the match on every keystroke, so the
 // open popup never waits on the source and Tab accepts at once. Placed after
 // `vim(...)`: `autocompletion` brings in the keymap facet, whose keydown
 // handler runs ahead of vim's when it is first met ahead of `vim(...)`. With

@@ -30,6 +30,7 @@ import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   NoteDraft,
   NoteFields,
+  NoteHomes,
   NoteSendResult,
   NoteSession,
   NotesChannel,
@@ -123,6 +124,8 @@ interface Harness {
   fakes: Fakes;
   // Hands `files` to the popup's drop target, as the core does.
   take(files: readonly DroppedFile[]): void;
+  // Sets the picker filter's text as typing it would.
+  typeFilter(text: string): void;
 }
 
 interface Fakes {
@@ -131,6 +134,7 @@ interface Fakes {
   encode: ImageEncoder['encode'];
   addImage(bytes: Uint8Array): Promise<NoteDraft>;
   sendToFollowup(): Promise<NoteSendResult>;
+  homes(): Promise<NoteHomes>;
 }
 
 function droppedFile(
@@ -249,7 +253,7 @@ function fakeChannel(
         case 'loadDraft':
           return fakes.loadDraft();
         case 'homes':
-          return Promise.resolve({ homes: [], message: null });
+          return fakes.homes();
         case 'image':
           return Promise.resolve(new Uint8Array([1]));
         case 'markup':
@@ -300,9 +304,11 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       return Promise.resolve({ ...draft, images });
     },
     sendToFollowup: () => new Promise(() => undefined),
+    homes: () => Promise.resolve({ homes: [], message: null }),
   };
   const targets: DropTarget[] = [];
   let body: TextEditor | null = null;
+  let filterEvents: EditorEvents | null = null;
   let pushes = 0;
   let pops = 0;
   const pushed = (): PushedScope => {
@@ -321,6 +327,8 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
         const editor = fakeEditor(doc, parent, events, inserts);
         if (parent.classList.contains('notes-body')) {
           body = editor;
+        } else {
+          filterEvents ??= events;
         }
         return editor;
       },
@@ -396,6 +404,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     advance: time.advance,
     fakes,
     take: (files) => targets[0].take(files),
+    typeFilter: (text) => filterEvents?.changed(text),
   };
 }
 
@@ -419,6 +428,31 @@ const FOCUSED_BOXES = [
 
 describe('note popup', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('pickTarget_Filter_NameOutranksAnotherRowsPath', async () => {
+    const harness = await openPopup();
+    const home = (repo: string, root: string) => ({
+      repo,
+      root,
+      folder: null,
+      followups: [],
+    });
+    harness.fakes.homes = () =>
+      Promise.resolve({
+        homes: [
+          home('backlog-repo', '/home/me/gui/backlog'),
+          home('wigley-gui', '/home/me/dev/wigley-gui'),
+        ],
+        message: null,
+      });
+
+    harness.popup.commands.pickTarget();
+    await settle();
+    harness.typeFilter('gui');
+    harness.popup.commands.pickerChoose();
+
+    expect(harness.logged).toContain('target wigley-gui');
+  });
 
   it.each(FOCUSED_BOXES)(
     'popupSetLayouts_BoxFocused_FocusesItAgainInTheNewRow ($box)',

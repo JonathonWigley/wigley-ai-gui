@@ -3,6 +3,7 @@ import type {
   FollowupDraft,
   FollowupItem,
 } from '../../../shared/followups/followup-file';
+import { matchesSubstring } from '../../../shared/matches-substring';
 import type {
   BacklogEdit,
   BacklogFeature,
@@ -242,12 +243,10 @@ export function visibleRows(
     return [];
   }
   const query = state.filter.trim();
-  const lowered = query.toLowerCase();
   const matches = (...texts: string[]) =>
     query === '' || texts.some((text) => matcher.matches(query, text));
   const isFollowupMatch = (item: FollowupItem) =>
-    matches(item.title, ...item.tags) ||
-    item.oneLine.toLowerCase().includes(lowered);
+    matches(item.title, ...item.tags) || matchesSubstring(query, item.oneLine);
   const rows: BacklogRow[] = [];
   for (const file of home.followupFiles) {
     for (const item of file.items) {

@@ -466,7 +466,8 @@ export interface ChatSidePart {
 
 // One command the `/` completion offers, whoever holds it: an app command, or
 // an agent command the app holds no name of. An app command has no argument
-// hint or aliases.
+// hint or aliases; a Claude command named `plugin:name` has the name after the
+// first `:` among its aliases.
 export interface CompletionCommand {
   name: string;
   description: string;
@@ -476,8 +477,9 @@ export interface CompletionCommand {
 }
 
 // Draws one `/` completion row into `row`, an element inside the row after its
-// name that starts empty, and returns true when it took the row: no older draw
-// then runs. CodeMirror draws a row again each time it rebuilds the list, and
+// name that starts empty, holds one line and is cut to the width the name
+// leaves, and returns true when it took the row: no older draw then runs. A draw
+// that returns false or throws leaves `row` empty for the next. CodeMirror draws a row again each time it rebuilds the list, and
 // only the rows it shows, so a draw runs any number of times for a command, on
 // a new `row` each time.
 export type CompletionRowDraw = (

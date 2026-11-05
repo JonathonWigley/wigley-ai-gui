@@ -126,9 +126,8 @@ export function placesFor(
     if (folder === null || places.has(folder)) {
       continue;
     }
-    const owner = placeOwner(entry, source);
-    const title = `${owner} · ${paths.tilde(folder, homeDir)}`;
-    places.set(folder, { title, owner, folder, source });
+    const title = placeTitle(entry, source, paths.tilde(folder, homeDir));
+    places.set(folder, { title, folder, source });
   }
   return [...places.values()].sort(
     (a, b) =>
@@ -217,14 +216,18 @@ function referenceFolder(entry: IndexEntry, paths: Paths): string | null {
   return isWigleyAgentsGlobal ? null : folder;
 }
 
-function placeOwner(entry: IndexEntry, source: DocSource): string {
+function placeTitle(
+  entry: IndexEntry,
+  source: DocSource,
+  tildeFolder: string,
+): string {
   const owners: Record<DocSource, string> = {
     global: 'Global',
     repo: `${entry.repo}`,
     features: `${entry.repo} features`,
     plugin: `${entry.plugin}`,
   };
-  return owners[source];
+  return `${owners[source]} · ${tildeFolder}`;
 }
 
 // `existing` with a follow-up titled `name` created in the file's own shape,

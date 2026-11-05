@@ -1320,6 +1320,37 @@ describe('session-fold', () => {
     expect(state.commandRecords).toEqual([FEATURE_COMMAND]);
   });
 
+  it('foldPipeLine_CommandsEffect_AddsNameAfterPlugin_HeldRecordsStayRaw', () => {
+    const brief = { ...FEATURE_COMMAND, name: 'wigley:brief', aliases: [] };
+    const offered = { ...brief, aliases: ['brief'] };
+    const { state, step } = answered(
+      initializeReply('wigley-1', { commands: [brief] }),
+    );
+
+    expect(commandsEffects(step.effects)).toEqual([
+      { kind: 'commands', commands: [offered] },
+    ]);
+    expect(state.commandRecords).toEqual([brief]);
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine({
+        ...lifecycleInit,
+        slash_commands: ['brief', 'wigley:brief'],
+      }),
+    );
+
+    expect(commandsEffects(effects)).toEqual([
+      {
+        kind: 'commands',
+        commands: [
+          { name: 'brief', description: '', argumentHint: '', aliases: [] },
+          offered,
+        ],
+      },
+    ]);
+  });
+
   it('foldPipeLine_InitializeAnswer_ReplacesListFromInit', () => {
     const state = foldedState([
       inLine(initializeRequest('wigley-1')),

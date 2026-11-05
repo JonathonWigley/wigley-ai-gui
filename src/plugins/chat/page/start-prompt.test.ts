@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AccountStatus } from '../../../contracts/agent';
 import type { ToastTone } from '../../../contracts/plugin';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import {
+  filterPicker,
+  openPicker,
+} from '../../../shared/page/list-picker-state';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   ChatProfile,
@@ -267,6 +272,26 @@ describe('start prompt', () => {
         selected: 0,
       },
     ]);
+  });
+
+  it('folderStep_Filter_NameOutranksAnotherRowsPath', async () => {
+    const run = setUp({
+      recent: [
+        { projectDir: '/Users/u/gui/backlog', profile: 'work', lastUsed: 3 },
+        { projectDir: '/Users/u/dev/wigley-gui', profile: 'work', lastUsed: 2 },
+      ],
+    });
+    await flush();
+    const { labels, request } = run.last();
+    const names = request.items.map((item) => request.name?.(item) ?? '');
+
+    const filtered = filterPicker(
+      openPicker(labels, 0, names),
+      'gui',
+      fakeFuzzyMatcher,
+    );
+
+    expect(labels[filtered.cursor]).toBe('~/dev/wigley-gui');
   });
 
   it('recentFolder_manyProfiles_opensProfileStepOnItsProfile', async () => {

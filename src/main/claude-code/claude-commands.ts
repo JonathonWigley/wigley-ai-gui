@@ -7,15 +7,26 @@ import {
   stringItems,
 } from './json-fields';
 
-function withoutSlash(name: string): string {
+export function withoutSlash(name: string): string {
   return name.replace(/^\//, '');
+}
+
+const ENTITY_TEXTS: Record<string, string> = {
+  '&lt;': '<',
+  '&gt;': '>',
+  '&amp;': '&',
+};
+
+// The CLI's answer spells `<` and `>` in a plugin skill's description as entities.
+function withEntitiesDecoded(text: string): string {
+  return text.replace(/&(?:lt|gt|amp);/g, (entity) => ENTITY_TEXTS[entity]);
 }
 
 function commandRecord(value: unknown): AgentCommand {
   const command = asJson(value);
   return {
     name: withoutSlash(asString(command.name)),
-    description: asString(command.description),
+    description: withEntitiesDecoded(asString(command.description)),
     argumentHint: asString(command.argumentHint),
     aliases: stringItems(command.aliases).map(withoutSlash),
   };
@@ -29,26 +40,55 @@ export function commandRecordsOf(initializeReply: Json): AgentCommand[] {
     .filter((command) => command.name !== '');
 }
 
-function answersTo(command: AgentCommand, name: string): boolean {
-  return command.name === name || command.aliases.includes(name);
-}
-
 // The list an `init` gives: one record per name in `names`, in that order. Each
-// name takes the first record it matches by name or alias that no earlier name
-// took, or else a new record with empty text; a record no name took drops.
+// name takes the record it names exactly; a name with none then takes the first
+// record left that holds it as an alias, or else a new record with empty text. A
+// record no name took drops.
 export function mergeInitNames(
   records: readonly AgentCommand[],
   names: readonly string[],
 ): AgentCommand[] {
   const taken = new Set<AgentCommand>();
-  return names.map((name) => {
-    const record = records.find(
-      (candidate) => !taken.has(candidate) && answersTo(candidate, name),
+  const exactRecords = new Map<string, AgentCommand>();
+  for (const name of names) {
+    const exact = records.find(
+      (candidate) => !taken.has(candidate) && candidate.name === name,
     );
-    if (record === undefined) {
+    if (exact !== undefined) {
+      taken.add(exact);
+      exactRecords.set(name, exact);
+    }
+  }
+  return names.map((name) => {
+    const exact = exactRecords.get(name);
+    if (exact !== undefined) {
+      return exact;
+    }
+    const aliased = records.find(
+      (candidate) => !taken.has(candidate) && candidate.aliases.includes(name),
+    );
+    if (aliased === undefined) {
       return { name, description: '', argumentHint: '', aliases: [] };
     }
-    taken.add(record);
-    return record;
+    taken.add(aliased);
+    return aliased;
+  });
+}
+
+// `records` as a session offers them: each named `plugin:name` also answers to
+// the name after its first `:`, which the CLI's aliases do not always hold.
+export function withNameAfterPlugin(
+  records: readonly AgentCommand[],
+): AgentCommand[] {
+  return records.map((record) => {
+    const colon = record.name.indexOf(':');
+    if (colon === -1) {
+      return record;
+    }
+    const nameAfterPlugin = record.name.slice(colon + 1);
+    return {
+      ...record,
+      aliases: [...new Set([...record.aliases, nameAfterPlugin])],
+    };
   });
 }

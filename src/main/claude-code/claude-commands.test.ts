@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentCommand } from '../../contracts/agent';
-import { commandRecordsOf, mergeInitNames } from './claude-commands';
+import {
+  commandRecordsOf,
+  mergeInitNames,
+  withNameAfterPlugin,
+} from './claude-commands';
 
 const record = (
   name: string,
@@ -23,6 +27,11 @@ describe('claude-commands', () => {
         },
         { name: '/compact', description: 12, argumentHint: null },
         { name: 'usage', aliases: ['/cost', 3] },
+        {
+          name: 'wigley:retro',
+          description: '`backfill &lt;days&gt;` &amp; &amp;lt;more',
+          argumentHint: '[backfill <days>]',
+        },
         { description: 'no name' },
         'not a record',
       ],
@@ -37,6 +46,12 @@ describe('claude-commands', () => {
       },
       { name: 'compact', description: '', argumentHint: '', aliases: [] },
       { name: 'usage', description: '', argumentHint: '', aliases: ['cost'] },
+      {
+        name: 'wigley:retro',
+        description: '`backfill <days>` & &lt;more',
+        argumentHint: '[backfill <days>]',
+        aliases: [],
+      },
     ]);
   });
 
@@ -71,12 +86,55 @@ describe('claude-commands', () => {
     ).toEqual([record('compact')]);
   });
 
-  it('mergeInitNames_RecordTakenOnce', () => {
-    const docx = record('docx', ['anthropic-skills:docx']);
+  const docx = record('docx', ['anthropic-skills:docx']);
+  const qualified = record('wigley:x', ['x']);
+  const bare = record('x');
 
-    expect(mergeInitNames([docx], ['docx', 'anthropic-skills:docx'])).toEqual([
-      docx,
-      emptyRecord('anthropic-skills:docx'),
-    ]);
+  it.each<{
+    case: string;
+    records: AgentCommand[];
+    names: string[];
+    expected: AgentCommand[];
+  }>([
+    {
+      case: 'an exact name, then its alias',
+      records: [docx],
+      names: ['docx', 'anthropic-skills:docx'],
+      expected: [docx, emptyRecord('anthropic-skills:docx')],
+    },
+    {
+      case: 'an alias, then the exact name',
+      records: [docx],
+      names: ['anthropic-skills:docx', 'docx'],
+      expected: [emptyRecord('anthropic-skills:docx'), docx],
+    },
+    {
+      case: "an earlier record's alias beside a later record's exact name",
+      records: [qualified, bare],
+      names: ['x', 'wigley:x'],
+      expected: [bare, qualified],
+    },
+  ])(
+    'mergeInitNames_RecordTakenOnce: $case',
+    ({ records, names, expected }) => {
+      expect(mergeInitNames(records, names)).toEqual(expected);
+    },
+  );
+
+  it.each<{ case: string; given: AgentCommand; aliases: string[] }>([
+    { case: 'no plugin', given: record('compact', ['c']), aliases: ['c'] },
+    {
+      case: 'no alias',
+      given: record('wigley:brief'),
+      aliases: ['brief'],
+    },
+    {
+      case: 'the alias held already',
+      given: record('wigley:feature', ['feature', 'f']),
+      aliases: ['feature', 'f'],
+    },
+    { case: 'a second colon', given: record('a:b:c'), aliases: ['b:c'] },
+  ])('withNameAfterPlugin_AddsAlias: $case', ({ given, aliases }) => {
+    expect(withNameAfterPlugin([given])).toEqual([{ ...given, aliases }]);
   });
 });

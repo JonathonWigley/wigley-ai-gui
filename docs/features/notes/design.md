@@ -27,7 +27,7 @@ session.
 - Rows, top to bottom: Target (a repo), Title, Body (a vim box), Tags (from Backlog's tag setting), the image strip
   and the Session chip. The follow-up's one line is the body's first sentence. The title is required for a new follow-up
   and optional for an append and for a launched session.
-- Target defaults to the repo of the attached session's folder. A fuzzy picker lists every repo with a features home.
+- Target defaults to the repo of the attached session's folder. A fuzzy picker lists every repo with a features home. A repo's name outranks its path, and with a filter typed the cursor goes to the first ranked row.
   A launched session starts in the target home's clone. For a home outside its clone it starts in the attached
   session's folder, else an open session row's folder, that maps to the target repo; with none, the send is refused
   with `No folder for <repo>; attach a session in that repo`.

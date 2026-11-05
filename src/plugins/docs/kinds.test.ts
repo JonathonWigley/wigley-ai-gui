@@ -26,7 +26,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
 }
 
 function place(folder: string, source: CreatePlace['source']): CreatePlace {
-  return { title: folder, owner: folder, folder, source };
+  return { title: folder, folder, source };
 }
 
 function itemFields(text: string, title: string) {
@@ -60,13 +60,11 @@ describe('placesFor', () => {
     expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([
       {
         title: 'Global · ~/.claude/skills',
-        owner: 'Global',
         folder: '/Users/u/.claude/skills',
         source: 'global',
       },
       {
         title: 'r · ~/dev/r/.claude/skills',
-        owner: 'r',
         folder: '/Users/u/dev/r/.claude/skills',
         source: 'repo',
       },
@@ -86,7 +84,6 @@ describe('placesFor', () => {
     expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([
       {
         title: 'Global · ~/.claude/skills',
-        owner: 'Global',
         folder: '/Users/u/.claude/skills',
         source: 'global',
       },
@@ -108,7 +105,6 @@ describe('placesFor', () => {
     expect(placesFor('instructions', entries, HOME, posixPaths)).toEqual([
       {
         title: 'Global · ~/wigley-agents',
-        owner: 'Global',
         folder: '/Users/u/wigley-agents',
         source: 'global',
       },
@@ -165,7 +161,6 @@ describe('placesFor', () => {
     expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([
       {
         title: 'r · ~/dev/r/docs',
-        owner: 'r',
         folder: '/Users/u/dev/r/docs',
         source: 'repo',
       },
@@ -227,7 +222,6 @@ describe('placesFor', () => {
     expect(placesFor('followup', entries, HOME, posixPaths)).toEqual([
       {
         title: 'r features · ~/wigley-features/r',
-        owner: 'r features',
         folder: root,
         source: 'features',
       },
@@ -412,7 +406,6 @@ describe('kinds on Windows', () => {
     ).toEqual([
       {
         title: 'Global · ~\\wigley-agents',
-        owner: 'Global',
         folder: 'C:\\Users\\u\\wigley-agents',
         source: 'global',
       },

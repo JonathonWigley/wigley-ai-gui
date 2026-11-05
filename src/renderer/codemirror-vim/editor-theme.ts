@@ -111,6 +111,11 @@ export const editorTheme = EditorView.theme({
       overflow: 'hidden',
       textOverflow: 'ellipsis',
     },
+    // Most names fit 31ch with their `/`, so a drawn row's text lines up after
+    // them and a longer name pushes only its own.
+    '& > ul > li:has(.wg-completion-row:not(:empty)) .cm-completionLabel': {
+      minWidth: '31ch',
+    },
     '& .wg-completion-row': {
       alignItems: 'baseline',
       display: 'flex',

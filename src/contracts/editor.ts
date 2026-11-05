@@ -184,7 +184,7 @@ export interface EditorHost {
   contains(element: Element): boolean;
   // Whether the editor holding the event's target takes the key press itself,
   // ahead of the page's chord binds: an open completion popup's keys.
-  takesKey(event: KeyboardEvent): boolean;
+  takesChordKey(event: KeyboardEvent): boolean;
   // Delivers `keys`, named as KeyboardEvent.key names them, to the editor
   // holding `element` as typed keys: each runs in the vim mode the keys before
   // it left, so in insert mode a character types itself.

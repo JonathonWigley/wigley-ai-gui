@@ -171,11 +171,19 @@ The inner `response` keys: `commands`, `agents`, `output_style`, `available_outp
 `remote_control_*` (6 keys), `ide_rc_auto_enable_gate`, `fast_mode_state`, `fast_mode_disabled_reason`,
 `session_state`, `capabilities`.
 
-- `commands` holds the same entries as `init.slash_commands` (101 on `2.1.318`, 52 of them with no `aliases`), each an object, without a leading `/`:
+- `commands` held every record the later `init` listed. A live `init` on `2.1.318` added 7 `mcp__` names the answer
+  had not listed; they take empty text. `commands` holds 101 entries on `2.1.318`, 52 of them with no `aliases`, each
+  an object, without a leading `/`:
   `{"name":"wigley:clean-up-branches","description":"(wigley) Delete the user's branches…","argumentHint":"integration branch patterns, e.g. protos/*","aliases":["clean-up-branches"]}`.
   `description` and `argumentHint` are strings (`""` when none); `aliases` is absent when a command has none; a
   built-in skill carries `"builtin":true`.
-- A plugin skill's alias is its bare name (`wigley:feature` → `feature`); a built-in command's aliases are other words
+- `description` spells `<` and `>` as `&lt;` and `&gt;` in 2 of the 101 records (`wigley:feature-primer`,
+  `wigley:retro`), though their `SKILL.md` frontmatter holds a literal `<`; their `argumentHint` holds a literal `<`, as
+  does `code-review`'s `description`. The adapter decodes `&lt;`, `&gt;` and `&amp;` in `description`.
+- A plugin skill's alias is usually its bare name (`wigley:feature` → `feature`). Of the 32 records named with a `:`,
+  4 lack it: `wigley:debug` and `anthropic-skills:deep-research`, whose bare name another record holds as its name;
+  `wigley:review`, whose bare name `code-review` holds as an alias; and `wigley:brief`, whose bare name no record holds.
+  A built-in command's aliases are other words
   (`usage` → `cost`, `stats`; `clear` → `reset`, `new`). The `anthropic-skills` skills reverse it: `name` is the bare
   word and the alias the qualified one (`docx` → `anthropic-skills:docx`), while `init.slash_commands` lists the
   qualified one.

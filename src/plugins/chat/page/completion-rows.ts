@@ -5,8 +5,8 @@ import type { CompletionCommand, CompletionRowDraw } from '../contract';
 // The draws of the `/` completion's rows. `draw` runs them newest first over
 // one row and stops at the first that returns true, so a row no draw takes
 // shows the name alone. A draw that throws is logged and counts as false, and
-// what it put in the row before throwing stays. `dispose` removes only the draw
-// `add` returned it for.
+// a false draw's row is cleared, so each draw starts on an empty row. `dispose`
+// removes only the draw `add` returned it for.
 export interface CompletionRows {
   add(draw: CompletionRowDraw): Disposable;
   draw(command: CompletionCommand, row: HTMLElement): void;
@@ -44,12 +44,16 @@ function tookRow(
   row: HTMLElement,
   log: (text: string) => void,
 ): boolean {
+  let isTaken = false;
   try {
-    return draw(command, row);
+    isTaken = draw(command, row);
   } catch (error) {
     log(`completion row draw failed for /${command.name}: ${errorText(error)}`);
-    return false;
   }
+  if (!isTaken) {
+    row.replaceChildren();
+  }
+  return isTaken;
 }
 
 // Chat's own draw: the command's description, through `drawPart`, while

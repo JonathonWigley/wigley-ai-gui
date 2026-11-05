@@ -5,6 +5,7 @@ import {
   type UsageAgentEvent,
 } from '../../contracts/agent';
 import type { AgentDefinition } from './agent-definitions';
+import { withoutSlash } from './claude-commands';
 import type { ClaudeControlId } from './claude-controls';
 import type { EntryDraft, WithoutAt } from '../../shared/entry-stamp';
 import { isJsonObject } from '../../shared/json';
@@ -212,7 +213,7 @@ function snapshot<E extends EntryDraft>(entry: E): E {
 // `slash_commands` then `skills`, without a leading `/`, first kept.
 function commandNames(init: Json): string[] {
   const names = [...asArray(init.slash_commands), ...asArray(init.skills)].map(
-    (name) => asString(name).replace(/^\//, ''),
+    (name) => withoutSlash(asString(name)),
   );
   return [...new Set(names)];
 }
