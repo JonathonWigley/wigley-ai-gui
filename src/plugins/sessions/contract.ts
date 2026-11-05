@@ -292,12 +292,13 @@ export interface SessionsChannel extends ChannelShape {
 // this tab becomes the visible tab: the selected tab of the focused chat pane's
 // session while Sessions mode shows. Its plugin sets its base key scope there.
 // `shown` may run inside `addTab`, before its handle returns, so it must not
-// read that handle.
+// read that handle. `order` places the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;
   icon: string;
   element: HTMLElement;
+  order?: number;
   beforeClose(): boolean;
   shown(): void;
 }
@@ -366,9 +367,10 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 
 // `addTab` attaches the tab's element before returning and selects the tab
 // when it is the session's first; it throws on a tab id the session already
-// holds. Docs and Chat lead the strip; other tabs follow in add order. A tab
-// added before its session's row waits for the row. A session's
-// tabs drop when its row leaves, and `sessionsRowsSlot`'s notice says so.
+// holds. The strip holds tabs with an `order` first, lowest first, then the tabs
+// with none; a tie keeps add order. A tab added before its session's row waits
+// for the row. A session's tabs drop when its row leaves, and
+// `sessionsRowsSlot`'s notice says so.
 // `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`

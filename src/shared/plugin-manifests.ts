@@ -568,16 +568,16 @@ export function defaultBindLines(
 
 // The served keymap in layers: `defaults`, then each manifest's keys in
 // `dependencyOrder` (commands and scopes qualified as `<pluginId>.<short>`,
-// the `any` scope left unqualified), then `runtime`, then the user's. Each layer's binds are
-// expanded with `expandBind` first. A later layer's bind replaces an earlier
-// layer's bind on the same keys in the same scope (the same chord, however its
-// accelerator is spelled, for app and global binds, the same key and modifiers
-// for intercepts), taking its place; any other appends. The user layer first
-// removes each bind its `unbind` names from the default, plugin and runtime
-// layers, and its `leader` replaces the default's, on the page and in a box, and each of
-// its page and editor binds moves ahead of the other binds of its command, so
-// a command's first bind is the user's. Group names layer the same way, by
-// their keys.
+// the `any` scope left unqualified), then `runtime`, then the user's. Each
+// layer's binds are expanded with `expandBind` first. A later layer's bind
+// replaces an earlier layer's bind on the same keys in the same scope (the same
+// chord, however its accelerator is spelled, for app and global binds, the same
+// key and modifiers for intercepts), taking its place; any other appends. The
+// user layer first removes each bind its `unbind` names from the default, plugin
+// and runtime layers, and its `leader` replaces the default's, on the page and
+// in a box, and each of its page and editor binds moves ahead of the other binds
+// of its command, so a command's first bind is the user's. Group names layer the
+// same way, by their keys.
 export function mergeKeymap(
   defaults: DefaultKeymap,
   manifests: readonly PluginManifest[],

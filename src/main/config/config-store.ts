@@ -67,7 +67,8 @@ const THEME_FILE = /^themes\/[^/]+\.json$/;
 // The last good value of each slice, which a broken file leaves in place. The
 // keymap's is the user layer that last merged, without the binds held back then. It
 // is checked again over the runtime layers, which keep changing, and always merges:
-// a bind leaving it uncovers only binds on its own keys.
+// a bind leaving it uncovers only binds on its own keys. While the file is refused
+// only the refusal is reported: this layer's paths are not the file's.
 interface Slices {
   settings: UserSettings;
   keptKeymap: UserKeymap;
@@ -148,7 +149,10 @@ export async function loadConfigStore(
   ): { kept: UserKeymap; checked: CheckedKeymap } => {
     const lastGood = () => ({
       kept: slices.keptKeymap,
-      checked: checkUserKeymap(slices.keptKeymap, deps, fixed, catalogs),
+      checked: {
+        ...checkUserKeymap(slices.keptKeymap, deps, fixed, catalogs),
+        heldBack: [],
+      },
     });
     if ('problem' in read) {
       problems.push(read.problem);

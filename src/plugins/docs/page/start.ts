@@ -443,6 +443,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         title: 'Docs',
         icon: 'book',
         element: held.view.element,
+        order: 1,
         beforeClose() {
           if (held.view.hasUnsavedEdits()) {
             services.toast(UNSAVED_TEXT, 'error');

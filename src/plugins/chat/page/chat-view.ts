@@ -819,6 +819,7 @@ function createTab(
     title: 'Chat',
     icon: 'comment',
     element: root,
+    order: 2,
     beforeClose: () => view.beforeClose(tab),
     shown: () => view.shown(tab),
   });

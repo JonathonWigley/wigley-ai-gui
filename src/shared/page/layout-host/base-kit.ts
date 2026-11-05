@@ -110,8 +110,8 @@ function qualifiedScope(
   return typeof scope === 'string' ? qualify(pluginId, scope) : scope.qualified;
 }
 
-// The commands a kit's `command` reaches: whether a plugin registers an id,
-// the argument it declares, and running it.
+// The commands a kit's `command` reaches: whether the served commands hold an
+// id, the argument it declares, and running it.
 export interface KitCommands {
   exists(id: CommandId): boolean;
   argShape(id: CommandId): CommandArgShape | undefined;

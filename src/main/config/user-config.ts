@@ -159,9 +159,8 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
 }
 
 // The problem that refuses `settings.json` holding `text`: the merge's, or a
-// theme name no theme can hold. A theme error on any other
-// file is that file's, which the ConfigStore reports there while keeping the
-// last good theme.
+// theme name no theme can hold. A theme error on any other file is that file's,
+// which the ConfigStore reports there while keeping the last good theme.
 function settingsProblem(
   text: string,
   userThemes: readonly ThemeFileText[],

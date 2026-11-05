@@ -81,19 +81,25 @@ export const NO_TABS: TabsState = {
   selections: 0,
 };
 
-// The tabs with `tabId` added last; the first tab added selects itself.
-// Throws when the session already has a tab with that id.
+// What a tab with no `order` sorts as: after every tab with one.
+const NO_ORDER = Number.MAX_SAFE_INTEGER;
+
+// The tabs with `tabId` added in strip order: by `orderOf` each id's `order`, lowest
+// first, then the ids with none, a tie keeping add order. The first tab added selects
+// itself. Throws when the session already has a tab with that id.
 export function tabsAfterAdd(
   tabs: TabsState,
   sessionId: string,
   tabId: string,
+  orderOf: (tabId: string) => number | undefined,
 ): TabsState {
   if (tabs.tabIds.includes(tabId)) {
     throw new Error(`Session ${sessionId} already has a tab "${tabId}"`);
   }
+  const rank = (id: string) => orderOf(id) ?? NO_ORDER;
   return {
     ...tabs,
-    tabIds: [...tabs.tabIds, tabId],
+    tabIds: [...tabs.tabIds, tabId].sort((a, b) => rank(a) - rank(b)),
     selectedTabId: tabs.selectedTabId ?? tabId,
   };
 }

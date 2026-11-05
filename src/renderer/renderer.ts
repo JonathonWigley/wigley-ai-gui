@@ -208,7 +208,7 @@ async function start() {
       keys: keyHints,
       platform: config.platform.os,
       commands: {
-        exists: hasHandler,
+        exists: (id) => live.current().commands[id] !== undefined,
         argShape: (id) => live.current().commands[id]?.arg,
         run: (id) => commands.router.run(id, undefined),
       },

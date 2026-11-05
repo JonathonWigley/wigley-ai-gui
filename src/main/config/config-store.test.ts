@@ -882,6 +882,32 @@ describe('loadConfigStore', () => {
       expect(pageCommands(store.current())).toContain('y p.down');
     });
 
+    it('setRuntime_FileRefused_ReportsOnlyTheRefusal', async () => {
+      const files = createMemoryFiles();
+      await files.write(
+        `${FOLDER}/keymap.json`,
+        JSON.stringify({
+          binds: [
+            { keys: 'x', scope: 'p.list', command: 'r.never' },
+            { keys: 'y', scope: 'p.list', command: 'r.later' },
+          ],
+        }),
+      );
+      const store = await load(files);
+      await setRuntimeAndWait(
+        store,
+        catalog({ commands: [runtimeInfo('r.later')] }),
+        'r.marker',
+      );
+      await writeAndWait(files, store, 'keymap.json', '{ not json');
+
+      await setRuntimeAndWait(store, NO_CATALOG, 'r.marker2');
+
+      expect(store.current().problems).toEqual([
+        { file: 'keymap.json', message: expect.any(String) },
+      ]);
+    });
+
     it('setRuntime_CommandArrives_BindAppliesAndProblemGoes', async () => {
       const store = await loadWithKeymap(LATER_FILE);
       await setRuntimeAndWait(store, NO_CATALOG, 'r.marker');

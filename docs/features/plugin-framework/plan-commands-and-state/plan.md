@@ -383,5 +383,6 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 16: createModes changes despite the plan's 'unchanged', since a separate write after parts start leaves '' visible while they start and misses the last-mode dispose; '' now means no mode shows.
 ### Review rounds
 - Round 1, range 7001a175..a0c69635, 12 correctness and 6 plan-and-design lanes: NEEDS FIXES, 62 findings merged in /tmp/claude-commands-state/review-a0c69635.md; each takes its recommended pick (AGENTS.md § Review).
+- Round 2, correctness re-review of fix commits a1d51b16..c707a0d6: NEEDS FIXES, 3 repeats taking Step back and 5 minor items, in /tmp/claude-commands-state/review-c707a0d6.md.
 ### Test gate
 - Unit suite: 491 files, 9027 tests passed, no type errors (head 0be0124e). Filtered self-test across the touched plugins: 955 PASS, 1 FAIL, 1 SKIP. The FAIL is agent-lines 'Escape zla fits the held width', which also fails on base 7001a175 (session-row holds 156px in 149px alone on both trees). The SKIP is the placement check, which a filtered run leaves out. Whole self-test not run: only the user asks for it.

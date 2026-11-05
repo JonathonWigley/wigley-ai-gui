@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { coreScopeSlot } from '../contracts/core-state';
+import { coreModeSlot, coreScopeSlot } from '../contracts/core-state';
 import type { Disposable } from '../contracts/disposable';
 import type { EditorEvents } from '../contracts/editor';
 import type { Keymap } from '../contracts/keymap';
@@ -555,26 +555,106 @@ describe('plugin part harness', () => {
     await expect(harness.restart()).resolves.toBeUndefined();
   });
 
-  it('ModeHandle_Show_MovesAHiddenModeFirstAndTellsItOnce', () => {
-    const shown = vi.fn();
-    let first!: ModeHandle;
-    let second!: ModeHandle;
-    startPagePart(
-      pagePart((api) => {
-        first = api.modes.add(browseMode);
-        second = api.modes.add({ ...browseMode, id: 'other', shown });
+  it.each([
+    {
+      row: 'a show hides the previous mode and shows the next once',
+      steps: ['b.show', 'b.show'],
+      calls: ['a shown', 'a hidden', 'b shown'],
+      heard: ['sample.b'],
+      shown: 'sample.b',
+    },
+    {
+      row: 'a shown mode disposed shows the first left in add order',
+      steps: ['b.show', 'c.show', 'c.dispose'],
+      calls: [
+        'a shown',
+        'a hidden',
+        'b shown',
+        'b hidden',
+        'c shown',
+        'a shown',
+      ],
+      heard: ['sample.b', 'sample.c', 'sample.a'],
+      shown: 'sample.a',
+    },
+    {
+      row: 'a hidden mode disposed tells nothing',
+      steps: ['b.dispose'],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'a disposed handle does nothing',
+      steps: ['b.dispose', 'b.show', 'b.dispose'],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'the last mode disposed tells none shows',
+      steps: ['b.dispose', 'c.dispose', 'a.dispose'],
+      calls: ['a shown'],
+      heard: [''],
+      shown: null,
+    },
+  ])(
+    'ModeHandle_Steps_ActAsTheCoreRegistry: $row',
+    ({ steps, calls, heard, shown }) => {
+      const called: string[] = [];
+      const handles = new Map<string, ModeHandle>();
+      let modes!: PageSampleApi['modes'];
+      const harness = startPagePart(
+        pagePart((api) => {
+          modes = api.modes;
+          for (const id of ['a', 'b', 'c']) {
+            const handle = api.modes.add({
+              ...browseMode,
+              id,
+              shown: () => called.push(`${id} shown`),
+              hidden: () => called.push(`${id} hidden`),
+            });
+            handles.set(id, handle);
+          }
+          return { commands: { run() {} } };
+        }),
+      );
+      const told: unknown[] = [];
+      harness.state.read(coreModeSlot, 'test').on((id) => told.push(id));
+
+      for (const step of steps) {
+        const [id, action] = step.split('.') as [string, 'show' | 'dispose'];
+        handles.get(id)?.[action]();
+      }
+
+      expect(called).toEqual(calls);
+      expect(told).toEqual(heard);
+      if (shown === null) {
+        expect(() => modes.shown()).toThrow('no mode is live');
+      } else {
+        expect(modes.shown()).toBe(shown);
+      }
+    },
+  );
+
+  it('pushSettings_ThenRestart_SettingsReadsThePushedValue', async () => {
+    const pushed = { width: 2 };
+    const heard: unknown[] = [];
+    let api!: PageSampleApi;
+    const harness = startPagePart(
+      pagePart((started) => {
+        api = started;
+        api.onSettingsChanged((settings) => heard.push(settings));
         return { commands: { run() {} } };
       }),
     );
 
-    second.show();
-    second.show();
-    expect(shown).toHaveBeenCalledTimes(1);
-    expect([first.isShown(), second.isShown()]).toEqual([false, true]);
+    harness.pushSettings(pushed);
+    expect(api.settings()).toBe(pushed);
+    expect(heard).toEqual([pushed]);
 
-    second.dispose();
-    second.show();
-    expect(shown).toHaveBeenCalledTimes(1);
+    await harness.restart();
+    expect(api.settings()).toBe(pushed);
   });
 
   it.each([

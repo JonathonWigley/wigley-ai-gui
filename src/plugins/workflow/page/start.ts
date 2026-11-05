@@ -58,11 +58,11 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // composer and a side pane beside its transcript, through the
 // `workflow.layout` layout. Reads `workflow.flows`, drawing the one flow each
 // notice names, leaving a deleted flow drawn until its row leaves and drawing no
-// flow whose row has left, and holds the page halves of the stages, which `addStage` extends.
-// Each workflow command runs on the selected session; each button on the
-// session it draws. `toggleSidePane` shows or hides the pane in every session,
-// kept in `uiState`. `openPreview` steps chat's preview session through a
-// sample of every stage (`createPreview`).
+// flow whose row has left, and holds the page halves of the stages, which
+// `addStage` extends. Each workflow command runs on the selected session; each
+// button on the session it draws. `toggleSidePane` shows or hides the pane in
+// every session, kept in `uiState`. `openPreview` steps chat's preview session
+// through a sample of every stage (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {

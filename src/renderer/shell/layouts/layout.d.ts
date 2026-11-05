@@ -26,7 +26,7 @@ export interface ActivityItemInput {
 
 // The shell's kit. The shell owns no command, so `keys`, `keyHint` and `edge` take any plugin's command by its
 // qualified id (as `docs.openDoc`), and a hint anchors in every scope. A hint shows once the plugins have started.
-// `command` runs any registered page command.
+// `keys` and `command` read the commands the app serves, so `command` runs a command of either process.
 export interface ShellKit extends BaseKit {}
 
 // A layout defines only the parts it changes: each part comes from the first layout that defines it among the

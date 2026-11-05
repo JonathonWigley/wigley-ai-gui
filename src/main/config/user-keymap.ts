@@ -579,7 +579,7 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
 
 // `user` without each bind whose command `fixedCommands` does not hold and `names`
 // cannot run: an unknown id, the wrong process or a bad `arg`. Each gives one
-// problem, with the text and the path in the file that the parse would give. A part
+// problem, with the text the parse would give and the bind's path in `user`. A part
 // can register the command later, so the caller decides when these are reported.
 export function heldBackUserBinds(
   user: UserKeymap,

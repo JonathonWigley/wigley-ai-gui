@@ -289,6 +289,21 @@ describe('changes', () => {
     expect(heard).toEqual(['value first', 'value second', 'keyed']);
   });
 
+  it('on_AddedByAListenerOnASlotItWrote_HearsTheQueuedChange', () => {
+    const { store } = storeWithLogs();
+    const writer = store.publish(valueKey);
+    const keyed = store.publish(keyedKey);
+    const heard: unknown[] = [];
+    store.read(valueKey, 'first').on(() => {
+      keyed.set('a', 1);
+      store.read(keyedKey, 'late').on((...args) => heard.push(args));
+    });
+
+    writer.set(1);
+
+    expect(heard).toEqual([['a', 1]]);
+  });
+
   it('write_OnWriteThrows_SlotUpdatedAndCallerHearsIt', () => {
     const { store } = storeWithLogs();
     const writer = store.publish(valueKey);

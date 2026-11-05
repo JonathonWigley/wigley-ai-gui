@@ -143,10 +143,9 @@ export interface SessionTabsView {
 // tab's element fills its frame's sheet, and a frame moves between panes, the
 // holder and a pane part drawn again as the same element, by a connected move that
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
-// (`vacate`) before its slot leaves the document. The strip holds the tabs of
-// LEADING_TAB_IDS first, whichever of them was added first, and every other tab
-// after them in add order. A frame no pane shows, a
-// session's with no row yet included, waits in the hidden holder.
+// (`vacate`) before its slot leaves the document. The strip follows each tab's
+// `order` (`tabsAfterAdd`). A frame no pane shows, a session's with no row yet
+// included, waits in the hidden holder.
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, its tooltip and the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
@@ -489,10 +488,17 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     add(sessionId, view) {
       const frame = frameOf(sessionId);
-      const added = tabsAfterAdd(frame.tabs, sessionId, view.id);
       const tab: Tab = { view, status: '' };
-      frame.entries = inStripOrder(new Map(frame.entries).set(view.id, tab));
-      frame.tabs = { ...added, tabIds: [...frame.entries.keys()] };
+      const entries = new Map(frame.entries).set(view.id, tab);
+      frame.tabs = tabsAfterAdd(
+        frame.tabs,
+        sessionId,
+        view.id,
+        (id) => entries.get(id)?.view.order,
+      );
+      frame.entries = new Map(
+        frame.tabs.tabIds.map((id) => [id, entries.get(id)!]),
+      );
       frame.body.append(view.element);
       changed();
       let latestTakeOver: { release(): void } | null = null;
@@ -571,19 +577,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     select,
   };
-}
-
-// The tabs every session gets, in strip order: a page load and a live session
-// add them in different orders.
-const LEADING_TAB_IDS: readonly string[] = ['docs', 'chat'];
-
-function stripRank(tabId: string): number {
-  const rank = LEADING_TAB_IDS.indexOf(tabId);
-  return rank === -1 ? LEADING_TAB_IDS.length : rank;
-}
-
-function inStripOrder(tabs: ReadonlyMap<string, Tab>): Map<string, Tab> {
-  return new Map([...tabs].sort(([a], [b]) => stripRank(a) - stripRank(b)));
 }
 
 function removeChildrenExcept(parent: HTMLElement, kept: HTMLElement): void {

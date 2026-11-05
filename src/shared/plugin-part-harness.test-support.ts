@@ -4,6 +4,7 @@ import type { Alerts } from '../contracts/alerts';
 import type { AppInstance } from '../contracts/app-instance';
 import type { CommandId } from '../contracts/commands';
 import {
+  coreModeSlot,
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
   type RuntimeCatalog,
@@ -33,6 +34,7 @@ import type {
   MainPart,
   MainServices,
   MainStart,
+  Mode,
   ModeHandle,
   PageApi,
   PageModes,
@@ -180,7 +182,8 @@ export interface HarnessAnchor {
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
 // `pushSettings` replaces what `settings()` reads for the part under test and tells
-// its `onSettingsChanged` listeners.
+// its `onSettingsChanged` listeners. The fake `modes` writes `coreModeSlot` on each
+// change of the shown mode, unless a test holds that slot's claim.
 export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   PageStart<M>
 > {
@@ -984,6 +987,12 @@ function newPageRecord(
   };
 }
 
+// A mode the fake registry holds: its qualified id and the calls it hears.
+interface FakeLiveMode {
+  id: string;
+  mode: Pick<Mode, 'shown' | 'hidden'>;
+}
+
 // What every page part of one harness shares: the page core's single slots.
 interface PageWorld extends HarnessWorld {
   replaced: Partial<Omit<PageServices, 'timers' | 'log'>>;
@@ -991,8 +1000,9 @@ interface PageWorld extends HarnessWorld {
   keymap: Keymap;
   scope: string;
   transparency: 'full' | 'reduced' | null;
-  // The qualified ids of the live modes, the shown one first.
-  liveModes: string[];
+  // The live modes in add order, and the shown one.
+  liveModes: FakeLiveMode[];
+  shownMode: FakeLiveMode | null;
   fences: FenceContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
@@ -1008,6 +1018,12 @@ function createPageWorld(
   state: SlotStore | undefined,
   manifests: readonly PluginManifest[],
 ): PageWorld {
+  const firstMode: FakeLiveMode | null = firstModeTaken
+    ? {
+        id: 'part-harness.first-mode',
+        mode: { shown() {}, hidden() {} },
+      }
+    : null;
   const world: PageWorld = {
     ...createWorld(state, 'page', manifests),
     replaced,
@@ -1022,7 +1038,8 @@ function createPageWorld(
     },
     scope: 'idle',
     transparency: null,
-    liveModes: firstModeTaken ? ['part-harness.first-mode'] : [],
+    liveModes: firstMode === null ? [] : [firstMode],
+    shownMode: firstMode,
     fences: [],
     anchors: [],
     where: 'page',
@@ -1032,6 +1049,7 @@ function createPageWorld(
       world.hintsShown = shown;
     }),
   };
+  tellShownMode(world.state, firstMode?.id ?? '');
   return world;
 }
 
@@ -1055,52 +1073,84 @@ function fakePushedScope(
   return common.register(pushed);
 }
 
+// Writes `coreModeSlot` as the page core does on each change, unless a test holds
+// the slot's claim to write it itself.
+function tellShownMode(state: SlotStore, modeId: string): void {
+  if (state.isHeld(coreModeSlot.id)) {
+    return;
+  }
+  const writer = state.publish(coreModeSlot);
+  writer.set(modeId);
+  writer.dispose();
+}
+
+function revealFakeMode(world: PageWorld, entry: FakeLiveMode): void {
+  world.shownMode = entry;
+  entry.mode.shown();
+  tellShownMode(world.state, entry.id);
+}
+
+// The registry of `createModes` without its DOM: the side bar stays hidden and no
+// element's `hidden` changes.
 function fakeModes(
   manifest: PluginManifest,
-  { liveModes }: PageWorld,
+  world: PageWorld,
   common: CommonApi,
 ): PageModes {
+  const { liveModes } = world;
   return {
     add(mode) {
       const id = qualify(manifest.id, mode.id);
-      if (liveModes.includes(id)) {
+      if (liveModes.some((live) => live.id === id)) {
         throw new Error(`Mode "${id}" is added twice`);
       }
-      const isFirst = liveModes.length === 0;
-      liveModes.push(id);
+      const entry: FakeLiveMode = { id, mode };
+      liveModes.push(entry);
+      const isDisposed = () => !liveModes.includes(entry);
       const handle: ModeHandle = common.register({
         show() {
-          const isDisposed = !liveModes.includes(id);
-          if (isDisposed || liveModes[0] === id) {
+          if (world.shownMode === entry || isDisposed()) {
             return;
           }
-          liveModes.splice(liveModes.indexOf(id), 1);
-          liveModes.unshift(id);
-          mode.shown();
+          world.shownMode?.mode.hidden();
+          revealFakeMode(world, entry);
         },
-        isShown: () => liveModes[0] === id,
+        isShown: () => world.shownMode === entry,
         setContext() {},
         toggleSideBar() {
-          if (mode.sideBar === undefined && liveModes.includes(id)) {
+          if (mode.sideBar === undefined && !isDisposed()) {
             throw new Error(`Mode "${id}" has no side bar`);
           }
         },
         picked() {},
         sideBarShown: () => false,
         dispose() {
-          liveModes.splice(liveModes.indexOf(id), 1);
+          if (isDisposed()) {
+            return;
+          }
+          liveModes.splice(liveModes.indexOf(entry), 1);
+          if (world.shownMode !== entry) {
+            return;
+          }
+          world.shownMode = null;
+          const [first] = liveModes;
+          if (first === undefined) {
+            tellShownMode(world.state, '');
+          } else {
+            revealFakeMode(world, first);
+          }
         },
       });
-      if (isFirst) {
-        mode.shown();
+      if (world.shownMode === null) {
+        revealFakeMode(world, entry);
       }
       return handle;
     },
     shown() {
-      if (liveModes.length === 0) {
+      if (world.shownMode === null) {
         throw new Error('part harness: no mode is live');
       }
-      return liveModes[0];
+      return world.shownMode.id;
     },
   };
 }
