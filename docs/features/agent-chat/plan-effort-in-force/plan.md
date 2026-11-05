@@ -103,5 +103,7 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 ### Review rounds
 - 1 · 1047872c · NEEDS FIXES
 - 2 · 96f0c3d6 · NEEDS FIXES (re-review: typed non-choice value dropped a pick; repeat of round 1, settled by the agent on the user's note to take its decisions)
+- 3 · 95919069 · PASS (re-review of the fold rule; the later shim removal was compile and tests only, at the cycle limit)
 ### Test gate
 - claude-controls, session-fold, claude-code-harness tests (edited with the change); chat-sessions.test.ts (confirmPicks and the reported-value restart row read the controls report) · 569 passed
+- Fix cycle: src/session-host, src/main/claude-code, src/main/session-host, src/plugins/chat/main, fake host test · 1247 passed at 96f0c3d6; live drive run fix-check at 96f0c3d6 · 5 of 5

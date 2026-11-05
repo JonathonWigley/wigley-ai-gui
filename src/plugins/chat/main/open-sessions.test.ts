@@ -139,31 +139,12 @@ describe('createOpenSessions', () => {
       },
     },
     {
-      file: 'written before confirmedPicks were saved',
+      file: 'a session holding a key no longer saved',
       text: withSessions([
-        {
-          ...TWO_SESSIONS.sessions[0],
-          confirmedPicks: undefined,
-          controls: [
-            { id: 'mode', label: 'Mode', choices: [], value: 'plan' },
-            { id: 'model', label: 'Model', choices: [], value: 'opus' },
-            { id: 'effort', label: 'Effort', choices: [], value: null },
-          ],
-          userSetControls: ['model', 'effort', 'gone'],
-        },
+        { ...TWO_SESSIONS.sessions[0], retiredField: ['stale'] },
       ]),
       expected: {
-        sessions: [
-          {
-            ...TWO_SESSIONS.sessions[0],
-            controls: [
-              { id: 'mode', label: 'Mode', choices: [], value: 'plan' },
-              { id: 'model', label: 'Model', choices: [], value: 'opus' },
-              { id: 'effort', label: 'Effort', choices: [], value: null },
-            ],
-            confirmedPicks: { model: 'opus' },
-          },
-        ],
+        sessions: [TWO_SESSIONS.sessions[0]],
         selectedHostSessionId: null,
       },
     },
@@ -266,12 +247,6 @@ describe('createOpenSessions', () => {
       file: 'confirmedPicks holding a number',
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], confirmedPicks: { effort: 1 } },
-      ]),
-    },
-    {
-      file: 'userSetControls holding a number',
-      text: withSessions([
-        { ...TWO_SESSIONS.sessions[0], userSetControls: [1] },
       ]),
     },
     {

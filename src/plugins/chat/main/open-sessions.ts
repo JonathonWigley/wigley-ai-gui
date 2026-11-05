@@ -57,12 +57,8 @@ type LaterSavedField =
   | 'returnedDrops'
   | 'activeMs';
 
-// `userSetControls` is what a file written before `confirmedPicks` holds: the
-// picked controls' ids.
 type StoredSession = Omit<SavedSession, LaterSavedField> &
-  Partial<Pick<SavedSession, LaterSavedField>> & {
-    userSetControls?: string[];
-  };
+  Partial<Pick<SavedSession, LaterSavedField>>;
 
 export interface SavedSessions {
   // In row order.
@@ -179,25 +175,9 @@ function isStoredSession(value: unknown): value is StoredSession {
       typeof value.launchResume === 'boolean') &&
     isOptionalControlList(value.controls) &&
     isOptionalStringRecord(value.confirmedPicks) &&
-    isOptionalStrings(value.userSetControls) &&
     isOptionalStrings(value.returnedDrops) &&
     isOptionalActiveMs(value.activeMs)
   );
-}
-
-// A file written before `confirmedPicks` holds the picked ids only, so each
-// takes the value its record held.
-function picksOfPickedIds(
-  pickedIds: readonly string[],
-  controls: readonly SessionControl[],
-): Record<string, string> {
-  const picks: Record<string, string> = {};
-  for (const control of controls) {
-    if (pickedIds.includes(control.id) && control.value !== null) {
-      picks[control.id] = control.value;
-    }
-  }
-  return picks;
 }
 
 function parseSavedSessions(text: string): SavedSessions {
@@ -222,23 +202,23 @@ function parseSavedSessions(text: string): SavedSessions {
     throw unreadable;
   }
   return {
-    sessions: (sessions as StoredSession[]).map(
-      ({ userSetControls, ...stored }) => ({
-        ...stored,
-        titles: stored.titles ?? NO_TITLES,
-        processId: stored.processId ?? null,
-        queued: stored.queued ?? [],
-        returned: stored.returned ?? [],
-        launchControls: stored.launchControls ?? {},
-        launchResume: stored.launchResume ?? false,
-        controls: stored.controls ?? [],
-        confirmedPicks:
-          stored.confirmedPicks ??
-          picksOfPickedIds(userSetControls ?? [], stored.controls ?? []),
-        returnedDrops: stored.returnedDrops ?? [],
-        activeMs: stored.activeMs ?? 0,
-      }),
-    ),
+    sessions: (sessions as StoredSession[]).map((stored) => ({
+      hostSessionId: stored.hostSessionId,
+      projectDir: stored.projectDir,
+      profile: stored.profile,
+      sent: stored.sent,
+      busy: stored.busy,
+      titles: stored.titles ?? NO_TITLES,
+      processId: stored.processId ?? null,
+      queued: stored.queued ?? [],
+      returned: stored.returned ?? [],
+      launchControls: stored.launchControls ?? {},
+      launchResume: stored.launchResume ?? false,
+      controls: stored.controls ?? [],
+      confirmedPicks: stored.confirmedPicks ?? {},
+      returnedDrops: stored.returnedDrops ?? [],
+      activeMs: stored.activeMs ?? 0,
+    })),
     selectedHostSessionId,
   };
 }

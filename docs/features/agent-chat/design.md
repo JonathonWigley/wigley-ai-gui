@@ -365,8 +365,9 @@ interview on 2026-10-23; this file is the record of both.
   only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned id), which the chip shows as
   its alias, is never narrowed to the alias. So a row resumed after its process exits, or cleared, keeps its mode and
   the model and effort the user picked, and its chips show them from the start. A restored row, re-attached or resting,
-  keeps them the same way: its record gives it the held controls and the picked values, a replay's report then replaces
-  the held values and drops picks as a live report does, and its next start passes the mode it holds and the picks. A
+  keeps them the same way: its record gives it the held controls and the picked values, a replay's one report, the
+  fold's final state, then replaces the held values and drops a pick only when its final value is null (a clear then a
+  settings reply inside the replay leaves the pick), and its next start passes the mode it holds and the picks. A
   record with no controls opens with none and passes none, so its first start runs in `auto`.
   Every start also passes `AgentStart.instructions`, the text plugins registered through `addInstructions` in
   registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
