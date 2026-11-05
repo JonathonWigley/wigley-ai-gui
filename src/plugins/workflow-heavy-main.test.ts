@@ -6,22 +6,16 @@ import type { QualifiedEvents } from '../contracts/plugin';
 import { createMemoryFiles, type MemoryFiles } from '../shared/memory-files';
 import { posixPaths } from '../shared/paths/posix-paths';
 import {
-  fakeDependency,
   noCounts,
   startMainPart,
   type MainPartHarness,
 } from '../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../shared/registrations';
-import {
-  type ChatMainEvents,
-  type ChatMainExports,
-  chatMainKey,
-} from './chat/contract';
+import { type ChatMainEvents, type ChatMainExports } from './chat/contract';
 import {
   type AgentSession,
   type SessionsMainEvents,
   type SessionsMainExports,
-  sessionsMainKey,
   type ToolCallContext,
   type ToolDefinition,
   type ToolSession,
@@ -31,10 +25,14 @@ import {
   type SessionFlow,
   startsSkill,
   type WorkflowMainExports,
-  workflowMainKey,
   type WorkflowSignal,
 } from './workflow/contract';
 import { newFlow } from './workflow/flow';
+import {
+  FAKE_CHAT,
+  FAKE_SESSIONS,
+  startEngineMainPart,
+} from './workflow/main/engine-fakes.test-support';
 import { FLOWS_FILE } from './workflow/main/flow-store';
 import { RUNS_FILE, type RunLogLine } from './workflow/main/run-log';
 import { workflowMainPart } from './workflow/main/start';
@@ -366,26 +364,6 @@ function startWorkflowPart(
   };
 }
 
-// Sessions for the harnesses' parts: every contribution taken and disposable.
-const FAKE_SESSIONS = fakeDependency(
-  sessionsMainKey,
-  (consumer) =>
-    ({
-      contributeTools: () => consumer.track({ dispose: () => undefined }),
-      label: () => null,
-    }) as unknown as SessionsMainExports,
-);
-
-// Chat for the harnesses' parts: every instruction taken and disposable.
-const FAKE_CHAT = fakeDependency(
-  chatMainKey,
-  (consumer) =>
-    ({
-      addInstructions: () => consumer.track({ dispose: () => undefined }),
-      activeTime: () => null,
-    }) as unknown as ChatMainExports,
-);
-
 const NO_CALL_CONTEXT: ToolCallContext = {
   toolUseId: null,
   signal: new AbortController().signal,
@@ -536,19 +514,9 @@ function startPartsInHarnesses(
   settings: HeavyTestSettings,
   services: { files?: Files } = {},
 ) {
-  const engine = startMainPart(workflowMainPart, {
-    dependencies: [FAKE_SESSIONS, FAKE_CHAT],
-  });
+  const { engine, dependency } = startEngineMainPart();
   const heavy = startMainPart(workflowHeavyMainPart, {
-    dependencies: [
-      fakeDependency(
-        workflowMainKey,
-        (consumer) =>
-          engine.started().exports?.(consumer) as WorkflowMainExports,
-      ),
-      FAKE_SESSIONS,
-      FAKE_CHAT,
-    ],
+    dependencies: [dependency, FAKE_SESSIONS, FAKE_CHAT],
     settings,
     services,
   });
@@ -1055,7 +1023,11 @@ describe('workflowHeavyMainPart', () => {
   });
 
   it('startWithFlowsHeld_FollowsTheirPlans', async () => {
-    const data = await savedFlowData({ stage: 'make', planDir: PLAN_DIR });
+    const data = await savedFlowData({
+      stage: 'make',
+      planDir: PLAN_DIR,
+      countdownEndsAt: 9000,
+    });
     const workflow = startWorkflowPart(SETTINGS, { data, heavyLater: true });
     await workflow.project.write(PLAN_FILE, PLAN);
     await workflow.openS1();
@@ -1064,7 +1036,11 @@ describe('workflowHeavyMainPart', () => {
     workflow.startHeavy();
     await settled();
 
-    expect(workflow.lastHeavy()?.progress).toEqual(readPlanProgress(PLAN));
+    expect(workflow.lastHeavy()).toMatchObject({
+      progress: readPlanProgress(PLAN),
+      countdownEndsAt: null,
+    });
+    expect(workflow.time.liveTimers()).toBe(0);
   });
 
   it('subagentPlanWrite_NamesThePlanAndWatchesIt', async () => {
@@ -1111,19 +1087,6 @@ describe('workflowHeavyMainPart', () => {
       state: null,
     });
     expect(workflow.projectReads).toEqual([]);
-  });
-
-  it('openedFlowWithASavedCountdown_ClearsIt', async () => {
-    const data = await savedFlowData({
-      stage: 'planReady',
-      planDir: PLAN_DIR,
-      countdownEndsAt: 9000,
-    });
-    const workflow = startWorkflowPart(SETTINGS, { data });
-
-    await workflow.openS1();
-
-    expect(workflow.lastHeavy()?.countdownEndsAt).toBeNull();
   });
 
   it('MissedLevel_ClaimedInTurn_StaysFalse', async () => {

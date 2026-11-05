@@ -25,6 +25,7 @@ import type {
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import { canonicalAccelerator } from './accelerator';
 import { parseChord } from './chord-notation';
+import { isJsonObject } from './json';
 import { editorBindMode, vimTokens, withLeader } from './key-hints';
 import { pageKeysFor } from './key-notation';
 import { startsWith } from './keymap-checks';
@@ -678,9 +679,7 @@ export function pluginOptionalSettings(
 function settingLeafPaths(manifest: PluginManifest): Set<string> {
   const leaves = new Set<string>();
   for (const [path, value] of settingDefaults(manifest.settings)) {
-    const isPlainObject =
-      typeof value === 'object' && value !== null && !Array.isArray(value);
-    if (!path.includes('[]') && !isPlainObject) {
+    if (!path.includes('[]') && !isJsonObject(value)) {
       leaves.add(path);
     }
   }

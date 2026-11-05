@@ -1,41 +1,18 @@
-import type { AgentHarness } from '../../../contracts/agent';
-import type { Disposable } from '../../../contracts/disposable';
-import type { Files } from '../../../contracts/files';
-import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
-import { errorText } from '../../../shared/error-text';
 import {
-  FAKE_TOOL_TEXT,
-  type FakeAgentProcessRecord,
-  markRun,
-  type RunMark,
-} from '../../../shared/fake-agent-harness';
-import type { ChatMainExports } from '../../chat/contract';
-import type { SessionsMainExports } from '../../sessions/contract';
-import type {
-  ChecklistItem,
-  WorkflowSelfTestHooks,
-} from '../../workflow/contract';
+  CHECKLIST_SEND,
+  type LevelSelfTestDeps,
+  levelLines,
+  levelSelfTestScript,
+  reportSend,
+  sendKeys,
+} from '../../workflow/main/level-selftest-script';
 
-// The self-test's project folder, made under the self-test's home. Its name
-// names the session in every page line.
 const SELFTEST_PROJECT_NAME = 'workflow-light-selftest';
 
 const LIGHT_SEND = '/wigley:light';
-// Sends the fake answers as any other, whose turn end makes the tool call the
-// send asks for, as a real agent would.
-const REPORT_SEND_PREFIX = 'fake: report ';
-const CHECKLIST_SEND = 'fake: checklist';
-const CHECKLIST_ITEMS: readonly ChecklistItem[] = [
-  { text: 'first', done: true },
-  { text: 'second', done: false },
-  { text: 'third', done: false },
-];
 
-const reportSend = (step: string) => `${REPORT_SEND_PREFIX}${step}`;
-
-const EXPECTED_SENDS = [
-  FAKE_TOOL_TEXT,
+const SENDS_AFTER_LAUNCH = [
   LIGHT_SEND,
   reportSend('done'),
   LIGHT_SEND,
@@ -46,33 +23,7 @@ const EXPECTED_SENDS = [
   reportSend('done'),
 ];
 
-export interface WorkflowLightSelfTestDeps {
-  homeDir: string;
-  files: Pick<Files, 'makeFolder' | 'realPath'>;
-  paths: Pick<Paths, 'join'>;
-  chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
-  sessions: Pick<SessionsMainExports, 'activate'>;
-  harnesses: readonly AgentHarness[];
-  hooks: WorkflowSelfTestHooks;
-}
-
-// The launched session's id, or the launch's error; `turnEnds` holds the
-// session id of each main turn end main heard during the run.
-interface WorkflowLightSelfTestResult {
-  project: string;
-  sessionId: string | null;
-  launchError: string | null;
-  turnEnds: readonly string[];
-}
-
-// Types the text in insert mode, Esc to normal mode, where Enter in the box
-// sends.
-const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
-
-const line = (text: string) => `[workflow] ${SELFTEST_PROJECT_NAME} ${text}`;
-// `text` holds no regex metacharacter.
-const anchored = (text: string) =>
-  new RegExp(`^\\[workflow\\] ${SELFTEST_PROJECT_NAME} ${text}$`);
+const { line, anchored } = levelLines(SELFTEST_PROJECT_NAME);
 
 const GROUPS: SelfTestGroup[] = [
   {
@@ -119,124 +70,12 @@ const GROUPS: SelfTestGroup[] = [
   },
 ];
 
-// This run's fake records for `project`, in start order.
-function projectRecords(
-  marks: readonly RunMark[],
-  project: string,
-): FakeAgentProcessRecord[] {
-  return marks
-    .flatMap((mark) => mark.harness.processes.slice(mark.processes))
-    .filter((record) => record.request.projectDir === project);
-}
-
-const sendTexts = (record: FakeAgentProcessRecord) =>
-  record.calls.flatMap((call) => (call.method === 'send' ? [call.text] : []));
-
-function runProblems(
-  result: WorkflowLightSelfTestResult,
-  marks: readonly RunMark[],
-): string[] {
-  if (result.sessionId === null) {
-    return [`no workflow-light session: ${result.launchError}`];
-  }
-  const problems: string[] = [];
-  const sends = projectRecords(marks, result.project).flatMap(sendTexts);
-  if (JSON.stringify(sends) !== JSON.stringify(EXPECTED_SENDS)) {
-    problems.push(`sends were ${JSON.stringify(sends)}`);
-  }
-  const turnEnds = result.turnEnds.filter((id) => id === result.sessionId);
-  if (turnEnds.length < sends.length - 1) {
-    problems.push(
-      `${String(turnEnds.length)} main turn ends for ${String(sends.length)} sends`,
-    );
-  }
-  return problems;
-}
-
-// Each run first closes every session still open in the project, waiting for their
-// rows to go so the new row takes the first label, and forgets the flows of the
-// project's sessions. It then launches one session in the project, counting the main
-// turn ends main hears until the next run opens, and at each of the launched
-// session's turn ends makes the tool call its last send asks for. The listener
-// outlives the script, so a later script's session calls nothing here.
 export function workflowLightSelfTestScript(
-  deps: WorkflowLightSelfTestDeps,
+  deps: LevelSelfTestDeps,
 ): SelfTestScript {
-  const { homeDir, files, paths, chat, sessions, harnesses, hooks } = deps;
-  let made: Promise<string> | null = null;
-  let marks: RunMark[] = [];
-  let turnEndListener: Disposable | null = null;
-
-  async function makeProject(): Promise<string> {
-    const project = paths.join(
-      await files.realPath(homeDir),
-      SELFTEST_PROJECT_NAME,
-    );
-    await files.makeFolder(project);
-    return project;
-  }
-
-  function callAskedTool(sessionId: string, lastSend: string | undefined) {
-    if (lastSend === CHECKLIST_SEND) {
-      hooks.callChecklistTool(sessionId, CHECKLIST_ITEMS);
-    } else if (lastSend?.startsWith(REPORT_SEND_PREFIX) === true) {
-      hooks.callStepTool(sessionId, lastSend.slice(REPORT_SEND_PREFIX.length));
-    }
-  }
-
-  async function openSession(): Promise<WorkflowLightSelfTestResult> {
-    made ??= makeProject().catch((error: unknown) => {
-      made = null;
-      throw error;
-    });
-    const project = await made;
-    await chat.closeSessionsIn(project);
-    hooks.forgetFlows(project);
-    const turnEnds: string[] = [];
-    let launched: string | null = null;
-    turnEndListener = hooks.onMainTurnEnded((sessionId) => {
-      turnEnds.push(sessionId);
-      if (sessionId === launched) {
-        callAskedTool(
-          sessionId,
-          projectRecords(marks, project).flatMap(sendTexts).at(-1),
-        );
-      }
-    });
-    try {
-      launched = await chat.launch({
-        projectDir: project,
-        profile: 'work',
-        message: { text: FAKE_TOOL_TEXT, images: [] },
-      });
-      sessions.activate(launched);
-      return { project, sessionId: launched, launchError: null, turnEnds };
-    } catch (error) {
-      return {
-        project,
-        sessionId: null,
-        launchError: errorText(error),
-        turnEnds,
-      };
-    }
-  }
-
-  return {
-    pageBinds: [],
-    settings: {},
-    scrollsItself: [],
-    open() {
-      marks = markRun(harnesses);
-      turnEndListener?.dispose();
-      turnEndListener = null;
-      return {
-        shownLine: line('shows idle'),
-        alsoShown: [anchored('no workflow')],
-        result: openSession(),
-      };
-    },
+  return levelSelfTestScript(deps, {
+    projectName: SELFTEST_PROJECT_NAME,
     groups: GROUPS,
-    problems: (result) =>
-      runProblems(result as WorkflowLightSelfTestResult, marks),
-  };
+    sendsAfterLaunch: SENDS_AFTER_LAUNCH,
+  });
 }

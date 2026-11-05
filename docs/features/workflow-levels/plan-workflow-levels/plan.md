@@ -254,6 +254,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 - RunMeter: five members → six, adding claimed(sessionId), which sets the baseline as finished does · why: the baseline resets at a null-to-claim move and the interface had no member for it · consumers: none outside workflow/main/start.ts · group 04
+- Round 1 fix: fake-agent-harness exports projectRecords and sendTexts; workflow/main/level-selftest-script.ts exports levelSelfTestScript, LevelSelfTestDeps, LevelSelfTestSpec, levelLines, sendKeys, reportSend, CHECKLIST_SEND; workflowSelfTestScript is workflowHeavySelfTestScript; Heavy's contract may import src/shared; Light's and Medium's selftest-script.ts may import workflow/main, the one exception to the plan's contract-only boundary, as whole-file sublayers.
 ### Rulings
 - A settings file of the wrong shape stops install with exit 1, as a parse failure does — merging into it would traceback — such a file blocks install until fixed · group 09 · group 09
 - A transcript line that parses but is not a pinned shape counts as no match, not a hook failure — one odd line should not disable the gate — a Claude Code shape change denies rather than fails open · group 09 · group 09
@@ -291,6 +292,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - Task 12's two parts split around steps 4 and 5: its live checks run now, the test gate and review follow, and its Landing order runs after the review verdict — landing first would push unreviewed code to main, and the live checks' fixes then fall inside the review — the box stays open until landing · lead
 - Live checks: S1, S2, D1 to D10 and R1 pass; S2's pinned command, the bare .ui-tag--error selector, D3 and D8's width, D9's Escape and R1's log prefix are spec slips, actual results recorded in task 12's Proof; L1 sets chat.profiles to the real config path as R1 did · group 12
 - A long stage word ellipsizes on the row (Interview · pa…) rather than clipping the cache icon — other fixes move other plugins' alignment and the strip still shows the whole word — the user may prefer whole words · group 12
+- Finding 38 reuses src/shared/json.ts isJsonObject rather than adding src/shared/is-record.ts, which would hold the same body twice. pane-tree.ts and read-layout-module.ts keep their copies since theirs admit arrays.
 ### Review rounds
 - Round 1 · range 52a66bfa..696c81a6 (agents ee97ed1..70a4e4e, marketplace c8e7abb..c489a32) · lanes correctness x3, plan-and-design x3 · 38 findings, none Critical · Verdict: NEEDS FIXES · report /tmp/claude-workflow-levels/review-696c81a6.md
 ### Test gate

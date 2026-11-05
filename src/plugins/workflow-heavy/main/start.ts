@@ -12,6 +12,7 @@ import {
   type HeavyState,
   heavyStateOf,
   type WorkflowHeavyChannel,
+  withHeavyState,
 } from '../contract';
 import { isPlanFile } from '../heavy-state';
 import { heavyMainWorkflow } from '../heavy-workflow';
@@ -20,7 +21,7 @@ import { HEAVY_MAIN_STAGES } from '../stages';
 import { createWorkflowActions } from './actions';
 import { createCountdown } from './countdown';
 import { createPlanWatch } from './plan-watch';
-import { workflowSelfTestScript } from './selftest-script';
+import { workflowHeavySelfTestScript } from './selftest-script';
 
 type WorkflowHeavyApi = MainApi<
   typeof workflowHeavyManifest,
@@ -78,7 +79,7 @@ export const workflowHeavyMainPart: MainPart<typeof workflowHeavyManifest> = {
     };
 
     const patchState = (flow: SessionFlow, patch: Partial<HeavyState>) => {
-      workflow.setState(flow.sessionId, { ...heavyStateOf(flow), ...patch });
+      workflow.setState(flow.sessionId, withHeavyState(flow, patch).state);
       syncCountdown(flow.sessionId);
     };
 
@@ -234,7 +235,7 @@ export const workflowHeavyMainPart: MainPart<typeof workflowHeavyManifest> = {
 
     if (services.selfTest !== null && workflow.selfTestHooks !== null) {
       services.selfTest.run(
-        workflowSelfTestScript({
+        workflowHeavySelfTestScript({
           homeDir: services.homeDir,
           files: services.files,
           chat,

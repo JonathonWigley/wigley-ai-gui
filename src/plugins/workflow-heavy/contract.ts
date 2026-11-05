@@ -2,6 +2,7 @@
 // stage rules, its main part and its page part share.
 
 import type { ChannelShape } from '../../contracts/plugin';
+import { isJsonObject } from '../../shared/json';
 import type {
   MainStage,
   SessionFlow,
@@ -68,7 +69,7 @@ export function heavySignal(event: HeavyEvent): WorkflowSignal {
 
 // The Heavy event a `custom` signal carries, else null.
 export function heavyEventOf(signal: WorkflowSignal): HeavyEvent | null {
-  if (signal.type !== 'custom' || !isRecord(signal.event)) {
+  if (signal.type !== 'custom' || !isJsonObject(signal.event)) {
     return null;
   }
   return HEAVY_EVENT_TYPES.has(signal.event.type)
@@ -107,7 +108,7 @@ export interface WorkflowHeavyChannel extends ChannelShape {
 
 function isHeavyState(value: unknown): value is HeavyState {
   return (
-    isRecord(value) &&
+    isJsonObject(value) &&
     (value.planDir === null || typeof value.planDir === 'string') &&
     (value.progress === null || isPlanProgress(value.progress)) &&
     isNumberOrNull(value.reviewRoundsAtMake) &&
@@ -117,7 +118,7 @@ function isHeavyState(value: unknown): value is HeavyState {
 
 function isPlanProgress(value: unknown): value is PlanProgress {
   return (
-    isRecord(value) &&
+    isJsonObject(value) &&
     typeof value.checked === 'number' &&
     typeof value.total === 'number' &&
     isNumberOrNull(value.wave) &&
@@ -130,15 +131,11 @@ function isPlanProgress(value: unknown): value is PlanProgress {
 
 function isPlanTaskLine(value: unknown): value is PlanTaskLine {
   return (
-    isRecord(value) &&
+    isJsonObject(value) &&
     isNumberOrNull(value.wave) &&
     typeof value.text === 'string' &&
     typeof value.done === 'boolean'
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isNumberOrNull(value: unknown): boolean {

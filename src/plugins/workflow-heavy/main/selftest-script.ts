@@ -8,9 +8,10 @@ import {
   FAKE_WORKFLOW_FEATURE_TEXT,
   FAKE_WORKFLOW_PLAN_PATH,
   FAKE_WORKFLOW_STEP_TEXT,
-  type FakeAgentProcessRecord,
   markRun,
+  projectRecords,
   type RunMark,
+  sendTexts,
 } from '../../../shared/fake-agent-harness';
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
@@ -34,7 +35,7 @@ const FEATURE_SEND = `/wigley:feature ${FAKE_WORKFLOW_FEATURE_TEXT}`;
 const REPORT_SEND_PREFIX = 'fake: report ';
 const REPORT_FIX_SEND = `${REPORT_SEND_PREFIX}fix`;
 
-export interface WorkflowSelfTestDeps {
+export interface WorkflowHeavySelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'makeFolder' | 'realPath' | 'trash' | 'write'>;
   chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
@@ -45,7 +46,7 @@ export interface WorkflowSelfTestDeps {
 
 // The launched session's id, or the launch's error; `turnEnds` holds the
 // session id of each main turn end main heard during the run.
-interface WorkflowSelfTestResult {
+interface WorkflowHeavySelfTestResult {
   project: string;
   sessionId: string | null;
   launchError: string | null;
@@ -167,19 +168,6 @@ const GROUPS: SelfTestGroup[] = [
   },
 ];
 
-// This run's fake records for `project`, in start order.
-function projectRecords(
-  marks: readonly RunMark[],
-  project: string,
-): FakeAgentProcessRecord[] {
-  return marks
-    .flatMap((mark) => mark.harness.processes.slice(mark.processes))
-    .filter((record) => record.request.projectDir === project);
-}
-
-const sendTexts = (record: FakeAgentProcessRecord) =>
-  record.calls.flatMap((call) => (call.method === 'send' ? [call.text] : []));
-
 function expectedSends(project: string): string[] {
   const planFolder = `${project}/${FAKE_WORKFLOW_PLAN_PATH}`.slice(
     0,
@@ -198,7 +186,7 @@ function expectedSends(project: string): string[] {
 }
 
 function runProblems(
-  result: WorkflowSelfTestResult,
+  result: WorkflowHeavySelfTestResult,
   marks: readonly RunMark[],
 ): string[] {
   if (result.sessionId === null) {
@@ -236,8 +224,8 @@ function runProblems(
 // opens, and makes the step call a report send asks for at that send's turn end.
 // The fake writes, ticks and deletes the plan itself; problems reads its records,
 // which the steps keep changing in place, when it runs.
-export function workflowSelfTestScript(
-  deps: WorkflowSelfTestDeps,
+export function workflowHeavySelfTestScript(
+  deps: WorkflowHeavySelfTestDeps,
 ): SelfTestScript {
   const { homeDir, files, chat, sessions, harnesses, hooks } = deps;
   let made: Promise<string> | null = null;
@@ -266,7 +254,7 @@ export function workflowSelfTestScript(
     hooks.forgetFlows(project);
   }
 
-  async function openSession(): Promise<WorkflowSelfTestResult> {
+  async function openSession(): Promise<WorkflowHeavySelfTestResult> {
     made ??= makeProject().catch((error: unknown) => {
       made = null;
       throw error;
@@ -317,6 +305,7 @@ export function workflowSelfTestScript(
       };
     },
     groups: GROUPS,
-    problems: (result) => runProblems(result as WorkflowSelfTestResult, marks),
+    problems: (result) =>
+      runProblems(result as WorkflowHeavySelfTestResult, marks),
   };
 }

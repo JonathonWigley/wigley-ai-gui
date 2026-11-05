@@ -3,6 +3,7 @@ import { type Files, readIfPresent } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
+import { isJsonObject } from '../../../shared/json';
 import type { ChecklistItem, SessionFlow } from '../contract';
 import { newFlow } from '../flow';
 
@@ -213,13 +214,13 @@ function parseFlowsFile(text: string): SavedEntry[] | null {
   } catch {
     return null;
   }
-  if (!isRecord(parsed) || !Array.isArray(parsed.flows)) {
+  if (!isJsonObject(parsed) || !Array.isArray(parsed.flows)) {
     return null;
   }
   const entries: SavedEntry[] = [];
   for (const entry of parsed.flows as unknown[]) {
     const isEntry =
-      isRecord(entry) &&
+      isJsonObject(entry) &&
       typeof entry.hostSessionId === 'string' &&
       isSessionFlow(entry.flow) &&
       (entry.savedAt === undefined || typeof entry.savedAt === 'number');
@@ -233,7 +234,7 @@ function parseFlowsFile(text: string): SavedEntry[] | null {
 
 function isSessionFlow(value: unknown): value is SessionFlow {
   return (
-    isRecord(value) &&
+    isJsonObject(value) &&
     typeof value.sessionId === 'string' &&
     typeof value.projectDir === 'string' &&
     typeof value.stage === 'string' &&
@@ -253,14 +254,10 @@ function isChecklist(value: unknown): boolean {
 
 export function isChecklistItem(value: unknown): value is ChecklistItem {
   return (
-    isRecord(value) &&
+    isJsonObject(value) &&
     typeof value.text === 'string' &&
     typeof value.done === 'boolean'
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isStringOrNull(value: unknown): boolean {

@@ -174,7 +174,9 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its root and parts share the plan reader and stages; main uses `node:path`.
   'workflow-heavy': {
     root: { layers: HEAVY_SUBLAYERS },
-    contract: { layers: ['src/plugins/workflow-heavy/plan-reader.ts'] },
+    contract: {
+      layers: ['src/plugins/workflow-heavy/plan-reader.ts', 'src/shared'],
+    },
     main: { layers: HEAVY_SUBLAYERS, packages: ['node:'] },
     page: { layers: HEAVY_SUBLAYERS },
     sublayers: {
@@ -224,9 +226,19 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   'workflow-light': {
-    main: { layers: ['src/plugins/workflow-light/stages'] },
+    main: {
+      layers: [
+        'src/plugins/workflow-light/stages',
+        'src/plugins/workflow-light/main/selftest-script.ts',
+      ],
+    },
     page: { layers: ['src/plugins/workflow-light/stages'] },
     sublayers: {
+      // Self-test support: Light's script is built on the engine's level script.
+      'src/plugins/workflow-light/main/selftest-script.ts': {
+        layers: ['src/contracts', 'src/plugins/workflow/main'],
+        packages: [],
+      },
       'src/plugins/workflow-light/stages': {
         layers: [
           'src/contracts',
@@ -273,9 +285,19 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   'workflow-medium': {
-    main: { layers: ['src/plugins/workflow-medium/stages'] },
+    main: {
+      layers: [
+        'src/plugins/workflow-medium/stages',
+        'src/plugins/workflow-medium/main/selftest-script.ts',
+      ],
+    },
     page: { layers: ['src/plugins/workflow-medium/stages'] },
     sublayers: {
+      // Self-test support: Medium's script is built on the engine's level script.
+      'src/plugins/workflow-medium/main/selftest-script.ts': {
+        layers: ['src/contracts', 'src/plugins/workflow/main'],
+        packages: [],
+      },
       'src/plugins/workflow-medium/stages': {
         layers: [
           'src/contracts',
