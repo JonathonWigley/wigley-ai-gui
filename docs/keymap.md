@@ -58,6 +58,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   primer column, on the primer card the rows of the column the card came from, and a doc's sections). A chord
   bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
   the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
+  `Ctrl+o`/`Ctrl+i` go back and forward through the docs view's places, as vim's jump list does.
 - **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they

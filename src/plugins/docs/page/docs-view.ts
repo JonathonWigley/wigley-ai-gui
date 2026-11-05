@@ -93,6 +93,8 @@ export interface DocsViewCommands {
   editSection(): void;
   prevSection(): void;
   nextSection(): void;
+  historyBack(): void;
+  historyForward(): void;
   quitEditor(): void;
   conflictReload(): void;
   conflictOverwrite(): void;
@@ -541,6 +543,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return lastLoaded === null ? null : loadedLine(lastLoaded, deps.now());
     },
     followFile: (path, line, fragment) => followFile(path, line, fragment),
+    followPlace: (path, line) =>
+      openListed(path, line, null, { isHistoryMove: true }),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
@@ -551,10 +555,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   // Opens `path` when the index lists it, selecting its entry's row; else
   // toasts that it does not.
-  const followFile = (
+  const openListed = (
     path: string,
     line: number | null,
     fragment: string | null,
+    options?: { isHistoryMove?: boolean },
   ) => {
     if (!isListed(path)) {
       toast(`Not an indexed doc: ${path}`, 'error');
@@ -564,12 +569,20 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
-    void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
-      if (opened && entry !== null) {
-        tree.selectEntry(entry.id);
-      }
-    });
+    void doc
+      .open(targetFor(path, entry, line, fragment), options)
+      .then((opened) => {
+        if (opened && entry !== null) {
+          tree.selectEntry(entry.id);
+        }
+      });
   };
+
+  const followFile = (
+    path: string,
+    line: number | null,
+    fragment: string | null,
+  ) => openListed(path, line, fragment);
 
   const restoreFocus = () => {
     if (focused === 'doc') {
@@ -1021,6 +1034,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     editSection: () => doc.editSection(),
     prevSection: () => doc.moveSection(-1),
     nextSection: () => doc.moveSection(1),
+    historyBack: () => doc.historyBack(),
+    historyForward: () => doc.historyForward(),
     quitEditor: () => doc.quitEditor(),
     conflictReload: () => doc.conflictReload(),
     conflictOverwrite: () => doc.conflictOverwrite(),

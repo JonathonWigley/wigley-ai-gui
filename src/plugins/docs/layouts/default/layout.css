@@ -119,8 +119,8 @@
   font-size: var(--wg-text-12);
 }
 
-/* The default doc pane: a column holding its `‹ tree ⌥H` row above the
-   scroller. */
+/* The default doc pane: a column holding its row of `‹ tree ⌥H` and the back
+   and forward edges above the scroller. */
 .docs-doc-frame {
   display: flex;
   flex: 1;
@@ -129,8 +129,8 @@
   min-width: 0;
 }
 
-/* The edge to the tree shows only with a doc open: the empty state names the
-   tree's key. */
+/* The row shows only with a doc open: the empty state names the tree's key,
+   and no doc means no place to move from. */
 [data-doc='none'] .docs-doc-top {
   display: none;
 }
@@ -142,7 +142,22 @@
 }
 
 .docs-doc-top {
+  align-items: baseline;
+  display: flex;
   padding: var(--wg-space-3) var(--wg-space-6) 0;
+}
+
+/* The back and forward edges, at the row's end. Each hides at its end of the
+   history, and the other keeps its place. */
+.docs-history {
+  display: flex;
+  gap: var(--wg-space-3);
+  margin-inline-start: auto;
+}
+
+[data-history-back='false'] .docs-history > :first-child,
+[data-history-forward='false'] .docs-history > :last-child {
+  display: none;
 }
 
 /* The editor's frame fills the scroller's height while editing. */

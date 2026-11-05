@@ -589,6 +589,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         editSection: onActiveView('editSection'),
         prevSection: onActiveView('prevSection'),
         nextSection: onActiveView('nextSection'),
+        historyBack: onActiveView('historyBack'),
+        historyForward: onActiveView('historyForward'),
         quitEditor: onActiveView('quitEditor'),
         conflictReload: onActiveView('conflictReload'),
         conflictOverwrite: onActiveView('conflictOverwrite'),

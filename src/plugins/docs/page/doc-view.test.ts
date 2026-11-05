@@ -199,6 +199,7 @@ function docViewOver(
     statusesOf: () => [],
     loadedOf: () => null,
     followFile: () => undefined,
+    followPlace: () => undefined,
     pushConflictScope: fakePushedScope,
     anchor: (anchoring: HTMLElement, command: string) => {
       anchored[command] = anchoring;
@@ -1410,7 +1411,349 @@ describe('createDocView', () => {
       expect(editors.map(({ text }) => text())).toEqual(['## C\nz']);
     });
   });
+
+  describe('section links', () => {
+    it.each([
+      { docLine: '12', line: 12 },
+      { docLine: undefined, line: null },
+    ])(
+      'followLink_DataDocPath_FollowsItsPathAndLine $docLine',
+      async ({ docLine, line }) => {
+        const { view, deps } = await sectionDoc(TWO_SECTIONS);
+        const followFile = vi.spyOn(deps, 'followFile');
+
+        clickLink(view, {
+          docPath: OTHER_DOC,
+          ...(docLine === undefined ? {} : { docLine }),
+        });
+
+        expect(followFile.mock.calls).toEqual([[OTHER_DOC, line, null]]);
+      },
+    );
+
+    it('followLink_SamePathLink_ScrollsAndReadsNothing', async () => {
+      const { view, deps, editors } = await pinnedSectionEditor();
+      const invoke = vi.spyOn(deps.channel, 'invoke');
+
+      clickLink(view, { docPath: DOC, docLine: '7' });
+      await settled();
+
+      expect({
+        reads: invoke.mock.calls.filter(([name]) => name === 'readDoc').length,
+        scrollTop: scroller(view.element).scrollTop,
+        destroys: editors[0].destroy.mock.calls.length,
+      }).toEqual({ reads: 0, scrollTop: 210, destroys: 0 });
+    });
+
+    it.each([
+      {
+        name: "the file's entry",
+        entries: () => [sectionLinkEntry()],
+      },
+      {
+        name: "a follow-up item's entry ahead of its file's",
+        entries: () => [
+          { ...sectionLinkEntry(), id: `${DOC}#L5`, line: 5, links: [] },
+          sectionLinkEntry(),
+        ],
+      },
+    ])(
+      'setEntries_LinksChanged_RendersTheBodyAgainKeepingScroll $name',
+      async ({ entries }) => {
+        installFocusFakeDom(
+          (name, value) => vi.stubGlobal(name, value),
+          ShrinkingScrollerFakeElement,
+        );
+        const { view, deps } = await sectionDoc(TWO_SECTIONS);
+        const pane = scroller(view.element);
+        const render = vi.spyOn(deps.markdown, 'document');
+
+        view.setEntries(entries());
+        // The scroll as the render answers, which the new body must keep.
+        pane.scrollTop = 120;
+        await settled();
+
+        expect({
+          renders: render.mock.calls.length,
+          scrollTop: pane.scrollTop,
+        }).toEqual({ renders: 1, scrollTop: 120 });
+      },
+    );
+
+    it.each([
+      {
+        name: 'the same links',
+        next: () => [sectionLinkEntry()],
+        isEditing: false,
+      },
+      {
+        name: 'only a markdown link changed',
+        next: () => [
+          {
+            ...sectionLinkEntry(),
+            links: [
+              ...sectionLinkEntry().links,
+              ...linkingEntry(DOC, OTHER_DOC, 3).links,
+            ],
+          },
+        ],
+        isEditing: false,
+      },
+      {
+        name: 'new links with an editor open',
+        next: () => [sectionLinkEntry(9)],
+        isEditing: true,
+      },
+    ])(
+      'setEntries_LinksSame_RendersNothing $name',
+      async ({ next, isEditing }) => {
+        const { view, deps } = docViewOver(() =>
+          withUser(defaultLayout, paneLayout('pane')),
+        );
+        view.setEntries([sectionLinkEntry()]);
+        await view.open(target(null));
+        if (isEditing) {
+          view.edit(1);
+        }
+        const render = vi.spyOn(deps.markdown, 'document');
+
+        view.setEntries(next());
+        await settled();
+
+        expect(render.mock.calls.length).toBe(0);
+      },
+    );
+  });
+
+  describe('history', () => {
+    it('history_BackAndForward_ReturnToTheReadPlace', async () => {
+      const { view, followPlace } = await readThenLeft();
+
+      view.historyBack();
+      const back = followPlace.mock.calls.at(-1);
+      await view.open(target(null, DOC), { isHistoryMove: true });
+      view.historyForward();
+
+      expect([back, followPlace.mock.calls.at(-1)]).toEqual([
+        [DOC, 5],
+        [OTHER_DOC, null],
+      ]);
+    });
+
+    it('history_HistoryMove_PushesNothing', async () => {
+      const { view, followPlace } = await readThenLeft();
+      view.historyBack();
+      await view.open(target(null, DOC), { isHistoryMove: true });
+      const pane = scroller(view.element);
+      pane.scrollTop = 77;
+
+      view.historyBack();
+
+      expect({
+        followed: followPlace.mock.calls.length,
+        scrollTop: pane.scrollTop,
+      }).toEqual({ followed: 1, scrollTop: 0 });
+    });
+
+    it('history_SameFilePlace_ScrollsWithNoFollowPlace', async () => {
+      const shown = await sectionDoc(TWO_SECTIONS);
+      const { view, deps } = shown;
+      const followPlace = vi.spyOn(deps, 'followPlace');
+      const pane = scroller(view.element);
+      pinBlocks(view);
+      pane.scrollTop = 100;
+      clickLink(view, { docPath: DOC, docLine: '7' });
+      const atLink = pane.scrollTop;
+
+      view.historyBack();
+
+      expect({
+        atLink,
+        scrollTop: pane.scrollTop,
+        followed: followPlace.mock.calls.length,
+      }).toEqual({ atLink: 210, scrollTop: 100, followed: 0 });
+    });
+
+    it('history_UnsavedEdits_RefusesAndKeepsTheCursor', async () => {
+      const { view, followPlace, editors, toasts } = await readThenLeft();
+      view.edit(1);
+      editors[0].change('changed');
+
+      view.historyBack();
+      const refused = {
+        toasts: [...toasts],
+        followed: followPlace.mock.calls.length,
+      };
+      editors[0].events.write();
+      await settled();
+      view.historyBack();
+
+      expect(refused).toEqual({ toasts: [UNSAVED_TEXT], followed: 0 });
+      expect(followPlace.mock.calls).toEqual([[DOC, 5]]);
+    });
+
+    it.each([
+      { name: 'same path', isSamePath: true },
+      { name: 'other path', isSamePath: false },
+    ])('history_CleanEditor_ClosesItAndMoves $name', async ({ isSamePath }) => {
+      const shown = await sectionDoc(TWO_SECTIONS);
+      const { view, deps, editors } = shown;
+      vi.spyOn(deps, 'followPlace').mockImplementation((path, line) => {
+        void view.open(
+          { ...target(null, path), line },
+          { isHistoryMove: true },
+        );
+      });
+      pinBlocks(view);
+      if (isSamePath) {
+        clickLink(view, { docPath: DOC, docLine: '7' });
+      } else {
+        await view.open(target(null, OTHER_DOC));
+      }
+      view.edit(1);
+
+      view.historyBack();
+      await settled();
+
+      expect({
+        destroys: editors[0].destroy.mock.calls.length,
+        path: view.openPath(),
+        scrollTop: scroller(view.element).scrollTop,
+      }).toEqual({ destroys: 1, path: DOC, scrollTop: 0 });
+    });
+
+    it.each([
+      { opens: [DOC], backs: 0, back: 'false', forward: 'false' },
+      { opens: [DOC, OTHER_DOC], backs: 0, back: 'true', forward: 'false' },
+      { opens: [DOC, OTHER_DOC], backs: 1, back: 'false', forward: 'true' },
+    ])(
+      'history_Edges_HideAtTheEnds $opens $backs',
+      async ({ opens, backs, back, forward }) => {
+        const { view } = docViewOver(() =>
+          withUser(defaultLayout, paneLayout('pane')),
+        );
+        for (const path of opens) {
+          await view.open(target(null, path));
+        }
+
+        for (let press = 0; press < backs; press++) {
+          view.historyBack();
+        }
+
+        expect({
+          back: view.element.dataset.historyBack,
+          forward: view.element.dataset.historyForward,
+        }).toEqual({ back, forward });
+      },
+    );
+
+    it('moveWithinDoc_SectionEditorOpen_RecordsTheVisibleLine', async () => {
+      const { view } = await pinnedSectionEditor();
+      clickLink(view, { docPath: DOC, docLine: '7' });
+
+      view.historyBack();
+      await settled();
+
+      // Line 1's block: the section's own blocks at the top of sight are hidden.
+      expect(scroller(view.element).scrollTop).toBe(0);
+    });
+
+    it('moveWithinDoc_MissingHeading_RecordsNothing', async () => {
+      vi.stubGlobal('CSS', { escape: (text: string) => text });
+      const { view, followPlace, toasts } = await readThenLeft();
+      pinBlocks(view);
+      scroller(view.element).scrollTop = 100;
+
+      clickLink(view, { href: '#gone' });
+      view.historyBack();
+
+      expect({ toasts, followed: followPlace.mock.calls }).toEqual({
+        toasts: ['No heading #gone in this doc'],
+        followed: [[DOC, 5]],
+      });
+    });
+
+    it('open_Fragment_RecordsTheHeadingsWholeFileLine', async () => {
+      vi.stubGlobal('CSS', { escape: (text: string) => text });
+      const shown = docViewOver(() =>
+        withUser(defaultLayout, paneLayout('pane')),
+      );
+      const { view, deps, replies } = shown;
+      const followPlace = vi.spyOn(deps, 'followPlace');
+      replies.readDoc = '---\nname: a\n---\nbody';
+      findAll(asFake(view.element), 'docs-body')[0].querySelector = () =>
+        heading(3, 'x');
+      await view.open({ ...target(null), fragment: 'x' });
+      await view.open(target(null, OTHER_DOC));
+
+      view.historyBack();
+      view.historyBack();
+
+      expect(followPlace.mock.calls.at(-1)).toEqual([DOC, 6]);
+    });
+
+    it('clickOnThisPage_ThenBack_ReturnsToTheReadPlace', async () => {
+      const { view } = await sectionDoc(TWO_SECTIONS);
+      const pane = scroller(view.element);
+      pinBlocks(view);
+      pane.scrollTop = 100;
+
+      findAll(asFake(view.element), 'ui-row')[2].click();
+      const atRow = pane.scrollTop;
+      view.historyBack();
+
+      expect({ atRow, scrollTop: pane.scrollTop }).toEqual({
+        atRow: 200,
+        scrollTop: 100,
+      });
+    });
+
+    it.each([{ press: 'historyBack' }, { press: 'historyForward' }] as const)(
+      'history_AtTheEnds_MovesNothing $press',
+      async ({ press }) => {
+        const { view, deps } = await sectionDoc(TWO_SECTIONS);
+        const followPlace = vi.spyOn(deps, 'followPlace');
+        const pane = scroller(view.element);
+        pane.scrollTop = 77;
+
+        view[press]();
+
+        expect({
+          followed: followPlace.mock.calls.length,
+          scrollTop: pane.scrollTop,
+        }).toEqual({ followed: 0, scrollTop: 77 });
+      },
+    );
+
+    it.each([
+      { name: 'a read that rejects', isRefused: false },
+      { name: 'a refusal over unsaved edits', isRefused: true },
+    ])('open_RefusedOrFailed_RecordsNoPlace $name', async ({ isRefused }) => {
+      const { view, deps, editors } = await sectionDoc(TWO_SECTIONS);
+      pinBlocks(view);
+      scroller(view.element).scrollTop = 100;
+      if (isRefused) {
+        view.edit(1);
+        editors[0].change('changed');
+      } else {
+        deps.channel.invoke = async () => {
+          throw new Error('gone');
+        };
+      }
+
+      const opened = await view.open(target(null, OTHER_DOC));
+
+      expect({ opened, back: view.element.dataset.historyBack }).toEqual({
+        opened: false,
+        back: 'false',
+      });
+    });
+  });
 });
+
+// The path `target(null)` opens, and another doc's.
+const DOC = '/home/notes.md';
+const OTHER_DOC = '/home/other.md';
 
 const TWO_SECTIONS = '# T\n\n## A\nx\n\n## B\ny';
 
@@ -1454,6 +1797,70 @@ async function hitConflict(
   editors[0].change('## A\nchanged\n');
   editors[0].events.write();
   await settled();
+}
+
+// `body`'s click listener hearing a click inside an `a.md-link` holding `dataset`.
+function clickLink(view: DocView, dataset: Record<string, string>) {
+  findAll(asFake(view.element), 'docs-body')[0].fire('click', {
+    target: { closest: () => ({ dataset }) },
+  });
+}
+
+// Adds the blocks of `TWO_SECTIONS`'s lines 1, 3, 4, 6 and 7 at fixed content
+// tops, whatever the pane's scroll: `pinned` reads each as the pane scrolls.
+function pinBlocks(view: DocView) {
+  const pane = scroller(view.element);
+  const pinned = [
+    { line: 1, top: 0 },
+    { line: 3, top: 100 },
+    { line: 4, top: 110 },
+    { line: 6, top: 200 },
+    { line: 7, top: 210 },
+  ].map(({ line, top }) => {
+    const moving = block(line, 0);
+    Object.defineProperty(moving, 'rectTop', {
+      get: () => top - pane.scrollTop,
+    });
+    return moving;
+  });
+  addBlocks(view, ...pinned);
+}
+
+// A section editor on `TWO_SECTIONS`'s `## A`, over pinned blocks.
+async function pinnedSectionEditor() {
+  const shown = await sectionDoc(TWO_SECTIONS);
+  pinBlocks(shown.view);
+  scroller(shown.view.element).scrollTop = 100;
+  shown.view.editSection();
+  return shown;
+}
+
+// A doc read at its line 5, left for `OTHER_DOC`.
+async function readThenLeft() {
+  const shown = docViewOver(() => withUser(defaultLayout, paneLayout('pane')));
+  const { view, deps } = shown;
+  const followPlace = vi.spyOn(deps, 'followPlace');
+  await view.open(target(null, DOC));
+  addBlocks(view, block(1, -100), block(5, 0), block(9, 40));
+  scroller(view.element).scrollTop = 100;
+  await view.open(target(null, OTHER_DOC));
+  return { ...shown, followPlace };
+}
+
+// `DOC`'s entry, holding one section link.
+function sectionLinkEntry(line = 3): IndexEntry {
+  return {
+    ...linkingEntry(DOC, OTHER_DOC, line),
+    links: [
+      {
+        form: 'section',
+        raw: '§ B',
+        target: OTHER_DOC,
+        line,
+        targetLine: 2,
+      },
+    ],
+  };
 }
 
 function addBlocks(view: DocView, ...blocks: FakeElement[]) {

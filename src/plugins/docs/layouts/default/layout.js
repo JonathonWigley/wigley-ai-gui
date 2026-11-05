@@ -103,6 +103,9 @@ const layout = {
       chevron: '‹ tree',
     });
     edge.classList.add('docs-edge', 'docs-edge--start');
+    const history = kit.el(top, 'div', 'docs-history');
+    kit.edge(history, 'historyBack', { side: 'start', label: 'back' });
+    kit.edge(history, 'historyForward', { side: 'end', label: 'forward' });
     kit.scroller(frame);
     return { element: frame };
   },

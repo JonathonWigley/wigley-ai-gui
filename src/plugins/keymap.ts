@@ -538,6 +538,8 @@ export const defaultKeymap = {
     { keys: 'e', scope: 'docs.doc', command: 'docs.editSection' },
     { keys: '<C-h>', scope: 'docs.doc', command: 'docs.prevSection' },
     { keys: '<C-l>', scope: 'docs.doc', command: 'docs.nextSection' },
+    { keys: '<C-o>', scope: 'docs.doc', command: 'docs.historyBack' },
+    { keys: '<C-i>', scope: 'docs.doc', command: 'docs.historyForward' },
     // Esc in the editor's normal mode closes it as `:q` does.
     {
       keys: '<Esc>',

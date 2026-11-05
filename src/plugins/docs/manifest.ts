@@ -78,6 +78,8 @@ export const docsManifest = definePlugin({
     editSection: { label: 'edit this section', group: 'doc', runsIn: 'page' },
     prevSection: { label: 'previous section', group: 'doc', runsIn: 'page' },
     nextSection: { label: 'next section', group: 'doc', runsIn: 'page' },
+    historyBack: { label: 'go back', group: 'doc', runsIn: 'page' },
+    historyForward: { label: 'go forward', group: 'doc', runsIn: 'page' },
     quitEditor: { label: 'close the editor', group: 'doc', runsIn: 'page' },
     conflictReload: {
       label: 'reload from disk',
