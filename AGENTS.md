@@ -679,8 +679,8 @@ round; primer: an open primer), since main, not the page, decides.
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
   `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the session hub's Main agent
   section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session rows),
-  `queuedMessage` (one pending message's row, § Pending messages), `completionDescription` (a `/` completion row's description), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
-  `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
+  `queuedMessage` (one pending message's row, § Pending messages), `completionDescription` (a `/` completion row's description), `composer`, `statusLine`, `attachments`, `pickerRow`, `pickerHeading`, `signIn`, `reasonBox`, `closeConfirm` and
+  `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage`, `pickerHeading` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws
   the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
@@ -809,7 +809,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
-  workflow, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  workflow, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

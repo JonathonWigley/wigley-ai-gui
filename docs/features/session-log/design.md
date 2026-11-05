@@ -38,7 +38,8 @@ start logs each row as `opened` with origin `restored`.
 
 The start prompt asks chat for its resume sections, and `session-log` registers one, Recently closed, through chat's
 `addResumeSection`. It shows at the top of the Folder step across every folder and profile, where a pick resumes at
-once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it.
+once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it. The newest row sits last, next to the cursor, so `k` then Enter reopens the session
+closed last.
 
 A session lists when the user closed it or cleared it, it was sent a message, and it is neither open nor archived. Each
 session shows once, under the title it had in the side bar.

@@ -490,7 +490,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
-- **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
+- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the folders and above the new-session line. After the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
   resumed with its earlier conversation read from the transcript. A resume lists the session host first, so a session
@@ -525,7 +525,7 @@ interview on 2026-10-23; this file is the record of both.
   dock: the running turn's state, its steps and its times `startedAt` and `now`, sent again each second, else the
   finished turn's `done` state with its steps, `startedAt`, `endedAt`, stop reason and cost), `queuedMessage` (one pending message, § Pending
   messages: its text, how many images it carries, and whether it was sent now), `composer`, `statusLine`, `attachments` (the
-  strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
+  strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `pickerHeading` (a heading in a picker's list, which the cursor skips), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
   (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:
   `startedAt`, `endedAt` (null while live) and `now`, which the app sends again each second while the run is live, so a
