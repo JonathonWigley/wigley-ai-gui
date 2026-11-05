@@ -29,7 +29,12 @@ import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
 import { signalOf } from './agent-signals';
-import { checklistToolDefinition, startChecklistTool } from './checklist-tool';
+import {
+  checklistToolDefinition,
+  SET_WORKFLOW_CHECKLIST_TOOL,
+  startChecklistTool,
+} from './checklist-tool';
+import { addDriveActions } from './drive-actions';
 import { createFlowStore } from './flow-store';
 import { createRunLog } from './run-log';
 import { createRunMeter } from './run-meter';
@@ -57,8 +62,9 @@ type WorkflowApi = MainApi<
 // which lists every workflow's stages' `reportedAs` and moves a flow only by its own
 // workflow's, and `set_workflow_checklist`, hands chat the session note naming both,
 // meters each session's active time and spend and appends a line to `runs.jsonl`
-// when a fold enters a stage that finishes its workflow, and sends every flow to
-// the page on each change. Exports `addWorkflow`, `signal`, `setState` and `observe`.
+// when a fold enters a stage that finishes its workflow, sends every flow to the
+// page on each change, and offers a drive run the two tools' reports as drive
+// actions. Exports `addWorkflow`, `signal`, `setState` and `observe`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -237,10 +243,14 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, { type: 'checklistReported', items }, 'live');
         return true;
       });
+    const startChecklistToolSession = startChecklistTool({ reportChecklist });
     const checklistTool = sessions.contributeTools(
       [checklistToolDefinition()],
-      startChecklistTool({ reportChecklist }),
+      startChecklistToolSession,
     );
+    if (api.drive !== null) {
+      addDriveActions(api.drive, { reportStep, reportChecklist });
+    }
     chat.addInstructions(SESSION_NOTE);
 
     // Contributes the tool again when the reportable stages change, so its
@@ -391,6 +401,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         void startStepToolSession({ id: sessionId }).call(
           SET_WORKFLOW_STEP_TOOL,
           { step },
+          { toolUseId: null, signal: new AbortController().signal },
+        );
+      },
+      callChecklistTool(sessionId, items) {
+        void startChecklistToolSession({ id: sessionId }).call(
+          SET_WORKFLOW_CHECKLIST_TOOL,
+          { items },
           { toolUseId: null, signal: new AbortController().signal },
         );
       },

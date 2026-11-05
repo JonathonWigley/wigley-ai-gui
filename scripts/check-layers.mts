@@ -200,10 +200,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         layers: [
           'src/contracts',
           'src/shared',
-          'src/shared/page',
-          'src/plugins/chat/contract.ts',
           'src/plugins/docs/contract.ts',
-          'src/plugins/keys/contract.ts',
           'src/plugins/sessions/contract.ts',
           'src/plugins/workflow',
           'src/plugins/workflow/contract.ts',
@@ -221,6 +218,55 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/shared/page',
           'src/plugins/workflow-heavy/layouts',
           'src/plugins/workflow/layouts',
+        ],
+        packages: [],
+      },
+    },
+  },
+  'workflow-light': {
+    main: { layers: ['src/plugins/workflow-light/stages'] },
+    page: { layers: ['src/plugins/workflow-light/stages'] },
+    sublayers: {
+      'src/plugins/workflow-light/stages': {
+        layers: [
+          'src/contracts',
+          'src/plugins/workflow-light',
+          'src/plugins/workflow-light/contract.ts',
+          'src/plugins/workflow/contract.ts',
+        ],
+        packages: [],
+      },
+      // Runs Light's stage rules through the engine's real fold.
+      'src/plugins/workflow-light/stages/light-stages.test.ts': {
+        layers: [
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow-light/contract.ts',
+          'src/plugins/workflow-light/stages',
+        ],
+        packages: [],
+      },
+      // Starts the real engine page part and Light's on it.
+      'src/plugins/workflow-light/page/start.test.ts': {
+        layers: [
+          'src/shared',
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow/page',
+          'src/plugins/workflow-light',
+          'src/plugins/workflow-light/contract.ts',
+          'src/plugins/workflow-light/page',
+          'src/plugins/workflow-light/stages',
+        ],
+        packages: [],
+      },
+      // Draws with the engine's real kit.
+      'src/plugins/workflow-light/layouts/default/layout.test.ts': {
+        layers: [
+          'src/shared/page',
+          'src/plugins/workflow-light/layouts',
+          'src/plugins/workflow/layouts',
+          'src/plugins/workflow/page',
         ],
         packages: [],
       },

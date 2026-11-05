@@ -256,12 +256,14 @@ export interface WorkflowObserver {
 // flow in the folder, saved ones included, and tells the observers each open one
 // closed, for a run that closed the folder's sessions; `onMainTurnEnded` hears
 // each main-agent `turnEnded` once main applied it, whether or not the flow
-// changed; `callStepTool` makes a `set_workflow_step` call from the session,
-// since the fake harness calls no MCP tool.
+// changed; `callStepTool` makes a `set_workflow_step` call from the session and
+// `callChecklistTool` a `set_workflow_checklist` call, since the fake harness calls
+// no MCP tool.
 export interface WorkflowSelfTestHooks {
   forgetFlows(projectDir: string): void;
   onMainTurnEnded(listener: (sessionId: string) => void): Disposable;
   callStepTool(sessionId: string, step: string): void;
+  callChecklistTool(sessionId: string, items: readonly ChecklistItem[]): void;
 }
 
 export interface WorkflowMainExports {

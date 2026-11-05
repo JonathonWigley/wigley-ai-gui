@@ -8,7 +8,7 @@
 //   Then the countdown and the main action. Its input also carries the detail and every action. An idle session draws
 //   no strip.
 // - `sidePane`, beside the Chat tab's transcript, in the side part's wrapper: the status mark and line, the detail, a
-//   progress bar, the checklist (finished groups folded, the current group in full, a line per later group) and every
+//   progress bar, the checklist (a layout picks how its groups read: a fold of the finished ones, a flat list) and every
 //   action of the stage. An idle session, a session with no checklist, and a hidden pane draw no pane. The app does not
 //   draw it again for the countdown, so a pane that shows the countdown updates on the next flow push.
 // A session with no workflow draws none of these.

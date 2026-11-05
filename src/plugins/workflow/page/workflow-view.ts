@@ -70,8 +70,9 @@ export interface WorkflowViewDeps {
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
 // checklist with items, else null. The side pane's list keeps its scroll across
 // those draws, and while the pane has no layout box. `setFlow` also logs the
-// session's stage, progress and countdown when each changes; `forget` drops what
-// it logged for a session that left and its finished groups' fold.
+// session's level, trail, stage, progress and countdown, and a missed level, when
+// each changes; `forget` drops what it logged for a session that left and its
+// finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
 // `toggleFinishedWaves` opens or folds one session's finished groups, logging
 // `nothing to run` and changing nothing while the pane would draw no fold.
@@ -122,9 +123,12 @@ const PENDING: MarkState = 'pending';
 export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const { log, clock, timers } = deps;
   const held = new Set<HeldPart>();
+  const loggedLevels = new Map<string, WorkflowId>();
+  const loggedTrails = new Map<string, string>();
   const loggedStages = new Map<string, string>();
   const loggedProgress = new Map<string, string>();
   const countdownShown = new Set<string>();
+  const noWorkflowLogged = new Set<string>();
   const missingWorkflowsLogged = new Set<string>();
   const missingStagesLogged = new Set<string>();
   const finishedOpen = new Set<string>();
@@ -442,8 +446,42 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     return { dispose: () => release(part) };
   };
 
+  const logLevelAndTrail = (flow: SessionFlow, name: string) => {
+    const workflow = pageWorkflowOf(flow);
+    if (workflow === null) {
+      loggedLevels.delete(flow.sessionId);
+      loggedTrails.delete(flow.sessionId);
+      return;
+    }
+    if (loggedLevels.get(flow.sessionId) !== workflow.id) {
+      loggedLevels.set(flow.sessionId, workflow.id);
+      log(`${name} level ${workflow.badge}`);
+    }
+    const stage = pageStageOf(flow);
+    if (stage === null) {
+      return;
+    }
+    const trail = stepperStages(workflow.stages, stage)
+      .map((step) => step.label)
+      .join(' › ');
+    if (loggedTrails.get(flow.sessionId) !== trail) {
+      loggedTrails.set(flow.sessionId, trail);
+      log(`${name} trail ${trail}`);
+    }
+  };
+
+  const logMissedLevel = (flow: SessionFlow, name: string) => {
+    if (flow.workflow !== null || !flow.missedLevel) {
+      noWorkflowLogged.delete(flow.sessionId);
+    } else if (!noWorkflowLogged.has(flow.sessionId)) {
+      noWorkflowLogged.add(flow.sessionId);
+      log(`${name} no workflow`);
+    }
+  };
+
   const logFlow = (flow: SessionFlow) => {
     const name = deps.nameOf(flow.sessionId);
+    logLevelAndTrail(flow, name);
     if (loggedStages.get(flow.sessionId) !== flow.stage) {
       loggedStages.set(flow.sessionId, flow.stage);
       log(`${name} shows ${flow.stage}`);
@@ -453,6 +491,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedProgress.set(flow.sessionId, progress);
       log(`${name} progress ${progress}`);
     }
+    logMissedLevel(flow, name);
     const hasCountdown = countdown(flow) !== null;
     if (hasCountdown && !countdownShown.has(flow.sessionId)) {
       countdownShown.add(flow.sessionId);
@@ -491,6 +530,9 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       }
     },
     forget(sessionId) {
+      loggedLevels.delete(sessionId);
+      loggedTrails.delete(sessionId);
+      noWorkflowLogged.delete(sessionId);
       loggedStages.delete(sessionId);
       loggedProgress.delete(sessionId);
       countdownShown.delete(sessionId);

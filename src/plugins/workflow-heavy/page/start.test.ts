@@ -1,17 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../../../contracts/disposable';
-import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import type { ChatPageExports } from '../../chat/contract';
-import { chatPageKey } from '../../chat/contract';
 import type { DocsPageExports } from '../../docs/contract';
 import { docsPageKey } from '../../docs/contract';
-import type { KeysPageExports } from '../../keys/contract';
-import { keysPageKey } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import { sessionsPageKey } from '../../sessions/contract';
 import {
@@ -22,7 +17,7 @@ import {
   workflowPageKey,
 } from '../../workflow/contract';
 import { newFlow } from '../../workflow/flow';
-import { workflowPagePart } from '../../workflow/page/start';
+import { startEnginePagePart } from '../../workflow/page/engine-parts.test-support';
 import {
   HEAVY_WORKFLOW_ID,
   type HeavyState,
@@ -96,40 +91,10 @@ function setUp() {
 
 // The real engine page part, and Heavy's part on its exports.
 function startOverTheEngine() {
-  installFakeDom((name, value) => vi.stubGlobal(name, value));
-  const untracked = () => ({ dispose: () => undefined });
-  const engine = startPagePart(workflowPagePart, {
-    dependencies: [
-      fakeDependency(
-        sessionsPageKey,
-        () =>
-          ({
-            addRowPart: untracked,
-            addTab: untracked,
-          }) as unknown as SessionsPageExports,
-      ),
-      fakeDependency(
-        chatPageKey,
-        () =>
-          ({
-            addComposerPart: untracked,
-            addSidePart: untracked,
-          }) as unknown as ChatPageExports,
-      ),
-      fakeDependency(
-        keysPageKey,
-        () => ({ anchor: untracked }) as unknown as KeysPageExports,
-      ),
-    ],
-    invoke: () => Promise.resolve([]),
-  });
+  const { engine, dependency } = startEnginePagePart();
   const heavy = startPagePart(workflowHeavyPagePart, {
     dependencies: [
-      fakeDependency(
-        workflowPageKey,
-        (consumer) =>
-          engine.started().exports?.(consumer) as WorkflowPageExports,
-      ),
+      dependency,
       NO_SESSIONS,
       fakeDependency(docsPageKey, () => ({}) as unknown as DocsPageExports),
     ],

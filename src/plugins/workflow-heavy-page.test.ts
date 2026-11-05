@@ -648,7 +648,7 @@ describe('Heavy over the engine page part', () => {
     view.chipPart.build(wrapper, 'a');
     put(flowIn('planReady', { progress: progressOf(1, [3, 3, 1]) }));
 
-    expect(logged()).toEqual([
+    expect(logged().filter((line) => !/ (level|trail) /.test(line))).toEqual([
       'proj shows planReady',
       'proj progress 0/7 wave 1',
       'proj progress 1/7 wave 1',

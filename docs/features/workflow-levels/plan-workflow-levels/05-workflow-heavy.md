@@ -1,6 +1,6 @@
 # 05 — workflow-heavy
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 02, 04
 Plan: [plan.md](plan.md)
@@ -327,3 +327,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 6dd57b21 · proof: diff read against the spec; § Finish's greps and file-gone checks hold; manifest, page part and layer rules read; typecheck and lint clean; a read of settings.json at preflight found no workflow setting to move · concerns: engine still registers layout types with no default folder, writing layouts/workflow/layout.d.ts; no set_workflow_step is contributed until a workflow with reportedAs is added; self-test not run until task 12, hello turn may draw No workflow in a pre-claim screenshot; page harness keys.command answers only the part's own commands; drive-commands.test.ts still names workflow.autoStartSeconds as a generic path; docs/features/layouts/design.md names the old owner, task 10's

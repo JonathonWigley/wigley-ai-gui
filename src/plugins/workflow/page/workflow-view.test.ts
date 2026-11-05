@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
-import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asHtml,
   FakeElement,
@@ -21,7 +19,7 @@ import type {
 } from '../contract';
 import { newFlow } from '../flow';
 import { createStageList } from '../stage-list';
-import { createWorkflowKit } from './layout/workflow-kit';
+import { testWorkflowKit } from './engine-parts.test-support';
 import { createWorkflowView } from './workflow-view';
 
 const NO_SECTION = { setSummary: () => undefined };
@@ -36,18 +34,6 @@ function recordingSection() {
 }
 
 const NOW = 1_000_000;
-
-const KIT_SERVICES = {
-  markdown: {
-    block: (text: string) => text,
-    inline: (text: string) => text,
-    document: async (text: string) => text,
-    ...NO_FENCES,
-  },
-  keys: recordingAnchors().keys,
-  commands: { exists: () => true, run: () => undefined },
-  platform: 'macos' as const,
-};
 
 // A stage of `label`, in the stepper unless a field says otherwise.
 function stageOf(
@@ -448,6 +434,75 @@ describe('workflow view over several workflows', () => {
     expect(logged.filter((each) => each === line)).toHaveLength(1);
   });
 
+  it('logFlow_LevelAndTrail_LogOncePerChange', () => {
+    const { view, workflows, put, logged } = setUp();
+    const light = stubWorkflow('light', stageOf('a', 'A', 10), {
+      badge: 'L',
+      stages: [stageOf('a', 'A', 10), stageOf('b', 'B', 20)],
+      progressText: () => '1/2',
+    });
+    const medium = stubWorkflow('medium', stageOf('c', 'C', 10), {
+      badge: 'M',
+    });
+    workflows.push(light.workflow, medium.workflow);
+    const flow = flowOf('light', {}, 'a');
+
+    put(flow);
+    put(flow);
+    const firstWorkflow = [...logged];
+    logged.length = 0;
+    put(flowOf('medium', {}, 'c'));
+    const movedOn = [...logged];
+    logged.length = 0;
+    view.forget('a');
+    put(flow);
+
+    expect(firstWorkflow).toEqual([
+      'proj level L',
+      'proj trail A › B',
+      'proj shows a',
+      'proj progress 1/2',
+    ]);
+    expect(movedOn).toEqual(['proj level M', 'proj trail C', 'proj shows c']);
+    expect(logged).toEqual(firstWorkflow);
+  });
+
+  it('logFlow_SharedStepSlot_TrailCountsItOnce', () => {
+    const { workflows, put, logged } = setUp();
+    workflows.push(
+      stubWorkflow('light', undefined, {
+        stages: [
+          stageOf('a', 'A', 10),
+          stageOf('land', 'Land', 20, { stepSlot: 'land' }),
+          stageOf('done', 'Land', 30, { stepSlot: 'land' }),
+        ],
+      }).workflow,
+    );
+
+    put(flowOf('light', {}, 'a'));
+    put(flowOf('light', {}, 'done'));
+
+    expect(logged.filter((line) => line.includes(' trail '))).toEqual([
+      'proj trail A › Land',
+    ]);
+  });
+
+  it.each([
+    { name: 'false', pushes: [false], lines: 0 },
+    { name: 'true', pushes: [true, true], lines: 1 },
+    { name: 'true again', pushes: [true, false, true], lines: 2 },
+  ])('logFlow_MissedLevel_LogsNoWorkflow $name', ({ pushes, lines }) => {
+    const { put, logged } = setUp();
+
+    for (const missedLevel of pushes) {
+      put({ ...newFlow('a', '/p'), missedLevel });
+    }
+
+    expect(logged.filter((line) => line === 'proj no workflow')).toHaveLength(
+      lines,
+    );
+  });
+
   it('Chip_Input_CarriesBadge', () => {
     const { view, workflows, put } = setUp();
     const light = stubWorkflow('light', undefined, {
@@ -608,17 +663,7 @@ describe('workflow kit', () => {
   const LIGHT = { id: 'workflow-light', commands: {} };
 
   // The kit under the manifest `workflow-light`, and the anchors it names.
-  function lightKit() {
-    const { anchors, keys } = recordingAnchors();
-    const kit = createWorkflowKit(
-      { ...KIT_SERVICES, keys },
-      { recordBox: () => undefined, recordAnchor: () => undefined },
-      () => undefined,
-      { now: () => NOW },
-      LIGHT,
-    );
-    return { kit, anchors };
-  }
+  const lightKit = () => testWorkflowKit(LIGHT, NOW);
 
   it.each<{ state: MarkState; icon: string }>([
     { state: 'pending', icon: 'codicon-circle-large' },

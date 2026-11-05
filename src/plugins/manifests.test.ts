@@ -37,4 +37,11 @@ describe('manifests', () => {
       ['layout', 'autoClearAndMake', 'autoStartSeconds'].sort(),
     );
   });
+
+  it('manifests_WorkflowLight_HasItsLayoutSettingAndBadgeToken', () => {
+    const light = manifests.find(({ id }) => id === 'workflow-light');
+
+    expect(Object.keys(light?.settings ?? {})).toEqual(['layout']);
+    expect(light?.themeTokens?.badge.default).toBe('var(--wg-status-info)');
+  });
 });

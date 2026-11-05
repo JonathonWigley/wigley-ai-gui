@@ -20,6 +20,7 @@ import { usageMainPart } from './usage/main/start';
 import { visualMainPart } from './visual/main/start';
 import { workflowMainPart } from './workflow/main/start';
 import { workflowHeavyMainPart } from './workflow-heavy/main/start';
+import { workflowLightMainPart } from './workflow-light/main/start';
 
 // Every built-in plugin's main part, in start order where no dependency says
 // otherwise.
@@ -42,6 +43,7 @@ export const mainParts: readonly MainPart[] = [
   usageMainPart,
   workflowMainPart,
   workflowHeavyMainPart,
+  workflowLightMainPart,
   unityPoolMainPart,
   visualMainPart,
   galleryMainPart,

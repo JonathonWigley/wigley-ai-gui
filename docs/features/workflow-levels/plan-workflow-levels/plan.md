@@ -219,7 +219,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [Run log](04-run-log.md) — after 03
 
 ### Wave 5
-- [ ] [workflow-heavy](05-workflow-heavy.md) — after 02, 04
+- [x] [workflow-heavy](05-workflow-heavy.md) — after 02, 04
 
 ### Wave 6
 - [ ] [workflow-light](07-light.md) — after 05
@@ -246,6 +246,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 02 · e20d8bbd · diff read against the spec; every Produces present; the spec's grep prints nothing; typecheck and lint clean · concerns: No workflow tag draws outside any layout (spec's decision) and will show on the self-test's hello session; --wg-workflow-badge has no DESIGN.md entry; AGENTS.md still names addStage until task 10; logFlow does not re-run on addWorkflow; no-page once-sets never clear; start.ts SessionCommand still names Heavy's commands
 - 03 · f205596a · diff read against the spec; every Produces present, parseChecklistItems included; typecheck and lint clean · concerns: checklist dispose line has no failing test; reportStep scoping has no start-level test that fails on a union lookup; merged table lost the ignored-step no-push assertion; StepTool_NotInTheUnion_ListsIt pins Heavy's step order, so task 05 reaches it; whitespace-only text accepted
 - 04 · 76979d31 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: activeMsOf copies every held session per agent event through chat.sessions(); a read in the clear window can log a negative activeMs; costUsd is 0 not null when the only spend predates the run; meter note after forget leaves one small entry
+- 05 · 6dd57b21 · diff read against the spec; § Finish's greps and file-gone checks hold; manifest, page part and layer rules read; typecheck and lint clean; a read of settings.json at preflight found no workflow setting to move · concerns: engine still registers layout types with no default folder, writing layouts/workflow/layout.d.ts; no set_workflow_step is contributed until a workflow with reportedAs is added; self-test not run until task 12, hello turn may draw No workflow in a pre-claim screenshot; page harness keys.command answers only the part's own commands; drive-commands.test.ts still names workflow.autoStartSeconds as a generic path; docs/features/layouts/design.md names the old owner, task 10's
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 - RunMeter: five members → six, adding claimed(sessionId), which sets the baseline as finished does · why: the baseline resets at a null-to-claim move and the interface had no member for it · consumers: none outside workflow/main/start.ts · group 04
@@ -268,5 +269,9 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - claimed runs in apply on a null-to-claim move — the one place a full fold lands — a replay past the save holding the first claim also resets the baseline · group 04 · group 04
 - costUsd is 0, not null, for a later run with no new spend or a first run whose only spend predates the claim — the spec's null rule reads since the last forget — such a line reads as free, not unknown · group 04 · group 04
 - AGENTS.md's line on chat's exports to workflow names activeTime — the edit outdated it — none · group 04 · group 04
+- Moved tests that run rules through flow.ts take whole-file layer rules — the spec's layer rule did not foresee them, and AGENTS.md documents the pattern — only test layer rules move · group 05 · group 05
+- Real engine plus real Heavy in two harnesses, with the engine's exports as a fakeDependency — the harness refuses fakes outside dependsOn — each harness has its own clock · group 05 · group 05
+- opened's body runs for the start walk of workflow.flows(), so a restart also clears a saved countdown — the spec says run the opened body — none · group 05 · group 05
+- Engine prose takes neutral examples, while pinned names (hasPlan, toggleFinishedWaves, countdownText, the finished-waves log line) stay — they are plan.md's names — a strict no-plan-word grep hits them · group 05 · group 05
 ### Review rounds
 ### Test gate
