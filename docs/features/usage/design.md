@@ -51,12 +51,12 @@ Only `src/main/claude-code/` knows any of these shapes.
 | --- | --- | --- |
 | Plan rows, extra usage | `claude -p /usage --output-format stream-json --verbose`: the `assistant` line's `usage_report.rate_limits` (`limits[]`, `extra_usage`) | every poll, per profile; 0 tokens, about 3 s; killed and failed after 20 s (`PLAN_USAGE_TIMEOUT_MS`) |
 | Session and weekly rows between polls | `rate_limit_event.rate_limit_info.unifiedWindows` (`five_hour` → `session`, `seven_day` → `weekly_all`; `status` `allowed` / `allowed_warning` / `rejected` → `normal` / `warning` / `critical`) | after every model message |
-| Context tokens | each `assistant` message's `usage`: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens` | every reply |
+| Context tokens | each `assistant` message's `usage`: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`; after a compaction, the `get_context_usage` control request's `totalTokens` until the next reply | every reply, and the turn end after a compaction |
 | Context window | the `get_context_usage` control request's `maxTokens`, and the `result` line's `modelUsage.<model>.contextWindow` | session start and every turn |
 | Session spend | the `result` line's `total_cost_usd` | every turn |
 | Reported autocompact limit | the `get_context_usage` control request's `autoCompactThreshold` | session start and after every turn |
 | Configured autocompact limit | the profile's `settings.json` `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, read when a session starts | session start |
-| Cache expiry | the reply's `usage.cache_creation` bucket (or a cache read) and the adapter's clock | every reply |
+| Cache expiry | the reply's `usage.cache_creation` bucket (or a cache read) and the adapter's clock; none from a compaction's after-size to the next reply | every reply |
 
 Measured 2026-10-30 on 2.1.314: `get_context_usage` reported `autoCompactThreshold: 967000`,
 `autocompactSource: "model-default"` on Opus, Sonnet and Haiku with the override at 30 in both the environment and

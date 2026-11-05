@@ -799,7 +799,7 @@ describe('session-fold', () => {
       spendUsd: 0.5,
     },
     {
-      case: 'a context usage reply',
+      case: 'a context usage reply with no total',
       between: (state) => {
         foldPipeLine(state, inLine(contextUsageRequest('wigley-2'), 3000));
         return foldPipeLine(
@@ -850,6 +850,54 @@ describe('session-fold', () => {
       ]);
     },
   );
+
+  it('foldPipeLine_AContextTotalAfterABoundary_SendsTheAfterSizeWithNoCacheExpiry', () => {
+    const state = foldedState([
+      inLine(send('/compact', 'u1'), 500),
+      outLine(REPLY_LINE, 600),
+      outLine(lifecycle('u1', 'started'), 700),
+      outLine(COMPACTING, 800),
+      outLine(BOUNDARY, 2000),
+      inLine(contextUsageRequest('wigley-2'), 3000),
+    ]);
+    const compactionEntries = (effects: readonly FoldEffect[]) =>
+      effects.flatMap((effect) =>
+        effect.kind === 'entry' && effect.entry.kind === 'compaction'
+          ? [effect.entry]
+          : [],
+      );
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine(
+        {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'wigley-2',
+            response: { maxTokens: 1000, totalTokens: 900 },
+          },
+        },
+        3100,
+      ),
+    );
+    const reply = foldPipeLine(state, outLine(CACHE_READ_LINE, 5000));
+
+    expect(usageEvents(effects)).toEqual([
+      expect.objectContaining({
+        at: 3100,
+        contextTokens: 900,
+        cacheExpiresAt: null,
+      }),
+    ]);
+    expect(compactionEntries(effects)).toEqual([
+      expect.objectContaining({ afterTokens: 900 }),
+    ]);
+    expect(usageEvents(reply.effects)).toEqual([
+      expect.objectContaining({ contextTokens: 40123 }),
+    ]);
+    expect(compactionEntries(reply.effects)).toEqual([]);
+  });
 
   it.each<{ case: string; beforeResult: object[]; afterResult: object[] }>([
     {

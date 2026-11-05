@@ -82,7 +82,7 @@ export interface RawInput {
   raw: unknown[];
 }
 // A finished compaction. `at` is epoch ms. `beforeTokens` is null when the harness does not report it, `durationMs`
-// likewise. `afterTokens` is null until the next main reply's context is known; the entry then arrives again with it set.
+// likewise. `afterTokens` is null until the size the compaction left is known; the entry then arrives again with it set.
 export interface CompactionInput {
   kind: 'compaction';
   id: string;

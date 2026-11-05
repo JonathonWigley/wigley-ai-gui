@@ -257,6 +257,7 @@ describe('session usage', () => {
     const state = foldContextUsage(withConfiguredPercent(turned, 45), {
       contextWindow: null,
       reported: 193_000,
+      totalTokens: null,
     });
 
     expect(usageEvent(state, 7000)).toEqual({
@@ -311,13 +312,18 @@ describe('session usage', () => {
         autoCompactThreshold: 967000,
         maxTokens: 1000000,
         rawMaxTokens: 1000000,
+        totalTokens: 37102,
       },
-      expected: { contextWindow: 1000000, reported: 967000 },
+      expected: {
+        contextWindow: 1000000,
+        reported: 967000,
+        totalTokens: 37102,
+      },
     },
     {
       name: 'Missing',
       response: {},
-      expected: { contextWindow: null, reported: null },
+      expected: { contextWindow: null, reported: null, totalTokens: null },
     },
   ])('contextUsageOf_$name', ({ response, expected }) => {
     expect(contextUsageOf(response)).toEqual(expected);
@@ -326,18 +332,19 @@ describe('session usage', () => {
   it.each([
     {
       name: 'WindowReplaces',
-      usage: { contextWindow: 200_000, reported: 167_000 },
+      usage: { contextWindow: 200_000, reported: 167_000, totalTokens: null },
       expected: { contextWindow: 200_000, reported: 167_000 },
     },
     {
       name: 'NullWindowKeepsWindow',
-      usage: { contextWindow: null, reported: null },
+      usage: { contextWindow: null, reported: null, totalTokens: null },
       expected: { contextWindow: 1_000_000, reported: null },
     },
   ])('foldContextUsage_$name', ({ usage, expected }) => {
     const kept = foldContextUsage(EMPTY_SESSION_USAGE, {
       contextWindow: 1_000_000,
       reported: 967_000,
+      totalTokens: null,
     });
 
     const state = foldContextUsage(kept, usage);

@@ -22,11 +22,12 @@ export interface TurnUsage {
   spendUsd: number | null;
 }
 
-// What one `get_context_usage` reply says: the main model's context window and the autocompact limit the harness
-// reports, each null when the reply carries none.
+// What one `get_context_usage` reply says: the main model's context window, the autocompact limit the harness reports
+// and the context's size now, each null when the reply carries none.
 export interface ContextUsage {
   contextWindow: number | null;
   reported: number | null;
+  totalTokens: number | null;
 }
 
 // A main reply a saved transcript holds, `at` its line's time.
@@ -125,6 +126,19 @@ export function foldContextUsage(
     ...state,
     contextWindow: usage.contextWindow ?? state.contextWindow,
     reported: usage.reported,
+  };
+}
+
+// The context a compaction left. Its cache expiry is unknown until the next reply, which rebuilds the cache.
+export function withCompactedContext(
+  state: SessionUsageState,
+  contextTokens: number,
+): SessionUsageState {
+  return {
+    ...state,
+    isContextKnown: true,
+    contextTokens,
+    cacheExpiresAt: null,
   };
 }
 
@@ -243,5 +257,6 @@ export function contextUsageOf(response: Json): ContextUsage {
   return {
     contextWindow: numberOrNull(response.maxTokens),
     reported: numberOrNull(response.autoCompactThreshold),
+    totalTokens: numberOrNull(response.totalTokens),
   };
 }

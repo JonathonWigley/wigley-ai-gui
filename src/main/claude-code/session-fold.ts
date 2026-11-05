@@ -33,6 +33,7 @@ import {
   type SavedReply,
   type SessionUsageState,
   usageEvent,
+  withCompactedContext,
   withSavedReplies,
 } from './session-usage';
 import {
@@ -143,8 +144,8 @@ export interface CompactionFoldState {
   // Apart from `graceDeadline`, which an interrupt reply can clear by idling the
   // session while `/compact` still runs.
   graceDeadline: number | null;
-  // The newest compaction entry, until the next main reply gives its after-size.
-  // No `usage` event goes out while it is set.
+  // The newest compaction entry, until a `get_context_usage` reply or the next main
+  // reply gives its after-size. No `usage` event goes out while it is set.
   awaitingAfterSize: Extract<EntryDraft, { kind: 'compaction' }> | null;
   entryCount: number;
 }
@@ -318,8 +319,8 @@ function pushUserMessage(
 }
 
 // Gives the usage event when it differs from the last one in any field but
-// `at`. From a boundary to the next main reply the state still holds the size and
-// the cache expiry from before the compaction, so nothing goes out.
+// `at`. From a boundary to the after-size the state still holds the size and the
+// cache expiry from before the compaction, so nothing goes out.
 function pushUsage(
   state: SessionFoldState,
   at: number,
@@ -462,6 +463,22 @@ function startCompaction(
     effects,
   );
   return open;
+}
+
+// The compaction entry comes again with its after-size, which ends the `usage` hold.
+function settleAfterSize(
+  state: SessionFoldState,
+  afterTokens: number,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const fold = state.compaction;
+  if (fold.awaitingAfterSize === null) {
+    return;
+  }
+  const entry = { ...fold.awaitingAfterSize, afterTokens };
+  fold.awaitingAfterSize = null;
+  pushEntry(state, entry, at, effects);
 }
 
 // The compaction entry goes out even when the grace already sent the end: the
@@ -647,15 +664,8 @@ function foldCompactionLine(
   if (compaction !== null) {
     foldCompactionPhase(state, compaction, at, effects);
   }
-  if (replyUsage !== null && fold.awaitingAfterSize !== null) {
-    // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so
-    // the after-size is the next main reply's context (claude-stream.md § Compaction).
-    const entry = {
-      ...fold.awaitingAfterSize,
-      afterTokens: replyUsage.contextTokens,
-    };
-    fold.awaitingAfterSize = null;
-    pushEntry(state, entry, at, effects);
+  if (replyUsage !== null) {
+    settleAfterSize(state, replyUsage.contextTokens, at, effects);
   }
   if (decoded.turnEnded) {
     endCompactionOnTurnEnd(state, decoded.turnOpener, at, effects);
@@ -935,10 +945,15 @@ function answerControlResponse(
       });
       return;
     }
-    state.usage = foldContextUsage(
-      state.usage,
-      contextUsageOf(response.response),
-    );
+    const contextUsage = contextUsageOf(response.response);
+    const { totalTokens } = contextUsage;
+    state.usage = foldContextUsage(state.usage, contextUsage);
+    // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so the
+    // after-size is this total or the next main reply's context (claude-stream.md § Compaction).
+    if (totalTokens !== null && state.compaction.awaitingAfterSize !== null) {
+      state.usage = withCompactedContext(state.usage, totalTokens);
+      settleAfterSize(state, totalTokens, at, effects);
+    }
     pushUsage(state, at, effects);
     return;
   }

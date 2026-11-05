@@ -64,7 +64,7 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
   Chat main drops the events of a process it let go, so on a `/clear` or a failed attach during a compaction it emits
   that end on `chat.agentEvent` itself: outcome `interrupted`, `beforeTokens` and `durationMs` null.
 - `ChatEntry` kind `compaction { id, at, trigger, beforeTokens, afterTokens, durationMs, raw }`. `afterTokens` is null
-  until the next main reply's context is known; the adapter then emits the same entry id again with it set.
+  until the size the compaction left is known; the adapter then emits the same entry id again with it set.
 - `AgentProcess.compact()` starts a compaction with trigger `app`. It throws after `end` and while the session is not idle. It
   makes no user entry.
 - Chat main's export `addSendGate(gate: SendGate): Disposable`, with
@@ -116,7 +116,12 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
 - **`⌃C` skips, not `Esc`** — `Esc` in the box already leaves the box.
 - **The divider is its own entry kind from the adapter** — structured fields let a layout draw it and fill the
   after-size later, and resumed history shows past compactions.
-- **The after-size comes from the next main reply** — Claude's `post_tokens` leaves out the system prompt and tools.
+- **The after-size comes from `get_context_usage`, or the next main reply when a reply comes first** — Claude's
+  `post_tokens` leaves out the system prompt and tools, and the control request answers with no model call, so the
+  usage line and the divider update as soon as a compaction's turn ends. A saved transcript has only the next main
+  reply, so a resumed divider can read slightly higher.
+- **A compaction's first `usage` has no cache expiry** — the next reply rebuilds the cache, and the gate must not read
+  the expiry from before the compaction as cold and compact the session again.
 - **The app holds the message itself** rather than writing it behind `/compact` into Claude's input queue.
 
 - **One threshold with Claude's idle compaction** (round 3) — by the code of the Claude Code 2.1.317 binary, not by

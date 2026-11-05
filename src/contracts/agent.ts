@@ -108,8 +108,8 @@ export type ChatEntry =
       tone: 'info' | 'error';
       raw: unknown[];
     }
-  // One per finished compaction (outcome `done`). `afterTokens` is null until the next main reply after the compaction;
-  // the adapter then sends the entry again with the same id and `afterTokens` set. A saved transcript's compaction reads
+  // One per finished compaction (outcome `done`). `afterTokens` is null until the adapter knows the size the compaction
+  // left; it then sends the entry again with the same id and `afterTokens` set. A saved transcript's compaction reads
   // back with trigger `manual` or `harness`, never `app`.
   | {
       kind: 'compaction';
@@ -296,8 +296,8 @@ export type AgentEvent =
   | { type: 'compactionStarted'; at: number; trigger: CompactionTrigger }
   // `beforeTokens` is the context size when the compaction ran, null when the harness does not report it or the outcome
   // is not `done`. `durationMs` is how long it ran, null when unknown. After a compaction's boundary no main `usage`
-  // goes out until the next main reply: that reply's `usage` is the first to carry the after-size, and spend or window
-  // news from the gap waits for it.
+  // goes out until the adapter knows the after-size: the first `usage` carries it, with `cacheExpiresAt` null unless a
+  // main reply set it, and spend or window news from the gap waits for it.
   | {
       type: 'compactionEnded';
       at: number;

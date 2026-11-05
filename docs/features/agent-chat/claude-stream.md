@@ -1163,6 +1163,10 @@ background subagent finished (the `task_*` lines of § Subagents arrived between
   a few tokens higher: with 5 output tokens, 38,930 reads 38,935.
 - The next call after the compaction rebuilt the cache: `"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":22479}}`
   and `"input_transformations":[{"type":"thinking_dropped",…}]` on the 16.61 `assistant`.
+- **`get_context_usage` reads the after-size with no model call.** Measured on 2.1.318, 2026-11-04, Haiku, as § How
+  every probe ran: right after `/compact`'s `result`, the reply's `totalTokens` was 37,102 (`post_tokens` 9,304), and the
+  next `assistant`, a one-word turn, summed to 38,412 with `cache_read_input_tokens` 13,463 and
+  `cache_creation_input_tokens` 24,940. The reply answered in 0.14 s and its `apiUsage` was null.
 
 The subsections below were measured on 2.1.318, 2026-11-03, as § How every probe ran. Each stdin user message carries a
 client `uuid` (§ Message lifecycle), and each process has its own project folder. `IN` marks a line the driver wrote,

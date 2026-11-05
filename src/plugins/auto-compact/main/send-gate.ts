@@ -10,7 +10,7 @@ export type LatestUsage = ReadonlyMap<string, UsageAgentEvent>;
 
 // The same map when `event` changes nothing, else a new one. An ended session
 // keeps its usage, since its next send is the one the gate is for; a finished
-// compaction drops it, until the next reply's `usage` refills it.
+// compaction drops it, until the `usage` carrying the after-size refills it.
 export function withAgentEvent(
   latest: LatestUsage,
   hostSessionId: string,
