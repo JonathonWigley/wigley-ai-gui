@@ -1,6 +1,6 @@
 # 01 — Index schema 5: headings, links and the wiki walk
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -324,3 +324,4 @@ Commit:    one commit in wigley-ai-marketplace for the group, on the run's workt
 
 ## Proof
 
+Commit 15fbf5c · proof: diff read, every Produces present, py compile clean, check_pointers and check_manifests pass, in wigley-ai-marketplace · concerns: MARKDOWN_LINK text can cross a blank line; raw of a wrapped reference in a CRLF file holds LF, for task 10's search; pointer errors now report in offset order; extra test rows beyond the task

@@ -114,12 +114,12 @@ wigley-ai-gui, git:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Index schema 5](01-index-schema-5.md)
+- [x] [Index schema 5](01-index-schema-5.md)
 - [x] [Entry fields and Linked from](02-entry-fields-linked-from.md)
 - [x] [Main parser, sections, history](03-pure-modules.md)
 
 ### Wave 2
-- [ ] [Git log and Recent changes call](04-git-log.md) — after 02
+- [x] [Git log and Recent changes call](04-git-log.md) — after 02
 - [ ] [Wiki tree and search rows](06-wiki-tree.md) — after 02, 03
 
 ### Wave 3
@@ -154,6 +154,8 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 ### Groups
 - 02 · 1c38d74c · diff read, every Produces present, tsc clean · concerns: codeUnitOrder stays private in path-completion.ts; docs-browser design says schema 4 of lastLoaded's origin, left true; cloneKey uses plain startsWith
 - 03 · b83f527a · diff read, every Produces present, tsc clean · concerns: a file ending in a lone CR keeps it in ScannedLine.text; [a](<>) gives an empty path, for 06 to show dangling
+- 01 · 15fbf5c · diff read, every Produces present, py compile clean, check_pointers and check_manifests pass, in wigley-ai-marketplace · concerns: MARKDOWN_LINK text can cross a blank line; raw of a wrapped reference in a CRLF file holds LF, for task 10's search; pointer errors now report in offset order; extra test rows beyond the task
+- 04 · ed07573b · diff read; every Produces present by search (GitCommit, Git.log, RecentChange, recentChanges, readRecentChanges, RecentChangesDeps, recentChangesLimit); compile checked with task 06's partial edits in the tree · concerns: a negative recentChangesLimit gives all commits minus the last row (configurer's, per plan); docs-browser design.md not checked for a settings list
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -161,5 +163,10 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - Added a valid-element row to index-document.test.ts — no planned row rejected a good form — one row to delete · group 02 · group 02
 - HEADING and FENCE_RUN carry the s flag, so '# T\ra' titles T\ra as the index does rather than the plan's T — line pairing with the index is the Decisions aim — one flag and one row if wrong · group 03 · group 03
 - An empty text gives zero lines — the plan named only a\n — none for later tasks · group 03 · group 03
+- Version 1.17.0 to 1.18.0, not the plan's 1.17.0 — origin moved — none · group 01 · group 01
+- parse_headings drops a heading empty after its marks — an empty text prefixes every remainder — such a heading leaves On this page · group 01 · group 01
+- A wigley:skill#frag href drops the fragment and targetLine stays null — the table gives null — a skill fragment does not move the page · group 01 · group 01
+- readRecentChanges de-duplicates real paths as well as asked paths, and compares paths with paths.samePath, as clonesOf does · group 04
+- one extra test row: realPath rejecting with a non-ENOENT error logs one line · group 04
 ### Review rounds
 ### Test gate

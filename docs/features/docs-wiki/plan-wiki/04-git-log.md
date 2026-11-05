@@ -1,6 +1,6 @@
 # 04 — Git log and Recent changes call
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -172,3 +172,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit ed07573b · proof: diff read; every Produces present by search (GitCommit, Git.log, RecentChange, recentChanges, readRecentChanges, RecentChangesDeps, recentChangesLimit); compile checked with task 06's partial edits in the tree · concerns: a negative recentChangesLimit gives all commits minus the last row (configurer's, per plan); docs-browser design.md not checked for a settings list
