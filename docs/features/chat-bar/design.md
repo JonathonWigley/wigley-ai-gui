@@ -53,7 +53,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ┌ composer (L3 floating) ───────────────────────────────────────────────┐
 │ workflow strip                                  workflow (composer part)
 │ ‹ [card] [card] … ›                             agent-strip (composer part, with a stop)
-│ ● Shell  npm test -- chat-row-clock      3m 05s agent-strip (one row per task, in the same part)
+│ ● Shell  Run Chat Row Tests              3m 05s agent-strip (one row per task, in the same part)
 │ ▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂  58k/300k  cache 59m    usage (composer part)
 │ 1:05 Working…                                   chat (activity line; only while the hub is not visible)
 │ attachments strip                               chat
@@ -127,8 +127,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   more; `84k` alone until the window is known) and the estimated cost. An open card swaps the tool lines for its name,
   the Agent call's `name` when given, else its agent type. The tag reads Subagent however the call was launched; the
   layout input's `kind` still says whether Claude's launch receipt put it in the background.
-- **A task row:** one line: a running dot, the Shell tag, the command in mono (the Task tag and the description when the
-  harness names no command) and the elapsed time. A task has no context or cost. Rows stack under the cards and scroll
+- **A task row:** one line: a running dot, the Shell tag (the Task tag when the harness names no command), its title and
+  the elapsed time. The title is the description the agent gave the call, else the command, cut to
+  `sessions.titleMaxLength` with `…`; the plugin's session instruction asks for 2 to 4 words within that limit. A task has no context or cost. Rows stack under the cards and scroll
   past four rows.
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
   when the session's process exits. Nothing stays to be closed, so the strip has no close control.
@@ -136,7 +137,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws while the strip shows; a redraw in a hidden tab, or a rebuilt composer, starts the list at the top.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
   row, else the last entry or an open last run's last step) selects the strip's first box; the strip then holds its own key scope: `h`/`l` move through the cards and then the rows, `k` or Esc returns to the last stop, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
-  subagent (a task row wraps its whole command over its owner and description), and Enter again closes it. `G` and a following cursor stay on the last entry,
+  subagent (a task row swaps its title for its whole command, wrapped, over its owner and description), and Enter again closes it. `G` and a following cursor stay on the last entry,
   so new output never moves the cursor into the strip. The selected box takes the focus ring.
 
 ## The activity dock

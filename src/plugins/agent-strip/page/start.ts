@@ -9,7 +9,10 @@ import { createHScroller } from '../../../shared/page/ui/h-scroller';
 import { agentsPageKey } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
 import { keysPageKey } from '../../keys/contract';
-import type { SessionsPageEvents } from '../../sessions/contract';
+import {
+  type SessionsPageEvents,
+  sessionsPageKey,
+} from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -50,6 +53,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       clock: services.clock,
       timers: services.timers,
       agents: api.dependency(agentsPageKey),
+      cutTitle: api.dependency(sessionsPageKey).cutToTitleLimit,
       setScope: () => api.keys.setScope('strip'),
       nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
       createScroller: createHScroller,

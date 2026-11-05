@@ -135,6 +135,8 @@ function boxesWith(wrapper: FakeElement, className: string): number[] {
 // called; `anchorDisposals` holds each key anchor's dispose count in naming
 // order; every session is named `proj`; `onSetScope` runs on each scope set.
 // `OTHER_SESSION` lists `initial` too and never changes.
+const TITLE_LIMIT = 8;
+
 function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   let now = NOW;
   const rosters = new Map<string, Roster>([
@@ -181,6 +183,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
       },
       clear: (handle) => clears.push(handle),
     },
+    cutTitle: (text) => text.slice(0, TITLE_LIMIT),
     agents: {
       roster: (sessionId) => rosters.get(sessionId) ?? EMPTY,
       onRosterChanged(listener) {
@@ -811,16 +814,27 @@ describe('agent strip', () => {
     );
   });
 
-  it('draw_TaskBox_ShowsItsCommandAndNoOwner', () => {
+  it.each([
+    {
+      case: 'its description',
+      fields: { description: 'Run the tests', command: 'npm t' },
+      text: 'ShellRun the 5s',
+    },
+    {
+      case: 'its command when it has no description',
+      fields: { description: '', command: 'npm t' },
+      text: 'Shellnpm t5s',
+    },
+  ])('draw_TaskBox_TitlesWith $case, cut, and no owner', ({ fields, text }) => {
     const { build, boxes } = setUp({
       agents: [],
-      tasks: [task('t1', 5_000, { ownerName: 'kind-fixer', command: 'npm t' })],
+      tasks: [task('t1', 5_000, { ownerName: 'kind-fixer', ...fields })],
       skills: [],
     });
 
     build();
 
-    expect(boxes()[0].textContent).toBe('Shellnpm t5s');
+    expect(boxes()[0].textContent).toBe(text);
   });
 
   it('draw_OneTaskNoAgent_HasRowsAndNoScroller', () => {

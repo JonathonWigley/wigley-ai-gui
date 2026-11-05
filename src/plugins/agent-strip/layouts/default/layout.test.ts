@@ -116,6 +116,7 @@ const AGENT: AgentBoxInput = {
 };
 
 const TASK: TaskBoxInput = {
+  title: 'Run the self-test',
   name: 'kind-fixer',
   description: 'Run the self-test',
   command: 'npm run selftest',
@@ -164,11 +165,16 @@ describe('default agent-strip layout', () => {
       title: 'Map the stream decoder',
       tag: 'Subagent',
     },
-    { case: 'task', box: () => drawTask(), title: null, tag: 'Shell' },
+    {
+      case: 'task',
+      box: () => drawTask(),
+      title: 'Run the self-test',
+      tag: 'Shell',
+    },
     {
       case: 'task without a command',
       box: () => drawTask({ command: null }),
-      title: null,
+      title: 'Run the self-test',
       tag: 'Task',
     },
   ])('head_$case', ({ box, title, tag }) => {
@@ -381,20 +387,23 @@ describe('default agent-strip layout', () => {
   it.each<{
     case: string;
     input: Partial<TaskBoxInput>;
-    command: string;
+    title: string | null;
+    command: string | null;
     owner: string | null;
     isOpen: boolean;
   }>([
     {
       case: 'closed',
       input: {},
-      command: 'npm run selftest',
+      title: 'Run the self-test',
+      command: null,
       owner: null,
       isOpen: false,
     },
     {
       case: 'open',
       input: { isOpen: true },
+      title: null,
       command: 'npm run selftest',
       owner: 'kind-fixer · Run the self-test',
       isOpen: true,
@@ -402,21 +411,24 @@ describe('default agent-strip layout', () => {
     {
       case: 'no command',
       input: { command: null },
-      command: 'Run the self-test',
+      title: 'Run the self-test',
+      command: null,
       owner: null,
       isOpen: false,
     },
     {
       case: 'open with no command',
       input: { command: null, isOpen: true },
+      title: null,
       command: 'Run the self-test',
       owner: 'kind-fixer',
       isOpen: true,
     },
-  ])('taskCommand_$case', ({ input, command, owner, isOpen }) => {
+  ])('taskRow_$case', ({ input, title, command, owner, isOpen }) => {
     const { root } = drawTask(input);
 
-    expect(root.find('agent-strip-command')?.textContent).toBe(command);
+    expect(root.find('agent-strip-title')?.textContent ?? null).toBe(title);
+    expect(root.find('agent-strip-command')?.textContent ?? null).toBe(command);
     expect(root.find('agent-strip-row-owner')?.textContent ?? null).toBe(owner);
     expect(root.classList.contains('is-open')).toBe(isOpen);
   });

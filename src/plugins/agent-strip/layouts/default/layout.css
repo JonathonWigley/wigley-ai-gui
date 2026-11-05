@@ -144,19 +144,8 @@
   min-width: 0;
 }
 
-/* A closed row's command keeps to one line. */
-[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box:not(
-    .is-open
-  )
-  .agent-strip-command {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* An open row's command wraps whole inside its row. */
-[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-open
-  .agent-strip-command {
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-command {
   overflow-wrap: anywhere;
 }
 

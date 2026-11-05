@@ -44,7 +44,8 @@ import {
   stepIndex,
 } from './strip-boxes';
 
-// `agents` is the only way the strip reads a roster. `setScope` sets the
+// `agents` is the only way the strip reads a roster. `cutTitle` cuts a task
+// row's title to the session title limit. `setScope` sets the
 // strip's key scope, `agent-strip.strip`; `nameOf` is a session's name in the
 // page log; `createScroller` makes the HScroller a strip draws its agent boxes
 // into.
@@ -54,6 +55,7 @@ export interface AgentStripDeps {
   clock: Clock;
   timers: Timers;
   agents: AgentsPageExports;
+  cutTitle(text: string): string;
   setScope(): void;
   nameOf(sessionId: string): string;
   createScroller(): HScroller;
@@ -318,7 +320,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         });
       } else {
         const { task } = box;
-        const input = taskBoxInput(task, state, now);
+        const input = taskBoxInput(task, state, now, deps.cutTitle);
         const drawn = drawTaskBox(heldRows(holder), input);
         holder.parts.push(drawn);
         listenForClick(drawn.built.element, sessionId, key);
@@ -759,9 +761,11 @@ function taskBoxInput(
   task: RosterTask,
   state: { isSelected: boolean; isOpen: boolean },
   now: number,
+  cutTitle: (text: string) => string,
 ): TaskBoxInput {
   return {
     name: task.ownerName,
+    title: cutTitle(task.description || (task.command ?? '')),
     description: task.description,
     command: task.command,
     elapsedMs: now - task.startedAt,

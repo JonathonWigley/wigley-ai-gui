@@ -32,8 +32,8 @@ export function titleProblem(text: string, max: number): string | null {
   return null;
 }
 
-// The first-message title cut to `max` with an ellipsis when longer.
-function cutTitle(text: string, max: number): string {
+// The text cut to `max` with an ellipsis when longer.
+export function cutTitle(text: string, max: number): string {
   const characters = codePoints(normalizedTitle(text));
   if (characters.length <= max) {
     return characters.join('');

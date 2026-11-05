@@ -373,6 +373,9 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // activities, and every page load starts with none.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
+  // The text cut to `sessions.titleMaxLength` with an ellipsis when longer, for
+  // another plugin's short title.
+  cutToTitleLimit(text: string): string;
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
   selectedSessionId(): string | null;

@@ -32,6 +32,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
+import { cutTitle, titleLimit } from '../session-title';
 import { sessionsPageView } from './consumer-view';
 import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
@@ -121,6 +122,8 @@ function createExports(
   const { log } = api.services;
   return {
     addTab: (sessionId, tab) => view.tabs.add(sessionId, tab),
+    cutToTitleLimit: (text) =>
+      cutTitle(text, titleLimit(api.settings().titleMaxLength)),
     addRowPart: (part) => rowParts.add(part),
     addBarPart: (part) => barParts.add(part),
     selectedSessionId: () => view.panes.focusedSessionId(),

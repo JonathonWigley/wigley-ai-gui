@@ -56,10 +56,12 @@ export interface AgentBoxInput {
 }
 
 // One task row (a background shell or another long-running job): the agent that started it (`main`, a subagent's name,
-// or `subagent` for one never listed), what it runs, its shell command, null when the harness named none, and how long
-// it has run in milliseconds. The default row shows `name` only while open.
+// or `subagent` for one never listed), its title (its description, else its command, cut to `sessions.titleMaxLength`),
+// what it runs uncut, its shell command, null when the harness named none, and how long it has run in milliseconds. The
+// default row shows `title` while closed, and its command and `name` only while open.
 export interface TaskBoxInput {
   name: string;
+  title: string;
   description: string;
   command: string | null;
   elapsedMs: number;

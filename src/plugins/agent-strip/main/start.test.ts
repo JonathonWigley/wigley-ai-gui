@@ -1,19 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import type { SelfTestScript } from '../../../contracts/plugin';
 import {
+  fakeDependency,
   noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { type ChatMainExports, chatMainKey } from '../../chat/contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { agentStripMainPart } from './start';
 
 // A self-test host, so the part reads its dependencies as a self-test run does.
-const WITH_SELF_TEST = { services: { selfTest: { run() {} } } };
+const WITH_SELF_TEST = {
+  services: { selfTest: { run() {} } },
+  dependencies: [
+    fakeDependency(
+      chatMainKey,
+      (consumer) =>
+        ({
+          addInstructions: () => consumer.track({ dispose() {} }),
+        }) as unknown as ChatMainExports,
+    ),
+  ],
+};
 
 describe('agentStripMainPart', () => {
   it('start_RegistersLayoutsAndHandsScript', () => {
     const registered: unknown[] = [];
     const scripts: SelfTestScript[] = [];
+    const instructions: string[] = [];
     const api = {
       layouts: {
         register: (registration: unknown) => {
@@ -24,13 +38,16 @@ describe('agentStripMainPart', () => {
         homeDir: '/home',
         selfTest: { run: (script: SelfTestScript) => scripts.push(script) },
       },
-      dependency: () => ({}),
+      dependency: () => ({
+        addInstructions: (text: string) => instructions.push(text),
+      }),
     } as unknown as Parameters<typeof agentStripMainPart.start>[0];
 
     agentStripMainPart.start(api);
 
     expect(registered).toEqual([{ layoutTypes }]);
     expect(scripts).toHaveLength(1);
+    expect(instructions).toEqual([expect.stringContaining('30 characters')]);
   });
 
   it('stop_LeavesNoLiveRegistration', async () => {

@@ -17,6 +17,7 @@ function fakeExports() {
   const activities: [string, string, RowActivity | null][] = [];
   const disposes = { tab: 0, rowPart: 0, barPart: 0 };
   const exports: SessionsPageExports = {
+    cutToTitleLimit: (text) => text,
     addTab: () => ({
       setStatus: () => undefined,
       select: () => undefined,
