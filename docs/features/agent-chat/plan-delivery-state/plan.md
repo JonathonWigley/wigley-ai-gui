@@ -148,5 +148,6 @@ Review base: 37c3020e57be67f8aa41edfbb3e771c5eacebfee
 - UserInput keeps the real delivery and gains isLatestDelivery, overriding task 02's page-owned rule — the repo takes each review recommendation, and a layout can then draw its own rule — one field to drop · lead
 ### Review rounds
 - 1 · 6fb95bd8 · NEEDS FIXES
+- 2 · 4a3ae60c · PASS after one lead-applied comment fix, 88fdf04b
 ### Test gate
 - stream-decoder, session-fold, transcripts, claude-code-harness, fake-agent-harness (the fold and every entry source), layout-contracts (UserInput contract), src/plugins/chat/ (entry-list, layout, preview, literal fixtures) · 46 files, 1821 tests passed, no type errors
