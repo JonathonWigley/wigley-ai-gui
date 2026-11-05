@@ -133,6 +133,7 @@ import {
 import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
 import {
   createMainWindow,
+  offscreenWindowService,
   registerWindowCommands,
   windowService,
 } from './window';
@@ -253,9 +254,10 @@ function liveServices(): ModeServices {
 
 // A run beside the user's app, the self-test or a drive run: every file sits
 // in the run's own home, so trash deletes for good and the user's Trash
-// collects nothing; alerts are silent, the offscreen window shows no dialog,
-// and no link takes the user's foreground. `runName` names the run in the line
-// a link not opened logs; sessions run over the harness `harness` builds.
+// collects nothing; alerts are silent, the window stays offscreen and shows no
+// dialog, and no link takes the user's foreground. `runName` names the run in
+// the line a window not shown or a link not opened logs; sessions run over the
+// harness `harness` builds.
 function offscreenRunServices(
   runName: string,
   harness: (context: ModeServicesContext) => AgentHarness,
@@ -265,10 +267,7 @@ function offscreenRunServices(
     forWindow: (context) => ({
       alerts: silentAlerts,
       agentHarnesses: [harness(context)],
-      window: {
-        ...windowService(context.window),
-        chooseFolder: async () => null,
-      },
+      window: offscreenWindowService(context.window, runName, context.log),
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
       ),

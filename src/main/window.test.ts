@@ -1,7 +1,11 @@
 import type { BrowserWindow } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MainCommands } from './keybindings';
-import { registerWindowCommands, windowService } from './window';
+import {
+  offscreenWindowService,
+  registerWindowCommands,
+  windowService,
+} from './window';
 
 const electron = vi.hoisted(() => ({
   app: { show: vi.fn(), focus: vi.fn() },
@@ -66,6 +70,30 @@ describe('windowService', () => {
     expect(service.isFocused()).toBe(true);
     await expect(service.chooseFolder()).resolves.toBe('/w/chosen');
     await expect(service.capture()).resolves.toBe(PNG);
+  });
+});
+
+describe('offscreenWindowService', () => {
+  it('show_LeavesTheWindowHiddenAndUnfocused', () => {
+    const { window, shown } = fakeWindow({ isDestroyed: false });
+    const log = vi.fn();
+
+    offscreenWindowService(window, 'the self-test', log).show();
+
+    expect(shown).toEqual([]);
+    expect(log).toHaveBeenCalledWith(
+      'main',
+      'window not shown in the self-test',
+    );
+  });
+
+  it('chooseFolder_OpensNoDialog', async () => {
+    electron.dialog.showOpenDialog.mockReset();
+    const { window } = fakeWindow({ isDestroyed: false });
+    const service = offscreenWindowService(window, 'the self-test', vi.fn());
+
+    await expect(service.chooseFolder()).resolves.toBeNull();
+    expect(electron.dialog.showOpenDialog).not.toHaveBeenCalled();
   });
 });
 

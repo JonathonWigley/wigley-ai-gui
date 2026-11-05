@@ -121,6 +121,21 @@ export function windowService(window: BrowserWindow): MainServices['window'] {
   };
 }
 
+// The window service of a run beside the user's app, `runName` naming the run
+// in the line a `show` not done logs: the window stays offscreen and the user
+// keeps the foreground, so `show` only logs and `chooseFolder` resolves to null.
+export function offscreenWindowService(
+  window: BrowserWindow,
+  runName: string,
+  log: Log,
+): MainServices['window'] {
+  return {
+    ...windowService(window),
+    show: () => log('main', `window not shown in ${runName}`),
+    chooseFolder: async () => null,
+  };
+}
+
 export function registerWindowCommands(
   commands: MainCommands,
   window: BrowserWindow,
