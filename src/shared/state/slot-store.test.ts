@@ -272,6 +272,26 @@ describe('changes', () => {
   });
 });
 
+describe('keyed order', () => {
+  it('all_SetKeepsAHeldKeysPlaceAndDeleteThenSetGoesLast', () => {
+    const { store } = storeWithLogs();
+    const keyed = store.publish(keyedKey);
+    keyed.set('b', 1);
+    keyed.set('a', 2);
+    keyed.set('c', 3);
+
+    keyed.set('b', 4);
+    keyed.delete('a');
+    keyed.set('a', 5);
+
+    expect([...keyed.all()]).toEqual([
+      ['b', 4],
+      ['c', 3],
+      ['a', 5],
+    ]);
+  });
+});
+
 describe('snapshot', () => {
   it('snapshot_ThroughStructuredCloneAndLoad_ReadsEveryKind', () => {
     const { store } = storeWithLogs();

@@ -21,6 +21,7 @@ import {
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
+  sessionsSelectionSlot,
   type ToolResult,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatMainEvents, ChatMainExports } from '../contract';
@@ -258,6 +259,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
   start(api: ChatApi) {
     const { services } = api;
     const sessions = api.dependency(sessionsMainKey);
+    const selection = api.state.read(sessionsSelectionSlot);
     const recent = createRecentFolders({
       data: api.data,
       clock: services.clock,
@@ -286,6 +288,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
+      selectedSessionId: () => selection.get() ?? null,
       profiles,
       randomUuid: services.randomUuid,
       recent,
@@ -413,9 +416,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       endWaits.get(sessionId)?.();
       endWaits.delete(sessionId);
     });
-    api.events.on('sessions.selected', ({ sessionId }) =>
-      chat.selected(sessionId),
-    );
+    selection.on((sessionId) => chat.selected(sessionId ?? null));
     api.events.on('sessions.titleChanged', ({ sessionId }) =>
       chat.titleChanged(sessionId),
     );

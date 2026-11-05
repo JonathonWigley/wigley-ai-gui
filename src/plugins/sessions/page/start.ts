@@ -1,4 +1,5 @@
 import './sessions.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type { PaneDirection } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -18,13 +19,17 @@ import {
   type SplitAxis,
 } from '../../../shared/page/pane-tree/pane-tree';
 import { qualify } from '../../../shared/plugin-manifests';
-import type {
-  SessionPart,
-  SessionRow,
-  SessionsChannel,
-  SessionsPageEvents,
-  SessionsPageExports,
-  SessionsState,
+import {
+  followRows,
+  type SessionPart,
+  type SessionRow,
+  type SessionsChannel,
+  sessionsActiveSlot,
+  type SessionsPageEvents,
+  type SessionsPageExports,
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
+  type SessionsState,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -72,7 +77,7 @@ type SessionsApi = PageApi<
   typeof sessionsManifest,
   SessionsChannel,
   SessionsPageEvents,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // The uiState key holding the chat panes: the pane tree and each pane's
@@ -106,6 +111,20 @@ function readSavedPanes(
   return { tree, hostIds };
 }
 
+// What the mid-operation states of one main operation added up to, for the state
+// that settles it: a later one's own panes are already closed.
+interface MidOperation {
+  removed: readonly string[];
+  wasSplit: boolean;
+  hasClosedPane: boolean;
+}
+
+const NO_MID_OPERATION: MidOperation = {
+  removed: [],
+  wasSplit: false,
+  hasClosedPane: false,
+};
+
 // A choice in the split picker: a session no pane shows, or a new session.
 type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 
@@ -124,7 +143,6 @@ function createExports(
       cutTitle(text, titleLimit(api.settings().titleMaxLength)),
     addRowPart: (part) => rowParts.add(part),
     addBarPart: (part) => barParts.add(part),
-    selectedSessionId: () => view.panes.focusedSessionId(),
     activate,
     closeSession(sessionId) {
       if (!mayClose(view.tabs.tabsOf(sessionId))) {
@@ -146,10 +164,15 @@ function createExports(
 
 // Sessions mode: a side bar row for each of main's sessions, in the mode's
 // side bar, beside chat panes, each showing one session's tabs, which other
-// plugins add. The side bar's selected row, the title bar and `activeChanged`
+// plugins add. The side bar's selected row, the title bar and `sessions.active`
 // follow the focused pane's session; main owns the rows and keeps a
 // selection of its own, which the page keeps in step through `activate`, its
-// own echoes changing nothing when they come back. Activating a session
+// own echoes changing nothing when they come back. The first state is read on
+// `core.pageReady`, and each notice of the rows or the selection applies after
+// it. A selection naming no row is mid-operation: main deleted that row and its
+// selection write follows, so the state that settles it places the panes, and
+// the focus and the visible tab follow in a microtask, after every reader heard
+// the notice. Activating a session
 // focuses the pane showing it, or loads it into the focused pane; closing one
 // asks main, and a pane whose session leaves closes, the last pane staying.
 // The visible tab, the focused pane's session's selected tab while the mode
@@ -173,9 +196,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   start(api: SessionsApi) {
     const { log } = api.services;
     const { uiState } = api.services;
+    const rows = api.state.read(sessionsRowsSlot);
+    const selection = api.state.read(sessionsSelectionSlot);
+    const active = api.state.publish(sessionsActiveSlot);
+    active.set(null);
     let state: SessionsState = { rows: [], selectedSessionId: null };
-    // Undefined until the first state is published.
-    let published: string | null | undefined;
+    // False until the first state's focus is written to `active`.
+    let hasPublished = false;
     let isModeShown = false;
     let lastVisible: VisibleTab = null;
     // The sessions the page asked main to activate whose state has not come
@@ -192,6 +219,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // publish once its state is in.
     let isPlacing = false;
     let isApplying = false;
+    let midOperation = NO_MID_OPERATION;
+
+    const applyNotice = () => {
+      if (hasRestored) {
+        apply(currentState());
+      }
+    };
+    rows.on(applyNotice);
+    selection.on(applyNotice);
+    api.events.on('core.pageReady', () => apply(currentState()));
 
     const rowOf = (sessionId: string) =>
       state.rows.find((row) => row.sessionId === sessionId);
@@ -245,18 +282,18 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
                     ),
             },
       );
-      if (sessionId === published) {
+      const lastPublished = hasPublished ? (active.get() ?? null) : undefined;
+      if (sessionId === lastPublished) {
         return;
       }
-      const wasPublished = published;
-      published = sessionId;
+      hasPublished = true;
       if (focused !== undefined) {
         log(`activated ${focused.label}`);
       }
-      api.events.emit('activeChanged', { sessionId });
+      active.set(sessionId);
       if (
         sessionId !== null &&
-        isRoundToast(wasPublished, sessionId, isModeShown)
+        isRoundToast(lastPublished, sessionId, isModeShown)
       ) {
         api.services.toast(
           roundToastText(
@@ -346,7 +383,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         mode.picked();
       },
       isModeShown: () => isModeShown,
-      tabsChanged: () => checkVisible(),
+      tabsChanged() {
+        if (!isApplying) {
+          checkVisible();
+        }
+      },
       keys: api.keys,
       timers: api.services.timers,
       panesChanged() {
@@ -486,13 +527,17 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     // Applies the selection rules (`selectionAction`) to the state `apply`
-    // took in.
+    // took in. A notice that leaves the selection alone answers no echo, however
+    // its id compares with the ones still waited for.
     const placeSelection = (
       before: SessionsState,
       next: SessionsState,
       removed: readonly string[],
       wasSplit: boolean,
     ) => {
+      if (next.selectedSessionId === before.selectedSessionId) {
+        return;
+      }
       const { action, echoes } = selectionAction({
         before: before.selectedSessionId,
         next: next.selectedSessionId,
@@ -523,13 +568,26 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
+    const currentState = (): SessionsState => ({
+      rows: [...rows.all().values()],
+      selectedSessionId: selection.get() ?? null,
+    });
+
     const apply = (next: SessionsState) => {
       const before = state;
       state = next;
       isApplying = true;
       const changes = rowChanges(before.rows, next.rows);
-      const wasSplit = leafIds(view.panes.tree()).length > 1;
       const closing = panesToClose(view.panes.sessions(), changes.removed);
+      const isSelectionRowless =
+        next.selectedSessionId !== null &&
+        !next.rows.some((row) => row.sessionId === next.selectedSessionId);
+      const seen: MidOperation = {
+        removed: [...midOperation.removed, ...changes.removed],
+        wasSplit:
+          midOperation.wasSplit || leafIds(view.panes.tree()).length > 1,
+        hasClosedPane: midOperation.hasClosedPane || closing.length > 0,
+      };
       try {
         view.render(next);
         for (const paneId of closing) {
@@ -540,59 +598,32 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         for (const sessionId of changes.removed) {
           view.tabs.drop(sessionId);
         }
-        if (hasRestored) {
-          fillWaiting(next.rows);
-          placeSelection(before, next, changes.removed, wasSplit);
-        } else {
+        if (!hasRestored) {
           hasRestored = true;
           restoreSavedPanes(next);
+        } else {
+          fillWaiting(next.rows);
+          if (!isSelectionRowless) {
+            placeSelection(before, next, seen.removed, seen.wasSplit);
+          }
         }
       } finally {
         isApplying = false;
       }
-      for (const sessionId of changes.removed) {
-        api.events.emit('sessionRemoved', { sessionId });
+      if (isSelectionRowless) {
+        midOperation = seen;
+        return;
       }
-      for (const row of changes.added) {
-        api.events.emit('sessionAdded', {
-          sessionId: row.sessionId,
-          label: row.label,
-          projectDir: row.projectDir,
-          harness: row.harness,
-          hostSessionId: row.hostSessionId,
-        });
-      }
-      for (const row of changes.changed) {
-        api.events.emit('sessionHostChanged', {
-          sessionId: row.sessionId,
-          hostSessionId: row.hostSessionId,
-        });
-      }
-      publishFocused();
-      checkVisible(closing.length > 0);
+      midOperation = NO_MID_OPERATION;
+      queueMicrotask(() => {
+        publishFocused();
+        checkVisible(seen.hasClosedPane);
+      });
     };
 
-    // Main sends `activated` before the state it causes, so the mode shows
-    // before that state arrives and the round never toasts.
+    // Main sends `activated` before the writes it causes, so the mode shows
+    // before they arrive and the round never toasts.
     api.channel.on('activated', () => mode.show());
-
-    // A state read that a stateChanged overtook is stale, as is one that lands
-    // after the stop. A failed read is logged and leaves the view blank, never
-    // claiming there are no sessions.
-    let isStopped = false;
-    let hasStateChanged = false;
-    api.channel.on('stateChanged', (next) => {
-      hasStateChanged = true;
-      apply(next);
-    });
-    api.channel
-      .invoke('state')
-      .then((first) => {
-        if (!hasStateChanged && !isStopped) {
-          apply(first);
-        }
-      })
-      .catch((error) => log(`state not read: ${errorText(error)}`));
 
     const showMode = () => {
       if (!mode.isShown()) {
@@ -839,14 +870,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       exports: (consumer) =>
         sessionsPageView(exports, consumer, (listener) =>
-          api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
-            listener(sessionId),
-          ),
+          followRows(rows, { removed: listener }),
         ),
-      dispose() {
-        isStopped = true;
-        view.dispose();
-      },
+      dispose: () => view.dispose(),
     };
   },
 };

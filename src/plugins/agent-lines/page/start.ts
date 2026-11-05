@@ -3,12 +3,12 @@ import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { agentsPageKey } from '../../agents/contract';
 import {
-  type SessionsPageEvents,
+  followRows,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -20,8 +20,7 @@ import { createWorkingLines } from './working-lines';
 type AgentLinesApi = PageApi<
   typeof agentLinesManifest,
   ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  Record<never, never>
 >;
 
 // Draws a working line under each session's row while it runs any subagent
@@ -35,8 +34,7 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
     const { services } = api;
     const agents = api.dependency(agentsPageKey);
     const sessions = api.dependency(sessionsPageKey);
-    // Each session's name in the log, its side-bar label (`gamma 2`).
-    const names = new Map<string, string>();
+    const rows = api.state.read(sessionsRowsSlot);
     const lines = createWorkingLines({
       kit: {
         markdown: services.markdown,
@@ -51,18 +49,12 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
       log: services.log,
       clock: services.clock,
       timers: services.timers,
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
+      nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
       roster: (sessionId) => agents.roster(sessionId),
     });
     sessions.addRowPart(lines.part);
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
-      names.set(sessionId, label);
-    });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      names.delete(sessionId);
-      lines.forget(sessionId);
-    });
+    followRows(rows, { removed: (sessionId) => lines.forget(sessionId) });
     agents.onRosterChanged((sessionId) =>
       lines.setRoster(sessionId, agents.roster(sessionId)),
     );

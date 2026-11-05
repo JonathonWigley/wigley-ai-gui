@@ -11,12 +11,24 @@ import { createRegistrations } from '../../../shared/registrations';
 import {
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
   type SessionTabHandle,
   type SessionTabView,
 } from '../../sessions/contract';
 import type { DocsPageExports } from '../contract';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
+
+const projectRow = (sessionId: string) => ({
+  sessionId,
+  label: sessionId,
+  project: 'project',
+  harness: 'claude' as const,
+  marked: false,
+  projectDir: '/p',
+  hostSessionId: null,
+  titles: { user: null, agent: null, firstMessage: null },
+});
 
 // What throws the next time one is disposed, once.
 interface ThrowsNext {
@@ -81,10 +93,8 @@ describe('docs page part lifecycle', () => {
     async ({ sessionAdded, tabCount }) => {
       const { harness, tabs } = startDocsPage();
       if (sessionAdded) {
-        harness.emit('sessions.sessionAdded', {
-          sessionId: 's1',
-          projectDir: '/p',
-        });
+        harness.state.publish(sessionsRowsSlot).set('s1', projectRow('s1'));
+        harness.emit('core.pageReady', null);
       }
 
       await harness.stop();
@@ -101,9 +111,11 @@ describe('docs page part lifecycle', () => {
     'stop_OneSessionsTeardownThrows_TearsDownEveryView ($part)',
     async ({ part, error }) => {
       const { harness, throwsNext } = startDocsPage();
+      const rows = harness.state.publish(sessionsRowsSlot);
       for (const sessionId of ['s1', 's2']) {
-        harness.emit('sessions.sessionAdded', { sessionId, projectDir: '/p' });
+        rows.set(sessionId, projectRow(sessionId));
       }
+      harness.emit('core.pageReady', null);
       expect(harness.counts().observers).toBeGreaterThan(0);
       throwsNext[part] = true;
 

@@ -87,8 +87,9 @@ export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
     SessionsMainExports,
-    'open' | 'mark' | 'activate' | 'selectedSessionId' | 'setTitle' | 'titles'
+    'open' | 'mark' | 'activate' | 'setTitle' | 'titles'
   >;
+  selectedSessionId(): string | null;
   // Read at each session start.
   profiles(): readonly ChatProfile[];
   randomUuid: RandomUuid;
@@ -145,7 +146,7 @@ export interface ChatSessions {
   // The sessions plugin's `titleChanged` event: a row chat holds is saved with
   // its new titles; any other row is left alone.
   titleChanged(sessionId: string): void;
-  // The sessions plugin's `selected` event: a row chat holds becomes the
+  // The sessions plugin's selection slot: a row chat holds becomes the
   // saved selection; any other row, or none, leaves it as it was.
   selected(sessionId: string | null): void;
   // The folder's saved sessions under the profile, newest first, leaving out
@@ -804,7 +805,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const turnFinished = activity === 'idle' && previous !== 'idle';
     const turnStarted = activity !== 'idle' && previous === 'idle';
     const userIsElsewhere =
-      !deps.window.isFocused() || sessions.selectedSessionId() !== sessionId;
+      !deps.window.isFocused() || deps.selectedSessionId() !== sessionId;
     const workIsOver = session.backgroundIds.size === 0;
     const isTheTurnsOwnEnd = !isReplayed && !session.isStopRequested;
     const ranATurn = !isHoldUp(session) && !session.isOnlyAHoldsCompaction;
@@ -1442,7 +1443,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         origin: opening.origin,
       });
     }
-    // The sessions plugin emits `selected` inside `open`, before the row is
+    // The sessions plugin writes its selection inside `open`, before the row is
     // held, so `selected` cannot record it.
     if (options.select) {
       selectedHostId = hostId;

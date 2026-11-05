@@ -2,11 +2,10 @@ import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { agentsPageKey } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
-import type { SessionsPageEvents } from '../../sessions/contract';
+import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -17,8 +16,7 @@ import { createSkillList } from './skill-list';
 type AgentSkillsApi = PageApi<
   typeof agentSkillsManifest,
   ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  Record<never, never>
 >;
 
 // Draws the session hub's Skills section through chat's side parts and the
@@ -31,8 +29,7 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
     const { services } = api;
     const agents = api.dependency(agentsPageKey);
     const chat = api.dependency(chatPageKey);
-    // Each session's name in the log, its side-bar label (`gamma 2`).
-    const names = new Map<string, string>();
+    const rows = api.state.read(sessionsRowsSlot);
     const list = createSkillList({
       kit: {
         markdown: services.markdown,
@@ -45,18 +42,12 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
         state: api.state.forLayouts,
       },
       log: services.log,
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
+      nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
       roster: (sessionId) => agents.roster(sessionId),
     });
     chat.addSidePart(list.part);
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
-      names.set(sessionId, label);
-    });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      names.delete(sessionId);
-      list.forget(sessionId);
-    });
+    followRows(rows, { removed: (sessionId) => list.forget(sessionId) });
     agents.onRosterChanged((sessionId) => list.rosterChanged(sessionId));
 
     api.layouts.show<Layout>({

@@ -5,16 +5,11 @@ import type {
   PageServices,
 } from '../../../contracts/plugin';
 import {
-  fakeDependency,
   noCounts,
   startPagePart,
   type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
-import {
-  type SessionsPageExports,
-  sessionsPageKey,
-} from '../../sessions/contract';
 import { emptyDraft } from '../draft';
 import { notesPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
@@ -42,9 +37,6 @@ function startNotes() {
     },
   } as unknown as PageServices['editor'];
   const harness = startPagePart(notesPagePart, {
-    dependencies: [
-      fakeDependency(sessionsPageKey, () => ({}) as SessionsPageExports),
-    ],
     services: { editor, picker: fakeListPickerService({ editor }) },
     invoke(method) {
       return Promise.resolve(

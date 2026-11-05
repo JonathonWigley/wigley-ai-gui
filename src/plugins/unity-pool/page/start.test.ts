@@ -7,6 +7,8 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import {
+  sessionsActiveSlot,
+  sessionsRowsSlot,
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
@@ -32,10 +34,8 @@ const UNHELD_CLONE: PoolClone = {
 
 // The part on the harness, over fakes that file each handle with
 // `consumer.track` as the real views do. `invoke` answers main's channel;
-// `selected` is the row the sessions fake shows.
 function startOnHarness(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
-  selected: string | null = null,
 ) {
   return startPagePart(unityPoolPagePart, {
     invoke,
@@ -44,7 +44,6 @@ function startOnHarness(
         sessionsPageKey,
         (consumer) =>
           ({
-            selectedSessionId: () => selected,
             activate() {},
             addRowPart: () => consumer.track({ dispose() {} }),
           }) as unknown as SessionsPageExports,
@@ -93,7 +92,7 @@ describe('unityPoolPagePart', () => {
         return run.promise;
       }
       return method === 'snapshot' ? snapshot : null;
-    }, ROW_ID);
+    });
     const panels: PanelInput[] = [];
     const capture: Layout = {
       panel(parent, input) {
@@ -110,11 +109,16 @@ describe('unityPoolPagePart', () => {
       ]),
       user: 'capture',
     });
-    harness.emit('sessions.sessionAdded', {
+    harness.state.publish(sessionsActiveSlot).set(ROW_ID);
+    harness.state.publish(sessionsRowsSlot).set(ROW_ID, {
       sessionId: ROW_ID,
       label: 'alpha 1',
+      project: 'alpha',
+      harness: 'claude',
+      marked: false,
       projectDir: CLONE_PATH,
       hostSessionId: 'host-1',
+      titles: { user: null, agent: null, firstMessage: null },
     });
     await vi.waitFor(() => expect(panels.length).toBeGreaterThan(0));
     const hold = () => panels[panels.length - 1].clones[0].action?.run();

@@ -1,11 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './primer.css';
 import type { Disposable } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { startAutosave } from '../../../shared/page/autosave';
 import {
@@ -14,9 +10,11 @@ import {
 } from '../../../shared/page/editor-boxes';
 import { activeForm } from '../../../shared/page/session-forms';
 import {
-  type SessionsPageEvents,
+  followRows,
+  sessionsActiveSlot,
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import type {
   PrimerChannel,
@@ -46,8 +44,7 @@ import { mountPrimerTab } from './primer-view';
 type PrimerApi = PageApi<
   typeof primerManifest,
   PrimerChannel,
-  PrimerPageEvents,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  PrimerPageEvents
 >;
 
 // Each box's edits reach the store, and a box taking focus shows its row and
@@ -103,8 +100,11 @@ function listenForPrimers(
       closed,
     ),
   );
-  api.events.on('sessions.activeChanged', ({ sessionId }) =>
-    store.dispatch({ type: 'sessionActivated', sessionId }),
+  api.state.read(sessionsActiveSlot).on((sessionId) =>
+    store.dispatch({
+      type: 'sessionActivated',
+      sessionId: sessionId ?? null,
+    }),
   );
   let isStopped = false;
   void api.channel
@@ -140,7 +140,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
     const store = createPrimerStore(
-      initialState([], sessions.selectedSessionId()),
+      initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
     );
     const boxes = createBoxes(api, store);
     const view = mountPrimerTab({
@@ -178,9 +178,9 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       toast: services.toast,
       log: services.log,
     });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
-      view.forgetSession(sessionId),
-    );
+    followRows(api.state.read(sessionsRowsSlot), {
+      removed: (sessionId) => view.forgetSession(sessionId),
+    });
     api.layouts.show<PrimerLayout>({
       defaultLayout,
       defaultStylesheet,

@@ -2,16 +2,14 @@ import '../../../shared/page/markdown.css';
 import './chat.css';
 import { coreScopeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
-  type SessionsPageEvents,
+  followRows,
+  sessionsActiveSlot,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import type {
   ChatChannel,
@@ -48,12 +46,7 @@ import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
 
-type ChatApi = PageApi<
-  typeof chatManifest,
-  ChatChannel,
-  ChatPageEvents,
-  QualifiedEvents<'sessions', SessionsPageEvents>
->;
+type ChatApi = PageApi<typeof chatManifest, ChatChannel, ChatPageEvents>;
 
 // Shows each chat session main holds in its session's Chat tab: the entries
 // under a floating composer holding the message box, the controls as chips
@@ -94,6 +87,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         services.log(`chat page load not sent: ${errorText(error)}`),
       );
     const sessions = api.dependency(sessionsPageKey);
+    const rows = api.state.read(sessionsRowsSlot);
+    const active = api.state.read(sessionsActiveSlot);
     const run = (command: string) => api.commands.run(command);
     const layouts = createChatLayouts(services.log);
     // What every surface's layout kit reads.
@@ -185,18 +180,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       paths: services.paths,
       homeDir: services.homeDir,
       sessions,
-      onSessionRemoved: (listener) =>
-        api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
-          listener(sessionId),
-        ),
+      activeSessionId: () => active.get() ?? null,
+      onSessionRemoved: (listener) => followRows(rows, { removed: listener }),
       onActiveChanged: (listener) =>
-        api.events.on('sessions.activeChanged', ({ sessionId }) =>
-          listener(sessionId),
-        ),
+        active.on((sessionId) => listener(sessionId ?? null)),
       onSessionHostChanged: (listener) =>
-        api.events.on('sessions.sessionHostChanged', ({ sessionId }) =>
-          listener(sessionId),
-        ),
+        followRows(rows, {
+          hostChanged: ({ sessionId }) => listener(sessionId),
+        }),
       onScopeChanged: (listener) =>
         api.state.read(coreScopeSlot).on(() => listener()),
       activeTimeListeners: [

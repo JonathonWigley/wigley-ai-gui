@@ -42,7 +42,6 @@ function startWorkflow() {
           ({
             addRowPart: noHandle(consumer),
             addTab: noHandle(consumer),
-            selectedSessionId: () => null,
             setActivity: () => undefined,
           }) as unknown as SessionsPageExports,
       ),

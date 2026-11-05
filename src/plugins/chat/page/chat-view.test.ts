@@ -132,8 +132,8 @@ function mounted(
       activate: noEvent,
       closeSession: noEvent,
       setActivity: noEvent,
-      selectedSessionId: () => null,
     },
+    activeSessionId: () => null,
     onSessionRemoved: (listener: (sessionId: string) => void) => {
       removeSession = listener;
     },

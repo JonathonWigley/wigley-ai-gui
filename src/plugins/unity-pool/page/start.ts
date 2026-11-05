@@ -1,9 +1,5 @@
 import type { Disposable } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
@@ -18,8 +14,10 @@ import type {
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import {
-  type SessionsPageEvents,
+  followRows,
+  sessionsActiveSlot,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import type { PoolAction, PoolState, UnityPoolChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -41,12 +39,7 @@ import {
   rowBadges,
 } from './pool-view-model';
 
-type UnityPoolApi = PageApi<
-  typeof unityPoolManifest,
-  UnityPoolChannel,
-  Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
->;
+type UnityPoolApi = PageApi<typeof unityPoolManifest, UnityPoolChannel>;
 
 const REDRAW_MS = 60_000;
 // After usage's details, which take the default order 0.
@@ -69,8 +62,8 @@ interface HeldWrapper {
 // Draws a badge under each session row for each clone it holds or queue it
 // waits in, and the right-bar panel of the shown session's pool, through the
 // `unity-pool.layout` layout. Reads main's `snapshot` once and applies each
-// `changed` after it; keeps each row's match keys from the sessions events and
-// the shown session from `sessions.activeChanged`; asks main for the shown
+// `changed` after it; reads each row's match keys from `sessions.rows` and
+// the shown session from `sessions.active`; asks main for the shown
 // session's folder's origin name once per folder while any pool exists. Hold
 // and Release run through main, one at a time per clone, each clone's last
 // result kept until the page reloads. Redraws all on each of those, on each
@@ -106,8 +99,8 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     let pools: readonly PoolState[] = [];
     // False until the `snapshot` reply or a `changed` lands.
     let hasSnapshot = false;
-    let shownSessionId = sessions.selectedSessionId();
-    const rows = new Map<string, PoolRow>();
+    const rows = api.state.read(sessionsRowsSlot);
+    const active = api.state.read(sessionsActiveSlot);
     const originNames = new Map<string, OriginEntry>();
     // Each pool's Hold and Release runs, by clone number.
     const pendingByPool = new Map<string, Map<number, PendingAction>>();
@@ -159,7 +152,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       if (row === undefined) {
         return;
       }
-      const badges = rowBadges(pools, [...rows.values()], row);
+      const badges = rowBadges(pools, [...rows.all().values()], row);
       for (const badge of badges) {
         holder.badges.push(
           layoutParts.draw(
@@ -173,8 +166,10 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       logBadges(row, badges);
     };
 
-    const shownRow = () =>
-      shownSessionId === null ? undefined : rows.get(shownSessionId);
+    const shownRow = () => {
+      const shownSessionId = active.get() ?? null;
+      return shownSessionId === null ? undefined : rows.get(shownSessionId);
+    };
 
     // Asks main once for the shown session's folder's origin name while any
     // pool exists; a rejection clears the entry so a later redraw asks again.
@@ -239,7 +234,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
 
     const drawPanel = (pool: PoolState, now: number) => {
       const input = withShownPaths(
-        panelInput(pool, [...rows.values()], now, pendingOf(pool.pool), {
+        panelInput(pool, [...rows.all().values()], now, pendingOf(pool.pool), {
           run: (action, clone) => runAction(pool.pool, action, clone),
           select: (sessionId) => sessions.activate(sessionId),
         }),
@@ -359,32 +354,11 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       },
       (error: unknown) => log(`snapshot not read: ${errorText(error)}`),
     );
-    api.events.on(
-      'sessions.sessionAdded',
-      ({ sessionId, label, projectDir, hostSessionId }) => {
-        rows.set(sessionId, { sessionId, label, projectDir, hostSessionId });
-        redraw();
-      },
-    );
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      rows.delete(sessionId);
-      loggedBadges.delete(sessionId);
-      redraw();
+    followRows(rows, {
+      removed: (sessionId) => loggedBadges.delete(sessionId),
     });
-    api.events.on(
-      'sessions.sessionHostChanged',
-      ({ sessionId, hostSessionId }) => {
-        const row = rows.get(sessionId);
-        if (row !== undefined) {
-          rows.set(sessionId, { ...row, hostSessionId });
-        }
-        redraw();
-      },
-    );
-    api.events.on('sessions.activeChanged', ({ sessionId }) => {
-      shownSessionId = sessionId;
-      redraw();
-    });
+    rows.on(() => redraw());
+    active.on(() => redraw());
     const tick = () => {
       redraw();
       services.timers.set(tick, REDRAW_MS);

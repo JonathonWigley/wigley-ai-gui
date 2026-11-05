@@ -5,9 +5,12 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
+import type { CoreEvents } from '../../../contracts/core-state';
 import {
-  type SessionsPageEvents,
-  sessionsPageKey,
+  followRows,
+  sessionsActiveSlot,
+  type SessionRow,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import type { NoteSession, NotesChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -21,45 +24,36 @@ type NotesApi = PageApi<
   typeof notesManifest,
   NotesChannel,
   Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  QualifiedEvents<'core', CoreEvents>
 >;
 
+// A row with no host session id can be neither attached nor named.
+function noteSessionOf(row: SessionRow | undefined): NoteSession | null {
+  if (row?.hostSessionId === undefined || row.hostSessionId === null) {
+    return null;
+  }
+  const { sessionId, harness, hostSessionId, projectDir } = row;
+  return { sessionId, harness, hostSessionId, projectDir };
+}
+
 // The note popup over any mode, on `Space n n`, drawn with the layout the
-// `layout` setting names. It keeps the open session rows that carry a host
-// session id, so the popup can attach one; a row with none can be neither
-// attached nor named.
+// `layout` setting names. It offers the popup the open session rows that carry
+// a host session id, so the popup can attach one.
 export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
     const { services } = api;
-    const sessions = api.dependency(sessionsPageKey);
-    const rows = new Map<string, NoteSession>();
+    const rows = api.state.read(sessionsRowsSlot);
+    const active = api.state.read(sessionsActiveSlot);
 
-    api.events.on('sessions.sessionAdded', (row) => {
-      const { sessionId, harness, hostSessionId, projectDir } = row;
-      if (hostSessionId !== null) {
-        rows.set(sessionId, { sessionId, harness, hostSessionId, projectDir });
-      }
-      services.log(`session ${hostSessionId ?? 'none'} listed`);
+    api.events.on('core.pageReady', () => {
+      followRows(rows, {
+        added: ({ hostSessionId }) =>
+          services.log(`session ${hostSessionId ?? 'none'} listed`),
+        hostChanged: ({ hostSessionId }) =>
+          services.log(`session moved to ${hostSessionId ?? 'none'}`),
+      });
     });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      rows.delete(sessionId);
-    });
-    api.events.on(
-      'sessions.sessionHostChanged',
-      ({ sessionId, hostSessionId }) => {
-        const row = rows.get(sessionId);
-        if (row === undefined) {
-          return;
-        }
-        if (hostSessionId === null) {
-          rows.delete(sessionId);
-          return;
-        }
-        rows.set(sessionId, { ...row, hostSessionId });
-        services.log(`session ${row.hostSessionId} moved to ${hostSessionId}`);
-      },
-    );
 
     const popup = createNotePopup({
       channel: api.channel,
@@ -75,10 +69,11 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       pushScope: (scope) => api.keys.pushScope(scope),
       autosaveDelayMs: () => api.settings().autosaveDelayMs,
       selectedSession: () => {
-        const selected = sessions.selectedSessionId();
-        return selected === null ? null : (rows.get(selected) ?? null);
+        const selected = active.get() ?? null;
+        return selected === null ? null : noteSessionOf(rows.get(selected));
       },
-      sessionRows: () => [...rows.values()],
+      sessionRows: () =>
+        [...rows.all().values()].flatMap((row) => noteSessionOf(row) ?? []),
       drops: api.drops,
       encoder: canvasEncoder,
     });

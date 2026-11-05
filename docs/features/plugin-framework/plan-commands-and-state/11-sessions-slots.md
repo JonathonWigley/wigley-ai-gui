@@ -1,6 +1,6 @@
 # 11 — Sessions rows and selection as slots
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 10 · Depends on: 10
 Plan: [plan.md](plan.md)

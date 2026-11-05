@@ -1,4 +1,5 @@
 import './workflow.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   PageApi,
@@ -9,8 +10,10 @@ import { errorText } from '../../../shared/error-text';
 import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
 import { docsPageKey } from '../../docs/contract';
 import {
-  type SessionsPageEvents,
+  followRows,
+  sessionsActiveSlot,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import type {
   PageStage,
@@ -33,7 +36,7 @@ type WorkflowApi = PageApi<
   typeof workflowManifest,
   WorkflowChannel,
   Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // The workflow commands a key runs on the selected session.
@@ -49,14 +52,6 @@ type SessionCommand =
   | 'toggleFinishedWaves';
 
 const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
-
-// A session the page heard of: its name in the log (its side bar label), its
-// project folder and its host session id.
-interface HeardSession {
-  name: string;
-  projectDir: string | null;
-  hostSessionId: string | null;
-}
 
 // Draws each session's flow as a chip under its row, a strip above its Chat
 // composer and a side pane beside its transcript, through the
@@ -74,17 +69,17 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     const chat = api.dependency(chatPageKey);
     const docs = api.dependency(docsPageKey);
-    const heard = new Map<string, HeardSession>();
+    const rows = api.state.read(sessionsRowsSlot);
     const flows = new Map<string, SessionFlow>();
     const stages = createStageList<PageStage>();
 
     const nameOf = (sessionId: string) =>
-      heard.get(sessionId)?.name ?? sessionId;
+      rows.get(sessionId)?.label ?? sessionId;
     const isPreview = (sessionId: string) => preview.flowOf(sessionId) !== null;
     const flowOf = (sessionId: string): SessionFlow =>
       preview.flowOf(sessionId) ??
       flows.get(sessionId) ??
-      newFlow(sessionId, heard.get(sessionId)?.projectDir ?? '');
+      newFlow(sessionId, rows.get(sessionId)?.projectDir ?? '');
 
     const view = createWorkflowView({
       kit: {
@@ -116,9 +111,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const preview = createPreview({
       openChatPreview: () => api.commands.run('chat.openPreview'),
       previewSessionId: () =>
-        [...heard].find(
-          ([, session]) => session.hostSessionId === CHAT_PREVIEW_HOST_ID,
-        )?.[0] ?? null,
+        [...rows.all().values()].find(
+          (row) => row.hostSessionId === CHAT_PREVIEW_HOST_ID,
+        )?.sessionId ?? null,
       showFlow: view.setFlow,
       closed: (sessionId) => view.setFlow(flowOf(sessionId)),
       clock: services.clock,
@@ -144,31 +139,16 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     chat.addComposerPart(view.stripPart);
     chat.addSidePart(view.sidePart);
 
-    api.events.on(
-      'sessions.sessionAdded',
-      ({ sessionId, label, projectDir, hostSessionId }) => {
-        heard.set(sessionId, {
-          name: label,
-          projectDir,
-          hostSessionId,
-        });
-        preview.sessionAdded(sessionId, hostSessionId);
-      },
-    );
-    api.events.on(
-      'sessions.sessionHostChanged',
-      ({ sessionId, hostSessionId }) => {
-        const session = heard.get(sessionId);
-        if (session !== undefined) {
-          session.hostSessionId = hostSessionId;
-        }
-      },
-    );
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      preview.sessionRemoved(sessionId);
-      heard.delete(sessionId);
-      flows.delete(sessionId);
-      view.forget(sessionId);
+    api.events.on('core.pageReady', () => {
+      followRows(rows, {
+        added: ({ sessionId, hostSessionId }) =>
+          preview.sessionAdded(sessionId, hostSessionId),
+        removed(sessionId) {
+          preview.sessionRemoved(sessionId);
+          flows.delete(sessionId);
+          view.forget(sessionId);
+        },
+      });
     });
 
     // A flows read is stale for each session a `flows` push touched since the
@@ -218,7 +198,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     });
 
     const runOnSelected = (command: SessionCommand) => () => {
-      const sessionId = sessions.selectedSessionId();
+      const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;

@@ -246,7 +246,6 @@ function setUp(
     },
     mark: (sessionId) => marked.push(sessionId),
     activate: (sessionId) => activated.push(sessionId),
-    selectedSessionId: () => selectedSessionId,
     setTitle: (sessionId, source, title) => {
       titleCalls.push([sessionId, source, title]);
       const held = titles.get(sessionId);
@@ -262,6 +261,7 @@ function setUp(
   const chat = createChatSessions({
     harnesses,
     sessions,
+    selectedSessionId: () => selectedSessionId,
     profiles: () => profiles,
     randomUuid: () => {
       uuidCalls++;

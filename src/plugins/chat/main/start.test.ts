@@ -20,6 +20,7 @@ import {
   type AgentSession,
   type SessionsMainExports,
   sessionsMainKey,
+  sessionsSelectionSlot,
   type SessionTitles,
   type TitleSource,
   type ToolDefinition,
@@ -335,6 +336,12 @@ function startChatPart(
         return { dispose: () => undefined };
       },
       emit: (event: string, data: unknown) => emitted.push({ event, data }),
+    },
+    state: {
+      read: () => ({
+        get: () => null,
+        on: () => ({ dispose: () => undefined }),
+      }),
     },
     settings: () => ({
       profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
@@ -1067,7 +1074,6 @@ function startChatOnHarness() {
               return owned;
             },
             activate() {},
-            selectedSessionId: () => null,
             setTitle() {},
             titles: () => null,
           }) as unknown as SessionsMainExports,
@@ -1096,6 +1102,25 @@ describe('chat main part on the harness', () => {
     await harness.restart();
 
     expect(harness.started().exports).toBeTypeOf('function');
+  });
+
+  it('selectionWrite_SavesTheSelectedSession', async () => {
+    const { harness } = startChatOnHarness();
+    await settleFiles();
+    harness.invoke('start', { projectDir: '/p', profile: 'work' });
+    await settleFiles();
+
+    harness.state.publish(sessionsSelectionSlot).set('row-1');
+    await settleFiles();
+
+    const saved = JSON.parse(
+      await harness.files.read(`/data/chat/${OPEN_SESSIONS_FILE}`),
+    ) as {
+      sessions: { hostSessionId: string }[];
+      selectedHostSessionId: string | null;
+    };
+    expect(saved.selectedHostSessionId).toBe(saved.sessions[0].hostSessionId);
+    await harness.stop();
   });
 
   it('stop_DetachesTheProcessEndsItsRowAndSavesOnceFirst', async () => {

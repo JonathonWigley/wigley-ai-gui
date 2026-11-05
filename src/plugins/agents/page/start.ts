@@ -1,20 +1,11 @@
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import type { SessionsPageEvents } from '../../sessions/contract';
+import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import type { AgentsChannel, AgentsPageExports } from '../contract';
 import { agentsManifest } from '../manifest';
 import { createPageRosters } from './rosters';
 
-type AgentsApi = PageApi<
-  typeof agentsManifest,
-  AgentsChannel,
-  Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
->;
+type AgentsApi = PageApi<typeof agentsManifest, AgentsChannel>;
 
 // Keeps each session's roster and exports it; draws nothing. Hears main's
 // `rosterChanged`, filled in by one `rosters` read, which a `rosterChanged`
@@ -26,8 +17,8 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
     const { services } = api;
     const rosters = createPageRosters({ log: services.log });
 
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      rosters.forget(sessionId);
+    followRows(api.state.read(sessionsRowsSlot), {
+      removed: (sessionId) => rosters.forget(sessionId),
     });
     api.channel.on('rosterChanged', ({ sessionId, roster }) => {
       rosters.set(sessionId, roster);

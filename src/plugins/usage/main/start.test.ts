@@ -19,8 +19,7 @@ import {
 } from '../../chat/contract';
 import {
   type SessionsMainEvents,
-  type SessionsMainExports,
-  sessionsMainKey,
+  sessionsSelectionSlot,
 } from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
 import type { UsageSelfTestDeps } from './selftest-script';
@@ -101,9 +100,6 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const chat: Pick<ChatMainExports, 'profiles'> = {
     profiles: () => [PERSONAL],
   };
-  const sessions: Pick<SessionsMainExports, 'selectedSessionId'> = {
-    selectedSessionId: () => SELECTED,
-  };
   const api = {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -120,6 +116,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       },
     },
+    state: { read: () => ({ get: () => SELECTED }) },
     settings: () => ({ pollIntervalSeconds: 300, layout: 'default' }),
     onSettingsChanged: () => ({ dispose: () => undefined }),
     services: {
@@ -137,8 +134,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
       selfTest: { run: () => undefined },
     },
     drive: drive.host,
-    dependency: (key: { id: string }) =>
-      ({ chat, sessions })[key.id as 'chat' | 'sessions'] ?? {},
+    dependency: (key: { id: string }) => ({ chat })[key.id as 'chat'] ?? {},
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
   usageMainPart.start(api);
@@ -427,19 +423,12 @@ describe('sessionUsage', () => {
 // Usage's main part on the harness in a drive run, its one harness's `planUsage`
 // answering with `read`.
 function startOnHarness(read: () => Promise<PlanUsage>) {
-  return startMainPart(usageMainPart, {
+  const harness = startMainPart(usageMainPart, {
     drive: true,
     dependencies: [
       fakeDependency(
         chatMainKey,
         () => ({ profiles: () => [PERSONAL] }) as unknown as ChatMainExports,
-      ),
-      fakeDependency(
-        sessionsMainKey,
-        () =>
-          ({
-            selectedSessionId: () => SELECTED,
-          }) as unknown as SessionsMainExports,
       ),
     ],
     services: {
@@ -448,6 +437,8 @@ function startOnHarness(read: () => Promise<PlanUsage>) {
       ],
     },
   });
+  harness.state.publish(sessionsSelectionSlot).set(SELECTED);
+  return harness;
 }
 
 describe('usageMainPart lifecycle', () => {

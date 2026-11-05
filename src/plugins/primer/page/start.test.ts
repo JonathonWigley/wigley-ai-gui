@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageCommandContext } from '../../../contracts/plugin';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   countingEditors,
@@ -9,6 +10,11 @@ import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
+import {
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
+} from '../../sessions/contract';
+import { sessionRow } from '../../sessions/page/session-fakes';
 import { sessionsPagePart } from '../../sessions/page/start';
 import type { PresentedPrimer } from '../contract';
 import { primerPagePart } from './start';
@@ -29,7 +35,11 @@ describe('primer page part', () => {
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
       parts: [sessionsPagePart],
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
     harness.send('formShown', presentedPrimer('p1'));
     expect(editors.live()).toBeGreaterThan(0);
@@ -47,7 +57,11 @@ describe('primer page part', () => {
     const harness = startPagePart(primerPagePart, {
       parts: [sessionsPagePart],
       invoke: () => read.promise,
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
 
     await harness.stop();
@@ -70,7 +84,11 @@ describe('primer page part', () => {
         }
         return new Promise(() => undefined);
       },
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
     harness.send('formShown', presentedPrimer('p1'));
     editors.type('typed');
@@ -94,11 +112,20 @@ describe('primer page part', () => {
       parts: [sessionsPagePart],
       invoke: (method) =>
         method === 'finish' ? finishing.promise : new Promise(() => undefined),
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
     const primer = presentedPrimer('p1');
     harness.send('formShown', primer);
-    harness.emit('sessions.activeChanged', { sessionId: primer.sessionId });
+    harness.state
+      .publish(sessionsRowsSlot)
+      .set(primer.sessionId, sessionRow(primer.sessionId));
+    harness.state.publish(sessionsSelectionSlot).set(primer.sessionId);
+    harness.emit('core.pageReady', null);
+    await settle();
     const { commands } = harness.started();
     commands.openReview({} as PageCommandContext);
     commands.askCancel({} as PageCommandContext);
@@ -120,7 +147,11 @@ describe('primer page part', () => {
     const harness = startPagePart(primerPagePart, {
       parts: [sessionsPagePart],
       invoke: async () => [presentedPrimer('p1')],
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
 
     await settle();

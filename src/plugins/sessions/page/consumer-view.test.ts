@@ -37,7 +37,6 @@ function fakeExports() {
         disposes.barPart++;
       },
     }),
-    selectedSessionId: () => null,
     activate: () => undefined,
     closeSession: () => undefined,
     setActivity: (sessionId, sourceId, activity) =>

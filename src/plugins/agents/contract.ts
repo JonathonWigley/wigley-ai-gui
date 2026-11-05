@@ -72,7 +72,7 @@ export interface Roster {
 // What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, all three
 // lists empty for a session with none; `onRosterChanged` calls `listener` with a session's id each time its roster
 // changes, the first `rosters` read included. A removed session's roster is dropped without a call: views hear
-// `sessions.sessionRemoved`.
+// `sessions.rows`.
 export interface AgentsPageExports {
   roster(sessionId: string): Roster;
   onRosterChanged(listener: (sessionId: string) => void): Disposable;

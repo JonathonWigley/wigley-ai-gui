@@ -166,7 +166,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     `compactionStarted` and `compactionEnded` agent event into the session's `compaction`
     (`docs/features/auto-compact/design.md`). Every session draws a line:
     one with no usage event yet (a new chat, a restored row before its saved usage is read, a session usage does not
-    track) draws a zero line, its context `0k` with no cache or spend. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
+    track) draws a zero line, its context `0k` with no cache or spend. The line redraws on each snapshot, each write of the `sessions.active` slot, each layouts set and the
     minute tick. Each surface logs `<label> in <name>: <text>` under its own plugin when a session's text
     changes (`context line` for the composer's line, `spend` for the status part, `session line` for the tab-bar line, `row session line` for the row line, `row cache session line` for the cache mark), `<name>` the session's side-bar label (its id while none is known).
   - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its

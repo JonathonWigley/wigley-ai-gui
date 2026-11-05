@@ -13,6 +13,7 @@ import {
 import { createRegistrations } from '../../../shared/registrations';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
 import {
+  sessionsActiveSlot,
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
@@ -41,7 +42,7 @@ const SNAPSHOT: UsageSnapshot = {
 // `consumer.track`, as the real views do. `invoke` answers the part's
 // `channel.invoke`.
 function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
-  return startPagePart(usagePagePart, {
+  const harness = startPagePart(usagePagePart, {
     invoke,
     dependencies: [
       fakeDependency(
@@ -56,12 +57,13 @@ function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
         sessionsPageKey,
         (consumer) =>
           ({
-            selectedSessionId: () => 's1',
             addRowPart: () => consumer.track({ dispose() {} }),
           }) as unknown as SessionsPageExports,
       ),
     ],
   });
+  harness.state.publish(sessionsActiveSlot).set('s1');
+  return harness;
 }
 
 describe('usagePagePart', () => {

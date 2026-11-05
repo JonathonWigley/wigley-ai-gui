@@ -26,6 +26,8 @@ import {
   type SessionsChannel,
   type SessionsMainEvents,
   type SessionsMainExports,
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionsManifest } from '../manifest';
@@ -68,12 +70,12 @@ function createList(api: SessionsApi): SessionList {
     clock: api.services.clock,
     log: api.services.log,
     emit: (event, data) => api.events.emit(event, data),
-    stateChanged: (state) => api.channel.send('stateChanged', state),
+    rows: api.state.publish(sessionsRowsSlot),
+    selection: api.state.publish(sessionsSelectionSlot),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
     projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
   });
-  api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId) =>
     list.closeSession(sessionId),
@@ -264,7 +266,6 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       activate: (sessionId) => list.activate(sessionId),
       activateExistingRow: (sessionId) => list.activateExistingRow(sessionId),
       release: (sessionId) => list.release(sessionId),
-      selectedSessionId: () => list.selectedSessionId(),
       label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
       setTitle: (sessionId, source, title) =>

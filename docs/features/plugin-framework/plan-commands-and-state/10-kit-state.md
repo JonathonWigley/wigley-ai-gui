@@ -1,6 +1,6 @@
 # 10 — Layouts read slots
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 9 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -150,3 +150,5 @@ Done when: `npm run typecheck` passes; `grep -n 'recordAnchor?' src/shared/page/
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 265ca654 · proof: Diff stat and kit diffs read; kit.state.read present; typecheck and lint clean; the recordAnchor? grep prints nothing. · concerns: The shell's layoutState wiring reaches no test (task 16); no single test runs a layout that subscribes, throws and then hears nothing; a layout calling on inside its own listener adds a subscription each time; AGENTS.md does not list the new fake (task 15).

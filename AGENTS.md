@@ -362,8 +362,8 @@ round; primer: an open primer), since main, not the page, decides.
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
   the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
   argument as `arg`, checked at load.
-- **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
-  `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
+- **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
+  `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
 - **The shell** is a registry of areas — title bar, activity bar, side bar, main, right bar, panel, status bar, overlay — laid
@@ -394,7 +394,7 @@ round; primer: an open primer), since main, not the page, decides.
   to each session it starts, and docs a Docs tab to each session when it connects. A tab that
   needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
   before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
-  `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
+  each plugin forgets the session when its row leaves the `sessions.rows` slot (`followRows`); the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`. A tab names its Codicon (`icon`), and
   the tab bar draws it with the title as its tooltip.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands

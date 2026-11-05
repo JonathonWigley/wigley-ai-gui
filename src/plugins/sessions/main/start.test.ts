@@ -16,12 +16,18 @@ import { osPlatform } from '../../../shared/os-platform';
 import { fakePlatform } from '../../../shared/platform.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
+  createSlotStore,
+  type SlotStore,
+} from '../../../shared/state/slot-store';
+import {
   type ConnectedSession,
   type OwnedSession,
   RELAY_PROTOCOL,
   type RelayHello,
   type SessionInfo,
   type SessionsMainExports,
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
   type ToolResult,
   type ToolSession,
 } from '../contract';
@@ -202,6 +208,7 @@ function startSessionsPart(
     send = () => undefined,
     originRepoName = () => Promise.resolve(null),
     agentHarnesses = [],
+    state = createSlotStore(() => undefined),
   }: {
     runMode?: 'selfTest' | 'live';
     homeDir?: string;
@@ -209,12 +216,14 @@ function startSessionsPart(
     send?: (message: string, payload: unknown) => void;
     originRepoName?: (projectDir: string) => Promise<string | null>;
     agentHarnesses?: { id: string; sessionName: unknown }[];
+    state?: SlotStore;
   } = {},
 ) {
   let hex = 0;
   const api = {
     channel: { handle: () => undefined, send },
     events: { emit: () => undefined, on: () => undefined },
+    state,
     settings: () => ({ layout: 'default', titleMaxLength }),
     services: {
       randomHex: () => (++hex).toString(16),
@@ -322,15 +331,17 @@ describe('sessions main part', () => {
   );
 
   it.each([
-    { case: 'running', disposed: false, messages: ['stateChanged'] },
-    { case: 'disposed', disposed: true, messages: [] },
+    { case: 'running', disposed: false, writes: ['sessions.rows'] },
+    { case: 'disposed', disposed: true, writes: [] },
   ])(
-    'a project lookup landing while the part is $case sends $messages',
-    async ({ disposed, messages }) => {
+    'a project lookup landing while the part is $case writes $writes',
+    async ({ disposed, writes }) => {
       const lookup = Promise.withResolvers<string | null>();
-      const sent: string[] = [];
+      const written: string[] = [];
+      const state = createSlotStore(() => undefined);
+      state.onWrite((change) => written.push(change.id));
       const started = startSessionsPart(10, {
-        send: (message) => sent.push(message),
+        state,
         originRepoName: () => lookup.promise,
       });
       const exports = viewOf(started);
@@ -344,14 +355,34 @@ describe('sessions main part', () => {
       if (disposed) {
         await started.dispose?.();
       }
-      sent.length = 0;
+      written.length = 0;
 
       lookup.resolve('repo');
       await new Promise((settle) => setImmediate(settle));
 
-      expect(sent).toEqual(messages);
+      expect(written).toEqual(writes);
     },
   );
+
+  it('dispose_EmptiesTheRowsThroughTheWriter', async () => {
+    const send = vi.fn();
+    const state = createSlotStore(() => undefined);
+    const started = startSessionsPart(10, { state, send });
+    const { session } = viewOf(started).connect({
+      sessionId: 'host-1',
+      projectDir: null,
+      deadlineSeconds: null,
+      harness: 'claude',
+    });
+    viewOf(started).mark(session.id);
+    expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(1);
+
+    await started.dispose?.();
+
+    expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(0);
+    expect(state.read(sessionsSelectionSlot, 'test').get()).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
 
   it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
     const exports = viewOf(startSessionsPart(10));

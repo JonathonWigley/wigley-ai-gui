@@ -13,6 +13,7 @@ import {
 import {
   type SessionsMainEvents,
   sessionsMainKey,
+  sessionsSelectionSlot,
 } from '../../sessions/contract';
 import type { UsageChannel, UsageSnapshot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -182,7 +183,8 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     if (api.drive !== null) {
       addDriveActions(api.drive, {
         clock: services.clock,
-        selectedSessionId: () => sessions.selectedSessionId(),
+        selectedSessionId: () =>
+          api.state.read(sessionsSelectionSlot).get() ?? null,
         snapshot,
         seed,
         pollNow,

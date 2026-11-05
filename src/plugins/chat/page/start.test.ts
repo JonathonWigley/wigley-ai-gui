@@ -10,6 +10,7 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
+  sessionsRowsSlot,
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
@@ -72,7 +73,6 @@ function startChatPage(
             addRowPart: () => consumer.track({ dispose() {} }),
             activate() {},
             setActivity() {},
-            selectedSessionId: () => null,
           }) as unknown as SessionsPageExports,
       ),
     ],
@@ -144,7 +144,18 @@ describe('chat page part', () => {
     const harness = startChatPage(noSessions, destroyEditor);
     harness.send('sessionStarted', SESSION);
 
-    harness.emit('sessions.sessionRemoved', { sessionId: SESSION.sessionId });
+    const rows = harness.state.publish(sessionsRowsSlot);
+    rows.set(SESSION.sessionId, {
+      sessionId: SESSION.sessionId,
+      label: 'row',
+      project: 'project',
+      harness: 'claude',
+      marked: false,
+      projectDir: null,
+      hostSessionId: null,
+      titles: { user: null, agent: null, firstMessage: null },
+    });
+    rows.delete(SESSION.sessionId);
 
     expect(destroyEditor).toHaveBeenCalledOnce();
     await harness.stop();

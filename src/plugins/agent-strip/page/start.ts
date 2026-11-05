@@ -3,14 +3,14 @@ import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
 import { agentsPageKey } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
 import {
-  type SessionsPageEvents,
+  followRows,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -22,8 +22,7 @@ import { readAgentStripLayout } from './layout/read-agent-strip-layout';
 type AgentStripApi = PageApi<
   typeof agentStripManifest,
   ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  Record<never, never>
 >;
 
 // Draws each Chat tab's agent strip above its composer box through chat's
@@ -35,8 +34,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
   start(api: AgentStripApi) {
     const { services } = api;
     const chat = api.dependency(chatPageKey);
-    // Each session's name in the log, its side-bar label (`gamma 2`).
-    const names = new Map<string, string>();
+    const rows = api.state.read(sessionsRowsSlot);
     const strip = createAgentStrip({
       kit: {
         markdown: services.markdown,
@@ -54,18 +52,12 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       agents: api.dependency(agentsPageKey),
       cutTitle: api.dependency(sessionsPageKey).cutToTitleLimit,
       setScope: () => api.keys.setScope('strip'),
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
+      nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
       createScroller: createHScroller,
     });
     chat.addComposerPart(strip.part);
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
-      names.set(sessionId, label);
-    });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      names.delete(sessionId);
-      strip.forget(sessionId);
-    });
+    followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });
 
     api.layouts.show<Layout>({
       defaultLayout,

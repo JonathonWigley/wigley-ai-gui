@@ -183,8 +183,9 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   homeDir: string;
   sessions: Pick<
     SessionsPageExports,
-    'addTab' | 'activate' | 'closeSession' | 'setActivity' | 'selectedSessionId'
+    'addTab' | 'activate' | 'closeSession' | 'setActivity'
   >;
+  activeSessionId(): string | null;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
@@ -387,7 +388,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       drawTurn(tab);
       if (isTurnEnded) {
         tab.entries.latest();
-        const focused = deps.sessions.selectedSessionId() === sessionId;
+        const focused = deps.activeSessionId() === sessionId;
         tab.unseen = unseenAfterTurnEnd(
           tab.unseen,
           focused,

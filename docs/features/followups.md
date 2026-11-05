@@ -457,9 +457,8 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   structured setting (chat's profiles, docs' config folders) cannot contribute its editor. A plugin registers a
   control kind with its row editor and its layout part, and the `control` field becomes a string so a new kind does
   not break a user settings layout. The layout name picker (Features) is then one such kind.
-- **Sessions queries and row decorations** — *needs a feature plan*: `activeChanged` landed; still missing are
-  `rows()` (page) and `sessions()` (main) queries so a late plugin sees live sessions (slots in the plugin state
-  registry, Foundations, rather than hand-written queries), a page `tabShown` event,
+- **Sessions queries and row decorations** — *needs a feature plan*: the `sessions.rows`, `sessions.selection` and
+  `sessions.active` slots show a late plugin the live sessions; still missing are a page `tabShown` event,
   `SessionTabView.hidden()` beside `shown()`, `setStatus` replaced by a row part (row parts landed and are the row
   decoration seam; `setStatus` lines overwrite each other), and one job per close seam (`beforeClose` on the page and
   `addCloseGuard` in main both carry forms' "open round" today; `plugin-framework/design.md` § Commands and state). With it, two tabs' take-overs released
@@ -743,8 +742,8 @@ because the earlier items rewrite many of these tests anyway.
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
 - **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the docs page hears
-  `sessions.sessionHostChanged` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
-  shown (`src/plugins/docs/page/start.ts`, `docs-view.ts`). No test pins it: the docs page has no unit test file, and
+  a row's host id change through `followRows` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
+  shown (`src/plugins/docs/page/start.ts`, `docs-view.ts`). No test pins it: the docs page's `start.test.ts` has no row with a shown tab, and
   the chat self-test's clear step never shows chat-second's Docs tab. Either give the docs page a test seam with a row
   for a shown tab (rebuilds) and an unshown one (does nothing), or add a self-test step that shows the Docs tab before
   the clear and expects a rebuild line after it.

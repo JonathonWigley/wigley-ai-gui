@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SlotChange, SlotKey } from '../../contracts/state';
 import { createSlotHolder } from './slot-holder';
 
@@ -31,6 +31,30 @@ describe('createSlotHolder', () => {
       [1, { id: 'p.v', kind: 'value', value: 1 }],
       [2, { id: 'p.v', kind: 'value', value: 2 }],
     ]);
+  });
+
+  it('mainWrite_QuitGatedPush_KeepsValueAndMovesSeq', () => {
+    let hasQuitStarted = false;
+    const page = { send: vi.fn() };
+    const livePage = () => page;
+    const holder = createSlotHolder(
+      () => undefined,
+      (seq, change) => {
+        const target = hasQuitStarted ? null : livePage();
+        target?.send(seq, change);
+      },
+    );
+    const writer = holder.store.publish(mainSlot);
+    writer.set(1);
+    const seqBeforeQuit = holder.snapshot().seq;
+    page.send.mockClear();
+
+    hasQuitStarted = true;
+    writer.set(2);
+
+    expect(page.send).not.toHaveBeenCalled();
+    expect(holder.store.read(mainSlot, 'test').get()).toBe(2);
+    expect(holder.snapshot().seq).toBeGreaterThan(seqBeforeQuit);
   });
 
   it('pageWrite_MovesSeqAndDoesNotPush', () => {

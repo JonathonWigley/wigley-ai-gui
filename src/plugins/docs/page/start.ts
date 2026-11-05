@@ -1,7 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
-import { coreModeSlot } from '../../../contracts/core-state';
+import { type CoreEvents, coreModeSlot } from '../../../contracts/core-state';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -21,9 +21,11 @@ import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import {
+  followRows,
+  type SessionRow,
   type SessionTabHandle,
-  type SessionsPageEvents,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
   type DocsChannel,
@@ -52,7 +54,7 @@ type DocsApi = PageApi<
   typeof docsManifest,
   DocsChannel,
   Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // A view `addView` handed out.
@@ -422,7 +424,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return { handle, view: added.view };
     };
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, projectDir }) => {
+    const addSessionDocs = ({ sessionId, projectDir }: SessionRow) => {
       const added = addView(sessionSourceId(sessionId), {
         isVisible: () => held.tab?.isVisible() === true,
       });
@@ -447,22 +449,27 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         },
         shown: () => held.view.shown(),
       });
-    });
+    };
     // The tab goes first, so it never holds a disposed view.
     const disposeSessionDocs = (held: SessionDocs) => {
       callEach([held.tab, held.view], (part) => part?.dispose());
     };
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
+    const removeSessionDocs = (sessionId: string) => {
       const held = sessionDocs.get(sessionId);
       if (held === undefined) {
         return;
       }
       sessionDocs.delete(sessionId);
       disposeSessionDocs(held);
-    });
-    // Main replaces a session's index source when its host id changes.
-    api.events.on('sessions.sessionHostChanged', ({ sessionId }) => {
-      sessionDocs.get(sessionId)?.docsView.sourceReplaced();
+    };
+    api.events.on('core.pageReady', () => {
+      followRows(api.state.read(sessionsRowsSlot), {
+        added: addSessionDocs,
+        removed: removeSessionDocs,
+        // Main replaces a session's index source when its host id changes.
+        hostChanged: ({ sessionId }) =>
+          sessionDocs.get(sessionId)?.docsView.sourceReplaced(),
+      });
     });
 
     const addedViewOf = (view: DocsView): AddedView | undefined =>
