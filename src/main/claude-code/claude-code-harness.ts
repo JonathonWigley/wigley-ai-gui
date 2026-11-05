@@ -509,10 +509,12 @@ function createClaudeSession(
     },
     interrupt() {
       requireRunning();
-      if (state.activity !== 'working') {
+      const isTurnWorking = state.activity === 'working';
+      const runningTaskIds = state.backgroundTaskIds;
+      if (!isTurnWorking && runningTaskIds.length === 0) {
         return;
       }
-      if (state.graceDeadline !== null) {
+      if (isTurnWorking && state.graceDeadline !== null) {
         // A call makes this notice, not a line: a replay cannot rebuild it, so
         // its id stays outside `noticeCount`.
         const entry: ChatEntry = {
@@ -537,6 +539,14 @@ function createClaudeSession(
         request: { subtype: 'interrupt' },
       });
     },
+      // Claude's interrupt leaves a main agent's background Bash running.
+      for (const taskId of runningTaskIds) {
+        writeMessage({
+          type: 'control_request',
+          request_id: nextRequestId(),
+          request: { subtype: 'stop_task', task_id: taskId },
+        });
+      }
     setControl(id, value) {
       requireRunning();
       const control = controlOf(id);

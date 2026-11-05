@@ -112,6 +112,7 @@ export function heldUserMessage({ draft }: HeldMessage): UserMessage {
 export type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
+  | { kind: 'stopTask'; taskId: string }
   | { kind: 'contextUsage' }
   | { kind: 'initialize' };
 
@@ -178,6 +179,8 @@ export interface SessionFoldState {
   lastStderr: string | null;
   // The interrupt grace's end, epoch ms; null when none is pending.
   graceDeadline: number | null;
+  // The background tasks the CLI last listed as running.
+  backgroundTaskIds: string[];
   // True from a turn's end until the next `get_context_usage` `in` line.
   isContextRequestOwed: boolean;
   // Subtype by request id, from a host request's `out` line until the `in` line
@@ -238,6 +241,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     lastUsageEvent: null,
     lastStderr: null,
     graceDeadline: null,
+    backgroundTaskIds: [],
     isContextRequestOwed: false,
     owedHostRequests: new Map(),
     compaction: {
@@ -815,6 +819,11 @@ function foldRequestLine(
     state.isContextRequestOwed = false;
   } else if (request.subtype === 'initialize') {
     state.pendingRequests.set(requestId, { kind: 'initialize' });
+  } else if (request.subtype === 'stop_task') {
+    state.pendingRequests.set(requestId, {
+      kind: 'stopTask',
+      taskId: asString(request.task_id),
+    });
   } else if (request.subtype === 'interrupt') {
     state.pendingRequests.set(requestId, { kind: 'interrupt' });
     state.graceDeadline = at + INTERRUPT_GRACE_MS;
@@ -1008,6 +1017,15 @@ function answerControlResponse(
     pushUsage(state, at, effects);
     return;
   }
+  if (pending.kind === 'stopTask') {
+    if (response.error !== null) {
+      effects.push({
+        kind: 'log',
+        text: `stop_task ${pending.taskId} failed: ${response.error}`,
+      });
+    }
+    return;
+  }
   if (pending.kind === 'interrupt') {
     if (response.error !== null) {
       pushNotice(
@@ -1094,6 +1112,9 @@ function foldOutLine(
     foldInitNames(state, decoded.commands, effects);
   }
   foldLineUsage(state, decoded, at, effects);
+  if (decoded.backgroundTaskIds !== null) {
+    state.backgroundTaskIds = decoded.backgroundTaskIds;
+  }
   if (decoded.controlResponse !== null) {
     answerControlResponse(state, decoded.controlResponse, at, effects);
   }

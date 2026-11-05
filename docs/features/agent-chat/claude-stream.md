@@ -2,6 +2,7 @@ Measured on `claude --version` → `2.1.304 (Claude Code)`, 2026-10-20, macOS.
 
 § Subagents and § Compaction's opening probe measured on 2.1.316, 2026-11-01. § Queued messages, § Message lifecycle
 and § Interrupt's idle case measured on 2.1.317, 2026-11-02. § Compaction's subsections measured on 2.1.318, 2026-11-03.
+§ Subagents' Probe 7 measured on 2.1.318, 2026-11-04.
 
 # Claude Code stream-json wire facts
 
@@ -1114,6 +1115,27 @@ The end event ties to the Agent call by `task_notification.tool_use_id` equal to
   with `agent_id`). The process exited with code 0. No follow-up turn ran.
 - A subagent's end therefore comes as `task_notification` in every case measured (`completed`, `stopped`), so an
   adapter finishes a subagent on that line, keyed by `tool_use_id`, and need not wait for the Agent call's `tool_result`.
+
+**Probe 7, what stops background work** (2.1.318). One run per row, haiku, with a subagent or background Bash waiting on
+a 60 s command. "Stopped" is `task_notification` `status: "stopped"` in the same 10 ms as the request.
+
+| Request | Main turn | Background work | Result |
+|---|---|---|---|
+| `interrupt` | idle, in a tool, or streaming | subagent | stopped; a turn's `result` is `error_during_execution` |
+| `interrupt` | at the Agent `tool_use` or at `task_started`, in the launching turn | subagent | stopped, the launch line printed first when it had not been |
+| `interrupt` | idle or in a tool | main agent's background Bash | **keeps running**: `completed` at 60 s, and Claude then runs a turn of its own to report it |
+| `interrupt` | idle | a subagent and that subagent's own background Bash | both stopped; the Bash's lines come last, 10 ms later |
+| `stop_task` | idle | subagent | stopped, then Claude runs a turn of its own |
+| `stop_task` | idle | main agent's background Bash | stopped; no turn within 15 s |
+| `stop_task` | in a tool | subagent or background Bash | stopped; the main turn keeps running |
+
+- The request is `{"type":"control_request","request_id":"…","request":{"subtype":"stop_task","task_id":"<task_id>"}}`,
+  and its reply is `success` with `response: {}`, an id that names no task included.
+- `interrupt` then `stop_task` for each id `background_tasks_changed` last listed, written together, ended a subagent and
+  a background Bash at once, idle and in a turn, with no turn of Claude's own in the next 20 s. Each order of the two
+  requests ended a Bash alone the same way.
+- `background_tasks_changed` lists backgrounded tasks only: a foreground Bash, the main agent's or a subagent's, is not
+  in it, and each ends with what owns it.
 
 **Not observed:** `task_notification` `status: "failed"`, a subagent that spawns its own subagent (`spawn_depth` was 1
 in every probe), a subagent `stream_event`, a `<task-notification>` user message, and a background subagent running

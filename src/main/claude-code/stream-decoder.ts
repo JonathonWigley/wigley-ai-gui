@@ -69,6 +69,8 @@ export interface DecodedLine {
   replyUsage: ReplyUsage | null;
   turnUsage: TurnUsage | null;
   compaction: CompactionLine | null;
+  // Every running background task's id, from a line that lists them; null on any other line.
+  backgroundTaskIds: string[] | null;
 }
 
 // `started` is every `compacting` status, repeats included. `boundary` is the
@@ -176,6 +178,7 @@ function emptyLine(): DecodedLine {
     replyUsage: null,
     turnUsage: null,
     compaction: null,
+    backgroundTaskIds: null,
   };
 }
 
@@ -702,6 +705,11 @@ export function createStreamDecoder(
     if (event.subtype === 'task_notification') {
       finishByNotification(event, out);
       finishTask(event, out);
+    }
+    if (event.subtype === 'background_tasks_changed') {
+      out.backgroundTaskIds = asArray(event.tasks).map((task) =>
+        asString(asJson(task).task_id),
+      );
     }
     out.compaction = compactionOf(event);
     if (out.compaction?.phase === 'done') {

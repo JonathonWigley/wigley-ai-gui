@@ -115,6 +115,26 @@ const GROUPS: SelfTestGroup[] = [
       },
     ],
   },
+  {
+    name: 'interrupt while idle',
+    why: 'With the main turn over and background tasks still running, Ctrl+C reaches them, so their boxes leave.',
+    steps: [
+      {
+        keys: sendKeys(FAKE_AGENTS_TEXT),
+        expect: boxesLine(4, 4),
+      },
+      {
+        keys: ['i', ...'next', 'Escape', '<D-Enter>'],
+        expect: boxesLine(2, 2),
+        why: 'Sent now, the next message ends the held turn and the subagents and leaves the two tasks running.',
+      },
+      {
+        keys: ['<C-c>'],
+        expect: boxesLine(0, 0),
+        alsoExpect: [/^\[chat\] interrupted agent-strip-selftest$/],
+      },
+    ],
+  },
 ];
 
 // Each run closes the sessions an earlier run left in the project folder, so

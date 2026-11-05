@@ -966,6 +966,55 @@ describe('createClaudeCodeHarness', () => {
     ]);
   });
 
+  describe('interrupt with background tasks', () => {
+    const tasksChanged = (taskIds: string[]) => ({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: taskIds.map((task_id) => ({ task_id, task_type: 'local_bash' })),
+    });
+    const stopRequests = (written: unknown[]) =>
+      written
+        .map((line) => (line as { request?: Record<string, unknown> }).request)
+        .filter((request) => request?.subtype === 'stop_task')
+        .map((request) => request?.task_id);
+
+    it.each([
+      { given: 'idle', isWorking: false },
+      { given: 'working', isWorking: true },
+    ])(
+      'interrupt_TasksRunning_InterruptsThenStopsEachTask ($given)',
+      async ({ isWorking }) => {
+        const run = await startedQuiet();
+        writeLine(run.stdout, tasksChanged(['a1', 'b1']));
+        await settle();
+        if (isWorking) {
+          run.agent.send({ text: 'one', images: [] });
+        }
+        const before = run.written.length;
+
+        run.agent.interrupt();
+
+        const written = run.written.slice(before);
+        expect(
+          (written[0] as { request: { subtype: string } }).request.subtype,
+        ).toBe('interrupt');
+        expect(stopRequests(written)).toEqual(['a1', 'b1']);
+      },
+    );
+
+    it('interrupt_TasksAllEnded_WritesNothingWhileIdle', async () => {
+      const run = await startedQuiet();
+      writeLine(run.stdout, tasksChanged(['b1']));
+      writeLine(run.stdout, tasksChanged([]));
+      await settle();
+      const before = run.written.length;
+
+      run.agent.interrupt();
+
+      expect(run.written.slice(before)).toEqual([]);
+    });
+  });
+
   it('send_TwoMessages_StaysWorkingUntilTheSecondResult', async () => {
     const run = await startedQuiet();
     run.agent.send({ text: 'one', images: [] });

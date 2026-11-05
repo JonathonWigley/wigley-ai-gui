@@ -68,6 +68,11 @@ const contextUsageRequest = (requestId: string) =>
   controlRequest(requestId, 'get_context_usage');
 const interruptRequest = (requestId: string) =>
   controlRequest(requestId, 'interrupt');
+const stopTaskRequest = (requestId: string, taskId: string) => ({
+  type: 'control_request',
+  request_id: requestId,
+  request: { subtype: 'stop_task', task_id: taskId },
+});
 const interruptReply = (requestId: string) => ({
   type: 'control_response',
   response: { subtype: 'success', request_id: requestId },
@@ -176,6 +181,25 @@ const compactionEvents = (effects: readonly FoldEffect[]) =>
   );
 
 describe('session-fold', () => {
+  it('stopTask_AnsweredWithError_LogsTheTask', () => {
+    const state = createSessionFoldState(request);
+    foldPipeLine(state, inLine(stopTaskRequest('wigley-2', 'b1')));
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine({
+        type: 'control_response',
+        response: { subtype: 'error', request_id: 'wigley-2', error: 'gone' },
+      }),
+    );
+
+    expect(effects).toContainEqual({
+      kind: 'log',
+      text: 'stop_task b1 failed: gone',
+    });
+    expect(state.pendingRequests.size).toBe(0);
+  });
+
   it.each<{
     case: string;
     setup?: PipeLine[];
@@ -266,6 +290,11 @@ describe('session-fold', () => {
           }),
         },
       ],
+    },
+    {
+      case: 'stop_task',
+      line: inLine(stopTaskRequest('wigley-2', 'b1')),
+      state: { pending: { 'wigley-2': { kind: 'stopTask', taskId: 'b1' } } },
     },
     {
       case: 'interrupt while idle',

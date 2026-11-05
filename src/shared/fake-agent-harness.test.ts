@@ -822,6 +822,25 @@ describe('createFakeAgentHarness', () => {
     expect(record.calls).toEqual([{ method: 'interrupt' }]);
   });
 
+  it('interrupt_IdleWithTasksRunning_EndsThemWithoutEndingATurn', async () => {
+    const { agent, agentEvents, heard } = await startedProcess();
+    agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
+    await flush();
+    agent.send({ text: 'next', images: [] });
+    await flush();
+    const eventsBefore = agentEvents.length;
+    const heardBefore = heard.length;
+
+    agent.interrupt();
+    await flush();
+
+    expect(agentEvents.slice(eventsBefore).map((event) => event.type)).toEqual([
+      'taskFinished',
+      'taskFinished',
+    ]);
+    expect(heard.slice(heardBefore).map(([name]) => name)).toEqual(['entry']);
+  });
+
   it('send_AgentsText_SpawnsTwoSubagentsAndHoldsTurn', async () => {
     const { agent, heard, agentEvents } = await startedProcess();
 

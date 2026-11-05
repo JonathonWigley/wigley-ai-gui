@@ -156,9 +156,15 @@ export function chatCommandHandlers(
     send: inSession((session) => send(deps, session)),
     sendNow: inSession((session) => sendNow(deps, session)),
     interrupt: inRunningSession((session) => {
-      const { activity, compaction, queued } = session.state;
+      const { activity, background, compaction, queued } = session.state;
       const isHoldUp = queued.some((row) => row.holdReason !== null);
-      if (activity === 'idle' && compaction === null && !isHoldUp) {
+      const isBackgroundRunning = background > 0;
+      if (
+        activity === 'idle' &&
+        compaction === null &&
+        !isHoldUp &&
+        !isBackgroundRunning
+      ) {
         log(`nothing to interrupt in ${session.name}`);
         return;
       }

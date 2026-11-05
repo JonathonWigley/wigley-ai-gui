@@ -358,7 +358,8 @@ export interface AgentProcessEvents {
 // throws for a control or choice the harness did not declare, or when the
 // harness cannot change that control now. `interrupt` always ends the running
 // turn: the adapter ends it within a grace period whatever the agent answers,
-// and a second `interrupt` while that grace is pending ends the process.
+// and a second `interrupt` while that grace is pending ends the process. It also
+// stops every running subagent and background task, with a turn running or none.
 export interface AgentProcess {
   // Returns the id of the user entry the harness emits for `message`. That
   // entry arrives through `entry` once the agent takes the message in, which

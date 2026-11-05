@@ -346,6 +346,12 @@ describe('chat commands', () => {
       logs: ['interrupted app'],
     },
     {
+      given: 'idle with background work running',
+      fields: { activity: 'idle', background: 1 },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['interrupted app'],
+    },
+    {
       given: 'working',
       fields: { activity: 'working' },
       invoked: [['interrupt', 'row-1']],
@@ -357,7 +363,7 @@ describe('chat commands', () => {
     invoked: string[][];
     logs: string[];
   }[])(
-    'interrupt_IdleActivity_InterruptsOnlyWithAHoldOrCompaction: $given',
+    'interrupt_IdleActivity_InterruptsOnlyWithSomethingRunning: $given',
     ({ fields, invoked, logs }) => {
       const run = setUp(session(true, undefined, fields));
 
