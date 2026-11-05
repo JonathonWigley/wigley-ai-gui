@@ -293,3 +293,4 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - A long stage word ellipsizes on the row (Interview · pa…) rather than clipping the cache icon — other fixes move other plugins' alignment and the strip still shows the whole word — the user may prefer whole words · group 12
 ### Review rounds
 ### Test gate
+- Picks by reader-sonnet over 52a66bfa..HEAD, plus the lead's layout-contracts: src/plugins/workflow, workflow-heavy, workflow-light, workflow-medium (added or edited); workflow-heavy-main, workflow-heavy-page, workflow-levels (new); chat/main/start, keymap, manifests (edited); src/main/drive/drive-commands (asserts the moved settings' paths); src/main/built-in-themes (builds tokens from the manifests); src/shared/layouts/layout-contracts (layout.d.ts changed). wigley-agents: tools/workflow-gate/tests. usage.css, docs, check-layers: no pick, no test over them; lint covers check-layers.
