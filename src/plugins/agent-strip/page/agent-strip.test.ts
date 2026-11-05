@@ -18,7 +18,7 @@ import type { HScroller } from '../../../shared/page/ui/h-scroller';
 import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 import type { ComposerStopExits } from '../../chat/contract';
 import defaultLayout from '../layouts/default/layout.js';
-import type { Layout } from '../layouts/layout';
+import type { AgentBoxInput, Layout } from '../layouts/layout';
 import { createAgentStrip } from './agent-strip';
 
 const NOW = 1_000_000;
@@ -293,7 +293,7 @@ describe('agent strip', () => {
     expect(scrollers.reveals).toEqual([boxes()[0]]);
     expect(logged.slice(-2)).toEqual([
       expect.stringContaining(
-        'box 1 of 3 in proj shows: name-a1Subagent1m 30s',
+        'box 1 of 3 in proj shows: Task of a11m 30sSubagent',
       ),
       'selected box 1 of 3 in proj',
     ]);
@@ -516,6 +516,7 @@ describe('agent strip', () => {
     const {
       strip,
       build,
+      enter,
       boxes,
       sets,
       clears,
@@ -531,7 +532,10 @@ describe('agent strip', () => {
       );
     }
     build();
-    boxes()[1].click();
+    enter();
+    strip.nextBox();
+    strip.toggleBox();
+    strip.leave();
     expect(sets).toHaveLength(1);
     const before = boxes();
     const beforeTexts = before.map((box) => box.textContent);
@@ -560,7 +564,7 @@ describe('agent strip', () => {
     };
     setRoster(EMPTY);
 
-    expect(beforeTexts[0]).toContain('Subagent1m 30s');
+    expect(beforeTexts[0]).toContain('1m 30sSubagent');
     expect(beforeTexts[2]).toBe('TaskRun t130s');
     expect(afterTicks).toEqual({
       agentBoxesKept: [row.agentBoxesKept, row.agentBoxesKept],
@@ -591,66 +595,78 @@ describe('agent strip', () => {
 
   // Box 1, the part's box in its roster, is selected and open under a layout
   // whose part has no `update`, so a
-  // tick replaces it: the new element takes clicks, its old parts' anchors are
-  // disposed once, and a later redraw disposes the new ones.
-  it.each<{ part: 'agentBox' | 'taskBox'; roster: Roster }>([
-    { part: 'agentBox', roster: MIXED },
+  // tick replaces it: the new element closes as the old one did, its old parts'
+  // anchors are disposed once, and a later redraw disposes the new ones.
+  it.each<{
+    part: 'agentBox' | 'taskBox';
+    closesBy: 'toggleBox' | 'click';
+    roster: Roster;
+  }>([
+    { part: 'agentBox', closesBy: 'toggleBox', roster: MIXED },
     {
       part: 'taskBox',
+      closesBy: 'click',
       roster: {
         agents: [agent('a1', 90_000)],
         tasks: [task('t1', 30_000)],
         skills: [],
       },
     },
-  ])('tick_ReplacedBox_KeepsItsBookkeeping ($part)', ({ part, roster }) => {
-    const {
-      strip,
-      build,
-      enter,
-      boxes,
-      opened,
-      sets,
-      advance,
-      anchorDisposals,
-    } = setUp(roster);
-    strip.setLayouts(
-      withUser<Layout>(defaultLayout, {
-        ...userBox(part, 'none'),
-        toolList(parent, input, kit) {
-          const list = defaultLayout.toolList(parent, input, kit);
-          kit.keyHint(list.element, 'focusBox');
-          return list;
-        },
-      }),
-    );
-    build();
-    enter();
-    strip.nextBox();
-    strip.toggleBox();
-    const before = boxes()[1];
-    const anchorsBeforeTick = anchorDisposals.length;
+  ])(
+    'tick_ReplacedBox_KeepsItsBookkeeping ($part)',
+    ({ part, closesBy, roster }) => {
+      const {
+        strip,
+        build,
+        enter,
+        boxes,
+        opened,
+        sets,
+        advance,
+        anchorDisposals,
+      } = setUp(roster);
+      strip.setLayouts(
+        withUser<Layout>(defaultLayout, {
+          ...userBox(part, 'none'),
+          toolList(parent, input, kit) {
+            const list = defaultLayout.toolList(parent, input, kit);
+            kit.keyHint(list.element, 'focusBox');
+            return list;
+          },
+        }),
+      );
+      build();
+      enter();
+      strip.nextBox();
+      strip.toggleBox();
+      const before = boxes()[1];
+      const anchorsBeforeTick = anchorDisposals.length;
 
-    advance(1000);
-    sets[0].run();
-    const replaced = boxes()[1];
-    const afterTick = [...anchorDisposals];
-    const anchorsBeforeClick = anchorDisposals.length;
-    replaced.click();
-    const afterClick = { opened: opened(), anchors: [...anchorDisposals] };
+      advance(1000);
+      sets[0].run();
+      const replaced = boxes()[1];
+      const afterTick = [...anchorDisposals];
+      const anchorsBeforeClose = anchorDisposals.length;
+      if (closesBy === 'click') {
+        replaced.click();
+      } else {
+        strip.toggleBox();
+      }
+      const afterClose = { opened: opened(), anchors: [...anchorDisposals] };
 
-    expect(replaced).not.toBe(before);
-    expect(afterTick).toEqual(
-      afterTick.map((_, index) => (index < anchorsBeforeTick ? 1 : 0)),
-    );
-    expect(afterTick.length).toBeGreaterThan(anchorsBeforeTick);
-    expect(afterClick).toEqual({
-      opened: [],
-      anchors: afterClick.anchors.map((_, index) =>
-        index < anchorsBeforeClick ? 1 : 0,
-      ),
-    });
-  });
+      expect(replaced).not.toBe(before);
+      expect(afterTick).toEqual(
+        afterTick.map((_, index) => (index < anchorsBeforeTick ? 1 : 0)),
+      );
+      expect(afterTick.length).toBeGreaterThan(anchorsBeforeTick);
+      expect(afterClose).toEqual({
+        opened: [],
+        anchors: afterClose.anchors.map((_, index) =>
+          index < anchorsBeforeClose ? 1 : 0,
+        ),
+      });
+    },
+  );
 
   it('tick_AgentBoxUpdate_RunsWithElapsedOneSecondLarger', () => {
     const elapsed: number[] = [];
@@ -716,23 +732,36 @@ describe('agent strip', () => {
     expect(updates).toBe(2);
   });
 
-  it.each<{ case: string; fields: Partial<RosterAgent>; shows: string }>([
-    { case: 'subagent', fields: {}, shows: 'Subagent' },
+  it.each<{
+    case: string;
+    fields: Partial<RosterAgent>;
+    kind: AgentBoxInput['kind'];
+  }>([
+    { case: 'subagent', fields: {}, kind: 'subagent' },
     {
       case: 'background agent',
       fields: { isBackground: true },
-      shows: 'Background agent',
+      kind: 'backgroundAgent',
     },
-  ])('draw_AgentKind_$case', ({ fields, shows }) => {
-    const { build, boxes } = setUp({
+  ])('draw_AgentKind_$case', ({ fields, kind }) => {
+    const kinds: AgentBoxInput['kind'][] = [];
+    const { strip, build } = setUp({
       agents: [agent('a1', 60_000, 1, fields)],
       tasks: [],
       skills: [],
     });
+    strip.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        agentBox(parent, input, kit) {
+          kinds.push(input.kind);
+          return defaultLayout.agentBox(parent, input, kit);
+        },
+      }),
+    );
 
     build();
 
-    expect(boxes()[0].textContent).toContain(`name-a1${shows}1m 00s`);
+    expect(kinds).toEqual([kind]);
   });
 
   it('draw_AgentBox_ShowsEachRosterField', () => {
@@ -753,7 +782,7 @@ describe('agent strip', () => {
     build();
 
     expect(boxes()[0].textContent).toContain(
-      'Task of a1opus · highRead file-1.ts84k/200k$1.50',
+      'Task of a11m 00sSubagentopus · highRead file-1.ts84k/200k$1.50',
     );
   });
 
@@ -900,13 +929,6 @@ describe('agent strip', () => {
       toggled: 2,
       revealedCards: [],
     },
-    {
-      case: 'click on an unselected card',
-      nextBoxes: 0,
-      toggle: 'click',
-      toggled: 1,
-      revealedCards: [1],
-    },
   ])('toggle_RevealsTheToggledBox ($case)', (row) => {
     const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
     const { strip, build, enter, boxes, opened, scrollers } = setUp(MIXED);
@@ -930,6 +952,16 @@ describe('agent strip', () => {
       row.revealedCards.map((index) => boxes()[index]),
     );
     scrolled.mockRestore();
+  });
+
+  it('click_OnCard_LeavesItClosed', () => {
+    const { build, boxes, opened, logged } = setUp(MIXED);
+    build();
+
+    boxes()[0].click();
+
+    expect(opened()).toEqual([]);
+    expect(logged.filter((line) => /opened|closed/.test(line))).toEqual([]);
   });
 
   // Emptying the rows clamps their scroll, as a browser does.
@@ -1015,7 +1047,7 @@ describe('agent strip', () => {
     enter();
 
     const shows = logged.find((line) => line.includes('shows:'));
-    expect(shows).toContain('name-a1Subagent1m 00s');
+    expect(shows).toContain('shows: long long');
     expect(shows).not.toContain('past-the-head');
   });
 
@@ -1032,7 +1064,7 @@ describe('agent strip', () => {
   });
 
   it('toggleBox_OpensOneAtATime', () => {
-    const { strip, build, enter, opened, selected, boxes, logged } =
+    const { strip, build, enter, opened, selected, logged } =
       setUp(THREE_AGENTS);
     build();
     enter();
@@ -1041,11 +1073,12 @@ describe('agent strip', () => {
     strip.nextBox();
     strip.toggleBox();
     const afterKeys = { opened: opened(), selected: selected() };
-    boxes()[2].click();
+    strip.nextBox();
+    strip.toggleBox();
 
     expect(afterKeys).toEqual({ opened: [1], selected: [1] });
     expect(opened()).toEqual([2]);
-    expect(selected()).toEqual([1]);
+    expect(selected()).toEqual([2]);
     expect(logged.filter((line) => /opened|closed/.test(line))).toEqual([
       'opened box 1 in proj',
       'opened box 2 in proj',
@@ -1054,9 +1087,10 @@ describe('agent strip', () => {
   });
 
   it('rosterDropsOpenBox_Closes', () => {
-    const { build, boxes, opened, setRoster } = setUp(THREE_AGENTS);
+    const { strip, build, enter, opened, setRoster } = setUp(THREE_AGENTS);
     build();
-    boxes()[0].click();
+    enter();
+    strip.toggleBox();
 
     setRoster({ ...THREE_AGENTS, agents: THREE_AGENTS.agents.slice(1) });
     const afterDrop = opened();
@@ -1113,16 +1147,19 @@ describe('agent strip', () => {
 
   // Box 2 of MIXED is open and scrolled; another box opening starts at the top.
   it('redraw_KeepsOpenListScrollByBox', () => {
-    const { build, boxes, setRoster } = setUp(MIXED);
+    const { strip, build, enter, boxes, setRoster } = setUp(MIXED);
     build();
-    boxes()[1].click();
+    enter();
+    strip.nextBox();
+    strip.toggleBox();
     const listOf = (index: number) =>
       findAll(boxes()[index], 'agent-strip-toolList')[0];
     listOf(1).scrollTop = 40;
 
     setRoster({ ...MIXED, agents: [...MIXED.agents, agent('a3', 10_000)] });
     const afterRoster = listOf(1).scrollTop;
-    boxes()[0].click();
+    strip.prevBox();
+    strip.toggleBox();
 
     expect(afterRoster).toBe(40);
     expect(listOf(0).scrollTop).toBe(0);

@@ -196,6 +196,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         homeDir: services.homeDir,
         editor: services.editor,
         markdown: services.markdown,
+        matcher: services.fuzzy,
         paths: services.paths,
         toast: services.toast,
         drops: api.drops,

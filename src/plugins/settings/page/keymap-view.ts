@@ -28,7 +28,7 @@ import {
   keymapRows,
   replacedBy,
 } from './keymap-rows';
-import { matchesCommand } from './row-filter';
+import { matchesCommand, matchesLeader } from './row-filter';
 import type { KeyLineInput, KeyRowInput } from '../layouts/layout';
 import type {
   RowActions,
@@ -361,23 +361,19 @@ export function keymapSection(ctx: RowContext, query: string): SectionDrawing {
     entries.push({ type: 'row', row });
     rows.push(row);
   };
-  const needle = query.toLowerCase();
-  const isLeaderShown = ['leader', leader(ctx).toLowerCase()].some((text) =>
-    text.includes(needle),
-  );
-  if (isLeaderShown) {
+  if (matchesLeader([leader(ctx)], query, ctx.matcher)) {
     addRow(leaderRow(ctx));
   }
   for (const group of keymapRows(ctx.schema, ctx.keymapLayer())) {
     const shown = group.rows
-      .filter((row) => matchesCommand(row, query))
+      .filter((row) => matchesCommand(row, query, ctx.matcher))
       .map((row) => commandRow(ctx, row));
     if (shown.length > 0) {
       entries.push({ type: 'header', input: { title: group.title } });
       shown.forEach(addRow);
     }
   }
-  if (query === '') {
+  if (query.trim() === '') {
     addRow(advancedRow(ctx));
   }
   return { entries, rows };

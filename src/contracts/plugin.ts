@@ -7,6 +7,7 @@ import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
+import type { FuzzyMatcher } from './fuzzy';
 import type { Git } from './git';
 import type { ImageEncoder } from './images';
 import type {
@@ -425,6 +426,7 @@ export interface PageCommandContext {
 export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  fuzzy: FuzzyMatcher;
   markup: MarkupEditor;
   // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
   visualFrames: VisualFrames;
@@ -684,7 +686,8 @@ export interface DriveHost {
 // id, called as `log(message)`.
 // `timers` runs one-shot timers, the `Timers` seam the page shares.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
-// good. `paths` handles full paths by the rules of the OS main runs on.
+// good. `paths` handles full paths by the rules of the OS main runs on, and
+// `platform` names that OS, picked by the composition root.
 // `processes` runs the machine's programs; `git` is the one way a plugin runs
 // `git`, and stopping the plugin leaves a `git` run to finish. `alerts` gets
 // the user's attention, and stopping the plugin zeroes the open counts it set.
@@ -718,6 +721,7 @@ export interface MainServices {
   tempFolders: readonly string[];
   userConfig: UserConfig;
   paths: Paths;
+  platform: Platform;
   alerts: Alerts;
   images: ImageEncoder;
   agentHarnesses: readonly AgentHarness[];

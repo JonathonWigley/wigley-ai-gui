@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { PageChannel } from '../../../contracts/plugin';
@@ -96,6 +97,7 @@ async function shownView(isSideBarShown = true) {
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
+    matcher: fakeFuzzyMatcher,
     platform: 'macos',
     markdown: {
       block: (text) => text,

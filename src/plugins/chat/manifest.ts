@@ -13,6 +13,11 @@ export const chatManifest = definePlugin({
   dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
   commands: {
     newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },
+    startNewSession: {
+      label: 'new session, folder and profile only',
+      group: 'sessions',
+      runsIn: 'page',
+    },
     stopAll: {
       label: "stop every session's process",
       group: 'sessions',

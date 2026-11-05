@@ -8,6 +8,7 @@
 // rollups.
 
 import type { Disposable } from '../../../contracts/disposable';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -95,28 +96,30 @@ export function expandNewStarred(
   return isStarredNew ? new Set([...expanded, STARRED_ROOT_ID]) : expanded;
 }
 
-// Unfiltered, a group's children show while it is expanded. Filtered, only
-// leaves whose title or path holds the filter (case-insensitive) show, under
-// every group above them, each such group expanded. `pathOf` reads a leaf's
-// entry path, for the filter.
+// Unfiltered, a group's children show while it is expanded; a filter of only
+// spaces is none. Filtered, only leaves whose title or path the filter fuzzily
+// matches show, in the tree's order, under every group above them, each such
+// group expanded. `pathOf` reads a leaf's entry path, for the filter.
 export function visibleRows(
   tree: readonly TreeNode[],
   state: TreeState,
   pathOf: (entryId: string) => string,
+  matcher: FuzzyMatcher,
 ): TreeRow[] {
-  const needle = state.filter.toLowerCase();
+  const { filter } = state;
+  const isFiltered = filter.trim() !== '';
   const matches = (node: TreeLeaf) =>
-    node.title.toLowerCase().includes(needle) ||
-    pathOf(node.entryId).toLowerCase().includes(needle);
+    matcher.matches(filter, node.title) ||
+    matcher.matches(filter, pathOf(node.entryId));
   // Recursive: a filtered group's row shows only once its children are known
   // to hold a match.
   const rowsOf = (node: TreeNode, depth: number): TreeRow[] => {
     if (node.type === 'entry') {
-      return needle === '' || matches(node)
+      return !isFiltered || matches(node)
         ? [{ node, depth, isExpanded: false }]
         : [];
     }
-    if (needle === '') {
+    if (!isFiltered) {
       const isExpanded = state.expanded.has(node.id);
       const children = isExpanded
         ? node.children.flatMap((child) => rowsOf(child, depth + 1))
@@ -209,7 +212,7 @@ export function treeRowAction(
 ): TreeRowAction {
   const { node } = row;
   const isCollapsible =
-    node.type === 'group' && row.isExpanded && filter === '';
+    node.type === 'group' && row.isExpanded && filter.trim() === '';
   if (key === 'close') {
     if (isCollapsible) {
       return { type: 'collapse' };
@@ -602,7 +605,7 @@ export function treeLine(state: TreeLineState): TreeLine | null {
       hint: { command: 'rescan', words: 'to rescan' },
     };
   }
-  const isFiltered = state.filter !== '';
+  const isFiltered = state.filter.trim() !== '';
   if (isFiltered && state.rowCount === 0) {
     return {
       placement: 'empty',

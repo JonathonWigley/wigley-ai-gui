@@ -207,12 +207,12 @@ harness type.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Fuzzy matcher contract and fzf adapter](01-fuzzy-matcher.md)
-- [ ] [Agent command records from initialize](02-agent-command-records.md)
+- [x] [Fuzzy matcher contract and fzf adapter](01-fuzzy-matcher.md)
+- [x] [Agent command records from initialize](02-agent-command-records.md)
 
 ### Wave 2
-- [ ] [Editor completion: fuzzy items and row drawing](03-editor-completion.md) — after 01, 02
-- [ ] [Pickers and `/` filters on the matcher](04-pickers-and-filters.md) — after 01
+- [x] [Editor completion: fuzzy items and row drawing](03-editor-completion.md) — after 01, 02
+- [x] [Pickers and `/` filters on the matcher](04-pickers-and-filters.md) — after 01
 
 ### Wave 3
 - [ ] [Chat completion, descriptions setting and row hook](05-chat-completion.md) — after 02, 03, 04
@@ -225,10 +225,32 @@ harness type.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 
 ### Groups
+- 02 · 44850dec · cherry-pick of 0640436c from the stopped worktree run onto main; session-fold auto-merged; diff read in the earlier run; typecheck exit 0; the five touched test files pass, 679 · concerns: isKeptOut is the decoder's parameter, not a fold name; an init with no names now emits nothing; alias match on an earlier record beats an exact name on a later one, as pinned, untested; initialize listing more than init drops records at the first init, check live in 07; leading-slash regex in both commandNames and withoutSlash
+- 01 · e25dcac6 · diff read; every Produces present; typecheck exit 0 with no errors; lint clean per worker; fzf-matcher tests 17 pass; npm list shows fzf@0.5.2 · concerns: tests beyond the named list for trim and case; notes popup and start tests cast their service fakes so typecheck does not name them; harness fuzzy is notFaked so tasks 04 and 05 need a fake or replacement slot there
+- 03 · 2f5e9016 · diff read; every Produces present; typecheck no errors; lint exit 0 per worker; prefix-completion tests pass · concerns: one added test pins the single tier and matcher order; drawRow runs per list rebuild and only for rendered rows, so task 05 must not assume one call per word; a selection the user moved down follows its word as ranks change, check live in 07; row drawing has no automated test, checked in 07
+- 04 · 33d71b2a · diff read; every Produces present; typecheck no errors; plugin and picker tests 1414 pass; filtered selftest docs,settings,backlog,notes 328 pass per worker; full selftest 949 pass, 1 fail in session-row fit, attributed to a peer's staged Sessions layout edit, re-checked at the test gate · concerns: self-test in a shared tree spoiled by peer page reloads; session-row fit failure unconfirmed as the peer's; Load states names the home folder by base, check live in 07; docs selftest commit split from a peer's staged line
 ### Contract changes
 ### Rulings
+- sameNames replaced by the existing isSameJson — compares all four fields with no new helper — a reordered alias list sends one extra message · group 02 · group 02
+- commandRecordsOf drops an item with no string name — an empty name would draw a blank row — a nameless item goes missing, none measured · group 02 · group 02
+- Leading slash stripped from aliases as well as names — merge and alias matching need both bare — an alias really spelled with a slash loses it · group 02 · group 02
+- A success answer with commands [] empties the list — the zero-names guard covers init only — an empty answer clears the list until the next init · group 02 · group 02
+- stringItems moved from stream-decoder.ts to json-fields.ts, outside the Files line — shared rather than copied — revert the move if unwanted · group 02 · group 02
+- This run works in the main tree, not the stopped .claude/worktrees/slash-completion run: this invocation asked for no worktree; 0640436c cherry-picked as 44850dec and the worktree left untouched — costs nothing but the leftover worktree to remove · lead
+- foundation-sweeps precondition met though the ref is gone: its merges are in main and ListPickerDeps already has log: PluginLog with no logSource — if wrong, callers fail typecheck · lead
+- A peer has uncommitted workflow-plugin edits in this tree: every commit is pathspec-scoped and the review range an explicit commit list · lead
+- An item's identity in rank is its input index, so the same value listed twice stays two rows — appears once dedups an item's own texts — a caller wanting duplicates merged gets both · group 01 · group 01
+- No index tiebreaker: fzf 0.5.2 keeps list order inside a score — rank_EqualScores_KeepInputOrder pins it — an fzf upgrade that changes this turns that test red · group 01 · group 01
+- matches has no empty-query branch: fzf's find('') returns the whole list — matches_EmptyQuery_True pins it — only a swapped adapter would need one · group 01 · group 01
+- The harness PageServices fake is notFaked fuzzy, as markup and visualFrames are — a part test reaching it throws until replaced · group 01 · group 01
+- The drawRow element is a span, as CodeMirror's label and detail are — the row flows inline — task 05's description column styles it if it needs more · group 03 · group 03
+- Shared fakeFuzzyMatcher in src/shared/fake-fuzzy-matcher.test-support.ts rather than one per test — about 15 test files need it — inline per test if wrong · group 04 · group 04
+- visibleIndexes and Backlog visibleRows skip the matcher on an empty filter; the Settings matchers call it with an empty query — each settings draw makes one Fzf per text with no filter open · group 04 · group 04
+- filterPicker with an empty filter and cursor -1 moves to the first row — stays where it is cannot hold with no row under it — pinned by a test · group 04 · group 04
+- A spaces-only filter keeps its text in Settings and Backlog but counts as no filter — only the reopened box shows it · group 04 · group 04
+- Self-test filters lengthened: neat to rulesneat, style to rulesstyle, help to togglehelp — claims kept · group 04 · group 04
 ### Review rounds
 ### Test gate

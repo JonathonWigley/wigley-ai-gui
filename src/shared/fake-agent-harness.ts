@@ -71,15 +71,13 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 // (failed), the next send other than `FAKE_END_TEXT` (done) or the process's
 // end (no `agentFinished`). An interrupt or send queued before the end still
 // finishes them. The turn also starts two tasks, one owned by `main` and one by
-// the first subagent; the next send leaves them running, and an interrupt of an
-// open turn, this one or a later one, ends them (failed); the process's end
-// sends no `taskFinished`, since `sessionEnded` ends a roster's running items.
-// Real Claude may keep a background Bash past an interrupt; the fake ends it to
-// keep the self-test row's count exact. Real Claude also keeps a launched
-// subagent running past an interrupt or a send, and fills its Agent entry's
+// the first subagent; the next send leaves them running, and an interrupt, with a
+// turn open or none, ends them (failed); the process's end sends no
+// `taskFinished`, since `sessionEnded` ends a roster's running items. Real Claude
+// keeps a launched subagent running past a send, and fills its Agent entry's
 // result at the receipt; the fake's launched subagent ends with the other and
 // its entry keeps `result: null`, so a self-test here does not prove a background
-// box survives an interrupt.
+// box survives a send.
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
@@ -467,7 +465,7 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     entry: (entry) => whileAttached(() => events.entry(entry)),
     controls: (controls) => whileAttached(() => events.controls(controls)),
     activity: (activity) => whileAttached(() => events.activity(activity)),
-    commands: (names) => whileAttached(() => events.commands(names)),
+    commands: (commands) => whileAttached(() => events.commands(commands)),
     planUsage: (update) => whileAttached(() => events.planUsage(update)),
     agentEvent: (event) => whileAttached(() => events.agentEvent(event)),
     messageDropped: (entryId, message) =>
@@ -1548,7 +1546,14 @@ export function createFakeAgentHarness(
       queueMicrotask(() => {
         events.agentEvent({ type: 'sessionStarted', at: clock.now() });
         events.controls(controls);
-        events.commands(['fake-command']);
+        events.commands([
+          {
+            name: 'fake-command',
+            description: 'A fake agent command',
+            argumentHint: '',
+            aliases: ['fake-alias'],
+          },
+        ]);
         events.activity('idle');
       });
     }
@@ -1686,14 +1691,7 @@ export function createFakeAgentHarness(
       interrupt() {
         calls.push({ method: 'interrupt' });
         requireRunning();
-        if (!isTurnOpen) {
-          return;
-        }
-        clearVisualHold();
-        isTurnOpen = false;
-        const interruptedTurn = turn;
-        const interrupted = takeOpenCompaction();
-        queueMicrotask(() => {
+        const finishBackgroundWork = () => {
           for (const taskId of runningTasks) {
             events.agentEvent({
               type: 'taskFinished',
@@ -1708,6 +1706,29 @@ export function createFakeAgentHarness(
             isError: true,
           });
           runningSubagents = [];
+        };
+        if (!isTurnOpen) {
+          if (runningTasks.length > 0 || runningSubagents.length > 0) {
+            const lastTurn = turn;
+            queueMicrotask(() => {
+              finishBackgroundWork();
+              emitEntry({
+                kind: 'notice',
+                id: `notice-idle-${lastTurn}`,
+                text: 'Interrupted',
+                tone: 'info',
+                raw: [{ fake: 'interrupt' }],
+              });
+            });
+          }
+          return;
+        }
+        clearVisualHold();
+        isTurnOpen = false;
+        const interruptedTurn = turn;
+        const interrupted = takeOpenCompaction();
+        queueMicrotask(() => {
+          finishBackgroundWork();
           if (interrupted !== null) {
             events.agentEvent(
               compactionEndedEvent(clock, interrupted, 'interrupted', null),
@@ -1911,6 +1932,7 @@ export function createFakeAgentHarness(
     failNextHistory(message) {
       nextHistoryFailure = message;
     },
+    sessionName: async () => null,
     lastUsageCalls,
     async lastUsage(sessionId) {
       lastUsageCalls.push(sessionId);

@@ -1,11 +1,11 @@
 // @ts-check
 
 // The built-in agent-strip look. A subagent box is a card of fixed width: its
-// running dot, name, kind tag and runtime, then its description cut to one line,
-// its model and effort, its latest tool calls in mono, which an open box drops,
-// and a footer of its context bar and cost. The app draws an open subagent box's
-// list of every call after all of these. A task box is a row the composer's
-// width: its running dot, Shell tag (Task when it has no command), command or
+// running dot, description as the title cut to one line, and runtime, then its
+// Subagent tag with its model and effort, its latest tool calls in mono, which an
+// open box swaps for its name, and a footer of its context bar and cost. The app
+// draws an open subagent box's list of every call after all of these. A task box
+// is a row the composer's width: its running dot, Shell tag (Task when it has no command), command or
 // else description in mono and runtime on one line.
 // An open row wraps the command and adds its owner under the line. The selected
 // box takes the focus ring and the prompt of the keys that type in the chat box.
@@ -22,21 +22,11 @@ const CONTEXT_WARNING_RATIO = 0.8;
 const layout = {
   agentBox(parent, input, kit) {
     const element = kit.card(parent, boxClass('agent-strip-agent', input));
-    const isBackground = input.kind === 'backgroundAgent';
-    const runtime = boxTop(
-      element,
-      input,
-      isBackground ? 'Background agent' : 'Subagent',
-      isBackground ? 'accent' : 'neutral',
-      kit,
-    );
-    const modelLine = [input.model, input.effort]
-      .filter((part) => part !== null)
-      .join(' · ');
-    if (modelLine !== '') {
-      kit.el(element, 'div', 'agent-strip-model', modelLine);
-    }
-    if (!input.isOpen) {
+    const runtime = agentHead(element, input, kit);
+    agentMeta(element, input, kit);
+    if (input.isOpen) {
+      kit.el(element, 'div', 'agent-strip-name', input.name);
+    } else {
       const recent = kit.el(element, 'div', 'agent-strip-recent');
       for (const tool of input.recentTools) {
         toolLine(recent, tool, kit);
@@ -119,26 +109,38 @@ function rowOwner(input) {
 }
 
 /**
- * An agent box's head row and description; returns the runtime `update` rewrites.
+ * An agent box's head row; returns the runtime `update` rewrites.
  * @param {HTMLElement} element
- * @param {{ name: string; description: string; elapsedMs: number }} input
- * @param {string} tagText
- * @param {import('../../../../shared/page/layout-host/kit').TagTone} tagTone
+ * @param {AgentBoxInput} input
  * @param {AgentStripKit} kit
  */
-function boxTop(element, input, tagText, tagTone, kit) {
+function agentHead(element, input, kit) {
   const head = kit.el(element, 'div', 'agent-strip-head');
   kit.statusDot(head, 'running');
-  kit.el(head, 'span', 'agent-strip-name', input.name);
-  kit.tag(head, tagText, tagTone);
-  const runtime = kit.el(
+  kit.el(head, 'span', 'agent-strip-title', input.description);
+  return kit.el(
     head,
     'span',
     'agent-strip-runtime',
     kit.duration(input.elapsedMs),
   );
-  kit.el(element, 'div', 'agent-strip-description', input.description);
-  return runtime;
+}
+
+/**
+ * The Subagent tag, then the model and effort, left out while neither is known.
+ * @param {HTMLElement} element
+ * @param {AgentBoxInput} input
+ * @param {AgentStripKit} kit
+ */
+function agentMeta(element, input, kit) {
+  const meta = kit.el(element, 'div', 'agent-strip-meta');
+  kit.tag(meta, 'Subagent', 'neutral');
+  const modelLine = [input.model, input.effort]
+    .filter((part) => part !== null)
+    .join(' · ');
+  if (modelLine !== '') {
+    kit.el(meta, 'span', 'agent-strip-model', modelLine);
+  }
 }
 
 /**

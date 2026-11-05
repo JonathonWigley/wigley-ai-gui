@@ -46,6 +46,7 @@ const layout = {
     const element = kit.el(parent, 'div', 'session-side');
     const header = kit.sectionHeader(element, 'Sessions');
     kit.sessionEdge(header);
+    kit.keyHint(header, 'chat.startNewSession', { label: 'new' });
     const rows = kit.el(element, 'nav', 'session-sidebar');
     rows.setAttribute('aria-label', 'Sessions');
     return { element, rows };

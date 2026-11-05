@@ -141,6 +141,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       ...partDeps,
       overlay: api.areas.overlay,
       editor: services.editor,
+      matcher: services.fuzzy,
       pushScope: (scope) => api.keys.pushScope(scope),
     });
     const viewer = createImageViewer({
@@ -286,6 +287,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           log: services.log,
         }),
         newSession: () => startPrompt.open(),
+        startNewSession: () => startPrompt.openForNewSession(),
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
         toggleSideParts: () => sideSections.toggleHidden(),

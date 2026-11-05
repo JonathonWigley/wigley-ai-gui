@@ -35,15 +35,14 @@
 /* A session's context under its side-bar row, after the row's other parts, and
    its cache mark at the line's end. Each plugin orders its own wrapper; chat's
    `chat.rowClock` takes the order between these two. The context's
-   `margin-right: auto` shares the free room with the run time's
-   `margin-left: auto`, so a row with a run time looks the same, and a row
-   without one still keeps the cache mark at the line's end. Under the default
-   layout the wrapper gives up width when the parts outgrow the line, which the
-   line passes on to its meter's bar (`layout.css`); a user layout's wrapper
-   stays at least its content's width, as only the default layout's content
-   shrinks. */
+   `margin-left: auto` takes the free room, so it and the parts after it sit at
+   the line's end. The cache mark's slot keeps its width while it draws nothing,
+   so the bars line up from row to row. Under the default layout the wrapper
+   gives up width when the parts outgrow the line, which the line passes on to
+   its meter's bar (`layout.css`); a user layout's wrapper stays at least its
+   content's width, as only the default layout's content shrinks. */
 .session-row-part[data-part='usage.rowLine'] {
-  margin-right: auto;
+  margin-left: auto;
   order: 2;
 }
 
@@ -55,5 +54,10 @@
 }
 
 .session-row-part[data-part='usage.rowCache'] {
+  min-width: var(--wg-icon-size);
   order: 4;
+}
+
+.session-row-part[data-part='usage.rowCache']:empty {
+  display: block;
 }

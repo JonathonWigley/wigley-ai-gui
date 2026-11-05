@@ -5,6 +5,7 @@ import type {
   UserConfigRead,
   UserConfigSchema,
 } from '../../../contracts/user-config';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
@@ -89,7 +90,7 @@ describe('settings page part', () => {
           land = resolve;
         });
       },
-      services: { markdown: PLAIN_MARKDOWN },
+      services: { markdown: PLAIN_MARKDOWN, fuzzy: fakeFuzzyMatcher },
     });
     await settle();
     const { commands } = harness.started();

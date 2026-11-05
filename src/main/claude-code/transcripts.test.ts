@@ -7,6 +7,7 @@ import {
   sessionTitle,
   SYNTHETIC_MODEL,
   transcriptEntries,
+  transcriptName,
 } from './transcripts';
 
 function jsonl(lines: (object | string)[]): string {
@@ -174,6 +175,52 @@ describe('endsInsideLine', () => {
     },
   ])('$name → $expected', ({ text, expected }) => {
     expect(endsInsideLine(text)).toBe(expected);
+  });
+});
+
+describe('transcriptName', () => {
+  const AI_TITLE = { type: 'ai-title', aiTitle: 'Generated', sessionId: 's' };
+  const CUSTOM_TITLE = {
+    type: 'custom-title',
+    customTitle: 'tournaments-wip',
+    sessionId: 's',
+  };
+
+  it.each([
+    { name: 'neither', lines: [{ type: 'mode' }], expected: null },
+    { name: 'ai only', lines: [AI_TITLE], expected: 'Generated' },
+    {
+      name: 'custom beats a later ai',
+      lines: [CUSTOM_TITLE, AI_TITLE],
+      expected: 'tournaments-wip',
+    },
+    {
+      name: 'last ai wins',
+      lines: [AI_TITLE, { ...AI_TITLE, aiTitle: 'Newer' }],
+      expected: 'Newer',
+    },
+    {
+      name: 'last custom wins',
+      lines: [CUSTOM_TITLE, { ...CUSTOM_TITLE, customTitle: 'renamed' }],
+      expected: 'renamed',
+    },
+    {
+      name: 'a user line quoting a title record is not one',
+      lines: [
+        {
+          type: 'user',
+          message: { content: '"type":"custom-title","customTitle":"quoted"' },
+        },
+      ],
+      expected: null,
+    },
+    {
+      name: 'an unparsable line is skipped',
+      lines: ['{"type":"custom-title', AI_TITLE],
+      expected: 'Generated',
+    },
+  ])('transcriptName_$name', ({ lines, expected }) => {
+    expect(transcriptName(jsonl(lines))).toBe(expected);
   });
 });
 

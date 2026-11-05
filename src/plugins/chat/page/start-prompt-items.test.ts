@@ -5,6 +5,7 @@ import type { ChatProfile, RecentFolder } from '../contract';
 import {
   displayPath,
   folderItems,
+  folderName,
   preselectedProfile,
 } from './start-prompt-items';
 
@@ -74,6 +75,18 @@ describe('start prompt items', () => {
       { kind: 'recent', folder: tool, label: '/opt/tool' },
       { kind: 'choose', label: expect.any(String) },
     ]);
+  });
+
+  it('folderName_Recent_IsBase', () => {
+    const [recentItem] = folderItems(recent, home, posixPaths);
+
+    expect(folderName(recentItem, posixPaths)).toBe('app');
+  });
+
+  it('folderName_Choose_IsLabel', () => {
+    const [choose] = folderItems([], home, posixPaths);
+
+    expect(folderName(choose, posixPaths)).toBe(choose.label);
   });
 
   it('folderItems_NoRecent_ChooseOnly', () => {

@@ -93,9 +93,11 @@ describe('ordinal', () => {
 });
 
 describe('rowBadges', () => {
+  // `rows` is every row on the page, `[row]` when left out.
   it.each<{
     name: string;
     pools: PoolState[];
+    rows?: PoolRow[];
     row: PoolRow;
     expected: RowBadgeInput[];
   }>([
@@ -117,6 +119,23 @@ describe('rowBadges', () => {
       ],
       row: ROW,
       expected: [{ text: 'Unity 2', queued: false }],
+    },
+    {
+      name: 'a claim whose row is another row on the page, its session ours',
+      pools: [
+        pool('a', [clone(2, { claim: claim('agent', 'host-7', 'row-3') })]),
+      ],
+      rows: [
+        ROW,
+        {
+          sessionId: 'row-3',
+          label: 'delta 1',
+          projectDir: '/x/repo-2',
+          hostSessionId: 'host-3',
+        },
+      ],
+      row: ROW,
+      expected: [],
     },
     {
       name: 'a hold shows no badge',
@@ -201,8 +220,8 @@ describe('rowBadges', () => {
       row: { ...ROW, hostSessionId: null },
       expected: [],
     },
-  ])('rowBadges_Matches ($name)', ({ pools, row, expected }) => {
-    expect(rowBadges(pools, row)).toEqual(expected);
+  ])('rowBadges_Matches ($name)', ({ pools, rows, row, expected }) => {
+    expect(rowBadges(pools, rows ?? [row], row)).toEqual(expected);
   });
 });
 

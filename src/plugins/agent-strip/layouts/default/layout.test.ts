@@ -149,37 +149,37 @@ describe('default agent-strip layout', () => {
   it.each<{
     case: string;
     box: () => ReturnType<typeof drawn>;
-    name: string | null;
+    title: string | null;
     tag: string;
   }>([
     {
       case: 'subagent',
       box: () => drawAgent(),
-      name: 'map-decoder',
+      title: 'Map the stream decoder',
       tag: 'Subagent',
     },
     {
       case: 'background agent',
       box: () => drawAgent({ kind: 'backgroundAgent' }),
-      name: 'map-decoder',
-      tag: 'Background agent',
+      title: 'Map the stream decoder',
+      tag: 'Subagent',
     },
-    { case: 'task', box: () => drawTask(), name: null, tag: 'Shell' },
+    { case: 'task', box: () => drawTask(), title: null, tag: 'Shell' },
     {
       case: 'task without a command',
       box: () => drawTask({ command: null }),
-      name: null,
+      title: null,
       tag: 'Task',
     },
-  ])('head_$case', ({ box, name, tag }) => {
+  ])('head_$case', ({ box, title, tag }) => {
     const { root } = box();
 
     expect({
       dot: root.find('ui-dot')?.classList.contains('running'),
-      name: root.find('agent-strip-name')?.textContent ?? null,
+      title: root.find('agent-strip-title')?.textContent ?? null,
       tag: root.find('ui-tag')?.textContent,
       runtime: root.find('agent-strip-runtime')?.textContent,
-    }).toEqual({ dot: true, name, tag, runtime: '42s' });
+    }).toEqual({ dot: true, title, tag, runtime: '42s' });
   });
 
   it.each<{
@@ -352,14 +352,30 @@ describe('default agent-strip layout', () => {
     expect(root.find('agent-strip-model')?.textContent ?? null).toBe(line);
   });
 
-  it.each<{ case: string; input: Partial<AgentBoxInput>; shown: boolean }>([
-    { case: 'closed with tools', input: {}, shown: true },
-    { case: 'closed with no tools', input: { recentTools: [] }, shown: true },
-    { case: 'open', input: { isOpen: true }, shown: false },
-  ])('recentTools_$case', ({ input, shown }) => {
+  it.each<{
+    case: string;
+    input: Partial<AgentBoxInput>;
+    shown: boolean;
+    name: string | null;
+  }>([
+    { case: 'closed with tools', input: {}, shown: true, name: null },
+    {
+      case: 'closed with no tools',
+      input: { recentTools: [] },
+      shown: true,
+      name: null,
+    },
+    {
+      case: 'open',
+      input: { isOpen: true },
+      shown: false,
+      name: 'map-decoder',
+    },
+  ])('recentTools_$case', ({ input, shown, name }) => {
     const { root } = drawAgent(input);
 
     expect(root.find('agent-strip-recent') !== null).toBe(shown);
+    expect(root.find('agent-strip-name')?.textContent ?? null).toBe(name);
   });
 
   it.each<{

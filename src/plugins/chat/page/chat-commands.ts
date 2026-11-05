@@ -98,15 +98,19 @@ export interface ChatCommandDeps {
 type Handler = (context: PageCommandContext) => void;
 
 // Every chat command's handler but the start prompt's (`newSession`,
-// `toggleArchive`, `showArchived`) and the session hub's (`toggleSideParts`), by
-// short id. A command acting on a
+// `startNewSession`, `toggleArchive`, `showArchived`) and the session hub's
+// (`toggleSideParts`), by short id. A command acting on a
 // session acts only on the session whose Chat tab is the visible tab, and
 // does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<
   PageStart<typeof chatManifest>['commands'],
-  'newSession' | 'toggleArchive' | 'showArchived' | 'toggleSideParts'
+  | 'newSession'
+  | 'startNewSession'
+  | 'toggleArchive'
+  | 'showArchived'
+  | 'toggleSideParts'
 > {
   const { tabs, channel, picker, log } = deps;
   const inSession =
@@ -156,9 +160,15 @@ export function chatCommandHandlers(
     send: inSession((session) => send(deps, session)),
     sendNow: inSession((session) => sendNow(deps, session)),
     interrupt: inRunningSession((session) => {
-      const { activity, compaction, queued } = session.state;
+      const { activity, background, compaction, queued } = session.state;
       const isHoldUp = queued.some((row) => row.holdReason !== null);
-      if (activity === 'idle' && compaction === null && !isHoldUp) {
+      const isBackgroundRunning = background > 0;
+      if (
+        activity === 'idle' &&
+        compaction === null &&
+        !isHoldUp &&
+        !isBackgroundRunning
+      ) {
         log(`nothing to interrupt in ${session.name}`);
         return;
       }

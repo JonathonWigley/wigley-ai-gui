@@ -1,5 +1,6 @@
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { ImageEncoder } from '../../../contracts/images';
 import type { Platform } from '../../../contracts/platform';
 import type {
@@ -93,6 +94,7 @@ type DraftOperation =
 export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
+  matcher: FuzzyMatcher;
   keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   overlay: PluginAreas['overlay'];
   // The commands a layout's kit runs and checks.
@@ -589,6 +591,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   const picker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log,
+    matcher: deps.matcher,
     filterEditor: editorHost,
   });
   dialog.element.append(picker.element);
@@ -600,12 +603,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     label: (item: T) => string,
     selected: number,
     chosen: (item: T) => void,
+    name?: (item: T) => string,
   ) => {
     blurBoxes();
     picker.open({
       title,
       items,
       label,
+      name,
       selected,
       headerEnd: pickerFilterHint,
       drawRow: (list, _item, { label, trailing }) =>
@@ -982,10 +987,17 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     const selected = homes.findIndex(
       (home) => target !== null && paths.samePath(home.root, target),
     );
-    pick('Target', homes, homeLabel, selected, (home) => {
-      edit({ target: home.root, targetPicked: true });
-      log(`target ${home.repo}`);
-    });
+    pick(
+      'Target',
+      homes,
+      homeLabel,
+      selected,
+      (home) => {
+        edit({ target: home.root, targetPicked: true });
+        log(`target ${home.repo}`);
+      },
+      (home) => home.repo,
+    );
   };
 
   const pickTags = async () => {

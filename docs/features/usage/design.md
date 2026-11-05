@@ -70,7 +70,7 @@ with the override at 30: 12 automatic compactions, all on `claude-opus-5-5`, at 
 limit on those models is unconfirmed.
 
 The launch strips `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from the child's environment (`claude-launch.ts`,
-`NESTED_SESSION_ENV`) because a parent Claude session sets it for its own children; Claude still reads it from the
+`NESTED_SESSION_ENV` in `src/shared/session-env.ts`) because a parent Claude session sets it for its own children; Claude still reads it from the
 profile's `settings.json`, which is why the configured limit is read there.
 
 ## Flow

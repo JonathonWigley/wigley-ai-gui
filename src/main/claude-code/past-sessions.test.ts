@@ -9,6 +9,7 @@ import {
   listProjectFolders,
   readHistory,
   readLastUsage,
+  readSessionName,
   TRANSCRIPT_READ_BATCH,
 } from './past-sessions';
 import {
@@ -367,6 +368,10 @@ describe('readHistory', () => {
         readHistory(files, paths, folder, id, null),
     },
     { name: 'readLastUsage_BadId_RejectsBeforeReading', read: readLastUsage },
+    {
+      name: 'readSessionName_BadId_RejectsBeforeReading',
+      read: readSessionName,
+    },
   ])('$name', async ({ read }) => {
     const stored = createMemoryFiles();
     const readPaths: string[] = [];

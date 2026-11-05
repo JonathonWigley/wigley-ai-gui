@@ -70,6 +70,11 @@ const settingsRequest = (requestId: string) =>
   controlRequest(requestId, 'get_settings');
 const interruptRequest = (requestId: string) =>
   controlRequest(requestId, 'interrupt');
+const stopTaskRequest = (requestId: string, taskId: string) => ({
+  type: 'control_request',
+  request_id: requestId,
+  request: { subtype: 'stop_task', task_id: taskId },
+});
 const interruptReply = (requestId: string) => ({
   type: 'control_response',
   response: { subtype: 'success', request_id: requestId },
@@ -83,6 +88,22 @@ const settingsReply = (reply: object) => ({
     response: { effective: {}, sources: [], ...reply },
   },
 });
+const initializeRequest = (requestId: string) =>
+  controlRequest(requestId, 'initialize');
+const initializeReply = (requestId: string, reply: object) => ({
+  type: 'control_response',
+  response: { subtype: 'success', request_id: requestId, response: reply },
+});
+const initializeError = (requestId: string, error: string) => ({
+  type: 'control_response',
+  response: { subtype: 'error', request_id: requestId, error },
+});
+const FEATURE_COMMAND = {
+  name: 'wigley:feature',
+  description: 'Plan a change',
+  argumentHint: 'the change',
+  aliases: ['feature'],
+};
 const send = (text: string, uuid: string) =>
   userMessage({ text, images: [] }, uuid);
 
@@ -176,6 +197,25 @@ const compactionEvents = (effects: readonly FoldEffect[]) =>
   );
 
 describe('session-fold', () => {
+  it('stopTask_AnsweredWithError_LogsTheTask', () => {
+    const state = createSessionFoldState(request);
+    foldPipeLine(state, inLine(stopTaskRequest('wigley-2', 'b1')));
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine({
+        type: 'control_response',
+        response: { subtype: 'error', request_id: 'wigley-2', error: 'gone' },
+      }),
+    );
+
+    expect(effects).toContainEqual({
+      kind: 'log',
+      text: 'stop_task b1 failed: gone',
+    });
+    expect(state.pendingRequests.size).toBe(0);
+  });
+
   it.each<{
     case: string;
     setup?: PipeLine[];
@@ -275,6 +315,11 @@ describe('session-fold', () => {
           }),
         },
       ],
+    },
+    {
+      case: 'stop_task',
+      line: inLine(stopTaskRequest('wigley-2', 'b1')),
+      state: { pending: { 'wigley-2': { kind: 'stopTask', taskId: 'b1' } } },
     },
     {
       case: 'interrupt while idle',
@@ -850,7 +895,12 @@ describe('session-fold', () => {
         expect.objectContaining({ id: 'model', value: null }),
       ]),
     });
-    expect(commands).toEqual({ kind: 'commands', commands: ['compact'] });
+    expect(commands).toEqual({
+      kind: 'commands',
+      commands: [
+        { name: 'compact', description: '', argumentHint: '', aliases: [] },
+      ],
+    });
     expect(activity).toEqual({ kind: 'activity', activity: 'idle' });
   });
 
@@ -1250,6 +1300,131 @@ describe('session-fold', () => {
       expect(compactionEvents(replayed).at(-1)?.at).toBe(replayedLastAt);
     },
   );
+
+  const commandsEffects = (effects: readonly FoldEffect[]) =>
+    effects.filter((effect) => effect.kind === 'commands');
+
+  const answered = (reply: object) => {
+    const state = foldedState([inLine(initializeRequest('wigley-1'))]);
+    return { state, step: foldPipeLine(state, outLine(reply)) };
+  };
+
+  it('foldPipeLine_InitializeAnswer_EmitsRecords', () => {
+    const { state, step } = answered(
+      initializeReply('wigley-1', { commands: [FEATURE_COMMAND] }),
+    );
+
+    expect(commandsEffects(step.effects)).toEqual([
+      { kind: 'commands', commands: [FEATURE_COMMAND] },
+    ]);
+    expect(state.commandRecords).toEqual([FEATURE_COMMAND]);
+  });
+
+  it('foldPipeLine_InitializeAnswer_ReplacesListFromInit', () => {
+    const state = foldedState([
+      inLine(initializeRequest('wigley-1')),
+      outLine({ ...lifecycleInit, slash_commands: ['compact'] }),
+    ]);
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine(initializeReply('wigley-1', { commands: [FEATURE_COMMAND] })),
+    );
+
+    expect(commandsEffects(effects)).toEqual([
+      { kind: 'commands', commands: [FEATURE_COMMAND] },
+    ]);
+  });
+
+  it.each<{ case: string; reply: object }>([
+    {
+      case: 'success',
+      reply: initializeReply('wigley-1', { commands: [FEATURE_COMMAND] }),
+    },
+    { case: 'error', reply: initializeError('wigley-1', 'boom') },
+    { case: 'no list', reply: initializeReply('wigley-1', {}) },
+  ])('foldPipeLine_InitializeAnswer_StaysOutOfEntries: $case', ({ reply }) => {
+    const { state, step } = answered(reply);
+
+    expect(step.effects.map((effect) => effect.kind)).not.toContain('entry');
+    expect(state.pendingRequests.size).toBe(0);
+  });
+
+  it('foldPipeLine_InitializeError_LogsAndEmitsNothing', () => {
+    const { step } = answered(initializeError('wigley-1', 'boom'));
+
+    expect(step.effects).toEqual([
+      { kind: 'log', text: expect.stringContaining('boom') },
+    ]);
+  });
+
+  it.each<{ case: string; reply: object }>([
+    { case: 'absent', reply: {} },
+    { case: 'not a list', reply: { commands: 'compact' } },
+  ])('foldPipeLine_InitializeWithoutList_KeepsHeldList: $case', ({ reply }) => {
+    const state = foldedState([
+      outLine({ ...lifecycleInit, slash_commands: ['compact'] }),
+      inLine(initializeRequest('wigley-1')),
+    ]);
+    const held = state.commandRecords;
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine(initializeReply('wigley-1', reply)),
+    );
+
+    expect(effects).toEqual([{ kind: 'log', text: expect.any(String) }]);
+    expect(state.commandRecords).toBe(held);
+    expect(held.map((command) => command.name)).toEqual(['compact']);
+  });
+
+  it('foldPipeLine_InitMergesOverHeldRecords', () => {
+    const docx = { ...FEATURE_COMMAND, name: 'docx', aliases: ['skills:docx'] };
+    const state = foldedState([
+      inLine(initializeRequest('wigley-1')),
+      outLine(initializeReply('wigley-1', { commands: [docx] })),
+    ]);
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine({ ...lifecycleInit, slash_commands: ['skills:docx'] }),
+    );
+
+    expect(commandsEffects(effects)).toEqual([
+      { kind: 'commands', commands: [docx] },
+    ]);
+  });
+
+  it('foldPipeLine_InitWithNoNames_KeepsHeldList', () => {
+    const { state } = answered(
+      initializeReply('wigley-1', { commands: [FEATURE_COMMAND] }),
+    );
+
+    const { effects } = foldPipeLine(state, outLine(lifecycleInit));
+
+    expect(commandsEffects(effects)).toEqual([]);
+    expect(state.commandRecords).toEqual([FEATURE_COMMAND]);
+  });
+
+  it('replayPipeLog_InitializeInLog_ReportsRecords', () => {
+    const effects = replayPipeLog(
+      createSessionFoldState(request),
+      [
+        inLine(initializeRequest('wigley-1')),
+        outLine(initializeReply('wigley-1', { commands: [FEATURE_COMMAND] })),
+      ],
+      1000,
+      null,
+    );
+
+    expect(commandsEffects(effects)).toEqual([
+      { kind: 'commands', commands: [FEATURE_COMMAND] },
+    ]);
+    const kinds = effects.map((effect) => effect.kind);
+    expect(kinds).not.toContain('entry');
+    expect(kinds).not.toContain('requestContextUsage');
+    expect(kinds).not.toContain('refuseHostRequest');
+  });
 
   it('replayPipeLog_AppCompact_KeepsItsTriggerAndEntry', () => {
     const boundary = BOUNDARY;

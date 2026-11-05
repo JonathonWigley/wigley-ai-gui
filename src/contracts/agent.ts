@@ -19,6 +19,15 @@ export interface SessionControl {
 
 export type ProcessActivity = 'idle' | 'working' | 'waiting';
 
+// A slash command or skill a session offers: `name` and `aliases` as typed
+// after `/`, and `description` and `argumentHint` `''` when it has none.
+export interface AgentCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  aliases: string[];
+}
+
 // An image in a user message: `mediaType` such as `image/png`, `data` the
 // file's bytes in base64 with no `data:` prefix.
 export interface ChatImage {
@@ -331,9 +340,9 @@ export interface AgentProcessEvents {
   entry(entry: ChatEntry): void;
   controls(controls: SessionControl[]): void;
   activity(activity: ProcessActivity): void;
-  // The slash commands and skills the session offers, as typed after `/`.
+  // The slash commands and skills the session offers, the whole list each time.
   // Chat main stores them and the Chat tab's message box offers them after `/`.
-  commands(names: string[]): void;
+  commands(commands: AgentCommand[]): void;
   // Plan rows the session saw between polls.
   planUsage(update: PlanRowUpdate): void;
   agentEvent(event: AgentEvent): void;
@@ -349,7 +358,8 @@ export interface AgentProcessEvents {
 // throws for a control or choice the harness did not declare, or when the
 // harness cannot change that control now. `interrupt` always ends the running
 // turn: the adapter ends it within a grace period whatever the agent answers,
-// and a second `interrupt` while that grace is pending ends the process.
+// and a second `interrupt` while that grace is pending ends the process. It also
+// stops every running subagent and background task, with a turn running or none.
 export interface AgentProcess {
   // Returns the id of the user entry the harness emits for `message`. That
   // entry arrives through `entry` once the agent takes the message in, which
@@ -450,6 +460,13 @@ export interface AgentHarness {
     projectDir: string,
     profileDir: string | null,
   ): Promise<UsageAgentEvent | null>;
+  // The name the harness itself shows for the saved session, such as one the user gave it in a terminal; null when it
+  // has none yet. Rejects naming the path when the transcript is missing.
+  sessionName(
+    sessionId: string,
+    projectDir: string,
+    profileDir: string | null,
+  ): Promise<string | null>;
   // Whether `profileDir` (as `AgentStart` holds it) is signed in, and as whom.
   accountStatus(profileDir: string | null): Promise<AccountStatus>;
   // Starts a sign-in to `profileDir`.

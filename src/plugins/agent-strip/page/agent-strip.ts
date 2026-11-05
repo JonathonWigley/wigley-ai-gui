@@ -292,16 +292,14 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         isOpen: box.key === openKey,
       };
       const { key } = box;
-      let boxElement: HTMLElement;
       if (box.kind === 'agent') {
         const { agent } = box;
         const input = agentBoxInput(agent, state, now);
         const drawn = drawAgentBox(heldTrack(holder), input);
         holder.parts.push(drawn);
-        boxElement = drawn.built.element;
         const toolList = state.isOpen
           ? drawOpenToolList(
-              boxElement,
+              drawn.built.element,
               agent.tools,
               listScrollTops.get(key) ?? 0,
             )
@@ -323,7 +321,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         const input = taskBoxInput(task, state, now);
         const drawn = drawTaskBox(heldRows(holder), input);
         holder.parts.push(drawn);
-        boxElement = drawn.built.element;
+        listenForClick(drawn.built.element, sessionId, key);
         holder.boxes.push({
           kind: 'task',
           key,
@@ -332,7 +330,6 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
           input,
         });
       }
-      listenForClick(boxElement, sessionId, key);
     }
     holder.scroller?.refresh();
     if (holder.rows !== null) {
@@ -365,23 +362,18 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   // Puts `next`, the box drawn again, in `old`'s place on the page and in the
   // holder.
   const swapBoxPart = (
-    sessionId: string,
     holder: HeldWrapper,
-    key: string,
     old: DrawnPart<AgentStripPart>,
     next: DrawnPart<AgentStripPart>,
   ) => {
-    const boxElement = next.built.element;
-    old.built.element.replaceWith(boxElement);
+    old.built.element.replaceWith(next.built.element);
     holder.parts[holder.parts.indexOf(old)] = next;
-    listenForClick(boxElement, sessionId, key);
   };
 
   // Draws the agent box again with its input, and its tool list into the new
   // element, at the old list's scroll, while it is open; the new parts replace
   // the old ones.
   const replaceAgentBox = (
-    sessionId: string,
     holder: HeldWrapper,
     box: Extract<TickingBox, { kind: 'agent' }>,
   ) => {
@@ -389,7 +381,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     const oldList = box.toolList;
     const scrollTop = listScrollTop(box);
     const next = drawAgentBox(trackOf(holder, box.key), box.input);
-    swapBoxPart(sessionId, holder, box.key, old, next);
+    swapBoxPart(holder, old, next);
     box.drawn = next;
     if (oldList !== null) {
       const nextList = drawOpenToolList(
@@ -413,7 +405,8 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   ) => {
     const old = box.drawn;
     const next = drawTaskBox(trackOf(holder, box.key), box.input);
-    swapBoxPart(sessionId, holder, box.key, old, next);
+    swapBoxPart(holder, old, next);
+    listenForClick(next.built.element, sessionId, box.key);
     box.drawn = next;
     old.dispose();
   };
@@ -469,7 +462,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   ) => {
     const elapsedMs = now - box.startedAt;
     if (box.kind === 'agent') {
-      tickPart(box, elapsedMs, () => replaceAgentBox(sessionId, holder, box));
+      tickPart(box, elapsedMs, () => replaceAgentBox(holder, box));
     } else {
       tickPart(box, elapsedMs, () => replaceTaskBox(sessionId, holder, box));
     }

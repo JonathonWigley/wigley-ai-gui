@@ -1,6 +1,6 @@
 # 03 — Editor completion: fuzzy items and row drawing
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -26,3 +26,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2f5e9016 · proof: diff read; every Produces present; typecheck no errors; lint exit 0 per worker; prefix-completion tests pass · concerns: one added test pins the single tier and matcher order; drawRow runs per list rebuild and only for rendered rows, so task 05 must not assume one call per word; a selection the user moved down follows its word as ranks change, check live in 07; row drawing has no automated test, checked in 07

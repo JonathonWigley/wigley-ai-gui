@@ -45,7 +45,7 @@ Built.
 
 ## The side-bar row
 
-The row's second line holds the status chip, the context meter and its used tokens, then the run time and the cache
+The row's second line holds the status chip, then the context meter and its used tokens, the run time and the cache
 mark at the line's end:
 
 - `chat.rowClock`, chat's row part, draws the run time through chat's `rowClock` layout part, again once a second
@@ -53,9 +53,10 @@ mark at the line's end:
 - `usage.rowCache`, usage's row part, draws the cache mark through usage's `rowCache` layout part: a cache icon,
   `status-error` once the cache is cold or while the session has no usage yet, its tooltip the minutes left.
 - Each plugin orders its own row part's wrapper (`sessions.css`: a part may set its own wrapper's `order`):
-  `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`, `chat.rowClock` 3 with `margin-left: auto` in `chat.css`.
-  `usage.rowLine` also has `margin-right: auto`: the two auto margins share the free room between the meter and the
-  run time, and a row whose run time draws nothing (a session chat does not hold) keeps any cache mark at the line's end.
+  `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`, `chat.rowClock` 3 in `chat.css`.
+  `usage.rowLine` also has `margin-left: auto`, which takes the free room, so the meter, run time and cache mark sit
+  at the line's end. The used tokens hold at least `999k`'s width, the run time `00m 00s`'s and the cache mark its icon's,
+  the last two even while they draw nothing, so the meters line up from row to row.
 
 ## Decisions
 

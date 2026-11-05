@@ -20,6 +20,11 @@ export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+// The string items of a list field; [] when the field is no list.
+export function stringItems(value: unknown): string[] {
+  return asArray(value).filter((item) => typeof item === 'string');
+}
+
 export function parsed(
   line: string,
 ): { ok: true; value: unknown } | { ok: false } {

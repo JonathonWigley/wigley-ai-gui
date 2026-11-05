@@ -1,6 +1,6 @@
 # 02 — Agent command records from initialize
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -41,3 +41,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 44850dec · proof: cherry-pick of 0640436c from the stopped worktree run onto main; session-fold auto-merged; diff read in the earlier run; typecheck exit 0; the five touched test files pass, 679 · concerns: isKeptOut is the decoder's parameter, not a fold name; an init with no names now emits nothing; alias match on an earlier record beats an exact name on a later one, as pinned, untested; initialize listing more than init drops records at the first init, check live in 07; leading-slash regex in both commandNames and withoutSlash

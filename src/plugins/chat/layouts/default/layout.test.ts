@@ -973,6 +973,47 @@ describe('default chat layout working', () => {
     );
   });
 
+  it('working_update_WhileCompacting_LeavesTheBarInTheDom', () => {
+    const compacting = (now: number): WorkingInput => ({
+      state: 'compacting',
+      steps: [],
+      startedAt: 0,
+      now,
+      compaction: '/compact',
+    });
+    const view = drawWorking(compacting(1000));
+    const block = asFake(view.element);
+    const bar = block.children[1];
+    const emptied = vi.spyOn(block, 'replaceChildren');
+
+    view.update?.(compacting(2000));
+
+    expect(emptied).not.toHaveBeenCalled();
+    expect(block.children[1]).toBe(bar);
+    expect(workingLines(view)).toEqual([
+      'chat-working',
+      'span.chat-working-time:0:02 span.chat-working-state:Compacting… span.chat-working-trigger:/compact',
+      'div.chat-working-bar:',
+    ]);
+  });
+
+  it('working_update_CompactionEnds_DropsTheBar', () => {
+    const view = drawWorking({
+      state: 'compacting',
+      steps: [],
+      startedAt: 0,
+      now: 1000,
+      compaction: '/compact',
+    });
+
+    view.update?.(workingTurn('thinking', [], 2000));
+
+    expect(workingLines(view)).toEqual([
+      'chat-working',
+      'span.chat-working-time:0:02 span.chat-working-state:Thinking…',
+    ]);
+  });
+
   it('working_update_LiveToDone_KeepsTheRootAndDrawsTheLine', () => {
     const view = drawWorking(
       workingTurn('working', [toolStep('Bash', 'ls', null)], 3000),

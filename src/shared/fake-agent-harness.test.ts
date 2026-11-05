@@ -77,7 +77,7 @@ function recordingEvents() {
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
-    commands: (names) => hear('commands', names),
+    commands: (commands) => hear('commands', commands),
     planUsage: (update) => hear('planUsage', update),
     agentEvent: (event) => {
       if (event.type === 'usage') {
@@ -192,6 +192,17 @@ describe('createFakeAgentHarness', () => {
       'effort',
       'model',
       'verbosity',
+    ]);
+    expect(heard[1]).toEqual([
+      'commands',
+      [
+        {
+          name: 'fake-command',
+          description: 'A fake agent command',
+          argumentHint: '',
+          aliases: ['fake-alias'],
+        },
+      ],
     ]);
     expect(heard[2]).toEqual(['activity', 'idle']);
   });
@@ -809,6 +820,25 @@ describe('createFakeAgentHarness', () => {
 
     expect(heard).toEqual([]);
     expect(record.calls).toEqual([{ method: 'interrupt' }]);
+  });
+
+  it('interrupt_IdleWithTasksRunning_EndsThemWithoutEndingATurn', async () => {
+    const { agent, agentEvents, heard } = await startedProcess();
+    agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
+    await flush();
+    agent.send({ text: 'next', images: [] });
+    await flush();
+    const eventsBefore = agentEvents.length;
+    const heardBefore = heard.length;
+
+    agent.interrupt();
+    await flush();
+
+    expect(agentEvents.slice(eventsBefore).map((event) => event.type)).toEqual([
+      'taskFinished',
+      'taskFinished',
+    ]);
+    expect(heard.slice(heardBefore).map(([name]) => name)).toEqual(['entry']);
   });
 
   it('send_AgentsText_SpawnsTwoSubagentsAndHoldsTurn', async () => {

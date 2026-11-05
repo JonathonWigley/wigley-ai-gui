@@ -101,7 +101,7 @@ export function settingSection(
   query: string,
 ): SectionDrawing {
   const rows: SettingsRow[] = settingRows(section, ctx.settingsLayer())
-    .filter((row) => matchesSetting(row, query))
+    .filter((row) => matchesSetting(row, query, ctx.matcher))
     .map((row) => {
       const { leaf } = row;
       const fallback = leaf.fallback?.value;

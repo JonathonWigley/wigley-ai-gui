@@ -32,6 +32,7 @@ import {
   type ChannelServer,
   listenOnChannel,
 } from '../../shared/local-channel/local-channel';
+import { osPlatform } from '../../shared/os-platform';
 import {
   createSessionHostClient,
   type SessionHostSpawn,
@@ -57,7 +58,14 @@ function tempFolder(): string {
 }
 
 function testChannel(dir: string, suffix: string): string {
-  return channelPath(process.platform, dir, 'u', 'wigley-ai-gui', suffix, dir);
+  return channelPath(
+    osPlatform(process.platform),
+    dir,
+    'u',
+    'wigley-ai-gui',
+    suffix,
+    dir,
+  );
 }
 
 interface ManualTimers extends Timers {

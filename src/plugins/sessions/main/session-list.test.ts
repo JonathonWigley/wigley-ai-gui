@@ -51,6 +51,8 @@ function tool(name: string): ToolDefinition {
 function setUp(
   projectName: (projectDir: string) => Promise<string | null> = async () =>
     null,
+  hostSessionName: (info: SessionInfo) => Promise<string | null> = async () =>
+    null,
 ) {
   let hexCount = 0;
   const emitted: [string, unknown][] = [];
@@ -81,6 +83,7 @@ function setUp(
       calls.push(`activated ${sessionId}`);
     },
     projectName,
+    hostSessionName,
   });
   return { list, clock, emitted, states, logged, activated, calls };
 }
@@ -1965,4 +1968,92 @@ describe('createSessionList', () => {
       expect(logged).toEqual(expectedLogged);
     },
   );
+});
+
+describe("a connected session's harness name", () => {
+  const NO_PROJECT = async () => null;
+
+  it('mark_ConnectedSession_TitlesTheRowWithItsHarnessName', async () => {
+    const { list, states } = setUp(NO_PROJECT, async () => 'tournaments-wip');
+    const { session } = list.connect(info('/work/x'));
+
+    list.mark(session.id);
+    await vi.waitFor(() =>
+      expect(states.at(-1)?.rows[0].titles.firstMessage).toBe(
+        'tournaments-wip',
+      ),
+    );
+  });
+
+  it('mark_NameChangedSinceLastForm_TakesTheNewName', async () => {
+    let name = 'first name';
+    const { list } = setUp(NO_PROJECT, async () => name);
+    const { session } = list.connect(info('/work/x'));
+
+    list.mark(session.id);
+    await vi.waitFor(() =>
+      expect(list.titles(session.id)?.firstMessage).toBe('first name'),
+    );
+    name = 'renamed';
+    list.mark(session.id);
+    await vi.waitFor(() =>
+      expect(list.titles(session.id)?.firstMessage).toBe('renamed'),
+    );
+  });
+
+  it('mark_NameBesideAgentTitle_KeepsTheAgentTitleSet', async () => {
+    const { list } = setUp(NO_PROJECT, async () => 'cli name');
+    const { session } = list.connect(info('/work/x'));
+    list.setTitle(session.id, 'agent', 'Agent Heading');
+
+    list.mark(session.id);
+    await vi.waitFor(() =>
+      expect(list.titles(session.id)).toEqual({
+        user: null,
+        agent: 'Agent Heading',
+        firstMessage: 'cli name',
+      }),
+    );
+  });
+
+  it('open_OwnedSession_NeverAsksItsHarnessName', () => {
+    const hostSessionName = vi.fn(async () => 'cli name');
+    const { list } = setUp(NO_PROJECT, hostSessionName);
+    const { session } = list.open(owned('host-1'));
+
+    list.mark(session.id);
+    list.activate(session.id);
+
+    expect(hostSessionName).not.toHaveBeenCalled();
+  });
+
+  it('mark_ReadRejects_LogsAndKeepsTheRowUntitled', async () => {
+    const { list, logged } = setUp(NO_PROJECT, async () => {
+      throw new Error('no transcript');
+    });
+    const { session } = list.connect(info('/work/x'));
+
+    list.mark(session.id);
+    await vi.waitFor(() =>
+      expect(logged).toContainEqual(expect.stringContaining('no transcript')),
+    );
+    expect(list.titles(session.id)?.firstMessage).toBeNull();
+  });
+
+  it('mark_SessionEndsBeforeTheNameLands_ChangesNothing', async () => {
+    let land: (name: string) => void = () => undefined;
+    const { list, logged } = setUp(
+      NO_PROJECT,
+      () => new Promise((resolve) => (land = resolve)),
+    );
+    const connected = list.connect(info('/work/x'));
+
+    list.mark(connected.session.id);
+    connected.end();
+    land('late');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(logged.filter((line) => line.includes('setTitle'))).toEqual([]);
+  });
 });

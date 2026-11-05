@@ -102,8 +102,8 @@ const KEYMAP_STEPS: SelfTestStep[] = [
     screenshot: 'keymap',
   },
   {
-    keys: ['/', ...'help', 'Enter'],
-    expect: '[settings] filter "help" first row keys.toggleHelp',
+    keys: ['/', ...'togglehelp', 'Enter'],
+    expect: '[settings] filter "togglehelp" first row keys.toggleHelp',
   },
   { keys: ['a'], expect: '[settings] box open keys.toggleHelp' },
   {

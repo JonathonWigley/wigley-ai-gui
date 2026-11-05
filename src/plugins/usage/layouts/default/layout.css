@@ -148,11 +148,12 @@
   min-width: 0;
 }
 
-/* The row's text is short, so it keeps no `100%` floor. */
+/* The row's text is never narrower than `999k`, so the bars line up from row to
+   row. */
 [data-layout-owner='usage'][data-layout='default'].usage-row-line
   .ui-meter
   + .usage-text::after {
-  content: none;
+  content: '999k';
 }
 
 [data-layout-owner='usage'][data-layout='default'].usage-row-cache {

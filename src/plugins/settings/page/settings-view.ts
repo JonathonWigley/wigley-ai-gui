@@ -1,5 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { UserKeymap } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -158,6 +159,7 @@ export interface RowContext {
   read(): UserConfigRead;
   settingsLayer(): Record<string, unknown> | null;
   keymapLayer(): UserKeymap | null;
+  matcher: FuzzyMatcher;
   openBox(request: BoxRequest): void;
   closeBox(box: RowBox): void;
   // Logs the problem and shows it under the box, which stays open.
@@ -172,6 +174,7 @@ export interface RowContext {
 export interface SettingsViewDeps {
   channel: PageChannel<SettingsChannel>;
   editor: EditorHost;
+  matcher: FuzzyMatcher;
   platform: Platform;
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
@@ -354,6 +357,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log,
+    matcher: deps.matcher,
   });
   deps.addOverlay(picker.element);
 
@@ -534,7 +538,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         drawRowEntry(entry.row, rowList);
       }
     }
-    const isEmpty = query !== '' && rows.length === 0;
+    const isEmpty = query.trim() !== '' && rows.length === 0;
     if (isEmpty) {
       const drawn = parts.draw('empty', rowList, entryBuild({ query }));
       entryDisposes.push(drawn.dispose);
@@ -788,6 +792,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       return schema;
     },
     platform: deps.platform,
+    matcher: deps.matcher,
     read() {
       if (latest === null) {
         throw new Error('The user config is not read yet');
@@ -951,7 +956,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const closeFilter = () => {
     filterScope?.pop();
     filterScope = null;
-    filterFrame.hidden = query === '';
+    filterFrame.hidden = query.trim() === '';
     markCursor();
   };
 
@@ -1013,7 +1018,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     removeBind: runQuietly('removeBind', true),
     filter: openFilter,
     clearFilter() {
-      if (query === '') {
+      if (query.trim() === '') {
         return;
       }
       query = '';

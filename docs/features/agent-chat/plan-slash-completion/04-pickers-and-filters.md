@@ -1,6 +1,6 @@
 # 04 — Pickers and `/` filters on the matcher
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -40,3 +40,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 33d71b2a · proof: diff read; every Produces present; typecheck no errors; plugin and picker tests 1414 pass; filtered selftest docs,settings,backlog,notes 328 pass per worker; full selftest 949 pass, 1 fail in session-row fit, attributed to a peer's staged Sessions layout edit, re-checked at the test gate · concerns: self-test in a shared tree spoiled by peer page reloads; session-row fit failure unconfirmed as the peer's; Load states names the home folder by base, check live in 07; docs selftest commit split from a peer's staged line

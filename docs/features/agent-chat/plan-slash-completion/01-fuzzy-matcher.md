@@ -1,6 +1,6 @@
 # 01 — Fuzzy matcher contract and fzf adapter
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -38,3 +38,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit e25dcac6 · proof: diff read; every Produces present; typecheck exit 0 with no errors; lint clean per worker; fzf-matcher tests 17 pass; npm list shows fzf@0.5.2 · concerns: tests beyond the named list for trim and case; notes popup and start tests cast their service fakes so typecheck does not name them; harness fuzzy is notFaked so tasks 04 and 05 need a fake or replacement slot there

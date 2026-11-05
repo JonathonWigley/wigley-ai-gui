@@ -120,6 +120,8 @@ export type CreateKind =
 // A folder a doc of some kind may be created in.
 export interface CreatePlace {
   title: string;
+  // The title's owner text, the place's name in the picker's ranking.
+  owner: string;
   folder: string;
   source: DocSource;
 }

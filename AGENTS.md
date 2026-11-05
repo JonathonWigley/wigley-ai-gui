@@ -595,12 +595,11 @@ round; primer: an open primer), since main, not the page, decides.
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the OS main runs on (`platform`, main only; a page reads `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
-  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` takes
-  a source and a message: a plugin calls `log('<id>', message)` with its own id, and the line shows as
-  `[<id>] message`. The page's home folder
+  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
+  scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)

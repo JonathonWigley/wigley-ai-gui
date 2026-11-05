@@ -1,3 +1,4 @@
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type {
   FollowupDraft,
   FollowupItem,
@@ -148,32 +149,41 @@ export function actedHome(state: BacklogState): BacklogHome | null {
   return openHome(state);
 }
 
-export function selectedRow(state: BacklogState): BacklogRow | null {
+export function selectedRow(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogRow | null {
   return (
-    visibleRows(state).find((row) => row.key === state.selectedKey) ?? null
+    visibleRows(state, matcher).find((row) => row.key === state.selectedKey) ??
+    null
   );
 }
 
 // The selected row when it is a follow-up.
 export function selectedFollowup(
   state: BacklogState,
+  matcher: FuzzyMatcher,
 ): Extract<BacklogRow, { kind: 'followup' }> | null {
-  const row = selectedRow(state);
+  const row = selectedRow(state, matcher);
   return row?.kind === 'followup' ? row : null;
 }
 
 // The row the row keys act on: the selected row while focus is off the side
 // bar.
-export function actedRow(state: BacklogState): BacklogRow | null {
-  return state.focus === 'homes' ? null : selectedRow(state);
+export function actedRow(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogRow | null {
+  return state.focus === 'homes' ? null : selectedRow(state, matcher);
 }
 
 // The follow-up the follow-up keys act on: the selected follow-up while focus
 // is off the side bar.
 export function actedFollowup(
   state: BacklogState,
+  matcher: FuzzyMatcher,
 ): Extract<BacklogRow, { kind: 'followup' }> | null {
-  return state.focus === 'homes' ? null : selectedFollowup(state);
+  return state.focus === 'homes' ? null : selectedFollowup(state, matcher);
 }
 
 // A command the cursor row's prompt shows.
@@ -219,27 +229,32 @@ export function rowTitle(row: BacklogRow): string {
 // The open home's rows in list order: follow-ups, then plans, then features,
 // each expanded plan or feature followed by its task rows. Done follow-ups
 // show only while `isDoneShown`; `isAgentReadyOnly` keeps only follow-ups
-// tagged `agent-ready`. The filter matches a follow-up's title, one line or
-// tags, a plan's title or feature, and a feature's slug, ignoring case.
-export function visibleRows(state: BacklogState): BacklogRow[] {
+// tagged `agent-ready`. The filter fuzzily matches a follow-up's title or tags,
+// a plan's title or feature, and a feature's slug; a follow-up's one line
+// matches when it holds the trimmed filter, ignoring case. Rows keep this order
+// under a filter, and a filter of only spaces is none.
+export function visibleRows(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogRow[] {
   const home = openHome(state);
   if (home === null) {
     return [];
   }
-  const query = state.filter.toLowerCase();
+  const query = state.filter.trim();
+  const lowered = query.toLowerCase();
   const matches = (...texts: string[]) =>
-    texts.some((text) => text.toLowerCase().includes(query));
+    query === '' || texts.some((text) => matcher.matches(query, text));
+  const isFollowupMatch = (item: FollowupItem) =>
+    matches(item.title, ...item.tags) ||
+    item.oneLine.toLowerCase().includes(lowered);
   const rows: BacklogRow[] = [];
   for (const file of home.followupFiles) {
     for (const item of file.items) {
       const isDoneHidden = item.done && !state.isDoneShown;
       const isUntaggedHidden =
         state.isAgentReadyOnly && !item.tags.includes(AGENT_READY);
-      if (
-        isDoneHidden ||
-        isUntaggedHidden ||
-        !matches(item.title, item.oneLine, ...item.tags)
-      ) {
+      if (isDoneHidden || isUntaggedHidden || !isFollowupMatch(item)) {
         continue;
       }
       rows.push({
@@ -328,15 +343,18 @@ export type EmptyReason =
   | 'nothing';
 
 // Null while a row shows.
-export function emptyReason(state: BacklogState): EmptyReason | null {
+export function emptyReason(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): EmptyReason | null {
   const home = openHome(state);
   if (home === null) {
     return 'noHome';
   }
-  if (visibleRows(state).length > 0) {
+  if (visibleRows(state, matcher).length > 0) {
     return null;
   }
-  if (state.filter !== '') {
+  if (state.filter.trim() !== '') {
     return 'filter';
   }
   const items = home.followupFiles.flatMap((file) => file.items);
@@ -357,48 +375,61 @@ export function isDraftChanged(editor: BacklogEditor): boolean {
 export function backlogReducer(
   state: BacklogState,
   action: BacklogAction,
+  matcher: FuzzyMatcher,
 ): BacklogState {
   switch (action.type) {
     case 'loaded':
-      return loaded(state, action.read);
+      return loaded(state, action.read, matcher);
     case 'move':
-      return move(state, action.to);
+      return move(state, action.to, matcher);
     case 'open':
-      return openOrStepIn(state);
+      return openOrStepIn(state, matcher);
     case 'toggle':
-      return toggle(state);
+      return toggle(state, matcher);
     case 'back':
       return back(state);
     case 'focus':
-      return focusOn(state, action.focus);
+      return focusOn(state, action.focus, matcher);
     case 'openHome':
-      return openHomeAt(state, action.root);
+      return openHomeAt(state, action.root, matcher);
     case 'select':
       return { ...state, selectedKey: action.key };
     case 'selectFollowup':
-      return selectPending({ ...state, pendingSelect: action.title });
+      return selectPending({ ...state, pendingSelect: action.title }, matcher);
     case 'setFilter':
-      return reselect(state, {
-        ...state,
-        filter: action.text,
-        pendingSelect: null,
-      });
+      return reselect(
+        state,
+        {
+          ...state,
+          filter: action.text,
+          pendingSelect: null,
+        },
+        matcher,
+      );
     case 'toggleDone':
-      return reselect(state, {
-        ...state,
-        isDoneShown: !state.isDoneShown,
-        pendingSelect: null,
-      });
+      return reselect(
+        state,
+        {
+          ...state,
+          isDoneShown: !state.isDoneShown,
+          pendingSelect: null,
+        },
+        matcher,
+      );
     case 'toggleAgentReadyOnly':
-      return reselect(state, {
-        ...state,
-        isAgentReadyOnly: !state.isAgentReadyOnly,
-        pendingSelect: null,
-      });
+      return reselect(
+        state,
+        {
+          ...state,
+          isAgentReadyOnly: !state.isAgentReadyOnly,
+          pendingSelect: null,
+        },
+        matcher,
+      );
     case 'openCreate':
       return openCreate(state);
     case 'openEdit':
-      return openEdit(state);
+      return openEdit(state, matcher);
     case 'draftChanged':
       return state.editor === null
         ? state
@@ -424,7 +455,7 @@ export function backlogReducer(
         ? state
         : { ...state, editor: null, confirm: null, focus: 'items' };
     case 'askDelete': {
-      const row = actedFollowup(state);
+      const row = actedFollowup(state, matcher);
       const home = openHome(state);
       if (row === null || home === null || state.editor !== null) {
         return state;
@@ -472,12 +503,16 @@ function clampIndex(index: number, count: number): number {
 
 // Keeps `next`'s selection when its row still shows; else selects the row
 // now at the selected row's place in `previous`, clamped, or nothing.
-function reselect(previous: BacklogState, next: BacklogState): BacklogState {
-  const rows = visibleRows(next);
+function reselect(
+  previous: BacklogState,
+  next: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogState {
+  const rows = visibleRows(next, matcher);
   if (rows.some((row) => row.key === next.selectedKey)) {
     return next;
   }
-  const previousIndex = visibleRows(previous).findIndex(
+  const previousIndex = visibleRows(previous, matcher).findIndex(
     (row) => row.key === previous.selectedKey,
   );
   const index = clampIndex(Math.max(previousIndex, 0), rows.length);
@@ -486,8 +521,11 @@ function reselect(previous: BacklogState, next: BacklogState): BacklogState {
 
 // Selects the visible follow-up titled `pendingSelect` and clears it; with
 // none showing, `pendingSelect` waits for the next load.
-function selectPending(state: BacklogState): BacklogState {
-  const found = visibleRows(state).find(
+function selectPending(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogState {
+  const found = visibleRows(state, matcher).find(
     (row) => row.kind === 'followup' && row.item.title === state.pendingSelect,
   );
   return found === undefined
@@ -498,7 +536,11 @@ function selectPending(state: BacklogState): BacklogState {
 // The open home stays open while the read still holds it; the side bar's
 // cursor stays on its home, else on its place, clamped. A pending follow-up
 // is selected when the read holds it, and is cleared either way.
-function loaded(state: BacklogState, read: BacklogRead): BacklogState {
+function loaded(
+  state: BacklogState,
+  read: BacklogRead,
+  matcher: FuzzyMatcher,
+): BacklogState {
   const cursorRoot = orderedHomes(state)[state.homeCursor]?.root ?? null;
   const next: BacklogState = {
     ...state,
@@ -522,16 +564,17 @@ function loaded(state: BacklogState, read: BacklogRead): BacklogState {
       focus: state.editor === null ? 'homes' : state.focus,
     };
   }
-  const reselected = reselect(state, next);
+  const reselected = reselect(state, next, matcher);
   if (state.pendingSelect === null) {
     return reselected;
   }
-  return { ...selectPending(reselected), pendingSelect: null };
+  return { ...selectPending(reselected, matcher), pendingSelect: null };
 }
 
 function move(
   state: BacklogState,
   to: 'down' | 'up' | 'top' | 'bottom',
+  matcher: FuzzyMatcher,
 ): BacklogState {
   const step = (index: number, count: number): number => {
     switch (to) {
@@ -554,7 +597,7 @@ function move(
   if (state.focus !== 'items') {
     return state;
   }
-  const rows = visibleRows(state);
+  const rows = visibleRows(state, matcher);
   if (rows.length === 0) {
     return state;
   }
@@ -564,7 +607,11 @@ function move(
 
 // Opens `root` with focus on its rows; reopening the open home keeps its
 // selection, and a newly opened home selects its first row.
-function openHomeAt(state: BacklogState, root: string): BacklogState {
+function openHomeAt(
+  state: BacklogState,
+  root: string,
+  matcher: FuzzyMatcher,
+): BacklogState {
   const homes = orderedHomes(state);
   const index = homes.findIndex((home) => home.root === root);
   if (index === -1) {
@@ -581,7 +628,7 @@ function openHomeAt(state: BacklogState, root: string): BacklogState {
     filter: '',
     expanded: [],
   };
-  return { ...next, selectedKey: visibleRows(next)[0]?.key ?? null };
+  return { ...next, selectedKey: visibleRows(next, matcher)[0]?.key ?? null };
 }
 
 function setExpanded(
@@ -603,23 +650,26 @@ function expandablePath(row: BacklogRow): string | null {
 // `l`: on the homes, opens the cursor home. On a row: a collapsed plan or
 // feature expands, an expanded one steps to its first task, and any other
 // row, or one with no tasks, moves focus to the detail.
-function openOrStepIn(state: BacklogState): BacklogState {
+function openOrStepIn(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogState {
   if (state.focus === 'homes') {
     const home = orderedHomes(state)[state.homeCursor];
-    return home === undefined ? state : openHomeAt(state, home.root);
+    return home === undefined ? state : openHomeAt(state, home.root, matcher);
   }
-  const row = selectedRow(state);
+  const row = selectedRow(state, matcher);
   if (state.focus !== 'items' || row === null) {
     return state;
   }
   const path = expandablePath(row);
   if (path === null || hasNoTasks(row)) {
-    return focusOn(state, 'detail');
+    return focusOn(state, 'detail', matcher);
   }
   if (!state.expanded.includes(path)) {
     return setExpanded(state, path, true);
   }
-  const rows = visibleRows(state);
+  const rows = visibleRows(state, matcher);
   const firstTask = rows[rows.indexOf(row) + 1];
   return firstTask?.kind === 'task'
     ? { ...state, selectedKey: firstTask.key }
@@ -635,17 +685,17 @@ function hasNoTasks(row: BacklogRow): boolean {
 
 // Enter: on the homes, opens the cursor home. On a plan or feature, expands
 // or collapses its task rows; on any other row, moves focus to the detail.
-function toggle(state: BacklogState): BacklogState {
+function toggle(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
   if (state.focus === 'homes') {
-    return openOrStepIn(state);
+    return openOrStepIn(state, matcher);
   }
-  const row = selectedRow(state);
+  const row = selectedRow(state, matcher);
   if (state.focus !== 'items' || row === null) {
     return state;
   }
   const path = expandablePath(row);
   if (path === null) {
-    return focusOn(state, 'detail');
+    return focusOn(state, 'detail', matcher);
   }
   return setExpanded(state, path, !state.expanded.includes(path));
 }
@@ -666,8 +716,12 @@ function back(state: BacklogState): BacklogState {
 }
 
 // The detail takes focus only with a row selected.
-function focusOn(state: BacklogState, focus: BacklogFocus): BacklogState {
-  if (focus === 'detail' && selectedRow(state) === null) {
+function focusOn(
+  state: BacklogState,
+  focus: BacklogFocus,
+  matcher: FuzzyMatcher,
+): BacklogState {
+  if (focus === 'detail' && selectedRow(state, matcher) === null) {
     return state;
   }
   return state.focus === focus ? state : { ...state, focus };
@@ -701,8 +755,8 @@ function openCreate(state: BacklogState): BacklogState {
   };
 }
 
-function openEdit(state: BacklogState): BacklogState {
-  const row = actedFollowup(state);
+function openEdit(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
+  const row = actedFollowup(state, matcher);
   const home = openHome(state);
   if (row === null || home === null || state.editor !== null) {
     return state;

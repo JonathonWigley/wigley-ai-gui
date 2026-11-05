@@ -15,6 +15,7 @@ import {
   type Json,
   numberOrNull,
   parsed,
+  stringItems,
 } from './json-fields';
 import { CONTEXT_SUFFIX, replySpendUsd } from './model-prices';
 import { rateLimitRows } from './plan-usage';
@@ -68,6 +69,8 @@ export interface DecodedLine {
   replyUsage: ReplyUsage | null;
   turnUsage: TurnUsage | null;
   compaction: CompactionLine | null;
+  // Every running background task's id, from a line that lists them; null on any other line.
+  backgroundTaskIds: string[] | null;
 }
 
 // `started` is every `compacting` status, repeats included. `boundary` is the
@@ -175,6 +178,7 @@ function emptyLine(): DecodedLine {
     replyUsage: null,
     turnUsage: null,
     compaction: null,
+    backgroundTaskIds: null,
   };
 }
 
@@ -211,11 +215,6 @@ function commandNames(init: Json): string[] {
     (name) => asString(name).replace(/^\//, ''),
   );
   return [...new Set(names)];
-}
-
-// The string items of a list field; [] when the field is no list.
-function stringItems(value: unknown): string[] {
-  return asArray(value).filter((item) => typeof item === 'string');
 }
 
 // The agent whose line `event` is: a subagent's lines carry its Agent call's id.
@@ -706,6 +705,11 @@ export function createStreamDecoder(
     if (event.subtype === 'task_notification') {
       finishByNotification(event, out);
       finishTask(event, out);
+    }
+    if (event.subtype === 'background_tasks_changed') {
+      out.backgroundTaskIds = asArray(event.tasks).map((task) =>
+        asString(asJson(task).task_id),
+      );
     }
     out.compaction = compactionOf(event);
     if (out.compaction?.phase === 'done') {

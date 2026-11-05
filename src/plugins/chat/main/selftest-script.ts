@@ -619,6 +619,12 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
 ];
 
 const RESUME_LIST_STEPS: SelfTestStep[] = [
+  {
+    keys: ['<C-n>'],
+    expect: '[chat] picker shown: Folder',
+    why: 'Ctrl+n from the Chat tab opens the folder step; the steps below use the session step only Space k n offers.',
+  },
+  { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
   { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
   {
     keys: ['/', ...SELFTEST_PROJECT_NAME, 'Enter'],

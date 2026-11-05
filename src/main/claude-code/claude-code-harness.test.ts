@@ -200,7 +200,7 @@ const REPLY_LINE =
 const RESULT_LINE =
   '{"type":"result","subtype":"success","is_error":false,"result":"ok","stop_reason":"end_turn","total_cost_usd":0.25,"duration_ms":1850,"num_turns":1,"modelUsage":{"claude-opus-5-5":{"contextWindow":1000000,"maxOutputTokens":64000,"costUSD":0.25,"costBasis":"list"}}}';
 const CONTEXT_REPLY_LINE =
-  '{"type":"control_response","response":{"subtype":"success","request_id":"wigley-1","response":{"autoCompactThreshold":967000,"autocompactSource":"model-default","maxTokens":1000000,"rawMaxTokens":1000000,"isAutoCompactEnabled":true}}}';
+  '{"type":"control_response","response":{"subtype":"success","request_id":"wigley-2","response":{"autoCompactThreshold":967000,"autocompactSource":"model-default","maxTokens":1000000,"rawMaxTokens":1000000,"isAutoCompactEnabled":true}}}';
 
 // A `get_context_usage` reply to `requestId` reporting `maxTokens` and `autoCompactThreshold`.
 const contextReply = (
@@ -239,6 +239,12 @@ const settingsReply = (
     request_id: requestId,
     response: { effective: {}, sources: [], applied },
   },
+});
+
+const initializeRequest = (requestId: string) => ({
+  type: 'control_request',
+  request_id: requestId,
+  request: { subtype: 'initialize' },
 });
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -461,14 +467,13 @@ describe('createClaudeCodeHarness', () => {
     },
   );
 
-  it('start_Opens_WritesContextThenSettingsRequest', async () => {
-    const run = started();
-
-    await settle();
+  it('start_Opens_WritesInitializeThenContextThenSettingsRequest', async () => {
+    const run = await startedQuiet();
 
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      settingsRequest('wigley-2'),
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      settingsRequest('wigley-3'),
     ]);
   });
 
@@ -480,8 +485,9 @@ describe('createClaudeCodeHarness', () => {
 
     const message = userMessage({ text: 'hi', images: [] }, 'uuid-1');
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      settingsRequest('wigley-2'),
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      settingsRequest('wigley-3'),
       message,
     ]);
     expect(run.heard).toEqual([['activity', 'working']]);
@@ -673,16 +679,17 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-3',
+        request_id: 'wigley-4',
         response: { mode: 'plan' },
       },
     });
     await settle();
 
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      settingsRequest('wigley-2'),
-      controlMessage('mode', 'plan', 'wigley-3'),
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      settingsRequest('wigley-3'),
+      controlMessage('mode', 'plan', 'wigley-4'),
     ]);
     const [name, controls] = run.heard[run.heard.length - 1];
     expect(name).toBe('controls');
@@ -715,11 +722,12 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      settingsRequest('wigley-2'),
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      settingsRequest('wigley-3'),
       controlMessage('effort', 'high', '00000000-1'),
-      contextUsageRequest('wigley-3'),
-      settingsRequest('wigley-4'),
+      contextUsageRequest('wigley-4'),
+      settingsRequest('wigley-5'),
     ]);
     expect(
       run.heard.some(
@@ -748,9 +756,9 @@ describe('createClaudeCodeHarness', () => {
       .filter((entry) => entry.kind === 'notice')
       .map((entry) => entry.id);
     expect(noticeIds).toEqual(['notice-1', 'control-notice-1']);
-    expect(run.written[6]).toEqual({
+    expect(run.written[7]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-5',
+      request_id: 'wigley-6',
       request: { subtype: 'interrupt' },
     });
   });
@@ -768,7 +776,7 @@ describe('createClaudeCodeHarness', () => {
     for (const text of [CONTEXT_REPLY_LINE, REPLY_LINE, RESULT_LINE]) {
       run.stdout.write(`${text}\n`);
     }
-    writeLine(run.stdout, contextReply('wigley-3', 200_000, 167_000));
+    writeLine(run.stdout, contextReply('wigley-4', 200_000, 167_000));
     await settle();
 
     // A new session knows its context from the start: the settings read and
@@ -805,11 +813,12 @@ describe('createClaudeCodeHarness', () => {
         .map(([, event]) => event),
     ).toEqual([settingsRead, contextReplied, first, second, third]);
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      settingsRequest('wigley-2'),
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      settingsRequest('wigley-3'),
       userMessage({ text: 'hi', images: [] }, 'uuid-1'),
-      contextUsageRequest('wigley-3'),
-      settingsRequest('wigley-4'),
+      contextUsageRequest('wigley-4'),
+      settingsRequest('wigley-5'),
     ]);
   });
 
@@ -964,7 +973,7 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-3',
+        request_id: 'wigley-4',
         response: { mode: 'plan' },
       },
     };
@@ -1009,6 +1018,55 @@ describe('createClaudeCodeHarness', () => {
     ]);
   });
 
+  describe('interrupt with background tasks', () => {
+    const tasksChanged = (taskIds: string[]) => ({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: taskIds.map((task_id) => ({ task_id, task_type: 'local_bash' })),
+    });
+    const stopRequests = (written: unknown[]) =>
+      written
+        .map((line) => (line as { request?: Record<string, unknown> }).request)
+        .filter((request) => request?.subtype === 'stop_task')
+        .map((request) => request?.task_id);
+
+    it.each([
+      { given: 'idle', isWorking: false },
+      { given: 'working', isWorking: true },
+    ])(
+      'interrupt_TasksRunning_InterruptsThenStopsEachTask ($given)',
+      async ({ isWorking }) => {
+        const run = await startedQuiet();
+        writeLine(run.stdout, tasksChanged(['a1', 'b1']));
+        await settle();
+        if (isWorking) {
+          run.agent.send({ text: 'one', images: [] });
+        }
+        const before = run.written.length;
+
+        run.agent.interrupt();
+
+        const written = run.written.slice(before);
+        expect(
+          (written[0] as { request: { subtype: string } }).request.subtype,
+        ).toBe('interrupt');
+        expect(stopRequests(written)).toEqual(['a1', 'b1']);
+      },
+    );
+
+    it('interrupt_TasksAllEnded_WritesNothingWhileIdle', async () => {
+      const run = await startedQuiet();
+      writeLine(run.stdout, tasksChanged(['b1']));
+      writeLine(run.stdout, tasksChanged([]));
+      await settle();
+      const before = run.written.length;
+
+      run.agent.interrupt();
+
+      expect(run.written.slice(before)).toEqual([]);
+    });
+  });
+
   it('send_TwoMessages_StaysWorkingUntilTheSecondResult', async () => {
     const run = await startedQuiet();
     run.agent.send({ text: 'one', images: [] });
@@ -1035,9 +1093,9 @@ describe('createClaudeCodeHarness', () => {
 
     run.agent.interrupt();
 
-    expect(run.written[6]).toEqual({
+    expect(run.written[7]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-5',
+      request_id: 'wigley-6',
       request: { subtype: 'interrupt' },
     });
   });
@@ -1159,13 +1217,13 @@ describe('createClaudeCodeHarness', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'wigley-3',
+            request_id: 'wigley-4',
             response: { still_queued: [] },
           },
         }
       : {
           type: 'control_response',
-          response: { subtype: 'error', request_id: 'wigley-3', error },
+          response: { subtype: 'error', request_id: 'wigley-4', error },
         };
 
   it.each([
@@ -1491,9 +1549,9 @@ describe('createClaudeCodeHarness', () => {
         run.stdout.write(`${text}\n`);
       });
 
-    await out(contextReply('wigley-1', 1000000, 967000));
+    await out(contextReply('wigley-2', 1000000, 967000));
     await out(
-      settingsReply('wigley-2', { model: 'claude-opus-5-5', effort: 'medium' }),
+      settingsReply('wigley-3', { model: 'claude-opus-5-5', effort: 'medium' }),
     );
     await step(() => run.agent.send({ text: 'hi', images: [] }));
     await out(lifecycleInit);
@@ -1503,12 +1561,12 @@ describe('createClaudeCodeHarness', () => {
     await step(() => run.agent.setControl('mode', 'plan'));
     await out({
       type: 'control_response',
-      response: { subtype: 'success', request_id: 'wigley-5' },
+      response: { subtype: 'success', request_id: 'wigley-6' },
     });
     await step(() => run.agent.setControl('effort', 'high'));
     await out(successResult('Set effort level to high', ['00000000-2']));
     await out(
-      settingsReply('wigley-7', { model: 'claude-opus-5-5', effort: 'high' }),
+      settingsReply('wigley-8', { model: 'claude-opus-5-5', effort: 'high' }),
     );
     await step(() => run.agent.send({ text: 'two', images: [] }));
     await out(lifecycleInit);
@@ -2381,7 +2439,7 @@ describe('createClaudeCodeHarness', () => {
             type: 'control_response',
             response: {
               subtype: 'success',
-              request_id: 'wigley-3',
+              request_id: 'wigley-4',
               response: { still_queued: [] },
             },
           },
@@ -2482,7 +2540,7 @@ describe('createClaudeCodeHarness', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'wigley-3',
+            request_id: 'wigley-4',
             response: { still_queued: [] },
           },
         },
@@ -3161,7 +3219,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       ],
     });
     expect(host.processes[0].writes[0]).toBe(
-      JSON.stringify(contextUsageRequest('wigley-1')),
+      JSON.stringify(initializeRequest('wigley-1')),
     );
   });
 
@@ -3233,9 +3291,19 @@ describe('createClaudeCodeHarness on the session host', () => {
     const out = (line: object | string) =>
       step(() => host.output('p-1', 'out', asText(line)));
 
-    await out(contextReply('wigley-1', 1000000, 967000));
+    await out({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-1',
+        response: {
+          commands: [{ name: 'compact', description: 'Compact the context' }],
+        },
+      },
+    });
+    await out(contextReply('wigley-2', 1000000, 967000));
     await out(
-      settingsReply('wigley-2', { model: 'claude-opus-5-5', effort: 'medium' }),
+      settingsReply('wigley-3', { model: 'claude-opus-5-5', effort: 'medium' }),
     );
     await step(() => agent.send({ text: 'hi', images: [] }));
     await out(lifecycleInit);
@@ -3245,12 +3313,12 @@ describe('createClaudeCodeHarness on the session host', () => {
     await step(() => agent.setControl('mode', 'plan'));
     await out({
       type: 'control_response',
-      response: { subtype: 'success', request_id: 'wigley-5' },
+      response: { subtype: 'success', request_id: 'wigley-6' },
     });
     await step(() => agent.setControl('effort', 'high'));
     await out(successResult('Set effort level to high', ['00000000-2']));
     await out(
-      settingsReply('wigley-7', { model: 'claude-opus-5-5', effort: 'high' }),
+      settingsReply('wigley-8', { model: 'claude-opus-5-5', effort: 'high' }),
     );
     await step(() => agent.send({ text: 'two', images: [] }));
     await out(lifecycleInit);
@@ -3431,6 +3499,18 @@ describe('createClaudeCodeHarness on the session host', () => {
       );
     },
   );
+
+  it('attach_WritesNoInitialize', async () => {
+    const host = createFakeSessionHost(clock);
+    const record = host.addRunning(running(logOf([])));
+
+    await hostHarness(host, clock).attach(request, recordingEvents().events);
+    await settle();
+
+    expect(record.writes).toEqual([
+      JSON.stringify(settingsRequest('wigley-1')),
+    ]);
+  });
 
   it.each([
     {

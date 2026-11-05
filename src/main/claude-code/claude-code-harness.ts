@@ -44,6 +44,7 @@ import {
   readHistory,
   readLastUsage,
   readSavedReplies,
+  readSessionName,
 } from './past-sessions';
 import { readPlanUsage } from './plan-usage';
 import {
@@ -374,6 +375,15 @@ function createClaudeSession(
 
   const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
+  // `init` waits for the first message; this answers at once.
+  const requestCommands = () => {
+    writeMessage({
+      type: 'control_request',
+      request_id: nextRequestId(),
+      request: { subtype: 'initialize' },
+    });
+  };
+
   // This request and `requestAppliedSettings` are asked at start and after every
   // turn, a control command's included: `/model` changes the window and the limit,
   // and `/effort` and `/model` change the applied model and effort.
@@ -515,6 +525,7 @@ function createClaudeSession(
       events.controls(state.controls.map((control) => ({ ...control }))),
     );
     emitActivity('idle');
+    requestCommands();
     requestContextUsage();
     requestAppliedSettings();
   };
@@ -527,10 +538,12 @@ function createClaudeSession(
     },
     interrupt() {
       requireRunning();
-      if (state.activity !== 'working') {
+      const isTurnWorking = state.activity === 'working';
+      const runningTaskIds = state.backgroundTaskIds;
+      if (!isTurnWorking && runningTaskIds.length === 0) {
         return;
       }
-      if (state.graceDeadline !== null) {
+      if (isTurnWorking && state.graceDeadline !== null) {
         // A call makes this notice, not a line: a replay cannot rebuild it, so
         // its id stays outside `noticeCount`.
         const entry: ChatEntry = {
@@ -554,6 +567,14 @@ function createClaudeSession(
         request_id: nextRequestId(),
         request: { subtype: 'interrupt' },
       });
+      // Claude's interrupt leaves a main agent's background Bash running.
+      for (const taskId of runningTaskIds) {
+        writeMessage({
+          type: 'control_request',
+          request_id: nextRequestId(),
+          request: { subtype: 'stop_task', task_id: taskId },
+        });
+      }
     },
     setControl(id, value) {
       requireRunning();
@@ -1106,6 +1127,13 @@ export function createClaudeCodeHarness(
       ),
     lastUsage: (sessionId, projectDir, profileDir) =>
       readLastUsage(
+        deps.files,
+        deps.paths,
+        projectsFolder(deps, projectDir, profileDir),
+        sessionId,
+      ),
+    sessionName: (sessionId, projectDir, profileDir) =>
+      readSessionName(
         deps.files,
         deps.paths,
         projectsFolder(deps, projectDir, profileDir),

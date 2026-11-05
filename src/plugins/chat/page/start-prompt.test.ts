@@ -392,6 +392,23 @@ describe('start prompt', () => {
     ]);
   });
 
+  it('openForNewSession_savedSessions_startsWithoutTheSessionStep', async () => {
+    const run = setUp({
+      answers: { pastSessions: () => Promise.resolve([alpha, beta]) },
+    });
+    run.prompt.openForNewSession();
+    await flush();
+    pickFolder(run.last(), '~/dev/app');
+    await flush();
+    pickItem(run.last(), 'work · ~/.claude');
+    await flush();
+    expect(run.opened.map(({ title }) => title)).toEqual(['Folder', 'Profile']);
+    expect(run.invoked).not.toContain('pastSessions');
+    expect(run.started).toEqual([
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
+    ]);
+  });
+
   it('sessionStep_savedSessions_opensOnNewThenUnarchivedRows', async () => {
     const run = await atSessionStep();
     expect(run.last().title).toBe('Session');

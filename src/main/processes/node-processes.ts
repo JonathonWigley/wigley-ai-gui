@@ -1,8 +1,13 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import type { ProcessResult, ProcessRunner } from '../../contracts/processes';
+import type {
+  ProcessResult,
+  ProcessRunner,
+  ProcessRunOptions,
+} from '../../contracts/processes';
 
-// `ProcessRunner` through `node:child_process`, in the app's environment.
+// `ProcessRunner` through `node:child_process`, in the app's environment less
+// `unsetEnv`.
 // Output is collected whole, with no size cap. A run that cannot start
 // rejects naming the program, or the folder when `cwd` does not exist. Past
 // `timeoutMs` the program is killed and the run resolves at once with the
@@ -15,7 +20,7 @@ export function createNodeProcesses(): ProcessRunner {
 function runToEnd(
   command: string,
   args: string[],
-  options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
+  options?: ProcessRunOptions,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     const signal = options?.signal;
@@ -25,6 +30,7 @@ function runToEnd(
     }
     const child = spawn(command, args, {
       cwd: options?.cwd,
+      env: envWithout(options?.unsetEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const stdout: Buffer[] = [];
@@ -71,6 +77,20 @@ function runToEnd(
       }
     });
   });
+}
+
+// Undefined, the child inherits the app's environment as it is.
+function envWithout(
+  names: readonly string[] | undefined,
+): NodeJS.ProcessEnv | undefined {
+  if (names === undefined) {
+    return undefined;
+  }
+  const env = { ...process.env };
+  for (const name of names) {
+    delete env[name];
+  }
+  return env;
 }
 
 function collected(

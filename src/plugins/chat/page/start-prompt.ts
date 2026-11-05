@@ -22,6 +22,7 @@ import type { SignInDialog } from './sign-in-dialog';
 import {
   displayPath,
   type FolderItem,
+  folderName,
   folderItems,
   preselectedProfile,
   profileLabel,
@@ -45,10 +46,12 @@ export interface StartPromptDeps {
 // resumes a chat session there, revealing its Chat tab. Esc at any step
 // starts nothing. Opening the prompt again drops the earlier one: an answer
 // or a sign-in that arrives for it is logged and goes no further.
-// `toggleArchive` and `showArchived` act on the session step while it is
-// open.
+// `openForNewSession` asks the same way but passes the session step over,
+// starting a new session once the profile is signed in. `toggleArchive` and
+// `showArchived` act on the session step while it is open.
 export interface StartPrompt {
   open(): void;
+  openForNewSession(): void;
   toggleArchive(): void;
   showArchived(): void;
 }
@@ -72,6 +75,7 @@ interface SessionStep {
 interface PromptContext {
   deps: StartPromptDeps;
   isCurrent(): boolean;
+  offersSavedSessions: boolean;
   recent: readonly RecentFolder[];
   profiles: readonly ChatProfile[];
 }
@@ -100,7 +104,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     return true;
   };
 
-  const openPrompt = () => {
+  const openPrompt = (offersSavedSessions: boolean) => {
     step = null;
     opens += 1;
     const opened = opens;
@@ -116,7 +120,13 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           deps.toast("Add a profile to chat's profiles setting first", 'error');
           return;
         }
-        openFolderStep({ deps, isCurrent, recent, profiles });
+        openFolderStep({
+          deps,
+          isCurrent,
+          offersSavedSessions,
+          recent,
+          profiles,
+        });
       },
       (error: unknown) => {
         log(`start prompt not opened: ${errorText(error)}`);
@@ -130,6 +140,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       title: 'Folder',
       items: folderItems(context.recent, deps.homeDir, deps.paths),
       label: (item) => item.label,
+      name: (item) => folderName(item, deps.paths),
       rowInput: folderRowInput,
       selected: 0,
       picked: (item) =>
@@ -181,22 +192,30 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     });
   };
 
-  // Goes on to the session step when the profile is signed in; a signed-out
-  // profile opens the sign-in dialog first, going on only once it finishes
-  // signed in. A status that cannot be read goes on. Nothing goes on once the
-  // prompt has opened again.
+  // Goes on to the session step, or to a new session when the prompt offers no
+  // saved ones, when the profile is signed in; a signed-out profile opens the
+  // sign-in dialog first, going on only once it finishes signed in. A status
+  // that cannot be read goes on. Nothing goes on once the prompt has opened
+  // again.
   const checkAccount = (
     context: PromptContext,
     projectDir: string,
     profile: ChatProfile,
   ) => {
+    const goOn = () => {
+      if (context.offersSavedSessions) {
+        listSessions(context, projectDir, profile);
+      } else {
+        startSession(context, projectDir, profile);
+      }
+    };
     void channel.invoke('accountStatus', profile.name).then(
       (status) => {
         if (isStale(context.isCurrent, `${profile.name}'s status`)) {
           return;
         }
         if (status.signedIn) {
-          listSessions(context, projectDir, profile);
+          goOn();
           return;
         }
         log(`${profile.name} is signed out`);
@@ -205,7 +224,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
             return;
           }
           if (signedIn) {
-            listSessions(context, projectDir, profile);
+            goOn();
             return;
           }
           log(`no session started: ${profile.name} is signed out`);
@@ -216,7 +235,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         if (isStale(context.isCurrent, `${profile.name}'s status`)) {
           return;
         }
-        listSessions(context, projectDir, profile);
+        goOn();
       },
     );
   };
@@ -354,7 +373,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   };
 
   return {
-    open: openPrompt,
+    open: () => openPrompt(true),
+    openForNewSession: () => openPrompt(false),
     toggleArchive,
     showArchived: toggleShowArchived,
   };

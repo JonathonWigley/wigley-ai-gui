@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { Platform } from '../../contracts/platform';
 
 // macOS's `sun_path` holds 104 bytes, the NUL included.
 const MAX_SOCKET_PATH_BYTES = 103;
@@ -14,7 +15,7 @@ const MAX_SOCKET_PATH_BYTES = 103;
 // enter when `tempDir` is too long as well. Creates that `/tmp` folder, and
 // throws when it exists but another user owns it or others can enter it.
 export function channelPath(
-  platform: NodeJS.Platform,
+  platform: Platform,
   home: string,
   username: string,
   instanceId: string,
@@ -22,7 +23,7 @@ export function channelPath(
   tempDir: string = os.tmpdir(),
 ): string {
   const perHome = `${instanceId}-${username}-${homeHash(home)}${suffix}`;
-  if (platform === 'win32') {
+  if (platform === 'windows') {
     return `\\\\.\\pipe\\${perHome}`;
   }
   const socket = path.posix.join(

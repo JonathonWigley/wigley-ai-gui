@@ -127,6 +127,8 @@ export interface StageActionSpec {
   // 'page': the page runs it (openPlan); 'main': through
   // runAction.
   side: 'page' | 'main';
+  // Runs from its own `<Leader>w` key only: no button, and never the main action.
+  keyOnly?: true;
   // Whether the action shows for this flow, beyond the stage match: Resume
   // make shows only with open boxes.
   available(flow: SessionFlow): boolean;
@@ -149,8 +151,8 @@ export interface PageStage {
   // sorts on it.
   order: number;
   // Actions in order, the main action first. `ww` and the main action's button
-  // run the first available one; when that one is disabled, they run nothing
-  // and log `nothing to run`.
+  // run the first available one that is not `keyOnly`; when that one is
+  // disabled, they run nothing and log `nothing to run`.
   actions: readonly StageActionSpec[];
   // The side pane's detail line: '3/7 · wave 2 · Claim grants'; '' for none.
   // The chip's input and the strip's input still carry it for a user layout.

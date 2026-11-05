@@ -1,6 +1,6 @@
 # 05 — Chat completion, descriptions setting and row hook
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)

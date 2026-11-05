@@ -1,6 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
@@ -174,6 +175,7 @@ export interface DocsViewDeps {
   homeDir: string;
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  matcher: FuzzyMatcher;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
@@ -413,6 +415,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const tree = createTreeView({
     log,
+    matcher: deps.matcher,
     parts: newParts(),
     isMachine,
     openLeaf: (leaf: TreeLeaf, focusesDoc: boolean) => {
@@ -581,6 +584,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
+    matcher: deps.matcher,
     parts: newParts(),
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
@@ -851,6 +855,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       title,
       items: choices,
       label: (choice) => deps.paths.tilde(choice.folder, homeDir),
+      name: (choice) => deps.paths.base(choice.folder),
       drawRow: dialogs.pickerRow(title),
       selected: choices.findIndex((choice) => choice.folder === contextFolder),
       chosen: (choice) => {

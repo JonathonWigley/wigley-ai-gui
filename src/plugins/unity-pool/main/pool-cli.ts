@@ -5,11 +5,12 @@ import type {
   ProcessRunner,
 } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
+import { SESSION_IDENTITY_ENV } from '../../../shared/session-env';
 import type { PoolAction, PoolActionResult } from '../contract';
 
 const RUN_TIMEOUT_MS = 30_000;
 
-// The `python3` arguments of `unity-pool <action> <pool> <clone> --json`.
+// The Python arguments of `unity-pool <action> <pool> <clone> --json`.
 export function poolCommandArgs(
   scriptPath: string,
   action: PoolAction,
@@ -51,8 +52,21 @@ export function readActionResult(result: ProcessResult): PoolActionResult {
   };
 }
 
-// Runs `python3 -X utf8 <script> <action> <pool> <clone> --json`, `scriptPath` being the raw setting with `~` not yet
-// expanded. A script missing from its path runs nothing and answers `no-cli`.
+// The script the `scriptPath` setting names, the setting itself when set. Empty, it is `~/.local/bin/unity-pool`,
+// where macOS and Linux link the tool; a Windows install writes launchers there, not a symlink a Python can run, so
+// Windows runs the tool from its own folder.
+export function resolveScriptPath(setting: string, windows: boolean): string {
+  if (setting !== '') {
+    return setting;
+  }
+  return windows
+    ? '~/wigley-agents/tools/unity-pool/unity-pool'
+    : '~/.local/bin/unity-pool';
+}
+
+// Runs `<pythonCommand> -X utf8 <script> <action> <pool> <clone> --json`, `scriptPath` being the raw setting with `~`
+// not yet expanded, without any session's identity in its environment, so the CLI takes the run as the user's. A
+// script missing from its path runs nothing and answers `no-cli`.
 export async function runPoolCommand(
   deps: {
     processes: ProcessRunner;
@@ -60,6 +74,7 @@ export async function runPoolCommand(
     paths: Pick<Paths, 'expandTilde'>;
     homeDir: string;
     scriptPath: string;
+    pythonCommand: string;
   },
   action: PoolAction,
   pool: string,
@@ -75,9 +90,9 @@ export async function runPoolCommand(
   }
   try {
     const result = await deps.processes.run(
-      'python3',
+      deps.pythonCommand,
       poolCommandArgs(script, action, pool, clone),
-      { timeoutMs: RUN_TIMEOUT_MS },
+      { timeoutMs: RUN_TIMEOUT_MS, unsetEnv: SESSION_IDENTITY_ENV },
     );
     return readActionResult(result);
   } catch (error) {

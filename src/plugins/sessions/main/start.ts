@@ -7,6 +7,7 @@ import type {
 } from '../../../contracts/plugin';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { errorText } from '../../../shared/error-text';
+import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import {
   argsObject,
   nullableNumberOr,
@@ -37,7 +38,6 @@ import {
   launchCommand,
   writeEndpointFiles,
 } from './relay/endpoint';
-import { createProjectNames } from './project-names';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
@@ -51,6 +51,22 @@ type SessionsApi = MainApi<
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
+// The name the session's harness shows for it; null when the app runs no such
+// harness or the session does not say which saved session it is.
+async function hostSessionName(
+  api: SessionsApi,
+  info: SessionInfo,
+): Promise<string | null> {
+  const { sessionId, projectDir } = info;
+  const harness = api.services.agentHarnesses.find(
+    (candidate) => candidate.id === info.harness,
+  );
+  if (harness === undefined || sessionId === null || projectDir === null) {
+    return null;
+  }
+  return harness.sessionName(sessionId, projectDir, info.profileDir ?? null);
+}
+
 function createList(api: SessionsApi): SessionList {
   const list = createSessionList({
     randomHex: api.services.randomHex,
@@ -59,7 +75,8 @@ function createList(api: SessionsApi): SessionList {
     emit: (event, data) => api.events.emit(event, data),
     stateChanged: (state) => api.channel.send('stateChanged', state),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
-    projectName: createProjectNames(api.services.git),
+    projectName: createOriginRepoNames(api.services.git),
+    hostSessionName: (info) => hostSessionName(api, info),
   });
   api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
@@ -81,7 +98,7 @@ function createList(api: SessionsApi): SessionList {
 // it again, except a drive run's, which stays ended and names the run's home.
 function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
   const channel = channelPath(
-    process.platform,
+    api.services.platform,
     api.services.homeDir,
     os.userInfo().username,
     api.services.appInstance.id,
@@ -99,7 +116,7 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
     channel,
     launch:
       api.services.runMode === 'drive'
-        ? endedDriveRunLaunch(process.platform, api.services.homeDir)
+        ? endedDriveRunLaunch(api.services.platform, api.services.homeDir)
         : launchCommand(
             process.env,
             process.execPath,

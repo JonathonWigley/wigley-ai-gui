@@ -1,4 +1,5 @@
 import {
+  type AgentCommand,
   type AgentEvent,
   type AgentStart,
   type ChatEntry,
@@ -15,6 +16,7 @@ import type { EntryDraft } from '../../shared/entry-stamp';
 import { isSameJson } from '../../shared/json';
 import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
 import type { AgentDefinitions } from './agent-definitions';
+import { commandRecordsOf, mergeInitNames } from './claude-commands';
 import {
   appliedControlsOf,
   CLAUDE_CONTROLS,
@@ -113,7 +115,9 @@ export function heldUserMessage({ draft }: HeldMessage): UserMessage {
 export type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
+  | { kind: 'stopTask'; taskId: string }
   | { kind: 'contextUsage' }
+  | { kind: 'initialize' }
   | { kind: 'appliedSettings' };
 
 // A `/compact` written and not yet taken by a compaction or ended.
@@ -160,6 +164,8 @@ export interface SessionFoldState {
   // Empty until the harness sets the loaded ones.
   definitions: AgentDefinitions;
   controls: SessionControl[];
+  // From the `initialize` answer, each `init` merged over them.
+  commandRecords: AgentCommand[];
   activity: ProcessActivity;
   // User entry ids are `user-<n>`.
   sendCount: number;
@@ -177,6 +183,8 @@ export interface SessionFoldState {
   lastStderr: string | null;
   // The interrupt grace's end, epoch ms; null when none is pending.
   graceDeadline: number | null;
+  // The background tasks the CLI last listed as running.
+  backgroundTaskIds: string[];
   // True from a turn's end until the next `get_context_usage` `in` line.
   isContextRequestOwed: boolean;
   // True from the start and from a turn's end until the next `get_settings` `in`
@@ -193,7 +201,7 @@ export type FoldEffect =
   | { kind: 'agentEvent'; event: AgentEvent }
   | { kind: 'controls'; controls: SessionControl[] }
   | { kind: 'activity'; activity: ProcessActivity }
-  | { kind: 'commands'; commands: string[] }
+  | { kind: 'commands'; commands: AgentCommand[] }
   | { kind: 'planUsage'; update: PlanRowUpdate }
   | { kind: 'messageDropped'; entryId: string; message: UserMessage }
   | { kind: 'requestContextUsage' }
@@ -217,12 +225,16 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     mode: launchMode(request.controls),
   };
   const state: SessionFoldState = {
-    // The adapter's own `get_context_usage` and `get_settings` replies stay out
-    // of the chat.
+    // The adapter's own `get_context_usage`, `get_settings` and `initialize` replies
+    // stay out of the chat.
     decoder: createStreamDecoder(
       (requestId) => {
         const kind = pendingRequests.get(requestId)?.kind;
-        return kind === 'contextUsage' || kind === 'appliedSettings';
+        return (
+          kind === 'contextUsage' ||
+          kind === 'appliedSettings' ||
+          kind === 'initialize'
+        );
       },
       (agentType) => state.definitions.get(agentType) ?? null,
     ),
@@ -232,6 +244,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
       ...control,
       value: launchedControls[control.id] ?? null,
     })),
+    commandRecords: [],
     activity: 'idle',
     sendCount: 0,
     requestCount: 0,
@@ -245,6 +258,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     lastUsageEvent: null,
     lastStderr: null,
     graceDeadline: null,
+    backgroundTaskIds: [],
     isContextRequestOwed: false,
     isSettingsRequestOwed: true,
     owedHostRequests: new Map(),
@@ -824,6 +838,13 @@ function foldRequestLine(
   } else if (request.subtype === 'get_settings') {
     state.pendingRequests.set(requestId, { kind: 'appliedSettings' });
     state.isSettingsRequestOwed = false;
+  } else if (request.subtype === 'initialize') {
+    state.pendingRequests.set(requestId, { kind: 'initialize' });
+  } else if (request.subtype === 'stop_task') {
+    state.pendingRequests.set(requestId, {
+      kind: 'stopTask',
+      taskId: asString(request.task_id),
+    });
   } else if (request.subtype === 'interrupt') {
     state.pendingRequests.set(requestId, { kind: 'interrupt' });
     state.graceDeadline = at + INTERRUPT_GRACE_MS;
@@ -992,6 +1013,45 @@ function foldAppliedSettings(
   }
 }
 
+// A failed answer only logs: the list waits for `init`, and the user lost nothing
+// they can act on.
+function foldInitializeAnswer(
+  state: SessionFoldState,
+  response: NonNullable<DecodedLine['controlResponse']>,
+  effects: FoldEffect[],
+): void {
+  if (response.error !== null) {
+    effects.push({
+      kind: 'log',
+      text: `Could not list commands: ${response.error}`,
+    });
+    return;
+  }
+  if (!Array.isArray(response.response.commands)) {
+    effects.push({
+      kind: 'log',
+      text: 'Could not list commands: no list in the answer',
+    });
+    return;
+  }
+  state.commandRecords = commandRecordsOf(response.response);
+  effects.push({ kind: 'commands', commands: state.commandRecords });
+}
+
+// An `init` with no names leaves the held list, so a malformed line cannot empty
+// a good one.
+function foldInitNames(
+  state: SessionFoldState,
+  names: readonly string[],
+  effects: FoldEffect[],
+): void {
+  if (names.length === 0) {
+    return;
+  }
+  state.commandRecords = mergeInitNames(state.commandRecords, names);
+  effects.push({ kind: 'commands', commands: state.commandRecords });
+}
+
 function answerControlResponse(
   state: SessionFoldState,
   response: NonNullable<DecodedLine['controlResponse']>,
@@ -1027,6 +1087,15 @@ function answerControlResponse(
     foldAppliedSettings(state, response, effects);
     return;
   }
+  if (pending.kind === 'stopTask') {
+    if (response.error !== null) {
+      effects.push({
+        kind: 'log',
+        text: `stop_task ${pending.taskId} failed: ${response.error}`,
+      });
+    }
+    return;
+  }
   if (pending.kind === 'interrupt') {
     if (response.error !== null) {
       pushNotice(
@@ -1044,6 +1113,10 @@ function answerControlResponse(
     if (state.tracker.activity() === 'idle') {
       forgetEndedCompaction(state.compaction);
     }
+    return;
+  }
+  if (pending.kind === 'initialize') {
+    foldInitializeAnswer(state, response, effects);
     return;
   }
   if (response.error !== null) {
@@ -1106,9 +1179,12 @@ function foldOutLine(
   foldCompactionLine(state, decoded, at, effects);
   foldControlValues(state, decoded, command, effects);
   if (decoded.commands !== null) {
-    effects.push({ kind: 'commands', commands: decoded.commands });
+    foldInitNames(state, decoded.commands, effects);
   }
   foldLineUsage(state, decoded, at, effects);
+  if (decoded.backgroundTaskIds !== null) {
+    state.backgroundTaskIds = decoded.backgroundTaskIds;
+  }
   if (decoded.controlResponse !== null) {
     answerControlResponse(state, decoded.controlResponse, at, effects);
   }
@@ -1288,7 +1364,7 @@ export function replayPipeLog(
   }
   folded.push(...advanceFold(state, now).effects);
   const lastEntries = new Map<string, ChatEntry>();
-  let lastCommands: string[] | null = null;
+  let lastCommands: AgentCommand[] | null = null;
   for (const effect of folded) {
     if (effect.kind === 'entry') {
       lastEntries.set(effect.entry.id, effect.entry);

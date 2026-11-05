@@ -57,15 +57,18 @@ export function ordinal(position: number): string {
 }
 
 // One badge per pool, in the snapshot's name order: `Unity <n>` for a clone the row's session holds by an agent
-// claim or an open handoff, else `Unity: queued <ordinal>` for its queue ticket. A hold and a stranded mark belong
-// to no session and show none.
+// claim or an open handoff, else `Unity: queued <ordinal>` for its queue ticket, each holder matched to its row
+// among `rows`. A hold and a stranded mark belong to no session and show none.
 export function rowBadges(
   pools: readonly PoolState[],
+  rows: readonly PoolRow[],
   row: PoolRow,
 ): RowBadgeInput[] {
   const badges: RowBadgeInput[] = [];
+  const belongsToRow = (holder: PoolHolder) =>
+    holderRow(holder, rows)?.sessionId === row.sessionId;
   for (const pool of pools) {
-    const badge = poolBadge(pool, row);
+    const badge = poolBadge(pool, belongsToRow);
     if (badge !== null) {
       badges.push(badge);
     }
@@ -142,31 +145,43 @@ export function panelInput(
   };
 }
 
-function poolBadge(pool: PoolState, row: PoolRow): RowBadgeInput | null {
+function poolBadge(
+  pool: PoolState,
+  belongsToRow: (holder: PoolHolder) => boolean,
+): RowBadgeInput | null {
   const held = pool.clones.find((clone) => {
     const claimedByRow =
       clone.claim !== null &&
       clone.claim.kind === 'agent' &&
-      belongsTo(clone.claim, row);
-    const handedToRow = clone.handoff !== null && belongsTo(clone.handoff, row);
+      belongsToRow(clone.claim);
+    const handedToRow = clone.handoff !== null && belongsToRow(clone.handoff);
     return claimedByRow || handedToRow;
   });
   if (held !== undefined) {
     return { text: `Unity ${held.number}`, queued: false };
   }
-  const index = pool.queue.findIndex((ticket) => belongsTo(ticket, row));
+  const index = pool.queue.findIndex((ticket) => belongsToRow(ticket));
   return index === -1
     ? null
     : { text: `Unity: queued ${ordinal(index + 1)}`, queued: true };
 }
 
-// A holder belongs to the row its `row` names, else to the row whose host session its `session` is; a null never
-// matches.
-function belongsTo(holder: PoolHolder, row: PoolRow): boolean {
-  const byRow = holder.row !== null && holder.row === row.sessionId;
-  const bySession =
-    holder.session !== null && holder.session === row.hostSessionId;
-  return byRow || bySession;
+// The row among `rows` its `row` names, else, when no row has that id, the row whose host session its `session` is;
+// a null never matches.
+function holderRow(
+  holder: PoolHolder,
+  rows: readonly PoolRow[],
+): PoolRow | undefined {
+  const byRow =
+    holder.row === null
+      ? undefined
+      : rows.find((each) => each.sessionId === holder.row);
+  return (
+    byRow ??
+    (holder.session === null
+      ? undefined
+      : rows.find((each) => each.hostSessionId === holder.session))
+  );
 }
 
 function isUnheld(clone: PoolClone): boolean {
@@ -257,7 +272,7 @@ function holderInput(
   idleMs: number | null,
   select: (sessionId: string) => void,
 ): HolderInput {
-  const row = rows.find((each) => belongsTo(holder, each));
+  const row = holderRow(holder, rows);
   if (row !== undefined) {
     return {
       kind: 'session',

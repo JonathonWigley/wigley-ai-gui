@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { channelPath } from '../../../../shared/local-channel/channel-path';
+import { osPlatform } from '../../../../shared/os-platform';
 import {
   type ConnectedSession,
   RELAY_PROTOCOL,
@@ -69,7 +70,7 @@ function echoServe() {
 // socket file elsewhere.
 function testChannel(dir: string): string {
   return channelPath(
-    process.platform,
+    osPlatform(process.platform),
     dir,
     'selftest',
     'wigley-ai-gui',
@@ -209,6 +210,7 @@ describe('startRelayServer', () => {
     ['project_dir', { project_dir: 42 }],
     ['deadline_seconds', { deadline_seconds: '300' }],
     ['harness', { harness: 3 }],
+    ['config_dir', { config_dir: 3 }],
   ])(
     'refuses a hello whose %s has the wrong type and starts no session',
     async (field, override) => {
@@ -275,6 +277,16 @@ describe('startRelayServer', () => {
         projectDir: null,
         deadlineSeconds: null,
         harness: null,
+      },
+    },
+    {
+      hello: { ...HELLO, config_dir: '/home/me/.claude-work' },
+      expected: {
+        sessionId: 'session-1',
+        projectDir: '/work/project',
+        deadlineSeconds: 300,
+        harness: 'claude',
+        profileDir: '/home/me/.claude-work',
       },
     },
     {

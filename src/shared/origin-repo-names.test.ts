@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createOriginNames } from './origin-names';
+import { createOriginRepoNames } from './origin-repo-names';
 
 const NAME_OF_A = 'repo-of-a';
 const NAME_OF_B = 'repo-of-b';
 
-describe('createOriginNames', () => {
+describe('createOriginRepoNames', () => {
   // `rounds` holds the folders asked together, each round settling before the
   // next. `firstAnswer` is what git gives its first call, every later call
   // answering with the folder's repo name. A rejection reads as `rejected`.
@@ -51,7 +51,7 @@ describe('createOriginNames', () => {
     'cachesOneLookupPerFolder: $name',
     async ({ firstAnswer, rounds, gitCalls, results }) => {
       const calls: string[] = [];
-      const originName = createOriginNames({
+      const originRepoName = createOriginRepoNames({
         originRepoName: (folder) => {
           calls.push(folder);
           if (calls.length === 1 && firstAnswer !== undefined) {
@@ -64,7 +64,7 @@ describe('createOriginNames', () => {
       const settled: (string | null)[] = [];
       for (const round of rounds) {
         const answers = await Promise.all(
-          round.map((folder) => originName(folder).catch(() => 'rejected')),
+          round.map((folder) => originRepoName(folder).catch(() => 'rejected')),
         );
         settled.push(...answers);
       }

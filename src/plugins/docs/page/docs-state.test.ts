@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type {
@@ -111,6 +112,7 @@ describe('visibleRows', () => {
       NESTED,
       state({ expanded: new Set(['a']) }),
       pathOf,
+      fakeFuzzyMatcher,
     );
 
     expect(rowSummary(rows)).toEqual([
@@ -120,7 +122,12 @@ describe('visibleRows', () => {
   });
 
   it('visibleRows_Filter_ShowsMatchesUnderExpandedGroups', () => {
-    const rows = visibleRows(FILTER_TREE, state({ filter: 'STYLE' }), pathOf);
+    const rows = visibleRows(
+      FILTER_TREE,
+      state({ filter: 'STYLE' }),
+      pathOf,
+      fakeFuzzyMatcher,
+    );
 
     expect(rowSummary(rows)).toEqual([
       { id: 'root', depth: 0, isExpanded: true },
@@ -130,10 +137,52 @@ describe('visibleRows', () => {
   });
 
   it('visibleRows_FilterMatchesPath_Shown', () => {
-    const rows = visibleRows(FILTER_TREE, state({ filter: 'rules/' }), pathOf);
+    const rows = visibleRows(
+      FILTER_TREE,
+      state({ filter: 'rules/' }),
+      pathOf,
+      fakeFuzzyMatcher,
+    );
 
     expect(rows.map((row) => row.node.id)).toContain('style');
     expect(rows.map((row) => row.node.id)).not.toContain('other');
+  });
+
+  it('visibleRows_FuzzyTitle_ShowsLeafUnderGroups', () => {
+    const tree = [
+      group('root', 'Root', [
+        group('docs', 'Docs', [leaf('stream', 'claude-stream', 'e:stream')]),
+        group('other', 'Others', [leaf('other', 'Other', 'e:other')]),
+      ]),
+    ];
+
+    const rows = visibleRows(
+      tree,
+      state({ filter: 'clstr' }),
+      pathOf,
+      fakeFuzzyMatcher,
+    );
+
+    expect(rowSummary(rows)).toEqual([
+      { id: 'root', depth: 0, isExpanded: true },
+      { id: 'docs', depth: 1, isExpanded: true },
+      { id: 'stream', depth: 2, isExpanded: false },
+    ]);
+  });
+
+  it('visibleRows_SpacesOnlyFilter_IsNoFilter', () => {
+    const rows = visibleRows(
+      FILTER_TREE,
+      state({ expanded: new Set(['root']), filter: '   ' }),
+      pathOf,
+      fakeFuzzyMatcher,
+    );
+
+    expect(rowSummary(rows)).toEqual([
+      { id: 'root', depth: 0, isExpanded: true },
+      { id: 'rules', depth: 1, isExpanded: false },
+      { id: 'other', depth: 1, isExpanded: false },
+    ]);
   });
 });
 
@@ -181,7 +230,12 @@ describe('treeRowAction', () => {
     ]),
   ];
   const rowsFor = (expanded: string[], filter = '') =>
-    visibleRows(tree, state({ expanded: new Set(expanded), filter }), String);
+    visibleRows(
+      tree,
+      state({ expanded: new Set(expanded), filter }),
+      String,
+      fakeFuzzyMatcher,
+    );
   const actionOf = (
     id: string,
     key: TreeRowKey,
@@ -202,6 +256,13 @@ describe('treeRowAction', () => {
     filter: string;
     expected: TreeRowAction;
   }>([
+    {
+      id: 'b',
+      key: 'close',
+      expanded: ['a', 'b'],
+      filter: '   ',
+      expected: { type: 'collapse' },
+    },
     {
       id: 'b',
       key: 'toggle',
@@ -275,6 +336,7 @@ describe('treeRowAction', () => {
       withEmpty,
       state({ expanded: new Set(['a', 'b']) }),
       String,
+      fakeFuzzyMatcher,
     );
     const [, emptyGroup] = rows;
 
@@ -1098,6 +1160,16 @@ describe('treeLine', () => {
     lineState: TreeLineState;
     expected: (Omit<TreeLine, 'text'> & { mentions: string }) | null;
   }>([
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: false,
+        filter: '   ',
+        rowCount: 0,
+        isFilterOpen: false,
+      },
+      expected: null,
+    },
     {
       lineState: {
         hasTree: false,

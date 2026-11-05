@@ -125,7 +125,9 @@ interview on 2026-10-23; this file is the record of both.
   result too, so any other value leaves the control alone, and the reply shows what Claude applied. The model also
   comes from the init event, and a full model name shows as its alias. A failed `get_settings` is logged and changes
   nothing.
-- **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
+- **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request, and stops every running subagent and
+  background task by that request and a `stop_task` for each, with a turn running or none (claude-stream.md § Subagents,
+  Probe 7); the process stays open for the next
   message. A SIGINT would end the process. Ctrl+C always ends the running turn (a message queued behind it still
   runs): when neither the turn's result nor an answer that leaves nothing running arrives within 5 s, the adapter
   drops its turn state, posts the notice `Claude did not stop within 5 s; showing the session idle.` and shows idle. A
@@ -390,7 +392,8 @@ interview on 2026-10-23; this file is the record of both.
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
 - **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
-  starts nothing. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
+  starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
+  profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
   one line per folder, its newest use and the profile of that use kept. A path that is no longer a folder, one that
   sits in an OS temp folder (`MainServices.tempFolders`), and one whose check fails (logged) are left out, and the list

@@ -4,7 +4,8 @@ import { WORKFLOW_COMMANDS } from './stages';
 // Each Chat-tab session's stage in the user's wigley workflow — idle, primer,
 // feature, plan ready, make, review, closed — on its session row, in a strip
 // above the Chat composer and in a side pane beside the transcript, with each
-// stage's next step as a button and a `<Leader>w` key. Main folds the agent
+// stage's actions on `<Leader>w` keys and the moves from feature to make and
+// from make to retro also as buttons. Main folds the agent
 // events into each session's flow, watches its plan folder and runs Clear &
 // make, by itself after a countdown when `autoClearAndMake` is on.
 export const workflowManifest = definePlugin({

@@ -201,6 +201,26 @@ export const defaultKeymap = {
     // ── Windows and modes ──────────────────────────────────────────────────
     { keys: '<Leader>ks', scope: 'any', command: 'sessions.showMode' },
     { keys: '<Leader>kn', scope: 'any', command: 'chat.newSession' },
+    // Bound per scope, since forms, the primer, the Backlog editor and notes
+    // hold `<C-n>` as next box and a key cannot sit in `any` beside a scope.
+    ...(
+      [
+        'sessions.idle',
+        'chat.chat',
+        'agent-strip.strip',
+        'docs.tree',
+        'docs.doc',
+        'backlog.list',
+        'backlog.detail',
+        'settings.sections',
+        'settings.rows',
+        'gallery.gallery',
+      ] as const
+    ).map((scope) => ({
+      keys: '<C-n>',
+      scope,
+      command: 'chat.startNewSession' as const,
+    })),
     { keys: '<Leader>kd', scope: 'any', command: 'docs.showMode' },
     { keys: '<Leader>vt', scope: 'any', command: 'docs.toggleTree' },
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },

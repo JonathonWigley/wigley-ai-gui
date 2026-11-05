@@ -29,6 +29,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     const view = createSettingsView({
       channel: api.channel,
       editor: services.editor,
+      matcher: services.fuzzy,
       platform: api.platform,
       markdown: services.markdown,
       keys,

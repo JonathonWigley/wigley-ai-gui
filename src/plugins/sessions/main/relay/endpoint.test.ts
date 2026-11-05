@@ -69,7 +69,7 @@ describe('launchCommand', () => {
 
 describe('endedDriveRunLaunch', () => {
   it('exits 1 from the home filesystem root, naming the home, on macOS and Linux', () => {
-    expect(endedDriveRunLaunch('darwin', '/work/app/.drive/r1/home')).toEqual({
+    expect(endedDriveRunLaunch('macos', '/work/app/.drive/r1/home')).toEqual({
       command: [
         '/bin/sh',
         '-c',
@@ -81,7 +81,9 @@ describe('endedDriveRunLaunch', () => {
   });
 
   it('exits 1 from the home drive root, naming the home, on Windows', () => {
-    expect(endedDriveRunLaunch('win32', 'C:\\work\\.drive\\r1\\home')).toEqual({
+    expect(
+      endedDriveRunLaunch('windows', 'C:\\work\\.drive\\r1\\home'),
+    ).toEqual({
       command: [
         'cmd.exe',
         '/d',

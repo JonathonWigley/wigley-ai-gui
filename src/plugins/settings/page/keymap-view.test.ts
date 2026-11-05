@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type {
   AcceleratorBind,
   KeyBind,
@@ -45,6 +46,7 @@ function context(given: UserConfigSchema, layer: UserKeymap): RowContext {
     read: unread,
     settingsLayer: unread,
     keymapLayer: () => layer,
+    matcher: fakeFuzzyMatcher,
     openBox: unread,
     closeBox: unread,
     boxProblem: unread,

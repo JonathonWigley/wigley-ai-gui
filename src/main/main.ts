@@ -55,6 +55,7 @@ import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
+import { osPlatform } from '../shared/os-platform';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
@@ -320,7 +321,9 @@ const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
-const paths: Paths = process.platform === 'win32' ? windowsPaths : posixPaths;
+// The OS main runs on, as the served config and every plugin's services name it.
+const platform: Platform = osPlatform(process.platform);
+const paths: Paths = platform === 'windows' ? windowsPaths : posixPaths;
 const git = createProcessGit({ processes, files, paths });
 
 let mainWindow: BrowserWindow | null = null;
@@ -428,14 +431,6 @@ interface StartInputs {
   // `WIGLEY_CLONE_DIR` when that is a folder, else null.
   repoDir: string | null;
 }
-
-// The OS as the served config names it.
-const platform: Platform =
-  process.platform === 'darwin'
-    ? 'macos'
-    : process.platform === 'win32'
-      ? 'windows'
-      : 'linux';
 
 // Whether the page paints the theme's `reduced` values, as the page decides it
 // from the `transparency` setting and the OS preference.
@@ -876,6 +871,7 @@ function createWindow(
       tempFolders: inputs.tempFolders,
       userConfig,
       paths,
+      platform,
       images: nativeImageEncoder,
       runMode,
       appInstance,
@@ -1059,7 +1055,7 @@ function startApp() {
       const sessionHost = createSessionHostClient({
         folder: sessionHostFolder(inputs.homeDir),
         channel: sessionHostChannel(
-          process.platform,
+          platform,
           inputs.homeDir,
           os.userInfo().username,
           appInstance.id,

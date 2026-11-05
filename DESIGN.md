@@ -357,7 +357,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
   `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done), and a second line holding the status then other
-  plugins' row parts on one line that never wraps, the run time and the cache mark at its end, gone while empty. Hover
+  plugins' row parts on one line that never wraps, the context bar, the run time and the cache mark at its end in slots of fixed least width, so the bars line up from row to row, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the

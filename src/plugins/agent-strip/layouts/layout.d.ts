@@ -11,10 +11,10 @@
 // The app keeps:
 // - the selection, which the entry cursor's `j` hands the strip, and `h`/`l` move through the cards and then the rows:
 //   the selected box draws with `isSelected`, its focus ring and its key prompts the layout's own;
-// - the open box, one per session, which Enter on the selected box or a click on any box opens and closes;
+// - the open box, one per session, which Enter on the selected box or a click on a task box opens and closes;
 // - the key scope `agent-strip.strip` the kit's key hints name;
 // - the scrolling track and its chevrons, the rows' column, and revealing the selected box;
-// - a box's click, and no focus: a box takes none;
+// - a task box's click, and no focus: a box takes none;
 // - the elapsed time once a second on every agent and task box: the app runs the box's `update` with the new
 //   `elapsedMs`, or draws a box with no `update` again and replaces its element, an open agent box's `toolList` with it;
 // - an open `toolList`'s `scrollTop` across every draw of its box, and the rows column's across every draw, while the

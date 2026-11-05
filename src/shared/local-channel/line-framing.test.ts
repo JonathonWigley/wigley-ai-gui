@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { osPlatform } from '../os-platform';
 import { channelPath } from './channel-path';
 import { jsonLine, readFirstLine, readLines } from './line-framing';
 import { connectToChannel, listenOnChannel } from './local-channel';
@@ -83,7 +84,7 @@ describe('readFirstLine', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'lf-'));
     cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     const channel = channelPath(
-      process.platform,
+      osPlatform(process.platform),
       dir,
       'selftest',
       'wigley-ai-gui',

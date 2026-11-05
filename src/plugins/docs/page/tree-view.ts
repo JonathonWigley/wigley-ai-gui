@@ -1,4 +1,5 @@
 import type { Disposable } from '../../../contracts/disposable';
+import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
@@ -30,6 +31,7 @@ import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-
 
 export interface TreeViewDeps {
   log: PluginLog;
+  matcher: FuzzyMatcher;
   // Draws the pane, the line and the rows through the docs layout.
   parts: DocsParts;
   // Whether the tree is Docs mode's, over the machine's index.
@@ -227,7 +229,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
 
   const draw = () => {
     pane.classList.toggle('is-pane-inactive', !hasFocus);
-    rows = visibleRows(tree, state, pathOf);
+    rows = visibleRows(tree, state, pathOf, deps.matcher);
     for (const drawn of drawnRows) {
       drawn.dispose();
     }
@@ -382,7 +384,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       if (isFirstTree) {
         hasRows = true;
         state = { ...state, expanded: defaultExpandedIds(next) };
-        rows = visibleRows(tree, state, pathOf);
+        rows = visibleRows(tree, state, pathOf, deps.matcher);
         state = { ...state, selectedId: rows[0]?.node.id ?? null };
       } else {
         const expanded = expandNewStarred(previous, next, state.expanded);
@@ -436,12 +438,13 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       if (filterScope === null) {
         return;
       }
+      const isFiltered = state.filter.trim() !== '';
       deps.log(
-        state.filter === ''
+        !isFiltered
           ? 'cleared the filter'
           : `filtered the tree: ${state.filter}`,
       );
-      if (state.filter !== '' && rows.length === 0) {
+      if (isFiltered && rows.length === 0) {
         deps.log(`no docs match "${state.filter}"`);
       }
       closeFilter(true);

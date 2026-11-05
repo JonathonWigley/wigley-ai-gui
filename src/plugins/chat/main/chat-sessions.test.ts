@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import {
+  type AgentCommand,
   type AgentEvent,
   type AgentProcessEvents,
   type ChatEntry,
@@ -1037,14 +1038,47 @@ describe('createChatSessions', () => {
   it('commands_StoredAndSentOnChange', async () => {
     const test = await started();
 
-    test.process.events.commands(['compact', 'model']);
-    test.process.events.commands(['compact', 'model']);
+    const fakeCommand = {
+      name: 'fake-command',
+      description: 'A fake agent command',
+      argumentHint: '',
+      aliases: ['fake-alias'],
+    };
+    const commands = [
+      { name: 'compact', description: 'd', argumentHint: '', aliases: [] },
+      { name: 'model', description: '', argumentHint: 'm', aliases: ['mo'] },
+    ];
+
+    test.process.events.commands(commands);
+    test.process.events.commands(structuredClone(commands));
 
     expect(test.sent('commands')).toEqual([
-      { sessionId: ROW_ID, names: ['fake-command'] },
-      { sessionId: ROW_ID, names: ['compact', 'model'] },
+      { sessionId: ROW_ID, commands: [fakeCommand] },
+      { sessionId: ROW_ID, commands },
     ]);
-    expect(test.chat.sessions()[0].commands).toEqual(['compact', 'model']);
+    expect(test.chat.sessions()[0].commands).toEqual(commands);
+  });
+
+  it.each<{ case: string; changed: Partial<AgentCommand> }>([
+    { case: 'description', changed: { description: 'new' } },
+    { case: 'argumentHint', changed: { argumentHint: 'new' } },
+    { case: 'aliases', changed: { aliases: ['new'] } },
+  ])('commands_SameNameNewDescription_Sent: $case', async ({ changed }) => {
+    const test = await started();
+    const command: AgentCommand = {
+      name: 'compact',
+      description: 'old',
+      argumentHint: '',
+      aliases: [],
+    };
+    test.process.events.commands([command]);
+    const sentBefore = test.sent('commands').length;
+
+    test.process.events.commands([{ ...command, ...changed }]);
+
+    expect(test.sent('commands').slice(sentBefore)).toEqual([
+      { sessionId: ROW_ID, commands: [{ ...command, ...changed }] },
+    ]);
   });
 
   it('start_OpensSelected', () => {
