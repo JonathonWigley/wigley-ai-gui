@@ -2,8 +2,7 @@
 // and keys that record every anchor named.
 import type { CommandId } from '../../../contracts/commands';
 import type { ViewScope } from '../../../contracts/keymap';
-import type { ShownLayouts } from '../../../contracts/plugin';
-import type { BaseKitDeps } from './base-kit';
+import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 
 // The name `withUser` gives the user's layout when the test names none.
 export const USER_LAYOUT = 'mine';
@@ -36,7 +35,7 @@ export interface RecordedAnchor {
 // `keysFor` reads null.
 export function recordingAnchors(): {
   anchors: RecordedAnchor[];
-  keys: BaseKitDeps['keys'];
+  keys: KeyHints;
 } {
   const anchors: RecordedAnchor[] = [];
   return {
@@ -58,6 +57,7 @@ export function recordingAnchors(): {
         };
       },
       keysFor: () => null,
+      onKeymapChanged: () => ({ dispose: () => undefined }),
     },
   };
 }

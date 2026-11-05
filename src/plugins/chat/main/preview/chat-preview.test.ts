@@ -1,24 +1,37 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../../contracts/agent';
+import { createSlotStore } from '../../../../shared/state/slot-store';
 import type { SessionInfo } from '../../../sessions/contract';
 import {
   CHAT_PREVIEW_HOST_ID,
   type ChatAgentEvent,
-  type ChatSessionState,
+  chatCommandsSlot,
+  chatControlsSlot,
+  chatEntriesSlot,
+  chatQueuedSlot,
+  chatReturnedSlot,
+  chatSessionSlot,
 } from '../../contract';
+import { createChatSlots } from '../chat-slots';
 import { createChatPreview } from './chat-preview';
 import { previewAgentEvents } from './preview-agent-events';
 
 // A preview over sessions whose `open` hands out rows `row-1`, `row-2`, …;
-// `sent` holds each channel message, `ends` each row whose owned session
-// ended, `emitted` each agent event published, `order` each message sent and
-// event emitted by name.
+// `ends` holds each row whose owned session ended, `emitted` each agent event
+// published, and `order` each slot written and event emitted by name.
 function setUp() {
   const opened: [SessionInfo, unknown][] = [];
-  const ends: string[] = [];
-  const sent: { message: string; data: unknown }[] = [];
-  const emitted: ChatAgentEvent[] = [];
   const order: string[] = [];
+  const ends: string[] = [];
+  const store = createSlotStore(() => undefined);
+  store.onWrite((change) => order.push(change.id));
+  const puts: ChatEntry[] = [];
+  store.onWrite((change) => {
+    if (change.kind === 'list' && change.change.kind === 'put') {
+      puts.push(change.change.item as ChatEntry);
+    }
+  });
+  const emitted: ChatAgentEvent[] = [];
   const activate = vi.fn<(sessionId: string) => void>();
   const preview = createChatPreview({
     sessions: {
@@ -33,10 +46,14 @@ function setUp() {
       },
       activate,
     },
-    send(message, data) {
-      sent.push({ message, data });
-      order.push(message);
-    },
+    slots: createChatSlots({
+      session: store.publish(chatSessionSlot),
+      entries: store.publish(chatEntriesSlot),
+      controls: store.publish(chatControlsSlot),
+      commands: store.publish(chatCommandsSlot),
+      queued: store.publish(chatQueuedSlot),
+      returned: store.publish(chatReturnedSlot),
+    }),
     emit(event, data) {
       emitted.push(data);
       order.push(event);
@@ -44,21 +61,17 @@ function setUp() {
     log: () => undefined,
     clock: { now: () => 5000 },
   });
-  const started = () =>
-    sent
-      .filter((held) => held.message === 'sessionStarted')
-      .map((held) => held.data as ChatSessionState);
-  const entries = () =>
-    sent
-      .filter((held) => held.message === 'entry')
-      .map((held) => (held.data as { entry: ChatEntry }).entry);
+  const sessionKeys = () => [
+    ...store.read(chatSessionSlot, 'test').all().keys(),
+  ];
   return {
     preview,
     opened,
     ends,
     activate,
-    started,
-    entries,
+    store,
+    sessionKeys,
+    puts,
     emitted,
     order,
   };
@@ -66,7 +79,7 @@ function setUp() {
 
 describe('chat preview', () => {
   it('open_FirstPress_OpensSelectedRowWithEveryKindAndControl', () => {
-    const { preview, opened, activate, started } = setUp();
+    const { preview, opened, activate, store } = setUp();
 
     preview.open();
 
@@ -77,8 +90,8 @@ describe('chat preview', () => {
       ],
     ]);
     expect(activate).toHaveBeenCalledWith('row-1');
-    const [state] = started();
-    expect(new Set(state.entries.map((entry) => entry.kind))).toEqual(
+    const entries = store.read(chatEntriesSlot, 'test').get('row-1');
+    expect(new Set(entries.map((entry) => entry.kind))).toEqual(
       new Set([
         'user',
         'assistant',
@@ -91,14 +104,15 @@ describe('chat preview', () => {
         'compaction',
       ]),
     );
-    const controlIds = state.controls.map((control) => control.id);
+    const controls = store.read(chatControlsSlot, 'test').get('row-1') ?? [];
+    const controlIds = controls.map((control) => control.id);
     expect(controlIds).toEqual(
       expect.arrayContaining(['mode', 'effort', 'model']),
     );
     expect(
       controlIds.some((id) => !['mode', 'effort', 'model'].includes(id)),
     ).toBe(true);
-    expect(state).toMatchObject({
+    expect(store.read(chatSessionSlot, 'test').get('row-1')).toMatchObject({
       sessionId: 'row-1',
       running: true,
       activity: 'idle',
@@ -106,14 +120,14 @@ describe('chat preview', () => {
   });
 
   it('open_SecondPress_ActivatesTheSameRow', () => {
-    const { preview, opened, activate, started, emitted } = setUp();
+    const { preview, opened, activate, sessionKeys, emitted } = setUp();
 
     preview.open();
     preview.open();
 
     expect(opened).toHaveLength(1);
     expect(activate.mock.calls).toEqual([['row-1'], ['row-1']]);
-    expect(started()).toHaveLength(1);
+    expect(sessionKeys()).toEqual(['row-1']);
     expect(emitted).toHaveLength(previewAgentEvents(5000).length);
   });
 
@@ -123,8 +137,8 @@ describe('chat preview', () => {
     preview.open();
 
     const events = previewAgentEvents(5000);
-    expect(order).toEqual([
-      'sessionStarted',
+    expect(order.slice(-events.length - 1)).toEqual([
+      chatSessionSlot.id,
       ...events.map(() => 'agentEvent'),
     ]);
     expect(emitted).toEqual(
@@ -173,27 +187,27 @@ describe('chat preview', () => {
   });
 
   it('closed_PreviewRow_EndsItAndAllowsANewOne', () => {
-    const { preview, opened, ends } = setUp();
+    const { preview, opened, ends, sessionKeys } = setUp();
     preview.open();
 
     preview.closed('other-row');
-    const afterOther = { ends: [...ends], states: preview.states().length };
+    const afterOther = { ends: [...ends], keys: sessionKeys() };
     preview.closed('row-1');
-    const afterClose = { ends: [...ends], states: preview.states() };
+    const afterClose = { ends: [...ends], keys: sessionKeys() };
     preview.open();
 
-    expect(afterOther).toEqual({ ends: [], states: 1 });
-    expect(afterClose).toEqual({ ends: ['row-1'], states: [] });
+    expect(afterOther).toEqual({ ends: [], keys: ['row-1'] });
+    expect(afterClose).toEqual({ ends: ['row-1'], keys: [] });
     expect(opened).toHaveLength(2);
   });
 
   it('notice_Preview_AddsANoticeEntry', () => {
-    const { preview, entries } = setUp();
+    const { preview, puts } = setUp();
     preview.open();
 
     preview.notice('Signed in.', 'error');
 
-    expect(entries()).toEqual([
+    expect(puts).toEqual([
       expect.objectContaining({
         kind: 'notice',
         at: 5000,

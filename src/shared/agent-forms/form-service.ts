@@ -10,6 +10,7 @@ import type {
   AgentFormType,
   AgentFormWake,
 } from '../../contracts/agent-forms';
+import type { Timers } from '../../contracts/ambient';
 import type { AgentFormStore, SavedAgentForm } from './form-store';
 
 export interface AgentFormServiceDeps<Form, Body, Payload> {
@@ -20,6 +21,9 @@ export interface AgentFormServiceDeps<Form, Body, Payload> {
   wake: AgentFormWake;
   // Reads the soft deadline when the host names none, once per session.
   defaultDeadlineSeconds(): number;
+  // A plugin's timers cap a long delay at the longest a timer takes, and its stop
+  // clears them with no wake, so its part ends each session before they clear.
+  timers: Timers;
 }
 
 interface FormFinish<Body> {
@@ -69,6 +73,7 @@ interface SessionContext<Form, Body, Payload> {
   presenter: AgentFormPresenter<Form, Body>;
   store: AgentFormStore;
   wake: AgentFormWake;
+  timers: Timers;
   open: OpenForm<Form, Body> | null;
   lastFinished: FinishedForm<Form, Body> | null;
   // Settles once every open call already made has returned; null when none
@@ -81,19 +86,13 @@ interface SessionContext<Form, Body, Payload> {
   reportedUnreadable: Set<string>;
 }
 
-// setTimeout fires at once for a delay above a signed 32-bit millisecond count.
-const MAX_TIMER_SECONDS = (2 ** 31 - 1) / 1000;
-
 function deadlineSeconds(
   info: AgentFormOwnerInfo,
   defaultSeconds: number,
 ): number {
   const hostSeconds = info.deadlineSeconds;
   const hostNamedOne =
-    hostSeconds !== null &&
-    Number.isFinite(hostSeconds) &&
-    hostSeconds > 0 &&
-    hostSeconds <= MAX_TIMER_SECONDS;
+    hostSeconds !== null && Number.isFinite(hostSeconds) && hostSeconds > 0;
   return hostNamedOne ? hostSeconds : defaultSeconds;
 }
 
@@ -233,18 +232,19 @@ function openFormPayload<Form, Body, Payload>(
 }
 
 function waitForEndOrDeadline<Form, Body>(
+  timers: Timers,
   open: OpenForm<Form, Body>,
   seconds: number,
   signal: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve) => {
     const wake = () => {
-      clearTimeout(timer);
+      timers.clear(timer);
       signal.removeEventListener('abort', wake);
       open.waiters.delete(wake);
       resolve();
     };
-    const timer = setTimeout(wake, seconds * 1000);
+    const timer = timers.set(wake, seconds * 1000);
     signal.addEventListener('abort', wake);
     open.waiters.add(wake);
   });
@@ -293,7 +293,7 @@ async function presentOpen<Form, Body, Payload>(
     return openFormPayload(session, open);
   }
   open.callers += 1;
-  await waitForEndOrDeadline(open, seconds, signal);
+  await waitForEndOrDeadline(session.timers, open, seconds, signal);
   try {
     return openFormPayload(session, open);
   } finally {
@@ -581,7 +581,12 @@ async function waitForOtherFormToFinish<Form, Body, Payload>(
   await settledOrAborted(earlier, signal);
   let other = otherUnfinishedForm(session, formFingerprint);
   while (other !== null && !signal.aborted && !session.ended) {
-    await waitForEndOrDeadline(other, session.deadlineSeconds, signal);
+    await waitForEndOrDeadline(
+      session.timers,
+      other,
+      session.deadlineSeconds,
+      signal,
+    );
     other = otherUnfinishedForm(session, formFingerprint);
   }
 }
@@ -618,7 +623,7 @@ async function openFormWhenFree<Form, Body, Payload>(
   signal: AbortSignal,
 ): Promise<Payload> {
   const deadline = new AbortController();
-  const timer = setTimeout(
+  const timer = session.timers.set(
     () => deadline.abort(),
     session.deadlineSeconds * 1000,
   );
@@ -654,7 +659,7 @@ async function openFormWhenFree<Form, Body, Payload>(
       signal,
     );
   } finally {
-    clearTimeout(timer);
+    session.timers.clear(timer);
   }
 }
 
@@ -784,6 +789,7 @@ function startSession<Form, Body, Payload>(
     presenter: deps.presenter,
     store: deps.store,
     wake: deps.wake,
+    timers: deps.timers,
     open: null,
     lastFinished: null,
     askTurn: null,

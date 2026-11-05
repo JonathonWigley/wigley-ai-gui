@@ -11,6 +11,7 @@ import {
   type MainPartHarness,
 } from '../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../shared/registrations';
+import { createSlotStore } from '../shared/state/slot-store';
 import { type ChatMainEvents, type ChatMainExports } from './chat/contract';
 import {
   type AgentSession,
@@ -24,6 +25,7 @@ import {
   type MainWorkflow,
   type SessionFlow,
   startsSkill,
+  workflowFlowsSlot,
   type WorkflowMainExports,
   type WorkflowSignal,
 } from './workflow/contract';
@@ -134,8 +136,8 @@ function session(id: string, hostSessionId: string): AgentSession {
 
 // The real engine's main part over a fake `MainApi`, handing its exports to the
 // real Heavy part as the `workflow` dependency: memory files for the engine's data
-// and for the project (`project`), hand-moved time, and a chat fake that records each
-// `clear` and `send`. `silentWatch` gives the project files a watch that reports
+// and for the project (`project`), hand-moved time, a real store for the engine's
+// slot, and a chat fake that records each `clear` and `send`. `silentWatch` gives the project files a watch that reports
 // nothing, as an OS watcher that misses a delete; `sessionLabel` is the side-bar
 // label sessions gives s1 (none by default); `data` is the engine's data folder as
 // the last run left it; `heavyLater` leaves Heavy unstarted until `startHeavy`, as a
@@ -151,7 +153,8 @@ function startWorkflowPart(
 ) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
-  const sent: SessionFlow[][] = [];
+  const store = createSlotStore(() => undefined);
+  const flows = store.read(workflowFlowsSlot, 'test');
   const logs: string[] = [];
   const chatCalls: unknown[][] = [];
   let settingsListener: (next: HeavyTestSettings) => void = () => undefined;
@@ -204,14 +207,7 @@ function startWorkflowPart(
   };
   const layouts = { register: () => ({ dispose: () => undefined }) };
   const engine = workflowMainPart.start({
-    channel: {
-      handle: () => undefined,
-      send: (name: string, flows: SessionFlow[]) => {
-        if (name === 'flows') {
-          sent.push(flows);
-        }
-      },
-    },
+    state: { publish: () => store.publish(workflowFlowsSlot) },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
@@ -313,7 +309,7 @@ function startWorkflowPart(
       origin: 'new',
     });
   };
-  const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
+  const lastFlow = () => flows.get('s1');
   // The last flow with its Heavy state's fields beside its own.
   const lastHeavy = () => {
     const flow = lastFlow();
@@ -352,7 +348,6 @@ function startWorkflowPart(
     setActiveTime: (next: ActiveTime) => {
       activeTime = next;
     },
-    sent,
     logs,
     chatCalls,
     emit,

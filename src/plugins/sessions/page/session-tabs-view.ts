@@ -5,7 +5,7 @@ import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
+import type { KeyHints } from '../../../contracts/plugin';
 import type {
   SessionsState,
   SessionTabHandle,
@@ -44,7 +44,7 @@ interface Tab {
 
 // A session's frame: its session, its tab bar over the sheet holding its
 // tabs' body and the text saying why no tab shows; its tab ids and selection,
-// and its tabs by id in add order.
+// and its tabs by id, both in strip order.
 interface Frame {
   sessionId: string;
   element: HTMLElement;
@@ -87,7 +87,7 @@ interface DrawnPane {
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeyHints, 'anchor'>;
   parts: SessionsParts;
 }
 
@@ -124,7 +124,7 @@ export interface SessionTabsView {
   // Drops every frame as `drop` does, then every pane with its part and text,
   // a throw not skipping the rest.
   dropAll(): void;
-  // The session's tabs, in add order.
+  // The session's tabs, in strip order.
   tabsOf(sessionId: string): SessionTabView[];
   statusesOf(sessionId: string): string[];
   selectedTabOf(sessionId: string): SessionTabView | null;
@@ -143,8 +143,9 @@ export interface SessionTabsView {
 // tab's element fills its frame's sheet, and a frame moves between panes, the
 // holder and a pane part drawn again as the same element, by a connected move that
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
-// (`vacate`) before its slot leaves the document. A frame no pane shows, a
-// session's with no row yet included, waits in the hidden holder.
+// (`vacate`) before its slot leaves the document. The strip follows each tab's
+// `order` (`tabsAfterAdd`). A frame no pane shows, a session's with no row yet
+// included, waits in the hidden holder.
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, its tooltip and the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
@@ -487,9 +488,17 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     add(sessionId, view) {
       const frame = frameOf(sessionId);
-      frame.tabs = tabsAfterAdd(frame.tabs, sessionId, view.id);
       const tab: Tab = { view, status: '' };
-      frame.entries.set(view.id, tab);
+      const entries = new Map(frame.entries).set(view.id, tab);
+      frame.tabs = tabsAfterAdd(
+        frame.tabs,
+        sessionId,
+        view.id,
+        (id) => entries.get(id)?.view.order,
+      );
+      frame.entries = new Map(
+        frame.tabs.tabIds.map((id) => [id, entries.get(id)!]),
+      );
       frame.body.append(view.element);
       changed();
       let latestTakeOver: { release(): void } | null = null;

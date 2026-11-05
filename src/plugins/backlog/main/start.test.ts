@@ -183,6 +183,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const listeners = new Map<string, (payload: unknown) => void>();
   const sent: [string, unknown][] = [];
+  const emitted: [string, unknown][] = [];
   const logged: string[] = [];
   const git = fakeGit();
   const index = { read: indexRead(entries) };
@@ -228,7 +229,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     events: {
       on: (name: string, listener: (payload: unknown) => void) =>
         listeners.set(name, listener),
-      emit: () => undefined,
+      emit: (name: string, payload: unknown) => emitted.push([name, payload]),
     },
     services: {
       git,
@@ -266,6 +267,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     links,
     watched,
     sent,
+    emitted,
     logged,
     git,
     index,
@@ -759,6 +761,130 @@ describe('backlog main part', () => {
     backlog.emit('docs.indexLoaded', { sourceId });
 
     expect(backlog.sent).toEqual(sent);
+  });
+
+  describe('follow-up events', () => {
+    const DRAFT = { title: 'New', oneLine: 'a new one', tags: [], body: '' };
+    const ALPHA = {
+      title: 'Alpha',
+      oneLine: 'first thing',
+      tags: [],
+      body: 'Stale.',
+    };
+
+    it.each<{
+      case: string;
+      path: string | null;
+      edit: (read: BacklogRead) => BacklogEdit;
+      emitted: [string, unknown][];
+    }>([
+      {
+        case: 'create',
+        path: null,
+        edit: () => ({ type: 'create', draft: DRAFT }),
+        emitted: [['followupCreated', { homeRoot: HOME, title: 'New' }]],
+      },
+      {
+        case: 'edit that retitles, named by the new title',
+        path: FOLLOWUPS,
+        edit: (read) => {
+          const item = firstFollowupDraft(read);
+          return {
+            type: 'edit',
+            title: item.title,
+            draft: { ...item, title: 'Renamed' },
+            baseline: item,
+          };
+        },
+        emitted: [['followupEdited', { homeRoot: HOME, title: 'Renamed' }]],
+      },
+      {
+        case: 'setTags',
+        path: FOLLOWUPS,
+        edit: () => ({
+          type: 'setTags',
+          title: 'Alpha',
+          tags: ['agent-ready'],
+        }),
+        emitted: [['followupEdited', { homeRoot: HOME, title: 'Alpha' }]],
+      },
+      {
+        case: 'delete',
+        path: FOLLOWUPS,
+        edit: () => ({ type: 'delete', title: 'Alpha' }),
+        emitted: [['followupDeleted', { homeRoot: HOME, title: 'Alpha' }]],
+      },
+      {
+        case: 'missing',
+        path: FOLLOWUPS,
+        edit: () => ({ type: 'delete', title: 'Nobody' }),
+        emitted: [],
+      },
+      {
+        case: 'titleTaken',
+        path: null,
+        edit: () => ({ type: 'create', draft: { ...DRAFT, title: 'Alpha' } }),
+        emitted: [],
+      },
+      {
+        case: 'refused',
+        path: null,
+        edit: () => ({ type: 'create', draft: { ...DRAFT, title: ' ' } }),
+        emitted: [],
+      },
+      {
+        case: 'changed on disk',
+        path: FOLLOWUPS,
+        edit: () => ({
+          type: 'edit',
+          title: 'Alpha',
+          draft: ALPHA,
+          baseline: ALPHA,
+        }),
+        emitted: [],
+      },
+    ])(
+      'followupEvents_EditLands_FireByType ($case)',
+      async ({ path, edit, emitted }) => {
+        const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+          [FOLLOWUPS]: FOLLOWUPS_TEXT,
+        });
+        const read = await backlog.invoke<BacklogRead>('load');
+
+        await backlog.invoke('applyEdit', HOME, path, edit(read));
+
+        expect(backlog.emitted).toEqual(emitted);
+      },
+    );
+
+    it.each<{ case: string; target: NoteTarget; event: string; title: string }>(
+      [
+        {
+          case: 'a new follow-up',
+          target: CHIP_TARGET,
+          event: 'followupCreated',
+          title: CHIP_TITLE,
+        },
+        {
+          case: 'an append',
+          target: { type: 'append', path: FOLLOWUPS, title: 'Alpha' },
+          event: 'followupEdited',
+          title: 'Alpha',
+        },
+      ],
+    )(
+      'followupEvents_EditLands_FireByType (fileNote: $case)',
+      async ({ target, event, title }) => {
+        const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+          [FOLLOWUPS]: FOLLOWUPS_TEXT,
+        });
+
+        await backlog.exports.fileNote(HOME, target, 'Text.', []);
+
+        expect(backlog.emitted).toEqual([[event, { homeRoot: HOME, title }]]);
+        expect(backlog.sent).toEqual([['changed', { homeRoot: HOME }]]);
+      },
+    );
   });
 
   it('fileNote_Create_WritesImagesThenLinkedBody', async () => {

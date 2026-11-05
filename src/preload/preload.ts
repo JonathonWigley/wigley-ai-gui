@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
+import type { SlotChange } from '../contracts/state';
 import { errorText } from '../shared/error-text';
+import { createListeners } from '../shared/listeners';
 import { createPluginMessageSubscribe } from './plugin-message-subscribe';
 
 // Electron prefixes a handler's error with the channel and the error's name.
@@ -12,6 +14,24 @@ const REMOTE_ERROR_PREFIX =
 function mainErrorText(error: unknown): string {
   return errorText(error).replace(REMOTE_ERROR_PREFIX, '');
 }
+
+async function invokeMain<Result>(
+  channel: string,
+  ...args: readonly unknown[]
+): Promise<Result> {
+  try {
+    return (await ipcRenderer.invoke(channel, ...args)) as Result;
+  } catch (error) {
+    throw new Error(mainErrorText(error));
+  }
+}
+
+const stateChanges = createListeners<{ seq: number; change: SlotChange }>();
+ipcRenderer.on(
+  BRIDGE_CHANNELS.stateChanged,
+  (_event, seq: number, change: SlotChange) =>
+    stateChanges.tell({ seq, change }),
+);
 
 const bridge: Bridge = {
   config: () => ipcRenderer.invoke(BRIDGE_CHANNELS.config),
@@ -39,18 +59,29 @@ const bridge: Bridge = {
   setUiState: (key, value) => {
     ipcRenderer.send(BRIDGE_CHANNELS.uiStateWrite, key, value);
   },
-  invoke: async (pluginId, method, args) => {
-    try {
-      return await ipcRenderer.invoke(
-        BRIDGE_CHANNELS.pluginInvoke,
-        pluginId,
-        method,
-        args,
-      );
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
+  stateSnapshot: () => ipcRenderer.invoke(BRIDGE_CHANNELS.stateSnapshot),
+  stateWrite: (change) => {
+    ipcRenderer.send(BRIDGE_CHANNELS.stateWrite, change);
   },
+  onStateChange: (listener) =>
+    stateChanges.add(({ seq, change }) => listener(seq, change)),
+  runCommand: async (id, arg) => {
+    await invokeMain(BRIDGE_CHANNELS.commandRun, id, arg);
+  },
+  onRunCommand: (listener) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.commandRunInPage,
+      (_event, request: number, id: string, arg: unknown) => {
+        const tellDone = () =>
+          ipcRenderer.send(BRIDGE_CHANNELS.commandRunDone, request);
+        void Promise.resolve()
+          .then(() => listener(id, arg))
+          .then(tellDone, tellDone);
+      },
+    );
+  },
+  invoke: (pluginId, method, args) =>
+    invokeMain(BRIDGE_CHANNELS.pluginInvoke, pluginId, method, args),
   onMessage: createPluginMessageSubscribe((deliver) => {
     ipcRenderer.on(
       BRIDGE_CHANNELS.pluginMessage,
@@ -59,16 +90,11 @@ const bridge: Bridge = {
     );
   }),
   pathForFile: (file) => webUtils.getPathForFile(file),
-  savePasted: async (bytes, mediaType) => {
-    try {
-      return await ipcRenderer.invoke(
-        BRIDGE_CHANNELS.savePasted,
-        bytes,
-        mediaType,
-      );
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
+  savePasted: (bytes, mediaType) =>
+    invokeMain(BRIDGE_CHANNELS.savePasted, bytes, mediaType),
+  chooseFolder: () => invokeMain(BRIDGE_CHANNELS.chooseFolder),
+  openExternal: async (url) => {
+    await invokeMain(BRIDGE_CHANNELS.openExternal, url);
   },
 };
 

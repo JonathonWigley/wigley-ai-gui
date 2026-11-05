@@ -1,19 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { Keymap } from '../../../contracts/keymap';
-import {
-  asHtml,
-  FakeElement,
-  installFakeDom,
-} from '../../../shared/page/test-dom';
+import { installFakeDom } from '../../../shared/page/test-dom';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import {
+  dataEmitted,
   noCounts,
   startPagePart,
-  type PagePartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
-import { createRegistrations } from '../../../shared/registrations';
-import type { KeysPageExports } from '../contract';
-import type { keysManifest } from '../manifest';
+import { keysManifest } from '../manifest';
 import { keysPagePart } from './start';
 
 const KEYMAP: Keymap = {
@@ -24,8 +19,6 @@ const KEYMAP: Keymap = {
   global: [],
   groups: {},
 };
-
-type KeysHarness = PagePartHarness<typeof keysManifest>;
 
 describe('keys page part', () => {
   beforeEach(() => {
@@ -43,6 +36,21 @@ describe('keys page part', () => {
     expect(harness.counts()).toEqual(noCounts);
 
     await harness.restart();
+    await harness.stop();
+  });
+
+  it('toggleHelp_OpenAndClose_FiresOnOpenOnly', async () => {
+    const harness = startPagePart(keysPagePart);
+    const { toggleHelp } = harness.started().commands;
+
+    toggleHelp({ arg: undefined });
+    expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null]);
+
+    toggleHelp({ arg: undefined });
+    expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null]);
+
+    toggleHelp({ arg: undefined });
+    expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null, null]);
     await harness.stop();
   });
 
@@ -64,44 +72,45 @@ describe('keys page part', () => {
     expect(removed).toHaveBeenCalledWith(PLACEMENT_CHECK_EVENT, listener);
   });
 
-  it.each<{
-    member: string;
-    // Registers through `view`; the result tells whether that is still live.
-    register(view: KeysPageExports, harness: KeysHarness): () => boolean;
-  }>([
-    {
-      member: 'anchor',
-      register(view) {
-        const span = new FakeElement('span');
-        view.anchor(asHtml(span), 'keys.toggleHelp');
-        return () => span.classList.contains('ui-key-anchor');
-      },
-    },
-    {
-      member: 'onChanged',
-      register(view, harness) {
-        const heard = vi.fn();
-        view.onChanged(heard);
-        return () => {
-          heard.mockClear();
-          harness.pushKeymap(KEYMAP);
-          return heard.mock.calls.length === 1;
-        };
-      },
-    },
+  it('start_ScopeSlotChanges_RecordsTheScopeForThePlacementCheck', async () => {
+    const harness = startPagePart(keysPagePart);
+    // The harness stubs its own `document` as it starts, so the spy goes on that
+    // one and the restart is the start it watches.
+    const added = vi.spyOn(document, 'addEventListener');
+    await harness.restart();
+    const checkPlacement = added.mock.calls.find(
+      ([type]) => type === PLACEMENT_CHECK_EVENT,
+    )?.[1] as () => void;
+    harness.pushKeymap({
+      ...KEYMAP,
+      page: [{ keys: ['x'], scope: 'other.view', command: 'keys.closeHelp' }],
+    });
+
+    harness.state.publish(coreScopeSlot).set('other.view');
+    checkPlacement();
+
+    expect(harness.logs.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([expect.stringContaining('other.view')]),
+    );
+    await harness.stop();
+  });
+
+  it.each([
+    { name: 'on at start, off by a change', start: true, changed: false },
+    { name: 'off at start, on by a change', start: false, changed: true },
   ])(
-    "a dependent's handle ends when the dependent stops ($member)",
-    async ({ register }) => {
-      const harness = startPagePart(keysPagePart);
-      const dependent = createRegistrations();
-      const view = harness.started().exports?.(dependent) as KeysPageExports;
-      const isLive = register(view, harness);
-      expect(isLive()).toBe(true);
+    'start_ShowHintsOff_CallsSetHintsShownFalse ($name)',
+    async ({ start, changed }) => {
+      const harness = startPagePart(keysPagePart, {
+        settings: { ...keysManifest.settings, showHints: start },
+      });
+      expect(harness.hintsShown()).toBe(start);
 
-      dependent.dispose();
+      harness.pushSettings({ ...keysManifest.settings, showHints: changed });
 
-      expect(isLive()).toBe(false);
+      expect(harness.hintsShown()).toBe(changed);
       await harness.stop();
+      expect(harness.hintsShown()).toBe(true);
     },
   );
 });

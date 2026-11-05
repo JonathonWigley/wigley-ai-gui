@@ -1,6 +1,6 @@
 // The notes plugin's records and its channel between its main and page parts.
 
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, EventShape } from '../../contracts/plugin';
 import type { Harness } from '../sessions/contract';
 
 // The session a note names. `sessionId` is the sessions plugin's row id;
@@ -70,6 +70,13 @@ export type FollowupRequest =
 export type NoteSendResult =
   | { type: 'sent'; draft: NoteDraft; toast: string }
   | { type: 'refused'; reason: string };
+
+// A send that landed, its draft cleared: a note filed as a follow-up, or sent to
+// a new session in `projectDir`. A refused send fires none.
+export interface NotesMainEvents extends EventShape {
+  noteSent: { projectDir: string };
+  noteFiled: { request: FollowupRequest };
+}
 
 // Every method rejects with main's own error text when its handler throws.
 // Each draft-store call runs in call order (one queue), so a save invoked

@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import type { PluginManifest } from '../../../contracts/plugin';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
@@ -8,7 +9,6 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -17,8 +17,8 @@ import { type WorkflowPageExports, workflowPageKey } from '../contract';
 import { createWorkflowKit } from './layout/workflow-kit';
 import { workflowPagePart } from './start';
 
-// The real engine page part over a fake DOM and fakes of sessions, chat and keys, and
-// its exports as the dependency a workflow plugin's part under test takes.
+// The real engine page part over a fake DOM and fakes of sessions and chat, and its
+// exports as the dependency a workflow plugin's part under test takes.
 export function startEnginePagePart() {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
   const untracked = () => ({ dispose: () => undefined });
@@ -40,12 +40,7 @@ export function startEnginePagePart() {
             addSidePart: untracked,
           }) as unknown as ChatPageExports,
       ),
-      fakeDependency(
-        keysPageKey,
-        () => ({ anchor: untracked }) as unknown as KeysPageExports,
-      ),
     ],
-    invoke: () => Promise.resolve([]),
   });
   const dependency = fakeDependency(
     workflowPageKey,
@@ -70,8 +65,13 @@ export function testWorkflowKit(
         ...NO_FENCES,
       },
       keys,
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     { recordBox: () => undefined, recordAnchor: () => undefined },
     () => undefined,

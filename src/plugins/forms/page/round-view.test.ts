@@ -24,6 +24,7 @@ import {
   installMarkdownDom,
   NO_FENCES,
 } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 interface CreatedEditor {
   events: EditorEvents;
@@ -123,13 +124,18 @@ function roundViewSetup(
     {
       markdown,
       boxes,
-      keys: { ...keys, onChanged: () => ({ dispose: () => undefined }) },
+      keys: { ...keys, onKeymapChanged: () => ({ dispose: () => undefined }) },
       dispatch: vi.fn(),
       getState: () => state,
       run: vi.fn(),
-      commands: { exists: () => false, run: vi.fn() },
+      commands: {
+        exists: () => false,
+        argShape: () => undefined,
+        run: vi.fn(),
+      },
       contributions: createFormsContributions(),
       platform: 'macos',
+      state: noLayoutState,
       uiState: { get: () => undefined, set: () => undefined },
       timers: { set: () => 0, clear: () => undefined },
       log: vi.fn(),

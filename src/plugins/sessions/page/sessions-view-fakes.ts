@@ -6,13 +6,19 @@ import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts'
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { UiState } from '../../../contracts/ui-state';
-import type { SessionPart, SessionsState } from '../contract';
+import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  type SessionPart,
+  sessionsActivitySlot,
+  type SessionsState,
+} from '../contract';
 import { createSessionsParts } from './layout/sessions-parts';
 import { createProjectFavorites } from './project-favorites';
 import { fakeUiState, sessionRow } from './session-fakes';
 import { createSessionRecency } from './session-recency';
 import { mountSessionsView } from './sessions-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 export { sessionRow };
 
@@ -37,7 +43,12 @@ function fakeKitServices() {
       ...NO_FENCES,
     },
     platform: 'macos' as const,
-    commands: { exists: () => true, run: () => undefined },
+    state: noLayoutState,
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     log: (message: string) => {
       logged.push(message);
     },
@@ -99,6 +110,7 @@ export function sessionsViewSetup(
     titleMaxLength,
     recency: createSessionRecency(clock, uiState),
     favorites: createProjectFavorites(uiState),
+    activities: createSlotStore(() => undefined).publish(sessionsActivitySlot),
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);

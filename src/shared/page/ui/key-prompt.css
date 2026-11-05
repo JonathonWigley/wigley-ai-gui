@@ -17,7 +17,7 @@
 
 /* A hint wrapper holding no key prompt, its commands unbound or hints off,
    takes no space:
-   an anchor (`ui-key-anchor`, set by the keys plugin), a box hint or a key
+   an anchor (`ui-key-anchor`, set by the core), a box hint or a key
    stack. A hidden prompt still counts, so it keeps its space. */
 :is(.ui-key-anchor, .ui-box-hint, .ui-key-stack):not(:has(.ui-key-prompt)) {
   display: none;

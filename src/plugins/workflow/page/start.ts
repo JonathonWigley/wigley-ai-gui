@@ -1,23 +1,26 @@
 import './workflow.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
+  ChannelShape,
   PageApi,
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
-  type SessionsPageEvents,
+  followRows,
+  sessionsActiveSlot,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  PageWorkflow,
-  SessionFlow,
-  WorkflowChannel,
-  WorkflowId,
-  WorkflowPageExports,
+import {
+  type PageWorkflow,
+  type SessionFlow,
+  workflowFlowsSlot,
+  type WorkflowId,
+  type WorkflowPageExports,
 } from '../contract';
 import { newFlow } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -30,9 +33,9 @@ import { createWorkflowView } from './workflow-view';
 
 type WorkflowApi = PageApi<
   typeof workflowManifest,
-  WorkflowChannel,
+  ChannelShape,
   Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // The engine's commands a key runs on the selected session.
@@ -40,23 +43,16 @@ type SessionCommand = 'mainAction' | 'toggleFinishedWaves';
 
 const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 
-// A session the page heard of: its name in the log (its side bar label), its
-// project folder and its host session id.
-interface HeardSession {
-  name: string;
-  projectDir: string | null;
-  hostSessionId: string | null;
-}
-
 // Draws each session's flow as a chip under its row, a strip above its Chat
 // composer and a side pane beside its transcript, through the `draw` of the
-// flow's workflow, each workflow plugin's over its own layouts. Holds every flow
-// main pushes, filled in by one `flows` read, and the page half of each workflow,
-// which `addWorkflow` extends; each workflow takes one side part. Each engine
-// command runs on the selected session; each button on the session it draws.
-// `toggleSidePane` shows or hides the pane in every session, kept in `uiState`.
-// `openPreview` steps chat's preview session through every workflow's samples
-// (`createPreview`).
+// flow's workflow, each workflow plugin's over its own layouts. Reads
+// `workflow.flows`, drawing the one flow each notice names, leaving a deleted flow
+// drawn until its row leaves and drawing no flow whose row has left, and holds the
+// page half of each workflow, which `addWorkflow` extends; each workflow takes one
+// side part. Each engine command runs on the selected session; each button on the
+// session it draws. `toggleSidePane` shows or hides the pane in every session, kept
+// in `uiState`. `openPreview` steps chat's preview session through every workflow's
+// samples (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -64,18 +60,17 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const { log } = services;
     const sessions = api.dependency(sessionsPageKey);
     const chat = api.dependency(chatPageKey);
-    const keys = api.dependency(keysPageKey);
-    const heard = new Map<string, HeardSession>();
-    const flows = new Map<string, SessionFlow>();
+    const rows = api.state.read(sessionsRowsSlot);
+    const flows = api.state.read(workflowFlowsSlot);
     const workflows = new Map<WorkflowId, PageWorkflow>();
 
     const nameOf = (sessionId: string) =>
-      heard.get(sessionId)?.name ?? sessionId;
+      rows.get(sessionId)?.label ?? sessionId;
     const isPreview = (sessionId: string) => preview.flowOf(sessionId) !== null;
     const flowOf = (sessionId: string): SessionFlow =>
       preview.flowOf(sessionId) ??
       flows.get(sessionId) ??
-      newFlow(sessionId, heard.get(sessionId)?.projectDir ?? '');
+      newFlow(sessionId, rows.get(sessionId)?.projectDir ?? '');
 
     const view = createWorkflowView({
       log: services.log,
@@ -94,9 +89,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const preview = createPreview({
       openChatPreview: () => api.commands.run('chat.openPreview'),
       previewSessionId: () =>
-        [...heard].find(
-          ([, session]) => session.hostSessionId === CHAT_PREVIEW_HOST_ID,
-        )?.[0] ?? null,
+        [...rows.all().values()].find(
+          (row) => row.hostSessionId === CHAT_PREVIEW_HOST_ID,
+        )?.sessionId ?? null,
       showFlow: view.setFlow,
       closed: (sessionId) => view.setFlow(flowOf(sessionId)),
       clock: services.clock,
@@ -110,21 +105,23 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const drawDeps: WorkflowDrawDeps = {
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
+          argShape: (id) => api.keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
-        platform: api.platform,
+        platform: api.platform.os,
+        state: api.state.forLayouts,
       },
       log: services.log,
       clock: services.clock,
       redraw: () => view.redraw(),
     };
 
-    // Holds a copy whose stages are in stage order, and puts again each held flow
-    // of it, which arrived before its page half; its dispose does nothing once the
-    // copy is gone.
+    // Holds a copy whose stages are in stage order, and draws again each flow of it,
+    // which arrived before its page half; its dispose does nothing once the copy is
+    // gone.
     const addWorkflow = (workflow: PageWorkflow): Disposable => {
       if (workflows.has(workflow.id)) {
         throw new Error(`${workflow.id} is already added`);
@@ -136,9 +133,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       workflows.set(added.id, added);
       const sidePart = chat.addSidePart(view.sidePartFor(added));
       view.redraw();
-      for (const flow of flows.values()) {
+      for (const flow of flows.all().values()) {
         if (flow.workflow === added.id) {
-          putFlow(flow);
+          drawFlow(flow);
         }
       }
       return {
@@ -156,41 +153,10 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     sessions.addRowPart(view.chipPart);
     chat.addComposerPart(view.stripPart);
 
-    api.events.on(
-      'sessions.sessionAdded',
-      ({ sessionId, label, projectDir, hostSessionId }) => {
-        heard.set(sessionId, {
-          name: label,
-          projectDir,
-          hostSessionId,
-        });
-        preview.sessionAdded(sessionId, hostSessionId);
-      },
-    );
-    api.events.on(
-      'sessions.sessionHostChanged',
-      ({ sessionId, hostSessionId }) => {
-        const session = heard.get(sessionId);
-        if (session !== undefined) {
-          session.hostSessionId = hostSessionId;
-        }
-      },
-    );
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      preview.sessionRemoved(sessionId);
-      heard.delete(sessionId);
-      flows.delete(sessionId);
-      view.forget(sessionId);
-    });
-
-    // A flows read is stale for each session a `flows` push touched since the
-    // read began; null once the read settles.
-    let changedSinceRead: Set<string> | null = new Set<string>();
-    // A flow whose draw throws is logged, so the rest of its push or read
-    // still draws.
-    const putFlow = (flow: SessionFlow) => {
-      flows.set(flow.sessionId, flow);
-      if (isPreview(flow.sessionId)) {
+    // A flow whose draw throws is logged, so the rest of the catch-up still draws.
+    const drawFlow = (flow: SessionFlow) => {
+      const rowHasLeft = rows.get(flow.sessionId) === undefined;
+      if (isPreview(flow.sessionId) || rowHasLeft) {
         return;
       }
       try {
@@ -199,30 +165,28 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         log(`flow of ${flow.sessionId} not drawn: ${errorText(error)}`);
       }
     };
-    api.channel.on('flows', (pushed) => {
-      for (const flow of pushed) {
-        changedSinceRead?.add(flow.sessionId);
-        putFlow(flow);
+
+    api.events.on('core.pageReady', () => {
+      followRows(rows, {
+        added: ({ sessionId, hostSessionId }) =>
+          preview.sessionAdded(sessionId, hostSessionId),
+        removed(sessionId) {
+          preview.sessionRemoved(sessionId);
+          view.forget(sessionId);
+        },
+      });
+      flows.on((_sessionId, flow) => {
+        if (flow !== undefined) {
+          drawFlow(flow);
+        }
+      });
+      for (const flow of flows.all().values()) {
+        drawFlow(flow);
       }
     });
-    api.channel
-      .invoke('flows')
-      .then(
-        (read) => {
-          for (const flow of read) {
-            if (!changedSinceRead?.has(flow.sessionId)) {
-              putFlow(flow);
-            }
-          }
-        },
-        (error: unknown) => log(`flows not read: ${errorText(error)}`),
-      )
-      .finally(() => {
-        changedSinceRead = null;
-      });
 
     const runOnSelected = (command: SessionCommand) => () => {
-      const sessionId = sessions.selectedSessionId();
+      const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;

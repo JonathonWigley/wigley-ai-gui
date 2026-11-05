@@ -1,10 +1,16 @@
-import type { CommandId } from '../../../contracts/commands';
+import type {
+  CommandArg,
+  CommandArgShape,
+  CommandId,
+} from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { Platform } from '../../../contracts/platform';
-import type { PluginManifest } from '../../../contracts/plugin';
+import type { OsName } from '../../../contracts/platform';
+import type { KeyHints, PluginManifest } from '../../../contracts/plugin';
+import type { LayoutState } from '../../../contracts/state';
+import { checkCommandArg } from '../../command-args';
 import { qualify } from '../../plugin-manifests';
 import { appended, element } from '../dom';
 import { createMarkdownMount, type MarkdownMount } from '../markdown-mount';
@@ -23,31 +29,23 @@ import { tag as tagPart } from '../ui/tag';
 import type { RollbackDeps } from './draw-part';
 import type { BaseKit } from './kit';
 
-// What the base kit reads. `keys` restates the keys plugin's page exports,
-// which `src/shared/page` may not import. `scope` is the qualified scope the
+// What the base kit reads. `keys` is the part of `KeyHints` a kit calls. `scope` is the qualified scope the
 // part's keys fire in; null anchors with no scope, so a hint shows in every
 // scope, and reads keys in any scope. `commandNamed` turns the owner's short
 // command name into its qualified id, null for a name the owner lacks.
-// `recordAnchor`, the drawing attempt's, takes each anchor the kit names;
-// left out, recording them is the `keys`' job, as forms' recording `keys`
-// does for its own anchors too. `recordMount` takes the kit's markdown mount;
-// left out, nothing disposes it. `log` takes the mount's lines; left out,
-// they are dropped.
+// `recordAnchor`, the drawing attempt's, takes each anchor the kit names and
+// each slot subscription its layout makes. `state` is what `kit.state` reads.
+// `recordMount` takes the kit's markdown mount; left out, nothing disposes it.
+// `log` takes the mount's lines; left out, they are dropped.
 export interface BaseKitDeps {
   markdown: MarkdownRenderer;
-  keys: {
-    anchor(
-      element: HTMLElement,
-      command: CommandId,
-      options?: { scope?: ViewScope; label?: boolean | string },
-    ): Disposable;
-    keysFor(command: CommandId, scope?: ViewScope): string | null;
-  };
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   commands: KitCommands;
   scope: ViewScope | null;
   commandNamed(short: string): CommandId | null;
-  platform: Platform;
-  recordAnchor?(anchor: Disposable): void;
+  platform: OsName;
+  state: LayoutState;
+  recordAnchor(anchor: Disposable): void;
   recordMount?(mount: MarkdownMount): void;
   log?: PluginLog;
 }
@@ -58,7 +56,8 @@ export interface OwnerKitServices {
   markdown: MarkdownRenderer;
   keys: BaseKitDeps['keys'];
   commands: KitCommands;
-  platform: Platform;
+  platform: OsName;
+  state: LayoutState;
   log?: PluginLog;
 }
 
@@ -92,6 +91,7 @@ export function ownerBaseKitDeps(
     keys: services.keys,
     commands: services.commands,
     platform: services.platform,
+    state: services.state,
     scope: qualifiedScope(manifest.id, scope),
     commandNamed: commandNamedIn(manifest),
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
@@ -110,16 +110,18 @@ function qualifiedScope(
   return typeof scope === 'string' ? qualify(pluginId, scope) : scope.qualified;
 }
 
-// The commands a kit's `command` reaches: whether a plugin registers an id,
-// and running it.
+// The commands a kit's `command` reaches: whether the served commands hold an
+// id, the argument it declares, and running it.
 export interface KitCommands {
   exists(id: CommandId): boolean;
+  argShape(id: CommandId): CommandArgShape | undefined;
   run(id: CommandId): void;
 }
 
 // A runner for the command `qualifiedId`, which runs it on each call and
-// never on creation. Throws `no command <id>` at once for an id no plugin
-// registers, so a part asking for one fails while it builds.
+// never on creation. Throws at once for an id the app does not serve and for a
+// command that needs an argument, since a runner passes none, so a part asking
+// for either fails while it builds.
 export function commandRunner(
   qualifiedId: CommandId,
   commands: KitCommands,
@@ -127,25 +129,34 @@ export function commandRunner(
   if (!commands.exists(qualifiedId)) {
     throw new Error(`no command ${qualifiedId}`);
   }
+  const argProblem = checkCommandArg(
+    qualifiedId,
+    commands.argShape(qualifiedId),
+    undefined,
+  );
+  if (argProblem !== null) {
+    throw new Error(argProblem);
+  }
   return () => commands.run(qualifiedId);
 }
 
 // The parts every owner's layout draws with, so an owner makes one per part
 // draw. It holds one markdown mount, made on its first markdown draw and
 // handed to `deps.recordMount` then; it builds nothing else until a member is
-// called.
+// called. `state.read(id).on` hands its subscription to `deps.recordAnchor`,
+// so a layout holds no handle.
 export function createBaseKit(deps: BaseKitDeps): BaseKit {
-  const keysFor = (id: CommandId) =>
-    deps.scope === null
-      ? deps.keys.keysFor(id)
-      : deps.keys.keysFor(id, deps.scope);
-  // A name holding a `.` is a qualified id, null unless a plugin registers it.
-  const commandId = (name: string) =>
-    name.includes('.')
-      ? deps.commands.exists(name)
-        ? name
-        : null
-      : deps.commandNamed(name);
+  const keysFor = (id: CommandId, arg?: CommandArg) =>
+    deps.keys.keysFor(id, deps.scope ?? undefined, undefined, arg);
+  // A name holding a `.` is a qualified id, anchored whether or not a plugin
+  // registers it yet, so a command registered after the draw fills its hint.
+  const hintedId = (name: string) =>
+    name.includes('.') ? name : deps.commandNamed(name);
+  // As `hintedId`, null for a qualified id the app does not serve now.
+  const registeredId = (name: string) => {
+    const id = hintedId(name);
+    return id === name && !deps.commands.exists(name) ? null : id;
+  };
   let markdownMount: MarkdownMount | null = null;
   const drawMarkdown = (
     target: HTMLElement,
@@ -185,25 +196,25 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
       drawMarkdown(body, deps.markdown.block(text));
       return section;
     },
-    keys(command) {
-      const id = commandId(command);
-      return id === null ? null : keysFor(id);
+    keys(command, arg) {
+      const id = registeredId(command);
+      return id === null ? null : keysFor(id, arg);
     },
     keyHint(parent, command, options = {}) {
       const node = appended(parent, element('span', options.className ?? ''));
-      const id = commandId(command);
+      const id = hintedId(command);
       if (id !== null) {
         const anchor = deps.keys.anchor(
           node,
           id,
-          anchorOptions(deps.scope, options.label),
+          anchorOptions(deps.scope, options),
         );
-        deps.recordAnchor?.(anchor);
+        deps.recordAnchor(anchor);
       }
       return node;
     },
     command: (qualifiedId) => commandRunner(qualifiedId, deps.commands),
-    keysFor: (qualifiedId) => keysFor(qualifiedId),
+    keysFor: (qualifiedId, arg) => keysFor(qualifiedId, arg),
     card(parent, className = '') {
       const node = cardPart();
       if (className !== '') {
@@ -256,6 +267,17 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     rowTrailing: (parentRow) =>
       appended(parentRow, element('span', 'ui-row-trailing')),
     duration: (ms) => durationText(ms),
+    state: {
+      read(id) {
+        const reader = deps.state.read(id);
+        return {
+          get: (key) => reader.get(key),
+          on(listener) {
+            deps.recordAnchor(reader.on(listener));
+          },
+        };
+      },
+    },
   };
   return kit;
 }
@@ -278,14 +300,15 @@ function twoDigits(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-// The anchor options for `scope`: no scope option when null, and no label
-// option when left out.
+// The anchor options for `scope`: no scope option when null, and no label or
+// arg option when left out.
 function anchorOptions(
   scope: ViewScope | null,
-  label: boolean | string | undefined,
-): { scope?: ViewScope; label?: boolean | string } {
+  { label, arg }: { label?: boolean | string; arg?: CommandArg },
+): { scope?: ViewScope; label?: boolean | string; arg?: CommandArg } {
   return {
     ...(scope === null ? {} : { scope }),
     ...(label === undefined ? {} : { label }),
+    ...(arg === undefined ? {} : { arg }),
   };
 }

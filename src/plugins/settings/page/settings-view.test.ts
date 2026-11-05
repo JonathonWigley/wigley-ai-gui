@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
+import type { UserKeymap } from '../../../contracts/keymap';
 import type { PageChannel } from '../../../contracts/plugin';
 import type {
   UserConfigRead,
@@ -24,6 +26,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
 import { createSettingsView, type SettingsView } from './settings-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One plugin section: a string leaf, then a choice leaf defaulting to `a`.
 const SCHEMA: UserConfigSchema = {
@@ -56,22 +59,28 @@ const SCHEMA: UserConfigSchema = {
   defaultLeader: '<Space>',
 };
 
-// A channel serving SCHEMA and empty files, recording each settings write.
-function fakeChannel() {
+// A channel serving `schema`, `keymap` and an empty settings file, recording
+// each settings write and each keymap write, which the next read then serves.
+function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
   const written: Record<string, unknown>[] = [];
+  const writtenKeymaps: UserKeymap[] = [];
   const read: UserConfigRead = {
     settings: { state: 'ok', layer: null, text: null },
-    keymap: { state: 'ok', layer: null, text: null },
+    keymap: { state: 'ok', layer: keymap, text: null },
     themes: [],
   };
   const invoke = async (method: string, ...args: unknown[]) => {
     switch (method) {
       case 'schema':
-        return SCHEMA;
+        return schema;
       case 'read':
         return read;
       case 'writeSettings':
         written.push(args[0] as Record<string, unknown>);
+        return { type: 'written' };
+      case 'writeKeymap':
+        writtenKeymaps.push(args[0] as UserKeymap);
+        read.keymap = { state: 'ok', layer: args[0] as UserKeymap, text: null };
         return { type: 'written' };
       default:
         throw new Error(`unexpected ${method}`);
@@ -81,15 +90,19 @@ function fakeChannel() {
     invoke,
     on: () => ({ dispose: () => undefined }),
   } as unknown as PageChannel<SettingsChannel>;
-  return { channel, written };
+  return { channel, written, writtenKeymaps };
 }
 
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
 // named, and `handed`: each scope set and each focus target handed over, in
 // order. The side bar shows unless `isSideBarShown` is false.
-async function shownView(isSideBarShown = true) {
-  const { channel, written } = fakeChannel();
+async function shownView(
+  isSideBarShown = true,
+  schema = SCHEMA,
+  keymap: UserKeymap | null = null,
+) {
+  const { channel, written, writtenKeymaps } = fakeChannel(schema, keymap);
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
   const { anchors, keys } = recordingAnchors();
@@ -99,6 +112,7 @@ async function shownView(isSideBarShown = true) {
     editor: {} as EditorHost,
     matcher: fakeFuzzyMatcher,
     platform: 'macos',
+    state: noLayoutState,
     markdown: {
       block: (text) => text,
       inline: (text) => text,
@@ -106,7 +120,11 @@ async function shownView(isSideBarShown = true) {
       ...NO_FENCES,
     },
     keys,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     log: () => undefined,
     toast: () => undefined,
     setScope: (scope) => handed.push(scope),
@@ -117,10 +135,11 @@ async function shownView(isSideBarShown = true) {
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
-    addOverlay(element) {
-      overlay.append(asFake(element));
-      return { dispose: () => undefined };
-    },
+    picker: fakeListPickerService({
+      place(element) {
+        overlay.append(asFake(element));
+      },
+    }),
     anchor,
     sectionShown: () => undefined,
     sectionPicked: () => undefined,
@@ -139,6 +158,7 @@ async function shownView(isSideBarShown = true) {
     view,
     overlay,
     written,
+    writtenKeymaps,
     anchors,
     handed,
     move,
@@ -328,5 +348,68 @@ describe('createSettingsView', () => {
     view.commands.pickerCancel();
 
     expect(rowAnchors().every((anchor) => anchor.isDisposed)).toBe(true);
+  });
+
+  it('a row that leaves the list on Remove hands the cursor to the row in its place', async () => {
+    const command = {
+      id: 'p.pick',
+      plugin: 'p',
+      label: 'pick',
+      group: 'g',
+      runsIn: 'page',
+      arg: 'number',
+    } as const;
+    const bind = (keys: string, arg: number) => ({
+      keys,
+      scope: 'any',
+      command: command.id,
+      arg,
+    });
+    const { view, writtenKeymaps } = await shownView(
+      true,
+      { ...SCHEMA, sections: [], commands: { [command.id]: command } },
+      { binds: [bind('a', 1), bind('b', 2), bind('c', 3)] },
+    );
+    // The leader row, then one row per argument.
+    view.commands.down();
+    view.commands.down();
+
+    view.commands.removeBind();
+    await settle();
+    view.commands.removeBind();
+    await settle();
+
+    expect(writtenKeymaps).toEqual([
+      { binds: [bind('a', 1), bind('c', 3)] },
+      { binds: [bind('a', 1)] },
+    ]);
+  });
+
+  it('a row a new filter hides hands the cursor to the first match', async () => {
+    const [section] = SCHEMA.sections;
+    const last = {
+      ...section.leaves[0],
+      path: 'p.last',
+      label: 'Last',
+      description: 'Last',
+    };
+    const { view, sheet } = await shownView(true, {
+      ...SCHEMA,
+      sections: [{ ...section, leaves: [...section.leaves, last] }],
+    });
+    view.commands.down();
+    view.commands.down();
+    view.commands.filter();
+    const frame = only(sheet, 'settings-filter');
+    const filter = only(frame, 'settings-box-input') as FocusFakeElement;
+    // Matches Name and Mode, leaving out Last, where the cursor is.
+    filter.value = 'm';
+    filter.fire('input');
+
+    // Name, a string, opens a box; Mode, a choice, would open the picker.
+    view.commands.edit();
+    await settle();
+
+    expect(findAll(sheet, 'settings-box')).toHaveLength(1);
   });
 });

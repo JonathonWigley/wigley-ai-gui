@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MainServices } from '../../../contracts/plugin';
+import type { OsName } from '../../../contracts/platform';
+import { fakePlatform } from '../../../shared/platform.test-support';
 import {
   fakeDependency,
   noCounts,
@@ -10,13 +11,19 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
+import { unityPoolSnapshotSlot } from '../contract';
 import { unityPoolManifest } from '../manifest';
+import {
+  poolStateText,
+  SELFTEST_POOL,
+  SELFTEST_STATE_PATH,
+} from './selftest-fixture';
 import { unityPoolMainPart } from './start';
 
-function startOnHarness(platform: MainServices['platform'] = 'macos') {
+function startOnHarness(os: OsName = 'macos') {
   return startMainPart(unityPoolMainPart, {
     settings: { ...unityPoolManifest.settings, scriptPath: '' },
-    services: { platform },
+    services: { platform: fakePlatform(os) },
     dependencies: [
       fakeDependency(chatMainKey, () => ({}) as unknown as ChatMainExports),
       fakeDependency(
@@ -45,6 +52,27 @@ describe('unityPoolMainPart', () => {
 
     await harness.restart();
     await vi.waitFor(() => expect(harness.counts()).toEqual(before));
+  });
+
+  it('start_WritesTheWatchSnapshot_AndAChangeWritesTheNewOne', async () => {
+    const harness = startOnHarness();
+    const slot = harness.state.read(unityPoolSnapshotSlot, 'test');
+    expect(slot.get()).toEqual({ pools: [] });
+
+    await harness.files.write(
+      `/home/${SELFTEST_STATE_PATH}`,
+      poolStateText(
+        { rowId: 'row-1', clonePaths: ['/x/1', '/x/2'], startedAt: 1_000 },
+        'opening',
+      ),
+    );
+    // A run reads every pool again.
+    await harness.invoke('run', 'hold', SELFTEST_POOL, 1);
+    await vi.waitFor(() =>
+      expect(slot.get()?.pools.map(({ pool }) => pool)).toEqual([
+        SELFTEST_POOL,
+      ]),
+    );
   });
 
   // The harness's home is `/home`.

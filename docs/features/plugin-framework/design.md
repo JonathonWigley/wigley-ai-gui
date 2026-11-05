@@ -7,7 +7,7 @@
 - **Shell and areas** — the permanent areas and who fills them.
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
-- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
+- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 
@@ -100,9 +100,9 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 
 Landed as one page-only `keys` plugin (depends on no plugin) holding which-key and the help overlay; it has since gained a
 main part that only registers its layouts (`src/plugins/keys/main/start.ts`). Key
-hints in place later replaced the plugin's bottom key list: the plugin now also exports `anchor`, which draws a command's
-keys into an element a view names, and the plugin's `showHints` setting (`"keys": { "showHints": false }` in
-`settings.json`) turns the hints off. The title bar's Keys button, which opens help, is the plugin's too
+hints in place later replaced the plugin's bottom key list: the core keys API's `anchor` (`PageApi['keys']`) draws a
+command's keys into an element a view names, and the plugin's `showHints` setting (`"keys": { "showHints": false }` in
+`settings.json`) tells the core to turn the hints off; with the plugin stopped or disabled, hints show. The title bar's Keys button, which opens help, is the plugin's too
 (`docs/features/key-hints/design.md`).
 
 - Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a panel docked full width just above
@@ -150,7 +150,7 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
   quit leaves what must outlast it: chat's stop detaches the processes the session host keeps
   (`docs/features/session-host/design.md`), and main sends the page no plugin message from the first quit task on, so
   rows those stops end stay in the page's saved panes and recency.
-- **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (workflow
+- **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (workflow-heavy
   on docs) no longer orders or blocks the main part. A list still names a plugin whose events the process only
   hears, since start order is how a listener exists before the first emit.
 - **Scoped logs on both sides.** Most hand-typed log sources were on main, so both processes get the scoped log.
@@ -162,8 +162,8 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
 
 ## Commands and state (Waves 2 and 3)
 
-Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Plan
-folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/` (Wave 3).
+Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Waves 0
+and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds Wave 3.
 
 - **One argument per command.** A manifest declares it as a number, a string or a small record of those. Plugin code
   runs an argument command through a typed `CommandKey` from `contract.ts`, and a `keymap.json` bind carries an `arg`
@@ -178,7 +178,7 @@ folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/`
 - **A slot holds a value a late reader wants.** Its change notice replaces any matching event. An event marks a moment
   (turn finished, doc saved). Publishing both for every change was rejected: two paths carry one change.
 - **All slots live in main's memory, page-owned ones included.** The page takes a snapshot before its parts start and a
-  sequence number orders every later change, which replaces twelve hand-written race rules. Each process-held store was
+  sequence number orders every later change, which replaces the hand-written race rules chat, sessions, agents, usage, workflow and unity-pool kept for it. Each process-held store was
   rejected because Wave 3 would then need a second store for reloads. Writing every slot to disk was rejected because
   chat entries would duplicate the transcript. Durable data stays in plugin data and `uiState`.
 - **Slot values are JSON.** Processes, resolvers, timers and watches stay in the owner's closure, and the owner rebuilds
@@ -188,7 +188,8 @@ folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/`
   nobody has measured, and they can come later behind the same slot.
 - **A slot outlives its owner's stop.** The next start publishes the same key, reads the last value and rebuilds from it.
   A key another live part holds throws, and a page load releases the previous page's claims. A disabled or never-started
-  owner reads undefined. Clearing a slot for a plugin switched off live falls to Wave 4.
+  owner reads undefined. `sessions.activity` clears itself at a page start, since each source sets its activity again, and
+  `sessions.active` goes back to null until the first panes are placed. Clearing a slot for a plugin switched off live falls to Wave 4.
 - **Soft reads.** A manifest's `reads` list allows a slot read, or hearing an event, with the contract import and no
   start order. `dependsOn` stays for exports and for needing the other plugin started first.
 - **Forms' and primer's rounds stay on their channels.** Their owners' state is mostly live `ask_round` calls, so a slot

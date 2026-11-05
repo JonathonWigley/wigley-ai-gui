@@ -15,34 +15,20 @@ headings): the Backlog plugin reads it as one follow-up per top-level list item.
 
 Core seams that most items below assume.
 
-- **Plugin state registry** — *needs a feature plan*: a core registry of typed state slots, so a plugin added late
-  or reloaded reads the current value of any state another plugin owns, and a rebuild is needed only for new data.
-  Each owner declares its slot keys in its `contract.ts` (`slot<ChatSession[]>('chat.sessions')`, keeping the
-  contract import and the layer check); `api.state.publish(key)` gives the owner the only writer;
-  `api.state.read(key)` gives anyone `get()` (undefined while the owner is absent or disabled) and a disposable
-  `on`. The core holds each slot, so it outlives the owner's reload, and mirrors main slots to the page, replacing
-  the hand-written state-plus-push pairs (`ChatChannel.sessions`, agents `rosters`, usage `snapshot`, workflow
-  `flows`). An untyped global store was weighed and rejected: every read becomes a cast, and owner-only writes
-  (sessions' close guards, chat's queue) go. Behaviour stays as dependency exports (`addTab`, `contributeTools`,
-  `send`). What it replaces: event-only session rows and session list (no late-starter read, Sessions queries and
-  row decorations); chat's session state, which has no cross-plugin read model, so agents, usage and workflow each
-  re-fold `chat.agentEvent` and a reloaded one cannot catch up; main parts' live state held in `start` closures
-  (sessions list, chat processes, agents rosters); visual reading chat's focused entry as an `HTMLElement`
-  (`ChatPageExports.focusedEntry`, an entry id slot instead); and the hard `dependsOn` a plugin takes only to hear
-  another plugin's event (agents on chat), since reading a slot needs the contract import but not start order. A
-  layout kit gets `kit.state.read(key)` too, so a user layout can show data its owner did not pass in (today
-  `BaseKit` reads no settings, sessions or other plugins' data). Questions for the plan: deltas or whole values for
-  streamed data (chat entries), and how a reloaded owner re-attaches to its slot. Builds on
-  disposable registrations landed (plan-foundation-sweeps).
 - **PluginHost stop and reload, with a live enable switch** — *needs a feature plan*: `PluginHost` has `stop(id)`
   and `stopAll()` (stop landed, plan-foundation-sweeps); add `reload(id, part)` (`src/shared/plugin-host.ts`),
   stopping dependents first and starting them again after. Dependents hold the view `exports(consumer)` gave them, so
-  a reload leaves them stale: hand them a stable export proxy or restart them too. A reloaded main part keeps its live state through the plugin
-  state registry above, not its `start` closure. On top of it, the `plugins.disabled` setting
+  a reload leaves them stale: hand them a stable export proxy or restart them too. A reloaded main part keeps its live state in the slots it
+  publishes, not its `start` closure: a start already reads the last value, so what is left is clearing a slot for a
+  plugin switched off live and how a reloaded owner re-attaches to its writer. On top of it, the `plugins.disabled` setting
   (`src/config/settings.ts`, read once by `startPlugins`) takes effect live from a per-plugin switch in Settings
   mode, so view and interaction behaviours (the completion row's description, key hints and the like) ship as
   plugins the user switches on and off rather than settings inside the plugin they change. Builds on
   disposable registrations landed (plan-foundation-sweeps).
+- **Parts that follow at `core.pageReady` follow nothing after a part restart** — *needs a feature plan*: `core.pageReady`
+  fires once per page load, and about ten page parts subscribe inside it (`src/plugins/docs/page/start.ts` is one), so a
+  part restarted later never subscribes again. No path reaches this until a reload lands. To decide, with the reload
+  above: a catch-up for a part that starts after the page is ready, or subscribing at `start`.
 - **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
   (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (forms' on an
   unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Chat stops after
@@ -50,10 +36,6 @@ Core seams that most items below assume.
   cut save itself: **A quit can lose a session's open run time**). Hold the quit until `stopAll`
   settles, and prove it in a live quit, which a drive run cannot show because it holds the quit itself. The hold
   changes quit latency, which is why it waits here.
-- **Runtime command API** — *agent-ready*: commands at runtime and around other plugins:
-  `commands.register(id, decl, handler)`, `keys.bind(bind)`, `commands.intercept(id, (next, ctx) => …)`,
-  `commands.onDidRun`, all disposable, and `MainApi.commands.run`. Commands take a count or argument, so
-  `choose1..9` (`src/plugins/forms/manifest.ts`, `forms-commands.ts`) becomes one `forms.choose`.
 - **Every click runs a command** — *needs a feature plan*: keys always run a command, but about two thirds of
   pointer actions do not, so a future `commands.intercept` or `onDidRun` misses them. Of 40 click sites sampled, 13
   run a command, 18 call what a command's handler calls (forms' card kit choose, clear, accept and toggles;
@@ -61,49 +43,24 @@ Core seams that most items below assume.
   expand; help's Close; the list picker's choose; sessions' tab and row select; settings' cursor set), and 9 have no
   command (docs `followLink` and opening a tree node by id, notes `pickColour`, backlog `openHome` and row select,
   chat opening the image viewer at an index). The cause: a command takes no target, so "do X to this row" cannot be
-  one. Give commands a target (row, index, href) through the runtime command API above, move each site onto its
+  one. Give commands a target (row, index, href) through the runtime command API (landed: `commands.run(key, arg)`), move each site onto its
   command, and fold forms' layout action vocabulary (`kit.run({ type })`, `runLayoutAction` in
   `src/plugins/forms/page/layout/card-kit.ts`) into commands. The activity bar's click calls `ModeHandle.show()`
   (`src/renderer/shell/shell-chrome.ts`) where it should run the mode's show command. Builds on the runtime command
-  API.
-- **Events for every state change** — *agent-ready*: the core emits its own events on the bus under `core` — mode and
-  scope changes, window focus, theme applied, config changed, page ready — each typed in `src/contracts`. Chat and
-  docs fill out their events, typed in each `contract.ts`: chat has `ChatMainEvents` (agent event, plan usage,
-  session opened) and still needs message sent, turn started and finished, and control changed (model, permission
-  mode, effort); docs has `DocsMainEvents` (index loaded) and still needs doc opened, saved, created and trashed.
-  Five more plugins send their state changes only over their own channel, so no other plugin hears them: backlog
-  (follow-up created, edited, deleted, applied; `channel.send('changed')` in `backlog/main/start.ts`), workflow (a
-  session's flow and stage, `channel.send('flows')`), agents (roster changed), usage (snapshot changed) and notes
-  (note sent or filed, `note-sender.ts`). Sessions' page still needs activity set and tab added; visual and keys
-  need visual opened and help opened. Then
-  add a standing rule to the AGENTS.md Intent so new work stays hookable: every user action runs as a command through
-  the runtime command API, and every state change a plugin owns is published as an event typed in its `contract.ts`.
-  Today AGENTS.md § Architecture says how to emit, not that a plugin must.
+  API, which landed.
 - **Page state survives a page reload** — *needs a feature plan*: a core per-plugin page-state slot kept outside the
   page, which a page reload restores. Chat's draft and its images: a layout reload keeps them (the box moves into the
   redrawn composer), but a page reload starts the box empty (`docs/features/layouts/design.md`). Forms: focus, review
   row and view (review, confirm) go into the draft or the slot; pending autosaves flush on `pagehide`; restored rounds
   do not take over their session again.
+- **Visual reads chat's focused entry through a slot** — *agent-ready*: `ChatPageExports.focusedEntry` and
+  `focusedBlock` hand visual an `HTMLElement`, which a plugin from a user folder cannot read across a reload. Publish
+  the focused entry's id and the cursor's block as a page slot in chat's `contract.ts`, and let visual find the
+  element from it. Left over from the plugin state registry, which landed without it.
 - **Picker ranks recent targets higher** — *needs a feature plan*: every list picker ranks with the `FuzzyMatcher` page
   service, and a row's name outranks its path, so `gui` in the Notes target picker puts `wigley-ai-gui` first. What
   remains is recency: a recently updated target ranks higher. `NoteHome` has no updated time, and "updated" still needs
   a definition (for example the home's latest commit).
-- **Core picker and folder services** — *agent-ready*: core page services for what plugins duplicate:
-  `services.picker` (chat-private today, `src/plugins/chat/page/picker.ts`; docs needs it), and `chooseFolder()` and
-  `openExternal(url)` on `PageServices` with the scheme check inside (both are `MainServices` only today), deleting
-  the per-plugin channel pass-throughs in chat and docs. Confirm already landed as the shared `createConfirmPrompt`.
-- **keysFor and box focus in the core keys API** — *agent-ready*: `keysFor` moves from the keys plugin
-  (`src/plugins/keys/contract.ts`) into the core keys API, so a plugin reads a command's keys without depending on
-  `keys`; it returns unformatted hints (page and editor) with a keymap-changed subscription, so drawn buttons follow
-  a rebind. Box focus (`page` or `editor`), decided today in `src/renderer/page-keys.ts` and the pending-keys hub, becomes a core
-  `keys.onWhereChanged`. With it, the renderer root builds the pending-keys hub without the nullable
-  `pageKeys` (`src/renderer/renderer.ts`), and the editor-bind miss policy moves into `editor-binds.ts`. `anchor`
-  moves with `keysFor`: the renderer reads the keys plugin's exports by `KEYS_PLUGIN_ID` to hand the shell chrome its
-  anchors, a reach a plugin from a user folder would not have, and the chrome's hints vanish with `keys` disabled.
-- **Forms takes the timers service** — *agent-ready*: `MainServices.timers` exists, but `FormsService`
-  (`src/shared/agent-forms/form-service.ts`) still calls the global `setTimeout`; move it onto `timers`, and move its
-  32-bit overflow clamp into the timers adapter.
-
 ## Bugs seen in use
 
 Defects seen in a drive run, a transcript or the user's own use.
@@ -280,6 +237,15 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Row title takes a local command's text** — *agent-ready*: a new session whose first message is a control
   command (`/effort auto`, seen in a live run) names its row after that command, though it starts no conversation.
   The first-message title source should wait for a message that reaches the model.
+- **`<C-n>` in a forms round leaves the focused box off screen** — *agent-ready*: the box takes focus at y900 in a
+  700px window and the pane does not scroll, so the user types into a box they cannot see. `focusBoxItem` reads the same
+  on the base (`7001a175`), so it looks old, not proved. Steps: open a forms round with the notes box on a finding, size
+  the window to 700px high, press `<C-n>`, then read the box's rect (`.cm-focused`) or take a screenshot; the box lies
+  below the window until the caret moves.
+- **`forms.choose` with an arg through `runCommand` across the Bridge is not proved live** — *agent-ready*:
+  `window.wigley.runCommand("forms.choose", 2)` resolved with no `[forms]` line, with the round's row not the one
+  showing, so the run proves nothing either way. The arg is proved through a `binds` entry only. To prove it: open a
+  round that shows the row, run the command by `runCommand` from the page and from main, and read the `[forms]` line.
 
 ## Harness seams
 
@@ -370,24 +336,16 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   unpushed, not installed, session stale; `docs-browser/design.md`). A push still needs the user's press each time.
   The first question is which statuses each sync step acts on. Builds on **Reload plugins and skills in a running
   session**.
+- **The harness's fake modes skip a `coreModeSlot` write made inside a `coreModeSlot` listener** — *needs a decision*:
+  `tellShownMode` in `src/shared/plugin-part-harness.test-support.ts` (about line 1078) returns when the slot is held,
+  and the fake holds its own claim across the write, so a listener that shows a mode finds the write skipped. The real
+  `createModes` has no claim there. Only one listener today sets a flag, so nothing fails. To decide: move the
+  `coreModeSlot` write to first, as the registry model does, or release the fake's claim before it tells.
 
 ## Platform and packaging
 
 What Windows support and installers need.
 
-- **Platform record** — *agent-ready*: a `Platform` record chosen in the composition root (`createMacPlatform` /
-  `createWindowsPlatform`), exposed read-only on both sides as `services.platform`, replacing today's
-  `'macos' | 'windows' | 'linux'` string under the same name: an `os` field holding that string, app lifecycle quirks,
-  attention and badge (the alerts adapter splits into mac and Windows variants), default program paths, the relay
-  endpoint. Every plugin that reads `services.platform` today moves to `services.platform.os` when the record lands.
-  Replaces the other `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`, the forms plugin's
-  `main/selftest-script.ts`, and the session host's own composition root `src/session-host/session-host.ts`) and sessions'
-  direct `os.userInfo`, `process.env`, `execPath` and `cwd` reads in `openRelay`; path rules already sit behind
-  `services.paths`.
-- **Forms self-test platform from services** — *agent-ready*: `src/plugins/forms/main/selftest-script.ts:63` sets
-  `IS_WINDOWS` from `process.platform` at module level, so the chip paths ignore the platform the app chose. The forms
-  main start passes `services.platform` into `formsSelfTestScript`, which picks the paths from it. Waits on that
-  file's staged changes being committed.
 - **Per-platform program lookup and spawning** — *agent-ready*: program lookup and spawning per platform behind
   `ProcessRunner`: `.cmd`/`.bat` shims through `cmd.exe` on Windows, a `resolveProgram('python')` (`py -3` → `python`
   → `python3`) for docs' index script (`index-sources.ts` runs `python3`), a PATH lookup for the `claude` command
@@ -414,9 +372,6 @@ What Windows support and installers need.
   the cause, then decide which signing identity `install-app` uses.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
-- **Menu labels by label** — *agent-ready*: the app menu labels commands by `label`, not id
-  (`src/main/keybindings.ts`).
-
 ## Plugin extension points
 
 Closed lists that become registrations, so a plugin adds what is hardcoded today.
@@ -454,9 +409,8 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   structured setting (chat's profiles, docs' config folders) cannot contribute its editor. A plugin registers a
   control kind with its row editor and its layout part, and the `control` field becomes a string so a new kind does
   not break a user settings layout. The layout name picker (Features) is then one such kind.
-- **Sessions queries and row decorations** — *needs a feature plan*: `activeChanged` landed; still missing are
-  `rows()` (page) and `sessions()` (main) queries so a late plugin sees live sessions (slots in the plugin state
-  registry, Foundations, rather than hand-written queries), a page `tabShown` event,
+- **Sessions queries and row decorations** — *needs a feature plan*: the `sessions.rows`, `sessions.selection` and
+  `sessions.active` slots show a late plugin the live sessions; still missing are a page `tabShown` event,
   `SessionTabView.hidden()` beside `shown()`, `setStatus` replaced by a row part (row parts landed and are the row
   decoration seam; `setStatus` lines overwrite each other), and one job per close seam (`beforeClose` on the page and
   `addCloseGuard` in main both carry forms' "open round" today; `plugin-framework/design.md` § Commands and state). With it, two tabs' take-overs released
@@ -479,9 +433,7 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   (`src/preload/preload.ts`). A user layout can therefore invoke any plugin's channel outside every API, contract and
   disposal. Decide whether this is a sanctioned power-user hook (then document it and type it) or closed (layouts
   in a scope with no `window.wigley`, data through the kit). The plugin state registry's `kit.state.read`
-  (Foundations) is the sanctioned route for data a layout needs.
-- **Window plugin** — *agent-ready*: window commands (`window.summon`, registered in `src/main/window.ts`) move into a
-  small `window` plugin.
+  (landed) is the sanctioned route for data a layout needs.
 - **Replaceable core services decision** — *needs a feature plan*: decide whether core services (`markdown`,
   `editor`, `alerts`) are replaceable by a plugin (a `provides` service registry) or deliberately not, and record it
   in `plugin-framework/design.md`.
@@ -501,7 +453,7 @@ User-facing features, those other work builds on first.
   with `focusAfterChange` in `src/plugins/chat/page/entry-focus.ts`, which holds the following rule.
 - **Command palette and fuzzy finders** — *needs a feature plan*: a command palette, and `Space f f` (find a file) and
   `Space f s` (search text), all ranked by the `FuzzyMatcher` page service (Foundations; `docs/keymap.md` reserves
-  the keys). Builds on the runtime command API (command labels) and the core picker service. Deferred from the docs
+  the keys). Builds on the runtime command API (command labels) and the core picker service (`services.picker`), both landed. Deferred from the docs
   browser (`docs-browser/design.md`).
 - **Terminal in the app** — *needs a feature plan*: a real interactive shell inside the app, so the user runs terminal
   commands without leaving it: a sign-in such as `gcloud auth login`, and the commands print mode refuses. The app has
@@ -583,7 +535,7 @@ Duplication and drift with no user-visible defect.
   `.ui-input > input` in `src/shared/page/ui/input-frame.css`, or a class `textBoxInput` adds) and delete the five
   copies, checking each box's look in a drive capture.
 - **Sessions split picker rows through the sessions layout** — *agent-ready*: the split's "Show session" picker
-  (`openSplitPicker`, `src/plugins/sessions/page/start.ts`) passes no `drawRow` to `createListPicker`, so its rows do
+  (`openSplitPicker`, `src/plugins/sessions/page/start.ts`) passes no `drawRow` to the picker's `open`, so its rows do
   not draw through `sessions.layout`, against `docs/features/layouts/design.md`'s "a dialog follows its opener". Add a
   picker-row part to the sessions layout contract and `default` layout, as docs, chat, settings, notes and backlog
   do.
@@ -748,8 +700,8 @@ because the earlier items rewrite many of these tests anyway.
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
 - **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the docs page hears
-  `sessions.sessionHostChanged` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
-  shown (`src/plugins/docs/page/start.ts`, `docs-view.ts`). No test pins it: the docs page has no unit test file, and
+  a row's host id change through `followRows` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
+  shown (`src/plugins/docs/page/start.ts`, `docs-view.ts`). No test pins it: the docs page's `start.test.ts` has no row with a shown tab, and
   the chat self-test's clear step never shows chat-second's Docs tab. Either give the docs page a test seam with a row
   for a shown tab (rebuilds) and an unshown one (does nothing), or add a self-test step that shows the Docs tab before
   the clear and expects a rebuild line after it.
@@ -854,7 +806,9 @@ because the earlier items rewrite many of these tests anyway.
   (`src/plugins/sessions/main/session-list.ts`). A process the session host kept running and chat re-attached keeps
   the old id in its environment. Its first `/clear` hands off under the old row id and starts the new process under
   the new one. The pool then misses the handoff, and the claim falls back to the expiry rules
-  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id. To
+  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id when the
+  claim names one; a claim naming only its row (`holderRow`, `src/plugins/unity-pool/page/pool-view-model.ts`) loses the
+  badge. To
   decide: keep a row's app id across relaunch, or have `/clear` pass the old row id to the new process.
 - **Backlog `/` with no home open does nothing and leaves the letters as commands** — *agent-ready*: `openFilter` in
   `src/plugins/backlog/page/backlog-view.ts` returns silently when no home is open, so `backlog.filter` logs, no box
@@ -865,3 +819,16 @@ because the earlier items rewrite many of these tests anyway.
   nothing refocuses the box and the next keys go to the page until `i`. To decide: whether a cancelled step hands focus
   back to the box. Pre-existing since 80edb99c. Source session: Claude Code a65d02f6-eab9-453b-be96-34ac71d33876 in
   wigley-ai-gui.
+- **Agent-lines row overflows at the side bar's least width** — *agent-ready*: `npm run selftest -- --plugin agent-lines`,
+  group `working line`, fails `session-row holds 156px in 149px`: row content needs 156px at the side bar's 160px least
+  width, and the header breaks `Sessions` beside its hints. The same on the base of plan-commands-and-state.
+- **`[chat] session <id> closed (code 0)` after a session's close** — *needs a decision*: main's record of the turn it
+  ended logs after `[chat] session closed: <label>`, by id, since the row is gone. To decide: keep it as main's record, or
+  name the session from what main still holds.
+- **Each chat tab draws twice per page load** — *agent-ready*: each load logs `Chat tab shown` twice and mounts each
+  visual frame twice, the same on the base of plan-commands-and-state. By reading and log order, not confirmed:
+  `show-layouts.ts` always calls `setLayouts` on a first load, which runs sessions' `checkVisible(true)` and chat's rebuild
+  of the entries.
+- **A user layout logs `layout st shown` then `layout default shown`** — *needs a decision*: `layout-loader.ts` loads
+  `default` on every load and `show-layouts.ts` logs each one, though the user's layout draws. To decide: log only the
+  layout in use, or log the default as loaded.

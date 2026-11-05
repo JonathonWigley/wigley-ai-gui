@@ -1,5 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type {
+  ChannelShape,
   MainApi,
   MainPart,
   QualifiedEvents,
@@ -13,17 +14,17 @@ import {
   type SessionsMainEvents,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type {
-  ChecklistItem,
-  FoldEvent,
-  MainWorkflow,
-  SessionFlow,
-  SignalOrigin,
-  WorkflowChannel,
-  WorkflowMainExports,
-  WorkflowObserver,
-  WorkflowSelfTestHooks,
-  WorkflowSignal,
+import {
+  type ChecklistItem,
+  type FoldEvent,
+  type MainWorkflow,
+  type SessionFlow,
+  type SignalOrigin,
+  workflowFlowsSlot,
+  type WorkflowMainExports,
+  type WorkflowObserver,
+  type WorkflowSelfTestHooks,
+  type WorkflowSignal,
 } from '../contract';
 import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -49,7 +50,7 @@ import { createTurnWork } from './turn-work';
 
 type WorkflowApi = MainApi<
   typeof workflowManifest,
-  WorkflowChannel,
+  ChannelShape,
   Record<never, never>,
   QualifiedEvents<'chat', ChatMainEvents> &
     QualifiedEvents<'sessions', SessionsMainEvents>
@@ -64,18 +65,19 @@ type WorkflowApi = MainApi<
 // `reportedAs` and moves a flow only by its own workflow's, and
 // `set_workflow_checklist`, hands chat the session note naming both,
 // meters each session's active time and spend and appends a line to `runs.jsonl`
-// when a fold enters a stage that finishes its workflow, sends every flow to the
-// page on each change, and offers a drive run the two tools' reports as drive
+// when a fold enters a stage that finishes its workflow, writes each open session's
+// flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
 // actions. Exports `addWorkflow`, `signal`, `setState` and `observe`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
-    const { services, channel, events } = api;
+    const { services, events } = api;
     const { log, clock } = services;
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
     const workflows = createStageList<MainWorkflow>();
     const store = createFlowStore({
+      flows: api.state.publish(workflowFlowsSlot),
       files: api.data,
       log,
       paths: services.paths,
@@ -101,15 +103,12 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     });
     const observers: WorkflowObserver[] = [];
 
-    const sendFlows = () => channel.send('flows', store.all());
-
     const putFlow = (next: SessionFlow, origin: SignalOrigin) => {
       if (origin === 'live') {
         store.put(next);
       } else {
         store.putKeepingSavedAt(next);
       }
-      sendFlows();
     };
 
     const tellObservers = (call: (observer: WorkflowObserver) => void) =>
@@ -312,7 +311,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         connected.delete(sessionId);
         const flow = store.open(sessionId, pair.hostSessionId, pair.projectDir);
         tellObservers((observer) => observer.opened(flow));
-        sendFlows();
       });
     });
     events.on('sessions.hostSessionChanged', ({ id, info }) => {
@@ -333,7 +331,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         runMeter.forget(sessionId);
         tellObservers((observer) => observer.closed(sessionId));
         store.drop(sessionId);
-        sendFlows();
       });
     });
     events.on(
@@ -370,9 +367,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       },
     );
 
-    channel.handle('flows', () => ready.then(() => store.all()));
-    void ready.then(sendFlows);
-
     const selfTestHooks: WorkflowSelfTestHooks = {
       forgetFlows(projectDir) {
         for (const sessionId of store.forgetFlows(projectDir)) {
@@ -380,7 +374,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           runMeter.forget(sessionId);
           tellObservers((observer) => observer.closed(sessionId));
         }
-        sendFlows();
       },
       callStepTool(sessionId, step) {
         void startStepToolSession({ id: sessionId }).call(
@@ -414,7 +407,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
             return;
           }
           store.putKeepingSavedAt({ ...flow, state: state ?? null });
-          sendFlows();
         },
         ready,
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),

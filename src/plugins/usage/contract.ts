@@ -1,11 +1,12 @@
-// The usage plugin's records and its channel between its main and page parts.
+// The usage plugin's records and its snapshot slot.
 
 import type {
   CompactionTrigger,
   PlanUsage,
   UsageAgentEvent,
 } from '../../contracts/agent';
-import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type { DependencyKey } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 
 // One chat profile's plan usage. `profileDir` is the profile's `configDir` as
 // chat's `profiles` setting writes it; `isDefault` is true for the first
@@ -40,11 +41,12 @@ export interface UsageSnapshot {
   sessions: readonly SessionUsage[];
 }
 
-// `changed` carries the whole snapshot after every change.
-export interface UsageChannel extends ChannelShape {
-  invoke: { snapshot(): UsageSnapshot };
-  messages: { changed: UsageSnapshot };
-}
+// The whole snapshot, written on every change.
+export const usageSnapshotSlot: SlotKey<UsageSnapshot, 'main', 'usage'> = {
+  id: 'usage.snapshot',
+  process: 'main',
+  kind: 'value',
+};
 
 // A part usage draws one session's usage line into: the same { id, build }
 // shape as chat's status part and sessions' bar part.

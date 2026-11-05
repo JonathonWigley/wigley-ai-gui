@@ -1,9 +1,12 @@
 import type { Timers } from '../contracts/ambient';
+import type { Disposable } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type { PageCommandContext } from '../contracts/plugin';
-import type { CommandRegistry } from '../shared/command-registry';
+import { type KeyCommands, runBound } from '../shared/command-router';
+import { createListeners } from '../shared/listeners';
+import type { BoxFocus } from './box-focus';
 import {
   type ChordMatcher,
   type ChordPress,
@@ -159,33 +162,38 @@ export function createPendingTimeout(
 // inside an editor too, ahead of it, unless the editor takes the key itself. A page sequence never outlives the place
 // it was typed: focus entering an editor, or the window losing focus, drops
 // the pending page keys, held ones included. A bind fires only in the scope
-// `currentScope` reads. `report` hears the pending page keys each time they
-// change, `[]` once none are, with the scope in force as it reports. The
-// returned `hold` keeps the pending keys past the timeout until they end, and
-// `cancel` drops them, running nothing. `setBinds` replaces the binds and the
-// timeout, dropping any pending keys; binds it rejects, such as a key bound
-// twice in one scope, throw and leave the current ones in force.
+// `currentScope` reads. It starts with no binds, so a key matches nothing until
+// `setBinds`, which replaces the binds and the timeout, dropping any pending keys;
+// binds it rejects, such as a key bound twice in one scope, throw and leave the
+// current ones in force. `onPendingKeys` hears the pending page keys each time
+// they change, `[]` once none are, with the scope in force as it reports. `hold`
+// keeps the pending keys past the timeout until they end, and `cancel` drops
+// them, running nothing.
 export function installPageKeys(
-  binds: PageBind[],
   timeoutMs: number,
   currentScope: () => ViewScope,
   editors: EditorHost,
-  commands: CommandRegistry<PageCommandContext>,
+  commands: KeyCommands<PageCommandContext<any>>,
   log: Log,
   timers: Timers,
-  report: (keys: string[], scope: ViewScope) => void,
+  boxFocus: BoxFocus,
 ): {
   hold(): void;
   cancel(): void;
   setBinds(binds: PageBind[], timeoutMs: number): void;
+  onPendingKeys(
+    listener: (keys: string[], scope: ViewScope) => void,
+  ): Disposable;
 } {
-  const reportKeys = (keys: string[]) => report(keys, currentScope());
-  let chords = createChordMatcher(binds);
-  let matcher = createSequenceMatcher(binds, timeoutMs);
+  const pendingKeys = createListeners<{ keys: string[]; scope: ViewScope }>();
+  const reportKeys = (keys: string[]) =>
+    pendingKeys.tell({ keys, scope: currentScope() });
+  let chords = createChordMatcher([]);
+  let matcher = createSequenceMatcher([], timeoutMs);
   let timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
   const runBind = (bind: PageBind) => {
-    log('page', `${bind.keys.join('')} ran ${bind.command}`);
-    commands.run(bind.command, {});
+    const keys = bind.keys.join('');
+    runBound(commands, bind, { keys, source: 'page', log, logsRun: true }, {});
   };
   const dropPending = () => {
     dropPendingKeys(matcher, reportKeys);
@@ -226,9 +234,7 @@ export function installPageKeys(
     }
     const isConsumed = feedPageKey(matcher, event.key, event.timeStamp, {
       scope: currentScope,
-      editorHasFocus: () =>
-        document.activeElement !== null &&
-        editors.contains(document.activeElement),
+      editorHasFocus: () => boxFocus.where() === 'box',
       run: runBind,
       typeIntoEditor: (keys) => {
         log('page', `typed ${keys.join('')} into the editor`);
@@ -242,6 +248,8 @@ export function installPageKeys(
     }
   });
   return {
+    onPendingKeys: (listener) =>
+      pendingKeys.add(({ keys, scope }) => listener(keys, scope)),
     hold() {
       matcher.hold();
       timeout.arm();

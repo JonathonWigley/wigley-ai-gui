@@ -230,7 +230,7 @@ const HOST_ID = '[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 // The notes page's line for its row moving to the random host id a clear
 // gives it.
 const NOTES_MOVED_TO_NEW_HOST = new RegExp(
-  `^\\[notes\\] session ${HOST_ID} moved to ${HOST_ID}$`,
+  `^\\[notes\\] session moved to ${HOST_ID}$`,
 );
 
 // Clears the second session: a clear in the first would replace the process

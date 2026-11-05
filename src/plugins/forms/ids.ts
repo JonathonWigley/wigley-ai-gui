@@ -24,9 +24,3 @@ export function formsCommandNamed(short: string): CommandId | null {
     ? formsCommand(short as FormsCommandName)
     : null;
 }
-
-// The numbered command picking choice `n`; null past the ninth, which has
-// none.
-export function numberedCommand(prefix: 'choose', n: number): CommandId | null {
-  return formsCommandNamed(`${prefix}${n}`);
-}

@@ -46,15 +46,18 @@ const app: RecentFolder = {
 
 // What the fake channel answers; a function answer runs per call, so it can
 // reject or answer differently each time.
-interface Answers {
+interface ChannelAnswers {
   recentFolders: () => Promise<RecentFolder[]>;
   resumeSections: () => Promise<ResumeSectionRows[]>;
   accountStatus: () => Promise<AccountStatus>;
-  chooseFolder: () => Promise<string | null>;
   pastSessions: () => Promise<PastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
   resume: (request: ResumeRequest) => Promise<string>;
   setArchived: (hostSessionId: string, archived: boolean) => Promise<void>;
+}
+
+interface Answers extends ChannelAnswers {
+  chooseFolder: () => Promise<string | null>;
 }
 
 interface Opened {
@@ -149,7 +152,10 @@ function setUp(
       return answers.setArchived(hostSessionId, archived);
     }
     return answers[
-      method as Exclude<keyof Answers, 'start' | 'resume' | 'setArchived'>
+      method as Exclude<
+        keyof ChannelAnswers,
+        'start' | 'resume' | 'setArchived'
+      >
     ]();
   };
   const prompt = createStartPrompt({
@@ -158,6 +164,7 @@ function setUp(
       open: (profile, finished) => signIns.push({ profile, finished }),
     },
     channel: { invoke } as Parameters<typeof createStartPrompt>[0]['channel'],
+    chooseFolder: () => answers.chooseFolder(),
     profiles: () => profiles,
     reveal: (sessionId) => revealed.push(sessionId),
     paths: posixPaths,
@@ -530,7 +537,6 @@ describe('start prompt', () => {
     await flush();
     pickFolder(run.opened[0], CHOOSE_FOLDER_LABEL);
     await flush();
-    expect(run.invoked).toContain('chooseFolder');
     expect(run.opened.map((opened) => opened.title)).toEqual([
       'Folder',
       'Profile',

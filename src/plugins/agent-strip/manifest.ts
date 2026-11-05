@@ -1,15 +1,16 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // The agent strip above every Chat tab's composer box: the page draws one box per subagent and task of the session's
-// roster, read from agents' page exports, as a chat composer part whose stop takes the entry cursor, through the
-// `layout` setting's agent-strip layout. It names `sessions` for each session's name in its log lines, `keys` for its
-// layout's key hints, and `chat` for its composer part and its self-test's launch.
+// roster, read from agents' `agents.rosters` slot, as a chat composer part whose stop takes the entry cursor, through the
+// `layout` setting's agent-strip layout. It names `sessions` for `cutToTitleLimit`, which cuts each box's title, and
+// `chat` for its composer part and its self-test's launch.
 export const agentStripManifest = definePlugin({
   id: 'agent-strip',
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['agents', 'chat', 'sessions', 'keys'],
+    page: ['chat', 'sessions'],
   },
+  reads: { main: [], page: ['agents'] },
   commands: {
     prevBox: { label: 'previous box', group: 'agent strip', runsIn: 'page' },
     nextBox: { label: 'next box', group: 'agent strip', runsIn: 'page' },

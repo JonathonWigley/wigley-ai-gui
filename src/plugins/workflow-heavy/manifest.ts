@@ -10,8 +10,9 @@ export const workflowHeavyManifest = definePlugin({
   id: 'workflow-heavy',
   dependsOn: {
     main: ['workflow', 'chat', 'sessions'],
-    page: ['workflow', 'sessions', 'docs'],
+    page: ['workflow', 'docs'],
   },
+  reads: { main: [], page: ['sessions'] },
   commands: HEAVY_COMMANDS,
   scopes: {},
   settings: {

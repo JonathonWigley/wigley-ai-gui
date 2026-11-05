@@ -89,6 +89,7 @@ function createForms(
     store,
     wake: createChatFormWake(chat, services.log),
     defaultDeadlineSeconds,
+    timers: services.timers,
   });
   const previewService = createAgentFormService({
     type: roundType,
@@ -100,6 +101,7 @@ function createForms(
     ),
     wake: NO_FORM_WAKE,
     defaultDeadlineSeconds,
+    timers: services.timers,
   });
   const preview = createLayoutPreview({
     sessions,
@@ -206,7 +208,13 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       () => api.layouts.register({ layoutTypes }),
       api.services.log,
     );
-    selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
+    selfTest?.run(
+      formsSelfTestScript(
+        sessions,
+        api.services.userConfig,
+        api.services.platform.os,
+      ),
+    );
     if (api.drive !== null) {
       addDriveActions(api.drive, sessions, (listener) =>
         api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),

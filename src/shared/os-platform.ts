@@ -1,7 +1,7 @@
-import type { Platform } from '../contracts/platform';
+import type { OsName } from '../contracts/platform';
 
-// The `Platform` Node names `nodePlatform`, every OS but macOS and Windows as `linux`.
-export function osPlatform(nodePlatform: NodeJS.Platform): Platform {
+// The `OsName` Node names `nodePlatform`, every OS but macOS and Windows as `linux`.
+export function osPlatform(nodePlatform: NodeJS.Platform): OsName {
   if (nodePlatform === 'darwin') {
     return 'macos';
   }

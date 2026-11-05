@@ -1,4 +1,4 @@
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type {
   AcceleratorBind,
   InterceptBind,
@@ -8,6 +8,8 @@ import type {
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { capitalised } from '../../../shared/capitalised';
+import { commandTarget } from '../../../shared/command-args';
+import { isSameJson } from '../../../shared/json';
 import {
   bindIdentities,
   defaultBindLines,
@@ -27,8 +29,10 @@ export interface BindLine {
 }
 // `accelerators`: a main command's `app`, `global` and `intercept` binds, read-only in the rows (the advanced box
 // edits them); the view prints them with `formatAccelerator` and `chordName`.
+// `arg`: the argument this row's lines bind, for a command that declares one.
 export interface CommandRow {
   command: CommandInfo;
+  arg?: CommandArg;
   binds: BindLine[];
   accelerators: AcceleratorLine[];
 }
@@ -229,7 +233,33 @@ function groupTitle(plugin: string): string {
   return capitalised(plugin);
 }
 
-// Every command's row, grouped by plugin: `core` first, then each plugin in
+// The rows of `whole`, every line of one command: `whole` itself for a command
+// that declares no argument, else one row per distinct bound argument, in the
+// order its lines first name each, and no row when no key binds it.
+function rowsPerArg(whole: CommandRow): CommandRow[] {
+  if (whole.command.arg === undefined) {
+    return [whole];
+  }
+  const args: CommandArg[] = [];
+  for (const { bind } of [...whole.binds, ...whole.accelerators]) {
+    if (
+      bind.arg !== undefined &&
+      !args.some((seen) => isSameJson(seen, bind.arg))
+    ) {
+      args.push(bind.arg);
+    }
+  }
+  return args.map((arg) => ({
+    ...whole,
+    arg,
+    binds: whole.binds.filter(({ bind }) => isSameJson(bind.arg, arg)),
+    accelerators: whole.accelerators.filter(({ bind }) =>
+      isSameJson(bind.arg, arg),
+    ),
+  }));
+}
+
+// Every command's rows, grouped by plugin: `core` first, then each plugin in
 // the order `schema.commands` first names it, rows in `schema.commands` order.
 // A row's default binds are those the merge of the default layers keeps.
 export function keymapRows(
@@ -252,11 +282,11 @@ export function keymapRows(
     const userLines = (layer?.binds ?? [])
       .filter((bind) => bind.command === command.id)
       .map((bind) => userLine(bind, leader));
-    const row: CommandRow = {
+    const rows = rowsPerArg({
       command,
       binds: [...defaultLines, ...userLines],
       accelerators: acceleratorLines(schema, layer, command.id, leader),
-    };
+    });
     let group = groups.get(command.plugin);
     if (!group) {
       group = {
@@ -266,23 +296,24 @@ export function keymapRows(
       };
       groups.set(command.plugin, group);
     }
-    group.rows.push(row);
+    group.rows.push(...rows);
   }
   return [...groups.values()].filter((group) => group.rows.length > 0);
 }
 
-// Every other command a new bind of `command` on `keys` in `scope` would
-// displace, in row order: each whose default bind fires on a half the new bind
+// Every other row's command a new bind of `command` with `arg` on `keys` in `scope`
+// would displace, in row order: each whose default bind fires on a half the new bind
 // shares, and each whose user bind `withAddedBind` drops; judged half by half
-// as the merge does. `command` itself is left out, since a bind on keys it
-// already holds displaces nothing. Empty when none, or when the merge cannot
-// expand those keys.
+// as the merge does. The row of `command` and `arg` itself is left out, since a bind
+// on keys it already holds displaces nothing. Empty when none, or when the merge
+// cannot expand those keys.
 export function replacedBy(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
   keys: string,
   scope: string,
   command: CommandId,
+  arg?: CommandArg,
 ): CommandInfo[] {
   const leader = keymapLeader(schema, layer);
   const typed: KeyBind = { keys, scope, command };
@@ -291,7 +322,10 @@ export function replacedBy(
   }
   const rows = keymapRows(schema, layer).flatMap((group) => group.rows);
   return rows
-    .filter((row) => row.command.id !== command)
+    .filter(
+      (row) =>
+        commandTarget(row.command.id, row.arg) !== commandTarget(command, arg),
+    )
     .filter((row) =>
       row.binds.some((line) => {
         const shared = sharedHalves(typed, line.bind, leader);

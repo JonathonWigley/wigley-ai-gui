@@ -19,6 +19,7 @@ import {
   spendLineKind,
 } from './session-lines';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOW = 50_000_000;
 const MINUTE = 60_000;
@@ -64,8 +65,13 @@ function defaultParts() {
         ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: () => undefined,
   });

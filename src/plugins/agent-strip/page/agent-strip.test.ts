@@ -20,6 +20,7 @@ import type { ComposerStopExits } from '../../chat/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { AgentBoxInput, Layout } from '../layouts/layout';
 import { createAgentStrip } from './agent-strip';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOW = 1_000_000;
 const SESSION = 'row-1';
@@ -130,8 +131,8 @@ function boxesWith(wrapper: FakeElement, className: string): number[] {
   );
 }
 
-// A strip over agents whose rosters `setRoster` changes, announcing each
-// change; timers record each `set` and `clear`; `exits` records each exit
+// A strip over rosters `setRoster` changes, telling the strip of each change;
+// timers record each `set` and `clear`; `exits` records each exit
 // called; `anchorDisposals` holds each key anchor's dispose count in naming
 // order; every session is named `proj`; `onSetScope` runs on each scope set.
 // `OTHER_SESSION` lists `initial` too and never changes.
@@ -143,7 +144,6 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
     [SESSION, initial],
     [OTHER_SESSION, initial],
   ]);
-  const listeners: ((sessionId: string) => void)[] = [];
   const sets: { run: () => void; handle: number }[] = [];
   const clears: number[] = [];
   const logged: string[] = [];
@@ -170,8 +170,13 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
           };
         },
       },
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: (line: string) => logged.push(line),
     clock: { now: () => now },
@@ -184,13 +189,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
       clear: (handle) => clears.push(handle),
     },
     cutTitle: (text) => text.slice(0, TITLE_LIMIT),
-    agents: {
-      roster: (sessionId) => rosters.get(sessionId) ?? EMPTY,
-      onRosterChanged(listener) {
-        listeners.push(listener);
-        return { dispose: () => undefined };
-      },
-    },
+    roster: (sessionId) => rosters.get(sessionId) ?? EMPTY,
     setScope: () => {
       scopeSets += 1;
       onSetScope();
@@ -205,9 +204,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   const wrapper = new FakeElement('div');
   const setRoster = (roster: Roster) => {
     rosters.set(SESSION, roster);
-    for (const listener of listeners) {
-      listener(SESSION);
-    }
+    strip.rosterUpdated(SESSION);
   };
   const build = () => strip.part.build(asHtml(wrapper), SESSION);
   const enter = () => strip.part.stop!.enter(SESSION, exits);
@@ -396,7 +393,7 @@ describe('agent strip', () => {
       exitCalls: [],
       nextBox: ['selected box 3 of 4 in proj'],
     },
-  ])('rosterChangedWhileSelected_$case', (row) => {
+  ])('rosterUpdatedWhileSelected_$case', (row) => {
     const {
       strip,
       build,
@@ -848,7 +845,7 @@ describe('agent strip', () => {
     expect(boxes()).toHaveLength(1);
   });
 
-  it('rosterChanged_AgentLeaves_DropsScrollerAndKeepsRow', () => {
+  it('rosterUpdated_AgentLeaves_DropsScrollerAndKeepsRow', () => {
     const roster: Roster = { ...ONE_TASK, agents: [agent('a1', 60_000)] };
     const { build, setRoster, boxes, scrollers, wrapper } = setUp(roster);
     build();
@@ -861,7 +858,7 @@ describe('agent strip', () => {
     expect(boxes()[0].parentNode).toBe(wrapper.children[0]);
   });
 
-  it('rosterChanged_AgentStartsAfterTask_PutsScrollerAboveRows', () => {
+  it('rosterUpdated_AgentStartsAfterTask_PutsScrollerAboveRows', () => {
     const { build, setRoster, scrollers, wrapper } = setUp(ONE_TASK);
     build();
     const rows = wrapper.children[0];
@@ -874,7 +871,7 @@ describe('agent strip', () => {
     ]);
   });
 
-  it('rosterChanged_TaskEnds_LeavesWrapperEmpty', () => {
+  it('rosterUpdated_TaskEnds_LeavesWrapperEmpty', () => {
     const { build, setRoster, wrapper } = setUp(ONE_TASK);
     build();
 

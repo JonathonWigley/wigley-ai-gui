@@ -1,6 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PendingKeys } from '../../../contracts/keymap';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type { CommandInfo } from '../../../contracts/plugin';
 import { pageKeysFor } from '../../../shared/key-notation';
 import {
@@ -41,7 +41,7 @@ export function whichKeyModel(
   keymap: Keymap,
   command: (id: CommandId) => CommandInfo | undefined,
   label: CommandLabel,
-  platform: Platform,
+  platform: OsName,
 ): WhichKeyModel | null {
   const candidates = continuations(pending.keys, bindsFor(pending, keymap));
   if (candidates.length === 0) {

@@ -6,6 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const usageTabLineManifest = definePlugin({
   id: 'usage-tab-line',
   dependsOn: { main: [], page: ['usage', 'sessions'] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},

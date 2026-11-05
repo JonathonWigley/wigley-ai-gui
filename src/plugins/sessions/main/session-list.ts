@@ -3,6 +3,7 @@ import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
+import type { KeyedSlotWriter, SlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { createListeners } from '../../../shared/listeners';
@@ -28,8 +29,9 @@ export interface SessionListDeps {
   clock: Clock;
   log: PluginLog;
   emit: PluginEvents<SessionsMainEvents>['emit'];
-  stateChanged(state: SessionsState): void;
-  // The user activated a session; called before the state it changes is sent.
+  rows: KeyedSlotWriter<SessionRow>;
+  selection: SlotWriter<string | null>;
+  // The user activated a session; called before the writes it causes.
   activated(sessionId: string): void;
   // The project of a session in `projectDir`; null when the folder has none.
   projectName(projectDir: string): Promise<string | null>;
@@ -44,7 +46,7 @@ export interface SessionList extends Omit<
   SessionsMainExports,
   'holdConnects' | 'activate'
 > {
-  // `SessionsMainExports.activate`; true when it sent the state.
+  // `SessionsMainExports.activate`; true when it wrote the rows or the selection.
   activate(sessionId: string): boolean;
   tools(): ToolDefinition[];
   onToolsChanged(listener: () => void): Disposable;
@@ -232,19 +234,22 @@ function routeCall(
 // row, a row was opened selected, a mark selected another session from none,
 // or `release` closed another selected row. `activateExistingRow` selects
 // only a row the session holds and logs and ignores one with none. `mark`,
-// `activate`, `activateExistingRow`, `release` and `closeSession` send the
-// whole state only when it changed; `mark`, `activate`, `activateExistingRow`
+// `activate`, `activateExistingRow`, `release` and `closeSession` write only what
+// changed; `mark`, `activate`, `activateExistingRow`
 // and `closeSession` log and ignore an unknown session, `release` silently
 // ignores a session it cannot act on. `release` and `closeSession` log and
 // keep a row a close guard refuses, and emit `closed` for a row they close;
 // `closeSession` returns true for a row it closes and for a known session
-// whose row is already closed, false otherwise. Every state sent with a
-// selection other than the last sent emits `selected` after it. Each session's
+// whose row is already closed, false otherwise. Each session's
 // titles live on its entry, copied onto its row while it has one, and last
 // while the session does; so does its project, which starts as the group and
-// sends the state when its lookup changes the project of a session with a row,
+// writes the row when its lookup changes the project of a session with a row,
 // until `stop`. Each `mark` and `activate` of a connected session reads its
 // harness's name for it into its `firstMessage` title, until `stop`.
+// The rows and the selection live in the writers, whose slots outlive a stop, so
+// creation clears them. One operation runs in one synchronous block: every row
+// write, then the selection write, then its events, with `activated` before them
+// all. A row value is never changed in place.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   // Each registration its own object, so one function added twice is two.
@@ -252,8 +257,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const toolNames = new Set<string>();
   const toolsChanged = createListeners<void>();
   const entries = new Map<string, SessionEntry>();
-  const rows: SessionRow[] = [];
-  let selectedSessionId: string | null = null;
+  const { rows, selection } = deps;
   // The session whose selected row `release` closed, and when: its next mark
   // selects the row again within RESELECT_WINDOW_MS. Null after that mark, an
   // activate or activateExistingRow, a selecting open, the session's end, or a
@@ -262,36 +266,51 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
   let isStopped = false;
 
-  const state = (): SessionsState => ({
-    rows: rows.map((row) => ({ ...row, titles: { ...row.titles } })),
-    selectedSessionId,
-  });
-  // The selected id the last `selected` carried; null before any.
-  let sentSelectedSessionId: string | null = null;
-  // Sends the state, then `selected` when the selection differs from the last sent.
-  const sendState = () => {
-    deps.stateChanged(state());
-    if (selectedSessionId === sentSelectedSessionId) {
-      return;
-    }
-    sentSelectedSessionId = selectedSessionId;
-    deps.emit('selected', { sessionId: selectedSessionId });
-  };
-  const rowIndex = (sessionId: string) =>
-    rows.findIndex((row) => row.sessionId === sessionId);
+  const selectedSessionId = () => selection.get() ?? null;
 
-  const select = (row: SessionRow | undefined) => {
-    selectedSessionId = row?.sessionId ?? null;
-    if (row !== undefined) {
-      row.marked = false;
+  const state = (): SessionsState => ({
+    rows: [...rows.all().values()].map((row) => ({
+      ...row,
+      titles: { ...row.titles },
+    })),
+    selectedSessionId: selectedSessionId(),
+  });
+
+  const writeSelection = (sessionId: string | null) => {
+    if (selection.get() !== sessionId) {
+      selection.set(sessionId);
     }
+  };
+
+  // A slot holding rows from an earlier stop would read on the page as live, and
+  // its selection as a write still on its way.
+  for (const sessionId of rows.all().keys()) {
+    rows.delete(sessionId);
+  }
+  writeSelection(null);
+
+  // Writes `row` unmarked unless it is already held so, then selects it.
+  const selectRow = (row: SessionRow) => {
+    if (row.marked || rows.get(row.sessionId) === undefined) {
+      rows.set(row.sessionId, { ...row, marked: false });
+    }
+    writeSelection(row.sessionId);
   };
 
   // The right neighbour takes over from a closed selected row, else the left.
-  const removeRow = (index: number) => {
-    const [removed] = rows.splice(index, 1);
-    if (removed.sessionId === selectedSessionId) {
-      select(rows[index] ?? rows[index - 1]);
+  const removeRow = (sessionId: string) => {
+    const ids = [...rows.all().keys()];
+    const position = ids.indexOf(sessionId);
+    rows.delete(sessionId);
+    if (sessionId !== selectedSessionId()) {
+      return;
+    }
+    const neighbourId = ids[position + 1] ?? ids[position - 1] ?? null;
+    const neighbour = neighbourId === null ? undefined : rows.get(neighbourId);
+    if (neighbour === undefined) {
+      writeSelection(null);
+    } else {
+      selectRow(neighbour);
     }
   };
 
@@ -308,10 +327,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       [
         () => endEach([...entry.toolSessions.values()]),
         () => {
-          const index = rowIndex(entry.session.id);
-          if (index !== -1) {
-            removeRow(index);
-            sendState();
+          if (rows.get(entry.session.id) !== undefined) {
+            removeRow(entry.session.id);
           }
         },
         () => deps.emit('ended', { sessionId: entry.session.id }),
@@ -320,33 +337,27 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
   };
 
-  // The index of the session's row, adding it at the end when it has none.
-  const rowIndexAdding = (entry: SessionEntry): number => {
-    const index = rowIndex(entry.session.id);
-    return index === -1 ? rows.push(rowOf(entry)) - 1 : index;
-  };
-
   const everyGuardAllows = (sessionId: string) =>
     [...closeGuards].every((guard) => guard.mayClose(sessionId));
 
-  // The user's pick of the row at `index`: reports `activated`, then selects it
-  // and clears its mark. True when that changed the state, which it sends.
-  const activateRow = (sessionId: string, index: number) => {
+  // The user's pick of the entry's row, adding it at the end when it has none:
+  // reports `activated`, then selects it and clears its mark. True when that
+  // wrote anything.
+  const activateRow = (entry: SessionEntry) => {
+    const sessionId = entry.session.id;
     deps.activated(sessionId);
     reselectOnReturn = null;
-    const row = rows[index];
-    if (sessionId === selectedSessionId && !row.marked) {
+    const row = rows.get(sessionId) ?? rowOf(entry);
+    if (sessionId === selectedSessionId() && !row.marked) {
       return false;
     }
-    select(row);
-    sendState();
+    selectRow(row);
     return true;
   };
 
-  // Removes the row, sends the state, then emits `closed`.
-  const closeRow = (index: number, sessionId: string) => {
-    removeRow(index);
-    sendState();
+  // Removes the row, then emits `closed`.
+  const closeRow = (sessionId: string) => {
+    removeRow(sessionId);
     deps.emit('closed', { sessionId });
   };
 
@@ -364,10 +375,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           return;
         }
         entry.project = name;
-        const index = rowIndex(appId);
-        if (index !== -1) {
-          rows[index].project = name;
-          sendState();
+        const row = rows.get(appId);
+        if (row !== undefined) {
+          rows.set(appId, { ...row, project: name });
         }
       },
       (error: unknown) =>
@@ -442,10 +452,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       entry.retiredHostIds.add(oldHostId);
       entry.joinedBy = null;
     }
-    const index = rowIndex(appId);
-    if (index !== -1) {
-      rows[index].hostSessionId = newHostId;
-      sendState();
+    const row = rows.get(appId);
+    if (row !== undefined) {
+      rows.set(appId, { ...row, hostSessionId: newHostId });
     }
     deps.log(`owned session ${appId} now host ${newHostId}`);
     deps.emit('hostSessionChanged', entry.session);
@@ -466,10 +475,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       return;
     }
     entry.titles[source] = value;
-    const index = rowIndex(sessionId);
-    if (index !== -1) {
-      rows[index].titles = { ...entry.titles };
-      sendState();
+    const row = rows.get(sessionId);
+    if (row !== undefined) {
+      rows.set(sessionId, { ...row, titles: { ...entry.titles } });
     }
     deps.emit('titleChanged', { sessionId, titles: { ...entry.titles } });
   };
@@ -624,12 +632,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         throw new Error(`Host session ${hostId} is already open`);
       }
       const entry = addEntry(info, true);
-      rows.push(rowOf(entry));
+      rows.set(entry.session.id, rowOf(entry));
       if (options?.select !== false) {
-        select(rows.at(-1));
+        writeSelection(entry.session.id);
         reselectOnReturn = null;
       }
-      sendState();
       deps.emit('connected', { ...entry.session, owned: true });
       return {
         session: entry.session,
@@ -644,9 +651,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         return;
       }
       lookUpHostName(entry);
-      // A connected session with no row, or a row the user closed, gets its
-      // row at the end, then is selected or marked like any other.
-      const row = rows[rowIndexAdding(entry)];
       const releasedSelected =
         reselectOnReturn?.sessionId === sessionId ? reselectOnReturn : null;
       const isReturningToSelection =
@@ -655,20 +659,20 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (releasedSelected !== null) {
         reselectOnReturn = null;
       }
-      if (sessionId === selectedSessionId) {
+      if (sessionId === selectedSessionId()) {
         return;
       }
-      if (selectedSessionId === null || isReturningToSelection) {
+      // A connected session with no row, or a row the user closed, gets its
+      // row at the end, then is selected or marked like any other.
+      const row = rows.get(sessionId) ?? rowOf(entry);
+      if (selectedSessionId() === null || isReturningToSelection) {
         reselectOnReturn = null;
-        select(row);
-        sendState();
+        selectRow(row);
         return;
       }
-      if (row.marked) {
-        return;
+      if (!row.marked) {
+        rows.set(sessionId, { ...row, marked: true });
       }
-      row.marked = true;
-      sendState();
     },
     activate(sessionId) {
       const entry = entries.get(sessionId);
@@ -677,30 +681,30 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         return false;
       }
       lookUpHostName(entry);
-      // A connected session with no row, or a row the user closed, gets its
-      // row at the end, then is selected like any other.
-      return activateRow(sessionId, rowIndexAdding(entry));
+      return activateRow(entry);
     },
     activateExistingRow(sessionId) {
-      if (!entries.has(sessionId)) {
+      const entry = entries.get(sessionId);
+      if (entry === undefined) {
         deps.log(
           `activateExistingRow for unknown session ${sessionId} ignored`,
         );
         return;
       }
-      const index = rowIndex(sessionId);
-      if (index === -1) {
+      if (rows.get(sessionId) === undefined) {
         deps.log(
           `activateExistingRow for session ${sessionId} with no row ignored`,
         );
         return;
       }
-      activateRow(sessionId, index);
+      activateRow(entry);
     },
     release(sessionId) {
       const entry = entries.get(sessionId);
-      const index = rowIndex(sessionId);
-      const isReleasable = entry !== undefined && !entry.owned && index !== -1;
+      const isReleasable =
+        entry !== undefined &&
+        !entry.owned &&
+        rows.get(sessionId) !== undefined;
       if (!isReleasable) {
         return;
       }
@@ -708,10 +712,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log(`release for session ${sessionId} kept by a close guard`);
         return;
       }
-      if (sessionId === selectedSessionId) {
+      if (sessionId === selectedSessionId()) {
         reselectOnReturn = { sessionId, releasedAt: deps.clock.now() };
       }
-      closeRow(index, sessionId);
+      closeRow(sessionId);
     },
     addCloseGuard(mayClose) {
       const guard = { mayClose };
@@ -727,18 +731,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log(`closeSession for unknown session ${sessionId} ignored`);
         return false;
       }
-      const index = rowIndex(sessionId);
-      if (index === -1) {
+      if (rows.get(sessionId) === undefined) {
         return true;
       }
       if (!everyGuardAllows(sessionId)) {
         deps.log(`closeSession for session ${sessionId} kept by a close guard`);
         return false;
       }
-      closeRow(index, sessionId);
+      closeRow(sessionId);
       return true;
     },
-    selectedSessionId: () => selectedSessionId,
     label(sessionId) {
       const entry = entries.get(sessionId);
       return entry === undefined ? null : labelOf(entry);

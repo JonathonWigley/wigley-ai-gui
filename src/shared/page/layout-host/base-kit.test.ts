@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
+import type { KeyedSlotKey, SlotKey } from '../../../contracts/state';
+import { commandTarget } from '../../command-args';
+import { createSlotStore, layoutState } from '../../state/slot-store';
 import { asFake, asHtml, FakeElement, installFakeDom } from '../test-dom';
 import {
   type BaseKitDeps,
@@ -8,6 +12,7 @@ import {
   type KitCommands,
   ownerBaseKitDeps,
 } from './base-kit';
+import { noLayoutState } from './fake-layout-state.test-support';
 import { recordingAnchors } from './test-layouts';
 import type { MarkdownMount } from '../markdown-mount';
 import {
@@ -16,14 +21,26 @@ import {
   NO_FENCES,
 } from '../markdown-mount.test-support';
 
+const valueSlot: SlotKey<number, 'page', 'p'> = {
+  id: 'p.v',
+  process: 'page',
+  kind: 'value',
+};
+const keyedSlot: KeyedSlotKey<number, 'page', 'p'> = {
+  id: 'p.k',
+  process: 'page',
+  kind: 'keyed',
+};
+
 const BOUND: Record<string, string> = {
   'docs.open': 'Mod+O',
   'panes.focusLeft': 'Alt+H',
+  'docs.pick 2': 'Mod+2',
 };
 
-// A kit for owner `docs` whose only commands are `open` and `close`, with
-// `Mod+O` bound to `docs.open` and `Alt+H` to `panes.focusLeft` in
-// `docs.tree` alone, recording each anchor
+// A kit for owner `docs` whose only commands are `open`, `close` and `pick`,
+// with `Mod+O` bound to `docs.open`, `Alt+H` to `panes.focusLeft` and `Mod+2` to
+// `docs.pick` with the argument 2 in `docs.tree` alone, recording each anchor
 // and each keys read.
 function kitOver(scope: ViewScope | null) {
   const anchors: unknown[][] = [];
@@ -40,22 +57,27 @@ function kitOver(scope: ViewScope | null) {
         anchors.push([asFake(element), command, options]);
         return { dispose: () => undefined };
       },
-      keysFor(command, readScope) {
+      keysFor(command, readScope, _where, arg) {
         reads.push([command, readScope]);
         return readScope === 'docs.tree' || readScope === undefined
-          ? (BOUND[command] ?? null)
+          ? (BOUND[commandTarget(command, arg)] ?? null)
           : null;
       },
     },
     commands: {
       exists: (id) =>
-        ['docs.open', 'docs.close', 'panes.focusLeft'].includes(id),
+        ['docs.open', 'docs.close', 'docs.pick', 'panes.focusLeft'].includes(
+          id,
+        ),
+      argShape: () => undefined,
       run: () => undefined,
     },
     scope,
     commandNamed: (short) =>
-      short === 'open' || short === 'close' ? `docs.${short}` : null,
+      ['open', 'close', 'pick'].includes(short) ? `docs.${short}` : null,
     platform: 'macos',
+    state: noLayoutState,
+    recordAnchor: () => undefined,
   };
   return { kit: createBaseKit(deps), deps, anchors, reads };
 }
@@ -81,16 +103,18 @@ describe('createBaseKit', () => {
     expect(kitOver(null).kit.duration(ms)).toBe(text);
   });
 
-  it('commandRunner_UnknownId_ThrowsAtCreationAndRunsOnlyOnCall', () => {
+  it('commandRunner_UnknownIdOrArgNeeded_ThrowsAtCreationAndRunsOnlyOnCall', () => {
     const ran: string[] = [];
     const commands: KitCommands = {
-      exists: (id) => id === 'docs.open',
+      exists: (id) => id === 'docs.open' || id === 'docs.pick',
+      argShape: (id) => (id === 'docs.pick' ? 'number' : undefined),
       run: (id) => ran.push(id),
     };
 
     expect(() => commandRunner('docs.nope', commands)).toThrow(
       'no command docs.nope',
     );
+    expect(() => commandRunner('docs.pick', commands)).toThrow('docs.pick');
     const run = commandRunner('docs.open', commands);
     expect(ran).toEqual([]);
     run();
@@ -132,12 +156,20 @@ describe('createBaseKit', () => {
       anchored: [['panes.focusLeft', { scope: 'docs.tree' }]],
     },
     {
-      row: 'unregistered qualified id',
+      row: 'qualified id no plugin registers yet',
       scope: 'docs.tree',
       command: 'docs.missing',
       options: undefined,
       className: '',
-      anchored: [],
+      anchored: [['docs.missing', { scope: 'docs.tree' }]],
+    },
+    {
+      row: 'an arg',
+      scope: 'docs.tree',
+      command: 'pick',
+      options: { arg: 2 },
+      className: '',
+      anchored: [['docs.pick', { scope: 'docs.tree', arg: 2 }]],
     },
     {
       row: 'no scope',
@@ -177,15 +209,35 @@ describe('createBaseKit', () => {
     { row: 'unbound', scope: 'docs.tree', command: 'close', keys: null },
     { row: 'unknown name', scope: 'docs.tree', command: 'nope', keys: null },
     {
+      row: 'unregistered qualified id',
+      scope: 'docs.tree',
+      command: 'docs.missing',
+      keys: null,
+    },
+    {
       row: 'qualified id',
       scope: 'docs.tree',
       command: 'panes.focusLeft',
       keys: 'Alt+H',
     },
-  ])('keys_ReadsInScope: $row', ({ scope, command, keys }) => {
+    {
+      row: "an arg's bind",
+      scope: 'docs.tree',
+      command: 'pick',
+      arg: 2,
+      keys: 'Mod+2',
+    },
+    {
+      row: 'an arg no bind carries',
+      scope: 'docs.tree',
+      command: 'pick',
+      arg: 3,
+      keys: null,
+    },
+  ])('keys_ReadsInScope: $row', ({ scope, command, arg, keys }) => {
     const { kit, reads } = kitOver(scope);
 
-    expect(kit.keys(command)).toBe(keys);
+    expect(kit.keys(command, arg)).toBe(keys);
     expect(kit.keysFor('docs.open')).toBe(
       scope === 'docs.view' ? null : 'Mod+O',
     );
@@ -212,8 +264,13 @@ describe('createBaseKit', () => {
           {
             markdown: kitOver(null).deps.markdown,
             keys,
-            commands: { exists: () => true, run: () => undefined },
+            commands: {
+              exists: () => true,
+              argShape: () => undefined,
+              run: () => undefined,
+            },
             platform: 'macos',
+            state: noLayoutState,
           },
           scope,
           { recordAnchor: (anchor) => recorded.push(anchor) },
@@ -295,6 +352,52 @@ describe('createBaseKit', () => {
     },
   );
 
+  it('stateRead_On_RecordsTheSubscription', () => {
+    const store = createSlotStore(() => undefined);
+    const writer = store.publish(valueSlot);
+    const recorded: Disposable[] = [];
+    const heard: unknown[][] = [];
+    const kit = createBaseKit({
+      ...kitOver(null).deps,
+      state: layoutState(store, 'docs', (handle) => handle),
+      recordAnchor: (anchor) => recorded.push(anchor),
+    });
+
+    kit.state.read('p.v').on((...args) => heard.push(args));
+    writer.set(1);
+    expect(recorded).toHaveLength(1);
+    recorded[0].dispose();
+    writer.set(2);
+
+    expect(heard).toEqual([[1]]);
+  });
+
+  it.each([
+    {
+      row: 'no key',
+      id: 'p.k',
+      key: undefined,
+      value: [
+        ['a', 1],
+        ['b', 2],
+      ],
+    },
+    { row: 'a key', id: 'p.k', key: 'b', value: 2 },
+    { row: 'no slot, no key', id: 'p.none', key: undefined, value: undefined },
+    { row: 'no slot, a key', id: 'p.none', key: 'b', value: undefined },
+  ])('stateRead_Get_ReadsThroughDeps: $row', ({ id, key, value }) => {
+    const store = createSlotStore(() => undefined);
+    const writer = store.publish(keyedSlot);
+    writer.set('a', 1);
+    writer.set('b', 2);
+    const kit = createBaseKit({
+      ...kitOver(null).deps,
+      state: layoutState(store, 'docs', (handle) => handle),
+    });
+
+    expect(kit.state.read(id).get(key)).toEqual(value);
+  });
+
   it('meter_AppendsAMeterFilledToItsPercentInItsTone', () => {
     const { kit } = kitOver(null);
     const parent = new FakeElement('div');
@@ -355,8 +458,13 @@ describe('createBaseKit', () => {
         {
           markdown: fence.markdown,
           keys: kitOver(null).deps.keys,
-          commands: { exists: () => true, run: () => undefined },
+          commands: {
+            exists: () => true,
+            argShape: () => undefined,
+            run: () => undefined,
+          },
           platform: 'macos',
+          state: noLayoutState,
         },
         null,
         { recordAnchor: (anchor) => recorded.push(anchor) },

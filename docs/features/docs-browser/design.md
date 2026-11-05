@@ -90,7 +90,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   unknown id rejects naming it. A view runs `load` on its first show, then `rebuild` when the source has one; Rescan
   runs `rebuild`, or `load` for a source with none. A session's host id change (`/clear` in chat) disposes its source
   and adds a fresh one under the same id (`sessions.hostSessionChanged`), holding no entries; the page's
-  `sessions.sessionHostChanged` rebuilds that session's Docs tab once it has shown, which loads the fresh source. The
+  `followRows` `hostChanged` rebuilds that session's Docs tab once it has shown, which loads the fresh source. The
   write guard below reads the entries each registered source last loaded, so a source's entries stop allowing changes
   once it is disposed, or once a load of it throws or gives no document.
 - **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), hasUnsavedEdits(), dispose() }`:

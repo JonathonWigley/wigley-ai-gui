@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShowLayoutOptions } from '../../../../contracts/plugin';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 import {
@@ -54,8 +55,13 @@ function setUp() {
           ...NO_FENCES,
         },
         keys: recordingAnchors().keys,
-        commands: { exists: () => true, run: () => undefined },
+        commands: {
+          exists: () => true,
+          argShape: () => undefined,
+          run: () => undefined,
+        },
         platform: 'macos',
+        state: noLayoutState,
       },
       log: () => undefined,
       clock: { now: () => 0 },

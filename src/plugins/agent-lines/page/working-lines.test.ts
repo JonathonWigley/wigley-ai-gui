@@ -15,6 +15,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, WorkingLineInput } from '../layouts/layout';
 import { createWorkingLines } from './working-lines';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOW = 1_000_000;
 const SESSION = 'row-1';
@@ -75,8 +76,13 @@ function setUp(current: Roster = { agents: [], tasks: [], skills: [] }) {
         ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: (line: string) => logged.push(line),
     clock: { now: () => now },

@@ -1,10 +1,18 @@
 import type { CommandId } from '../../contracts/commands';
+import type { RuntimeCatalog } from '../../contracts/core-state';
 import {
   type FileEntry,
   type Files,
   isMissingFile,
 } from '../../contracts/files';
-import type { DefaultKeymap, Keymap } from '../../contracts/keymap';
+import type {
+  DefaultKeymap,
+  InterceptBind,
+  Keymap,
+  KeyBind,
+  AcceleratorBind,
+  UserKeymap,
+} from '../../contracts/keymap';
 import type {
   CommandDecl,
   PluginManifest,
@@ -17,14 +25,20 @@ import type {
   Settings,
 } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
+import { interceptChordText } from '../../shared/accelerator';
+import { checkCommandArg, commandTarget } from '../../shared/command-args';
 import { errorText } from '../../shared/error-text';
 import { requireUnambiguousKeymap } from '../../shared/keymap-checks';
 import {
   commandInfos,
+  type DefaultKeyLayer,
+  defaultKeyLayers,
   disabledDependencyProblem,
   mergeKeymap,
   pluginOptionalSettings,
   pluginSettings,
+  requireNoSettingsUnderCoreNames,
+  runtimeLayerClash,
   scopeInfos,
 } from '../../shared/plugin-manifests';
 import {
@@ -35,7 +49,7 @@ import {
   type ThemeTokenRegistry,
   type TokenCheck,
 } from '../themes/theme-loader';
-import { parseUserKeymap } from './user-keymap';
+import { heldBackUserBinds, parseUserKeymap } from './user-keymap';
 import { mergeUserSettings, type UserSettings } from './user-settings';
 
 // What the checks of the user config files read: the core settings and keys,
@@ -79,26 +93,39 @@ export type ConfigFileText =
   | { text: string | null }
   | { problem: ConfigProblem };
 
-function requireNoCoreSettingIds(
-  manifests: readonly PluginManifest[],
-  defaults: Settings,
+// Throws on a default or manifest bind whose `arg` its command does not take.
+function requireFittingArgs(
+  deps: ConfigCheckDeps,
+  commands: AppConfig['commands'],
 ) {
-  for (const manifest of manifests) {
-    if (Object.hasOwn(defaults, manifest.id)) {
-      throw new Error(
-        `Plugin "${manifest.id}" has the name of a core setting, so its settings cannot sit under its id`,
-      );
+  for (const layer of defaultKeyLayers(deps.defaultKeymap, deps.manifests)) {
+    const binds = [
+      ...(layer.binds ?? []),
+      ...(layer.app ?? []),
+      ...(layer.intercept ?? []),
+      ...(layer.global ?? []),
+    ];
+    for (const { command, arg } of binds) {
+      const problem = Object.hasOwn(commands, command)
+        ? checkCommandArg(command, commands[command].arg, arg)
+        : null;
+      if (problem !== null) {
+        throw new Error(problem);
+      }
     }
   }
 }
 
-// Throws when a plugin's id is a core setting's name or a manifest holds
-// what its own checks reject (a command declared twice, a null default with
-// no kind); each is a bug in the app, not in the user's files.
+// Throws when a plugin declaring settings has a core setting's name for its id
+// or a manifest holds what its own checks reject (a command declared twice, a
+// null default with no kind), or a default bind's `arg` does not fit its command;
+// each is a bug in the app, not in the user's files.
 export function configSchema(deps: ConfigCheckDeps): ConfigSchema {
-  requireNoCoreSettingIds(deps.manifests, deps.defaults);
+  requireNoSettingsUnderCoreNames(deps.manifests, deps.defaults);
+  const commands = commandInfos(deps.coreCommands, deps.manifests);
+  requireFittingArgs(deps, commands);
   return {
-    commands: commandInfos(deps.coreCommands, deps.manifests),
+    commands,
     scopes: scopeInfos(deps.coreScopes, deps.manifests),
     pluginDefaults: pluginSettings(deps.manifests),
     optionalSettings: {
@@ -135,18 +162,124 @@ export function checkSettingsText(
   return merged;
 }
 
-// The keymap the user's `text`, a `keymap.json`, merges into over the default
-// and plugin layers. Throws an Error whose message is the first problem found,
-// as the user reads it: in the file, or a key bound twice in one scope.
+// Both processes' runtime commands and binds.
+export interface RuntimeCatalogs {
+  main: RuntimeCatalog;
+  page: RuntimeCatalog;
+}
+
+// `runtime`'s binds that can sit under `user`, in merge order, main's then the
+// page's: a bind that clashes with one kept before it, or with the merge, is dropped
+// with one line of text. Throws only when the merge with no runtime layer fails,
+// which is a bad user file; a race between processes is no bug in the app.
+export function keptRuntimeLayer(
+  runtime: RuntimeCatalogs,
+  deps: ConfigCheckDeps,
+  user: UserKeymap,
+): { layer: DefaultKeyLayer; dropped: string[] } {
+  const base = mergeKeymap(deps.defaultKeymap, deps.manifests, user);
+  requireUnambiguousKeymap(base);
+  const leader = base.editor.leader;
+  const clashOf = (layer: DefaultKeyLayer): string | null => {
+    const inLayer = runtimeLayerClash(layer, leader);
+    if (inLayer !== null) {
+      return inLayer;
+    }
+    try {
+      requireUnambiguousKeymap(
+        mergeKeymap(deps.defaultKeymap, deps.manifests, user, layer),
+      );
+      return null;
+    } catch (error) {
+      return errorText(error);
+    }
+  };
+  let layer: Required<Pick<DefaultKeyLayer, 'binds' | 'app' | 'intercept'>> = {
+    binds: [],
+    app: [],
+    intercept: [],
+  };
+  const dropped: string[] = [];
+  const consider = (
+    tried: typeof layer,
+    keys: string,
+    bind: KeyBind | AcceleratorBind | InterceptBind,
+  ) => {
+    const clash = clashOf(tried);
+    if (clash === null) {
+      layer = tried;
+    } else {
+      dropped.push(
+        `runtime bind ${keys} of ${commandTarget(bind.command, bind.arg)} dropped: ${clash}`,
+      );
+    }
+  };
+  for (const { binds } of [runtime.main, runtime.page]) {
+    for (const bind of binds.binds) {
+      consider({ ...layer, binds: [...layer.binds, bind] }, bind.keys, bind);
+    }
+    for (const bind of binds.app) {
+      consider({ ...layer, app: [...layer.app, bind] }, bind.accelerator, bind);
+    }
+    for (const bind of binds.intercept) {
+      consider(
+        { ...layer, intercept: [...layer.intercept, bind] },
+        interceptChordText(bind),
+        bind,
+      );
+    }
+  }
+  return { layer, dropped };
+}
+
+// What a keymap check gives. `heldBack` is a problem for each user bind no command
+// can run yet, `kept` the user layer without those binds, `layer` the runtime binds
+// in force, and `dropped` a line for each runtime bind left out.
+export interface CheckedKeymap {
+  keymap: Keymap;
+  heldBack: string[];
+  kept: UserKeymap;
+  layer: DefaultKeyLayer;
+  dropped: string[];
+}
+
+// The keymap `user` merges into over the default, plugin and runtime layers. Throws
+// an Error whose message is the first problem found, as the user reads it: a key
+// bound twice in one scope.
+export function checkUserKeymap(
+  user: UserKeymap,
+  deps: ConfigCheckDeps,
+  schema: ConfigSchema,
+  runtime: RuntimeCatalogs,
+): CheckedKeymap {
+  const names = {
+    ...schema,
+    commands: commandInfos(deps.coreCommands, deps.manifests, [
+      ...runtime.main.commands,
+      ...runtime.page.commands,
+    ]),
+  };
+  const { kept, problems } = heldBackUserBinds(user, names, schema.commands);
+  const { layer, dropped } = keptRuntimeLayer(runtime, deps, kept);
+  return {
+    keymap: mergeKeymap(deps.defaultKeymap, deps.manifests, kept, layer),
+    heldBack: problems,
+    kept,
+    layer,
+    dropped,
+  };
+}
+
+// `checkUserKeymap` of the user's `text`, a `keymap.json`. Throws an Error whose
+// message is the first problem found, as the user reads it: in the file, or a key
+// bound twice in one scope.
 export function checkKeymapText(
   text: string,
   deps: ConfigCheckDeps,
   schema: ConfigSchema,
-): Keymap {
-  const user = parseUserKeymap(text, schema);
-  const keymap = mergeKeymap(deps.defaultKeymap, deps.manifests, user);
-  requireUnambiguousKeymap(keymap);
-  return keymap;
+  runtime: RuntimeCatalogs,
+): CheckedKeymap {
+  return checkUserKeymap(parseUserKeymap(text, schema), deps, schema, runtime);
 }
 
 // The text of `relative`, a file in the user config folder `folder`; a file

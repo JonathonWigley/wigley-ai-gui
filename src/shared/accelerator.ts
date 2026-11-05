@@ -1,3 +1,5 @@
+import type { InterceptBind } from '../contracts/keymap';
+
 // Electron's accelerator syntax, as `Menu` and `globalShortcut` accept it:
 // any modifiers, then one key code, joined by `+` and read case-insensitively.
 // Electron throws on an accelerator outside it, so a keymap checks each one
@@ -114,4 +116,15 @@ export function canonicalAccelerator(accelerator: string): string {
   const key = parts[parts.length - 1];
   const modifiers = [...new Set(parts.slice(0, -1))].sort();
   return [...modifiers, key].join('+');
+}
+
+// An intercept bind's chord in accelerator spelling, e.g. `Control+Tab`.
+export function interceptChordText(bind: InterceptBind): string {
+  const modifiers = [
+    bind.control && 'Control',
+    bind.alt && 'Alt',
+    bind.shift && 'Shift',
+    bind.meta && 'Command',
+  ].filter(Boolean);
+  return [...modifiers, bind.key].join('+');
 }

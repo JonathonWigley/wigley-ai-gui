@@ -13,7 +13,6 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import { visualPagePart } from './start';
 
 // The part on the harness, over fake frames and a chat whose focused entry is
@@ -25,11 +24,6 @@ function startOnHarness() {
   const harness = startPagePart(visualPagePart, {
     services: { visualFrames: frames },
     dependencies: [
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
-      })),
       fakeDependency(
         chatPageKey,
         () =>

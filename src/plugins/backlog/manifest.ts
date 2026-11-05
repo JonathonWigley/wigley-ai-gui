@@ -6,7 +6,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // `layout` names the layout Backlog draws with.
 export const backlogManifest = definePlugin({
   id: 'backlog',
-  dependsOn: { main: ['docs'], page: ['docs', 'keys'] },
+  dependsOn: { main: ['docs'], page: ['docs'] },
+  reads: { main: [], page: [] },
   commands: {
     showMode: {
       label: 'backlog (again: toggle the side bar)',

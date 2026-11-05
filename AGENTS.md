@@ -79,11 +79,21 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
-                 record of a clock that counts only while something runs); imports nothing
+                 record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
+                 readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots and `CoreEvents`;
+                 `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`)
+                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
+                 `platform.ts`: one builder of the `Platform` record per OS,
+                 `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
+                 `command-router.ts`: the run and intercept chain each process builds its commands on, over
+                 `command-registry.ts`, which holds `onDidRun`,
+                 `runtime-commands.ts`: the commands and binds parts add while they run, as each process's catalog, and a
+                 part's `commands.onDidRun`,
+                 `keys-for.ts`: the keys that run a command, as help and hints read them)
+  state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
@@ -113,7 +123,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
-                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter` and `duration`) and
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `duration` and `state`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
                  through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
@@ -121,7 +131,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
-                 reader skeleton) and `test-layouts.ts` (the test helpers owners share)), the reducer store, autosave,
+                 reader skeleton) and `test-layouts.ts` (the test helpers owners share) and
+                 `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot)), the reducer store, autosave,
                  editor boxes, the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
@@ -134,14 +145,19 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
+  state/         the slot holder (`slot-holder.ts`): every slot's value, page-owned ones included, in main's memory, each
+                 change numbered for the page mirror; `window-focus-slot.ts` writes `core.windowFocused`
+  runtime-wiring.ts the runtime commands' wiring: each process's catalog slot merged into the served config, the
+                 command router's remote hop to the page
+  page-commands.ts runs a page command from main and resolves when the page says it settled
   config/        the ConfigStore: watches the user config folder, layers settings, keymap and themes over the
                  defaults, and tells its listeners each new config, which main.ts pushes to the page; and the
                  userConfig service, which reads and writes the user's `settings.json` and `keymap.json` layers
                  through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
-  alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
-                 open counts each source sets
+  alerts/        native notification behind Alerts, with a Mac variant (Dock bounce, badge), a Windows variant (taskbar
+                 flash, overlay dot) and a plain one for Linux; the badge sums the open counts each source sets
   images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
@@ -175,6 +191,11 @@ src/renderer/    core page; renderer.ts is its composition root
                  title bar's context, dev tag and config problems and the activity bar's items through the shell's
                  layout (`layouts/`, the `shell.layout` setting)
   plugins/       the page-side plugin API
+  state/         the page mirror (`page-state.ts`: main's snapshot, then each push, and the page's own writes sent back)
+                 and `core-slots.ts`, which writes `core.mode`, `core.scope` and `core.theme`
+  key-anchors.ts the anchors: draws a command's keys into an element a view names (§ Key hints); `anchor-wiring.ts`
+                 redraws and shows or hides them on a keymap or scope change, and `box-focus.ts` tells whether focus is in
+                 a text box
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
   visual-frames/ the visual frames service plugins open a visual through: the sandboxed frame on the `wigley-visual:`
                  scheme, the theme posted in on load and on each change, and the height and `Esc` it posts out
@@ -190,8 +211,9 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
-  sessions/      manifest.ts, contract.ts, session-title.ts (the title rules main and page share), main/ (the
-                 session list — rows, their titles and origin-repo project names, the selected session, tool routing — the
+  sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active` and
+                 `sessions.activity` slots and `followRows`), session-title.ts (the title rules main and page share), main/ (the
+                 session list — rows, their titles and origin-repo project names, the selected session, written to the `rows` and `selection` slots, tool routing — the
                  `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
@@ -202,8 +224,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
-                 `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
-                 part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
+                 `logs/<host session id>.jsonl` in its plugin data, the layout preview, and writes the `agents.rosters`
+                 slot the views below read); draws nothing; `docs/features/agent-tower/design.md`
   agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the working line
                  under each session row while it runs a subagent or task, through sessions' `addRowPart`), layouts/ (its Layout contract and
                  `default` layout); in `plugins.disabled` by default
@@ -220,6 +242,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   session-log/   manifest.ts and main/ only (hears chat's and sessions' lifecycle events, appends each to
                  `session-events.jsonl` in its plugin data, registers the Recently closed resume section through chat's
                  `addResumeSection`, hands its self-test script); `docs/features/session-log/design.md`
+  window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
+                 `services.window.summon`)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -241,7 +265,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `load`, `tags` and `fileNote` it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
-  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
+  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
+                 `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
                  layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
@@ -249,11 +274,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual and workflow, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
-                 with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
+                 to visual and workflow, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
-  keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
-                 the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
+  keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
+                 the title bar's Keys button, and the placement check over the core's anchors), layouts/
                  (the keys Layout contract and the built-in `default` layout)
   gallery/       manifest.ts, main/ (registers the layouts only), page/ (Gallery mode: every primitive in every state,
                  a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
@@ -267,7 +291,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
                  layout)
   usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
-                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's context line
+                 `chat.planUsage` and `chat.agentEvent` into the `usage.snapshot` slot), page/ (the status-bar plan line, each session's context line
                  above the Chat box through chat's `addComposerPart` and its spend in the Chat status line through `addStatusPart`, its context meter and cache mark under each session row, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`
@@ -276,11 +300,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `plugins.disabled` by default
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow, run through the
                  rules of the flow's current workflow alone), main/ (the engine: hears `chat.agentEvent` and the sessions
-                 events, keeps each session's flow in its plugin data, contributes `set_workflow_step` and
-                 `set_workflow_checklist` through sessions' `contributeTools`, appends a line to `runs.jsonl` when a
-                 workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/ (hosts the row chip,
-                 the composer strip and the side pane, each drawn through the flow's workflow's layout, and the preview;
-                 exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
+                 events, keeps each session's flow in its plugin data and writes it to the `workflow.flows` slot, contributes
+                 `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools`, appends a line to
+                 `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
+                 (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
+                 and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the `No workflow` tag is the exception to
                  the layout rule: the engine draws it with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
@@ -294,7 +318,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
                  `wigley:medium`
-  unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json`, runs
+  unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json` into the `unity-pool.snapshot` slot, runs
                  `unity-pool hold|release` for the panel, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
@@ -357,26 +381,33 @@ round; primer: an open primer), since main, not the page, decides.
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
   events it hears there. A plugin reads a dependency with `api.dependency(key)`, where the key is the typed
-  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `keysPageKey`). The
+  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `sessionsPageKey`). The
   compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
-  only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
-  which types that plugin's exports, keys and events.
-- **A slot** (landing with `docs/features/plugin-framework/plan-commands-and-state/`; until its doc re-read drops this tag, this entry describes the plan, not the tree) is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed
+  only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on or
+  reads, which types that plugin's exports, keys and events.
+- **A slot** is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed
   values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
   writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
   `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
-  included, so the value outlives an owner's stop and a page reload, not an app restart. A new start publishes the
+  included, so the value outlives an owner's stop and a page reload, not an app restart. `sessions.activity` clears
+  itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
+  the first panes are placed. A new start publishes the
   same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
   reads a slot or hears an event lists its owner in the manifest's `reads`, which carries no start order. A value
-  belongs in a slot and a moment in an event (`docs/features/plugin-framework/design.md` § Commands and state).
-- **A command** (landing with `docs/features/plugin-framework/plan-commands-and-state/`; until its doc re-read drops this tag, this entry describes the plan, not the tree) takes at most one argument, declared in the manifest as a number, a string or a small record;
+  belongs in a slot and a moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`,
+  `core.windowFocused` and the two runtime command catalogs (`src/contracts/core-state.ts`)
+  (`docs/features/plugin-framework/design.md` § Commands and state).
+- **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
   the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
   argument as `arg`, checked at load.
-- **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
-  `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
-  the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
+- **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
+  `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
+  the publisher's `contract.ts`, and the core's own (`core.pageReady`, `CoreEvents`) in
+  `src/contracts/core-state.ts`, which any part hears with no `dependsOn` entry. A state change a late reader wants is
+  a slot, and an event is the moment: a note filed, a doc saved, a turn started or finished, a message sent, a help
+  overlay opened. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
 - **The shell** is a registry of areas — title bar, activity bar, side bar, main, right bar, panel, status bar, overlay — laid
   out by one `ShellLayout` module in `src/renderer/shell/`. A page plugin may replace the layout through the shell
@@ -406,7 +437,7 @@ round; primer: an open primer), since main, not the page, decides.
   to each session it starts, and docs a Docs tab to each session when it connects. A tab that
   needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
   before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
-  `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
+  each plugin forgets the session when its row leaves the `sessions.rows` slot (`followRows`); the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`. A tab names its Codicon (`icon`), and
   the tab bar draws it with the title as its tooltip.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
@@ -495,7 +526,7 @@ round; primer: an open primer), since main, not the page, decides.
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the
-  keys `shell.setKeys` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
+  keys `mountShell` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
   the drag listeners and disposes the prompt's anchors; a view that drops a split calls it.
 - **A drop target** is how files dropped or pasted reach a plugin's text box: the view registers its element and
   `take(files)` with `api.drops.addTarget`, which returns a `Disposable`. The page core routes a drop to the innermost
@@ -505,21 +536,23 @@ round; primer: an open primer), since main, not the page, decides.
   `TextEditor.insert`, keeping focus and the vim mode. A file's path comes from the Bridge's `pathForFile`; a file with
   none (a screenshot) is saved through `savePasted` first. What each surface makes of a file is
   `docs/features/file-drop/design.md`.
-- **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
-  `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no
-  bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
+- **Key hints** read the merged keymap. The core draws every hint in place. The `keys` plugin keeps which-key after a
+  pending prefix, help on `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), the `showHints` setting and
+  the placement check. The app has no bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
   (`docs/features/key-hints/design.md`).
-  - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through the `keys`
-    page export `anchor`, which returns a Disposable. The keys plugin draws the KeyPrompt primitive into it, redraws
-    it on each keymap change, draws nothing when the command is unbound or the keys plugin's `showHints` setting
-    (`"keys": { "showHints": false }` in `settings.json`) is off, so the anchor takes no space, and hides it, keeping
-    its space, while its scope is not the one in force (an anchor with no scope always shows). A plugin draws no key
+  - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through
+    `api.keys.anchor`, which returns a Disposable. The core (`src/renderer/key-anchors.ts`) draws the KeyPrompt
+    primitive into it, redraws it on each keymap change, draws nothing when the command is unbound or the keys plugin's
+    `showHints` setting (`"keys": { "showHints": false }` in `settings.json`, which the plugin hands the core through
+    `keys.setHintsShown`) is off, so the anchor takes no space, and hides it, keeping its space, until the page parts
+    have started and while its scope is not the one in force (an anchor with no scope always shows). With the keys
+    plugin stopped or disabled, hints show. A plugin draws no key
     hint of its own.
   - **The view places and styles each anchor** by one of four placement kinds (`DESIGN.md` § Keys and focus): an edge
     prompt, a cursor prompt, a control hint or a box hint. The parts around anchors — chevrons, edge prompts, box
     hints, stacks of one command's anchors, and recording and disposing anchors — come from
     `src/shared/page/ui/key-anchors.ts`.
-  - **Vim's own keys** — the key sequences listed in the keys plugin (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
+  - **Vim's own keys** — the key sequences listed in `src/shared/vim-keys.ts` (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
     keys and the like), in any spelling of them (`<esc>`, `<Return>`, `<c-j>`) — need no anchor and show in help
     only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
     not one of vim's own keys, or its first bind when every bind is; the user's binds come before the defaults. Leader
@@ -534,8 +567,7 @@ round; primer: an open primer), since main, not the page, decides.
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.
   - Every layout's `keyHint` and `keysFor` kit calls (`BaseKit`) keep their shape and route through anchors. The
-    shell's kit takes any plugin's qualified command id; the core cannot reach the keys plugin before the plugins
-    start, so the shell's anchors draw when the chrome draws again once they have (`setKeys` in `renderer.ts`).
+    shell's kit takes any plugin's qualified command id, and its anchors show once the page parts have started.
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names: on macOS the modifiers and Return, Tab, Esc,
@@ -631,16 +663,18 @@ round; primer: an open primer), since main, not the page, decides.
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the OS main runs on (`platform`, main only; a page reads `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
-  scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's home folder
+  scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's services add `picker` (the shared list picker,
+  wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and
+  `openExternal` (an http or https link in the default app; main refuses any other). The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
-  runs on, the page by the served `platform`. Page and shared code that joins, splits or shows a full path calls it,
+  runs on, the page by the served `platform.os`. Page and shared code that joins, splits or shows a full path calls it,
   and so does every path compare in either process, so no plugin writes `/` into a full path or compares paths as
   strings; main-side code may join and split with `node:path`, which follows the OS main runs on, and a Unix socket
   path, which exists only on POSIX, is written with `/` and `path.posix`. Windows paths show with backslashes and the home folder
@@ -747,9 +781,9 @@ round; primer: an open primer), since main, not the page, decides.
     `page/forms-events.ts`), each logged as `[forms] event <name> …`.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
   allow. A plugin's rules are derived in `scripts/layer-rules.mts` from the folder convention and its manifest's
-  per-process `dependsOn`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its
-  `page/` those in `dependsOn.page`. Each plugin's `contract.ts` is a layer of its own, with `src/contracts` and the
-  contracts of the plugin's dependencies. `src/shared/paths` and `src/shared/followups` are allowed in every
+  per-process `dependsOn` and `reads`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main` or
+  `reads.main`, and its `page/` those in `dependsOn.page` or `reads.page`. Each plugin's `contract.ts` is a layer of its own, with `src/contracts` and the
+  contracts of the plugins it depends on or reads. `src/shared/paths` and `src/shared/followups` are allowed in every
   plugin root, `main/` and `page/`, and the four page kits (`src/shared/page` and its `ui`, `layout-host` and `file-drop`
   folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
   `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or

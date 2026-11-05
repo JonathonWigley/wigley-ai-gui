@@ -1,4 +1,5 @@
-import type { CommandId } from './commands';
+import type { CommandArg, CommandId } from './commands';
+import type { ProcessName } from './plugin';
 
 export type EditorMode = 'normal' | 'insert';
 
@@ -19,6 +20,7 @@ export interface EditorBind {
   scope: ViewScope;
   command: CommandId;
   mode?: EditorMode;
+  arg?: CommandArg;
 }
 
 export interface EditorKeymap {
@@ -30,6 +32,24 @@ export interface EditorKeymap {
 // The scope a page or editor key fires in; `any` fires in every scope. A
 // plugin's scopes reach the keymap qualified as `<pluginId>.<scope>`.
 export type ViewScope = string;
+
+// Which keys a hint reads: the page's, or those inside a text box.
+export type HintWhere = 'page' | 'box';
+
+export interface AnchorOptions {
+  // The qualified scope the hint shows in; left out, the hint shows in every scope.
+  // The keys come from the first bind of `command` in this scope (`any` binds included) whose keys
+  // are not vim's own keys; when every bind is a vim key, from the first bind.
+  scope?: ViewScope;
+  // 'page' (default) reads page binds; 'box' reads binds inside a text box.
+  where?: HintWhere;
+  // Draws the command's label after the keys (cursor prompts, edge prompts with words).
+  // A string draws that text in place of the command's label.
+  label?: boolean | string;
+  // The argument the anchored bind carries: the keys of that argument's bind, and a
+  // placement of that argument alone. Left out, the command's first bind is drawn.
+  arg?: CommandArg;
+}
 
 // The keys of an unfinished sequence with the scope they were typed in: on the
 // page, as KeyboardEvent.key values (`[' ', 'a']`); in an editor, as vim names
@@ -48,12 +68,14 @@ export interface PageBind {
   keys: string[];
   scope: ViewScope;
   command: CommandId;
+  arg?: CommandArg;
 }
 
 // `accelerator` is an Electron accelerator, e.g. `CommandOrControl+W`.
 export interface AcceleratorBind {
   accelerator: string;
   command: CommandId;
+  arg?: CommandArg;
 }
 
 // A chord caught before the page sees it, for chords no menu item can claim.
@@ -65,6 +87,7 @@ export interface InterceptBind {
   shift?: boolean;
   meta?: boolean;
   command: CommandId;
+  arg?: CommandArg;
 }
 
 // Which side of a text box's edge a bind fires on: `page` while no editor has
@@ -77,14 +100,25 @@ export type BindWhere = 'page' | 'box' | 'both';
 // the page and in a box, and any other bind fires on the page; a chord on the
 // page fires inside a box too. `where` overrides that (a chord takes only
 // `page`), and a bind with `mode` fires only in a box, in that vim mode. The
-// merge expands each into the `PageBind` and `EditorBind` it stands for.
+// merge expands each into the `PageBind` and `EditorBind` it stands for. `arg` is
+// what the command runs with, and no part of which bind a key holds: two binds on
+// one key that differ only by `arg` are a key bound twice.
 export interface KeyBind {
   keys: string;
   scope: ViewScope;
   command: CommandId;
   where?: BindWhere;
   mode?: EditorMode;
+  arg?: CommandArg;
 }
+
+// A bind a part adds while it runs, its scope and command qualified as in
+// `keymap.json`. Main's binds take no `global` section.
+export type RuntimeBind<P extends ProcessName = ProcessName> = P extends 'page'
+  ? KeyBind
+  :
+      | { kind: 'app'; bind: AcceleratorBind }
+      | { kind: 'intercept'; bind: InterceptBind };
 
 // The which-key name of each leader prefix, by its keys (`<Leader>k`).
 export type KeyGroups = Record<string, string>;

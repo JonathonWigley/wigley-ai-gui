@@ -1,5 +1,5 @@
 import type { Keymap } from '../../../contracts/keymap';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type { ScopeInfo } from '../../../contracts/plugin';
 import {
   type CommandLabel,
@@ -25,7 +25,7 @@ export function helpSections(
   keymap: Keymap,
   scopes: readonly ScopeInfo[],
   label: CommandLabel,
-  platform: Platform,
+  platform: OsName,
 ): HelpSection[] {
   const readVimKeys = (keys: string) =>
     formatVimKeys(keys, keymap.editor.leader, platform);

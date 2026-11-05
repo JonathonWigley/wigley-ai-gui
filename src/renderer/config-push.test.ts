@@ -39,15 +39,22 @@ function fakeTargets(initial: AppConfig) {
   const calls: string[] = [];
   const failing = new Set<'editor' | 'page'>();
   const toasted: string[] = [];
+  const themeThenLive: string[] = [];
   let current = initial;
   const targets: PushTargets = {
     live: {
       current: () => current,
       replace(next) {
         current = next;
+        themeThenLive.push('live');
       },
     },
-    applier: { apply: () => calls.push('theme') },
+    applier: {
+      apply() {
+        calls.push('theme');
+        themeThenLive.push('theme');
+      },
+    },
     editor: {
       setKeymap() {
         calls.push('editor');
@@ -76,7 +83,14 @@ function fakeTargets(initial: AppConfig) {
     toasts: { show: (text) => toasted.push(text) },
     log: () => undefined,
   };
-  return { targets, calls, failing, toasted, current: () => current };
+  return {
+    targets,
+    calls,
+    failing,
+    toasted,
+    themeThenLive,
+    current: () => current,
+  };
 }
 
 function start(initial: AppConfig) {
@@ -135,6 +149,14 @@ describe('createConfigPush', () => {
     push(config('known', 500));
 
     expect(calls).toEqual(['theme']);
+  });
+
+  it('push_NewTheme_AppliesThemeBeforeLiveReplace', () => {
+    const { push, themeThenLive } = start(config('known'));
+
+    push(config('known'));
+
+    expect(themeThenLive).toEqual(['theme', 'live']);
   });
 
   it('toasts a new problem once across pushes that keep it', () => {

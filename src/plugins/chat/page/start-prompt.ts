@@ -37,6 +37,7 @@ export interface StartPromptDeps {
   picker: Picker;
   signIn: Pick<SignInDialog, 'open'>;
   channel: Pick<PageChannel<ChatChannel>, 'invoke'>;
+  chooseFolder(): Promise<string | null>;
   profiles(): readonly ChatProfile[];
   reveal(sessionId: string): void;
   paths: Paths;
@@ -208,7 +209,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
 
   // The folder dialog; dismissing it returns to the folder step.
   const chooseFolder = (context: PromptContext) => {
-    void channel.invoke('chooseFolder').then(
+    void deps.chooseFolder().then(
       (projectDir) => {
         if (isStale(context.isCurrent, 'chosen folder')) {
           return;

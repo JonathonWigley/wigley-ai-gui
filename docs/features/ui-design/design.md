@@ -156,8 +156,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   `DESIGN.md`. A primitive built with no screen using it gets reworked when its first feature
   arrives.
 - **Kbd** draws key hints through one `formatChord(token, platform)`: ⌘ ⌥ on macOS, Ctrl Alt on
-  Windows. The page learns its platform from the served config; the full Platform record stays a
-  follow-up.
+  Windows. The page reads `platform.os` from the served config.
 - **Icon** draws Codicons; it is the one module naming the icon font.
 - **Layout kits** gain the primitives, so user layouts build from them too: forms' and chat's first, then every
   owner's, through the shared `BaseKit` (`docs/features/layouts/design.md`).
@@ -235,4 +234,4 @@ Each stays its own entry in `docs/features/followups.md`:
   LayoutService, `api.layouts` and the page host landed later (`docs/features/layouts/design.md`).
 - Native window vibrancy and mica, behind a window adapter.
 - Per-tool-call duration on chat tool cards.
-- The full `Platform` record, the runtime plugin loader, and unloading every registration.
+- The runtime plugin loader, and unloading every registration. (The `Platform` record has landed.)

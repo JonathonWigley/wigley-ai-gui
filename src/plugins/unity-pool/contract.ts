@@ -1,4 +1,5 @@
 import type { ChannelShape } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 
 // The pool as unity-pool's state files hold it (its README, § State file), every time in epoch milliseconds.
 
@@ -77,6 +78,13 @@ export interface PoolSnapshot {
   pools: PoolState[];
 }
 
+// The pools main holds now, written at start and after each change.
+export const unityPoolSnapshotSlot: SlotKey<
+  PoolSnapshot,
+  'main',
+  'unity-pool'
+> = { id: 'unity-pool.snapshot', process: 'main', kind: 'value' };
+
 export type PoolAction = 'hold' | 'release';
 
 // The CLI's own JSON answer, or `no-cli` and `cli-failed` when it gave none.
@@ -84,11 +92,10 @@ export type PoolActionResult =
   | { ok: true; pool: string; clone: number }
   | { ok: false; error: string; message: string };
 
-// `snapshot` answers the pools main holds now, and `changed` sends them after each change. `originName` is a
-// folder's origin repo name, null outside a clone with an origin. `run` runs `unity-pool <action> <pool> <clone>`.
+// `originName` is a folder's origin repo name, null outside a clone with an origin. `run` runs
+// `unity-pool <action> <pool> <clone>`.
 export interface UnityPoolChannel extends ChannelShape {
   invoke: {
-    snapshot(): PoolSnapshot;
     originName(folder: string): Promise<string | null>;
     run(
       action: PoolAction,
@@ -96,5 +103,5 @@ export interface UnityPoolChannel extends ChannelShape {
       clone: number,
     ): Promise<PoolActionResult>;
   };
-  messages: { changed: PoolSnapshot };
+  messages: Record<never, never>;
 }

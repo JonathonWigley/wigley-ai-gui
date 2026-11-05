@@ -1,21 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { coreModeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
+  dataEmitted,
   fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
   type SessionTabHandle,
   type SessionTabView,
 } from '../../sessions/contract';
-import type { DocsPageExports } from '../contract';
+import { type DocsPageExports, sessionSourceId } from '../contract';
 import { docsPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
+
+const projectRow = (sessionId: string) => ({
+  sessionId,
+  label: sessionId,
+  project: 'project',
+  harness: 'claude' as const,
+  marked: false,
+  projectDir: '/p',
+  hostSessionId: null,
+  titles: { user: null, agent: null, firstMessage: null },
+});
 
 // What throws the next time one is disposed, once.
 interface ThrowsNext {
@@ -35,39 +50,86 @@ function disposeThrowingOn(
   };
 }
 
-// `tabs` holds each tab's title; its handle files under the dependent.
-function fakeSessions(tabs: string[], throwsNext: ThrowsNext) {
+// `tabs` holds each tab's title and `liveTabs` each undisposed tab by session;
+// its handle files under the dependent.
+function fakeSessions(
+  tabs: string[],
+  liveTabs: Map<string, SessionTabView>,
+  throwsNext: ThrowsNext,
+) {
+  const throwFromDispose = disposeThrowingOn(throwsNext, 'tab');
   return fakeDependency(
     sessionsPageKey,
     (consumer) =>
       ({
-        addTab(_sessionId: string, tab: SessionTabView) {
+        addTab(sessionId: string, tab: SessionTabView) {
           tabs.push(tab.title);
+          liveTabs.set(sessionId, tab);
           return consumer.track({
-            dispose: disposeThrowingOn(throwsNext, 'tab'),
+            dispose() {
+              liveTabs.delete(sessionId);
+              throwFromDispose();
+            },
           } as SessionTabHandle);
         },
       }) as unknown as SessionsPageExports,
   );
 }
 
-function startDocsPage() {
-  installFakeDom(vi.stubGlobal);
+function startDocsPage(
+  invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
+) {
+  installFocusFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
+  const liveTabs = new Map<string, SessionTabView>();
   const throwsNext: ThrowsNext = { anchor: false, tab: false };
-  const keys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
-    keysFor: () => null,
-    onChanged: () => consumer.track({ dispose: () => undefined }),
-    anchor: () =>
-      consumer.track({ dispose: disposeThrowingOn(throwsNext, 'anchor') }),
-  }));
+  const picker = fakeListPickerService();
   const harness = startPagePart(docsPagePart, {
-    dependencies: [keys, fakeSessions(tabs, throwsNext)],
+    services: {
+      picker,
+      markdown: {
+        block: (text) => text,
+        inline: (text) => text,
+        document: async (text) => text,
+        ...NO_FENCES,
+      },
+    },
+    dependencies: [fakeSessions(tabs, liveTabs, throwsNext)],
+    anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
     firstModeTaken: true,
+    invoke,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, tabs, throwsNext };
+  return { harness, exportsTo, tabs, liveTabs, throwsNext, picker };
+}
+
+type DocsPage = ReturnType<typeof startDocsPage>;
+
+// Opens `path` through Docs mode's `openDoc` message.
+function openByMessage({ harness }: DocsPage, path: string) {
+  harness.send('openDoc', { path, line: null });
+}
+
+// Shows an added view, then steps its tree down to the only leaf and opens it:
+// `treeOpen` expands or enters a group until it reaches the leaf, which reads
+// its doc.
+async function openFromTree(
+  { harness, exportsTo }: DocsPage,
+  _path: string,
+  readDocs: readonly unknown[],
+) {
+  exportsTo(createRegistrations())
+    .addView('source', { isVisible: () => true })
+    .shown();
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const { commands } = harness.started();
+  await settle();
+  commands.treeDown({ arg: undefined });
+  for (let press = 0; press < 8 && readDocs.length === 0; press += 1) {
+    commands.treeOpen({ arg: undefined });
+    await settle();
+  }
 }
 
 describe('docs page part lifecycle', () => {
@@ -83,10 +145,8 @@ describe('docs page part lifecycle', () => {
     async ({ sessionAdded, tabCount }) => {
       const { harness, tabs } = startDocsPage();
       if (sessionAdded) {
-        harness.emit('sessions.sessionAdded', {
-          sessionId: 's1',
-          projectDir: '/p',
-        });
+        harness.state.publish(sessionsRowsSlot).set('s1', projectRow('s1'));
+        harness.emit('core.pageReady', null);
       }
 
       await harness.stop();
@@ -103,9 +163,11 @@ describe('docs page part lifecycle', () => {
     'stop_OneSessionsTeardownThrows_TearsDownEveryView ($part)',
     async ({ part, error }) => {
       const { harness, throwsNext } = startDocsPage();
+      const rows = harness.state.publish(sessionsRowsSlot);
       for (const sessionId of ['s1', 's2']) {
-        harness.emit('sessions.sessionAdded', { sessionId, projectDir: '/p' });
+        rows.set(sessionId, projectRow(sessionId));
       }
+      harness.emit('core.pageReady', null);
       expect(harness.counts().observers).toBeGreaterThan(0);
       throwsNext[part] = true;
 
@@ -114,6 +176,148 @@ describe('docs page part lifecycle', () => {
       expect(harness.counts()).toEqual(noCounts);
     },
   );
+
+  it('start_ModeSlotChanges_TracksDocsModeShown', async () => {
+    const { harness } = startDocsPage();
+    const shownMode = harness.state.publish(coreModeSlot);
+    // The fake mode's side bar is hidden, so with Docs mode shown a tree command
+    // reports its tree out of sight, and with it not shown no view acts at all.
+    const treeDownActed = () => {
+      const before = harness.logs.length;
+      harness.started().commands.treeDown({ arg: undefined });
+      return harness.logs.length > before;
+    };
+    expect(treeDownActed()).toBe(false);
+
+    shownMode.set('docs.docs');
+    expect(treeDownActed()).toBe(true);
+
+    shownMode.set('other.mode');
+    expect(treeDownActed()).toBe(false);
+    await harness.stop();
+  });
+
+  it.each([
+    {
+      case: 'a message opening a doc that reads',
+      open: openByMessage,
+      path: '/p/kept.md',
+      opened: ['/p/kept.md'],
+    },
+    {
+      case: 'a message opening a missing doc',
+      open: openByMessage,
+      path: '/p/gone.md',
+      opened: [],
+    },
+    {
+      case: 'the tree opening a doc that reads',
+      open: openFromTree,
+      path: '/p/kept.md',
+      opened: ['/p/kept.md'],
+    },
+    {
+      case: 'the tree opening a missing doc',
+      open: openFromTree,
+      path: '/p/gone.md',
+      opened: [],
+    },
+  ])(
+    'docOpened_DocOpens_FiresOnlyThen ($case)',
+    async ({ open, path, opened }) => {
+      const entry = {
+        id: path,
+        kind: 'instructions',
+        source: 'global',
+        owner: 'mine',
+        repo: null,
+        root: null,
+        plugin: null,
+        path,
+        line: null,
+        title: path,
+        meta: {},
+        walked: [],
+        lastLoaded: null,
+        headings: [],
+        links: [],
+      };
+      const readDocs: unknown[] = [];
+      const page = startDocsPage(async (method, ...args) => {
+        if (method === 'loadIndex') {
+          return {
+            document: {
+              schemaVersion: 5,
+              generatedAt: '2026-11-05T00:00:00Z',
+              entries: [entry],
+              contexts: [],
+            },
+            message: null,
+            title: 'index',
+            canRebuild: false,
+          };
+        }
+        if (method === 'wikiMainPath') {
+          return '/p/wiki/Main.md';
+        }
+        if (method === 'readDocIfPresent') {
+          return null;
+        }
+        if (method !== 'readDoc') {
+          return { clones: [] };
+        }
+        readDocs.push(args[0]);
+        if (args[0] === '/p/gone.md') {
+          throw new Error('no such file');
+        }
+        return '# Doc';
+      });
+      const { harness } = page;
+
+      await open(page, path, readDocs);
+      const hasSettled = () =>
+        dataEmitted(harness, 'docs.docOpened').length > 0 ||
+        harness.logs.some(({ message }) => message.includes('Could not open'));
+      await vi.waitFor(() => expect(hasSettled()).toBe(true));
+
+      expect(dataEmitted(harness, 'docs.docOpened')).toEqual(
+        opened.map((each) => ({ path: each })),
+      );
+      await harness.stop();
+    },
+  );
+
+  it('rows_HostChangedOrRemoved_ReachOnlyThatRowsView', async () => {
+    const rebuilt: unknown[] = [];
+    const { harness, liveTabs } = startDocsPage(async (method, ...args) => {
+      if (method === 'rebuildIndex') {
+        rebuilt.push(args[0]);
+      }
+      return method === 'pluginStatus'
+        ? { clones: [] }
+        : { document: null, message: null, title: 'index', canRebuild: false };
+    });
+    const rows = harness.state.publish(sessionsRowsSlot);
+    const observersOfNone = harness.counts().observers;
+    for (const sessionId of ['s1', 's2']) {
+      rows.set(sessionId, projectRow(sessionId));
+    }
+    harness.emit('core.pageReady', null);
+    for (const tab of liveTabs.values()) {
+      tab.shown?.();
+    }
+
+    rows.set('s1', { ...projectRow('s1'), hostSessionId: 'moved' });
+    await vi.waitFor(() => expect(rebuilt).toEqual([sessionSourceId('s1')]));
+
+    const observersOfBoth = harness.counts().observers;
+    rows.delete('s1');
+    expect([...liveTabs.keys()]).toEqual(['s2']);
+    expect(harness.counts().observers - observersOfNone).toBe(
+      (observersOfBoth - observersOfNone) / 2,
+    );
+    await harness.stop();
+  });
 
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startDocsPage();
@@ -141,6 +345,16 @@ describe('docs page part lifecycle', () => {
     await harness.stop();
 
     expect(harness.counts().frames).toBe(0);
+  });
+
+  it('start_TwoViews_CreatesOnePicker', () => {
+    const { exportsTo, picker } = startDocsPage();
+
+    exportsTo(createRegistrations()).addView('extra', {
+      isVisible: () => false,
+    });
+
+    expect(picker.created).toHaveLength(1);
   });
 
   it('exports_ConsumerDisposed_DisposesItsView', () => {

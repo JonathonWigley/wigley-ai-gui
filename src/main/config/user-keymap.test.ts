@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { type KeymapNames, parseUserKeymap } from './user-keymap';
+import {
+  heldBackUserBinds,
+  type KeymapNames,
+  parseUserKeymap,
+} from './user-keymap';
 
 const NAMES: KeymapNames = {
   commands: {
@@ -16,6 +20,14 @@ const NAMES: KeymapNames = {
       label: 'Open',
       group: 'Test',
       runsIn: 'main',
+    },
+    'test.nth': {
+      id: 'test.nth',
+      plugin: 'test',
+      label: 'Nth',
+      group: 'Test',
+      runsIn: 'page',
+      arg: 'number',
     },
   },
   scopes: [
@@ -189,5 +201,93 @@ describe('parseUserKeymap', () => {
     ];
 
     expect(parse({ global }).global).toEqual(global);
+  });
+
+  it.each([
+    {
+      case: 'page bind',
+      keymap: {
+        binds: [{ keys: 'x', scope: 'any', command: 'test.nth', arg: 'a' }],
+      },
+      text: '"binds[0].arg": command "test.nth" needs a number.',
+    },
+    {
+      case: 'no-arg command',
+      keymap: {
+        binds: [{ keys: 'x', scope: 'any', command: 'test.pick', arg: 1 }],
+      },
+      text: '"binds[0].arg": command "test.pick" takes no argument.',
+    },
+    {
+      case: 'app bind',
+      keymap: { app: [{ accelerator: 'Alt+K', command: 'test.open', arg: 1 }] },
+      text: '"app[0].arg": command "test.open" takes no argument.',
+    },
+  ])('parseUserKeymap_KnownCommandBadArg_Throws: $case', ({ keymap, text }) => {
+    expect(() => parse(keymap)).toThrow(text);
+  });
+
+  it('parseUserKeymap_ArgOnUnbind_Throws', () => {
+    expect(() =>
+      parse({ unbind: [{ keys: 'x', scope: 'any', arg: 1 }] }),
+    ).toThrow(/arg/);
+  });
+
+  it('parseUserKeymap_FittingArg_KeepsIt', () => {
+    const binds = [{ keys: 'x', scope: 'any', command: 'test.nth', arg: 2 }];
+
+    expect(parse({ binds }).binds).toEqual(binds);
+  });
+
+  it('parseUserKeymap_UnknownCommand_KeepsTheBind', () => {
+    const binds = [{ keys: 'x', scope: 'any', command: 'later.go', arg: 1 }];
+    const app = [{ accelerator: 'Alt+K', command: 'later.main' }];
+
+    const parsed = parse({ binds, app });
+
+    expect(parsed.binds).toEqual(binds);
+    expect(parsed.app).toEqual(app);
+  });
+
+  it('heldBackUserBinds_UnknownWrongProcessBadArg_DropsWithPathInText', () => {
+    const info = (id: string, runsIn: 'page' | 'main', arg?: 'number') => ({
+      id,
+      plugin: 'later',
+      label: id,
+      group: 'g',
+      runsIn,
+      runtime: true as const,
+      ...(arg && { arg }),
+    });
+    const fixed = NAMES.commands;
+    const names: KeymapNames = {
+      ...NAMES,
+      commands: {
+        ...fixed,
+        'later.good': info('later.good', 'page'),
+        'later.main': info('later.main', 'main'),
+        'later.nth': info('later.nth', 'page', 'number'),
+      },
+    };
+    const keep = { keys: 'a', scope: 'any', command: 'test.pick' };
+    const good = { keys: 'b', scope: 'any', command: 'later.good' };
+    const gone = { keys: 'c', scope: 'any', command: 'later.gone' };
+    const wrong = { keys: 'd', scope: 'any', command: 'later.main' };
+    const badArg = { keys: 'e', scope: 'any', command: 'later.nth' };
+    const goneApp = { accelerator: 'Alt+K', command: 'later.gone' };
+
+    const { kept, problems } = heldBackUserBinds(
+      { binds: [keep, good, gone, wrong, badArg], app: [goneApp] },
+      names,
+      fixed,
+    );
+
+    expect(kept).toEqual({ binds: [keep, good], app: [] });
+    expect(problems).toEqual([
+      '"binds[2].command" names no command "later.gone".',
+      expect.stringMatching(/^"binds\[3\]\.command" names "later\.main"/),
+      '"binds[4].arg": command "later.nth" needs a number.',
+      '"app[0].command" names no command "later.gone".',
+    ]);
   });
 });

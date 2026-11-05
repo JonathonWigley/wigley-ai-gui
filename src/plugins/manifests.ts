@@ -19,6 +19,7 @@ import { unityPoolManifest } from './unity-pool/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
+import { windowManifest } from './window/manifest';
 import { workflowManifest } from './workflow/manifest';
 import { workflowHeavyManifest } from './workflow-heavy/manifest';
 import { workflowLightManifest } from './workflow-light/manifest';
@@ -54,6 +55,7 @@ export const builtInManifests = [
   workflowMediumManifest,
   unityPoolManifest,
   visualManifest,
+  windowManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command

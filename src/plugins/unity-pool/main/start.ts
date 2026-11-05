@@ -2,7 +2,7 @@ import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
-import type { UnityPoolChannel } from '../contract';
+import { type UnityPoolChannel, unityPoolSnapshotSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { unityPoolManifest } from '../manifest';
 import { resolveScriptPath, runPoolCommand } from './pool-cli';
@@ -11,7 +11,7 @@ import { unityPoolSelfTestScript } from './selftest-script';
 
 type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 
-// Watches unity-pool's state files and sends the page each change, and runs the CLI for the panel's Hold and
+// Watches unity-pool's state files and writes `unity-pool.snapshot` at start and on each change, and runs the CLI for the panel's Hold and
 // Release, logging each run's outcome and reading every pool again after it in case the OS watcher misses the
 // write. Registers the layouts and hands the self-test the badge and panel script.
 export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
@@ -19,6 +19,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
   start(api: UnityPoolApi) {
     const { services } = api;
     api.layouts.register({ layoutTypes });
+    const poolSnapshot = api.state.publish(unityPoolSnapshotSlot);
     const watch = createPoolWatch({
       files: services.files,
       paths: services.paths,
@@ -30,11 +31,11 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
         'state',
         'unity-pool',
       ),
-      changed: (snapshot) => api.channel.send('changed', snapshot),
+      changed: (snapshot) => poolSnapshot.set(snapshot),
     });
+    poolSnapshot.set(watch.snapshot());
     const originName = createOriginRepoNames(services.git);
 
-    api.channel.handle('snapshot', () => watch.snapshot());
     api.channel.handle('originName', (folder) => originName(folder));
     api.channel.handle('run', async (action, pool, clone) => {
       const { scriptPath, pythonCommand } = api.settings();
@@ -46,7 +47,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
           homeDir: services.homeDir,
           scriptPath: resolveScriptPath(
             scriptPath,
-            services.platform === 'windows',
+            services.platform.os === 'windows',
           ),
           pythonCommand,
         },

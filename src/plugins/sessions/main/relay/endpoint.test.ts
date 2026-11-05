@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
-import {
-  endedDriveRunLaunch,
-  launchCommand,
-  writeEndpointFiles,
-} from './endpoint';
+import { endedDriveRunLaunch, writeEndpointFiles } from './endpoint';
 
 const folders: string[] = [];
 
@@ -26,46 +22,6 @@ function tempFolder(): string {
 function readJson(file: string): unknown {
   return JSON.parse(readFileSync(file, 'utf8'));
 }
-
-describe('launchCommand', () => {
-  const npmEnv = {
-    npm_node_execpath: '/opt/node/bin/node',
-    npm_execpath: '/opt/node/lib/npm-cli.js',
-    INIT_CWD: '/work/wigley-ai-gui',
-  };
-
-  it('runs npm start from the folder npm started in for the dev app', () => {
-    expect(launchCommand(npmEnv, '/opt/electron', '/elsewhere', true)).toEqual({
-      command: ['/opt/node/bin/node', '/opt/node/lib/npm-cli.js', 'start'],
-      cwd: '/work/wigley-ai-gui',
-    });
-  });
-
-  it('runs the executable itself for a stable app npm started', () => {
-    expect(launchCommand(npmEnv, '/opt/electron', '/work/app', false)).toEqual({
-      command: ['/opt/electron'],
-      cwd: '/work/app',
-    });
-  });
-
-  it('falls back to the given folder when npm names none', () => {
-    const env = {
-      npm_node_execpath: '/opt/node/bin/node',
-      npm_execpath: '/opt/node/lib/npm-cli.js',
-    };
-
-    expect(launchCommand(env, '/opt/electron', '/work/app', true).cwd).toBe(
-      '/work/app',
-    );
-  });
-
-  it('runs the executable itself outside npm', () => {
-    expect(launchCommand({}, '/opt/electron', '/work/app', true)).toEqual({
-      command: ['/opt/electron'],
-      cwd: '/work/app',
-    });
-  });
-});
 
 describe('endedDriveRunLaunch', () => {
   it('exits 1 from the home filesystem root, naming the home, on macOS and Linux', () => {

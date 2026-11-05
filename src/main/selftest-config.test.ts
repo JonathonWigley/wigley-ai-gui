@@ -6,6 +6,7 @@ import type {
   SelfTestStep,
 } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
+import { fakePlatform } from '../shared/platform.test-support';
 import {
   applySelfTestConfig,
   checkGroups,
@@ -128,7 +129,7 @@ describe('applySelfTestConfig', () => {
       scopes: [],
       pluginSettings: { p: { size: 1, speed: 2 } },
       theme: { name: 't', colorScheme: 'dark', tokens: {}, reduced: {} },
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: '/Users/u',
       appInstance: {
         id: 'wigley-ai-gui-dev',

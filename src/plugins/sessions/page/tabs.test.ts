@@ -106,25 +106,84 @@ describe('tabs', () => {
     expect(hasOtherTab(['t1', 't2'], 't1')).toBe(true);
   });
 
-  it.each([
+  it.each<{
+    tabs: TabsState;
+    tabId: string;
+    orders: Record<string, number>;
+    expected: TabsState;
+  }>([
     {
       tabs: NO_TABS,
       tabId: 'form',
+      orders: {},
       expected: { tabIds: ['form'], selectedTabId: 'form', selections: 0 },
     },
     {
       tabs: { tabIds: ['form'], selectedTabId: 'form', selections: 2 },
       tabId: 'docs',
+      orders: {},
       expected: {
         tabIds: ['form', 'docs'],
         selectedTabId: 'form',
         selections: 2,
       },
     },
+    {
+      tabs: { tabIds: ['chat', 'form'], selectedTabId: 'form', selections: 2 },
+      tabId: 'docs',
+      orders: { docs: 1, chat: 2 },
+      expected: {
+        tabIds: ['docs', 'chat', 'form'],
+        selectedTabId: 'form',
+        selections: 2,
+      },
+    },
+    {
+      tabs: { tabIds: ['docs', 'form'], selectedTabId: 'form', selections: 0 },
+      tabId: 'chat',
+      orders: { docs: 1, chat: 2 },
+      expected: {
+        tabIds: ['docs', 'chat', 'form'],
+        selectedTabId: 'form',
+        selections: 0,
+      },
+    },
+    {
+      tabs: { tabIds: ['chat', 'form'], selectedTabId: 'chat', selections: 0 },
+      tabId: 'primer',
+      orders: { chat: 2 },
+      expected: {
+        tabIds: ['chat', 'form', 'primer'],
+        selectedTabId: 'chat',
+        selections: 0,
+      },
+    },
+    {
+      tabs: { tabIds: ['chat'], selectedTabId: 'chat', selections: 0 },
+      tabId: 'same',
+      orders: { chat: 2, same: 2 },
+      expected: {
+        tabIds: ['chat', 'same'],
+        selectedTabId: 'chat',
+        selections: 0,
+      },
+    },
+    {
+      tabs: { tabIds: ['chat'], selectedTabId: 'chat', selections: 0 },
+      tabId: 'zero',
+      orders: { chat: 2, zero: 0 },
+      expected: {
+        tabIds: ['zero', 'chat'],
+        selectedTabId: 'chat',
+        selections: 0,
+      },
+    },
   ])(
-    'tabsAfterAdd of $tabId to $tabs.tabIds gives $expected',
-    ({ tabs, tabId, expected }) => {
-      expect(tabsAfterAdd(tabs, 's', tabId)).toEqual(expected);
+    'tabsAfterAdd of $tabId to $tabs.tabIds with $orders gives $expected',
+    ({ tabs, tabId, orders, expected }) => {
+      expect(tabsAfterAdd(tabs, 's', tabId, (id) => orders[id])).toEqual(
+        expected,
+      );
     },
   );
 
@@ -135,7 +194,7 @@ describe('tabs', () => {
       selections: 0,
     };
 
-    expect(() => tabsAfterAdd(tabs, 's', 'form')).toThrow(
+    expect(() => tabsAfterAdd(tabs, 's', 'form', () => undefined)).toThrow(
       'Session s already has a tab "form"',
     );
   });
@@ -226,7 +285,7 @@ describe('tabs', () => {
       selections: 2,
     };
     const taken = tabsAfterTakeOver(tabs, 'form');
-    const added = tabsAfterAdd(taken.tabs, 's', 'docs');
+    const added = tabsAfterAdd(taken.tabs, 's', 'docs', () => undefined);
 
     expect(tabsAfterRelease(added, taken.takeOver)).toEqual({
       tabIds: ['chat', 'form', 'docs'],

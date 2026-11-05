@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { coreModeSlot, coreScopeSlot } from '../contracts/core-state';
 import type { Disposable } from '../contracts/disposable';
 import type { EditorEvents } from '../contracts/editor';
 import type { Keymap } from '../contracts/keymap';
@@ -7,8 +8,10 @@ import type {
   DependencyKey,
   LayoutShow,
   MainPart,
+  ModeHandle,
   PagePart,
 } from '../contracts/plugin';
+import type { SlotKey } from '../contracts/state';
 import { definePlugin } from './define-plugin';
 import {
   countingEditors,
@@ -17,6 +20,13 @@ import {
   startMainPart,
   startPagePart,
 } from './plugin-part-harness.test-support';
+import { createSlotStore } from './state/slot-store';
+
+const sampleSlot: SlotKey<number, 'main', 'sample'> = {
+  id: 'sample.v',
+  process: 'main',
+  kind: 'value',
+};
 
 const depMainKey: DependencyKey<{ add(): Disposable }, 'main', 'dep'> = {
   id: 'dep',
@@ -30,6 +40,7 @@ const otherKey: DependencyKey<{ ping(): string }, 'main', 'other'> = {
 const mainManifest = definePlugin({
   id: 'sample',
   dependsOn: { main: ['dep', 'other'], page: [] },
+  reads: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'main' } },
   scopes: {},
   settings: {},
@@ -40,6 +51,7 @@ const mainManifest = definePlugin({
 const pageManifest = definePlugin({
   id: 'sample',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'page' } },
   scopes: {},
   settings: {},
@@ -50,6 +62,7 @@ const pageManifest = definePlugin({
 const depManifest = definePlugin({
   id: 'dep',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -104,7 +117,7 @@ function pageSample(kind: 'tidy' | 'leaky'): PagePart<typeof pageManifest> {
       observer.observe(element);
       const frame = requestAnimationFrame(() => {});
       api.areas.statusBar.contribute(element);
-      api.keys.onScopeChanged(() => {});
+      api.state.read(coreScopeSlot).on(() => {});
       api.channel.on('changed', () => {});
       return {
         commands: { run() {} },
@@ -543,6 +556,164 @@ describe('plugin part harness', () => {
   });
 
   it.each([
+    {
+      row: 'a show hides the previous mode and shows the next once',
+      steps: ['b.show', 'b.show'],
+      calls: ['a shown', 'a hidden', 'b shown'],
+      heard: ['sample.b'],
+      shown: 'sample.b',
+    },
+    {
+      row: 'a shown mode disposed shows the first left in add order',
+      steps: ['b.show', 'c.show', 'c.dispose'],
+      calls: [
+        'a shown',
+        'a hidden',
+        'b shown',
+        'b hidden',
+        'c shown',
+        'a shown',
+      ],
+      heard: ['sample.b', 'sample.c', 'sample.a'],
+      shown: 'sample.a',
+    },
+    {
+      row: 'a hidden mode disposed tells nothing',
+      steps: ['b.dispose'],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'the first mode added is the slot start value',
+      steps: [],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'an old handle does nothing once its id is added again',
+      steps: ['b.dispose', 'b.add', 'b.oldShow', 'b.oldDispose'],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'a disposed handle does nothing',
+      steps: ['b.dispose', 'b.show', 'b.dispose'],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'the last mode disposed tells none shows',
+      steps: ['b.dispose', 'c.dispose', 'a.dispose'],
+      calls: ['a shown'],
+      heard: [''],
+      shown: null,
+    },
+  ])(
+    'ModeHandle_Steps_ActAsTheCoreRegistry: $row',
+    ({ steps, calls, heard, shown }) => {
+      const called: string[] = [];
+      const handles = new Map<string, ModeHandle>();
+      const olds = new Map<string, ModeHandle>();
+      let modes!: PageSampleApi['modes'];
+      let modesApi!: PageSampleApi;
+      const addMode = (api: PageSampleApi, id: string) =>
+        api.modes.add({
+          ...browseMode,
+          id,
+          shown: () => called.push(`${id} shown`),
+          hidden: () => called.push(`${id} hidden`),
+        });
+      const harness = startPagePart(
+        pagePart((api) => {
+          modes = api.modes;
+          modesApi = api;
+          for (const id of ['a', 'b', 'c']) {
+            handles.set(id, addMode(api, id));
+          }
+          return { commands: { run() {} } };
+        }),
+      );
+      const reader = harness.state.read(coreModeSlot, 'test');
+      const told: unknown[] = [];
+      reader.on((id) => told.push(id));
+
+      for (const step of steps) {
+        const [id, action] = step.split('.') as [
+          string,
+          'show' | 'dispose' | 'add' | 'oldShow' | 'oldDispose',
+        ];
+        if (action === 'add') {
+          olds.set(id, handles.get(id) as ModeHandle);
+          handles.set(id, addMode(modesApi, id));
+        } else if (action === 'oldShow') {
+          olds.get(id)?.show();
+        } else if (action === 'oldDispose') {
+          olds.get(id)?.dispose();
+        } else {
+          handles.get(id)?.[action]();
+        }
+      }
+
+      expect(called).toEqual(calls);
+      expect(told).toEqual(heard);
+      expect(reader.get()).toBe(shown ?? '');
+      if (shown === null) {
+        expect(() => modes.shown()).toThrow('no mode is live');
+      } else {
+        expect(modes.shown()).toBe(shown);
+      }
+    },
+  );
+
+  it('pushSettings_ThenRestart_SettingsReadsThePushedValue', async () => {
+    const pushed = { width: 2 };
+    const heard: unknown[] = [];
+    let api!: PageSampleApi;
+    const harness = startPagePart(
+      pagePart((started) => {
+        api = started;
+        api.onSettingsChanged((settings) => heard.push(settings));
+        return { commands: { run() {} } };
+      }),
+    );
+
+    harness.pushSettings(pushed);
+    expect(api.settings()).toBe(pushed);
+    expect(heard).toEqual([pushed]);
+
+    await harness.restart();
+    expect(api.settings()).toBe(pushed);
+  });
+
+  it.each([
+    { row: 'a string', scope: 'nope' },
+    { row: "a function's first value", scope: () => 'nope' },
+    { row: 'the default', scope: undefined },
+  ])(
+    'services.picker_ScopeTheManifestLacks_ThrowsAtCreate: $row',
+    ({ scope }) => {
+      let thrown: unknown;
+      startPagePart(
+        pagePart((api) => {
+          try {
+            api.services.picker.create({ scope });
+          } catch (error) {
+            thrown = error;
+          }
+          return { commands: { run() {} } };
+        }),
+        { services: { picker: { create: vi.fn() } } },
+      );
+
+      expect(String(thrown)).toContain('declares no scope');
+    },
+  );
+
+  it.each([
     { firstModeTaken: false, shownCalls: 1 },
     { firstModeTaken: true, shownCalls: 0 },
   ])(
@@ -638,6 +809,65 @@ describe('plugin part harness', () => {
       { event: 'sample.saved', data: 2 },
       { event: 'sample.saved', data: 4 },
     ]);
+  });
+
+  it('harness_Restart_KeepsSlotValueAndReleasesClaim', async () => {
+    const lastRead: (number | undefined)[] = [];
+    const harness = startMainPart(
+      mainPart((api) => {
+        const writer = api.state.publish(sampleSlot);
+        lastRead.push(writer.get());
+        api.channel.handle('save', (value: number) => writer.set(value));
+        return { commands: { run() {} } };
+      }),
+    );
+
+    harness.invoke('save', 7);
+    await harness.restart();
+
+    expect(lastRead).toEqual([undefined, 7]);
+  });
+
+  it('counts a writer and an on until stop', async () => {
+    const harness = startMainPart(
+      mainPart((api) => {
+        api.state.publish(sampleSlot);
+        api.state.read(sampleSlot).on(() => {});
+        return { commands: { run() {} } };
+      }),
+    );
+
+    // The part's command, its writer and its listener.
+    expect(harness.counts().registrations).toBe(3);
+
+    await harness.stop();
+
+    expect(harness.counts()).toEqual(noCounts);
+  });
+
+  it('shows the part a store it was given, and the test a write through it', () => {
+    const state = createSlotStore(() => {});
+    const seeding = state.publish(sampleSlot);
+    seeding.set(3);
+    seeding.dispose();
+    const heard: (number | undefined)[] = [];
+    const otherSlot: SlotKey<number, 'main', 'other'> = {
+      id: 'other.v',
+      process: 'main',
+      kind: 'value',
+    };
+    const harness = startMainPart(
+      mainPart((api) => {
+        heard.push(api.state.publish(sampleSlot).get());
+        api.state.read(otherSlot).on((value) => heard.push(value));
+        return { commands: { run() {} } };
+      }),
+      { state },
+    );
+
+    harness.state.publish(otherSlot).set(4);
+
+    expect(heard).toEqual([3, 4]);
   });
 
   it("keeps a real provider's own handles out of the counts", () => {

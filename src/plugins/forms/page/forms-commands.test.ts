@@ -6,7 +6,11 @@ import type {
   ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
-import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
+import type {
+  CommandHandler,
+  PageCommandContext,
+  ToastTone,
+} from '../../../contracts/plugin';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import type { Finding, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
@@ -20,6 +24,9 @@ import { type FormsPageEvent, startFormsEvents } from './forms-events';
 import { finding, notice, presentedRound, question } from './test-rounds';
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
+
+// A command a row of a table runs, with its argument when it takes one.
+type TableRun = FormsCommand | { command: FormsCommand; arg: number };
 
 // The editor of each box a test fires a command in.
 const boxEditors = new Map<TextEditor, BoxRef>();
@@ -122,8 +129,10 @@ function setup(
   // Each session the guard selected.
   const activated: string[] = [];
   const activate = (sessionId: string) => activated.push(sessionId);
-  const run = (command: FormsCommand, context: PageCommandContext = {}) =>
-    handlers[command](context);
+  const run = (
+    command: FormsCommand,
+    context: Partial<PageCommandContext<any>> = {},
+  ) => (handlers[command] as CommandHandler)({ arg: undefined, ...context });
   const round = () => {
     const current = activeForm(store.get());
     if (current === null) {
@@ -201,34 +210,34 @@ describe('formsCommandHandlers', () => {
     name: string;
     findings?: Finding[];
     questions?: Question[];
-    before: FormsCommand[];
-    command: FormsCommand;
+    before: TableRun[];
+    command: TableRun;
     logs: string[];
   }>([
     {
       name: 'a choice picked on a question',
       before: [],
-      command: 'choose2',
+      command: { command: 'choose', arg: 2 },
       logs: ['chose 2 on question 1'],
     },
     {
       name: 'the same choice picked again, clearing it',
-      before: ['choose2'],
-      command: 'choose2',
+      before: [{ command: 'choose', arg: 2 }],
+      command: { command: 'choose', arg: 2 },
       logs: ['cleared the choice on question 1'],
     },
     {
       name: 'an entry picked on a finding',
       findings: [twoFix],
       before: [],
-      command: 'choose3',
+      command: { command: 'choose', arg: 3 },
       logs: ['chose 3 on finding 1'],
     },
     {
       name: 'the same entry picked again, clearing it',
       findings: [twoFix],
-      before: ['choose3'],
-      command: 'choose3',
+      before: [{ command: 'choose', arg: 3 }],
+      command: { command: 'choose', arg: 3 },
       logs: ['cleared the choice on finding 1'],
     },
     {
@@ -241,14 +250,14 @@ describe('formsCommandHandlers', () => {
     {
       name: 'the recommendation already held',
       questions: [question('Alpha', { recommend: 1 })],
-      before: ['choose1'],
+      before: [{ command: 'choose', arg: 1 }],
       command: 'acceptRecommendation',
       logs: [],
     },
     {
       name: 'a pick on a notice, which changes nothing',
       before: ['prevItem'],
-      command: 'choose1',
+      command: { command: 'choose', arg: 1 },
       logs: [],
     },
     {
@@ -261,12 +270,14 @@ describe('formsCommandHandlers', () => {
     'logs an answer command only when it changes state: $name',
     ({ findings, questions, before, command, logs: expected }) => {
       const { run, logs } = setup(findings, questions);
+      const runRow = (row: TableRun) =>
+        typeof row === 'string' ? run(row) : run(row.command, { arg: row.arg });
       for (const each of before) {
-        run(each);
+        runRow(each);
       }
       logs.length = 0;
 
-      run(command);
+      runRow(command);
 
       expect(logs).toEqual(expected);
     },
@@ -275,7 +286,7 @@ describe('formsCommandHandlers', () => {
   it("acts on the box's question when fired in a box", () => {
     const { run, round } = setup();
 
-    run('choose1', { editor: editorOf(notes2) });
+    run('choose', { arg: 1, editor: editorOf(notes2) });
 
     expect(round().focus).toBe(2);
     expect(round().answers[1].choice).toBe(1);
@@ -362,7 +373,7 @@ describe('formsCommandHandlers', () => {
     const { run, focused, setActive } = setup();
     setActive(notes1);
 
-    run('nextItem', {});
+    run('nextItem');
 
     expect(focused.at(-1)).toEqual(notes2);
   });
@@ -371,7 +382,7 @@ describe('formsCommandHandlers', () => {
     const { run, round, focused, setActive } = setup();
     setActive(notes1);
 
-    run('nextUnanswered', {});
+    run('nextUnanswered');
 
     expect(focused.at(-1)).toEqual(notes2);
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
@@ -380,7 +391,7 @@ describe('formsCommandHandlers', () => {
   it('stays on the focused item when it is the only unanswered one', () => {
     const { run, store, round, logs } = setup();
     store.dispatch({ type: 'focusItem', item: 1 });
-    run('choose1');
+    run('choose', { arg: 1 });
     store.dispatch({ type: 'focusItem', item: 2 });
     logs.length = 0;
 
@@ -388,7 +399,7 @@ describe('formsCommandHandlers', () => {
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
 
-    run('choose1');
+    run('choose', { arg: 1 });
     logs.length = 0;
     run('nextUnanswered');
 
@@ -488,7 +499,7 @@ describe('formsCommandHandlers', () => {
 
   it('hands main the body on submit and keeps the round until main closes it', () => {
     const { run, round, store, finished, toasts } = setup();
-    run('choose3');
+    run('choose', { arg: 3 });
     run('openReview');
     const body = buildBody(round());
 
@@ -529,7 +540,7 @@ describe('formsCommandHandlers', () => {
       logs,
       failFinish,
     } = setup();
-    run('choose3');
+    run('choose', { arg: 3 });
     run('openReview');
     failFinish(new Error('round r1 has no question 3'));
 

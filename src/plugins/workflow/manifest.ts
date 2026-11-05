@@ -10,8 +10,9 @@ export const workflowManifest = definePlugin({
   id: 'workflow',
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['chat', 'sessions', 'keys'],
+    page: ['chat', 'sessions'],
   },
+  reads: { main: [], page: [] },
   commands: {
     mainAction: {
       label: "run the stage's next step",

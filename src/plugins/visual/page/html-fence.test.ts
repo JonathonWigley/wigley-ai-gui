@@ -17,6 +17,7 @@ import type { Layout } from '../layouts/layout';
 import { createHtmlFence } from './html-fence';
 import { createVisualParts } from './layout/visual-parts';
 import { createVisualRegistry, type VisualRegistry } from './visual-registry';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // A user layout whose `visual` draws `div.mine` holding a label and never
 // calls `kit.frame`.
@@ -45,8 +46,13 @@ function fenceFixture() {
         ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: () => undefined,
   });

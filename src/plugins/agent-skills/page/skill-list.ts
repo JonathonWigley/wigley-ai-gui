@@ -29,11 +29,11 @@ export interface SkillListDeps {
 }
 
 // `part` draws the main agent's skills into a session's section of the session
-// hub. `rosterChanged` redraws a session whose list changed; `setLayouts` redraws
+// hub. `rosterUpdated` redraws a session whose list changed; `setLayouts` redraws
 // every session's; `forget` drops a session that left.
 export interface SkillList {
   part: ChatSidePart;
-  rosterChanged(sessionId: string): void;
+  rosterUpdated(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;
 }
@@ -143,7 +143,7 @@ export function createSkillList(deps: SkillListDeps): SkillList {
         };
       },
     },
-    rosterChanged(sessionId) {
+    rosterUpdated(sessionId) {
       const holder = held.get(sessionId);
       const isUnchanged =
         holder?.drawnSkills ===

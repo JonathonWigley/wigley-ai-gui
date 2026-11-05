@@ -1,34 +1,18 @@
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Platform } from '../../../../contracts/platform';
+import type { OsName } from '../../../../contracts/platform';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
-
-// How a relay starts the app: `npm start` from the repo when this is the dev
-// app and npm started this run, else the running executable, so a stable app
-// started from under `npm run` still records its own executable.
-export function launchCommand(
-  env: NodeJS.ProcessEnv,
-  execPath: string,
-  cwd: string,
-  isDev: boolean,
-): RelayEndpoint['launch'] {
-  const { npm_node_execpath: node, npm_execpath: npm } = env;
-  if (isDev && node && npm) {
-    return { command: [node, npm, 'start'], cwd: env.INIT_CWD ?? cwd };
-  }
-  return { command: [execPath], cwd };
-}
 
 // How a relay that finds a drive run gone "starts" it: a shell that exits 1
 // with the run's home named in the command's text, which the relay reports,
 // so the relay never starts the user's own app in the run's place. Runs in
 // the home's filesystem root, which outlives the run.
 export function endedDriveRunLaunch(
-  platform: Platform,
+  os: OsName,
   homeDir: string,
 ): RelayEndpoint['launch'] {
   const ended = `The drive run whose home is ${homeDir} has ended`;
-  if (platform === 'windows') {
+  if (os === 'windows') {
     // cmd reads everything after `rem` as a comment, `&` included.
     return {
       command: ['cmd.exe', '/d', '/c', `exit 1 & rem ${ended}`],

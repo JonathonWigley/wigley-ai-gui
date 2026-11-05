@@ -1,17 +1,11 @@
-import type { ChatEntry } from '../../../../contracts/agent';
 import type { Clock } from '../../../../contracts/ambient';
 import type { PluginLog } from '../../../../contracts/log';
-import type { MainChannel } from '../../../../contracts/plugin';
 import type {
   OwnedSession,
   SessionsMainExports,
 } from '../../../sessions/contract';
-import {
-  CHAT_PREVIEW_HOST_ID,
-  type ChatAgentEvent,
-  type ChatChannel,
-  type ChatSessionState,
-} from '../../contract';
+import { CHAT_PREVIEW_HOST_ID, type ChatAgentEvent } from '../../contract';
+import type { ChatSlots, SessionSlots } from '../chat-slots';
 import { previewAgentEvents } from './preview-agent-events';
 import {
   PREVIEW_PROFILE,
@@ -26,7 +20,7 @@ import {
 // events. `emit` publishes chat's `agentEvent`.
 export interface ChatPreviewDeps {
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
-  send: MainChannel<ChatChannel>['send'];
+  slots: ChatSlots;
   emit: (event: 'agentEvent', data: ChatAgentEvent) => void;
   log: PluginLog;
   clock: Clock;
@@ -35,18 +29,14 @@ export interface ChatPreviewDeps {
 export interface ChatPreview {
   open(): void;
   holds(sessionId: string): boolean;
-  // The preview's state while it is open; [] while closed.
-  states(): ChatSessionState[];
   // Adds a notice entry to the open preview's chat; throws while it is closed.
   notice(text: string, tone: 'info' | 'error'): void;
   closed(sessionId: string): void;
 }
 
-// `state.entries` is replaced on each change, never changed in place, so a
-// shallow copy of `state` is a snapshot.
 interface OpenPreview {
   owned: OwnedSession;
-  state: ChatSessionState;
+  slots: SessionSlots;
   noticeCount: number;
 }
 
@@ -58,13 +48,13 @@ interface OpenPreview {
 // never saved, so a relaunch has no preview row. Closing the row ends it, and
 // the next open starts over.
 export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
-  const { sessions, send, log } = deps;
+  const { sessions, log } = deps;
   let preview: OpenPreview | null = null;
 
   return {
     open() {
       if (preview !== null) {
-        sessions.activate(preview.state.sessionId);
+        sessions.activate(preview.slots.sessionId);
         log('chat preview shown');
         return;
       }
@@ -77,8 +67,11 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         },
         { select: true },
       );
-      const state: ChatSessionState = {
-        sessionId: owned.session.id,
+      const sessionId = owned.session.id;
+      // `select` picks the row; only `activate` shows the sessions mode.
+      sessions.activate(sessionId);
+      const slots = deps.slots.open({
+        sessionId,
         projectDir: PREVIEW_PROJECT_DIR,
         profile: PREVIEW_PROFILE,
         entries: previewEntries(),
@@ -93,14 +86,11 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         returned: [],
         repo: PREVIEW_PROJECT_DIR,
         branch: 'main',
-      };
-      preview = { owned, state, noticeCount: 0 };
-      // `select` picks the row; only `activate` shows the sessions mode.
-      sessions.activate(state.sessionId);
-      send('sessionStarted', { ...state });
+      });
+      preview = { owned, slots, noticeCount: 0 };
       for (const event of previewAgentEvents(deps.clock.now())) {
         deps.emit('agentEvent', {
-          sessionId: state.sessionId,
+          sessionId,
           profileDir: null,
           hostSessionId: CHAT_PREVIEW_HOST_ID,
           event,
@@ -109,28 +99,26 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
       }
       log('chat preview opened');
     },
-    holds: (sessionId) => preview?.state.sessionId === sessionId,
-    states: () => (preview === null ? [] : [{ ...preview.state }]),
+    holds: (sessionId) => preview?.slots.sessionId === sessionId,
     notice(text, tone) {
       const shown = preview!;
       shown.noticeCount += 1;
-      const entry: ChatEntry = {
+      shown.slots.putEntry({
         kind: 'notice',
         id: `preview-app-notice-${shown.noticeCount}`,
         at: deps.clock.now(),
         text,
         tone,
         raw: [],
-      };
-      shown.state.entries = [...shown.state.entries, entry];
-      send('entry', { sessionId: shown.state.sessionId, entry });
+      });
     },
     closed(sessionId) {
-      if (preview === null || preview.state.sessionId !== sessionId) {
+      if (preview === null || preview.slots.sessionId !== sessionId) {
         return;
       }
-      const { owned } = preview;
+      const { owned, slots } = preview;
       preview = null;
+      slots.close();
       owned.end();
     },
   };

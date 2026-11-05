@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DefaultKeymap } from '../../contracts/keymap';
 import type { Settings } from '../../contracts/settings';
 import type { UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
+import { EMPTY_RUNTIME_CATALOG } from '../../shared/runtime-commands';
+import { fakePlatform } from '../../shared/platform.test-support';
 import { resolveTheme } from '../themes/theme-loader';
 import type { ConfigCheckDeps } from './config-checks';
-import { loadConfigStore } from './config-store';
+import { type ConfigStore, loadConfigStore } from './config-store';
 import { createUserConfig } from './user-config';
 
 const HOME = '/home';
@@ -36,6 +38,7 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 const listPlugin = definePlugin({
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     down: { label: 'Down', group: 'Moves', runsIn: 'page' },
     up: { label: 'Up', group: 'Moves', runsIn: 'page' },
@@ -56,6 +59,7 @@ const listPlugin = definePlugin({
 const quietPlugin = definePlugin({
   id: 'quiet',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -66,6 +70,7 @@ const quietPlugin = definePlugin({
 const dependentPlugin = definePlugin({
   id: 'q',
   dependsOn: { main: ['p'], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -100,16 +105,14 @@ const CORE_INFO = {
   'fonts.ui': { label: 'UI font', description: 'A font.' },
 };
 
-async function create(
-  files: MemoryFiles,
-  manifests = CHECK_DEPS.manifests,
-): Promise<UserConfig> {
-  const store = await loadConfigStore({
+// A store over `files` for `createUserConfig`.
+function storeOver(files: MemoryFiles, manifests = CHECK_DEPS.manifests) {
+  return loadConfigStore({
     ...CHECK_DEPS,
     manifests,
     files,
     folder: FOLDER,
-    platform: 'macos',
+    platform: fakePlatform('macos'),
     homeDir: HOME,
     appInstance: {
       id: 'wigley-ai-gui-dev',
@@ -119,12 +122,20 @@ async function create(
     runMode: 'live',
     log: () => undefined,
   });
+}
+
+async function create(
+  files: MemoryFiles,
+  manifests = CHECK_DEPS.manifests,
+  store?: ConfigStore,
+): Promise<UserConfig> {
+  const served = store ?? (await storeOver(files, manifests));
   return createUserConfig({
     ...CHECK_DEPS,
     manifests,
     files,
     folder: FOLDER,
-    store,
+    store: served,
     settingInfo: CORE_INFO,
   });
 }
@@ -376,7 +387,7 @@ describe('createUserConfig', () => {
     const files = createMemoryFiles();
     const userConfig = await create(files);
     const layer = {
-      binds: [{ keys: 'x', scope: 'p.list', command: 'p.nope' }],
+      binds: [{ keys: 'x', scope: 'p.nope', command: 'p.down' }],
     };
 
     const result = await userConfig.writeKeymap(layer, null);
@@ -470,6 +481,32 @@ describe('createUserConfig', () => {
     const read = await userConfig.read();
 
     expect(read[slice]).toEqual(expected);
+  });
+
+  it("keeps a core setting's row and writes when a settingless plugin's id shares its name", async () => {
+    const windowPlugin = definePlugin({
+      ...quietPlugin,
+      id: 'window',
+      settings: {},
+      settingInfo: {},
+    });
+    const files = createMemoryFiles();
+    const userConfig = await create(files, [windowPlugin]);
+
+    const schema = userConfig.schema();
+    const result = await userConfig.writeSettings(
+      { window: { width: 1200 } },
+      null,
+    );
+
+    expect(schema.sections.map((section) => section.id)).toEqual(['core']);
+    expect(
+      schema.sections[0].leaves.find((leaf) => leaf.path === 'window.width'),
+    ).toMatchObject({
+      control: { kind: 'number' },
+      fallback: { value: 900 },
+    });
+    expect(result).toEqual({ type: 'written' });
   });
 
   it('gives each leaf the control and fallback its default and kind call for', async () => {
@@ -572,6 +609,7 @@ describe('createUserConfig', () => {
     const flagPlugin = definePlugin({
       id: 'f',
       dependsOn: { main: [], page: [] },
+      reads: { main: [], page: [] },
       commands: {},
       scopes: {},
       settings: { wrap: true, strict: null as boolean | null },
@@ -588,7 +626,7 @@ describe('createUserConfig', () => {
       manifests: [flagPlugin],
       files,
       folder: FOLDER,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: HOME,
       appInstance: {
         id: 'wigley-ai-gui-dev',
@@ -643,6 +681,7 @@ describe('createUserConfig', () => {
     const overPlugin = definePlugin({
       id: 'over',
       dependsOn: { main: [], page: [] },
+      reads: { main: [], page: [] },
       commands: { quit: { label: 'Quit', group: 'App', runsIn: 'main' } },
       scopes: {},
       keys: { app: [{ accelerator: 'CmdOrCtrl+Q', command: 'quit' }] },
@@ -656,7 +695,7 @@ describe('createUserConfig', () => {
       manifests: [overPlugin],
       files,
       folder: FOLDER,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: HOME,
       appInstance: {
         id: 'wigley-ai-gui-dev',
@@ -686,7 +725,7 @@ describe('createUserConfig', () => {
       ...CHECK_DEPS,
       files: createMemoryFiles(),
       folder: FOLDER,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       homeDir: HOME,
       appInstance: {
         id: 'wigley-ai-gui-dev',
@@ -726,5 +765,103 @@ describe('createUserConfig', () => {
     );
 
     await expect(changed).resolves.toBeUndefined();
+  });
+
+  describe('runtime commands', () => {
+    const page = {
+      ...EMPTY_RUNTIME_CATALOG,
+      commands: [
+        {
+          id: 'p.later',
+          plugin: 'p',
+          label: 'Later',
+          group: 'g',
+          runsIn: 'page' as const,
+          runtime: true as const,
+        },
+      ],
+      binds: {
+        binds: [{ keys: 'l', scope: 'any', command: 'p.later' }],
+        app: [],
+        intercept: [],
+      },
+    };
+
+    const main = {
+      ...EMPTY_RUNTIME_CATALOG,
+      commands: [
+        {
+          id: 'p.away',
+          plugin: 'p',
+          label: 'Away',
+          group: 'g',
+          runsIn: 'main' as const,
+          runtime: true as const,
+        },
+      ],
+      binds: {
+        binds: [],
+        app: [{ accelerator: 'Alt+L', command: 'p.away' }],
+        intercept: [],
+      },
+    };
+
+    it('schema_RuntimeCommands_AreListed', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+
+      store.setRuntime({ main, page });
+      await vi.waitFor(() => {
+        expect(store.current().commands['p.later']).toBeDefined();
+      });
+
+      const schema = userConfig.schema();
+      expect(schema.commands['p.later'].label).toBe('Later');
+      expect(schema.defaultBindLayers.flat()).toContainEqual(
+        page.binds.binds[0],
+      );
+      expect(schema.defaultAccelerators.app).toEqual([
+        ...DEFAULT_KEYMAP.app,
+        main.binds.app[0],
+      ]);
+    });
+
+    it('writeKeymap_UnknownCommandBothStarted_WritesAndTheStoreHoldsItBack', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const started = { ...EMPTY_RUNTIME_CATALOG, started: true };
+      store.setRuntime({ main: started, page: { ...page, started: true } });
+      await vi.waitFor(() => {
+        expect(store.current().commands['p.later']).toBeDefined();
+      });
+      const layer = {
+        binds: [{ keys: 'x', scope: 'p.list', command: 'p.gone' }],
+      };
+
+      const result = await userConfig.writeKeymap(layer, null);
+
+      expect(result).toEqual({ type: 'written' });
+      expect((await userConfig.read()).keymap.state).toBe('ok');
+      await vi.waitFor(() => {
+        expect(store.current().problems).toEqual([
+          { file: 'keymap.json', message: expect.stringContaining('p.gone') },
+        ]);
+      });
+    });
+
+    it('onChanged_SetRuntimeChangesCommands_Fires', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const changed = new Promise<void>((resolve) => {
+        userConfig.onChanged(resolve);
+      });
+
+      store.setRuntime({ main: EMPTY_RUNTIME_CATALOG, page });
+
+      await expect(changed).resolves.toBeUndefined();
+    });
   });
 });

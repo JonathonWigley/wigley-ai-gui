@@ -3,6 +3,7 @@ import {
   compositionFailures,
   pluginLayers,
   readDependsOn,
+  readReads,
   type PluginExtra,
   type PluginFolder,
 } from './layer-rules.mts';
@@ -14,6 +15,7 @@ const NOTES: PluginFolder = {
   hasPage: true,
   hasLayouts: true,
   dependsOn: { main: ['chat', 'keys'], page: ['keys'] },
+  reads: { main: [], page: [] },
 };
 const CHAT: PluginFolder = {
   id: 'chat',
@@ -22,6 +24,7 @@ const CHAT: PluginFolder = {
   hasPage: true,
   hasLayouts: false,
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
 };
 const KEYS: PluginFolder = {
   id: 'keys',
@@ -30,6 +33,7 @@ const KEYS: PluginFolder = {
   hasPage: true,
   hasLayouts: false,
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
 };
 const FOLDERS = [NOTES, CHAT, KEYS];
 const MAIN_ONLY: PluginFolder = {
@@ -39,6 +43,7 @@ const MAIN_ONLY: PluginFolder = {
   hasPage: false,
   hasLayouts: false,
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
 };
 
 const SHARED = [
@@ -198,6 +203,12 @@ describe('pluginLayers', () => {
       extras: {},
       message: 'notes: dependsOn names ghost, which is no plugin folder',
     },
+    {
+      case: 'reads',
+      folders: [{ ...NOTES, reads: { main: [], page: ['ghost'] } }, CHAT, KEYS],
+      extras: {},
+      message: 'notes: reads names ghost, which is no plugin folder',
+    },
   ])(
     'pluginLayers_NamesNoFolder_Throws: $case',
     ({ folders, extras, message }) => {
@@ -227,48 +238,81 @@ describe('pluginLayers', () => {
   );
 });
 
-describe('readDependsOn', () => {
-  const FILE = 'src/plugins/notes/manifest.ts';
-  const manifest = (dependsOn: string): string =>
-    `export const m = definePlugin({ id: 'notes', ${dependsOn}, commands: {} });`;
-  const MUST_BE_LITERAL = `${FILE}: dependsOn must be an object literal with main and page arrays of string literals`;
+describe('pluginLayers reads', () => {
+  const ROOT = 'src/plugins/reader';
+  const OWNER: PluginFolder = {
+    id: 'owner',
+    hasContract: true,
+    hasMain: true,
+    hasPage: true,
+    hasLayouts: false,
+    dependsOn: { main: [], page: [] },
+    reads: { main: [], page: [] },
+  };
+  const OWNER_CONTRACT = 'src/plugins/owner/contract.ts';
 
   it.each([
-    { case: 'Literal', value: "dependsOn: { main: ['chat'], page: [] }" },
-    {
-      case: 'AsConst',
-      value: "dependsOn: { main: ['chat'], page: [] } as const",
+    { member: 'main', has: 'main', hasNot: 'page' },
+    { member: 'page', has: 'page', hasNot: 'main' },
+  ] as const)(
+    'pluginLayers_Reads_GivesThatLayerTheContractOnly: $member',
+    ({ member, has, hasNot }) => {
+      const reader: PluginFolder = {
+        ...OWNER,
+        id: 'reader',
+        reads: { main: [], page: [], [member]: ['owner'] },
+      };
+
+      const entries = pluginLayers([reader, OWNER], {});
+
+      expect(entries[`${ROOT}/${has}`].layers).toContain(OWNER_CONTRACT);
+      expect(entries[`${ROOT}/${hasNot}`].layers).not.toContain(OWNER_CONTRACT);
+      expect(entries[ROOT].layers).toContain(OWNER_CONTRACT);
+      expect(entries[`${ROOT}/contract.ts`].layers).toContain(OWNER_CONTRACT);
     },
-    {
-      case: 'ArrayAsConst',
-      value: "dependsOn: { main: ['chat'] as const, page: [] }",
-    },
-  ])('readDependsOn_$case', ({ value }) => {
-    expect(readDependsOn(FILE, manifest(value))).toEqual({
+  );
+});
+
+describe.each([
+  { member: 'dependsOn', read: readDependsOn },
+  { member: 'reads', read: readReads },
+])('$member reader', ({ member, read }) => {
+  const FILE = 'src/plugins/notes/manifest.ts';
+  const manifest = (property: string): string =>
+    `export const m = definePlugin({ id: 'notes', ${property}, commands: {} });`;
+
+  it.each([
+    { case: 'Literal', lists: "{ main: ['chat'], page: [] }" },
+    { case: 'AsConst', lists: "{ main: ['chat'], page: [] } as const" },
+    { case: 'ArrayAsConst', lists: "{ main: ['chat'] as const, page: [] }" },
+  ])('read_$case', ({ lists }) => {
+    expect(read(FILE, manifest(`${member}: ${lists}`))).toEqual({
       main: ['chat'],
       page: [],
     });
   });
 
   it.each([
-    { case: 'Identifier', value: 'dependsOn: DEPS' },
-    { case: 'FlatArray', value: "dependsOn: ['chat']" },
-    { case: 'Spread', value: 'dependsOn: { main: [...SHARED], page: [] }' },
+    { case: 'Identifier', property: `${member}: LISTS` },
+    { case: 'FlatArray', property: `${member}: ['chat']` },
+    { case: 'Spread', property: `${member}: { main: [...SHARED], page: [] }` },
     {
       case: 'SpreadProperty',
-      value: "dependsOn: { ...SHARED, main: ['chat'], page: [] }",
+      property: `${member}: { ...SHARED, main: ['chat'], page: [] }`,
     },
-    { case: 'NoPage', value: "dependsOn: { main: ['chat'] }" },
-    { case: 'Absent', value: "label: 'notes'" },
-  ])('readDependsOn_$case', ({ value }) => {
-    expect(() => readDependsOn(FILE, manifest(value))).toThrow(MUST_BE_LITERAL);
+    { case: 'NoPage', property: `${member}: { main: ['chat'] }` },
+    { case: 'Absent', property: "label: 'notes'" },
+  ])('read_$case', ({ property }) => {
+    expect(() => read(FILE, manifest(property))).toThrow(
+      `${FILE}: ${member} must be an object literal with main and page arrays of string literals`,
+    );
   });
 
   it.each([
     { case: 'NoDefinePlugin', source: 'export const m = {}' },
     { case: 'ArgumentNotALiteral', source: 'export const m = definePlugin(x)' },
-  ])('readDependsOn_$case', ({ source }) => {
-    expect(() => readDependsOn(FILE, source)).toThrow(
+  ])('read_$case', ({ source }) => {
+    expect(() => read(FILE, source)).toThrow(
       `${FILE}: no definePlugin({ … }) call`,
     );
   });

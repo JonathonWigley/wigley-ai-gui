@@ -13,6 +13,7 @@ import {
   type MainPartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
 import {
   type AgentSession,
@@ -29,6 +30,7 @@ import {
   type MainWorkflow,
   type SessionFlow,
   startsSkill,
+  workflowFlowsSlot,
   type WorkflowMainExports,
   type WorkflowSignal,
 } from '../contract';
@@ -97,9 +99,10 @@ function session(id: string, hostSessionId: string): AgentSession {
 }
 
 // Workflow's main part started over a fake `MainApi`: memory files for its
-// data, hand-moved time, and fakes of chat and sessions. `data` is workflow's data
-// folder as the last run left it; `selfTest` starts the part with the self-test on,
-// so its hooks are exported.
+// data, hand-moved time, fakes of chat and sessions, and a real store for its slot:
+// `sent` holds each flow the slot's notices carry. `data` is workflow's data folder
+// as the last run left it; `selfTest` starts the part with the self-test on, so its
+// hooks are exported.
 // `setActiveTime` sets the clock chat's fake reports for every session.
 function startWorkflowPart(
   options: {
@@ -108,7 +111,14 @@ function startWorkflowPart(
   } = {},
 ) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
-  const sent: SessionFlow[][] = [];
+  const sent: SessionFlow[] = [];
+  const store = createSlotStore(() => undefined);
+  const slot = store.read(workflowFlowsSlot, 'test');
+  slot.on((_sessionId, flow) => {
+    if (flow !== undefined) {
+      sent.push(flow);
+    }
+  });
   const data = options.data ?? createMemoryFiles();
   const time = handTime();
   const instructions: string[] = [];
@@ -137,14 +147,7 @@ function startWorkflowPart(
   };
   const dependencies: Record<string, unknown> = { chat, sessions };
   const api = {
-    channel: {
-      handle: () => undefined,
-      send: (name: string, flows: SessionFlow[]) => {
-        if (name === 'flows') {
-          sent.push(flows);
-        }
-      },
-    },
+    state: { publish: () => store.publish(workflowFlowsSlot) },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
@@ -218,7 +221,7 @@ function startWorkflowPart(
       origin: 'new',
     });
   };
-  const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
+  const lastFlow = () => slot.get('s1');
   const exported = () =>
     part.exports?.(createRegistrations()) as WorkflowMainExports;
   const savedAt = async () => {
@@ -423,6 +426,30 @@ const FLOW_ENDS: {
 ];
 
 describe('workflowMainPart', () => {
+  it('oneFlowChange_NotifiesOneKey', async () => {
+    const workflow = startWorkflowPart();
+    await workflow.openS1();
+    for (const id of ['s2', 's3']) {
+      await workflow.emit('sessions.connected', {
+        ...session(id, `h-${id}`),
+        owned: true,
+      });
+      await workflow.emit('chat.sessionOpened', {
+        sessionId: id,
+        profileDir: '~/.c',
+        hostSessionId: `h-${id}`,
+        projectDir: '/p',
+        profile: 'personal',
+        origin: 'new',
+      });
+    }
+    workflow.sent.length = 0;
+
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+
+    expect(workflow.sent.map(({ sessionId }) => sessionId)).toEqual(['s1']);
+  });
+
   it('sessionEnded_EndsTheTurnOnlyFromTheCurrentHost', async () => {
     const workflow = startWorkflowPart();
     await workflow.openS1();
@@ -765,8 +792,11 @@ describe('workflowMainPart', () => {
     const { engine: harness } = startEngineMainPart();
 
     await harness.restart();
+    await settled();
 
-    expect(await harness.invoke('flows')).toEqual([]);
+    expect([...harness.state.read(workflowFlowsSlot, 'test').all()]).toEqual(
+      [],
+    );
   });
 
   it('exports_ConsumerDisposed_FreesTheWorkflowId', () => {

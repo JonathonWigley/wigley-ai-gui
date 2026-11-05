@@ -1,7 +1,7 @@
 import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import { appended, element } from '../../../../shared/page/dom';
-import type { DrawnPickerRow } from '../../../../shared/page/list-picker';
+import type { DrawnPickerRow } from '../../../../contracts/list-picker';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   createBaseKit,
@@ -122,7 +122,7 @@ const MARKUP_COMMANDS: readonly { command: MarkupCommand; label: string }[] = [
   { command: 'closeMarkup', label: 'Done' },
 ];
 
-// What every notes part draw reads: the page services and the keys export.
+// What every notes part draw reads: the page services and the part's key hints.
 export interface NotesPartsDeps extends OwnerKitServices {
   log: PluginLog;
 }

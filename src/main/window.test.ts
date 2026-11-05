@@ -1,11 +1,6 @@
 import type { BrowserWindow } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MainCommands } from './keybindings';
-import {
-  offscreenWindowService,
-  registerWindowCommands,
-  windowService,
-} from './window';
+import { offscreenWindowService, windowService } from './window';
 
 const electron = vi.hoisted(() => ({
   app: { show: vi.fn(), focus: vi.fn() },
@@ -14,6 +9,11 @@ const electron = vi.hoisted(() => ({
 vi.mock('electron', () => electron);
 
 const PNG = new Uint8Array([1, 2, 3]);
+
+beforeEach(() => {
+  electron.app.show.mockReset();
+  electron.app.focus.mockReset();
+});
 
 // A window whose calls throw once it is destroyed, as Electron's do.
 function fakeWindow({ isDestroyed }: { isDestroyed: boolean }) {
@@ -71,6 +71,26 @@ describe('windowService', () => {
     await expect(service.chooseFolder()).resolves.toBe('/w/chosen');
     await expect(service.capture()).resolves.toBe(PNG);
   });
+
+  it('summon_DestroyedWindow_DoesNothing', () => {
+    const { window, shown } = fakeWindow({ isDestroyed: true });
+
+    expect(windowService(window).summon()).toBe(false);
+
+    expect(shown).toEqual([]);
+    expect(electron.app.show).not.toHaveBeenCalled();
+  });
+
+  it('summon_LiveWindow_ShowsAndStealsFocus', () => {
+    const { window, shown } = fakeWindow({ isDestroyed: false });
+    electron.app.show.mockImplementation(() => shown.push('app.show'));
+    electron.app.focus.mockImplementation(() => shown.push('app.focus'));
+
+    expect(windowService(window).summon()).toBe(true);
+
+    expect(shown).toEqual(['app.show', 'show', 'app.focus']);
+    expect(electron.app.focus).toHaveBeenCalledWith({ steal: true });
+  });
 });
 
 describe('offscreenWindowService', () => {
@@ -95,23 +115,23 @@ describe('offscreenWindowService', () => {
     await expect(service.chooseFolder()).resolves.toBeNull();
     expect(electron.dialog.showOpenDialog).not.toHaveBeenCalled();
   });
-});
 
-describe('registerWindowCommands', () => {
-  it('summon_DestroyedWindow_DoesNothing', () => {
-    const handlers = new Map<string, (chord: string) => void>();
-    const commands = {
-      register: (name: string, handler: (chord: string) => void) =>
-        handlers.set(name, handler),
-    } as unknown as MainCommands;
-    const { window, shown } = fakeWindow({ isDestroyed: true });
+  it('summon_Offscreen_LogsAndStaysBack', () => {
+    const { window, shown } = fakeWindow({ isDestroyed: false });
     const log = vi.fn();
-    registerWindowCommands(commands, window, log);
 
-    handlers.get('window.summon')?.('chord');
+    const result = offscreenWindowService(
+      window,
+      'the self-test',
+      log,
+    ).summon();
 
+    expect(result).toBe(false);
     expect(shown).toEqual([]);
     expect(electron.app.show).not.toHaveBeenCalled();
-    expect(log).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      'main',
+      'window not summoned in the self-test',
+    );
   });
 });

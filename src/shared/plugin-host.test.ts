@@ -18,6 +18,7 @@ function part(
     manifest: {
       id,
       dependsOn: { main: dependsOn, page: otherProcess },
+      reads: { main: [], page: [] },
       commands: {},
       scopes: {},
       settings: {},
@@ -198,6 +199,16 @@ describe('startPlugins', () => {
         return {};
       }),
     ).toThrow(/"b".*"c".*dependsOn\.main/);
+  });
+
+  it('starts a part whose reads names a plugin not in the list', () => {
+    const reader = part('a');
+    reader.manifest = {
+      ...reader.manifest,
+      reads: { main: ['ghost'], page: [] },
+    };
+
+    expect(startRecording([reader])).toEqual(['a']);
   });
 
   it('stops the dependents of a part first, newest first, then the part', async () => {

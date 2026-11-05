@@ -34,6 +34,28 @@ describe('startedPluginsConfig', () => {
     },
     { case: 'NoneUnstarted_KeepsTheKeymap', loadList: [], expected: config },
   ])('startedPluginsConfig_$case', ({ loadList, expected }) => {
-    expect(startedPluginsConfig(config, loadList)).toEqual(expected);
+    expect(startedPluginsConfig(config, loadList, () => true)).toEqual(
+      expected,
+    );
+  });
+
+  it('startedPluginsConfig_RuntimeBindWithNoHandler_Dropped', () => {
+    const runtimeBind = { keys: ['r'], scope: 'any', command: 'r.gone' };
+    const withRuntime = {
+      ...config,
+      commands: {
+        ...config.commands,
+        'r.gone': { ...command('r.gone', 'r'), runtime: true as const },
+      },
+      keymap: { ...config.keymap, page: [runtimeBind] },
+    };
+
+    const started = startedPluginsConfig(
+      withRuntime,
+      [],
+      (id) => id !== 'r.gone',
+    );
+
+    expect(started.keymap.page).toEqual([]);
   });
 });

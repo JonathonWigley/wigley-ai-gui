@@ -273,7 +273,7 @@ describe('chat commands', () => {
     (command) => {
       const run = setUp(session(false));
 
-      run.handlers[command]({});
+      run.handlers[command]({ arg: undefined });
 
       expect(run.opened).toEqual([]);
       expect(run.invoked).toEqual([]);
@@ -284,7 +284,7 @@ describe('chat commands', () => {
   it('openPreview_Rejects_ToastsError', async () => {
     const run = setUp(session(true), new Error('host id taken'));
 
-    run.handlers.openPreview({});
+    run.handlers.openPreview({ arg: undefined });
     await flush();
 
     expect(run.invoked).toEqual([['openPreview']]);
@@ -295,7 +295,7 @@ describe('chat commands', () => {
   it('stopAll_InvokesMain', async () => {
     const run = setUp(session(true));
 
-    run.handlers.stopAll({});
+    run.handlers.stopAll({ arg: undefined });
     await flush();
 
     expect(run.invoked).toEqual([['stopAll']]);
@@ -305,7 +305,7 @@ describe('chat commands', () => {
   it('stopAll_Rejects_ToastsError', async () => {
     const run = setUp(session(true), new Error('host gone'));
 
-    run.handlers.stopAll({});
+    run.handlers.stopAll({ arg: undefined });
     await flush();
 
     expect(run.invoked).toEqual([['stopAll']]);
@@ -368,7 +368,7 @@ describe('chat commands', () => {
     ({ fields, invoked, logs }) => {
       const run = setUp(session(true, undefined, fields));
 
-      run.handlers.interrupt({});
+      run.handlers.interrupt({ arg: undefined });
 
       expect(run.invoked).toEqual(invoked);
       expect(run.logs).toEqual(logs);
@@ -378,7 +378,7 @@ describe('chat commands', () => {
   it('pickMode_runningSession_sessionBoundPickerSetsTheChoice', () => {
     const run = setUp(session(true));
 
-    run.handlers.pickMode({});
+    run.handlers.pickMode({ arg: undefined });
     const [request] = run.opened;
     request.picked(mode.choices[1]);
 
@@ -389,7 +389,7 @@ describe('chat commands', () => {
   it('pickMode_mainApplies_logsTheChangeOnceMainAnswers', async () => {
     const run = setUp(session(true));
 
-    run.handlers.pickMode({});
+    run.handlers.pickMode({ arg: undefined });
     run.opened[0].picked(mode.choices[1]);
     const beforeAnswer = [...run.logs];
     await flush();
@@ -404,7 +404,7 @@ describe('chat commands', () => {
       new Error('session row-1 has no running process'),
     );
 
-    run.handlers.pickMode({});
+    run.handlers.pickMode({ arg: undefined });
     run.opened[0].picked(mode.choices[1]);
     await flush();
 
@@ -415,7 +415,7 @@ describe('chat commands', () => {
   it('pickControl_runningSession_sessionBoundPickerOpensChoices', () => {
     const run = setUp(session(true));
 
-    run.handlers.pickControl({});
+    run.handlers.pickControl({ arg: undefined });
     const [controls] = run.opened;
     controls.picked(mode);
     const [, choices] = run.opened;
@@ -430,7 +430,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
 
-    run.handlers.toggleEntry({});
+    run.handlers.toggleEntry({ arg: undefined });
 
     expect(run.viewed).toEqual([{ images: [png, jpeg], index: 0 }]);
     expect(entries.counts.toggles).toBe(0);
@@ -441,7 +441,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
 
-    run.handlers.toggleEntry({});
+    run.handlers.toggleEntry({ arg: undefined });
 
     expect(entries.counts.toggles).toBe(1);
     expect(run.viewed).toEqual([]);
@@ -452,7 +452,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
 
-    run.handlers.toggleEntry({});
+    run.handlers.toggleEntry({ arg: undefined });
 
     expect(entries.counts.toggles).toBe(1);
     expect(run.logs).toEqual(['expanded activity line']);
@@ -472,7 +472,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
 
-    run.handlers.toggleEntry({});
+    run.handlers.toggleEntry({ arg: undefined });
 
     expect(run.invoked).toEqual([['pullBack', 'row-1', 'q-2']]);
     expect(entries.counts.toggles).toBe(0);
@@ -522,7 +522,7 @@ describe('chat commands', () => {
       };
       const run = setUp(Object.assign(shown, { state }));
 
-      run.handlers.pullBackQueued({});
+      run.handlers.pullBackQueued({ arg: undefined });
 
       expect(run.invoked).toEqual(invoked);
       expect(run.logs).toEqual(logs);
@@ -647,7 +647,7 @@ describe('chat commands', () => {
       });
       const run = setUp(shown, undefined, true, commands);
 
-      run.handlers.sendNow({});
+      run.handlers.sendNow({ arg: undefined });
       await flush();
 
       expect(run.invoked).toEqual(invoked);
@@ -713,7 +713,7 @@ describe('chat commands', () => {
     });
     const run = setUp(shown);
 
-    run.handlers.nextEntry({});
+    run.handlers.nextEntry({ arg: undefined });
 
     expect(counts).toEqual({ offered, moves });
     expect(run.logs).toEqual(logs);
@@ -768,7 +768,7 @@ describe('chat commands', () => {
       });
       const run = setUp(shown);
 
-      run.handlers[command]({});
+      run.handlers[command]({ arg: undefined });
 
       expect(called).toEqual(calls);
       expect(run.logs).toEqual(logs);
@@ -796,7 +796,7 @@ describe('chat commands', () => {
     } as Partial<ChatSession['entries']> as ChatSession['entries'];
     const run = setUp(Object.assign(session(true), { entries }));
 
-    run.handlers.cancelRange({});
+    run.handlers.cancelRange({ arg: undefined });
 
     expect(called).toEqual(['cancelRange']);
     expect(run.logs).toEqual(logs);
@@ -924,7 +924,7 @@ describe('chat commands', () => {
       );
       const run = setUp(shown, undefined, true, undefined, failure);
 
-      run.handlers.allowOrCopy({});
+      run.handlers.allowOrCopy({ arg: undefined });
       await flush();
 
       expect(run.allowed).toEqual(allowed);
@@ -968,7 +968,7 @@ describe('chat commands', () => {
       const shown = session(true, scroll);
       const run = setUp(shown);
 
-      run.handlers[command]({});
+      run.handlers[command]({ arg: undefined });
 
       expect(shown.counts.scrolls).toEqual([step]);
     },
@@ -978,9 +978,9 @@ describe('chat commands', () => {
     const shown = session(true);
     const run = setUp(shown, undefined, false);
 
-    run.handlers.halfPageDown({});
-    run.handlers.halfPageUp({});
-    run.handlers.lineDown({});
+    run.handlers.halfPageDown({ arg: undefined });
+    run.handlers.halfPageUp({ arg: undefined });
+    run.handlers.lineDown({ arg: undefined });
 
     expect(shown.counts.scrolls).toEqual([]);
     expect(run.logs).toHaveLength(3);
@@ -1000,7 +1000,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { box: message });
     const run = setUp(shown, undefined, true, commands);
 
-    run.handlers.send({});
+    run.handlers.send({ arg: undefined });
 
     expect(ran).toEqual([{ sessionId: 'row-1', profile: 'work', args: '' }]);
     expect(run.invoked).toEqual([]);
@@ -1018,7 +1018,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { box: box('/logout') });
     const run = setUp(shown, undefined, true, commands);
 
-    run.handlers.send({});
+    run.handlers.send({ arg: undefined });
     await flush();
 
     expect(run.toasts).toEqual([expect.stringContaining('no network')]);
@@ -1029,7 +1029,7 @@ describe('chat commands', () => {
     const shown = Object.assign(session(true), { box: box('/model opus') });
     const run = setUp(shown);
 
-    run.handlers.send({});
+    run.handlers.send({ arg: undefined });
 
     expect(run.invoked).toEqual([
       ['send', 'row-1', { text: '/model opus', images: [] }],
@@ -1098,7 +1098,7 @@ describe('chat commands', () => {
       shown.attachments.add(png);
       const run = setUp(shown, new Error('profile gone'));
 
-      run.handlers[handler]({});
+      run.handlers[handler]({ arg: undefined });
       message.held.text = typedSince;
       for (const image of attachedSince) {
         shown.attachments.add(image);
@@ -1121,7 +1121,7 @@ describe('chat commands', () => {
     shown.attachments.add(png);
     const run = setUp(shown);
 
-    run.handlers.send({});
+    run.handlers.send({ arg: undefined });
     await flush();
 
     expect(run.invoked).toEqual([
@@ -1188,7 +1188,7 @@ describe('chat commands', () => {
       shown.attachments.add(jpeg);
       const run = setUp(shown);
 
-      run.handlers.send({});
+      run.handlers.send({ arg: undefined });
       expect(run.marked).toEqual([]);
       await flush();
 
@@ -1208,7 +1208,7 @@ describe('chat commands', () => {
     shown.attachments.add(png);
     const run = setUp(shown, undefined, true, commands);
 
-    run.handlers.send({});
+    run.handlers.send({ arg: undefined });
 
     expect(run.invoked).toEqual([]);
     expect(shown.attachments.images()).toEqual([png]);

@@ -1,4 +1,4 @@
-import type { CommandId } from '../../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../../contracts/commands';
 import type { ViewScope } from '../../../../contracts/keymap';
 import { button, element } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
@@ -50,7 +50,7 @@ import {
   statusLabel,
 } from '../kinds/card-parts';
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 
 type TextBoxField = Parameters<Kit['textBox']>[1];
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
@@ -265,7 +265,14 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
 export function baseKitDepsFor(
   deps: Pick<
     CardDeps,
-    'markdown' | 'platform' | 'commands' | 'keys' | 'recordMount' | 'log'
+    | 'markdown'
+    | 'platform'
+    | 'commands'
+    | 'keys'
+    | 'state'
+    | 'recordAnchor'
+    | 'recordMount'
+    | 'log'
   >,
   scope: ViewScope,
 ): BaseKitDeps {
@@ -276,6 +283,8 @@ export function baseKitDepsFor(
     scope,
     commandNamed: formsCommandNamed,
     platform: deps.platform,
+    state: deps.state,
+    recordAnchor: (anchor) => deps.recordAnchor(anchor),
     recordMount: (mount) => deps.recordMount(mount),
     log: deps.log,
   };
@@ -296,21 +305,21 @@ export function createFormsBaseKit(deps: BaseKitDeps): FormsBaseKit {
   };
 }
 
-// Names the anchor for a qualified command on `element`, drawing the
-// command's label after the keys as `label` says.
+// Names the anchor for a qualified command on `element`, firing with `arg`,
+// and drawing the command's label after the keys as `label` says.
 export type ScopedAnchor = (
   element: HTMLElement,
   command: CommandId,
-  label?: boolean | string,
+  options?: { arg?: CommandArg; label?: boolean | string },
 ) => void;
 
 // The anchor `keys` names in `scope`, the scope of the part drawing.
 export function scopedAnchor(
-  keys: Pick<KeysPageExports, 'anchor'>,
+  keys: Pick<KeyHints, 'anchor'>,
   scope: ViewScope,
 ): ScopedAnchor {
-  return (element, command, label) => {
-    keys.anchor(element, command, { scope, label });
+  return (element, command, options) => {
+    keys.anchor(element, command, { scope, ...options });
   };
 }
 

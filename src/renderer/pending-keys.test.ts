@@ -2,15 +2,21 @@ import { describe, expect, it } from 'vitest';
 import type { PendingKeys } from '../contracts/keymap';
 import { createPendingKeys } from './pending-keys';
 
-// Sources recording each hold and cancel they receive; `reportEditor` stands
-// in for the editor host reporting vim's pending keys.
+// Sources recording each hold and cancel they receive; `reportEditor` and
+// `reportPage` stand in for the editor host and the page engine reporting
+// pending keys.
 function fakeSources() {
   const calls: string[] = [];
   let editorListener: (keys: string[]) => void = () => {};
+  let pageListener: (keys: string[], scope: string) => void = () => {};
   const sources = {
     page: {
       hold: () => calls.push('page.hold'),
       cancel: () => calls.push('page.cancel'),
+      onPendingKeys: (listener: (keys: string[], scope: string) => void) => {
+        pageListener = listener;
+        return { dispose: () => {} };
+      },
     },
     editor: {
       onPendingKeys: (listener: (keys: string[]) => void) => {
@@ -25,6 +31,7 @@ function fakeSources() {
     sources,
     calls,
     reportEditor: (keys: string[]) => editorListener(keys),
+    reportPage: (keys: string[], scope: string) => pageListener(keys, scope),
   };
 }
 
@@ -43,24 +50,24 @@ describe('createPendingKeys', () => {
   });
 
   it('stops telling an onPending listener once disposed', () => {
-    const { sources } = fakeSources();
+    const { sources, reportPage } = fakeSources();
     const hub = createPendingKeys(sources);
     const heard: (PendingKeys | null)[] = [];
     const listening = hub.onPending((pending) => heard.push(pending));
 
     listening.dispose();
-    hub.reportPage(['g'], 'any');
+    reportPage(['g'], 'any');
 
     expect(heard).toEqual([]);
   });
 
   it('sends hold and cancel to the source whose keys are pending', () => {
-    const { sources, calls, reportEditor } = fakeSources();
+    const { sources, calls, reportEditor, reportPage } = fakeSources();
     const hub = createPendingKeys(sources);
 
     hub.hold();
     hub.cancel();
-    hub.reportPage([' '], 'forms.review');
+    reportPage([' '], 'forms.review');
     hub.hold();
     hub.cancel();
     reportEditor(['<Space>']);
@@ -71,13 +78,13 @@ describe('createPendingKeys', () => {
   });
 
   it('tells its listeners null for an empty report', () => {
-    const { sources, reportEditor } = fakeSources();
+    const { sources, reportEditor, reportPage } = fakeSources();
     const hub = createPendingKeys(sources);
     const heard: (PendingKeys | null)[] = [];
     hub.onPending((pending) => heard.push(pending));
 
-    hub.reportPage([' '], 'forms.review');
-    hub.reportPage([], 'forms.review');
+    reportPage([' '], 'forms.review');
+    reportPage([], 'forms.review');
     reportEditor([]);
 
     expect(heard).toEqual([

@@ -5,19 +5,15 @@ import type {
   PageServices,
 } from '../../../contracts/plugin';
 import {
-  fakeDependency,
   noCounts,
   startPagePart,
   type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
-import {
-  type SessionsPageExports,
-  sessionsPageKey,
-} from '../../sessions/contract';
+import type { SessionRow } from '../../sessions/contract';
 import { emptyDraft } from '../draft';
-import { notesPagePart } from './start';
+import { noteSessions, notesPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
 const NONE_LIVE: PartCounts = noCounts;
 
@@ -42,18 +38,7 @@ function startNotes() {
     },
   } as unknown as PageServices['editor'];
   const harness = startPagePart(notesPagePart, {
-    dependencies: [
-      fakeDependency(sessionsPageKey, () => ({}) as SessionsPageExports),
-      fakeDependency(
-        keysPageKey,
-        (consumer) =>
-          ({
-            anchor: () => consumer.track({ dispose: () => undefined }),
-            keysFor: () => null,
-          }) as unknown as KeysPageExports,
-      ),
-    ],
-    services: { editor },
+    services: { editor, picker: fakeListPickerService({ editor }) },
     invoke(method) {
       return Promise.resolve(
         method === 'loadDraft'
@@ -103,5 +88,60 @@ describe('notes page part', () => {
     expect(Object.keys(harness.started().commands)).toContain('open');
     await harness.stop();
     expect(harness.counts()).toEqual(NONE_LIVE);
+  });
+});
+
+describe('noteSessions', () => {
+  const row = (
+    sessionId: string,
+    hostSessionId: string | null,
+  ): SessionRow => ({
+    sessionId,
+    label: sessionId,
+    project: 'project',
+    harness: 'claude',
+    marked: false,
+    projectDir: `/${sessionId}`,
+    hostSessionId,
+    titles: { user: null, agent: null, firstMessage: null },
+  });
+  const noteSession = (sessionId: string, hostSessionId: string) => ({
+    sessionId,
+    harness: 'claude',
+    hostSessionId,
+    projectDir: `/${sessionId}`,
+  });
+  const HELD = new Map([
+    ['with-host', row('with-host', 'host-1')],
+    ['no-host', row('no-host', null)],
+    ['also-host', row('also-host', 'host-2')],
+  ]);
+  const ROWS = { get: (id: string) => HELD.get(id), all: () => HELD };
+
+  it.each([
+    {
+      case: 'a row with a host id',
+      active: 'also-host',
+      selected: noteSession('also-host', 'host-2'),
+    },
+    { case: 'a row with no host id', active: 'no-host', selected: null },
+    { case: 'a row no longer listed', active: 'gone', selected: null },
+    { case: 'no active row', active: null, selected: null },
+    { case: 'an unwritten active slot', active: undefined, selected: null },
+  ])('selectedSession: $case', ({ active, selected }) => {
+    const sessions = noteSessions(ROWS, {
+      get: () => active as string | null,
+    });
+
+    expect(sessions.selectedSession()).toEqual(selected);
+  });
+
+  it('sessionRows_RowsWithAHostId_InRowOrder', () => {
+    const sessions = noteSessions(ROWS, { get: () => null });
+
+    expect(sessions.sessionRows()).toEqual([
+      noteSession('with-host', 'host-1'),
+      noteSession('also-host', 'host-2'),
+    ]);
   });
 });

@@ -2,7 +2,14 @@ import type { AgentHarness } from './agent';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { AppInstance } from './app-instance';
-import type { CommandId } from './commands';
+import type {
+  ArgOf,
+  CommandArg,
+  CommandArgShape,
+  CommandId,
+  CommandKey,
+  CommandRunContext,
+} from './commands';
 import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
@@ -11,14 +18,18 @@ import type { FuzzyMatcher } from './fuzzy';
 import type { Git } from './git';
 import type { ImageEncoder } from './images';
 import type {
+  AnchorOptions,
+  HintWhere,
   InterceptBind,
   KeyBind,
   KeyGroups,
   Keymap,
   PageBind,
   PendingKeys,
+  RuntimeBind,
   ViewScope,
 } from './keymap';
+import type { ListPickerService } from './list-picker';
 import type { PluginLog } from './log';
 import type { MarkdownRenderer } from './markdown';
 import type { MarkupEditor } from './markup';
@@ -27,6 +38,19 @@ import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { SessionHost } from './session-host';
+import type {
+  JsonSlot,
+  KeyedSlotKey,
+  KeyedSlotReader,
+  KeyedSlotWriter,
+  LayoutState,
+  ListSlotKey,
+  ListSlotReader,
+  ListSlotWriter,
+  SlotKey,
+  SlotReader,
+  SlotWriter,
+} from './state';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
@@ -47,18 +71,70 @@ export interface DependencyKey<
   readonly exportsType?: E; // type only; never set
 }
 
-// A command as a manifest declares it, under its short id.
+// A command as a manifest declares it, under its short id. `arg` is the one
+// argument it takes; with none, it takes no argument.
 export interface CommandDecl {
   label: string;
   group: string;
   runsIn: ProcessName;
+  arg?: CommandArgShape;
 }
 
 // A command under its qualified id, `<pluginId>.<short>`, or the core's own id
-// with plugin `core`.
+// with plugin `core`. `runtime` marks one a part added while it runs.
 export interface CommandInfo extends CommandDecl {
   id: CommandId;
   plugin: string;
+  runtime?: true;
+}
+
+// What runs a command. A command acts and returns no result; a failure is logged
+// under the plugin that owns the handler, and the run's promise resolves.
+// `any`: one registry holds handlers of different arguments.
+export type CommandHandler<
+  Context = PageCommandContext<any> | MainCommandContext<any>,
+> = (context: Context) => void | Promise<void>;
+
+// The argument of `M`'s command `K`. `any` for a manifest type that names no
+// particular command: one parts list holds parts with different arguments.
+type DeclaredArg<
+  M extends PluginManifest,
+  K,
+> = CommandDecl extends M['commands'][K & keyof M['commands']]
+  ? any
+  : M['commands'][K & keyof M['commands']] extends { arg: infer S }
+    ? ArgOf<S>
+    : undefined;
+
+// A part's commands. `run` starts a handler in this process before it returns, or
+// sends the run to the process that declares the command, and resolves once the
+// handler settles; it throws at the call for an unknown id or a bad argument, and
+// a run a page cannot take is logged and resolves. `register` adds a command while
+// the part runs, qualified by the plugin's id, and throws when `decl.runsIn` is the
+// other process or the id is taken. `intercept` wraps every run of a command in the
+// process that runs its handler: the last registered is outermost, `next` runs the
+// next wrap and then the handler, and a wrap that does not call `next` stops the
+// run; a wrap calling `next` after its own promise settles still runs the handler,
+// but `run` has resolved and `onDidRun` hears nothing; it throws for a command the
+// catalog knows as the other process's. `onDidRun` hears each run that ended with
+// no failure, in the process that ran the handler, once the handler has settled.
+// Each handle is filed in the part's registrations.
+export interface PluginCommands {
+  run(id: CommandId): Promise<void>;
+  run<A>(key: CommandKey<A>, arg: A): Promise<void>;
+  register(
+    short: string,
+    decl: CommandDecl,
+    handler: CommandHandler,
+  ): Disposable;
+  intercept(
+    id: CommandId,
+    wrap: (
+      next: () => Promise<void>,
+      context: CommandRunContext,
+    ) => void | Promise<void>,
+  ): Disposable;
+  onDidRun(listener: (id: CommandId, arg: unknown) => void): Disposable;
 }
 
 // A scope under its qualified id, `<pluginId>.<short>`, or the core's own id
@@ -84,8 +160,8 @@ export interface PluginKeys<
     command: PageC;
   })[];
   groups?: KeyGroups;
-  app?: { accelerator: string; command: MainC }[];
-  global?: { accelerator: string; command: MainC }[];
+  app?: { accelerator: string; command: MainC; arg?: CommandArg }[];
+  global?: { accelerator: string; command: MainC; arg?: CommandArg }[];
   intercept?: (Omit<InterceptBind, 'command'> & { command: MainC })[];
 }
 
@@ -126,7 +202,10 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // declares the plugin's own theme tokens by their unqualified names
 // (`origin-caused`), each with its kind and default; each `dependsOn` list names
 // the plugins whose exports that process reads or whose events it hears there;
-// they start before this plugin's part in that process.
+// they start before this plugin's part in that process; each `reads` list names
+// the plugins whose slots that process reads or whose events it hears with no
+// start order, so a disabled or unlisted plugin there is no problem and reads
+// `undefined`.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -139,6 +218,7 @@ export interface PluginManifest<
     readonly main: readonly string[];
     readonly page: readonly string[];
   };
+  reads: { readonly main: readonly string[]; readonly page: readonly string[] };
   commands: Record<C, CommandDecl>;
   scopes: Readonly<Record<S, string>>;
   keys?: PluginKeys<C, C, S>;
@@ -146,6 +226,38 @@ export interface PluginManifest<
   optionalSettings?: Readonly<Record<string, SettingKind>>;
   settingInfo: Readonly<Record<string, SettingInfo>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
+}
+
+// The plugins whose slots `M`'s part in process `P` may read: itself, its
+// `dependsOn` and `reads` there, and the core, which every part reads.
+export type ReadableOwner<M extends PluginManifest, P extends ProcessName> =
+  | M['id']
+  | M['dependsOn'][P][number]
+  | M['reads'][P][number]
+  | 'core';
+
+// One part's slots. `publish` takes a key of this plugin and process whose value is
+// JSON and returns its writer; it throws `Slot "<id>" is held by a live part` while
+// another writer holds the key, and at a key another plugin or process owns. The
+// writer and every reader `on` are filed in the part's registrations. A slot's value
+// outlives its owner's stop: the next start publishes the key again and reads the
+// last value through `writer.get()`. Owners read through the writer and keep no
+// second copy. A slot no owner has written reads `undefined`, or `[]` for a list.
+export interface PluginState<M extends PluginManifest, P extends ProcessName> {
+  publish<V>(key: SlotKey<V, P, M['id']> & JsonSlot<V>): SlotWriter<V>;
+  publish<V>(
+    key: KeyedSlotKey<V, P, M['id']> & JsonSlot<V>,
+  ): KeyedSlotWriter<V>;
+  publish<V extends { readonly id: string }>(
+    key: ListSlotKey<V, P, M['id']> & JsonSlot<V>,
+  ): ListSlotWriter<V>;
+  read<V>(key: SlotKey<V, ProcessName, ReadableOwner<M, P>>): SlotReader<V>;
+  read<V>(
+    key: KeyedSlotKey<V, ProcessName, ReadableOwner<M, P>>,
+  ): KeyedSlotReader<V>;
+  read<V extends { readonly id: string }>(
+    key: ListSlotKey<V, ProcessName, ReadableOwner<M, P>>,
+  ): ListSlotReader<V>;
 }
 
 // The short ids of the commands in `Cmds` that run in process `P`.
@@ -334,7 +446,8 @@ export interface Mode {
 // over the content. `dispose` takes the mode's element, side bar and activity
 // item out of the window, without calling its `hidden`, and frees its id; a
 // disposed shown mode gives way to the first remaining mode in add order, as
-// `show` would show it, and `onChanged` listeners hear its id. Once disposed,
+// `show` would show it, and `onChanged` listeners hear its id, or `''` when no
+// mode remains. Once disposed,
 // every member does nothing, and `isShown` and `sideBarShown` return false.
 export interface ModeHandle extends Disposable {
   show(): void;
@@ -348,7 +461,8 @@ export interface ModeHandle extends Disposable {
 // The first mode added shows and every later one is added hidden; a hidden
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
 // the first mode's `shown`, and its side bar callback, before it returns, so
-// that neither can read the handle. `shown` is the shown mode's id and throws
+// that neither can read the handle; `onChanged` listeners then hear that mode's
+// id. `shown` is the shown mode's id and throws
 // before any `add` and once every mode is disposed. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
@@ -360,6 +474,10 @@ export interface Modes {
   shown(): string;
   onChanged(listener: (modeId: string) => void): Disposable;
 }
+
+// What a plugin holds of the registry: a part hears the shown mode through
+// `coreModeSlot`.
+export type PageModes = Omit<Modes, 'onChanged'>;
 
 // An area the layout splits by alignment: `element` is the area's own element,
 // and each contribution goes into the `tracks` container of its `align`.
@@ -418,15 +536,23 @@ export interface LayoutShow {
   dispose(): void;
 }
 
-// `editor` is the text box a key fired in.
-export interface PageCommandContext {
+// `editor` is the text box a key fired in. `arg` is the command's argument.
+export interface PageCommandContext<A = undefined> {
   editor?: TextEditor;
+  arg: A;
 }
 
 export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   fuzzy: FuzzyMatcher;
+  // Builds the shared list picker, wired to the plugin's scope, log and overlay.
+  picker: ListPickerService;
+  // The native folder dialog over the window; null when the user dismisses it.
+  chooseFolder(): Promise<string | null>;
+  // Opens an http or https URL in the user's default app; rejects with main's
+  // `Refused to open <url>: …` for any other.
+  openExternal(url: string): Promise<void>;
   markup: MarkupEditor;
   // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
   visualFrames: VisualFrames;
@@ -466,10 +592,39 @@ export interface PageTransparency {
   overridden(): 'full' | 'reduced' | null;
 }
 
+// What a view needs to show keys. `keysFor` reads the keys that run the
+// qualified `command`, as the user reads them: the first such bind in the merged
+// keymap firing in the qualified `scope` (an `any` bind included), or in any scope
+// when `scope` is left out, on the page or, for `where` `box`, inside a text box;
+// null when none is bound. With `arg`, only a bind carrying that argument counts.
+// `anchor` draws the keys of `command` into `element`, which the view places and
+// leaves empty, and keeps them drawn and shown or hidden by scope until its
+// `dispose`. `onKeymapChanged` hears each change to the merged keymap, after which
+// `keysFor` reads the new keys, until its `dispose`. PageApi['keys'] extends it.
+export interface KeyHints {
+  keysFor(
+    command: CommandId,
+    scope?: ViewScope,
+    where?: HintWhere,
+    arg?: CommandArg,
+  ): string | null;
+  anchor(
+    element: HTMLElement,
+    command: CommandId,
+    options?: AnchorOptions,
+  ): Disposable;
+  onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
+}
+
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
-// `keys.scope` is the qualified scope keys fire in now, and
-// `keys.onScopeChanged` hears it each time it changes, until its `dispose`.
+// `keys.scope` is the qualified scope keys fire in now, and a part hears each
+// change of it through `coreScopeSlot`.
+// `keys.bind` adds a bind under the user's `keymap.json` while the part runs, its
+// scope and command qualified; a later re-serve puts it in force, and the user's
+// bind on those keys wins. It throws when the command is not known yet or runs in
+// main, the argument is bad, the keys cannot expand, or the keys clash with another
+// runtime bind; the handle is filed in the part's registrations.
 // `keys.onPending` hears the keys of an unfinished sequence on the page or in
 // an editor, `null` once none are pending, until its `dispose`;
 // `keys.holdPending` keeps a pending page sequence past its
@@ -479,12 +634,20 @@ export interface PageTransparency {
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
 // `keys.label` falls back to the id for a command with no label;
 // `keys.command` reads a command by its qualified id; `keys.scopes` lists
-// every scope as main serves them.
+// every scope as main serves them. `keysFor`, `anchor` and `onKeymapChanged` are as
+// `KeyHints` says, each handle filed in the part's registrations.
+// `keys.where` reads whether focus is in a text box now, and `keys.onWhereChanged`
+// hears it move between the page and a box, until its `dispose`.
+// `keys.setHintsShown` hides or shows every anchored hint. The latest handle's
+// `dispose` shows them again, and an older handle's `dispose` does nothing, so
+// a new call then the old handle's `dispose` keeps the new value.
+// `keys.placedIn` is the placement check's source: the command targets anchored in
+// `scope` or with no scope during this page load.
 // `settings` reads the plugin's settings as the user config now sets them, and
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
-// `platform` is the OS the app runs on, fixed for the page load.
+// `platform` is the record of the OS the app runs on, fixed for the page load.
 // `modes.add` qualifies the mode's id by the plugin (`browse` in plugin `p`
-// is `p.browse`), and `modes.shown` and `modes.onChanged` read qualified ids.
+// is `p.browse`), and `modes.shown` and `coreModeSlot` read qualified ids.
 // `shell.setLayout` places the shell's areas by `layout` in place of the one
 // in use, moving every contribution into it, and returns the `Disposable` that
 // restores the default layout; that `dispose` does nothing once another
@@ -516,7 +679,8 @@ export interface PageTransparency {
 // fresh. `layouts.show` shows the plugin's own layouts, loading each set main
 // announces for the plugin and handing `options.setLayouts` the result, and
 // refreshes the show on each change of the plugin's settings until the
-// show's `dispose`.
+// show's `dispose`. `state` is as `PluginState` says, and `state.forLayouts` reads
+// any slot by its id, for a layout's kit.
 export interface PageApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -526,21 +690,24 @@ export interface PageApi<
   areas: PluginAreas;
   channel: PageChannel<Ch>;
   events: PluginEvents<Ev, Heard>;
-  keys: {
+  keys: KeyHints & {
     setScope(scope: keyof M['scopes'] & string): void;
     pushScope(scope: keyof M['scopes'] & string): PushedScope;
     scope(): ViewScope;
-    onScopeChanged(listener: (scope: ViewScope) => void): Disposable;
     onPending(listener: (pending: PendingKeys | null) => void): Disposable;
     holdPending(): void;
     cancelPending(): void;
     keymap(): Keymap;
-    onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
     label(id: CommandId): string;
     command(id: CommandId): CommandInfo | undefined;
     scopes: readonly ScopeInfo[];
+    bind(bind: RuntimeBind<'page'>): Disposable;
+    where(): HintWhere;
+    onWhereChanged(listener: (where: HintWhere) => void): Disposable;
+    setHintsShown(shown: boolean): Disposable;
+    placedIn(scope: ViewScope): ReadonlySet<string>;
   };
-  modes: Modes;
+  modes: PageModes;
   shell: { setLayout(layout: ShellLayout): Disposable };
   transparency: PageTransparency;
   panes: {
@@ -552,20 +719,22 @@ export interface PageApi<
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;
-  commands: { run(id: CommandId, context?: PageCommandContext): void };
+  commands: PluginCommands;
   services: PageServices;
   dependency<E, Id extends M['dependsOn']['page'][number]>(
     key: DependencyKey<E, 'page', Id>,
   ): E;
   dataUrl(path: string, revision: number): string;
   layouts: { show<L>(options: ShowLayoutOptions<L>): LayoutShow };
+  state: PluginState<M, 'page'> & { forLayouts: LayoutState };
 }
 
 export interface PageStart<M extends PluginManifest> {
-  commands: Record<
-    CommandsRunIn<M, 'page'>,
-    (context: PageCommandContext) => void
-  >;
+  commands: {
+    [K in CommandsRunIn<M, 'page'>]: CommandHandler<
+      PageCommandContext<DeclaredArg<M, K>>
+    >;
+  };
   // Called once for each dependent, with that dependent's registrations; returns
   // that dependent's view.
   exports?(consumer: Registrations): unknown;
@@ -684,19 +853,21 @@ export interface DriveHost {
 // `runMode` is how the app was started. `selfTest` is the plugin's own
 // self-test host, null outside the self-test. `log` logs under the plugin's
 // id, called as `log(message)`.
-// `timers` runs one-shot timers, the `Timers` seam the page shares.
+// `timers` runs one-shot timers, the `Timers` seam the page shares, and caps a
+// delay at the longest a timer takes.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `paths` handles full paths by the rules of the OS main runs on, and
-// `platform` names that OS, picked by the composition root.
+// `platform` is the record of that OS, picked by the composition root.
 // `processes` runs the machine's programs; `git` is the one way a plugin runs
 // `git`, and stopping the plugin leaves a `git` run to finish. `alerts` gets
 // the user's attention, and stopping the plugin zeroes the open counts it set.
 // Stopping the plugin also clears its pending `timers`, disposes its live
 // `files` watches and stops its running `processes`, each of which then rejects
 // with `Stopped <command>`. `agentHarnesses` lists every
-// harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
-// native folder dialog over the window and resolves to null when the user
-// cancels; `window.isFocused` is true while the app's window has focus;
+// harness adapter the app runs, found by `id`. `window.summon` brings the app
+// forward from behind another app and returns whether the window came forward.
+// `window.chooseFolder` opens the native folder dialog over the window and
+// resolves to null when the user cancels; `window.isFocused` is true while the app's window has focus;
 // `window.capture` resolves to a PNG of the window's content as the user sees
 // it, at the display's device pixels, and rejects when the capture is empty.
 // `openExternal` opens an http or https URL in the user's default app,
@@ -728,6 +899,7 @@ export interface MainServices {
   sessionHost: SessionHost;
   window: {
     show(): void;
+    summon(): boolean;
     isFocused(): boolean;
     chooseFolder(): Promise<string | null>;
     capture(): Promise<Uint8Array>; // PNG of the window's content, as shown
@@ -753,7 +925,9 @@ export interface MainServices {
 // `src/plugins/<id>/layouts/default` in the repo clone, until the returned
 // `Disposable`'s `dispose`; it throws for a second registration.
 // `layouts.names` lists the plugin's layouts, `default` first; only `default`
-// before the folder has been listed or while unregistered.
+// before the folder has been listed or while unregistered. `state` is as
+// `PluginState` says. `commands` is as `PluginCommands` says. `keys.bind` adds an
+// app or intercept bind while the part runs, as `PageApi.keys.bind` does a page one.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -774,10 +948,24 @@ export interface MainApi<
     register(options: { layoutTypes: string }): Disposable;
     names(): string[];
   };
+  state: PluginState<M, 'main'>;
+  commands: PluginCommands;
+  keys: { bind(bind: RuntimeBind<'main'>): Disposable };
+}
+
+// `chord` is the chord that fired the command; a run from code or the page has
+// none. `arg` is the command's argument.
+export interface MainCommandContext<A = undefined> {
+  chord?: string;
+  arg: A;
 }
 
 export interface MainStart<M extends PluginManifest> {
-  commands: Record<CommandsRunIn<M, 'main'>, (chord: string) => void>;
+  commands: {
+    [K in CommandsRunIn<M, 'main'>]: CommandHandler<
+      MainCommandContext<DeclaredArg<M, K>>
+    >;
+  };
   // Called once for each dependent, with that dependent's registrations; returns
   // that dependent's view.
   exports?(consumer: Registrations): unknown;

@@ -1,10 +1,12 @@
-import type { RowActivity } from '../contract';
+import type { KeyedSlotWriter } from '../../../contracts/state';
+import type { RowActivity, RowActivitySource } from '../contract';
 
-// Every session's activities, one per source. `set` stores or, for null,
-// removes the source's activity and returns whether the session's top changed;
-// a session needs no row to hold activities. `top` is the highest-ranked
-// activity, the latest set winning a tie; null for none. `forget` drops all of
-// the session's activities.
+// Every session's activities in `sessionsActivitySlot`, one per source, in the
+// order they were last set. `set` stores or, for null, removes the source's
+// activity and returns whether the session's top changed, writing nothing when
+// the sources stay equal in order and content; a session needs no row to hold
+// activities. `top` is the highest-ranked activity, the latest set
+// winning a tie; null for none. `forget` drops all of the session's activities.
 export interface RowActivities {
   set(
     sessionId: string,
@@ -15,13 +17,12 @@ export interface RowActivities {
   forget(sessionId: string): void;
 }
 
-export function createRowActivities(): RowActivities {
-  // Each session's activities by source, in the order they were last set.
-  const bySession = new Map<string, Map<string, RowActivity>>();
-
+export function createRowActivities(
+  slot: KeyedSlotWriter<RowActivitySource[]>,
+): RowActivities {
   const top = (sessionId: string): RowActivity | null => {
     let found: RowActivity | null = null;
-    for (const activity of bySession.get(sessionId)?.values() ?? []) {
+    for (const { activity } of slot.get(sessionId) ?? []) {
       if (found === null || activity.rank >= found.rank) {
         found = activity;
       }
@@ -32,26 +33,43 @@ export function createRowActivities(): RowActivities {
   return {
     set(sessionId, sourceId, activity) {
       const before = top(sessionId);
-      const sources = bySession.get(sessionId) ?? new Map();
-      sources.delete(sourceId);
-      if (activity !== null) {
-        sources.set(sourceId, activity);
+      const held = slot.get(sessionId) ?? [];
+      const others = held.filter((source) => source.sourceId !== sourceId);
+      const sources =
+        activity === null ? others : [...others, { sourceId, activity }];
+      if (sameSources(held, sources)) {
+        return false;
       }
-      if (sources.size === 0) {
-        bySession.delete(sessionId);
+      if (sources.length === 0) {
+        slot.delete(sessionId);
       } else {
-        bySession.set(sessionId, sources);
+        slot.set(sessionId, sources);
       }
-      return !sameActivity(before, top(sessionId));
+      return !sameDrawnActivity(before, top(sessionId));
     },
     top,
     forget(sessionId) {
-      bySession.delete(sessionId);
+      slot.delete(sessionId);
     },
   };
 }
 
-function sameActivity(
+function sameSources(
+  first: readonly RowActivitySource[],
+  second: readonly RowActivitySource[],
+): boolean {
+  return (
+    first.length === second.length &&
+    first.every(
+      ({ sourceId, activity }, index) =>
+        sourceId === second[index].sourceId &&
+        activity.rank === second[index].activity.rank &&
+        sameDrawnActivity(activity, second[index].activity),
+    )
+  );
+}
+
+function sameDrawnActivity(
   first: RowActivity | null,
   second: RowActivity | null,
 ): boolean {

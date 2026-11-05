@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { fakeDriveHost } from '../shared/fake-drive-host';
 import { addDriveActions as addFormsDriveActions } from './forms/main/start';
 import { addDriveActions as addPrimerDriveActions } from './primer/main/start';
-import type { SessionsState, ToolResult } from './sessions/contract';
+import { createSlotStore } from '../shared/state/slot-store';
+import {
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
+  type ToolResult,
+} from './sessions/contract';
 import { createSessionList } from './sessions/main/session-list';
 import { addDriveActions as addSessionsDriveActions } from './sessions/main/start';
 
@@ -11,7 +16,7 @@ import { addDriveActions as addSessionsDriveActions } from './sessions/main/star
 function sessionList() {
   const calls: [string, string][] = [];
   const endedListeners: ((rowId: string) => void)[] = [];
-  let state: SessionsState = { rows: [], selectedSessionId: null };
+  const store = createSlotStore(() => undefined);
   let ids = 0;
   const list = createSessionList({
     randomHex: () => `row-${++ids}`,
@@ -24,9 +29,8 @@ function sessionList() {
         }
       }
     },
-    stateChanged: (next) => {
-      state = next;
-    },
+    rows: store.publish(sessionsRowsSlot),
+    selection: store.publish(sessionsSelectionSlot),
     activated: () => undefined,
     projectName: async () => null,
     hostSessionName: async () => null,
@@ -46,7 +50,7 @@ function sessionList() {
   return {
     list,
     calls,
-    rows: () => state.rows,
+    rows: () => list.state().rows,
     onEnded: (listener: (rowId: string) => void) => {
       endedListeners.push(listener);
     },

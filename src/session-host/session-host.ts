@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { Clock, Timers } from '../contracts/ambient';
+import { osPlatform } from '../shared/os-platform';
 import { createDiagnosticLog } from './diagnostic-log';
 import { createHostChildren } from './host-children';
 import { startSessionHost } from './host-server';
@@ -20,7 +21,7 @@ const children = createHostChildren({
   pid: process.pid,
   spawn: (command, args, options) =>
     spawn(command, args, { ...options, windowsHide: true }),
-  processes: createOsProcesses(process.platform),
+  processes: createOsProcesses(osPlatform(process.platform)),
   timers,
   report: (message) => diagnostics.append(message),
 });

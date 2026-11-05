@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../../contracts/disposable';
-import type {
-  AgentSession,
-  ConnectedSession,
-  Harness,
-  OwnedSession,
-  SessionInfo,
-  SessionsState,
-  SessionTitles,
-  ToolCallContext,
-  ToolDefinition,
-  ToolResult,
-  ToolSession,
+import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  type AgentSession,
+  type ConnectedSession,
+  type Harness,
+  type OwnedSession,
+  type SessionInfo,
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
+  type SessionsState,
+  type SessionTitles,
+  type ToolCallContext,
+  type ToolDefinition,
+  type ToolResult,
+  type ToolSession,
 } from '../contract';
 import { createSessionList, RESELECT_WINDOW_MS } from './session-list';
 
@@ -56,12 +59,31 @@ function setUp(
 ) {
   let hexCount = 0;
   const emitted: [string, unknown][] = [];
+  const store = createSlotStore(() => undefined);
+  const rows = store.publish(sessionsRowsSlot);
+  const selection = store.publish(sessionsSelectionSlot);
+  // The whole state after each write, the creation's own left out.
   const states: SessionsState[] = [];
   const logged: string[] = [];
   const activated: string[] = [];
-  // `activated <id>`, `stateChanged` and `emit <event>`, in the order the list
-  // called them.
+  // Each value the selection was set to, the creation's own left out.
+  const selections: (string | null)[] = [];
+  // `activated <id>`, `rows set <id>`, `rows delete <id>`, `selection <id>` and
+  // `emit <event>`, in the order the list called them.
   const calls: string[] = [];
+  store.onWrite((change) => {
+    states.push({
+      rows: [...rows.all().values()],
+      selectedSessionId: selection.get() ?? null,
+    });
+    if (change.kind === 'keyed') {
+      const verb = change.value === undefined ? 'delete' : 'set';
+      calls.push(`rows ${verb} ${change.key}`);
+    } else if (change.kind === 'value') {
+      selections.push(change.value as string | null);
+      calls.push(`selection ${String(change.value)}`);
+    }
+  });
   const clock = { time: 0, now: () => clock.time };
   const list = createSessionList({
     randomHex: () => {
@@ -74,10 +96,8 @@ function setUp(
       emitted.push([event, data]);
       calls.push(`emit ${event}`);
     },
-    stateChanged: (state) => {
-      states.push(state);
-      calls.push('stateChanged');
-    },
+    rows,
+    selection,
     activated: (sessionId) => {
       activated.push(sessionId);
       calls.push(`activated ${sessionId}`);
@@ -85,7 +105,10 @@ function setUp(
     projectName,
     hostSessionName,
   });
-  return { list, clock, emitted, states, logged, activated, calls };
+  states.length = 0;
+  selections.length = 0;
+  calls.length = 0;
+  return { list, clock, emitted, states, logged, activated, calls, selections };
 }
 
 // A contribution's start: records each session it starts for, and each tool
@@ -359,6 +382,7 @@ describe('createSessionList', () => {
         state.selectedSessionId,
       ]),
     ).toEqual([
+      [[[b.session.id, false]], null],
       [[[b.session.id, false]], b.session.id],
       [
         [
@@ -482,8 +506,8 @@ describe('createSessionList', () => {
       expect(activated).toEqual([sessionId]);
       expect(calls.slice(callsBefore)).toEqual([
         `activated ${sessionId}`,
-        'stateChanged',
-        'emit selected',
+        `rows set ${sessionId}`,
+        `selection ${sessionId}`,
       ]);
       const { rows, selectedSessionId } = list.state();
       expect(selectedSessionId).toBe(sessionId);
@@ -768,7 +792,7 @@ describe('createSessionList', () => {
       sent: true,
     },
   ])(
-    'activate says whether it sent the state, which the page holds its echo for: $name',
+    'activate says whether it wrote, which the page holds its echo for: $name',
     ({ target, sent }) => {
       const { list, states } = setUp();
       connectWithRow(list, info('/work/x'));
@@ -807,29 +831,114 @@ describe('createSessionList', () => {
     expect(states).toHaveLength(sentBefore);
   });
 
-  it('sends the whole state on every change', () => {
-    const { list, states } = setUp();
-    const taken: SessionsState[] = [];
-    const connected: ConnectedSession[] = [];
-    connected.push(list.connect(info('/work/x')));
-    connected.push(list.connect(info('/work/x')));
-    const id = (index: number) => connected[index].session.id;
-    const changes = [
-      () => list.mark(id(0)),
-      () => list.mark(id(1)),
-      () => list.activate(id(1)),
-      () => list.closeSession(id(1)),
-      () => list.mark(id(1)),
-      () => list.release(id(1)),
-      () => connected[0].end(),
-    ];
+  // Ids count up from 00000001 in connect and open order. Each `act` runs on a
+  // list whose 00000001 is selected and 00000002 marked, both with rows.
+  it.each<{ name: string; act: (list: SessionList) => void; calls: string[] }>([
+    {
+      name: 'open',
+      act: (list) => list.open(owned('h3')),
+      calls: ['rows set 00000003', 'selection 00000003', 'emit connected'],
+    },
+    {
+      name: 'activate with a mark',
+      act: (list) => list.activate('00000002'),
+      calls: ['activated 00000002', 'rows set 00000002', 'selection 00000002'],
+    },
+    {
+      name: 'close selected',
+      act: (list) => list.closeSession('00000001'),
+      calls: [
+        'rows delete 00000001',
+        'rows set 00000002',
+        'selection 00000002',
+        'emit closed',
+      ],
+    },
+    {
+      name: 'end selected',
+      act: (list) => list.endAll(),
+      calls: [
+        'rows delete 00000001',
+        'rows set 00000002',
+        'selection 00000002',
+        'emit ended',
+        'rows delete 00000002',
+        'selection null',
+        'emit ended',
+      ],
+    },
+    {
+      name: 'setTitle',
+      act: (list) => list.setTitle('00000001', 'user', 'Named'),
+      calls: ['rows set 00000001', 'emit titleChanged'],
+    },
+  ])(
+    'every operation writes rows, then selection, then emits: $name',
+    ({ act, calls: expected }) => {
+      const { list, calls } = setUp();
+      list.open(owned('h1'));
+      list.open(owned('h2'), { select: false });
+      list.mark('00000002');
+      calls.length = 0;
 
-    for (const change of changes) {
-      change();
-      taken.push(list.state());
+      act(list);
+
+      expect(calls).toEqual(expected);
+    },
+  );
+
+  it.each<{
+    name: string;
+    held: string[];
+    selection: string | null | undefined;
+    writes: string[];
+  }>([
+    {
+      name: 'rows and a selection held',
+      held: ['a', 'b'],
+      selection: 'a',
+      writes: ['rows delete a', 'rows delete b', 'selection null'],
+    },
+    { name: 'a slot holding null', held: [], selection: null, writes: [] },
+    {
+      name: 'a slot unwritten',
+      held: [],
+      selection: undefined,
+      writes: ['selection null'],
+    },
+  ])('create_ClearsLeftovers: $name', ({ held, selection, writes }) => {
+    const store = createSlotStore(() => undefined);
+    const rows = store.publish(sessionsRowsSlot);
+    const selected = store.publish(sessionsSelectionSlot);
+    for (const key of held) {
+      rows.set(key, { sessionId: key } as never);
     }
+    if (selection !== undefined) {
+      selected.set(selection);
+    }
+    const written: string[] = [];
+    store.onWrite((change) =>
+      written.push(
+        change.kind === 'value'
+          ? `selection ${String(change.value)}`
+          : `rows delete ${change.key}`,
+      ),
+    );
 
-    expect(states).toEqual(taken);
+    const list = createSessionList({
+      randomHex: () => 'id',
+      clock: { now: () => 0 },
+      log: () => undefined,
+      emit: () => undefined,
+      rows,
+      selection: selected,
+      activated: () => undefined,
+      projectName: async () => null,
+      hostSessionName: async () => null,
+    });
+
+    expect(written).toEqual(writes);
+    expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
   });
 
   it('opens an owned session with a selected row and emits connected', () => {
@@ -853,9 +962,8 @@ describe('createSessionList', () => {
       ],
       selectedSessionId: '00000001',
     });
-    expect(states).toHaveLength(1);
+    expect(states).toHaveLength(2);
     expect(emitted).toEqual([
-      ['selected', { sessionId: '00000001' }],
       ['connected', { id: '00000001', info: owned('host-1'), owned: true }],
     ]);
   });
@@ -897,7 +1005,7 @@ describe('createSessionList', () => {
 
     list.open(owned('h'), { select: false });
 
-    expect(list.selectedSessionId()).toBeNull();
+    expect(list.state().selectedSessionId).toBeNull();
   });
 
   it('starts the contributed tool sessions when an owned session opens', () => {
@@ -1034,7 +1142,7 @@ describe('createSessionList', () => {
     });
     expect(list.titles(ownedSession.session.id)?.agent).toBe('Fix login');
     expect(calls.slice(callsBefore)).toEqual([
-      'stateChanged',
+      `rows set ${ownedSession.session.id}`,
       'emit hostSessionChanged',
     ]);
     const changed = emitted.filter(([event]) => event === 'hostSessionChanged');
@@ -1171,9 +1279,10 @@ describe('createSessionList', () => {
 
     expect(list.closeSession('00000001')).toBe(true);
 
-    expect(calls.slice(-3)).toEqual([
-      'stateChanged',
-      'emit selected',
+    expect(calls.slice(-4)).toEqual([
+      'rows delete 00000001',
+      'rows set 00000002',
+      'selection 00000002',
       'emit closed',
     ]);
     expect(emitted.at(-1)).toEqual(['closed', { sessionId: '00000001' }]);
@@ -1259,7 +1368,7 @@ describe('createSessionList', () => {
 
     const expected = { ...NO_TITLES, agent: 'Fix login bug' };
     expect(calls.slice(callsBefore)).toEqual([
-      'stateChanged',
+      `rows set ${session.id}`,
       'emit titleChanged',
     ]);
     expect(states.at(-1)?.rows[0].titles).toEqual(expected);
@@ -1397,9 +1506,9 @@ describe('createSessionList', () => {
   });
 
   // Each row arranges a fresh list and returns the id `release` gets; ids
-  // count up from 00000001 in connect and open order. `sent` is each state
-  // sent as its row ids and selected id; `events` and `logs` are what follows
-  // the release.
+  // count up from 00000001 in connect and open order. `sent` is the state after
+  // the release's last write as its row ids and selected id, empty for no write;
+  // `events` and `logs` are what follows the release.
   it.each<{
     name: string;
     arrange: (list: SessionList) => string;
@@ -1470,10 +1579,7 @@ describe('createSessionList', () => {
         return a.session.id;
       },
       sent: [[['00000002', '00000003'], '00000002']],
-      events: [
-        ['selected', { sessionId: '00000002' }],
-        ['closed', { sessionId: '00000001' }],
-      ],
+      events: [['closed', { sessionId: '00000001' }]],
       logs: [],
     },
     {
@@ -1485,10 +1591,7 @@ describe('createSessionList', () => {
         return b.session.id;
       },
       sent: [[['00000001'], '00000001']],
-      events: [
-        ['selected', { sessionId: '00000001' }],
-        ['closed', { sessionId: '00000002' }],
-      ],
+      events: [['closed', { sessionId: '00000002' }]],
       logs: [],
     },
   ])('release: $name', ({ arrange, sent, events, logs }) => {
@@ -1505,6 +1608,7 @@ describe('createSessionList', () => {
     expect(
       states
         .slice(sentBefore)
+        .slice(-1)
         .map((state) => [
           state.rows.map((row) => row.sessionId),
           state.selectedSessionId,
@@ -1683,20 +1787,13 @@ describe('createSessionList', () => {
       act: (list) => list.open(owned('h1')).end(),
       expected: ['00000001', null],
     },
-  ])(
-    'selected_SelectionChanges_EmitsOncePerChange: $name',
-    ({ act, expected }) => {
-      const { list, clock, emitted } = setUp();
+  ])('selection_Changes_WritesOncePerChange: $name', ({ act, expected }) => {
+    const { list, clock, selections } = setUp();
 
-      act(list, clock);
+    act(list, clock);
 
-      expect(
-        emitted
-          .filter(([event]) => event === 'selected')
-          .map(([, data]) => (data as { sessionId: string | null }).sessionId),
-      ).toEqual(expected);
-    },
-  );
+    expect(selections).toEqual(expected);
+  });
 
   it.each<{
     case: string;

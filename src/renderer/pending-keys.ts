@@ -7,17 +7,22 @@ import { createListeners } from '../shared/listeners';
 // past its timeout, and the editor host, whose vim has no timeout to hold;
 // `scope` reads the scope in force, which the editor's keys are typed in.
 export interface PendingSources {
-  page: { hold(): void; cancel(): void };
+  page: {
+    hold(): void;
+    cancel(): void;
+    onPendingKeys(
+      listener: (keys: string[], scope: ViewScope) => void,
+    ): Disposable;
+  };
   editor: Pick<EditorHost, 'onPendingKeys' | 'cancelPendingKeys'>;
   scope(): ViewScope;
 }
 
-// One report of pending keys over the page and the editors. `reportPage` takes
-// the page engine's report; `onPending` hears every source's, `null` once none
-// are pending, until its handle's `dispose`. `hold` and `cancel` reach the source whose keys are pending, and
-// do nothing while none are.
+// One report of pending keys over the page and the editors. `onPending` hears
+// every source's, `null` once none are pending, until its handle's `dispose`.
+// `hold` and `cancel` reach the source whose keys are pending, and do nothing
+// while none are.
 export interface PendingKeysHub {
-  reportPage(keys: string[], scope: ViewScope): void;
   onPending(listener: (pending: PendingKeys | null) => void): Disposable;
   hold(): void;
   cancel(): void;
@@ -30,6 +35,9 @@ export function createPendingKeys(sources: PendingSources): PendingKeysHub {
     pending = reported;
     listeners.tell(reported);
   };
+  sources.page.onPendingKeys((keys, scope) =>
+    tell(keys.length > 0 ? { where: 'page', keys, scope } : null),
+  );
   sources.editor.onPendingKeys((keys) =>
     tell(
       keys.length > 0
@@ -39,9 +47,6 @@ export function createPendingKeys(sources: PendingSources): PendingKeysHub {
   );
 
   return {
-    reportPage(keys, scope) {
-      tell(keys.length > 0 ? { where: 'page', keys, scope } : null);
-    },
     onPending: (listener) => listeners.add(listener),
     hold() {
       if (pending?.where === 'page') {

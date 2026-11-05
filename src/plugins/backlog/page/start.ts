@@ -2,7 +2,6 @@ import '../../../shared/page/markdown.css';
 import './backlog.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
-import { keysPageKey } from '../../keys/contract';
 import type { BacklogChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -24,7 +23,6 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services } = api;
-    const keys = api.dependency(keysPageKey);
     const docs = api.dependency(docsPageKey);
     let isShown = false;
     const view = createBacklogView({
@@ -39,10 +37,12 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       log: services.log,
       toast: services.toast,
       drops: api.drops,
-      keys,
-      platform: api.platform,
+      keys: api.keys,
+      platform: api.platform.os,
+      state: api.state.forLayouts,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
+        argShape: (id) => api.keys.command(id)?.arg,
         run: (id) => api.commands.run(id),
       },
       tags: () => api.settings().tags,
@@ -51,6 +51,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       setResizeTarget: (target) => api.panes.setResizeTarget(target),
       setFocusTarget: (target) => api.panes.setFocusTarget(target),
       pushScope: (scope) => api.keys.pushScope(scope),
+      picker: services.picker,
       addOverlay: (element) => api.areas.overlay.contribute(element),
       run: (command) => api.commands.run(command),
       isShown: () => isShown,

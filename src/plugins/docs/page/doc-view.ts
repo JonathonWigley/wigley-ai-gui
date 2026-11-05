@@ -113,6 +113,7 @@ export interface DocViewDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  openExternal(url: string): Promise<void>;
   // Registers the scroller as a drop target while the editor is open.
   drops: Pick<PageDrops, 'addTarget'>;
   // Epoch milliseconds, for naming pasted files.
@@ -1059,8 +1060,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     const target = linkTargetOf(anchor, fromFile);
     switch (target.type) {
       case 'external':
-        deps.channel
-          .invoke('openExternal', target.url)
+        deps
+          .openExternal(target.url)
           .then(() => deps.log(`opened link ${target.url}`))
           .catch((error) => deps.toast(errorText(error), 'error'));
         break;

@@ -9,10 +9,9 @@ import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { agentsPageKey, type Roster } from '../../agents/contract';
+import { agentsRostersSlot, type Roster } from '../../agents/contract';
 import { sessionsPageKey } from '../../sessions/contract';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import { agentStripPagePart } from './start';
 
 const SESSION = 's1';
@@ -66,17 +65,8 @@ function startOnHarness() {
             },
           }) as unknown as ChatPageExports,
       ),
-      fakeDependency(agentsPageKey, (consumer) => ({
-        roster: () => RUNNING,
-        onRosterChanged: () => consumer.track({ dispose() {} }),
-      })),
       fakeDependency(sessionsPageKey, () => ({
         cutToTitleLimit: (text: string) => text,
-      })),
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
       })),
     ],
   });
@@ -93,6 +83,8 @@ describe('agentStripPagePart', () => {
 
   it('stop_LeavesNoLiveRegistration', async () => {
     const harness = startOnHarness();
+    harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
+    harness.emit('core.pageReady', null);
     expect(harness.counts().registrations).toBeGreaterThan(0);
     expect(harness.counts().observers).toBe(1);
     expect(harness.counts().timers).toBe(1);
@@ -109,5 +101,15 @@ describe('agentStripPagePart', () => {
     await harness.restart();
 
     expect(harness.counts()).toEqual(before);
+  });
+
+  it('pageReady_RosterWrittenBefore_DrawsIt', () => {
+    const harness = startOnHarness();
+    harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
+    expect(harness.counts().observers).toBe(0);
+
+    harness.emit('core.pageReady', null);
+
+    expect(harness.counts().observers).toBe(1);
   });
 });

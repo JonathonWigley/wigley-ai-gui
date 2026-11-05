@@ -34,7 +34,6 @@ import {
   sessionSourceId,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
-import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import {
@@ -223,8 +222,8 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
 // doc changes, one watched file per view, external links, the git statuses of
 // the marketplace clones among a source's entries, and the recent commits
 // touching named docs. A source's index entries stay writable while it is
-// registered. The page's own index reads emit `indexLoaded`; the exports'
-// reads do not.
+// registered. The page's own index reads emit `indexLoaded`; the exports' reads
+// do not. A change that lands emits its event, from the page or an export alike.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -286,10 +285,27 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       path: string,
       text: string,
       expectedText: string | null,
-    ) => (await docs).docFiles.write(path, text, expectedText);
-    const writeBytes = async (path: string, bytes: Uint8Array) =>
-      (await docs).docFiles.writeBytes(path, bytes);
-    const trashDoc = async (path: string) => (await docs).docFiles.trash(path);
+    ) => {
+      const result = await (
+        await docs
+      ).docFiles.write(path, text, expectedText);
+      if (result.type === 'written') {
+        api.events.emit('docSaved', { path });
+      }
+      return result;
+    };
+    const writeBytes = async (path: string, bytes: Uint8Array) => {
+      const result = await (await docs).docFiles.writeBytes(path, bytes);
+      api.events.emit('docSaved', { path });
+      return result;
+    };
+    const trashDoc = async (path: string) => {
+      const result = await (await docs).docFiles.trash(path);
+      if (result.trashed.length > 0) {
+        api.events.emit('docTrashed', { path, trashed: result.trashed });
+      }
+      return result;
+    };
     channel.handle('loadIndex', async (sourceId) => {
       const read = await registry.load(sourceId);
       api.events.emit('indexLoaded', { sourceId });
@@ -309,12 +325,16 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     );
     channel.handle('writeDoc', writeDoc);
     channel.handle('writeBytes', writeBytes);
-    channel.handle('createDoc', async (request) =>
-      (await docs).docFiles.create(request),
-    );
-    channel.handle('renameDoc', async (from, to) =>
-      (await docs).docFiles.rename(from, to),
-    );
+    channel.handle('createDoc', async (request) => {
+      const created = await (await docs).docFiles.create(request);
+      api.events.emit('docCreated', { path: created.path });
+      return created;
+    });
+    channel.handle('renameDoc', async (from, to) => {
+      const renamed = await (await docs).docFiles.rename(from, to);
+      api.events.emit('docRenamed', { from, to: renamed });
+      return renamed;
+    });
     channel.handle('trashTargets', async (path) =>
       (await docs).docFiles.trashTargets(path),
     );
@@ -329,13 +349,6 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('unwatchAll', async () => {
       await docs;
       watches.closeAll();
-    });
-    channel.handle('openExternal', async (url) => {
-      await docs;
-      if (!EXTERNAL_SCHEME.test(url)) {
-        throw new Error('Only http and https links open outside the app');
-      }
-      await services.openExternal(url);
     });
     channel.handle('pluginConfigFile', async (key, harness) =>
       (await docs).docFiles.pluginConfigFile(key, harness),

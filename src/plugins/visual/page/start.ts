@@ -2,8 +2,7 @@ import './visual.css';
 import type { PagePart, PageApi } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
-import type { VisualChannel } from '../contract';
+import type { VisualChannel, VisualPageEvents } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -15,7 +14,11 @@ import { createVisualCommands } from './visual-commands';
 import { createVisualOverlay } from './visual-overlay';
 import { createVisualRegistry } from './visual-registry';
 
-type VisualApi = PageApi<typeof visualManifest, VisualChannel>;
+type VisualApi = PageApi<
+  typeof visualManifest,
+  VisualChannel,
+  VisualPageEvents
+>;
 
 // Contributes the live `html` fence to the markdown service while it runs, so
 // every markdown owner draws an agent's html block as a visual through the
@@ -27,7 +30,6 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
   manifest: visualManifest,
   start(api: VisualApi) {
     const { services } = api;
-    const keys = api.dependency(keysPageKey);
     const chat = api.dependency(chatPageKey);
     const layoutsChanged: (() => void)[] = [];
     const registry = createVisualRegistry();
@@ -35,12 +37,14 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
       defaultLayout,
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
+          argShape: (id) => api.keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
-        platform: api.platform,
+        platform: api.platform.os,
+        state: api.state.forLayouts,
       },
       log: services.log,
     });
@@ -51,6 +55,8 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
       parts,
       log: services.log,
       onLayoutsChanged: (listener) => layoutsChanged.push(listener),
+      opened: (count, index) =>
+        api.events.emit('visualOpened', { count, index }),
     });
     const fence = createHtmlFence({
       frames: services.visualFrames,

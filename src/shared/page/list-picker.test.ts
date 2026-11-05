@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../contracts/editor';
+import type { ListPickerRequest } from '../../contracts/list-picker';
 import { fakeFuzzyMatcher } from '../fake-fuzzy-matcher.test-support';
-import { createListPicker, type ListPickerRequest } from './list-picker';
+import { createListPicker } from './list-picker';
 import {
   asFake,
   asHtml,

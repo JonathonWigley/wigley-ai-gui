@@ -44,7 +44,7 @@ import {
 } from '../tree';
 
 // Names `element` as the anchor of a docs command's hint in a docs scope, as
-// the `keys` page export `anchor` does, until the Disposable's `dispose`.
+// `api.keys.anchor` does, until the Disposable's `dispose`.
 export type DocsAnchor = (
   element: HTMLElement,
   command: keyof typeof docsManifest.commands,

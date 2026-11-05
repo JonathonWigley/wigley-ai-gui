@@ -504,18 +504,13 @@ export function putBack(
 }
 
 // Puts messages main returned into their session's box and tells main they are
-// placed. Main keeps any for a session with no tab, which its tab reads at mount.
+// placed.
 export function placeReturned(
   deps: Pick<ChatCommandDeps, 'tabs' | 'channel' | 'log'>,
-  sessionId: string,
+  session: ChatSession,
   messages: readonly ReturnedMessage[],
 ) {
   if (messages.length === 0) {
-    return;
-  }
-  const session = deps.tabs.session(sessionId);
-  if (session === undefined) {
-    deps.log(`returned for unknown session ${sessionId} ignored`);
     return;
   }
   if (!putBack(deps, session, messages)) {
@@ -525,7 +520,7 @@ export function placeReturned(
   void deps.channel
     .invoke(
       'returnedPlaced',
-      sessionId,
+      session.sessionId,
       messages.map((message) => message.id),
     )
     .catch((error: unknown) =>
@@ -553,7 +548,7 @@ export function fillComposer(
 }
 
 // Asks main to take the queued message out of the session's queue; it
-// arrives back as `returned`.
+// arrives back in `chat.returned`.
 export function pullBackQueued(
   deps: { channel: ChatInvoke; log: PluginLog },
   session: SessionRef,

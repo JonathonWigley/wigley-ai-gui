@@ -1,7 +1,7 @@
-// The agents plugin's records and its channel between its main and page parts.
+// The agents plugin's records, its rosters slot and its channel between its main and page parts.
 
-import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type { ChannelShape } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 
 // Whether a subagent's tool call is still running, or how it ended.
 export type RosterOutcome = 'running' | 'done' | 'failed';
@@ -69,22 +69,20 @@ export interface Roster {
   skills: RosterSkill[];
 }
 
-// What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, all three
-// lists empty for a session with none; `onRosterChanged` calls `listener` with a session's id each time its roster
-// changes, the first `rosters` read included. A removed session's roster is dropped without a call: views hear
-// `sessions.sessionRemoved`.
-export interface AgentsPageExports {
-  roster(sessionId: string): Roster;
-  onRosterChanged(listener: (sessionId: string) => void): Disposable;
-}
+// What a reader takes for a session whose key the rosters slot does not hold.
+export const EMPTY_ROSTER: Roster = { agents: [], tasks: [], skills: [] };
 
-export const agentsPageKey: DependencyKey<AgentsPageExports, 'page', 'agents'> =
-  { id: 'agents', process: 'page' };
+// Every session's whole roster that lists any item, keyed by the app's sessionId (the session row's id). Each change
+// writes the whole roster, its agents and tasks empty once each has ended; the key goes once it lists nothing, when the
+// row ends and when agents' main part starts.
+export const agentsRostersSlot: KeyedSlotKey<Roster, 'main', 'agents'> = {
+  id: 'agents.rosters',
+  process: 'main',
+  kind: 'keyed',
+};
 
-// Rosters are keyed by the app's sessionId (the session row's id). `rosters` returns every session's roster that
-// lists any item; `rosterChanged` carries a session's whole roster after each change, its agents and tasks empty once
-// each has ended, and all three lists empty once the row ends. `openPreview` opens agents' sample session, or ends it while it is open.
+// `openPreview` opens agents' sample session, or ends it while it is open.
 export interface AgentsChannel extends ChannelShape {
-  invoke: { rosters(): Record<string, Roster>; openPreview(): void };
-  messages: { rosterChanged: { sessionId: string; roster: Roster } };
+  invoke: { openPreview(): void };
+  messages: Record<never, never>;
 }

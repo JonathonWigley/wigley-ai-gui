@@ -1,4 +1,4 @@
-import type { CommandId } from '../../contracts/commands';
+import type { CommandArg, CommandId } from '../../contracts/commands';
 import { UNBOUND_INSERT_KEYS } from '../../contracts/editor';
 import type {
   AcceleratorBind,
@@ -21,6 +21,7 @@ import {
   canonicalAccelerator,
 } from '../../shared/accelerator';
 import { parseChord } from '../../shared/chord-notation';
+import { checkCommandArg } from '../../shared/command-args';
 import { errorText } from '../../shared/error-text';
 import { vimTokens } from '../../shared/key-hints';
 import { pageKeysFor, vimTokenForPageKey } from '../../shared/key-notation';
@@ -66,7 +67,7 @@ interface EntryShape {
 const BIND: EntryShape = {
   noun: 'a bind',
   required: ['keys', 'scope', 'command'],
-  optional: ['where', 'mode'],
+  optional: ['where', 'mode', 'arg'],
 };
 const EDITOR_REMAP: EntryShape = {
   noun: 'an editor remap',
@@ -80,11 +81,11 @@ const INTERCEPT_CHORD = {
 const INTERCEPT_BIND: EntryShape = {
   noun: 'an intercept bind',
   required: [...INTERCEPT_CHORD.required, 'command'],
-  optional: INTERCEPT_CHORD.optional,
+  optional: [...INTERCEPT_CHORD.optional, 'arg'],
 };
 
 function acceleratorShape(noun: string): EntryShape {
-  return { noun, required: ['accelerator', 'command'], optional: [] };
+  return { noun, required: ['accelerator', 'command'], optional: ['arg'] };
 }
 
 function unbindShape(kind: (typeof UNBIND_KINDS)[number]): EntryShape {
@@ -182,27 +183,53 @@ function requireFields(
   return entry;
 }
 
+function commandInfoOf(id: CommandId, names: KeymapNames) {
+  return Object.hasOwn(names.commands, id) ? names.commands[id] : undefined;
+}
+
+// What is wrong with a known command as the bind at `entryPath`'s: it runs in the
+// other process, or the bind's `arg` does not fit it.
+function knownCommandProblem(
+  entryPath: string,
+  info: CommandInfo,
+  arg: unknown,
+  runsIn: ProcessName,
+  noun: string,
+): string | null {
+  if (info.runsIn !== runsIn) {
+    const where = info.runsIn === 'page' ? 'the page' : 'main';
+    return `"${entryPath}.command" names "${info.id}", which runs in ${where}; ${noun} needs a ${runsIn} command.`;
+  }
+  const problem = checkCommandArg(info.id, info.arg, arg);
+  return problem === null ? null : `"${entryPath}.arg": ${problem}.`;
+}
+
+// The bind at `entryPath`'s command id. An id `names` does not hold stays: a part may
+// register it later, and `heldBackUserBinds` judges it then. Throws on a known
+// command the bind cannot name.
 function requireCommand(
-  path: string,
+  entryPath: string,
   value: unknown,
+  arg: unknown,
   runsIn: ProcessName,
   noun: string,
   names: KeymapNames,
 ): CommandId {
-  const id = requireString(path, value);
-  const info = Object.hasOwn(names.commands, id)
-    ? names.commands[id]
-    : undefined;
-  if (info === undefined) {
-    throw new Error(`"${path}" names no command "${id}".`);
-  }
-  if (info.runsIn !== runsIn) {
-    const where = info.runsIn === 'page' ? 'the page' : 'main';
-    throw new Error(
-      `"${path}" names "${id}", which runs in ${where}; ${noun} needs a ${runsIn} command.`,
-    );
+  const id = requireString(`${entryPath}.command`, value);
+  const info = commandInfoOf(id, names);
+  const problem =
+    info === undefined
+      ? null
+      : knownCommandProblem(entryPath, info, arg, runsIn, noun);
+  if (problem !== null) {
+    throw new Error(problem);
   }
   return id;
+}
+
+// `arg` of the entry, when it sets one. Its shape is the command's to judge.
+function readArg(entry: Record<string, unknown>): { arg?: CommandArg } {
+  return Object.hasOwn(entry, 'arg') ? { arg: entry.arg as CommandArg } : {};
 }
 
 function requireScope(
@@ -283,13 +310,15 @@ function readBind(
     keys: requireKeysString(`${path}.keys`, entry.keys),
     scope: requireScope(`${path}.scope`, entry.scope, names),
     command: requireCommand(
-      `${path}.command`,
+      path,
       entry.command,
+      entry.arg,
       'page',
       BIND.noun,
       names,
     ),
     ...readWhereAndMode(path, entry),
+    ...readArg(entry),
   };
   requireExpandable(path, bind, leader);
   if (bind.mode === 'insert') {
@@ -317,12 +346,14 @@ function readAcceleratorBind(
   return {
     accelerator: requireAccelerator(`${path}.accelerator`, entry.accelerator),
     command: requireCommand(
-      `${path}.command`,
+      path,
       entry.command,
+      entry.arg,
       'main',
       shape.noun,
       names,
     ),
+    ...readArg(entry),
   };
 }
 
@@ -336,12 +367,14 @@ function readInterceptBind(
     key: requireKeysString(`${path}.key`, entry.key),
     ...readModifiers(path, entry),
     command: requireCommand(
-      `${path}.command`,
+      path,
       entry.command,
+      entry.arg,
       'main',
       INTERCEPT_BIND.noun,
       names,
     ),
+    ...readArg(entry),
   };
 }
 
@@ -477,8 +510,9 @@ function readGroups(value: unknown): KeyGroups {
 }
 
 // The user keymap `text`, a `keymap.json`, holds, its leader spelled as
-// `readLeader` gives it, each bind naming a command
-// and scope of `names` that runs in the bind's process, each bind's and
+// `readLeader` gives it, each bind naming a scope of `names` and either a command
+// of `names` that runs in the bind's process and fits the bind's `arg`, or an id
+// `names` does not hold, for `heldBackUserBinds` to judge; each bind's and
 // unbind's keys and `where` ones the merge expands, each insert bind a key of
 // `UNBOUND_INSERT_KEYS`, and each accelerator one Electron accepts. Throws an
 // Error whose message is the first problem found, as the user reads it.
@@ -541,4 +575,56 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
     );
   }
   return keymap;
+}
+
+// `user` without each bind whose command `fixedCommands` does not hold and `names`
+// cannot run: an unknown id, the wrong process or a bad `arg`. Each gives one
+// problem, with the text the parse would give and the bind's path in `user`. A part
+// can register the command later, so the caller decides when these are reported.
+export function heldBackUserBinds(
+  user: UserKeymap,
+  names: KeymapNames,
+  fixedCommands: KeymapNames['commands'],
+): { kept: UserKeymap; problems: string[] } {
+  const problems: string[] = [];
+  const keptOf = <B extends { command: CommandId; arg?: CommandArg }>(
+    section: 'binds' | 'app' | 'intercept' | 'global',
+    binds: readonly B[],
+    runsIn: ProcessName,
+    noun: string,
+  ): B[] =>
+    binds.filter((bind, index) => {
+      if (Object.hasOwn(fixedCommands, bind.command)) {
+        return true;
+      }
+      const path = `${section}[${index}]`;
+      const info = commandInfoOf(bind.command, names);
+      const problem =
+        info === undefined
+          ? `"${path}.command" names no command "${bind.command}".`
+          : knownCommandProblem(path, info, bind.arg, runsIn, noun);
+      if (problem !== null) {
+        problems.push(problem);
+      }
+      return problem === null;
+    });
+  const kept: UserKeymap = { ...user };
+  if (user.binds !== undefined) {
+    kept.binds = keptOf('binds', user.binds, 'page', BIND.noun);
+  }
+  if (user.app !== undefined) {
+    kept.app = keptOf('app', user.app, 'main', 'an app bind');
+  }
+  if (user.intercept !== undefined) {
+    kept.intercept = keptOf(
+      'intercept',
+      user.intercept,
+      'main',
+      INTERCEPT_BIND.noun,
+    );
+  }
+  if (user.global !== undefined) {
+    kept.global = keptOf('global', user.global, 'main', 'a global bind');
+  }
+  return { kept, problems };
 }

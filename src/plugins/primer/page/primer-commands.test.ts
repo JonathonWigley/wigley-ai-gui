@@ -131,8 +131,10 @@ function setup(
   // Each Primer tab the guard selected, and each session it selected.
   const shownPrimers: string[] = [];
   const activated: string[] = [];
-  const run = (command: PrimerCommand, context: PageCommandContext = {}) =>
-    handlers[command](context);
+  const run = (
+    command: PrimerCommand,
+    context: Omit<PageCommandContext, 'arg'> = {},
+  ) => handlers[command]({ arg: undefined, ...context });
   // A press of the core's focus key toward `direction`.
   const move = (direction: PaneDirection) => focusTarget.move(direction);
   const primer = () => {

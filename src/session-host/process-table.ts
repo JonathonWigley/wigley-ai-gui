@@ -13,13 +13,12 @@ import {
   type ListedProcess,
 } from '../contracts/session-host-protocol';
 import { readLines } from '../shared/local-channel/line-framing';
+import { MAX_TIMER_MS } from '../shared/tracked-timers';
 import type { DiagnosticLog } from './diagnostic-log';
 import { createPipeLog, type PipeLog } from './pipe-log';
 
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
 const MS_PER_MINUTE = 60_000;
-// `setTimeout` fires at once past this delay.
-const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export type HostSpawn = (
   command: string,
@@ -217,7 +216,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
           endProcess(hosted);
         }
       },
-      Math.min(delay, MAX_TIMER_DELAY_MS),
+      Math.min(delay, MAX_TIMER_MS),
     );
   }
 

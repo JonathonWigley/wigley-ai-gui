@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DropTarget, DroppedFile } from '../../../contracts/drops';
 import type { EditorEvents, TextEditor } from '../../../contracts/editor';
 import type { ImageEncoder } from '../../../contracts/images';
@@ -40,6 +40,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createNotePopup, type NotePopup } from './popup';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -348,10 +349,14 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     homeDir: '/home/me',
     uiState: { get: () => undefined, set: () => undefined },
   } as unknown as PageServices;
+  services.picker = fakeListPickerService({
+    editor: services.editor,
+    log: services.log,
+    pushScope: pushed,
+  });
   const popup = createNotePopup({
     channel: fakeChannel(draft, fakes, added, saved, savedMarkups),
     services,
-    matcher: fakeFuzzyMatcher,
     keys: recordingAnchors().keys,
     overlay: {
       contribute(element) {
@@ -359,8 +364,13 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
         return { dispose: () => undefined };
       },
     },
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     platform: 'macos',
+    state: noLayoutState,
     pushScope: pushed,
     autosaveDelayMs: () => AUTOSAVE_DELAY_MS,
     selectedSession: () => null,

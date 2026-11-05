@@ -280,7 +280,7 @@ export interface ChatKit extends BaseKit {
     options: CollapsibleCardOptions,
   ): CollapsibleCard;
   edgeCard(parent: HTMLElement, edge?: CardEdge | null): HTMLElement; // a solid block, with a status edge when `edge` is given
-  // Allow once / Deny with their keys beside them (anchors the keys plugin draws); Deny opens the reason box. Draws the
+  // Allow once / Deny with their keys beside them (anchors the core draws); Deny opens the reason box. Draws the
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
   permissionActions(parent: HTMLElement): HTMLElement;
   // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.

@@ -4,6 +4,7 @@ import { definePlugin } from './define-plugin';
 const manifest = definePlugin({
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     go: { label: 'Go', group: 'Moves', runsIn: 'page' },
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },
@@ -26,6 +27,12 @@ describe('definePlugin', () => {
   it('an id holding a dot throws naming the id', () => {
     expect(() => definePlugin({ ...manifest, id: 'my.plugin' })).toThrow(
       '"my.plugin"',
+    );
+  });
+
+  it("the core's id throws saying it is reserved", () => {
+    expect(() => definePlugin({ ...manifest, id: 'core' })).toThrow(
+      'Plugin id "core" is reserved for the core',
     );
   });
 });

@@ -4,6 +4,11 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type {
+  DrawnPickerRow,
+  DrawRowInput,
+  ListPickerService,
+} from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type {
@@ -12,9 +17,11 @@ import type {
   ResizeTarget,
 } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
   CommandsRunIn,
+  KeyHints,
   PageChannel,
   PushedScope,
   ShownLayouts,
@@ -40,12 +47,6 @@ import type {
   RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
-import {
-  createListPicker,
-  type DrawnPickerRow,
-  type DrawRowInput,
-  type ListPicker,
-} from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { textLineHeightPx } from '../../../shared/page/text-line';
@@ -54,7 +55,6 @@ import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogEdit, BacklogHome } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -113,7 +113,7 @@ const TAGS_PICKER = 'Tags';
 // boxes.
 type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 
-type BacklogPushedScope = 'box' | 'confirm' | 'picker';
+type BacklogPushedScope = 'box' | 'confirm';
 
 // Every page command but `showMode`, which the page part runs itself.
 export type BacklogCommand = Exclude<
@@ -145,8 +145,10 @@ export interface BacklogViewDeps {
   toast(text: string, tone: ToastTone): void;
   // Makes the follow-up editor's slot a drop target.
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
-  keys: KeysPageExports;
-  platform: Platform;
+  keys: KeyHints;
+  platform: OsName;
+  // The slots a layout's kit reads.
+  state: LayoutState;
   // The commands a layout's kit runs by qualified id.
   commands: KitCommands;
   // The `tags` setting as the user config now sets it.
@@ -159,6 +161,7 @@ export interface BacklogViewDeps {
   // Sets the panes the focus keys move between, after each `setScope`.
   setFocusTarget(target: FocusTarget | null): void;
   pushScope(scope: BacklogPushedScope): PushedScope;
+  picker: ListPickerService;
   addOverlay(element: HTMLElement): Disposable;
   run(command: CommandId): void;
   isShown(): boolean;
@@ -200,9 +203,9 @@ export interface BacklogView {
 export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const { channel, paths, homeDir } = deps;
   const tilde = (path: string) => paths.tilde(path, homeDir);
-  // A new element, made once for the view's life, that the keys plugin draws
-  // the keys of `command` in `scope` into, then `label` when given. The keys
-  // plugin disposes the anchor when backlog stops.
+  // A new element, made once for the view's life, that the core draws
+  // the keys of `command` in `scope` into, then `label` when given. The anchor
+  // is disposed when backlog stops.
   const anchored = (
     command: BacklogCommand,
     scope: BacklogBaseScope,
@@ -235,6 +238,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
   };
   const kitFor = (scope: BacklogKitScope, rollback: RollbackDeps) =>
     createBacklogKit(kitServices, scope, rollback);
@@ -318,12 +322,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   contentSheet.classList.add('backlog-sheet');
   contentSheet.append(split.element);
 
-  const picker: ListPicker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log: deps.log,
-    matcher,
-  });
-  deps.addOverlay(picker.element);
+  const picker = deps.picker.create();
 
   // A prompt's `drawBody`: the layout's `confirmBody` for `kind`, with the
   // prompt's own buttons; each kind's last body draw is disposed as it draws

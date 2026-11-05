@@ -15,12 +15,13 @@ import { sessionsViewSetup, stateOf } from './sessions-view-fakes';
 
 type Setup = ReturnType<typeof sessionsViewSetup>;
 
-function tabView(id: string): SessionTabView {
+function tabView(id: string, order?: number): SessionTabView {
   return {
     id,
     title: `title ${id}`,
     icon: 'comment',
     element: asHtml(new FakeElement('div')),
+    order,
     beforeClose: () => true,
     shown: () => undefined,
   };
@@ -133,6 +134,36 @@ describe('session tabs view', () => {
       expect(frame.isConnected).toBe(true);
       expect(moves).toContainEqual({ element: frame, to: frame.parentNode });
     }
+  });
+
+  it('sessionTabs_TabsWithAnOrder_DrawInTheOrdersStripOrder', () => {
+    const { view, area } = sessionsViewSetup();
+    view.tabs.add('s', tabView('form'));
+    view.tabs.add('s', tabView('chat', 2));
+    view.tabs.add('s', tabView('primer'));
+    view.tabs.add('s', tabView('docs', 1));
+    view.render(stateOf(['s'], 's'));
+    view.panes.restore(
+      { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
+      new Map([['pane-1', 's']]),
+    );
+    const strip = ['docs', 'chat', 'form', 'primer'];
+
+    expect(view.tabs.tabsOf('s').map((tab) => tab.id)).toEqual(strip);
+    expect(findAll(area, 'ui-tab').map((tab) => tab.title)).toEqual(
+      strip.map((id) => `title ${id}`),
+    );
+  });
+
+  it('sessionTabs_SelectedTabRemoved_SelectsItsStripNeighbour', () => {
+    const { view } = sessionsViewSetup();
+    const chat = view.tabs.add('s', tabView('chat', 2));
+    view.tabs.add('s', tabView('docs', 1));
+    view.tabs.add('s', tabView('form'));
+
+    chat.dispose();
+
+    expect(view.tabs.selectedTabOf('s')?.id).toBe('form');
   });
 
   it('releases a live takeover when the tab handle is disposed', () => {

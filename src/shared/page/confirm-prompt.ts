@@ -12,7 +12,7 @@ export interface ConfirmChoice {
   command: CommandId;
 }
 
-// Draws a button's hint as an anchor; the `keys` plugin's page exports fit.
+// Draws a button's hint as an anchor; `api.keys`, the page's `KeyHints`, fits.
 export interface ConfirmKeys {
   anchor(
     element: HTMLElement,

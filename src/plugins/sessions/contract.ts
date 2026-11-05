@@ -4,6 +4,12 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type {
+  KeyedSlotKey,
+  KeyedSlotReader,
+  SlotKey,
+} from '../../contracts/state';
+import { callEach } from '../../shared/call-each';
 
 // Every agent harness a session can run in; the relay hello's parse reads a
 // harness missing from this list as none.
@@ -83,7 +89,7 @@ export interface RelayEndpoint {
   protocol: number;
   // A Unix socket path (macOS) or a named pipe path (Windows).
   channel: string;
-  launch: { command: string[]; cwd: string };
+  launch: { command: readonly string[]; cwd: string };
 }
 
 export interface ToolResult {
@@ -156,7 +162,7 @@ export interface SessionsMainExports {
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
   ): Disposable;
-  // Connects the session with no row, sending no state, or joins the owned
+  // Connects the session with no row, writing none, or joins the owned
   // session whose host id the info carries; `mark` or `activate` adds a
   // connected session's row, and `release` closes it. A newer relay for that
   // host id takes the join from an older one still connected; the older
@@ -187,7 +193,6 @@ export interface SessionsMainExports {
   // `closed`; a guard refusing keeps the row and logs. An unknown or owned
   // session, or one with no row, is left alone without a log line.
   release(sessionId: string): void;
-  selectedSessionId(): string | null;
   // The session's side-bar label (`gamma 2`), kept while its row is closed;
   // null for a session not connected.
   label(sessionId: string): string | null;
@@ -199,7 +204,7 @@ export interface SessionsMainExports {
   addCloseGuard(mayClose: (sessionId: string) => boolean): Disposable;
   // Stores the source's title, normalized, or clears it for null or a string
   // that normalizes to empty; checks no limit, which callers own. A changed
-  // value sends the state when the session has a row and emits `titleChanged`
+  // value writes the session's row when it has one and emits `titleChanged`
   // either way. A session not connected is logged and ignored.
   setTitle(sessionId: string, source: TitleSource, title: string | null): void;
   // A copy of the session's titles, kept while its row is closed; null for a
@@ -224,19 +229,15 @@ export interface ConnectedSessionEvent extends AgentSession {
 }
 
 // `closed` is a row the user closed, or one `release` closed, every guard
-// allowing; the session itself stays until it ends. `selected` is the selected
-// row changing, to another row or to none, emitted after the state that
-// carries it: an open that selects, an activate or mark that selects, or the
-// selected row closing or ending.
+// allowing; the session itself stays until it ends.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
-// after the state that carries it, with the session's info already updated.
-// `titleChanged` is a session's titles changing, after the state that carries
+// after the row write that carries it, with the session's info already updated.
+// `titleChanged` is a session's titles changing, after the row write that carries
 // them when the session has a row.
 export interface SessionsMainEvents extends EventShape {
   connected: ConnectedSessionEvent;
   ended: { sessionId: string };
   closed: { sessionId: string };
-  selected: { sessionId: string | null };
   hostSessionChanged: AgentSession;
   titleChanged: { sessionId: string; titles: SessionTitles };
 }
@@ -270,19 +271,18 @@ export interface SessionsState {
 // `closeSession` returns whether the session's row is closed: true when it
 // closed or was already closed, false when a close guard kept it or main knows
 // no such session; the session stays connected either way.
-// `activate` returns whether it sent a `stateChanged`, which may reach the page
-// after that reply. `activated` arrives before the `stateChanged` the activation
+// `activate` returns whether it wrote the rows or the selection, which may reach
+// the page after that reply. `activated` arrives before the writes the activation
 // causes.
 // `setUserTitle` sets the user title, a string that normalizes to empty or
 // null clearing it; it throws a title past `sessions.titleMaxLength`.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
-    state(): SessionsState;
     activate(sessionId: string): boolean;
     closeSession(sessionId: string): boolean;
     setUserTitle(sessionId: string, title: string | null): void;
   };
-  messages: { stateChanged: SessionsState; activated: { sessionId: string } };
+  messages: { activated: { sessionId: string } };
 }
 
 // The page part's exports and events.
@@ -293,12 +293,13 @@ export interface SessionsChannel extends ChannelShape {
 // this tab becomes the visible tab: the selected tab of the focused chat pane's
 // session while Sessions mode shows. Its plugin sets its base key scope there.
 // `shown` may run inside `addTab`, before its handle returns, so it must not
-// read that handle.
+// read that handle. `order` places the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;
   icon: string;
   element: HTMLElement;
+  order?: number;
   beforeClose(): boolean;
   shown(): void;
 }
@@ -367,10 +368,11 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 
 // `addTab` attaches the tab's element before returning and selects the tab
 // when it is the session's first; it throws on a tab id the session already
-// holds. A tab added before its session's row waits for the row. A session's
-// tabs drop when its row leaves, and `sessionRemoved` says so.
-// `selectedSessionId` is the focused chat pane's session, null for an empty
-// pane, not main's selection. `addRowPart` adds a part under every session
+// holds. The strip holds tabs with an `order` first, lowest first, then the tabs
+// with none; a tie keeps add order. A tab added before its session's row waits
+// for the row. A session's tabs drop when its row leaves, and
+// `sessionsRowsSlot`'s notice says so.
+// `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
 // each redraw that surface: the rows or the tab bars. A row part shares one
@@ -390,7 +392,6 @@ export interface SessionsPageExports {
   cutToTitleLimit(text: string): string;
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
-  selectedSessionId(): string | null;
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose`, then asks main to close it.
   closeSession(sessionId: string): void;
@@ -407,22 +408,89 @@ export const sessionsPageKey: DependencyKey<
   'sessions'
 > = { id: 'sessions', process: 'page' };
 
-// `activeChanged` fires when the focused chat pane's session changes, to
-// null for an empty pane. `sessionAdded` fires once for every row main sends,
-// the rows present at start included, carrying the row's `label` as the side
-// bar shows it (`gamma 2`), fixed for the row's life, and `sessionRemoved`
-// once when that row leaves. `sessionHostChanged` fires when a kept row's host
-// id changes, after the `sessionAdded` and `sessionRemoved` events of the same
-// state.
+// `tabAdded`: a plugin's tab added to the session through `addTab`.
 export interface SessionsPageEvents extends EventShape {
-  activeChanged: { sessionId: string | null };
-  sessionAdded: {
-    sessionId: string;
-    label: string;
-    projectDir: string | null;
-    harness: Harness | null;
-    hostSessionId: string | null;
+  tabAdded: { sessionId: string; tabId: string };
+}
+
+// One source's activity for a session.
+export interface RowActivitySource {
+  sourceId: string;
+  activity: RowActivity;
+}
+
+// Each session's activities from `setActivity`, by the session id, in last-set
+// order: the highest rank shows, the latest set winning a tie. A session with no
+// sources holds no key. Every page load starts with none, and each source sets
+// its activity again.
+export const sessionsActivitySlot: KeyedSlotKey<
+  RowActivitySource[],
+  'page',
+  'sessions'
+> = { id: 'sessions.activity', process: 'page', kind: 'keyed' };
+
+// Main's rows, keyed by each row's `sessionId`, in the order main added them. In
+// one list operation main writes every row, then the selection, then emits its
+// events, all in one synchronous block. A row's `label` (`gamma 2`) is fixed for
+// its life.
+export const sessionsRowsSlot: KeyedSlotKey<SessionRow, 'main', 'sessions'> = {
+  id: 'sessions.rows',
+  process: 'main',
+  kind: 'keyed',
+};
+
+// Main's selected row, null for none. On the page, a value naming no row means
+// main deleted that row and this slot's write is on its way.
+export const sessionsSelectionSlot: SlotKey<string | null, 'main', 'sessions'> =
+  {
+    id: 'sessions.selection',
+    process: 'main',
+    kind: 'value',
   };
-  sessionRemoved: { sessionId: string };
-  sessionHostChanged: { sessionId: string; hostSessionId: string | null };
+
+// The focused chat pane's session, null for an empty pane; not main's selection.
+// Null from each page load until the first panes are placed. A notice of the rows
+// or the selection reaches readers before the `sessions.active` write it causes.
+export const sessionsActiveSlot: SlotKey<string | null, 'page', 'sessions'> = {
+  id: 'sessions.active',
+  process: 'page',
+  kind: 'value',
+};
+
+// Follows the rows as a reader's lifecycle: `added` runs once per row `rows`
+// holds, in order, inside the call, then once per later new row; `removed` once
+// when a row leaves; `hostChanged` when a kept row's host id changes. A change to
+// any other field of a row calls nothing. A row deleted and set again calls
+// `removed`, then `added`. A throw from a catch-up `added` skips no other row and
+// reaches the caller once every row had its call, with the follow still live until
+// the part stops.
+export function followRows(
+  rows: KeyedSlotReader<SessionRow>,
+  handlers: {
+    added?(row: SessionRow): void;
+    removed?(sessionId: string): void;
+    hostChanged?(row: SessionRow): void;
+  },
+): Disposable {
+  const hostIds = new Map<string, string | null>();
+  for (const [sessionId, row] of rows.all()) {
+    hostIds.set(sessionId, row.hostSessionId);
+  }
+  const following = rows.on((sessionId, row) => {
+    if (row === undefined) {
+      hostIds.delete(sessionId);
+      handlers.removed?.(sessionId);
+      return;
+    }
+    const isNewRow = !hostIds.has(sessionId);
+    const lastHostId = hostIds.get(sessionId);
+    hostIds.set(sessionId, row.hostSessionId);
+    if (isNewRow) {
+      handlers.added?.(row);
+    } else if (lastHostId !== row.hostSessionId) {
+      handlers.hostChanged?.(row);
+    }
+  });
+  callEach([...rows.all().values()], (row) => handlers.added?.(row));
+  return following;
 }

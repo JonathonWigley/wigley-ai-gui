@@ -10,6 +10,7 @@ export const workflowLightManifest = definePlugin({
     main: ['workflow', 'chat', 'sessions'],
     page: ['workflow'],
   },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {

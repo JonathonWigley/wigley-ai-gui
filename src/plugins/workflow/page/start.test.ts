@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../../../contracts/disposable';
 import { createRegistrations } from '../../../shared/registrations';
 import {
@@ -18,22 +18,45 @@ import {
   type ChatSidePart,
   chatPageKey,
 } from '../../chat/contract';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionPart,
+  type SessionRow,
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  PageStage,
-  PageWorkflow,
-  SessionFlow,
-  StripInput,
-  WorkflowDraw,
-  WorkflowPageExports,
+import {
+  type PageStage,
+  type PageWorkflow,
+  type SessionFlow,
+  type StripInput,
+  type WorkflowDraw,
+  workflowFlowsSlot,
+  type WorkflowPageExports,
 } from '../contract';
 import { newFlow } from '../flow';
 import { workflowPagePart } from './start';
+import type { createWorkflowView } from './workflow-view';
+
+// Each session id the view's `setFlow` ran for, in order.
+const drawn = vi.hoisted(() => ({ setFlow: [] as string[] }));
+
+vi.mock('./workflow-view', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./workflow-view')>();
+  return {
+    ...original,
+    createWorkflowView(deps: Parameters<typeof createWorkflowView>[0]) {
+      const view = original.createWorkflowView(deps);
+      return {
+        ...view,
+        setFlow(flow: SessionFlow) {
+          drawn.setFlow.push(flow.sessionId);
+          view.setFlow(flow);
+        },
+      };
+    },
+  };
+});
 
 const NONE_LIVE: PartCounts = noCounts;
 
@@ -62,7 +85,6 @@ function startWorkflow() {
             addRowPart: (part: SessionPart) =>
               holdsPart(consumer, rowParts, part),
             addTab: noHandle(consumer),
-            selectedSessionId: () => null,
             setActivity: () => undefined,
           }) as unknown as SessionsPageExports,
       ),
@@ -76,16 +98,7 @@ function startWorkflow() {
               holdsPart(consumer, sideParts, part),
           }) as unknown as ChatPageExports,
       ),
-      fakeDependency(
-        keysPageKey,
-        (consumer) =>
-          ({
-            anchor: noHandle(consumer),
-            keysFor: () => null,
-          }) as unknown as KeysPageExports,
-      ),
     ],
-    invoke: () => Promise.resolve([]),
   });
   const exportsFor = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as WorkflowPageExports;
@@ -139,6 +152,10 @@ function flowOfLight(stage: string): SessionFlow {
 }
 
 describe('workflow page part', () => {
+  beforeEach(() => {
+    drawn.setFlow = [];
+  });
+
   afterEach(() => vi.unstubAllGlobals());
 
   it('stop_LeavesNoLiveRegistration', async () => {
@@ -167,7 +184,7 @@ describe('workflow page part', () => {
     const wrapper = new FakeElement('div');
 
     exportsFor(consumer).addWorkflow(workflow);
-    harness.send('flows', [flowOfLight('build')]);
+    harness.state.publish(workflowFlowsSlot).set('s1', flowOfLight('build'));
     [...rowParts][0].build(asHtml(wrapper), 's1');
     const whileAdded = { chip: wrapper.children.length, ids: ids() };
     consumer.dispose();
@@ -179,6 +196,68 @@ describe('workflow page part', () => {
     expect(() =>
       exportsFor(createRegistrations()).addWorkflow(workflow),
     ).not.toThrow();
+  });
+
+  function row(sessionId: string): SessionRow {
+    return {
+      sessionId,
+      label: sessionId,
+      project: 'project',
+      harness: 'claude',
+      marked: false,
+      projectDir: '/r',
+      hostSessionId: `h-${sessionId}`,
+      titles: { user: null, agent: null, firstMessage: null },
+    };
+  }
+
+  // A harness past `core.pageReady` whose slots held rows and flows of s1, s2 and
+  // s3 before it, and the flow of `gone`, which has no row.
+  function startWithThreeFlows() {
+    const harness = startWorkflow().harness;
+    const rows = harness.state.publish(sessionsRowsSlot);
+    const flows = harness.state.publish(workflowFlowsSlot);
+    for (const sessionId of ['s1', 's2', 's3']) {
+      rows.set(sessionId, row(sessionId));
+      flows.set(sessionId, newFlow(sessionId, '/r'));
+    }
+    flows.set('gone', newFlow('gone', '/r'));
+    harness.emit('core.pageReady', null);
+    return { harness, rows, flows };
+  }
+
+  it('pageReady_DrawsEachFlowTheSlotHolds', () => {
+    startWithThreeFlows();
+
+    expect(drawn.setFlow).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('oneFlowNotice_DrawsOneFlow', () => {
+    const { flows } = startWithThreeFlows();
+    drawn.setFlow = [];
+
+    flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
+
+    expect(drawn.setFlow).toEqual(['s2']);
+  });
+
+  it('flowNotice_RowHasLeft_DrawsNothing', () => {
+    const { rows, flows } = startWithThreeFlows();
+    drawn.setFlow = [];
+
+    rows.delete('s2');
+    flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
+
+    expect(drawn.setFlow).toEqual([]);
+  });
+
+  it('undefinedNotice_KeepsTheDrawnFlow', () => {
+    const { flows } = startWithThreeFlows();
+    drawn.setFlow = [];
+
+    flows.delete('s2');
+
+    expect(drawn.setFlow).toEqual([]);
   });
 
   it('exports_AddWorkflow_HeldId_Throws', () => {
@@ -194,6 +273,8 @@ describe('workflow page part', () => {
 
   it('AddWorkflow_Sorts', () => {
     const { harness, exportsFor, composerParts } = startWorkflow();
+    harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
+    harness.emit('core.pageReady', null);
     const { workflow, strips } = stubLight([
       stageOf('later', 20),
       stageOf('first', 10),
@@ -201,7 +282,7 @@ describe('workflow page part', () => {
     exportsFor(createRegistrations()).addWorkflow(workflow);
     [...composerParts][0].build(asHtml(new FakeElement('div')), 's1');
 
-    harness.send('flows', [flowOfLight('first')]);
+    harness.state.publish(workflowFlowsSlot).set('s1', flowOfLight('first'));
 
     expect(strips.at(-1)?.steps.map((step) => step.id)).toEqual([
       'first',
@@ -211,7 +292,8 @@ describe('workflow page part', () => {
 
   it('AddWorkflow_AfterItsFlowArrived_LogsItsLevelAndTrail', () => {
     const { harness, exportsFor } = startWorkflow();
-    harness.send('flows', [flowOfLight('build')]);
+    harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
+    harness.state.publish(workflowFlowsSlot).set('s1', flowOfLight('build'));
     const { workflow } = stubLight();
 
     exportsFor(createRegistrations()).addWorkflow(workflow);

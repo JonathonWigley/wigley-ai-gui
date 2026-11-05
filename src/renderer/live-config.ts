@@ -44,3 +44,18 @@ export function createLiveConfig(
     },
   };
 }
+
+// Calls `listener` with the part of each new config `part` reads, only when
+// it differs from the previous config's, compared as JSON.
+export function onChangedPart<T>(
+  config: Pick<LiveConfig, 'onChanged'>,
+  part: (served: AppConfig) => T,
+  listener: (changed: T) => void,
+): Disposable {
+  return config.onChanged((next, previous) => {
+    const changed = part(next);
+    if (JSON.stringify(changed) !== JSON.stringify(part(previous))) {
+      listener(changed);
+    }
+  });
+}

@@ -1,3 +1,10 @@
+import type { EventShape } from '../../contracts/plugin';
+
+// `visualOpened`: the full-size overlay opened on visual `index` of `count`.
+export interface VisualPageEvents extends EventShape {
+  visualOpened: { count: number; index: number };
+}
+
 // The visual plugin's channel between its main and page parts, which carries
 // nothing: main only registers the layouts and the session note.
 export interface VisualChannel {

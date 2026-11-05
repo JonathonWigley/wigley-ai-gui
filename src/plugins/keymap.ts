@@ -20,10 +20,8 @@ type CorePageCommand =
   | (typeof PANE_RESIZE_COMMANDS)[keyof typeof PANE_RESIZE_COMMANDS]
   | (typeof PANE_FOCUS_COMMANDS)[keyof typeof PANE_FOCUS_COMMANDS];
 
-// A main-process command of a built-in plugin, or the core's.
-type BuiltInMainCommand =
-  | QualifiedCommandId<BuiltInManifest, 'main'>
-  | 'window.summon';
+// A main-process command of a built-in plugin.
+type BuiltInMainCommand = QualifiedCommandId<BuiltInManifest, 'main'>;
 
 type BuiltInAcceleratorBind = Omit<AcceleratorBind, 'command'> & {
   command: BuiltInMainCommand;
@@ -51,7 +49,8 @@ type BuiltInKeymap = Omit<
 const formsPageChoices = DIGITS.map((digit) => ({
   keys: digit,
   scope: 'forms.forms' as const,
-  command: `forms.choose${digit}` as const,
+  command: 'forms.choose' as const,
+  arg: Number(digit),
 }));
 
 // A text box holds focus only in the form's and the review's views, so its
@@ -61,7 +60,8 @@ function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
     { keys: '<Leader>x', command: 'forms.toggleNotApplicable' as const },
     ...DIGITS.map((digit) => ({
       keys: `<Leader>a${digit}`,
-      command: `forms.choose${digit}` as const,
+      command: 'forms.choose' as const,
+      arg: Number(digit),
     })),
     { keys: '<Leader>ac', command: 'forms.clearChoice' as const },
     ...(scope === 'forms.review'

@@ -1,6 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
+import { type CoreEvents, coreModeSlot } from '../../../contracts/core-state';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -19,14 +20,16 @@ import { sheet } from '../../../shared/page/ui/sheet';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import { keysPageKey } from '../../keys/contract';
 import {
+  followRows,
+  type SessionRow,
   type SessionTabHandle,
-  type SessionsPageEvents,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
   type DocsChannel,
+  type DocsPageEvents,
   type DocsPageExports,
   type DocsViewHandle,
   MACHINE_SOURCE_ID,
@@ -42,6 +45,7 @@ import {
   type DocsView,
   type DocsViewCommands,
 } from './docs-view';
+import { createDocsPicker } from './docs-dialogs';
 import { commandOfKeysIn } from './hidden-tree-keys';
 import type { DocsScope } from './layout/docs-parts';
 import { readDocsLayout } from './layout/read-layout';
@@ -50,8 +54,8 @@ import { createStarredDocs } from './starred-docs';
 type DocsApi = PageApi<
   typeof docsManifest,
   DocsChannel,
-  Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  DocsPageEvents,
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // A view `addView` handed out.
@@ -121,7 +125,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const { services } = api;
     const { log } = services;
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
@@ -142,12 +145,14 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
-      keys,
+      keys: api.keys,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
+        argShape: (id) => api.keys.command(id)?.arg,
         run: (id) => api.commands.run(id),
       },
-      platform: api.platform,
+      platform: api.platform.os,
+      state: api.state.forLayouts,
     };
     // A base kit whose keys fire in the docs scope `scope`, each anchor it
     // names recorded by `rollback`.
@@ -177,6 +182,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
     };
 
+    // The one list every view opens, contributed under each view's dialogs.
+    const docsPicker = createDocsPicker(services.picker.create());
+
     // `changed` reads the view only once a change is made, after creation.
     // Each scope the view sets is followed by `resizeTarget`, the divider the
     // resize keys move while the view has the keys (null moves the side bar),
@@ -198,14 +206,16 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         editor: services.editor,
         markdown: services.markdown,
         matcher: services.fuzzy,
+        picker: docsPicker.forView(viewId),
         paths: services.paths,
         toast: services.toast,
+        openExternal: services.openExternal,
         drops: api.drops,
         starred,
         now: () => services.clock.now(),
         log,
         anchor: (element, command, options) =>
-          keys.anchor(element, qualify(docsManifest.id, command), {
+          api.keys.anchor(element, qualify(docsManifest.id, command), {
             ...options,
             scope: qualify(docsManifest.id, options.scope),
           }),
@@ -217,6 +227,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
         openChanged,
+        docOpened: (path) => api.events.emit('docOpened', { path }),
         revealTree,
         isTreeShown: () => !isTreeHiddenIn(view),
         leafOpened,
@@ -340,7 +351,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       });
     };
     window.addEventListener('resize', onWindowResize);
-    api.modes.onChanged((modeId) => {
+    api.state.read(coreModeSlot).on((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
     });
 
@@ -370,7 +381,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         ...SESSION_TREE_SPLIT,
         uiState: services.uiState,
         stateKey: 'sessionTree',
-        anchor: keys.anchor,
+        anchor: api.keys.anchor,
         timers: services.timers,
       });
       const added: AddedView = {
@@ -417,7 +428,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return { handle, view: added.view };
     };
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, projectDir }) => {
+    const addSessionDocs = ({ sessionId, projectDir }: SessionRow) => {
       const added = addView(sessionSourceId(sessionId), {
         isVisible: () => held.tab?.isVisible() === true,
       });
@@ -433,6 +444,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         title: 'Docs',
         icon: 'book',
         element: held.view.element,
+        order: 1,
         beforeClose() {
           if (held.view.hasUnsavedEdits()) {
             services.toast(UNSAVED_TEXT, 'error');
@@ -442,22 +454,27 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         },
         shown: () => held.view.shown(),
       });
-    });
+    };
     // The tab goes first, so it never holds a disposed view.
     const disposeSessionDocs = (held: SessionDocs) => {
       callEach([held.tab, held.view], (part) => part?.dispose());
     };
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
+    const removeSessionDocs = (sessionId: string) => {
       const held = sessionDocs.get(sessionId);
       if (held === undefined) {
         return;
       }
       sessionDocs.delete(sessionId);
       disposeSessionDocs(held);
-    });
-    // Main replaces a session's index source when its host id changes.
-    api.events.on('sessions.sessionHostChanged', ({ sessionId }) => {
-      sessionDocs.get(sessionId)?.docsView.sourceReplaced();
+    };
+    api.events.on('core.pageReady', () => {
+      followRows(api.state.read(sessionsRowsSlot), {
+        added: addSessionDocs,
+        removed: removeSessionDocs,
+        // Main replaces a session's index source when its host id changes.
+        hostChanged: ({ sessionId }) =>
+          sessionDocs.get(sessionId)?.docsView.sourceReplaced(),
+      });
     });
 
     const addedViewOf = (view: DocsView): AddedView | undefined =>

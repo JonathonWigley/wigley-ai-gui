@@ -1,72 +1,49 @@
-import type { BrowserWindow } from 'electron';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createElectronAlerts } from './electron-alerts';
 
-const DOT = 'dot';
+type Listener = (...args: unknown[]) => void;
 
-const electron = vi.hoisted(() => ({
-  app: {},
-  nativeImage: { createFromBitmap: () => 'dot' },
-  Notification: { isSupported: () => false },
-}));
+const electron = vi.hoisted(() => {
+  // A notification a row fires events on, the last one made in `latest`.
+  class FakeNotification {
+    static isSupported = () => true;
+    static latest: FakeNotification | null = null;
+    private readonly listeners = new Map<string, Listener>();
+
+    constructor() {
+      FakeNotification.latest = this;
+    }
+
+    on(event: string, listener: Listener) {
+      this.listeners.set(event, listener);
+    }
+
+    fire(event: string, ...args: unknown[]) {
+      this.listeners.get(event)?.(...args);
+    }
+
+    show() {}
+  }
+  return {
+    app: { dock: { bounce: vi.fn() }, setBadgeCount: vi.fn() },
+    Notification: FakeNotification,
+  };
+});
 vi.mock('electron', () => electron);
 
-// A window whose calls throw once it is destroyed, as Electron's do.
-function fakeWindow({ isDestroyed }: { isDestroyed: boolean }) {
-  const calls: unknown[][] = [];
-  const live = () => {
-    if (isDestroyed) {
-      throw new TypeError('Object has been destroyed');
-    }
-  };
-  const window = {
-    isDestroyed: () => isDestroyed,
-    on: () => {},
-    flashFrame(flag: boolean) {
-      live();
-      calls.push(['flashFrame', flag]);
-    },
-    setOverlayIcon(icon: unknown) {
-      live();
-      calls.push(['setOverlayIcon', icon]);
-    },
-  };
-  return { window: window as unknown as BrowserWindow, calls };
-}
+describe('createElectronAlerts', () => {
+  it('createElectronAlerts_NotificationFails_LogsAndDrawsAttention', () => {
+    const attention = { drawAttention: vi.fn(), showOpenCount: vi.fn() };
+    const log = vi.fn();
+    const alerts = createElectronAlerts(attention, log);
 
-describe('createElectronAlerts on Windows', () => {
-  const realPlatform = process.platform;
-
-  beforeEach(() => {
-    Object.defineProperty(process, 'platform', { value: 'win32' });
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: realPlatform });
-  });
-
-  it('destroyedWindow_AnswersWithoutThrowing', () => {
-    const { window, calls } = fakeWindow({ isDestroyed: true });
-    const alerts = createElectronAlerts(window, vi.fn());
-
-    alerts.setOpenCount('forms', 0);
     alerts.announce('title', 'body', vi.fn());
+    electron.Notification.latest?.fire('failed', {}, 'no permission');
 
-    expect(calls).toEqual([]);
-  });
-
-  it('liveWindow_UsesTheWindow', () => {
-    const { window, calls } = fakeWindow({ isDestroyed: false });
-    const alerts = createElectronAlerts(window, vi.fn());
-
-    alerts.setOpenCount('forms', 2);
-    alerts.setOpenCount('forms', 0);
-    alerts.announce('title', 'body', vi.fn());
-
-    expect(calls).toEqual([
-      ['setOverlayIcon', DOT],
-      ['setOverlayIcon', null],
-      ['flashFrame', true],
-    ]);
+    expect(attention.drawAttention).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(
+      'alerts',
+      expect.stringContaining('notification failed'),
+    );
   });
 });

@@ -1,6 +1,6 @@
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
-import { sessionsPageKey } from '../../sessions/contract';
+import { sessionsActiveSlot } from '../../sessions/contract';
 import { workflowPageKey } from '../../workflow/contract';
 import {
   HEAVY_WORKFLOW_ID,
@@ -41,7 +41,6 @@ export const workflowHeavyPagePart: PagePart<typeof workflowHeavyManifest> = {
     const { services } = api;
     const { log } = services;
     const workflow = api.dependency(workflowPageKey);
-    const sessions = api.dependency(sessionsPageKey);
     const docs = api.dependency(docsPageKey);
 
     workflow.addWorkflow({
@@ -86,7 +85,7 @@ export const workflowHeavyPagePart: PagePart<typeof workflowHeavyManifest> = {
     });
 
     const runOnSelected = (command: keyof typeof HEAVY_COMMANDS) => () => {
-      const sessionId = sessions.selectedSessionId();
+      const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;

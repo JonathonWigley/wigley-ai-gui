@@ -15,6 +15,7 @@ import type { Roster, RosterSkill } from '../../agents/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, SkillListInput } from '../layouts/layout';
 import { createSkillList } from './skill-list';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const SESSION = 'row-1';
 
@@ -57,8 +58,13 @@ function setUp(skills: RosterSkill[] = []) {
         ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: (message) => logged.push(message),
     nameOf: () => 'proj',
@@ -70,7 +76,7 @@ function setUp(skills: RosterSkill[] = []) {
   const build = () => list.part.build(asHtml(parent), SESSION, section);
   const changeSkills = (next: RosterSkill[]) => {
     current = rosterOf(next);
-    list.rosterChanged(SESSION);
+    list.rosterUpdated(SESSION);
   };
   return { list, parent, summaries, logged, build, changeSkills };
 }
@@ -150,7 +156,7 @@ describe('skill list', () => {
     expect(summaries.at(-1)).toBe('1');
   });
 
-  it('rosterChanged_SkillAddedThenListEmptied_RedrawsAndLogsEachText', () => {
+  it('rosterUpdated_SkillAddedThenListEmptied_RedrawsAndLogsEachText', () => {
     const { parent, summaries, logged, build, changeSkills } = setUp([
       MAIN_FOO,
     ]);
@@ -174,7 +180,7 @@ describe('skill list', () => {
 
   // Each subagent tool call changes the roster; a redraw would close a row's
   // open tooltip.
-  it('rosterChanged_OnlySubagentSkillsDiffer_KeepsTheDrawnList', () => {
+  it('rosterUpdated_OnlySubagentSkillsDiffer_KeepsTheDrawnList', () => {
     const { parent, logged, build, changeSkills } = setUp([MAIN_FOO]);
     build();
     const drawn = parent.children[0];

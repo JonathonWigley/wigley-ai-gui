@@ -1,8 +1,10 @@
 import type { Bridge } from '../../contracts/bridge';
-import type { CommandId } from '../../contracts/commands';
 import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
-import type { Log } from '../../contracts/log';
+import type { EditorHost } from '../../contracts/editor';
+import type { FuzzyMatcher } from '../../contracts/fuzzy';
+import type { ListPickerService } from '../../contracts/list-picker';
+import type { Log, PluginLog } from '../../contracts/log';
 import type {
   FocusTarget,
   OuterPanes,
@@ -13,6 +15,7 @@ import type {
   AreaName,
   ChannelShape,
   DependencyKey,
+  KeyHints,
   PageChannel,
   Modes,
   PageApi,
@@ -29,22 +32,40 @@ import type { AppConfig } from '../../contracts/settings';
 import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
+import { keysFor } from '../../shared/keys-for';
+import { createListPicker } from '../../shared/page/list-picker';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
-import { qualify } from '../../shared/plugin-manifests';
+import {
+  commandLabel,
+  qualify,
+  requireDeclaredScope,
+} from '../../shared/plugin-manifests';
 import {
   trackedEditor,
   trackedMarkdown,
 } from '../../shared/plugin-service-views';
+import { createRegistrations } from '../../shared/registrations';
+import {
+  layoutState,
+  pluginState,
+  type SlotStore,
+} from '../../shared/state/slot-store';
+import type { RuntimeCommands } from '../../shared/runtime-commands';
 import { trackedTimers } from '../../shared/tracked-timers';
+import type { BoxFocus } from '../box-focus';
+import type { Anchors } from '../key-anchors';
 import type { ScopeStack } from '../key-scope';
-import type { LiveConfig } from '../live-config';
+import { type LiveConfig, onChangedPart } from '../live-config';
 import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
 
-// The services the page core hands the plugin APIs: each plugin's `uiState` and
-// scoped `log` are made from these, `log` being the core's own.
-export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
+// The services the page core hands the plugin APIs: each plugin's `uiState`,
+// `picker` and scoped `log` are made from these, `log` being the core's own.
+export type PageApiServices = Omit<
+  PageServices,
+  'uiState' | 'log' | 'picker'
+> & {
   log: Log;
 };
 
@@ -61,7 +82,10 @@ export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
 // layouts. `paneTargets` takes the resize and focus targets and the outer panes
 // a plugin hands the pane commands, and releases them. `drops` is the page's one
 // drop registry. `registrations` is the part's own store, which the host
-// disposes when the part stops.
+// disposes when the part stops. `state` is the page load's slot store, and
+// `commands` the page's commands, which each plugin reaches under its id.
+// `anchors` holds every key hint of the page load, and `boxFocus` tells whether
+// focus is in a text box.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -73,7 +97,7 @@ export interface PageApiDeps {
   config: LiveConfig;
   services: PageApiServices;
   uiState: { scoped(prefix: string): UiState };
-  run(id: CommandId, context?: PageCommandContext): void;
+  commands: RuntimeCommands<PageCommandContext<any>>;
   dependency(pluginId: string): unknown;
   registrations: Registrations;
   bus: EventBus;
@@ -83,6 +107,19 @@ export interface PageApiDeps {
     'setResizeTarget' | 'setFocusTarget' | 'setOuterPanes' | 'release'
   >;
   drops: PageDrops;
+  state: SlotStore;
+  anchors: Anchors;
+  boxFocus: BoxFocus;
+}
+
+// `KeyHints['keysFor']` over the config served now, read at each call.
+export function liveKeysFor(
+  config: Pick<LiveConfig, 'current'>,
+): KeyHints['keysFor'] {
+  return (command, scope, where, arg) => {
+    const { keymap, platform } = config.current();
+    return keysFor(keymap, command, scope, platform.os, where, arg);
+  };
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
@@ -95,6 +132,7 @@ export interface PageApiDeps {
 // Every registration it makes through the API is filed in
 // `deps.registrations`. Editors, timers, pane targets and the transparency
 // override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
+// `services.picker` builds lists under its scopes, log, editor and overlay;
 // `services.visualFrames`, `services.markup` and `uiState` are not recorded,
 // and the plugin closes what it opens through them.
 export function createPageApi(
@@ -105,8 +143,14 @@ export function createPageApi(
   const settingsOf = (served: AppConfig) => served.pluginSettings[manifest.id];
   const channel = pageChannel(manifest.id, deps.bridge);
   const events = pluginEvents(deps.bus, manifest.id, deps.services.log);
+  const track = <T extends Disposable>(handle: T) =>
+    registrations.track(handle);
+  const pluginCommands = deps.commands.forPlugin(manifest.id, track);
+  const areas = pluginAreas(deps.areas, registrations);
+  const log = pluginLog(deps.services.log, manifest.id);
+  const editor = trackedEditor(deps.services.editor, registrations);
   return {
-    areas: pluginAreas(deps.areas, registrations),
+    areas,
     channel: {
       invoke: channel.invoke,
       on: (message, listener) =>
@@ -125,8 +169,6 @@ export function createPageApi(
           registrations,
         ),
       scope: () => deps.scopeStack.current(),
-      onScopeChanged: (listener) =>
-        registrations.track(deps.scopeStack.onChange(listener)),
       onPending: (listener) =>
         registrations.track(deps.pendingKeys.onPending(listener)),
       holdPending: () => deps.pendingKeys.hold(),
@@ -136,11 +178,19 @@ export function createPageApi(
         registrations.track(
           onChangedPart(config, (served) => served.keymap, listener),
         ),
-      label: (id) => config.current().commands[id]?.label ?? id,
+      label: (id) => commandLabel(config.current().commands, id),
       command: (id) => config.current().commands[id],
       get scopes() {
         return config.current().scopes;
       },
+      bind: pluginCommands.bind,
+      keysFor: liveKeysFor(config),
+      anchor: (element, command, options) =>
+        track(deps.anchors.anchor(element, command, options)),
+      where: () => deps.boxFocus.where(),
+      onWhereChanged: (listener) => track(deps.boxFocus.onChanged(listener)),
+      setHintsShown: (shown) => track(deps.anchors.holdShown(shown)),
+      placedIn: (scope) => deps.anchors.placedIn(scope),
     },
     modes: {
       add: (mode) =>
@@ -148,8 +198,6 @@ export function createPageApi(
           deps.modes.add({ ...mode, id: qualify(manifest.id, mode.id) }),
         ),
       shown: () => deps.modes.shown(),
-      onChanged: (listener) =>
-        registrations.track(deps.modes.onChanged(listener)),
     },
     shell: {
       setLayout: (layout) => registrations.track(deps.setLayout(layout)),
@@ -164,11 +212,19 @@ export function createPageApi(
     onSettingsChanged: (listener) =>
       registrations.track(onChangedPart(config, settingsOf, listener)),
     platform: config.current().platform,
-    commands: { run: deps.run },
+    commands: pluginCommands.commands,
     services: {
       ...deps.services,
-      log: pluginLog(deps.services.log, manifest.id),
-      editor: trackedEditor(deps.services.editor, registrations),
+      log,
+      editor,
+      picker: pluginPicker(manifest, {
+        scopeStack: deps.scopeStack,
+        log,
+        matcher: deps.services.fuzzy,
+        editor,
+        overlay: areas.overlay,
+        registrations,
+      }),
       markdown: trackedMarkdown(deps.services.markdown, registrations),
       timers: trackedTimers(deps.services.timers, registrations),
       uiState: deps.uiState.scoped(manifest.id),
@@ -180,22 +236,11 @@ export function createPageApi(
       show: (options) =>
         registrations.track(deps.layouts.show(manifest.id, options)),
     },
+    state: {
+      ...pluginState(deps.state, manifest.id, 'page', track),
+      forLayouts: layoutState(deps.state, manifest.id, track),
+    },
   };
-}
-
-// Calls `listener` with the part of each new config `part` reads, only when
-// it differs from the previous config's, compared as JSON.
-function onChangedPart<T>(
-  config: LiveConfig,
-  part: (served: AppConfig) => T,
-  listener: (changed: T) => void,
-): Disposable {
-  return config.onChanged((next, previous) => {
-    const changed = part(next);
-    if (JSON.stringify(changed) !== JSON.stringify(part(previous))) {
-      listener(changed);
-    }
-  });
 }
 
 // A pushed scope the store forgets at its `pop`: the stack's `pop` throws on a
@@ -213,6 +258,49 @@ function trackedPushedScope(
     dispose: () => pushed.dispose(),
   };
   return registrations.track(view);
+}
+
+// One plugin's list pickers. `pushedScopes` is filed ahead of each list's close,
+// because the store disposes in reverse: the close pops the scope it holds, and
+// a second pop throws.
+function pluginPicker(
+  manifest: PluginManifest,
+  deps: {
+    scopeStack: ScopeStack;
+    log: PluginLog;
+    matcher: FuzzyMatcher;
+    editor: EditorHost;
+    overlay: Area;
+    registrations: Registrations;
+  },
+): ListPickerService {
+  return {
+    create({ scope = 'picker', filter = false, parent } = {}) {
+      const scopeName = typeof scope === 'string' ? () => scope : scope;
+      requireDeclaredScope(manifest, scopeName());
+      const pushedScopes = deps.registrations.track(createRegistrations());
+      const picker = createListPicker({
+        pushScope() {
+          const name = scopeName();
+          requireDeclaredScope(manifest, name);
+          return trackedPushedScope(
+            deps.scopeStack.push(qualify(manifest.id, name)),
+            pushedScopes,
+          );
+        },
+        log: deps.log,
+        matcher: deps.matcher,
+        filterEditor: filter ? deps.editor : undefined,
+      });
+      if (parent === undefined) {
+        deps.overlay.contribute(picker.element);
+      } else {
+        parent.append(picker.element);
+      }
+      deps.registrations.track({ dispose: () => picker.close() });
+      return picker;
+    },
+  };
 }
 
 // Keeps the last value this plugin handed each slot, and releases the non-null

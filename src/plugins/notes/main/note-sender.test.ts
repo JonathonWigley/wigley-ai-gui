@@ -73,6 +73,7 @@ async function setUp(options: {
   }
   const filed: FiledNote[] = [];
   const launched: LaunchRequest[] = [];
+  const emitted: [string, unknown][] = [];
   const sender = createNoteSender({
     store,
     images: options.encoder ?? fakeEncoder(new Uint8Array()),
@@ -96,14 +97,77 @@ async function setUp(options: {
     paths: posixPaths,
     homeDir: Promise.resolve(HOME),
     log: () => undefined,
+    emit: (event, data) => emitted.push([event, data]),
   });
   const saved = async () => parseDraft(await files.read('draft.json'));
-  return { store, sender, filed, launched, saved };
+  return { store, sender, filed, launched, saved, emitted };
 }
 
 function refusedWith(reason: string) {
   return async (): Promise<BacklogWriteResult> => ({ type: 'refused', reason });
 }
+
+describe('send events', () => {
+  const REPO = '/home/me/repo';
+  const APPEND: FollowupRequest = {
+    type: 'append',
+    path: `${ROOT}/followups.md`,
+    title: 'Gap',
+  };
+  const toSession = (note: Awaited<ReturnType<typeof setUp>>) =>
+    note.sender.toSession(REPO, []);
+  const toFollowup =
+    (request: FollowupRequest) => (note: Awaited<ReturnType<typeof setUp>>) =>
+      note.sender.toFollowup(request, []);
+
+  it.each([
+    {
+      case: 'a session send sent',
+      send: toSession,
+      options: {},
+      emitted: [['noteSent', { projectDir: REPO }]],
+    },
+    {
+      case: 'a session send refused',
+      send: toSession,
+      options: { defaultProfile: () => null },
+      emitted: [],
+    },
+    {
+      case: 'a session launch failing',
+      send: toSession,
+      options: { launch: () => Promise.reject(new Error('no')) },
+      emitted: [],
+    },
+    {
+      case: 'a new follow-up filed',
+      send: toFollowup(CREATE),
+      options: {},
+      emitted: [['noteFiled', { request: CREATE }]],
+    },
+    {
+      case: 'an append filed',
+      send: toFollowup(APPEND),
+      options: {},
+      emitted: [['noteFiled', { request: APPEND }]],
+    },
+    {
+      case: 'a follow-up refused',
+      send: toFollowup(CREATE),
+      options: { fileNote: refusedWith('no') },
+      emitted: [],
+    },
+  ])(
+    'send_Result_EmitsOnlySent ($case)',
+    async ({ send, options, emitted }) => {
+      const note = await setUp(options);
+
+      await send(note);
+
+      expect(note.emitted).toEqual(emitted);
+    },
+  );
+});
 
 describe('toSession', () => {
   it.each([

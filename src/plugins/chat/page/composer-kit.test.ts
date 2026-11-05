@@ -27,6 +27,7 @@ import { createChatLayouts } from './chat-layouts';
 import { createComposerSurface } from './composer-kit';
 import { createSignInPart } from './dialog-kits';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // Timers that run only when the test fires them, each armed one kept in
 // `armed`.
@@ -69,8 +70,13 @@ function surfaceDeps(user: ChatLayout | null) {
       ...NO_FENCES,
     },
     keys,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     platform: 'macos' as const,
+    state: noLayoutState,
     run: (command: CommandId) => {
       ran.push(command);
     },

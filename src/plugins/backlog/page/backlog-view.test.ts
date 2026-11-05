@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
@@ -21,12 +22,12 @@ import {
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogRead } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
 import { createBacklogView } from './backlog-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const ROOT = '/home/repo/docs/features';
 
@@ -143,10 +144,7 @@ async function backlogSetup() {
   const overlays: FakeElement[] = [];
   const recorded = recordingAnchors();
   const anchors = recorded.anchors;
-  const keys: KeysPageExports = {
-    ...recorded.keys,
-    onChanged: () => ({ dispose: () => undefined }),
-  };
+  const { keys } = recorded;
   const channel = {
     invoke: async (method: string) => (method === 'load' ? READ : ''),
   } as unknown as PageChannel<BacklogChannel>;
@@ -175,7 +173,12 @@ async function backlogSetup() {
     },
     keys,
     platform: 'macos',
-    commands: { exists: () => true, run: () => undefined },
+    state: noLayoutState,
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     tags: () => ['agent-ready', 'later'],
     openDoc: () => undefined,
     setScope: (scope) => calls.push(['setScope', scope]),
@@ -189,6 +192,11 @@ async function backlogSetup() {
       pop: () => undefined,
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
+    picker: fakeListPickerService({
+      place(element) {
+        overlays.push(asFake(element));
+      },
     }),
     addOverlay: (element) => {
       overlays.push(asFake(element));

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AnchorOptions } from '../../../../contracts/keymap';
 import type {
   DefectFinding,
   FindingChoice,
@@ -15,7 +16,12 @@ import { questionFormat } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound, question } from '../test-rounds';
 import type { LayoutAction } from '../../layouts/layout';
-import { choiceGroupsOf, createCardKit } from './card-kit';
+import {
+  baseKitDepsFor,
+  choiceGroupsOf,
+  createCardKit,
+  createFormsBaseKit,
+} from './card-kit';
 import {
   asFake,
   asHtml,
@@ -24,6 +30,7 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
@@ -148,7 +155,7 @@ function fakeCardDeps(contributions: FormsContributions) {
     command === 'demo.run' ? 'g d' : null,
   );
   const anchor = vi.fn(
-    (_element: HTMLElement, _command: string, _options?: unknown) => ({
+    (_element: HTMLElement, _command: string, _options?: AnchorOptions) => ({
       dispose: () => undefined,
     }),
   );
@@ -167,17 +174,18 @@ function fakeCardDeps(contributions: FormsContributions) {
     toggleDontAsk: vi.fn(),
     keys: { keysFor, anchor },
     platform: 'macos',
+    state: noLayoutState,
     log,
-    commands: { exists: (id) => id === 'demo.run', run },
+    commands: {
+      exists: (id) => id === 'demo.run',
+      argShape: () => undefined,
+      run,
+    },
     contributions,
+    recordAnchor: () => {},
     recordMount: () => {},
   };
   return { deps, keysFor, anchor, run, log };
-}
-
-// The commands `anchor` was called with, in call order.
-function anchoredCommands(anchor: ReturnType<typeof fakeCardDeps>['anchor']) {
-  return anchor.mock.calls.map(([, command]) => command);
 }
 
 function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
@@ -213,6 +221,29 @@ function recordingPart(id: string, kinds: ItemKind[], built: unknown[]) {
   };
   return part;
 }
+
+describe('baseKitDepsFor', () => {
+  it('baseKitDepsFor_RecordsSubscriptionThroughDeps', () => {
+    const handle = { dispose: () => undefined };
+    const recorded: unknown[] = [];
+    const kit = createFormsBaseKit(
+      baseKitDepsFor(
+        {
+          ...fakeCardDeps(createFormsContributions()).deps,
+          state: {
+            read: () => ({ get: () => undefined, on: () => handle }),
+          },
+          recordAnchor: (anchor) => recorded.push(anchor),
+        },
+        'forms.forms',
+      ),
+    );
+
+    kit.state.read('p.v').on(() => undefined);
+
+    expect(recorded).toEqual([handle]);
+  });
+});
 
 describe('card kit', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
@@ -375,7 +406,45 @@ describe('card kit', () => {
 
     expect(bound).toBe('g d');
     expect(unbound).toBeNull();
-    expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.forms');
+    expect(keysFor).toHaveBeenCalledWith(
+      'demo.run',
+      'forms.forms',
+      undefined,
+      undefined,
+    );
+  });
+
+  it('kitChoose_Arg_ReachesTheKeysAndTheAnchor', () => {
+    const { deps, keysFor, anchor } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    kit.keys('choose', 2);
+    const span = kit.keyHint(asHtml(new FakeElement('div')), 'choose', {
+      arg: 2,
+    });
+
+    expect(keysFor).toHaveBeenCalledWith(
+      'forms.choose',
+      'forms.forms',
+      undefined,
+      2,
+    );
+    expect(anchor).toHaveBeenCalledWith(span, 'forms.choose', {
+      scope: 'forms.forms',
+      arg: 2,
+    });
+  });
+
+  it('kitCommand_ChooseNeedsAnArg_ThrowsWhileThePartBuilds', () => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+    deps.commands = {
+      exists: () => true,
+      argShape: () => 'number',
+      run: deps.commands.run,
+    };
+    const { kit } = findingKit(deps);
+
+    expect(() => kit.command('forms.choose')).toThrow('forms.choose');
   });
 
   it('kitKeyHint_NamedCommand_AnchorsInTheCardScope', () => {
@@ -429,11 +498,10 @@ describe('card kit', () => {
 
     kit.choiceList(asHtml(new FakeElement('div')), 'none');
 
-    expect(
-      anchoredCommands(anchor).filter((command) =>
-        command.startsWith('forms.choose'),
-      ),
-    ).toEqual(['forms.choose1', 'forms.choose2']);
+    const chooseArgs = anchor.mock.calls
+      .filter(([, command]) => command === 'forms.choose')
+      .map(([, , options]) => options?.arg);
+    expect(chooseArgs).toEqual([1, 2]);
   });
 
   it('clearButton_Click_FocusesTheItemThenClears', () => {

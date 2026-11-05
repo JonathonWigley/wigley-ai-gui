@@ -5,6 +5,7 @@ import type {
   DependencyKey,
   DriveHost,
   MainApi,
+  MainCommandContext,
   MainServices,
   PluginManifest,
   SelfTestHost,
@@ -19,6 +20,8 @@ import {
   trackedUserConfig,
 } from '../../shared/plugin-service-views';
 import { scopedFiles } from '../../shared/scoped-files';
+import type { RuntimeCommands } from '../../shared/runtime-commands';
+import { pluginState, type SlotStore } from '../../shared/state/slot-store';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
@@ -38,7 +41,8 @@ export type MainApiServices = Omit<MainServices, 'selfTest' | 'log'> & {
 // store, which the host disposes when the part stops; `bus` is shared by every
 // main part; `dataRoot` is the absolute folder that holds a folder per plugin,
 // named by its id; `layouts` is the core layouts service, which each plugin
-// reaches under its id.
+// reaches under its id; `state` is the store of main's slot holder; `commands`
+// is main's commands, which each plugin reaches under its id.
 export interface MainApiDeps {
   channels: PluginChannels;
   pluginSettings(): Record<string, object>;
@@ -53,6 +57,8 @@ export interface MainApiDeps {
   bus: EventBus;
   dataRoot: string;
   layouts: LayoutService;
+  state: SlotStore;
+  commands: RuntimeCommands<MainCommandContext<any>>;
 }
 
 // One plugin's main API. `services.log` is scoped to its id. Every registration
@@ -71,6 +77,9 @@ export function createMainApi(
   const channel = deps.channels.forPlugin(manifest.id);
   const events = pluginEvents(deps.bus, manifest.id, deps.services.log);
   const files = trackedFiles(deps.services.files, registrations);
+  const pluginCommands = deps.commands.forPlugin(manifest.id, (handle) =>
+    registrations.track(handle),
+  );
   return {
     channel: {
       handle: (method, handler) =>
@@ -125,6 +134,11 @@ export function createMainApi(
         ),
       names: () => deps.layouts.names(manifest.id),
     },
+    state: pluginState(deps.state, manifest.id, 'main', (handle) =>
+      registrations.track(handle),
+    ),
+    commands: pluginCommands.commands,
+    keys: { bind: pluginCommands.bind },
   };
 }
 

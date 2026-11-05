@@ -250,4 +250,36 @@ describe('whichKeyModel', () => {
       { keys: 'k', label: '+panes', kind: 'prefix' },
     ]);
   });
+
+  it('whichKeyModel_FormsChooseDigits_OneMergedLine', () => {
+    const scope = 'forms.forms';
+    const map = keymap(
+      ['1', '2', '3'].map((digit) => ({
+        keys: [' ', digit],
+        scope,
+        command: 'forms.choose',
+        arg: Number(digit),
+      })),
+    );
+    const choose = (id: string): CommandInfo => ({
+      id,
+      plugin: 'forms',
+      label: 'pick a choice',
+      group: 'choices',
+      runsIn: 'page',
+      arg: 'number',
+    });
+
+    const model = whichKeyModel(
+      { where: 'page', keys: [' '], scope },
+      map,
+      choose,
+      () => 'pick a choice',
+      'macos',
+    );
+
+    expect(model?.entries).toEqual([
+      { keys: '1–3', label: 'pick a choice', kind: 'command' },
+    ]);
+  });
 });

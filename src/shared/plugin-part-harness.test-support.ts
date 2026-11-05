@@ -2,17 +2,26 @@ import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
 import type { AppInstance } from '../contracts/app-instance';
+import type { CommandId } from '../contracts/commands';
+import {
+  coreModeSlot,
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+  type RuntimeCatalog,
+} from '../contracts/core-state';
 import type { Disposable, Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
 import type { FuzzyMatcher } from '../contracts/fuzzy';
+import type { ListPickerService } from '../contracts/list-picker';
 import type { Git } from '../contracts/git';
 import type { ImageEncoder } from '../contracts/images';
-import type { Keymap } from '../contracts/keymap';
+import type { AnchorOptions, HintWhere, Keymap } from '../contracts/keymap';
 import type {
   FenceContribution,
   MarkdownRenderer,
 } from '../contracts/markdown';
+import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
 import type {
   AreaName,
@@ -25,19 +34,22 @@ import type {
   MainPart,
   MainServices,
   MainStart,
+  Mode,
   ModeHandle,
-  Modes,
   PageApi,
+  PageModes,
   PagePart,
   PageServices,
   PageStart,
   PluginManifest,
+  PluginState,
   ProcessName,
   PushedScope,
   ShownLayouts,
   UntypedEvents,
 } from '../contracts/plugin';
 import type { SessionHost } from '../contracts/session-host';
+import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -49,9 +61,17 @@ import { fakeDriveHost } from './fake-drive-host';
 import { createListeners, type Listeners } from './listeners';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
+import { fakePlatform } from './platform.test-support';
+import { commandTarget } from './command-args';
+import { keysFor } from './keys-for';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
-import { qualify } from './plugin-manifests';
+import { createLatestHold } from './latest-hold';
+import {
+  commandInfos,
+  qualify,
+  requireDeclaredScope,
+} from './plugin-manifests';
 import {
   abortableProcesses,
   trackedAlerts,
@@ -60,7 +80,17 @@ import {
   trackedMarkdown,
   trackedUserConfig,
 } from './plugin-service-views';
+import {
+  createRuntimeCommands,
+  type RuntimeCommands,
+} from './runtime-commands';
 import { scopedFiles } from './scoped-files';
+import {
+  createSlotStore,
+  layoutState,
+  pluginState,
+  type SlotStore,
+} from './state/slot-store';
 import { trackedTimers } from './tracked-timers';
 
 // A provider the part under test depends on, faked: `exports` gets a consumer
@@ -97,12 +127,23 @@ export const noCounts: Readonly<PartCounts> = {
   frames: 0,
 };
 
+export interface HarnessCommandRun {
+  id: CommandId;
+  arg: unknown;
+}
+
 // `started` throws while the part is stopped. `restart` stops a started part and
 // starts it again on a new host with the same fakes and the same counts, so what
 // a leaky `dispose` left stays counted. `advance` runs the due timers in due
 // order, the clock reading each one's due time, and ends `ms` later. `emitted`
 // holds what any started part emitted, in order, under its qualified name; it
-// outlives the stop, so a test reads there what a late read emitted.
+// outlives the stop, so a test reads there what a late read emitted. `state` is
+// the store every part of the harness shares, across stops and restarts. A test
+// writes a slot through `state.publish(key).set(value)`: that claim is held until
+// the writer's `dispose` and `counts` does not hold it, so a test publishes each
+// key once and disposes the writer of a key the part under test publishes before
+// that part starts. `commandRuns` holds each run sent to the other process, in
+// order, under its qualified id.
 export interface PartHarness<Started> {
   started(): Started;
   counts(): PartCounts;
@@ -110,6 +151,8 @@ export interface PartHarness<Started> {
   emit(qualifiedEvent: string, data: unknown): void;
   readonly logs: readonly { source: string; message: string }[];
   readonly emitted: readonly HarnessEvent[];
+  readonly state: SlotStore;
+  readonly commandRuns: readonly HarnessCommandRun[];
   stop(): Promise<void>;
   restart(): Promise<void>;
 }
@@ -126,10 +169,21 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   readonly sent: readonly { message: string; data: unknown }[];
 }
 
+export interface HarnessAnchor {
+  element: HTMLElement;
+  command: CommandId;
+  options: AnchorOptions;
+}
+
 // `send` tells the channel listeners of the part under test. `fireWindow` calls
 // each live `window` listener of `type` in added order, with `{ type }` when
 // `event` is left out. `fences` holds the fences live through the default
-// `services.markdown`.
+// `services.markdown`. `anchors` holds each anchor named through the fake
+// `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
+// tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
+// `pushSettings` replaces what `settings()` reads for the part under test and tells
+// its `onSettingsChanged` listeners. The fake `modes` writes `coreModeSlot` on each
+// change of the shown mode, unless a test holds that slot's claim.
 export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   PageStart<M>
 > {
@@ -137,33 +191,42 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   fireWindow(type: string, event?: unknown): void;
   showLayouts(shown: ShownLayouts<unknown>): void;
   pushKeymap(keymap: Keymap): void;
+  pushSettings(settings: M['settings']): void;
   readonly fences: readonly FenceContribution[];
+  readonly anchors: readonly HarnessAnchor[];
+  setWhere(where: HintWhere): void;
+  hintsShown(): boolean;
 }
 
 // `services` replaces the named default services, and a replaced service counts
 // nothing. A replaced `files`, `processes`, `alerts` or `userConfig` still runs
 // through its per-plugin view, as `createMainApi` does. `parts` holds real
 // providers, started before the part in listed order and stopped after it.
+// `state` replaces the harness's own slot store, to seed a slot before the start.
 export interface MainPartHarnessOptions<M extends PluginManifest> {
   dependencies?: readonly FakeDependency<'main'>[];
   settings?: M['settings'];
   services?: Partial<Omit<MainServices, 'timers' | 'log'>>;
   drive?: boolean;
   parts?: readonly MainPart[];
+  state?: SlotStore;
 }
 
 // `invoke` answers the `channel.invoke` of the part under test, which otherwise
 // never settles. A replaced `editor` or `markdown` still runs through its
 // per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
-// added. `parts` is as on main.
+// added. `parts` and `state` are as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
+  // Runs at each fake anchor's `dispose`, to make one throw.
+  anchorDispose?(): void;
   dependencies?: readonly FakeDependency<'page'>[];
   settings?: M['settings'];
   services?: Partial<Omit<PageServices, 'timers' | 'log'>>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
   firstModeTaken?: boolean;
   parts?: readonly PagePart[];
+  state?: SlotStore;
 }
 
 export interface HarnessEvent {
@@ -182,6 +245,9 @@ interface HarnessWorld {
   bus: EventBus;
   logs: HarnessLogLine[];
   emitted: HarnessEvent[];
+  state: SlotStore;
+  commandRuns: HarnessCommandRun[];
+  commands: RuntimeCommands<any>;
 }
 
 interface Scheduler {
@@ -227,6 +293,7 @@ interface CommonApi {
   log: MainServices['log'];
   timers: Timers;
   clock: { now(): number };
+  state: PluginState<PluginManifest, ProcessName>;
 }
 
 function zeroCounts(): PartCounts {
@@ -308,12 +375,65 @@ function countingTimers(scheduler: Scheduler, counts: PartCounts): Timers {
   };
 }
 
-function createWorld(): HarnessWorld {
+// Takes the catalog slot's claim at its first write, so a test that publishes a slot
+// or shares a store with another harness meets no clash until a part writes.
+function lazyCatalogWriter(
+  store: SlotStore,
+  key: SlotKey<RuntimeCatalog>,
+): SlotWriter<RuntimeCatalog> {
+  let writer: SlotWriter<RuntimeCatalog> | null = null;
+  const reader = store.read(key, 'core');
+  return {
+    get: () => reader.get(),
+    set(value) {
+      writer ??= store.publish(key);
+      writer.set(value);
+    },
+    dispose() {
+      writer?.dispose();
+    },
+  };
+}
+
+// What every part of the harness runs commands on: a real registry and router over
+// the commands `manifests` declare and the catalog slots. A run sent to the other
+// process joins `commandRuns`.
+function createWorld(
+  state: SlotStore | undefined,
+  process: ProcessName,
+  manifests: readonly PluginManifest[],
+): HarnessWorld {
+  const logs: HarnessLogLine[] = [];
+  const log: Log = (source, message) => {
+    logs.push({ source, message });
+  };
+  const store = state ?? createSlotStore(log);
+  const commandRuns: HarnessCommandRun[] = [];
+  const registry = new CommandRegistry<any>(log);
+  const declared = commandInfos({}, manifests);
+  const [ownKey, otherKey] =
+    process === 'main'
+      ? [coreRuntimeMainSlot, coreRuntimePageSlot]
+      : [coreRuntimePageSlot, coreRuntimeMainSlot];
   return {
     scheduler: createScheduler(),
     bus: createEventBus(),
-    logs: [],
+    logs,
     emitted: [],
+    state: store,
+    commandRuns,
+    commands: createRuntimeCommands<any>({
+      process,
+      registry,
+      writer: lazyCatalogWriter(store, ownKey),
+      other: store.read(otherKey, 'core'),
+      served: () => declared,
+      leader: () => ' ',
+      remote(id, arg) {
+        commandRuns.push({ id, arg });
+        return Promise.resolve();
+      },
+    }),
   };
 }
 
@@ -323,6 +443,7 @@ function commonApi(
   world: HarnessWorld,
   counts: PartCounts,
   settings: object,
+  process: ProcessName,
 ): CommonApi {
   const register = <T extends Disposable>(handle: T): T =>
     context.registrations.track(countedHandle(handle, counts));
@@ -359,6 +480,41 @@ function commonApi(
       context.registrations,
     ),
     clock: { now: world.scheduler.now },
+    state: pluginState(world.state, manifest.id, process, register),
+  };
+}
+
+// `picker` checking each scope against `manifest` as the page service does: at
+// the `create` for a string or a function's first value, at the push for a
+// function's later value.
+function scopeCheckedPicker(
+  manifest: PluginManifest,
+  picker: ListPickerService,
+): ListPickerService {
+  return {
+    ...picker,
+    create(options = {}) {
+      const { scope = 'picker' } = options;
+      const scopeName = typeof scope === 'string' ? () => scope : scope;
+      requireDeclaredScope(manifest, scopeName());
+      return picker.create({
+        ...options,
+        scope: () => {
+          const name = scopeName();
+          requireDeclaredScope(manifest, name);
+          return name;
+        },
+      });
+    },
+  };
+}
+
+// A service function that throws when called.
+function notFakedCall(name: string): () => never {
+  return () => {
+    throw new Error(
+      `part harness: services.${name} is not faked; pass it in options`,
+    );
   };
 }
 
@@ -412,6 +568,7 @@ function providerManifest(id: string): PluginManifest {
   return {
     id,
     dependsOn: { main: [], page: [] },
+    reads: { main: [], page: [] },
     commands: {},
     scopes: {},
     settings: {},
@@ -440,6 +597,7 @@ function partLifecycle<Started>(
   dependencies: readonly FakeDependency<ProcessName>[],
   realParts: readonly HostedPart[],
   counts: PartCounts,
+  commands: CommandRegistry<any>,
 ): PartLifecycle<Started> {
   let underTestStore: Registrations | null = null;
   const consumerView = (consumer: Registrations) =>
@@ -471,7 +629,6 @@ function partLifecycle<Started>(
     begin: () => ({ commands: {} }),
   }));
   const hosted = [...fakes, ...stubs, ...reals, underTest];
-  const commands = new CommandRegistry<never>();
   let host: PluginHost<HostedStart> | null = null;
 
   const lifecycle: PartLifecycle<Started> = {
@@ -486,6 +643,7 @@ function partLifecycle<Started>(
           const handle = commands.register(
             qualify(part.manifest.id, short),
             handler,
+            part.manifest.id,
           );
           context.registrations.track(
             isUnderTest ? countedHandle(handle, counts) : handle,
@@ -525,6 +683,8 @@ function baseHarness<Started>(
     emit: world.bus.emit,
     logs: world.logs,
     emitted: world.emitted,
+    state: world.state,
+    commandRuns: world.commandRuns,
     stop: lifecycle.stop,
     restart: lifecycle.restart,
   };
@@ -583,8 +743,10 @@ function countingWatches(files: Files, counts: PartCounts): Files {
 function createMainWorld(
   drive: boolean,
   replaced: MainWorld['replaced'],
+  state: SlotStore | undefined,
+  manifests: readonly PluginManifest[],
 ): MainWorld {
-  const world = createWorld();
+  const world = createWorld(state, 'main', manifests);
   let hexes = 0;
   let uuids = 0;
   return {
@@ -637,13 +799,23 @@ function fakeMainApi(
   record: MainRecord,
   settings: object,
 ): MainApi<PluginManifest, any, any, any> {
-  const common = commonApi(manifest, context, world, record.counts, settings);
+  const common = commonApi(
+    manifest,
+    context,
+    world,
+    record.counts,
+    settings,
+    'main',
+  );
   const { register } = common;
   const { handlers, sent, counts } = record;
   const { replaced } = world;
   const defaultFiles = countingWatches(world.files, counts);
   const partFiles = trackedFiles(defaultFiles, context.registrations);
+  const pluginCommands = world.commands.forPlugin(manifest.id, register);
   return {
+    commands: pluginCommands.commands,
+    keys: { bind: pluginCommands.bind },
     channel: {
       handle(method, handler) {
         if (handlers.has(method)) {
@@ -679,6 +851,7 @@ function fakeMainApi(
       register: () => fakeLayoutsRegister(manifest, record, register),
       names: () => ['default'],
     },
+    state: common.state,
     services: {
       clock: common.clock,
       randomHex: world.randomHex,
@@ -686,12 +859,13 @@ function fakeMainApi(
       homeDir: '/home',
       tempFolders: [],
       paths: posixPaths,
-      platform: 'macos',
+      platform: fakePlatform('macos'),
       runMode: 'selfTest',
       selfTest: null,
       appInstance: DEV_APP,
       window: {
         show() {},
+        summon: () => false,
         isFocused: () => false,
         chooseFolder: async () => null,
         capture: () =>
@@ -733,7 +907,12 @@ export function startMainPart<M extends PluginManifest>(
   const realParts = options.parts ?? [];
   requireFakesListed(part.manifest, 'main', dependencies);
   requireNoFakeIsReal(dependencies, realParts);
-  const world = createMainWorld(options.drive === true, options.services ?? {});
+  const world = createMainWorld(
+    options.drive === true,
+    options.services ?? {},
+    options.state,
+    [part.manifest, ...realParts.map(({ manifest }) => manifest)],
+  );
   const record = newMainRecord();
   const beginOn = (
     each: { manifest: PluginManifest; start(api: never): HostedStart },
@@ -760,6 +939,7 @@ export function startMainPart<M extends PluginManifest>(
       beginOn(real, newMainRecord(), real.manifest.settings),
     ),
     record.counts,
+    world.commands.registry,
   );
   lifecycle.start();
   return {
@@ -786,10 +966,13 @@ interface PageRecord {
   channelListeners: Map<string, Listeners<unknown>>;
   shows: Listeners<ShownLayouts<unknown>>;
   uiState: Map<string, unknown>;
+  settings: object;
+  settingsListeners: Listeners<object>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
 }
 
 function newPageRecord(
+  settings: object,
   counts: PartCounts = zeroCounts(),
   invoke?: PageRecord['invoke'],
 ): PageRecord {
@@ -798,8 +981,16 @@ function newPageRecord(
     channelListeners: new Map(),
     shows: createListeners(),
     uiState: new Map(),
+    settings,
+    settingsListeners: createListeners(),
     invoke,
   };
+}
+
+// A mode the fake registry holds: its qualified id and the calls it hears.
+interface FakeLiveMode {
+  id: string;
+  mode: Pick<Mode, 'shown' | 'hidden'>;
 }
 
 // What every page part of one harness shares: the page core's single slots.
@@ -809,17 +1000,32 @@ interface PageWorld extends HarnessWorld {
   keymap: Keymap;
   scope: string;
   transparency: 'full' | 'reduced' | null;
-  // The qualified ids of the live modes, in add order; the first one shows.
-  liveModes: string[];
+  // The live modes in add order, and the shown one.
+  liveModes: FakeLiveMode[];
+  shownMode: FakeLiveMode | null;
   fences: FenceContribution[];
+  anchors: HarnessAnchor[];
+  where: HintWhere;
+  whereListeners: Listeners<HintWhere>;
+  hintsShown: boolean;
+  hintsHold: { hold(shown: boolean): Disposable };
+  anchorDispose?(): void;
 }
 
 function createPageWorld(
   replaced: PageWorld['replaced'],
   firstModeTaken: boolean,
+  state: SlotStore | undefined,
+  manifests: readonly PluginManifest[],
 ): PageWorld {
-  return {
-    ...createWorld(),
+  const firstMode: FakeLiveMode | null = firstModeTaken
+    ? {
+        id: 'part-harness.first-mode',
+        mode: { shown() {}, hidden() {} },
+      }
+    : null;
+  const world: PageWorld = {
+    ...createWorld(state, 'page', manifests),
     replaced,
     keymapListeners: createListeners(),
     keymap: {
@@ -832,9 +1038,19 @@ function createPageWorld(
     },
     scope: 'idle',
     transparency: null,
-    liveModes: firstModeTaken ? ['part-harness.first-mode'] : [],
+    liveModes: firstMode === null ? [] : [firstMode],
+    shownMode: firstMode,
     fences: [],
+    anchors: [],
+    where: 'page',
+    whereListeners: createListeners(),
+    hintsShown: true,
+    hintsHold: createLatestHold<boolean>(true, (shown) => {
+      world.hintsShown = shown;
+    }),
   };
+  tellShownMode(world.state, firstMode?.id ?? '');
+  return world;
 }
 
 function fakePushedScope(
@@ -857,46 +1073,85 @@ function fakePushedScope(
   return common.register(pushed);
 }
 
+// Writes `coreModeSlot` as the page core does on each change, unless a test holds
+// the slot's claim to write it itself.
+function tellShownMode(state: SlotStore, modeId: string): void {
+  if (state.isHeld(coreModeSlot.id)) {
+    return;
+  }
+  const writer = state.publish(coreModeSlot);
+  writer.set(modeId);
+  writer.dispose();
+}
+
+function revealFakeMode(world: PageWorld, entry: FakeLiveMode): void {
+  world.shownMode = entry;
+  entry.mode.shown();
+  tellShownMode(world.state, entry.id);
+}
+
+// The registry of `createModes` without its DOM: the side bar stays hidden and no
+// element's `hidden` changes.
 function fakeModes(
   manifest: PluginManifest,
-  { liveModes }: PageWorld,
+  world: PageWorld,
   common: CommonApi,
-): Modes {
+): PageModes {
+  const { liveModes } = world;
   return {
     add(mode) {
       const id = qualify(manifest.id, mode.id);
-      if (liveModes.includes(id)) {
+      if (liveModes.some((live) => live.id === id)) {
         throw new Error(`Mode "${id}" is added twice`);
       }
-      const isFirst = liveModes.length === 0;
-      liveModes.push(id);
+      const entry: FakeLiveMode = { id, mode };
+      liveModes.push(entry);
+      const isDisposed = () => !liveModes.includes(entry);
       const handle: ModeHandle = common.register({
-        show() {},
-        isShown: () => liveModes[0] === id,
+        show() {
+          if (world.shownMode === entry || isDisposed()) {
+            return;
+          }
+          world.shownMode?.mode.hidden();
+          revealFakeMode(world, entry);
+        },
+        isShown: () => world.shownMode === entry,
         setContext() {},
         toggleSideBar() {
-          if (mode.sideBar === undefined && liveModes.includes(id)) {
+          if (mode.sideBar === undefined && !isDisposed()) {
             throw new Error(`Mode "${id}" has no side bar`);
           }
         },
         picked() {},
         sideBarShown: () => false,
         dispose() {
-          liveModes.splice(liveModes.indexOf(id), 1);
+          if (isDisposed()) {
+            return;
+          }
+          liveModes.splice(liveModes.indexOf(entry), 1);
+          if (world.shownMode !== entry) {
+            return;
+          }
+          world.shownMode = null;
+          const [first] = liveModes;
+          if (first === undefined) {
+            tellShownMode(world.state, '');
+          } else {
+            revealFakeMode(world, first);
+          }
         },
       });
-      if (isFirst) {
-        mode.shown();
+      if (world.shownMode === null) {
+        revealFakeMode(world, entry);
       }
       return handle;
     },
     shown() {
-      if (liveModes.length === 0) {
+      if (world.shownMode === null) {
         throw new Error('part harness: no mode is live');
       }
-      return liveModes[0];
+      return world.shownMode.id;
     },
-    onChanged: common.liveHandle,
   };
 }
 
@@ -974,11 +1229,18 @@ function fakePageApi(
   context: PartContext,
   world: PageWorld,
   record: PageRecord,
-  settings: object,
 ): PageApi<PluginManifest, any, any, any> {
-  const common = commonApi(manifest, context, world, record.counts, settings);
+  const common = commonApi(
+    manifest,
+    context,
+    world,
+    record.counts,
+    record.settings,
+    'page',
+  );
   const { register, liveHandle } = common;
   const { replaced } = world;
+  const pluginCommands = world.commands.forPlugin(manifest.id, register);
   const area = {
     contribute: liveHandle,
   };
@@ -1010,7 +1272,6 @@ function fakePageApi(
       pushScope: (scope) =>
         fakePushedScope(qualify(manifest.id, scope), common),
       scope: () => world.scope,
-      onScopeChanged: liveHandle,
       onPending: liveHandle,
       holdPending() {},
       cancelPending() {},
@@ -1020,6 +1281,25 @@ function fakePageApi(
       label: (id) => id,
       command: (id) => ownCommand(manifest, id),
       scopes: [],
+      bind: pluginCommands.bind,
+      keysFor: (command, scope, where, arg) =>
+        keysFor(world.keymap, command, scope, 'macos', where, arg),
+      anchor(element, command, options = {}) {
+        world.anchors.push({ element, command, options });
+        return register<Disposable>({
+          dispose: world.anchorDispose ?? (() => undefined),
+        });
+      },
+      where: () => world.where,
+      onWhereChanged: (listener) =>
+        register(world.whereListeners.add(listener)),
+      setHintsShown: (shown) => register(world.hintsHold.hold(shown)),
+      placedIn: (scope) =>
+        new Set(
+          world.anchors
+            .filter(({ options }) => [scope, undefined].includes(options.scope))
+            .map(({ command, options }) => commandTarget(command, options.arg)),
+        ),
     },
     modes: fakeModes(manifest, world, common),
     shell: { setLayout: liveHandle },
@@ -1035,10 +1315,11 @@ function fakePageApi(
       setOuterPanes() {},
     },
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
-    settings: common.settings,
-    onSettingsChanged: common.onSettingsChanged,
-    platform: 'macos',
-    commands: { run() {} },
+    settings: () => record.settings,
+    onSettingsChanged: (listener) =>
+      register(record.settingsListeners.add(listener)),
+    platform: fakePlatform('macos'),
+    commands: pluginCommands.commands,
     dependency: common.dependency as PageApi<
       PluginManifest,
       any,
@@ -1050,8 +1331,14 @@ function fakePageApi(
       show: (options) =>
         fakeLayoutShow(record.shows, options.setLayouts, register),
     },
+    state: {
+      ...common.state,
+      forLayouts: layoutState(world.state, manifest.id, register),
+    },
     services: {
       fuzzy: notFaked<FuzzyMatcher>('fuzzy'),
+      chooseFolder: notFakedCall('chooseFolder'),
+      openExternal: notFakedCall('openExternal'),
       markup: notFaked<MarkupEditor>('markup'),
       visualFrames: notFaked<VisualFrames>('visualFrames'),
       toast(text, tone) {
@@ -1075,6 +1362,10 @@ function fakePageApi(
         },
       },
       ...replaced,
+      picker:
+        replaced.picker === undefined
+          ? notFaked<ListPickerService>('picker')
+          : scopeCheckedPicker(manifest, replaced.picker),
       editor:
         replaced.editor === undefined
           ? notFaked<EditorHost>('editor')
@@ -1234,39 +1525,46 @@ export function startPagePart<M extends PluginManifest>(
   const world = createPageWorld(
     options.services ?? {},
     options.firstModeTaken === true,
+    options.state,
+    [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
-  const record = newPageRecord(zeroCounts(), options.invoke);
+  world.anchorDispose = options.anchorDispose;
+  const record = newPageRecord(
+    options.settings ?? part.manifest.settings,
+    zeroCounts(),
+    options.invoke,
+  );
   const fireWindowListeners = stubPageGlobals(record.counts);
   const beginOn = (
     each: { manifest: PluginManifest; start(api: never): HostedStart },
     partRecord: PageRecord,
-    settings: object,
   ): HostedPart => ({
     manifest: each.manifest,
     begin: (context) =>
       each.start(
-        fakePageApi(
-          each.manifest,
-          context,
-          world,
-          partRecord,
-          settings,
-        ) as never,
+        fakePageApi(each.manifest, context, world, partRecord) as never,
       ),
   });
   const lifecycle = partLifecycle<PageStart<M>>(
     'page',
-    beginOn(part, record, options.settings ?? part.manifest.settings),
+    beginOn(part, record),
     dependencies,
     realParts.map((real) =>
-      beginOn(real, newPageRecord(), real.manifest.settings),
+      beginOn(real, newPageRecord(real.manifest.settings)),
     ),
     record.counts,
+    world.commands.registry,
   );
   lifecycle.start();
   return {
     ...baseHarness(lifecycle, world, record.counts),
     fences: world.fences,
+    anchors: world.anchors,
+    setWhere(where) {
+      world.where = where;
+      world.whereListeners.tell(where);
+    },
+    hintsShown: () => world.hintsShown,
     send(message, data) {
       record.channelListeners.get(message)?.tell(data);
     },
@@ -1274,6 +1572,10 @@ export function startPagePart<M extends PluginManifest>(
       fireWindowListeners(type, event);
     },
     showLayouts: record.shows.tell,
+    pushSettings(settings) {
+      record.settings = settings;
+      record.settingsListeners.tell(settings);
+    },
     pushKeymap(keymap) {
       world.keymap = keymap;
       world.keymapListeners.tell(keymap);

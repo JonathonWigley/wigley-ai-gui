@@ -5,11 +5,11 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
-import type { KeysPageExports } from '../../keys/contract';
 import type { FormsView } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
@@ -18,7 +18,7 @@ import {
   type EditorBoxes,
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
-import type { ShownLayouts } from '../../../contracts/plugin';
+import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import type {
   BaseKitDeps,
   KitCommands,
@@ -72,7 +72,8 @@ import {
 // moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
 // rail's dragged width; `timers` runs the split's resize prompt linger.
 // `commands` is what every kit's `command` checks and runs; `contributions`
-// holds the card parts and review columns other plugins added.
+// holds the card parts and review columns other plugins added; `state` is
+// what every kit's `state` reads.
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<
@@ -86,13 +87,14 @@ export interface RoundViewDeps {
     | 'focus'
     | 'formIdOf'
   >;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
-  platform: Platform;
+  platform: OsName;
+  state: LayoutState;
   uiState: UiState;
   timers: Timers;
   log: PluginLog;
@@ -266,12 +268,12 @@ export function createRoundView(
       keysChange.dispose();
     },
   };
-  const keysChange = deps.keys.onChanged(() => parts.redrawLayoutHead());
+  const keysChange = deps.keys.onKeymapChanged(() => parts.redrawLayoutHead());
   return view;
 }
 
 // The anchor keys a build hands its parts.
-type AnchorKeys = Pick<KeysPageExports, 'keysFor' | 'anchor'>;
+type AnchorKeys = Pick<KeyHints, 'keysFor' | 'anchor'>;
 
 // `keys`, keeping each anchor it names in `anchors`.
 function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
@@ -312,6 +314,8 @@ function buildRoundParts(
     shownView: () => deps.getState().view,
     commands: deps.commands,
     contributions: deps.contributions,
+    state: deps.state,
+    recordAnchor: (anchor) => anchors.push(anchor),
     recordMount: (mount) => anchors.push(mount),
   };
   const railHead = buildRailHead(split.start, keys);
@@ -324,6 +328,7 @@ function buildRoundParts(
       {
         ...deps,
         keys: recordingKeys(deps.keys, headAnchors),
+        recordAnchor: (anchor) => headAnchors.push(anchor),
         recordMount: (mount) => headAnchors.push(mount),
       },
       formsScope('forms'),
@@ -352,6 +357,8 @@ function buildRoundParts(
     log: deps.log,
     commands: deps.commands,
     contributions: deps.contributions,
+    state: deps.state,
+    recordAnchor: (anchor) => anchors.push(anchor),
     recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>

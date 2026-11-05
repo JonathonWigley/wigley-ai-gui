@@ -1,12 +1,15 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type { ListPickerService } from '../../../contracts/list-picker';
 import type { UserKeymap } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
+  KeyHints,
   PageChannel,
   PushedScope,
   ShownLayouts,
@@ -32,14 +35,9 @@ import {
   createLayoutParts,
   type LayoutParts,
 } from '../../../shared/page/layout-host/layout-parts';
-import {
-  createListPicker,
-  type ListPicker,
-} from '../../../shared/page/list-picker';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
-import type { KeysPageExports } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -112,8 +110,9 @@ type RowPartOf<P extends keyof RowInputs> = { part: P; input: RowInputs[P] };
 
 export type RowPart = { [P in keyof RowInputs]: RowPartOf<P> }[keyof RowInputs];
 
-// One row: `key` names it in the cursor and log lines (a setting's path, a
-// command id, `leader` or `advanced`); `draw` is the part that draws it.
+// One row: `key` names it in the cursor and log lines (a setting's path,
+// `commandTarget(id, arg)`, `leader` or `advanced`); `draw` is the part that
+// draws it.
 export interface SettingsRow {
   key: string;
   file: ConfigFile;
@@ -155,7 +154,7 @@ export interface PickRequest<T> {
 // box's handler sees the layer in force when it commits.
 export interface RowContext {
   schema: UserConfigSchema;
-  platform: Platform;
+  platform: OsName;
   read(): UserConfigRead;
   settingsLayer(): Record<string, unknown> | null;
   keymapLayer(): UserKeymap | null;
@@ -170,15 +169,16 @@ export interface RowContext {
   toast(text: string, tone: ToastTone): void;
 }
 
-// `markdown`, `keys` and `commands` are what the layout's kits read.
+// `markdown`, `keys`, `commands` and `state` are what the layout's kits read.
 export interface SettingsViewDeps {
   channel: PageChannel<SettingsChannel>;
   editor: EditorHost;
   matcher: FuzzyMatcher;
-  platform: Platform;
+  platform: OsName;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   commands: KitCommands;
+  state: LayoutState;
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;
   setScope(scope: 'sections' | 'rows'): void;
@@ -189,8 +189,8 @@ export interface SettingsViewDeps {
   // True while the side bar lies beside or over the rows: the focus keys
   // move to the sections only then.
   isSideBarShown(): boolean;
-  pushScope(scope: 'box' | 'picker'): PushedScope;
-  addOverlay(element: HTMLElement): Disposable;
+  pushScope(scope: 'box'): PushedScope;
+  picker: ListPickerService;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
   // `scope` is in force, followed by `label` (true: the command's label): the
   // cursor prompt's keys, which the app draws in each layout.
@@ -280,6 +280,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
   };
   const parts = createLayoutParts<SettingsLayout, CompleteSettingsLayout>({
     owner: 'settings',
@@ -354,12 +355,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const filterBox = textBoxInput('settings-box-input');
   filterFrame.append(filterBox);
 
-  const picker: ListPicker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log,
-    matcher: deps.matcher,
-  });
-  deps.addOverlay(picker.element);
+  const picker = deps.picker.create();
 
   let schema: UserConfigSchema | null = null;
   let latest: UserConfigRead | null = null;
@@ -377,6 +373,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let hasOpenedSection = false;
   let focus: 'sections' | 'rows' = 'sections';
   let query = '';
+  let drawnQuery = '';
   let filterScope: PushedScope | null = null;
   let rows: SettingsRow[] = [];
   // Each drawn row by its key, and the dispose of every part drawn into the
@@ -511,9 +508,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       section === undefined
         ? keymapSection(context, query)
         : settingSection(section, context, query);
+    const cursorIndex = rows.findIndex((row) => row.key === cursorKey);
+    const isSameFilter = query === drawnQuery;
+    drawnQuery = query;
     rows = drawing.rows;
     if (!rows.some((row) => row.key === cursorKey)) {
-      setCursor(rows[0]?.key ?? null);
+      // A row that left the list hands the cursor to the row now in its place;
+      // a row the filter hid hands it to the best match.
+      const place = isSameFilter ? Math.max(cursorIndex, 0) : 0;
+      setCursor(rows[Math.min(place, rows.length - 1)]?.key ?? null);
     }
     disposeEntries();
     const { problem, rowList } = rowsPane.built;

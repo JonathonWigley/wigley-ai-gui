@@ -12,6 +12,7 @@ import {
 const manifest = definePlugin({
   id: 'sample',
   dependsOn: { main: ['dep'], page: ['dep'] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},

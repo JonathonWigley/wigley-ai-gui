@@ -11,6 +11,7 @@ import {
 import type { CommandId } from '../../../contracts/commands';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import type { AnchorOptions } from '../../../contracts/keymap';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
@@ -25,7 +26,6 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
-import type { AnchorOptions } from '../../keys/contract';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { PrimerEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -46,6 +46,7 @@ import { createPrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -203,8 +204,13 @@ function primerTabSetup(
       keysFor: () => null,
     },
     run: () => undefined,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     platform: 'macos',
+    state: noLayoutState,
     uiState: {
       get: (key) => uiValues.get(key),
       set: (key, value) => {
@@ -258,7 +264,7 @@ function primerTabSetup(
     tab,
     tabs,
     // Fires `command` with no editor in its context, as a page key does.
-    run: (command: PrimerCommand) => handlers[command]({}),
+    run: (command: PrimerCommand) => handlers[command]({ arg: undefined }),
   };
 }
 

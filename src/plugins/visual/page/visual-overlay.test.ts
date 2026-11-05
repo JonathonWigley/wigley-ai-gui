@@ -10,6 +10,7 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import { createVisualParts } from './layout/visual-parts';
 import { createVisualOverlay } from './visual-overlay';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // An overlay over fake frames and the default layout: its backdrop, its log
 // lines, how many times its scope popped, and the scope's base-changed and
@@ -20,6 +21,7 @@ function overlayFixture() {
   const contributed: FakeElement[] = [];
   const scope = { pops: 0, baseChanged: [] as (() => void)[] };
   const layoutsChanged: (() => void)[] = [];
+  const openings: [number, number][] = [];
   const parts = createVisualParts({
     defaultLayout,
     kit: {
@@ -30,8 +32,13 @@ function overlayFixture() {
         ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     log: () => undefined,
   });
@@ -56,6 +63,7 @@ function overlayFixture() {
     parts,
     log: (message: string) => logs.push(message),
     onLayoutsChanged: (listener) => layoutsChanged.push(listener),
+    opened: (count, index) => openings.push([count, index]),
   });
   return {
     overlay,
@@ -64,6 +72,7 @@ function overlayFixture() {
     logs,
     scope,
     layoutsChanged,
+    openings,
   };
 }
 
@@ -93,6 +102,19 @@ describe('createVisualOverlay', () => {
     ]);
     expect(test.backdrop.hidden).toBe(true);
     expect(test.scope.pops).toBe(1);
+  });
+
+  it('overlayOpen_Opens_ReportsCountAndIndex', () => {
+    const test = overlayFixture();
+
+    test.overlay.open(['a', 'b', 'c'], 2);
+    test.overlay.previous();
+    test.overlay.open(['d', 'e'], 1);
+
+    expect(test.openings).toEqual([
+      [3, 2],
+      [2, 1],
+    ]);
   });
 
   it('overlay_BaseChanged_Closes', () => {

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettings } from '../config/settings';
+import { defaultSettingsFor } from '../config/settings';
+import { fakePlatform } from '../shared/platform.test-support';
 import {
   disabledDependencyProblem,
   pluginSettingInfo,
+  requireNoSettingsUnderCoreNames,
 } from '../shared/plugin-manifests';
 import { manifests } from './manifests';
 
@@ -13,9 +15,21 @@ describe('manifests', () => {
     expect(() => pluginSettingInfo(manifests)).not.toThrow();
   });
 
+  it('manifests_CoreSettingNames_HoldNoPluginSettings', () => {
+    expect(() =>
+      requireNoSettingsUnderCoreNames(
+        manifests,
+        defaultSettingsFor(fakePlatform('macos').programs),
+      ),
+    ).not.toThrow();
+  });
+
   it('manifests_DefaultDisabled_BreaksNoDependency', () => {
     expect(
-      disabledDependencyProblem(defaultSettings.plugins.disabled, manifests),
+      disabledDependencyProblem(
+        defaultSettingsFor(fakePlatform('macos').programs).plugins.disabled,
+        manifests,
+      ),
     ).toBeNull();
   });
 

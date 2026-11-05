@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +13,12 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { channelPath } from '../../../shared/local-channel/channel-path';
 import { osPlatform } from '../../../shared/os-platform';
+import { fakePlatform } from '../../../shared/platform.test-support';
 import { createRegistrations } from '../../../shared/registrations';
+import {
+  createSlotStore,
+  type SlotStore,
+} from '../../../shared/state/slot-store';
 import {
   type ConnectedSession,
   type OwnedSession,
@@ -21,6 +26,8 @@ import {
   type RelayHello,
   type SessionInfo,
   type SessionsMainExports,
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
   type ToolResult,
   type ToolSession,
 } from '../contract';
@@ -201,6 +208,7 @@ function startSessionsPart(
     send = () => undefined,
     originRepoName = () => Promise.resolve(null),
     agentHarnesses = [],
+    state = createSlotStore(() => undefined),
   }: {
     runMode?: 'selfTest' | 'live';
     homeDir?: string;
@@ -208,12 +216,14 @@ function startSessionsPart(
     send?: (message: string, payload: unknown) => void;
     originRepoName?: (projectDir: string) => Promise<string | null>;
     agentHarnesses?: { id: string; sessionName: unknown }[];
+    state?: SlotStore;
   } = {},
 ) {
   let hex = 0;
   const api = {
     channel: { handle: () => undefined, send },
     events: { emit: () => undefined, on: () => undefined },
+    state,
     settings: () => ({ layout: 'default', titleMaxLength }),
     services: {
       randomHex: () => (++hex).toString(16),
@@ -224,6 +234,7 @@ function startSessionsPart(
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
       git: { originRepoName },
+      platform,
       agentHarnesses,
     },
     drive: null,
@@ -242,8 +253,8 @@ function viewOf(
 // The app instance id the harness's fake services carry.
 const HARNESS_APP_ID = 'wigley-ai-gui-dev';
 
-// The OS the tests run on, so a test's relay opens the channel this OS's relays use.
-const platform = osPlatform(process.platform);
+// The record of the OS the tests run on, so a test's relay opens the channel this OS's relays use.
+const platform = fakePlatform(osPlatform(process.platform));
 
 const RELAY_HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -320,15 +331,17 @@ describe('sessions main part', () => {
   );
 
   it.each([
-    { case: 'running', disposed: false, messages: ['stateChanged'] },
-    { case: 'disposed', disposed: true, messages: [] },
+    { case: 'running', disposed: false, writes: ['sessions.rows'] },
+    { case: 'disposed', disposed: true, writes: [] },
   ])(
-    'a project lookup landing while the part is $case sends $messages',
-    async ({ disposed, messages }) => {
+    'a project lookup landing while the part is $case writes $writes',
+    async ({ disposed, writes }) => {
       const lookup = Promise.withResolvers<string | null>();
-      const sent: string[] = [];
+      const written: string[] = [];
+      const state = createSlotStore(() => undefined);
+      state.onWrite((change) => written.push(change.id));
       const started = startSessionsPart(10, {
-        send: (message) => sent.push(message),
+        state,
         originRepoName: () => lookup.promise,
       });
       const exports = viewOf(started);
@@ -342,14 +355,34 @@ describe('sessions main part', () => {
       if (disposed) {
         await started.dispose?.();
       }
-      sent.length = 0;
+      written.length = 0;
 
       lookup.resolve('repo');
       await new Promise((settle) => setImmediate(settle));
 
-      expect(sent).toEqual(messages);
+      expect(written).toEqual(writes);
     },
   );
+
+  it('dispose_EmptiesTheRowsThroughTheWriter', async () => {
+    const send = vi.fn();
+    const state = createSlotStore(() => undefined);
+    const started = startSessionsPart(10, { state, send });
+    const { session } = viewOf(started).connect({
+      sessionId: 'host-1',
+      projectDir: null,
+      deadlineSeconds: null,
+      harness: 'claude',
+    });
+    viewOf(started).mark(session.id);
+    expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(1);
+
+    await started.dispose?.();
+
+    expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(0);
+    expect(state.read(sessionsSelectionSlot, 'test').get()).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
 
   it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
     const exports = viewOf(startSessionsPart(10));
@@ -480,9 +513,9 @@ describe('sessions main part', () => {
 
       const socket = connectSocket(
         channelPath(
-          platform,
+          platform.os,
           homeDir,
-          os.userInfo().username,
+          platform.relay.username,
           HARNESS_APP_ID,
           '',
         ),
@@ -501,9 +534,9 @@ describe('sessions main part', () => {
     });
     const socket = connectSocket(
       channelPath(
-        platform,
+        platform.os,
         homeDir,
-        os.userInfo().username,
+        platform.relay.username,
         HARNESS_APP_ID,
         '',
       ),
@@ -519,11 +552,13 @@ describe('sessions main part', () => {
       const { connected, ended } = sessionEvents(harness);
       expect(connected).toHaveLength(1);
       expect(ended).toEqual(connected);
-      expect(
-        existsSync(
+      const endpoint: unknown = JSON.parse(
+        readFileSync(
           path.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
+          'utf8',
         ),
-      ).toBe(true);
+      );
+      expect(endpoint).toMatchObject({ launch: platform.relay.launch });
     } finally {
       socket.destroy();
       rmSync(homeDir, { recursive: true, force: true });

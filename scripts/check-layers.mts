@@ -1,9 +1,9 @@
 // Fails when a source file (`.ts` or `.js`) imports across a layer boundary its
 // rules do not allow. The rules are CORE_LAYERS, written here, and each plugin's
 // entries, derived in `layer-rules.mts` from the plugin folders and each
-// manifest's `dependsOn`, with PLUGIN_EXTRAS added. A file belongs to the layer
-// with the longest matching path; imports inside a file's own layer are always
-// allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
+// manifest's `dependsOn` and `reads`, with PLUGIN_EXTRAS added. A file belongs to
+// the layer with the longest matching path; imports inside a file's own layer are
+// always allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
 // `.test-support.ts` module of shared test cases) may also import the test
 // packages. An import is allowed when the imported file's own layer is listed
 // exactly: allowing `src/shared` does not admit `src/shared/page`. It also fails
@@ -16,6 +16,7 @@ import {
   compositionFailures,
   pluginLayers,
   readDependsOn,
+  readReads,
   type LayerRule,
   type PluginExtra,
   type PluginFolder,
@@ -87,7 +88,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
-      // Starts the real sessions and keys pages, whose exports forms files under.
+      // Starts the real sessions page, whose exports forms files under.
       'src/plugins/forms/page/start.test.ts': {
         layers: [
           'src/contracts',
@@ -95,8 +96,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/shared/page',
           'src/plugins/forms/contract.ts',
           'src/plugins/forms/page',
+          'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/page',
-          'src/plugins/keys/page',
         ],
         packages: [],
       },
@@ -120,7 +121,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
-      // Starts the real sessions and keys pages, whose exports primer files under.
+      // Starts the real sessions page, whose exports primer files under.
       'src/plugins/primer/page/start.test.ts': {
         layers: [
           'src/contracts',
@@ -128,8 +129,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/shared/page',
           'src/plugins/primer/contract.ts',
           'src/plugins/primer/page',
+          'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/page',
-          'src/plugins/keys/page',
         ],
         packages: [],
       },
@@ -138,6 +139,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the
   // relay and its channel path use the shared local channel transport.
   sessions: {
+    contract: { layers: ['src/shared'] },
     main: {
       layers: [
         'src/plugins/sessions/main/relay',
@@ -556,6 +558,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  // Checks the order the built-in page parts start in.
+  'src/plugins/page.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/page.ts'],
+    packages: [],
+  },
   // Checks the built-in manifests' setting declarations, and that the default
   // disabled list breaks none of their dependencies.
   'src/plugins/manifests.test.ts': {
@@ -802,13 +809,15 @@ function readPluginFolder(id: string): PluginFolder | undefined {
     return undefined;
   }
   try {
+    const source = readFileSync(manifest, 'utf8');
     return {
       id,
       hasContract: existsSync(`${root}/contract.ts`),
       hasMain: existsSync(`${root}/main/start.ts`),
       hasPage: existsSync(`${root}/page/start.ts`),
       hasLayouts: existsSync(`${root}/layouts`),
-      dependsOn: readDependsOn(manifest, readFileSync(manifest, 'utf8')),
+      dependsOn: readDependsOn(manifest, source),
+      reads: readReads(manifest, source),
     };
   } catch (error) {
     printFailure(thrownText(error));

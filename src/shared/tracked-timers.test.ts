@@ -5,13 +5,16 @@ import { trackedTimers } from './tracked-timers';
 
 // Timers numbering their handles from 1. `fire` runs one timer's run, and
 // `fireAll` every timer's, cleared or not, as a clear that came too late would.
+// `delays` holds each timer's delay in the order they were set.
 function fakeTimers() {
   const runs = new Map<number, () => void>();
   const cleared: number[] = [];
+  const delays: number[] = [];
   const timers: Timers = {
-    set(run) {
+    set(run, ms) {
       const handle = runs.size + 1;
       runs.set(handle, run);
+      delays.push(ms);
       return handle;
     },
     clear: (handle) => cleared.push(handle),
@@ -19,6 +22,7 @@ function fakeTimers() {
   return {
     timers,
     cleared,
+    delays,
     fire: (handle: number) => runs.get(handle)?.(),
     fireAll: () => runs.forEach((run) => run()),
   };
@@ -53,5 +57,15 @@ describe('trackedTimers', () => {
     fireAll();
 
     expect(ran).toEqual([]);
+  });
+
+  it('caps a delay past the 32-bit limit at the longest delay a timer takes', () => {
+    const { timers, delays } = fakeTimers();
+    const tracked = trackedTimers(timers, createRegistrations());
+
+    tracked.set(() => {}, 2 ** 31);
+    tracked.set(() => {}, 1000);
+
+    expect(delays).toEqual([2147483647, 1000]);
   });
 });

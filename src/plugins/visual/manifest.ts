@@ -10,7 +10,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // agents about visuals.
 export const visualManifest = definePlugin({
   id: 'visual',
-  dependsOn: { main: ['chat'], page: ['chat', 'keys'] },
+  dependsOn: { main: ['chat'], page: ['chat'] },
+  reads: { main: [], page: [] },
   commands: {
     openVisuals: {
       label: "open the focused entry's visuals",

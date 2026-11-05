@@ -33,6 +33,7 @@ import {
   sourceOfLines,
 } from './entry-list';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 type AnyBuilder = (
   parent: HTMLElement,
@@ -367,8 +368,13 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         keysFor: (command) =>
           command === chatCommand('interrupt') ? '⌃C' : null,
       },
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
       allow: () => undefined,
       deny: () => undefined,
       openImages: () => undefined,

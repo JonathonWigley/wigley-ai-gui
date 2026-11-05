@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../../contracts/disposable';
 import { errorText } from '../../../../shared/error-text';
 import {
   drawPart,
@@ -5,7 +6,7 @@ import {
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 import type { ItemKind } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { CardAnswer, LayoutCard } from '../../layouts/layout';
@@ -66,8 +67,8 @@ export function cardAnswer(
 
 // The item's card at rail `position`, drawn into `parent` by drawPart with
 // the picked layout, or with `default` when the pick lacks the item's kind or
-// its card throws. The boxes the card mounts, the anchors it names and its
-// markdown mounts are recorded for drawPart's rollback.
+// its card throws. The boxes the card mounts, the anchors it names, its slot
+// subscriptions and its markdown mounts are recorded for drawPart's rollback.
 export function buildLayoutCard(
   pick: LayoutPick,
   parent: HTMLElement,
@@ -99,16 +100,19 @@ export function buildLayoutCard(
 }
 
 // What a layout's card or pane mounts its text boxes and anchors its keys
-// through, and where it records each markdown mount it makes.
+// through, and where it records each anchor the kit names and each slot
+// subscription and markdown mount it makes.
 interface MountingDeps {
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeyHints, 'anchor'>;
+  recordAnchor(anchor: Disposable): void;
   recordMount(mount: MarkdownMount): void;
 }
 
-// `deps` with each box it mounts, each anchor it names and each markdown
-// mount it records also recorded in `rollback`.
+// `deps` with each box it mounts, each anchor it names, and each anchor the
+// kit names and each slot subscription and markdown mount it records also
+// recorded in `rollback`.
 export function recordingDeps<D extends MountingDeps>(
   deps: D,
   rollback: RollbackDeps,
@@ -119,13 +123,17 @@ export function recordingDeps<D extends MountingDeps>(
       deps.mountBox(parent, target, text);
       rollback.recordBox(() => deps.destroyBox(target));
     },
+    recordAnchor(anchor: Disposable) {
+      deps.recordAnchor(anchor);
+      rollback.recordAnchor(anchor);
+    },
     recordMount(mount: MarkdownMount) {
       deps.recordMount(mount);
       rollback.recordAnchor(mount);
     },
     keys: {
       ...deps.keys,
-      anchor(...args: Parameters<KeysPageExports['anchor']>) {
+      anchor(...args: Parameters<KeyHints['anchor']>) {
         const anchor = deps.keys.anchor(...args);
         rollback.recordAnchor(anchor);
         return anchor;

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorHost } from '../../../contracts/editor';
-import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
@@ -11,6 +11,7 @@ import {
 } from '../../../shared/page/test-dom';
 import type { ChatLayouts } from './chat-layouts';
 import { createPicker } from './picker';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOOP = () => undefined;
 
@@ -52,25 +53,19 @@ const filterEditor = {
 function pickerSetup() {
   let layer: FakeElement | null = null;
   const picker = createPicker({
-    overlay: {
-      contribute(element) {
+    picker: fakeListPickerService({
+      place(element) {
         layer = asFake(element);
-        return { dispose: NOOP };
       },
-    },
-    editor: filterEditor,
-    pushScope: () => ({
-      pop: NOOP,
-      dispose: NOOP,
-      onBaseChanged: () => ({ dispose: NOOP }),
+      editor: filterEditor,
     }),
     layouts,
     log: NOOP,
-    matcher: fakeFuzzyMatcher,
     keys: recordingAnchors().keys,
     markdown: {} as never,
-    commands: { exists: () => true, run: NOOP },
+    commands: { exists: () => true, argShape: () => undefined, run: NOOP },
     platform: 'macos',
+    state: noLayoutState,
   });
   return { picker, layer: layer as unknown as FakeElement };
 }

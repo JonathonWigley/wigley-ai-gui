@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { SessionFlow } from '../contract';
+import { createSlotStore } from '../../../shared/state/slot-store';
+import { type SessionFlow, workflowFlowsSlot } from '../contract';
 import { newFlow } from '../flow';
 import { createFlowStore, FLOWS_FILE, type FlowStore } from './flow-store';
 
@@ -25,15 +26,24 @@ function flowsFile(
 }
 
 // A flow store over memory files holding `text` as flows.json (none when
-// null), its clock reading `time.now`; `logs` records each logged line.
-async function loadStore(text: string | null) {
+// null), and a real slot already holding `leftover`, its clock reading `time.now`;
+// `logs` records each logged line and `slot` reads the slot.
+async function loadStore(
+  text: string | null,
+  leftover: Record<string, SessionFlow> = {},
+) {
   const files = createMemoryFiles();
   if (text !== null) {
     await files.write(FLOWS_FILE, text);
   }
   const logs: string[] = [];
   const time = { now: NOW };
+  const flows = createSlotStore(() => undefined).publish(workflowFlowsSlot);
+  for (const [sessionId, flow] of Object.entries(leftover)) {
+    flows.set(sessionId, flow);
+  }
   const store = createFlowStore({
+    flows,
     files,
     log: (line) => logs.push(line),
     paths: posixPaths,
@@ -46,7 +56,8 @@ async function loadStore(text: string | null) {
       flows: { hostSessionId: string; flow: SessionFlow }[];
     };
   };
-  return { store, logs, saved, time };
+  const slot = () => Object.fromEntries(flows.all());
+  return { store, logs, saved, slot, time };
 }
 
 describe('createFlowStore', () => {
@@ -225,6 +236,101 @@ describe('createFlowStore', () => {
     store.open('s1', 'h1', '/r');
 
     expect(store.savedAtOf('s1')).toBe(0);
+  });
+
+  // What the file gives a session that opens on host h1.
+  const RESTORED_S9: SessionFlow = {
+    ...SAVED_H1,
+    sessionId: 's9',
+    turnRunning: false,
+    runningSubagents: [],
+  };
+  const STALE: SessionFlow = { ...newFlow('s9', '/r'), stage: 'review' };
+
+  it.each<{
+    name: string;
+    leftover?: Record<string, SessionFlow>;
+    act: (store: FlowStore) => void;
+    slot: Record<string, SessionFlow>;
+    all: string[];
+    savedHosts: string[];
+  }>([
+    {
+      name: 'open_RestoresFromTheFile',
+      act: (store) => store.open('s9', 'h1', '/r'),
+      slot: { s9: RESTORED_S9 },
+      all: ['s9'],
+      savedHosts: ['h1'],
+    },
+    {
+      name: 'a leftover key at creation is deleted',
+      leftover: { s9: STALE },
+      act: () => undefined,
+      slot: {},
+      all: [],
+      savedHosts: ['h1'],
+    },
+    {
+      name: 'a leftover key gives way to the file at the open',
+      leftover: { s9: STALE },
+      act: (store) => store.open('s9', 'h1', '/r'),
+      slot: { s9: RESTORED_S9 },
+      all: ['s9'],
+      savedHosts: ['h1'],
+    },
+    {
+      name: 'drop deletes the key and the saved entry',
+      act: (store) => {
+        store.open('s9', 'h1', '/r');
+        store.drop('s9');
+      },
+      slot: {},
+      all: [],
+      savedHosts: [],
+    },
+    {
+      name: 'a reopen after a drop restores no stale flow',
+      act: (store) => {
+        store.open('s9', 'h1', '/r');
+        store.drop('s9');
+        store.open('s9', 'h1', '/r');
+      },
+      slot: { s9: newFlow('s9', '/r') },
+      all: ['s9'],
+      savedHosts: ['h1'],
+    },
+    {
+      name: 'all keeps open order through a put',
+      act: (store) => {
+        store.open('s2', 'h2', '/r');
+        const first = store.open('s9', 'h1', '/r');
+        store.put({ ...first, stage: 'make' });
+        store.put({ ...store.get('s2')!, stage: 'make' });
+      },
+      slot: {
+        s2: { ...newFlow('s2', '/r'), stage: 'make' },
+        s9: { ...RESTORED_S9, stage: 'make' },
+      },
+      all: ['s2', 's9'],
+      savedHosts: ['h1', 'h2'],
+    },
+  ])('slot_$name', async ({ leftover, act, slot, all, savedHosts }) => {
+    const {
+      store,
+      saved,
+      slot: readSlot,
+    } = await loadStore(
+      flowsFile([{ hostSessionId: 'h1', flow: SAVED_H1 }]),
+      leftover,
+    );
+
+    act(store);
+
+    expect(readSlot()).toEqual(slot);
+    expect(store.all().map(({ sessionId }) => sessionId)).toEqual(all);
+    expect((await saved()).flows.map((entry) => entry.hostSessionId)).toEqual(
+      savedHosts,
+    );
   });
 
   it('forgetFlows_ForgetsOpenAndSavedFlowsInTheFolder_KeepsOthers', async () => {

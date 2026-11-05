@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../contracts/disposable';
 import type { ShownLayouts } from '../contracts/plugin';
-import {
-  recordingAnchors,
-  withUser,
-} from '../shared/page/layout-host/test-layouts';
+import { withUser } from '../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../shared/page/markdown-mount.test-support';
 import {
   asHtml,
@@ -24,15 +21,18 @@ import {
   chatPageKey,
 } from './chat/contract';
 import { type DocsPageExports, docsPageKey } from './docs/contract';
-import { type KeysPageExports, keysPageKey } from './keys/contract';
 import {
   type RowActivity,
   type SessionPart,
+  type SessionRow,
+  sessionsActiveSlot,
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from './sessions/contract';
 import {
   type SessionFlow,
+  workflowFlowsSlot,
   type WorkflowPageExports,
   workflowPageKey,
 } from './workflow/contract';
@@ -151,22 +151,29 @@ function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
   };
 }
 
-const KIT_SERVICES = {
-  markdown: {
-    block: (text: string) => text,
-    inline: (text: string) => text,
-    document: async (text: string) => text,
-    ...NO_FENCES,
-  },
-  keys: recordingAnchors().keys,
-  commands: { exists: () => true, run: () => undefined },
-  platform: 'macos' as const,
+const MARKDOWN = {
+  block: (text: string) => text,
+  inline: (text: string) => text,
+  document: async (text: string) => text,
+  ...NO_FENCES,
 };
 
+function rowOf(sessionId: string): SessionRow {
+  return {
+    sessionId,
+    label: 'proj',
+    project: 'proj',
+    harness: 'claude',
+    marked: false,
+    projectDir: '/p/proj',
+    hostSessionId: null,
+    titles: { user: null, agent: null, firstMessage: null },
+  };
+}
+
 // The real engine page part and the real Heavy page part on its exports, each in
-// its own harness, over fakes of sessions, chat, keys and docs. `view` drives the
-// engine as its parts' hosts, commands and events do: `put` pushes a flow, `timers`
-// counts the engine's live timers and `advance` moves its clock, `setLayouts` shows
+// its own harness, over fakes of sessions, chat and docs. `view` drives the engine
+// as its parts' hosts, commands and slots do: `put` writes a flow, `timers` counts the engine's live timers and `advance` moves its clock, `setLayouts` shows
 // Heavy's layouts. `invoked` records Heavy's `runAction` calls; `logged` reads the
 // engine's lines; `heavyLogged` Heavy's; every session named `a`, `b` or `s1` reads
 // as `proj`. `selected` sets the session the commands run on.
@@ -177,7 +184,6 @@ function setUp() {
   const rowParts: SessionPart[] = [];
   const composerParts: ChatComposerPart[] = [];
   const sideParts: ChatSidePart[] = [];
-  let selectedSession: string | null = null;
   const untracked = () => ({ dispose: () => undefined });
   const engine = startPagePart(workflowPagePart, {
     dependencies: [
@@ -190,7 +196,6 @@ function setUp() {
               return untracked();
             },
             addTab: untracked,
-            selectedSessionId: () => selectedSession,
             setActivity: (
               sessionId: string,
               _owner: string,
@@ -212,13 +217,8 @@ function setUp() {
             },
           }) as unknown as ChatPageExports,
       ),
-      fakeDependency(
-        keysPageKey,
-        () => KIT_SERVICES.keys as unknown as KeysPageExports,
-      ),
     ],
-    services: { markdown: KIT_SERVICES.markdown },
-    invoke: () => Promise.resolve([]),
+    services: { markdown: MARKDOWN },
   });
   const engineExports = (consumer: Registrations = createRegistrations()) =>
     engine.started().exports?.(consumer) as WorkflowPageExports;
@@ -232,13 +232,6 @@ function setUp() {
         runCommand,
       })),
       fakeDependency(
-        sessionsPageKey,
-        () =>
-          ({
-            selectedSessionId: () => selectedSession,
-          }) as unknown as SessionsPageExports,
-      ),
-      fakeDependency(
         docsPageKey,
         () =>
           ({
@@ -250,16 +243,15 @@ function setUp() {
       invoked.push(args[0] as HeavyActionRequest);
     },
   });
+  const rows = engine.state.publish(sessionsRowsSlot);
+  const flows = engine.state.publish(workflowFlowsSlot);
+  const active = heavy.state.publish(sessionsActiveSlot);
   for (const sessionId of ['a', 'b', 's1']) {
-    engine.emit('sessions.sessionAdded', {
-      sessionId,
-      label: 'proj',
-      projectDir: '/p/proj',
-      hostSessionId: null,
-    });
+    rows.set(sessionId, rowOf(sessionId));
   }
+  engine.emit('core.pageReady', null);
   engine.advance(NOW);
-  const put = (flow: SessionFlow) => engine.send('flows', [flow]);
+  const put = (flow: SessionFlow) => flows.set(flow.sessionId, flow);
   const engineCommands = () => engine.started().commands;
   let isPaneHidden = false;
   const view = {
@@ -276,18 +268,14 @@ function setUp() {
     setSidePaneHidden(hidden: boolean) {
       if (hidden !== isPaneHidden) {
         isPaneHidden = hidden;
-        engineCommands().toggleSidePane({});
+        engineCommands().toggleSidePane({ arg: undefined });
       }
     },
     // A session leaving and coming back: the engine forgets what it kept for it.
     forget(sessionId: string) {
-      engine.emit('sessions.sessionRemoved', { sessionId });
-      engine.emit('sessions.sessionAdded', {
-        sessionId,
-        label: 'proj',
-        projectDir: '/p/proj',
-        hostSessionId: null,
-      });
+      rows.delete(sessionId);
+      flows.delete(sessionId);
+      rows.set(sessionId, rowOf(sessionId));
     },
     redraw: () => undefined,
   };
@@ -312,9 +300,7 @@ function setUp() {
     openedDocs,
     runCommand,
     rowActivities,
-    selected: (sessionId: string | null) => {
-      selectedSession = sessionId;
-    },
+    selected: (sessionId: string | null) => active.set(sessionId),
   };
 }
 
@@ -1285,7 +1271,7 @@ describe('Heavy over the engine page part', () => {
   it('commandWithNoSelectedSession_LogsAndRunsNothing', async () => {
     const { heavy, heavyLogged, invoked, runCommand } = setUp();
 
-    heavy.started().commands.dismiss({});
+    heavy.started().commands.dismiss({ arg: undefined });
     await settle();
 
     expect(heavyLogged()).toEqual(['no selected session for dismiss']);
@@ -1307,7 +1293,7 @@ describe('Heavy over the engine page part', () => {
       const { heavy, runCommand, selected } = setUp();
       selected('s1');
 
-      heavy.started().commands[command]({});
+      heavy.started().commands[command]({ arg: undefined });
 
       expect(runCommand.mock.calls).toEqual([['s1', command]]);
     },
@@ -1318,7 +1304,7 @@ describe('Heavy over the engine page part', () => {
     selected('s1');
     put(flowIn('make', {}, 's1'));
 
-    heavy.started().commands.openPlan({});
+    heavy.started().commands.openPlan({ arg: undefined });
     await settle();
 
     expect(openedDocs).toEqual([`${PLAN_DIR}/plan.md`]);

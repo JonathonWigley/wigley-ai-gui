@@ -9,6 +9,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { createDocsParts } from './layout/docs-parts';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // A part drawer over the layouts `layouts` returns, its base kits built as
 // the page builds them. `anchors` holds each anchor a draw named and `logs`
@@ -31,8 +32,13 @@ export function fakeDocsParts(layouts: () => ShownLayouts<Layout>) {
               ...NO_FENCES,
             },
             keys,
-            commands: { exists: () => true, run: () => undefined },
+            commands: {
+              exists: () => true,
+              argShape: () => undefined,
+              run: () => undefined,
+            },
             platform: 'macos',
+            state: noLayoutState,
           },
           scope,
           rollback,

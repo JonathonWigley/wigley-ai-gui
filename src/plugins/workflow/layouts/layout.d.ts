@@ -17,7 +17,7 @@
 // only its own parts.
 //
 // The app keeps:
-// - each session's stage and flow, which main folds from the agent's events and pushes on each change;
+// - each session's stage and flow, which main folds from the agent's events and writes on each change;
 // - the workflow commands and their keys, and what each runs;
 // - the session each button runs for: a part's buttons run for the session it draws, whether or not that session is
 //   selected; only keys act on the selected session;

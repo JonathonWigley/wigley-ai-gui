@@ -1,15 +1,17 @@
 import './agent-lines.css';
+import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
-import { agentsPageKey } from '../../agents/contract';
-import { keysPageKey } from '../../keys/contract';
+import { callEach } from '../../../shared/call-each';
+import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import {
-  type SessionsPageEvents,
+  followRows,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -22,51 +24,49 @@ type AgentLinesApi = PageApi<
   typeof agentLinesManifest,
   ChannelShape,
   Record<never, never>,
-  QualifiedEvents<'sessions', SessionsPageEvents>
+  QualifiedEvents<'core', CoreEvents>
 >;
 
 // Draws a working line under each session's row while it runs any subagent
 // or task, through sessions' row parts and the `agent-lines.layout` layout.
-// Reads the rosters from agents' page exports, redrawing a session's line each
-// time its roster changes, and names each session by its side-bar label for
-// the page log.
+// Reads `agents.rosters`, redrawing a session's line each time its roster
+// changes, and names each session by its side-bar label for the page log.
 export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
   manifest: agentLinesManifest,
   start(api: AgentLinesApi) {
     const { services } = api;
-    const agents = api.dependency(agentsPageKey);
+    const rosters = api.state.read(agentsRostersSlot);
     const sessions = api.dependency(sessionsPageKey);
-    const keys = api.dependency(keysPageKey);
-    // Each session's name in the log, its side-bar label (`gamma 2`).
-    const names = new Map<string, string>();
+    const rows = api.state.read(sessionsRowsSlot);
     const lines = createWorkingLines({
       kit: {
         markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
+        keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
+          argShape: (id) => api.keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
-        platform: api.platform,
+        platform: api.platform.os,
+        state: api.state.forLayouts,
       },
       log: services.log,
       clock: services.clock,
       timers: services.timers,
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
-      roster: (sessionId) => agents.roster(sessionId),
+      nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
+      roster: (sessionId) => rosters.get(sessionId) ?? EMPTY_ROSTER,
     });
     sessions.addRowPart(lines.part);
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
-      names.set(sessionId, label);
+    followRows(rows, { removed: (sessionId) => lines.forget(sessionId) });
+    api.events.on('core.pageReady', () => {
+      rosters.on((sessionId, roster) =>
+        lines.setRoster(sessionId, roster ?? EMPTY_ROSTER),
+      );
+      callEach([...rosters.all()], ([sessionId, roster]) =>
+        lines.setRoster(sessionId, roster),
+      );
     });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      names.delete(sessionId);
-      lines.forget(sessionId);
-    });
-    agents.onRosterChanged((sessionId) =>
-      lines.setRoster(sessionId, agents.roster(sessionId)),
-    );
 
     api.layouts.show<Layout>({
       defaultLayout,

@@ -1,11 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './forms.css';
 import type { Disposable } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   createEditorBoxes,
@@ -14,11 +10,12 @@ import {
 import { activeForm, formById } from '../../../shared/page/session-forms';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import {
-  type SessionsPageEvents,
+  followRows,
+  sessionsActiveSlot,
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
-import { keysPageKey } from '../../keys/contract';
 import type {
   FormsChannel,
   FormsPageEvents,
@@ -47,12 +44,7 @@ import { readLayout } from './layout/read-layout';
 import { roundLayoutNames } from './layout/layout-resolver';
 import { presentedRoundOf } from './presented-round';
 
-type FormsApi = PageApi<
-  typeof formsManifest,
-  FormsChannel,
-  FormsPageEvents,
-  QualifiedEvents<'sessions', SessionsPageEvents>
->;
+type FormsApi = PageApi<typeof formsManifest, FormsChannel, FormsPageEvents>;
 
 // Each box's edits reach the store, and a box taking focus focuses its item.
 function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
@@ -103,8 +95,11 @@ function listenForRounds(
       closed,
     ),
   );
-  api.events.on('sessions.activeChanged', ({ sessionId }) =>
-    store.dispatch({ type: 'sessionActivated', sessionId }),
+  api.state.read(sessionsActiveSlot).on((sessionId) =>
+    store.dispatch({
+      type: 'sessionActivated',
+      sessionId: sessionId ?? null,
+    }),
   );
   let isStopped = false;
   void api.channel
@@ -140,7 +135,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
     const store = createReducerStore(
-      initialState([], sessions.selectedSessionId()),
+      initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
       apply,
     );
     const boxes = createBoxes(api, store);
@@ -165,23 +160,25 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       store,
       boxes,
       markdown: services.markdown,
-      keys: api.dependency(keysPageKey),
+      keys: api.keys,
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,
+        argShape: (command) => api.keys.command(command)?.arg,
         run: (command) => api.commands.run(command),
       },
       contributions,
-      platform: api.platform,
+      platform: api.platform.os,
+      state: api.state.forLayouts,
       uiState: services.uiState,
       timers: services.timers,
       drops: api.drops,
       toast: services.toast,
       log: services.log,
     });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
-      view.forgetSession(sessionId),
-    );
+    followRows(api.state.read(sessionsRowsSlot), {
+      removed: (sessionId) => view.forgetSession(sessionId),
+    });
     const autosave = startRoundAutosave({
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),

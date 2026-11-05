@@ -7,7 +7,7 @@ import {
   type Mock,
   vi,
 } from 'vitest';
-import type { Area, Mode, ModeHandle } from '../../contracts/plugin';
+import type { Area, KeyHints, Mode, ModeHandle } from '../../contracts/plugin';
 import type { ConfigProblem } from '../../contracts/settings';
 import {
   recordingAnchors,
@@ -25,6 +25,7 @@ import defaultLayout from './layouts/default/layout.js';
 import type { Layout } from './layouts/layout';
 import { mountShellChrome } from './shell-chrome';
 import { NO_FENCES } from '../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../shared/page/layout-host/fake-layout-state.test-support';
 
 // An area that appends each contribution to `root`, its alignment as
 // `data-align`, in the order contributed.
@@ -81,7 +82,7 @@ function handle(): ModeHandle & { show: Mock<() => void> } {
 }
 
 // The chrome over fake title and activity bars, in the dev app.
-function mountChrome() {
+function mountChrome(keys: KeyHints = recordingAnchors().keys) {
   const titleBar = fakeArea();
   const activityBar = fakeArea();
   const chrome = mountShellChrome({
@@ -94,8 +95,14 @@ function mountChrome() {
         document: async (text) => text,
         ...NO_FENCES,
       },
-      commands: { exists: (id) => id === REGISTERED, run: () => undefined },
+      keys,
+      commands: {
+        exists: (id) => id === REGISTERED,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
+      state: noLayoutState,
     },
     instance: { id: 'wigley-ai-gui-dev', displayName: 'Auri Dev', isDev: true },
     log: () => undefined,
@@ -191,21 +198,26 @@ describe('mountShellChrome', () => {
         [REGISTERED, undefined, false],
       ],
     },
-    { row: 'an unregistered command', hinted: 'docs.missing', anchors: [] },
+    {
+      row: 'a command no plugin registers yet',
+      hinted: 'docs.missing',
+      anchors: [
+        ['docs.missing', undefined, true],
+        ['docs.missing', undefined, false],
+      ],
+    },
   ])(
-    'setKeys_UserItemHint_AnchorsOnlyARegisteredCommandAndDisposesTheLastDraw: $row',
+    'setLayouts_UserItemHint_AnchorsTheCommandAndDisposesTheLastDraw: $row',
     ({ hinted, anchors }) => {
-      const { chrome } = mountChrome();
+      const recorded = recordingAnchors();
+      const { chrome } = mountChrome(recorded.keys);
       chrome.addMode(mode('docs', 'Docs'), handle());
-      chrome.setLayouts(shownMine(hinted));
-      const first = recordingAnchors();
-      const second = recordingAnchors();
 
-      chrome.setKeys(first.keys);
-      chrome.setKeys(second.keys);
+      chrome.setLayouts(shownMine(hinted));
+      chrome.setLayouts(shownMine(hinted));
 
       expect(
-        [...first.anchors, ...second.anchors].map((anchor) => [
+        recorded.anchors.map((anchor) => [
           anchor.command,
           anchor.scope,
           anchor.isDisposed,

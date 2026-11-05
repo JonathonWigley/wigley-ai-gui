@@ -1,6 +1,11 @@
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { Clock, Timers } from '../../../contracts/ambient';
-import type { ChatEntry, SessionControl } from '../../../contracts/agent';
+import type {
+  AgentCommand,
+  ChatEntry,
+  ProcessActivity,
+  SessionControl,
+} from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
@@ -13,8 +18,10 @@ import type { ChatEntryKind } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import type { KeyedSlotReader, ListSlotReader } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import { isSameJson } from '../../../shared/json';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
@@ -28,9 +35,12 @@ import type {
   AppSlashCommand,
   ChatChannel,
   ChatComposerPart,
+  ChatSessionInfo,
   ChatSessionState,
   ChatSidePart,
   ChatStatusPart,
+  QueuedMessage,
+  ReturnedMessage,
 } from '../contract';
 import {
   type AttachReport,
@@ -85,8 +95,8 @@ export interface ChatView {
   // tab, on a stop with no blocks, or while a composer part's stop holds the
   // cursor.
   focusedBlock(): HTMLElement | null;
-  // The session's clock as main last sent it, from the moment its tab starts
-  // being added; null for a session the view does not hold.
+  // The session's clock in `chat.session`, from before its tab is added; null for
+  // a session with no key there.
   activeTime(sessionId: string): ActiveTime | null;
 }
 
@@ -96,8 +106,8 @@ export interface SessionRef {
   name: string;
 }
 
-// One held chat session as the commands act on it: its state as chat main
-// last sent it, whether its process runs, its message box, the images
+// One held chat session as the commands act on it: its state as the view last
+// applied it, whether its process runs, its message box, the images
 // attached to its next message and its entries. `enterStop` offers the entry
 // cursor to the composer parts' stops, in part order: the id of the part that
 // took it, null when none did. `isBoxFocused` says whether the box holds
@@ -159,9 +169,12 @@ export type ChatTabScope = 'chat';
 // `onActiveChanged` the focused pane's session change and
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in; `sessions` also takes each
-// row's activity and names the focused pane's session. `activeTimeListeners` run
-// when a session arrives and on each `activeTime` message for a held session, a
-// throw skipping none of them. `run` runs
+// row's activity, and `activeSessionId` names the focused pane's session.
+// `slots` holds chat's slots, and `onPageReady` hears that every page part has
+// started: the view reads the sessions already held and follows the slots from
+// then. `activeTimeListeners`
+// run when a session arrives and on each change of a held session's `activeTime`
+// in `chat.session`, a throw skipping none of them. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder, and with
@@ -179,12 +192,15 @@ export type ChatTabScope = 'chat';
 // image.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
+  slots: ChatSlotReaders;
+  onPageReady(listener: () => void): void;
   paths: Paths;
   homeDir: string;
   sessions: Pick<
     SessionsPageExports,
-    'addTab' | 'activate' | 'closeSession' | 'setActivity' | 'selectedSessionId'
+    'addTab' | 'activate' | 'closeSession' | 'setActivity'
   >;
+  activeSessionId(): string | null;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
@@ -215,13 +231,27 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
 }
 
-// A held session's Chat tab. `handle` is null until `addTab` returns, and
+// Chat's slots as the page reads them.
+export interface ChatSlotReaders {
+  session: KeyedSlotReader<ChatSessionInfo>;
+  entries: ListSlotReader<ChatEntry>;
+  controls: KeyedSlotReader<SessionControl[]>;
+  commands: KeyedSlotReader<AgentCommand[]>;
+  queued: KeyedSlotReader<QueuedMessage[]>;
+  returned: KeyedSlotReader<ReturnedMessage[]>;
+}
+
+// A held session's Chat tab. `state` is the view's last applied state: the
+// baseline a `chat.session` write compares with. `handle` is null until `addTab` returns, and
 // `box` and `dropTarget` until the editor mounts into the attached tab.
 // `composerSize` follows the drawn composer's height for as long as the tab is
 // held. `unseen` is the finished turn the row still shows, and `activity` the
 // activity last set on the row. `stop` holds the composer part holding the
 // tab's entry cursor. `main` holds the entries and the composer; `side` is the
 // tab's session hub. `factsListeners` hear each status line draw.
+// `placedReturned` holds each returned message's id once it is handed to the box:
+// `chat.returned` is the whole list, which still names them until main hears
+// `returnedPlaced`.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -242,13 +272,33 @@ interface HeldTab {
   dropTarget: Disposable | null;
   stop: ComposerStopHolder;
   factsListeners: Set<() => void>;
+  placedReturned: Set<string>;
+}
+
+// The session's state in the slots now, from `info`, the value of its key in
+// `chat.session`: main writes that key after the session's lists.
+function stateInSlots(
+  info: ChatSessionInfo,
+  slots: ChatSlotReaders,
+): ChatSessionState {
+  const { sessionId } = info;
+  return {
+    ...info,
+    entries: [...slots.entries.get(sessionId)],
+    controls: slots.controls.get(sessionId) ?? [],
+    commands: slots.commands.get(sessionId) ?? [],
+    queued: slots.queued.get(sessionId) ?? [],
+    returned: slots.returned.get(sessionId) ?? [],
+  };
 }
 
 // One Chat tab per chat session main holds, each with its entries, its
 // pending rows and its composer (the activity line, attached images, message
 // box, and the status line: repo, branch, type hint, control chips, status
 // parts, running indicator, send) in its `.chat-main`, and the session hub
-// beside that, kept up to date from chat main's messages. Each tab is
+// beside that, kept up to date from chat's slots. A key deleted from a slot
+// changes nothing: a closing session's tab stays as drawn until its row leaves.
+// Each tab is
 // selected in its session when added. A layout change draws every tab's
 // entries, pending rows and composer again and builds its side parts again, and
 // a composer or status part added or removed draws every tab's composer again,
@@ -261,9 +311,6 @@ interface HeldTab {
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
-  // Apart from `tabs`: `addTab` draws the side bar's rows, whose clocks read
-  // this, before the tab is in `tabs`.
-  const activeTimes = new Map<string, ActiveTime>();
   // The kinds whose failed draw has toasted since the layouts were shown.
   const toastedKinds = new Set<ChatEntryKind>();
   deps.layouts.onChange(() => {
@@ -308,11 +355,25 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       listener(sessionId, activeTime),
     );
 
-  const add = (state: ChatSessionState) => {
-    if (isDisposed || tabs.has(state.sessionId)) {
+  const { channel, slots } = deps;
+
+  // Hands the box only the messages this page has not placed: each gets one
+  // attempt per page load.
+  const placeNewReturned = (tab: HeldTab, returned: ReturnedMessage[]) => {
+    const fresh = returned.filter(({ id }) => !tab.placedReturned.has(id));
+    for (const { id } of fresh) {
+      tab.placedReturned.add(id);
+    }
+    // `tabs` holds a tab once `createTab` mounted its box.
+    const session = sessionOf(tab, tab.box!, deps.composerParts);
+    placeReturned({ tabs: view, channel, log }, session, fresh);
+  };
+
+  const add = (info: ChatSessionInfo) => {
+    if (isDisposed || tabs.has(info.sessionId)) {
       return;
     }
-    activeTimes.set(state.sessionId, state.activeTime);
+    const state = stateInSlots(info, slots);
     const tab = createTab(state, toastedKinds, deps, {
       isHeld: (heldTab) => tabs.get(heldTab.sessionId) === heldTab,
       // Chat keys act only on the visible Chat tab's session. Every Chat tab
@@ -338,156 +399,106 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     });
     tabs.set(state.sessionId, tab);
     tab.side.sync();
-    placeReturned(
-      { tabs: view, channel, log },
-      state.sessionId,
-      state.returned,
-    );
+    placeNewReturned(tab, state.returned);
     if (pendingReveal === tab.sessionId) {
       showRevealed(tab);
     }
     announceActiveTime(state.sessionId, state.activeTime);
   };
 
-  const heldFor = (message: string, sessionId: string) => {
-    const tab = tabs.get(sessionId);
-    if (tab === undefined) {
-      log(`${message} for unknown session ${sessionId} ignored`);
+  // Runs the block of each value `info` changed. A fresh object from the Bridge
+  // always differs by identity, so the two objects compare by what they hold.
+  const applyInfo = (tab: HeldTab, info: ChatSessionInfo) => {
+    const before = tab.state;
+    tab.state = { ...before, ...info };
+    if (info.running !== before.running) {
+      showRunning(tab, before.running, log);
     }
-    return tab;
+    if (info.activity !== before.activity) {
+      showActivity(tab, before.activity, deps);
+    }
+    if (info.background !== before.background) {
+      log(`${tab.name} has ${info.background} running in the background`);
+      drawActivity(tab, deps);
+    }
+    if (!isSameJson(info.activeTime, before.activeTime)) {
+      announceActiveTime(info.sessionId, info.activeTime);
+    }
+    if (info.repo !== before.repo || info.branch !== before.branch) {
+      showBranch(tab, log);
+    }
+    if (!isSameJson(info.compaction, before.compaction)) {
+      showCompaction(tab, log);
+    }
   };
 
-  // Listeners first: a session `sessions()` returns after its
-  // `sessionStarted` is already held, and adding it again changes nothing.
-  const { channel } = deps;
-  channel.on('sessionStarted', add);
-  channel.on('returned', ({ sessionId, messages }) =>
-    placeReturned({ tabs: view, channel, log }, sessionId, messages),
-  );
-  channel.on('entry', ({ sessionId, entry }) => {
-    const tab = heldFor('entry', sessionId);
-    if (tab !== undefined) {
-      putEntry(tab, entry, log);
-    }
-  });
-  channel.on('controls', ({ sessionId, controls }) => {
-    const tab = heldFor('controls', sessionId);
-    if (tab !== undefined) {
-      setControls(tab, controls, log);
-    }
-  });
-  channel.on('activity', ({ sessionId, activity }) => {
-    const tab = heldFor('activity', sessionId);
-    if (tab !== undefined) {
-      const isTurnEnded = tab.state.activity !== 'idle' && activity === 'idle';
-      const isTurnStarted =
-        tab.state.activity === 'idle' && activity !== 'idle';
-      tab.state = { ...tab.state, activity };
-      tab.entries.setWorking(isWorking(tab.state));
-      drawTurn(tab);
-      if (isTurnEnded) {
-        tab.entries.latest();
-        const focused = deps.sessions.selectedSessionId() === sessionId;
-        tab.unseen = unseenAfterTurnEnd(
-          tab.unseen,
-          focused,
-          tab.state.background,
-        );
+  // A keyed slot's change for a held tab; a key with no tab loses nothing, since
+  // `add` reads the slots when its `chat.session` key arrives, and a delete
+  // changes nothing.
+  const followKeyed = <V>(
+    reader: KeyedSlotReader<V>,
+    apply: (tab: HeldTab, value: V) => void,
+  ) =>
+    reader.on((sessionId, value) => {
+      const tab = tabs.get(sessionId);
+      if (tab !== undefined && value !== undefined) {
+        apply(tab, value);
       }
-      if (isTurnStarted) {
-        tab.unseen = null;
+    });
+
+  // Reads the sessions already held, then follows the slots.
+  deps.onPageReady(() => {
+    try {
+      callEach([...slots.session.all().values()], add);
+    } catch (error) {
+      log(`chat session arrival failed: ${errorText(error)}`);
+    }
+    slots.session.on((sessionId, info) => {
+      if (info === undefined) {
+        return;
       }
-      log(`${tab.name} is ${activity}`);
-      drawActivity(tab, deps);
-      drawStatusLine(tab);
-    }
-  });
-  channel.on('background', ({ sessionId, background }) => {
-    const tab = heldFor('background', sessionId);
-    if (tab !== undefined) {
-      tab.state = { ...tab.state, background };
-      log(`${tab.name} has ${background} running in the background`);
-      drawActivity(tab, deps);
-    }
-  });
-  channel.on('activeTime', ({ sessionId, activeTime }) => {
-    const tab = heldFor('activeTime', sessionId);
-    if (tab !== undefined) {
-      tab.state = { ...tab.state, activeTime };
-      activeTimes.set(sessionId, activeTime);
-      announceActiveTime(sessionId, activeTime);
-    }
-  });
-  channel.on('branch', ({ sessionId, repo, branch }) => {
-    const tab = tabs.get(sessionId);
-    if (tab === undefined) {
-      return;
-    }
-    tab.state = { ...tab.state, repo, branch };
-    drawStatusLine(tab);
-    log(
-      branch === null
-        ? `${tab.name} is in ${repo}, no branch`
-        : `${tab.name} is in ${repo} on ${branch}`,
+      const tab = tabs.get(sessionId);
+      if (tab === undefined) {
+        add(info);
+      } else {
+        applyInfo(tab, info);
+      }
+    });
+    slots.entries.on((sessionId, change) => {
+      const tab = tabs.get(sessionId);
+      if (tab === undefined || change.kind === 'delete') {
+        return;
+      }
+      if (change.kind === 'put') {
+        putEntry(tab, change.item, log);
+      } else {
+        replaceEntries(tab, change.items, log);
+      }
+    });
+    followKeyed(slots.controls, (tab, controls) =>
+      setControls(tab, controls, log),
     );
-  });
-  channel.on('commands', ({ sessionId, commands }) => {
-    const tab = heldFor('commands', sessionId);
-    if (tab !== undefined) {
+    followKeyed(slots.commands, (tab, commands) => {
       tab.state = { ...tab.state, commands };
-    }
-  });
-  channel.on('entries', ({ sessionId, entries }) => {
-    const tab = heldFor('entries', sessionId);
-    if (tab !== undefined) {
-      tab.state = { ...tab.state, entries };
-      tab.entries.rebuild(entries);
-      drawTurn(tab);
-      log(`${entries.length} entries read in ${tab.name}`);
-    }
-  });
-  channel.on('queued', ({ sessionId, queued }) => {
-    const tab = heldFor('queued', sessionId);
-    if (tab !== undefined) {
+    });
+    followKeyed(slots.queued, (tab, queued) => {
       tab.state = { ...tab.state, queued };
       tab.entries.setQueued(queued);
       log(`${queued.length} pending message(s) in ${tab.name}`);
-    }
+    });
+    followKeyed(slots.returned, (tab, returned) => {
+      tab.state = { ...tab.state, returned };
+      placeNewReturned(tab, returned);
+    });
   });
-  channel.on('compaction', ({ sessionId, compaction }) => {
-    const tab = heldFor('compaction', sessionId);
-    if (tab !== undefined) {
-      tab.state = { ...tab.state, compaction };
-      drawTurn(tab);
-      drawStatusLine(tab);
-      log(
-        compaction === null
-          ? `${tab.name} compaction ended`
-          : `${tab.name} compacting: ${compactionLabel(compaction)}`,
-      );
-    }
-  });
-  channel.on('sessionRunning', ({ sessionId }) => {
-    const tab = heldFor('sessionRunning', sessionId);
-    if (tab !== undefined) {
-      tab.state = { ...tab.state, running: true };
-      tab.entries.setWorking(isWorking(tab.state));
-      drawTurn(tab);
-      drawStatusLine(tab);
-      log(`${tab.name} running`);
-    }
-  });
+  // `running: false` reached `chat.session` first, with its draws.
   channel.on('sessionRested', ({ sessionId, error }) => {
-    const tab = heldFor('sessionRested', sessionId);
+    const tab = tabs.get(sessionId);
     if (tab === undefined) {
       return;
     }
     const wasActive = tab.state.activity !== 'idle';
     tab.unseen = unseenAfterRest(tab.unseen, error, wasActive);
-    tab.state = { ...tab.state, running: false };
-    tab.entries.setWorking(isWorking(tab.state));
-    drawTurn(tab);
-    drawStatusLine(tab);
     drawActivity(tab, deps);
     if (tab.handle?.isVisible() === true) {
       deps.visibleSessionRested();
@@ -505,7 +516,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
-    activeTimes.delete(sessionId);
     if (pendingReveal === sessionId) {
       pendingReveal = null;
     }
@@ -530,16 +540,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.stop.scopeChanged(tab.handle?.isVisible() === true);
     }
   });
-  void channel.invoke('sessions').then(
-    (states) => {
-      try {
-        callEach(states, add);
-      } catch (error) {
-        log(`chat session arrival failed: ${errorText(error)}`);
-      }
-    },
-    (error: unknown) => log(`chat sessions not read: ${errorText(error)}`),
-  );
 
   const visibleTab = () =>
     [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);
@@ -572,7 +572,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         ? null
         : tab.entries.focusedBlock();
     },
-    activeTime: (sessionId) => activeTimes.get(sessionId) ?? null,
+    activeTime: (sessionId) => slots.session.get(sessionId)?.activeTime ?? null,
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
@@ -667,7 +667,7 @@ function cursorToEntries(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
-// main reads it once, and it arrives as an `entries` message.
+// main reads it once, and it arrives as a `replace` in `chat.entries`.
 function askHistory(tab: HeldTab, deps: ChatViewDeps) {
   void deps.channel
     .invoke('loadHistory', tab.sessionId)
@@ -735,6 +735,7 @@ function createTab(
       keys: deps.keys,
       commands: deps.commands,
       platform: deps.platform,
+      state: deps.state,
       run: deps.run,
       composerParts: deps.composerParts,
       statusParts: deps.statusParts,
@@ -756,6 +757,7 @@ function createTab(
       keys: deps.keys,
       commands: deps.commands,
       platform: deps.platform,
+      state: deps.state,
       allow: (entry) => deps.permissions.allow(ref, entry),
       deny: (entry) => deps.permissions.deny(ref, entry),
       openImages: (images, index) => deps.viewer.open(images, index),
@@ -805,6 +807,7 @@ function createTab(
       log: deps.log,
     }),
     factsListeners: new Set(),
+    placedReturned: new Set(),
   };
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);
@@ -816,6 +819,7 @@ function createTab(
     title: 'Chat',
     icon: 'comment',
     element: root,
+    order: 2,
     beforeClose: () => view.beforeClose(tab),
     shown: () => view.shown(tab),
   });
@@ -926,6 +930,71 @@ function putEntry(tab: HeldTab, entry: ChatEntry, log: PluginLog) {
   if (applied.added) {
     log(`${entry.kind} entry added in ${tab.name}`);
   }
+}
+
+function replaceEntries(
+  tab: HeldTab,
+  items: readonly ChatEntry[],
+  log: PluginLog,
+) {
+  const entries = [...items];
+  tab.state = { ...tab.state, entries };
+  tab.entries.rebuild(entries);
+  drawTurn(tab);
+  log(`${entries.length} entries read in ${tab.name}`);
+}
+
+// `tab.state.running` changed: it owns the working line, whichever way it went.
+function showRunning(tab: HeldTab, wasRunning: boolean, log: PluginLog) {
+  tab.entries.setWorking(isWorking(tab.state));
+  drawTurn(tab);
+  drawStatusLine(tab);
+  if (!wasRunning) {
+    log(`${tab.name} running`);
+  }
+}
+
+// `tab.state.activity` changed from `previous`.
+function showActivity(
+  tab: HeldTab,
+  previous: ProcessActivity,
+  deps: Pick<ChatViewDeps, 'sessions' | 'activeSessionId' | 'log'>,
+) {
+  const { activity } = tab.state;
+  tab.entries.setWorking(isWorking(tab.state));
+  drawTurn(tab);
+  if (previous !== 'idle' && activity === 'idle') {
+    tab.entries.latest();
+    const focused = deps.activeSessionId() === tab.sessionId;
+    tab.unseen = unseenAfterTurnEnd(tab.unseen, focused, tab.state.background);
+  }
+  if (previous === 'idle' && activity !== 'idle') {
+    tab.unseen = null;
+  }
+  deps.log(`${tab.name} is ${activity}`);
+  drawActivity(tab, deps);
+  drawStatusLine(tab);
+}
+
+function showBranch(tab: HeldTab, log: PluginLog) {
+  const { repo, branch } = tab.state;
+  drawStatusLine(tab);
+  log(
+    branch === null
+      ? `${tab.name} is in ${repo}, no branch`
+      : `${tab.name} is in ${repo} on ${branch}`,
+  );
+}
+
+function showCompaction(tab: HeldTab, log: PluginLog) {
+  const { compaction } = tab.state;
+  drawTurn(tab);
+  drawStatusLine(tab);
+  log(
+    compaction === null
+      ? `${tab.name} compaction ended`
+      : `${tab.name} compacting: ${compactionLabel(compaction)}`,
+  );
 }
 
 function setControls(tab: HeldTab, controls: SessionControl[], log: PluginLog) {

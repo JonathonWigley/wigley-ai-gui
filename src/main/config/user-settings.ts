@@ -138,6 +138,16 @@ function mergeObject(
   return merged;
 }
 
+// The defaults as a `settings.json` lays them out: core settings by name, each
+// plugin's under its id. An id sharing a core name declares no settings, so that
+// key is the core setting's.
+export function settingsFileDefaults(
+  defaults: Settings,
+  pluginDefaults: Record<string, object>,
+): Record<string, unknown> {
+  return { ...pluginDefaults, ...defaults };
+}
+
 // The settings `text`, a `settings.json`, deep-merges over the defaults: core
 // settings by name, each plugin's under its id. Throws an Error whose message
 // is the first problem found, as the user reads it.
@@ -146,16 +156,16 @@ export function mergeUserSettings(
   schema: SettingsSchema,
 ): UserSettings {
   const user = parseJsonObject(text);
-  const defaults: Record<string, unknown> = {
-    ...schema.defaults,
-    ...schema.pluginDefaults,
-  };
+  const defaults = settingsFileDefaults(schema.defaults, schema.pluginDefaults);
   const merged = mergeObject('', defaults, user, schema);
   const settings = Object.fromEntries(
     Object.keys(schema.defaults).map((key) => [key, merged[key]]),
   ) as unknown as Settings;
   const pluginSettings = Object.fromEntries(
-    Object.keys(schema.pluginDefaults).map((id) => [id, merged[id] as object]),
+    Object.entries(schema.pluginDefaults).map(([id, fallback]) => [
+      id,
+      Object.hasOwn(schema.defaults, id) ? fallback : (merged[id] as object),
+    ]),
   );
   return { settings, pluginSettings };
 }

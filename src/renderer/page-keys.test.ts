@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
+import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import { createChordMatcher, createSequenceMatcher } from './key-sequences';
 import {
@@ -7,6 +8,7 @@ import {
   dropPendingKeys,
   feedChordKey,
   feedPageKey,
+  installPageKeys,
 } from './page-keys';
 
 const TIMEOUT_MS = 1000;
@@ -256,5 +258,100 @@ describe('createPendingTimeout', () => {
     timeout.arm();
 
     expect(armed.size).toBe(0);
+  });
+});
+
+describe('installPageKeys', () => {
+  // Installs the engine over stubbed page globals, with no binds; `press` sends a
+  // key.
+  function installed(has = true) {
+    const keydowns: ((event: unknown) => void)[] = [];
+    const target = {
+      addEventListener: (type: string, listener: (event: unknown) => void) => {
+        if (type === 'keydown') {
+          keydowns.push(listener);
+        }
+      },
+      activeElement: null,
+    };
+    vi.stubGlobal('document', target);
+    vi.stubGlobal('window', target);
+    const runs: unknown[][] = [];
+    const logs: string[] = [];
+    const engine = installPageKeys(
+      TIMEOUT_MS,
+      () => 'any',
+      {
+        contains: () => false,
+        takesChordKey: () => false,
+      } as unknown as EditorHost,
+      {
+        run: (...args) => {
+          runs.push(args);
+          return Promise.resolve();
+        },
+        has: () => has,
+        requireRegistered: () => {},
+      },
+      (source, message) => void logs.push(`${source}: ${message}`),
+      fakeTimers().timers,
+      { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
+    );
+    const press = (key: string) => {
+      for (const keydown of keydowns) {
+        keydown({
+          key,
+          target: null,
+          timeStamp: 0,
+          preventDefault: () => {},
+          stopPropagation: () => {},
+        });
+      }
+    };
+    return { engine, press, runs, logs };
+  }
+
+  it('setBinds_FirstCall_KeysStartFiring', () => {
+    const { engine, press, runs } = installed();
+
+    press('x');
+    expect(runs).toEqual([]);
+
+    engine.setBinds(
+      [{ keys: ['x'], scope: 'any', command: 'p.x' }],
+      TIMEOUT_MS,
+    );
+    press('x');
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([['p.x', undefined, {}]]);
+  });
+
+  it('runBind_Arg_PassesItToTheRun', () => {
+    const { engine, press, runs, logs } = installed();
+    engine.setBinds(
+      [{ keys: ['1'], scope: 'any', command: 'forms.choose', arg: 1 }],
+      TIMEOUT_MS,
+    );
+
+    press('1');
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([['forms.choose', 1, {}]]);
+    expect(logs).toEqual(['page: 1 ran forms.choose 1']);
+  });
+
+  it('runBind_RuntimeCommandGone_LogsAndRunsNothing', () => {
+    const { engine, press, runs, logs } = installed(false);
+    engine.setBinds(
+      [{ keys: ['r'], scope: 'any', command: 'r.gone' }],
+      TIMEOUT_MS,
+    );
+
+    press('r');
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([]);
+    expect(logs).toEqual(['page: r names no command r.gone']);
   });
 });

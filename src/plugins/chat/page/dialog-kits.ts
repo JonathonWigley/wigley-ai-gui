@@ -9,7 +9,7 @@ import {
 } from '../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
-import type { KeysPageExports } from '../../keys/contract';
+import type { KeyHints } from '../../../contracts/plugin';
 import {
   type ChatCommandName,
   type ChatScopeName,
@@ -50,7 +50,7 @@ export interface DialogAction {
 export function dialogActions(
   actions: readonly DialogAction[],
   deps: {
-    keys: Pick<KeysPageExports, 'anchor'>;
+    keys: Pick<KeyHints, 'anchor'>;
     run(command: CommandId): void;
   },
 ): HTMLElement {

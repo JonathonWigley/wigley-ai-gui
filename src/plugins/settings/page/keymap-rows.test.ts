@@ -296,3 +296,64 @@ describe('coverTexts', () => {
     },
   );
 });
+
+describe('a command with an argument', () => {
+  const pick: CommandInfo = { ...command('p.pick'), arg: 'number' };
+  const argsOf = (groups: ReturnType<typeof keymapRows>) =>
+    groups
+      .flatMap((group) => group.rows)
+      .filter((each) => each.command.id === 'p.pick')
+      .map((each) => each.arg);
+
+  it('keymapRows_ArgCommand_OneRowPerBoundArgAndNoneWhenUnbound', () => {
+    const defaults = [
+      { keys: '1', scope: 'p.s', command: 'p.pick', arg: 1 },
+      { keys: '2', scope: 'p.s', command: 'p.pick', arg: 2 },
+      { keys: 'x', scope: 'p.s', command: 'p.pick', arg: 1 },
+    ];
+
+    const groups = keymapRows(schema([pick], defaults), null);
+
+    expect(argsOf(groups)).toEqual([1, 2]);
+    const first = groups[0].rows[0];
+    expect(first.binds.map((line) => line.bind.keys)).toEqual(['1', 'x']);
+    expect(argsOf(keymapRows(schema([pick], []), null))).toEqual([]);
+  });
+
+  it('keymapRows_ArgCommand_UserLineGivesARow', () => {
+    const groups = keymapRows(schema([pick], []), {
+      binds: [{ keys: '7', scope: 'p.s', command: 'p.pick', arg: 7 }],
+    });
+
+    expect(argsOf(groups)).toEqual([7]);
+  });
+
+  it('keymapRows_ArgCommand_AcceleratorGivesARow', () => {
+    const mainPick: CommandInfo = { ...pick, runsIn: 'main' };
+    const groups = keymapRows(
+      schema(
+        [mainPick],
+        [],
+        [{ accelerator: 'Alt+K', command: 'p.pick', arg: 4 }],
+      ),
+      null,
+    );
+
+    expect(argsOf(groups)).toEqual([4]);
+  });
+
+  it('replacedBy_SameCommandOtherArg_ReportsTheDisplacedRow', () => {
+    const defaults = [
+      { keys: '2', scope: 'p.s', command: 'p.pick', arg: 2 },
+      { keys: '3', scope: 'p.s', command: 'p.pick', arg: 3 },
+    ];
+    const withPick = schema([pick], defaults);
+
+    expect(ids(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 2))).toEqual([
+      'p.pick',
+    ]);
+    expect(ids(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 3))).toEqual(
+      [],
+    );
+  });
+});

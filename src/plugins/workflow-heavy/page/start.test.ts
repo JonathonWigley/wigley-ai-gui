@@ -7,8 +7,6 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import type { DocsPageExports } from '../../docs/contract';
 import { docsPageKey } from '../../docs/contract';
-import type { SessionsPageExports } from '../../sessions/contract';
-import { sessionsPageKey } from '../../sessions/contract';
 import {
   type PageWorkflow,
   type SessionFlow,
@@ -49,11 +47,6 @@ function progressOf(fields: Partial<PlanProgress>): PlanProgress {
   };
 }
 
-const NO_SESSIONS = fakeDependency(
-  sessionsPageKey,
-  () => ({ selectedSessionId: () => null }) as unknown as SessionsPageExports,
-);
-
 // Heavy's part over a fake engine that holds the workflow it adds, recording each
 // main action and opened doc.
 function setUp() {
@@ -73,7 +66,6 @@ function setUp() {
             createWorkflowDraw: () => ({}) as WorkflowDraw,
           }) as unknown as WorkflowPageExports,
       ),
-      NO_SESSIONS,
       fakeDependency(
         docsPageKey,
         () => ({ openDoc }) as unknown as DocsPageExports,
@@ -95,7 +87,6 @@ function startOverTheEngine() {
   const heavy = startPagePart(workflowHeavyPagePart, {
     dependencies: [
       dependency,
-      NO_SESSIONS,
       fakeDependency(docsPageKey, () => ({}) as unknown as DocsPageExports),
     ],
   });

@@ -223,8 +223,24 @@ export const docsMainKey: DependencyKey<DocsMainExports, 'main', 'docs'> = {
 
 // `indexLoaded`: a `loadIndex` or `rebuildIndex` channel call (the page's
 // own reads) finished reading the source `sourceId`.
+// `docSaved`: text or bytes written, by the page or an export. A write that
+// finds the file changed on disk saved nothing and fires none.
+// `docCreated`, `docRenamed`: the page's create or rename landed; `to` is the
+// path the doc now has.
+// `docTrashed`: a trash moved `trashed`; a partial trash fires for what went, and
+// one that moved nothing fires none.
 export interface DocsMainEvents extends EventShape {
   indexLoaded: { sourceId: string };
+  docSaved: { path: string };
+  docCreated: { path: string };
+  docTrashed: { path: string; trashed: string[] };
+  docRenamed: { from: string; to: string };
+}
+
+// `docOpened`: a docs view showed the doc at `path`. A refused or failed open
+// fires none, and neither does a close or the open doc moving.
+export interface DocsPageEvents extends EventShape {
+  docOpened: { path: string };
 }
 
 // One docs view `addView` handed out: `element` holds its tree and doc in a
@@ -352,7 +368,6 @@ export interface DocsChannel extends ChannelShape {
     // One watched file per watch id; `path` null stops that watch.
     watchDoc(viewId: string, path: string | null): Promise<void>;
     unwatchAll(): Promise<void>;
-    openExternal(url: string): Promise<void>;
     // The config file that lists plugin `key` (`<plugin>@<marketplace>`) and
     // the 1-based line holding it; null when none lists it.
     pluginConfigFile(

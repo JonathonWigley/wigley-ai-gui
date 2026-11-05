@@ -14,7 +14,7 @@ import {
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
-import { buildLayoutCard } from './layout-cards';
+import { buildLayoutCard, recordingDeps } from './layout-cards';
 import {
   asFake,
   asHtml,
@@ -22,6 +22,7 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // A round of one finding, open and active.
 function findingRound(): RoundState {
@@ -52,9 +53,11 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
       anchor: () => ({ dispose: () => undefined }),
     },
     platform: 'macos',
+    state: noLayoutState,
     log: vi.fn(),
-    commands: { exists: () => false, run: vi.fn() },
+    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
     contributions,
+    recordAnchor: () => {},
     recordMount: () => {},
   };
 }
@@ -127,6 +130,29 @@ describe('hostCard', () => {
     card.update(round);
 
     expect(calls).toEqual(['card', 'p1', 'p2']);
+  });
+});
+
+describe('recordingDeps', () => {
+  it('recordingDeps_RecordAnchor_RecordsInDepsAndRollback', () => {
+    const inDeps: unknown[] = [];
+    const inRollback: unknown[] = [];
+    const deps = recordingDeps(
+      {
+        ...fakeCardDeps(createFormsContributions()),
+        recordAnchor: (anchor) => inDeps.push(anchor),
+      },
+      {
+        recordBox: () => undefined,
+        recordAnchor: (anchor) => inRollback.push(anchor),
+      },
+    );
+    const handle = { dispose: () => undefined };
+
+    deps.recordAnchor(handle);
+
+    expect(inDeps).toEqual([handle]);
+    expect(inRollback).toEqual([handle]);
   });
 });
 

@@ -221,6 +221,11 @@ plugin data. The keys are pinned: `at`, `sessionId`, `projectDir`, `workflow`, `
 spend since then (null when no spend arrived since the run began; a process figure that falls counts as a new process
 and carries), and `fixCycles` is the workflow's own review fix count. Nothing draws the log.
 
+`costUsd` runs one turn behind. Spend updates at a turn's result and a finishing stage lands mid-turn, so a run's last turn
+is not in the figure, and a one-turn run logs null. The user accepted this at landing, after the real Light check logged null
+ahead of $0.36 of spend: the log compares levels. A level whose runs are often one turn, as Light's can be, needs the line
+written at the turn's end before its cost can be compared.
+
 A re-attach replays its process's whole log, each event flagged `replayed`, over the saved flow. `flows.json` holds each
 flow's save time, stamped by a change from a live event or from Make in new session or Dismiss, not by a plan read, a
 replay or a countdown's Cancel or firing. A replayed event

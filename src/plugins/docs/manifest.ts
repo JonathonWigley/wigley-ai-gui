@@ -7,7 +7,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // `recentChangesLimit` caps the commits the Main page's Recent changes lists.
 export const docsManifest = definePlugin({
   id: 'docs',
-  dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
+  dependsOn: { main: ['sessions'], page: ['sessions'] },
+  reads: { main: [], page: [] },
   commands: {
     showMode: {
       label: 'docs (again: toggle the tree)',

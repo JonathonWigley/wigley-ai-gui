@@ -7,46 +7,65 @@ import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
-import type { CommandId } from '../contracts/commands';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+} from '../contracts/core-state';
 import {
   PANE_DIRECTIONS,
   PANE_FOCUS_COMMANDS,
   PANE_RESIZE_COMMANDS,
 } from '../contracts/panes';
-import type { PageCommandContext } from '../contracts/plugin';
+import type {
+  CommandHandler,
+  KeyHints,
+  PageCommandContext,
+} from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
-import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
+import { promptKeysFor } from '../shared/keys-for';
 import { focusOutOfFrame } from '../shared/page/dom';
-import type { BaseKitDeps } from '../shared/page/layout-host/base-kit';
 import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { icon } from '../shared/page/ui/icon';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
-import { qualify } from '../shared/plugin-manifests';
+import { runBound } from '../shared/command-router';
+import { commandLabel, qualify } from '../shared/plugin-manifests';
 import { createRegistrations } from '../shared/registrations';
+import {
+  createRuntimeCommands,
+  EMPTY_RUNTIME_CATALOG,
+} from '../shared/runtime-commands';
+import { layoutState } from '../shared/state/slot-store';
+import { wireAnchors } from './anchor-wiring';
+import { createBoxFocus } from './box-focus';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { createDropTargets } from './drop-targets';
-import { editorBindInForce } from './editor-binds';
+import { runEditorBind } from './editor-binds';
 import { createFabricMarkupEditor } from './fabric/fabric-markup-editor';
 import { createFzfMatcher } from './fzf/fzf-matcher';
-import { createLiveConfig } from './live-config';
+import { createAnchors } from './key-anchors';
+import { createLiveConfig, onChangedPart } from './live-config';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
-import { createPageApi, type PageApiServices } from './plugins/page-api';
+import {
+  createPageApi,
+  liveKeysFor,
+  type PageApiServices,
+} from './plugins/page-api';
 import defaultChromeLayout from './shell/layouts/default/layout.js';
 import defaultChromeStylesheet from './shell/layouts/default/layout.css?url';
 import type { Layout as ChromeLayout } from './shell/layouts/layout';
@@ -59,14 +78,13 @@ import { startedPluginsConfig } from './started-config';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
+import { startPageCoreSlots } from './state/core-slots';
+import { createPageState } from './state/page-state';
 import { createPageUiState } from './ui-state';
 import { createVisualFrames } from './visual-frames/visual-frames';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
-
-// The plugin whose exports anchor the shell chrome's key hints.
-const KEYS_PLUGIN_ID = 'keys';
 
 const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),
@@ -104,12 +122,40 @@ async function start() {
   // load.
   const served = await bridge.config();
   const pageLoadList = served.settings.plugins.disabled;
-  const config = startedPluginsConfig(served, pageLoadList);
+  const registry = new CommandRegistry<PageCommandContext<any>>(log);
+  const hasHandler = (id: string) => registry.has(id);
+  const config = startedPluginsConfig(served, pageLoadList, hasHandler);
   // Read before the plugins start, so each reads its state as it starts.
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
   );
+  const state = await createPageState(bridge, log);
   const live = createLiveConfig(config, log);
+  // Written before any plugin starts: it tells main the old page's commands are gone.
+  const runtimeCatalog = state.publish(coreRuntimePageSlot);
+  runtimeCatalog.set(EMPTY_RUNTIME_CATALOG);
+  const commands = createRuntimeCommands<PageCommandContext<any>>({
+    process: 'page',
+    registry,
+    writer: runtimeCatalog,
+    other: state.read(coreRuntimeMainSlot, 'core'),
+    served: () => live.current().commands,
+    leader: () => live.current().keymap.editor.leader,
+    async remote(id, arg) {
+      try {
+        await bridge.runCommand(id, arg);
+      } catch (error) {
+        log('commands', `command ${id} failed: ${errorText(error)}`);
+      }
+    },
+  });
+  bridge.onRunCommand(async (id, arg) => {
+    try {
+      await commands.router.run(id, arg);
+    } catch (error) {
+      log('commands', `command ${id} failed: ${errorText(error)}`);
+    }
+  });
   const { settings, keymap } = config;
   const visualFrames = createVisualFrames({
     serveVisual: (source) => bridge.serveVisual(source),
@@ -126,26 +172,47 @@ async function start() {
   );
   themeApplier.apply(config.theme, settings);
 
-  document.documentElement.dataset.platform = config.platform;
+  document.documentElement.dataset.platform = config.platform.os;
+  const scopeStack = createScopeStack(INITIAL_SCOPE);
+  // Anchors use `promptKeysFor`: a prompt skips vim's own keys.
+  const anchors = createAnchors({
+    keysFor: (command, scope, where, arg) => {
+      const { keymap, platform } = live.current();
+      return promptKeysFor(keymap, command, scope, platform.os, where, arg);
+    },
+    label: (id) => commandLabel(live.current().commands, id),
+    scope: () => scopeStack.current(),
+    platform: live.current().platform.os,
+  });
+  wireAnchors({ live, scopeStack, anchors });
+  const keyHints: KeyHints = {
+    keysFor: liveKeysFor(live),
+    anchor: anchors.anchor,
+    onKeymapChanged: (listener) =>
+      onChangedPart(live, (served) => served.keymap, listener),
+  };
   const shell = mountShell(
     document.getElementById('app') as HTMLElement,
     defaultShellLayout,
     uiState.scoped('shell'),
     timers,
+    keyHints,
   );
   const { areas } = shell;
-  const commands = new CommandRegistry<PageCommandContext>();
   const markdown = createMarkdownItRenderer(createCodeMirrorHighlighter());
   const chrome = mountShellChrome({
     areas,
     defaultLayout: defaultChromeLayout,
     services: {
       markdown,
-      platform: config.platform,
+      keys: keyHints,
+      platform: config.platform.os,
       commands: {
-        exists: (id) => commands.has(id),
-        run: (id) => commands.run(id, {}),
+        exists: (id) => live.current().commands[id] !== undefined,
+        argShape: (id) => live.current().commands[id]?.arg,
+        run: (id) => commands.router.run(id, undefined),
       },
+      state: layoutState(state, 'shell', (handle) => handle),
     },
     instance: config.appInstance,
     log,
@@ -176,7 +243,11 @@ async function start() {
   const toasts = createToasts(toastLayer, timers);
   chrome.showProblems(config.problems);
 
-  const scopeStack = createScopeStack(INITIAL_SCOPE);
+  const coreSlots = startPageCoreSlots(state, {
+    scope: scopeStack,
+    modes,
+    theme: config.theme.name,
+  });
   const paneTargets = createPaneTargets(
     shell.sideBarDivider,
     () => scopeStack.anyPushed(),
@@ -192,36 +263,40 @@ async function start() {
     isShown: (element) => element.checkVisibility(),
   });
   for (const direction of PANE_DIRECTIONS) {
-    commands.register(PANE_RESIZE_COMMANDS[direction], () =>
-      paneTargets.resize(direction),
+    registry.register(
+      PANE_RESIZE_COMMANDS[direction],
+      () => paneTargets.resize(direction),
+      'core',
     );
-    commands.register(PANE_FOCUS_COMMANDS[direction], () =>
-      paneTargets.focus(direction),
+    registry.register(
+      PANE_FOCUS_COMMANDS[direction],
+      () => paneTargets.focus(direction),
+      'core',
     );
   }
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
-  // An insert-mode key with no bind in force types as it would unbound, so
-  // only a normal-mode miss is logged.
-  const paths = config.platform === 'windows' ? windowsPaths : posixPaths;
+  const paths = config.platform.os === 'windows' ? windowsPaths : posixPaths;
   const fuzzy = createFzfMatcher();
   const editor = createCodeMirrorVimHost(
     keymap.editor,
-    (binds, fired) => {
-      const choice = editorBindInForce(binds, scopeStack.current());
-      if (choice.kind === 'run') {
-        commands.run(choice.bind.command, { editor: fired });
-        return true;
-      }
-      if (editorBindMode(binds[0]) === 'normal') {
-        log('page', choice.message);
-      }
-      return false;
-    },
+    (binds, fired) =>
+      runEditorBind(binds, fired, {
+        scope: () => scopeStack.current(),
+        run: (bind, editorFired) =>
+          runBound(
+            commands.keyCommands,
+            bind,
+            { keys: bind.keys, source: 'page', log },
+            { editor: editorFired },
+          ),
+        log,
+      }),
     log,
     { paths, fileIcon: () => icon('file') },
     fuzzy,
   );
+  const boxFocus = createBoxFocus(document, editor);
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
   const services: PageApiServices = {
@@ -237,16 +312,25 @@ async function start() {
     paths,
     homeDir: config.homeDir,
     runMode: config.runMode,
+    chooseFolder: () => bridge.chooseFolder(),
+    openExternal: (url) => bridge.openExternal(url),
   };
-  // Filled once the page keys are installed; no key reaches the engine before.
-  let pageKeys: ReturnType<typeof installPageKeys> | null = null;
+  // Starts with no binds, since `createPendingKeys` needs it first and binds wait
+  // for the parts: a key pressed while they start matches nothing.
+  const pageKeys = installPageKeys(
+    settings.keySequenceTimeoutMs,
+    () => scopeStack.current(),
+    editor,
+    commands.keyCommands,
+    log,
+    timers,
+    boxFocus,
+  );
   const pendingKeys = createPendingKeys({
-    page: { hold: () => pageKeys?.hold(), cancel: () => pageKeys?.cancel() },
+    page: pageKeys,
     editor,
     scope: () => scopeStack.current(),
   });
-  const run = (id: CommandId, context: PageCommandContext = {}) =>
-    commands.run(id, context);
   const bus = createEventBus();
   const layouts = createPageLayouts({
     bridge,
@@ -266,7 +350,7 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  const host = startPlugins(
+  startPlugins(
     pageParts,
     'page',
     (part, context) => {
@@ -284,20 +368,25 @@ async function start() {
           config: live,
           services,
           uiState,
-          run,
+          commands,
           dependency: context.dependency,
           registrations: context.registrations,
           bus,
           layouts,
           paneTargets,
           drops,
+          state,
+          anchors,
+          boxFocus,
         }),
       );
-      const handlers: Record<string, (context: PageCommandContext) => void> =
-        started.commands;
+      const handlers: Record<
+        string,
+        CommandHandler<PageCommandContext<any>>
+      > = started.commands;
       for (const [short, handler] of Object.entries(handlers)) {
         context.registrations.track(
-          commands.register(qualify(id, short), handler),
+          registry.register(qualify(id, short), handler, id),
         );
       }
       return started;
@@ -306,30 +395,16 @@ async function start() {
     pageLoadList,
     log,
   );
-  // The core's own store for the chrome's view of keys, kept for the page load.
-  const shellRegistrations = createRegistrations();
-  const keysExports = host.started
-    .get(KEYS_PLUGIN_ID)
-    ?.exports?.(shellRegistrations);
-  if (keysExports !== undefined) {
-    chrome.setKeys(keysExports as BaseKitDeps['keys']);
-    shell.setKeys(keysExports as BaseKitDeps['keys']);
-  }
-  commands.requireRegistered(
+  anchors.reveal();
+  registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
+  runtimeCatalog.set({
+    ...(runtimeCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
+    started: true,
+  });
   // Building the matcher rejects a page key bound twice in one scope.
-  const installed = installPageKeys(
-    keymap.page,
-    settings.keySequenceTimeoutMs,
-    () => scopeStack.current(),
-    editor,
-    commands,
-    log,
-    timers,
-    (keys, scope) => pendingKeys.reportPage(keys, scope),
-  );
-  pageKeys = installed;
+  pageKeys.setBinds(keymap.page, settings.keySequenceTimeoutMs);
 
   announceNewProblems(config.problems, [], toasts, log);
   const applyStartedPush = createConfigPush(
@@ -346,22 +421,24 @@ async function start() {
         apply(theme, applied) {
           themeApplier.apply(theme, applied);
           shell.reloadBarOpenWidths();
+          coreSlots.themeApplied(theme.name);
         },
       },
       editor,
-      commands,
-      pageKeys: installed,
+      commands: registry,
+      pageKeys,
       problems: { show: (next) => chrome.showProblems(next) },
       toasts,
       log,
     },
   );
   applyPush = (next) =>
-    applyStartedPush(startedPluginsConfig(next, pageLoadList));
+    applyStartedPush(startedPluginsConfig(next, pageLoadList, hasHandler));
   if (heldPush !== null) {
     applyPush(heldPush);
     heldPush = null;
   }
+  bus.emit(qualify('core', 'pageReady'), null);
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
   document.body.dataset.ready = 'true';

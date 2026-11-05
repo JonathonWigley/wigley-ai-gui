@@ -1,18 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import type { SessionInfo } from '../../sessions/contract';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type { Roster } from '../contract';
+import { agentsRostersSlot, type Roster } from '../contract';
 import { createAgentsPreview } from './preview';
 
 const NOW = 900_000;
 
 // A preview over sessions whose `open` hands out rows `row-1`, `row-2`, …;
-// `rosters` holds each `rosterChanged` sent, `ends` each row whose owned
+// `rosters` holds each notice of a real store's slot, `roster` undefined for a
+// deleted key, `slot` reads that slot, and `ends` holds each row whose owned
 // session ended.
 function setUp() {
   const opened: [SessionInfo, unknown][] = [];
   const ends: string[] = [];
-  const rosters: { sessionId: string; roster: Roster }[] = [];
+  const rosters: { sessionId: string; roster: Roster | undefined }[] = [];
+  const store = createSlotStore(() => undefined);
+  const writer = store.publish(agentsRostersSlot);
+  store
+    .read(agentsRostersSlot, 'test')
+    .on((sessionId, roster) => rosters.push({ sessionId, roster }));
   const activate = vi.fn<(sessionId: string) => void>();
   const preview = createAgentsPreview({
     sessions: {
@@ -28,22 +35,19 @@ function setUp() {
       activate,
     },
     clock: { now: () => NOW },
-    send: (message, data) => {
-      if (message === 'rosterChanged') {
-        rosters.push(data);
-      }
-    },
+    rosters: writer,
     log: () => undefined,
   });
-  return { preview, opened, ends, rosters, activate };
+  const slot = () => Object.fromEntries(writer.all());
+  return { preview, opened, ends, rosters, slot, activate };
 }
 
 describe('agents preview', () => {
   it('toggle_Twice_OpensSampleThenEndsRow', () => {
-    const { preview, opened, ends, rosters, activate } = setUp();
+    const { preview, opened, ends, rosters, slot, activate } = setUp();
 
     preview.toggle();
-    const afterOpen = { ends: [...ends], rosters: preview.rosters() };
+    const afterOpen = { ends: [...ends], rosters: slot() };
     preview.toggle();
 
     expect(opened).toEqual([
@@ -54,7 +58,7 @@ describe('agents preview', () => {
     ]);
     expect(activate).toHaveBeenCalledWith('row-1');
     expect(rosters[0].sessionId).toBe('row-1');
-    const sample = rosters[0].roster;
+    const sample = rosters[0].roster!;
     expect(sample.agents.map((agent) => agent.startedAt)).toEqual([
       NOW - 42_000,
       NOW - 185_000,
@@ -139,15 +143,12 @@ describe('agents preview', () => {
       rosters: { 'row-1': sample },
     });
     expect(ends).toEqual(['row-1']);
-    expect(rosters[1]).toEqual({
-      sessionId: 'row-1',
-      roster: { agents: [], tasks: [], skills: [] },
-    });
-    expect(preview.rosters()).toEqual({});
+    expect(rosters[1]).toEqual({ sessionId: 'row-1', roster: undefined });
+    expect(slot()).toEqual({});
   });
 
   it('closed_PreviewRow_NextToggleOpensAgain', () => {
-    const { preview, opened, ends } = setUp();
+    const { preview, opened, ends, slot } = setUp();
     preview.toggle();
 
     preview.closed('other-row');
@@ -158,22 +159,19 @@ describe('agents preview', () => {
     expect(afterOther).toEqual([]);
     expect(ends).toEqual(['row-1']);
     expect(opened).toHaveLength(2);
-    expect(Object.keys(preview.rosters())).toEqual(['row-2']);
+    expect(Object.keys(slot())).toEqual(['row-2']);
   });
 
-  it('close_OpenPreview_SendsEmptyRoster', () => {
-    const { preview, ends, rosters } = setUp();
+  it('close_OpenPreview_DeletesTheKey', () => {
+    const { preview, ends, rosters, slot } = setUp();
     preview.toggle();
 
     preview.close();
     preview.close();
 
     expect(rosters).toHaveLength(2);
-    expect(rosters[1]).toEqual({
-      sessionId: 'row-1',
-      roster: { agents: [], tasks: [], skills: [] },
-    });
-    expect(preview.rosters()).toEqual({});
+    expect(rosters[1]).toEqual({ sessionId: 'row-1', roster: undefined });
+    expect(slot()).toEqual({});
     expect(ends).toEqual([]);
   });
 });

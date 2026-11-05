@@ -1,12 +1,14 @@
 // Type tests, checked under `vitest --typecheck`: the line after each
 // `@ts-expect-error` must fail to compile.
 import { assertType, describe, it } from 'vitest';
+import type { CommandKey } from '../contracts/commands';
 import type {
   ChannelShape,
   DependencyKey,
   MainApi,
   PageApi,
   PageStart,
+  PluginManifest,
   SettingInfos,
 } from '../contracts/plugin';
 import { definePlugin } from './define-plugin';
@@ -14,6 +16,7 @@ import { definePlugin } from './define-plugin';
 const manifest = definePlugin({
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     go: { label: 'Go', group: 'Moves', runsIn: 'page' },
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },
@@ -103,11 +106,25 @@ describe('definePlugin', () => {
     >({ 'window.width': info, 'fonts.ui': info, list: info });
   });
 
+  it('requires reads, as dependsOn', () => {
+    // @ts-expect-error -- `reads` is missing
+    definePlugin({
+      id: 'r',
+      dependsOn: { main: [], page: [] },
+      commands: {},
+      scopes: {},
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    });
+  });
+
   it('types dependency keys so a wrong process or an undeclared id fails to compile', () => {
     const q = definePlugin({
       ...manifest,
       id: 'q',
       dependsOn: { main: [], page: ['a'] },
+      reads: { main: [], page: [] },
     });
     const pageApi = {} as PageApi<typeof q, ChannelShape>;
     const mainApi = {} as MainApi<typeof q, ChannelShape>;
@@ -139,5 +156,50 @@ describe('definePlugin', () => {
       mainApi.dependency('a');
     };
     assertType<() => void>(typeChecksOnly);
+  });
+
+  it('types a command argument from its declaration', () => {
+    const withArgs = definePlugin({
+      ...manifest,
+      commands: {
+        go: { label: 'Go', group: 'Moves', runsIn: 'page' },
+        pick: { label: 'Pick', group: 'Moves', runsIn: 'page', arg: 'number' },
+        place: {
+          label: 'Place',
+          group: 'Moves',
+          runsIn: 'page',
+          arg: { x: 'number', name: 'string' },
+        },
+      },
+      keys: {},
+    });
+    assertType<PageStart<typeof withArgs>>({
+      commands: {
+        go: (context) => assertType<undefined>(context.arg),
+        pick: (context) => assertType<number>(context.arg),
+        place: (context) => {
+          assertType<number>(context.arg.x);
+          assertType<string>(context.arg.name);
+        },
+      },
+    });
+    assertType<PageStart<typeof withArgs>>({
+      commands: {
+        go: () => {},
+        // @ts-expect-error -- `pick` takes a number
+        pick: (context) => assertType<string>(context.arg),
+        place: () => {},
+      },
+    });
+
+    // The body only type-checks: the API here is an empty fake.
+    const pageApi = {} as PageApi<PluginManifest, ChannelShape>;
+    const formsChooseCommand: CommandKey<number> = { id: 'forms.choose' };
+    const typeChecksOnly = async () => {
+      await pageApi.commands.run(formsChooseCommand, 2);
+      // @ts-expect-error -- `forms.choose` takes a number
+      await pageApi.commands.run(formsChooseCommand, 'x');
+    };
+    assertType<() => Promise<void>>(typeChecksOnly);
   });
 });

@@ -26,11 +26,14 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // Returns `manifest` unchanged, keeping its literal id, command ids and scopes
 // in its type and its settings as plain types: a key naming an undeclared command
 // or scope, or a command running in the other process, fails to compile, and
-// so does a start function missing a declared command's handler, a top-level
+// so does a start function missing a declared command's handler, a handler reading
+// its `context.arg` as anything but what its command's `arg` declares, a top-level
 // setting defaulting to null whose kind `optionalSettings` leaves out, and a
 // `settingInfo` missing a leaf setting's path or naming a path that is no
 // leaf; a dependency key for a plugin missing from that process's list fails to
-// compile. Throws when the id holds anything but lowercase letters, digits and `-`.
+// compile, and so does a slot key read from a plugin in neither its `dependsOn`
+// nor its `reads` there. Throws when the id holds anything but lowercase letters,
+// digits and `-`, and for the id `core`, whose slots and events are the core's.
 export function definePlugin<
   const Id extends string,
   const Cmds extends Record<string, CommandDecl>,
@@ -38,10 +41,13 @@ export function definePlugin<
   T extends object,
   const DM extends string = never,
   const DP extends string = never,
+  const RM extends string = never,
+  const RP extends string = never,
 >(
   manifest: {
     id: Id;
     dependsOn: { main: readonly DM[]; page: readonly DP[] };
+    reads: { main: readonly RM[]; page: readonly RP[] };
     commands: Cmds;
     scopes: Readonly<Record<S, string>>;
     keys?: PluginKeys<
@@ -59,6 +65,9 @@ export function definePlugin<
     throw new Error(
       `Plugin id "${manifest.id}" must be lowercase letters, digits and -`,
     );
+  }
+  if (manifest.id === 'core') {
+    throw new Error('Plugin id "core" is reserved for the core');
   }
   return manifest;
 }

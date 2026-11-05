@@ -12,12 +12,16 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
-import { keysPageKey } from '../../keys/contract';
 import {
+  sessionsActiveSlot,
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import type { UsagePageExports, UsageSnapshot } from '../contract';
+import {
+  type UsagePageExports,
+  type UsageSnapshot,
+  usageSnapshotSlot,
+} from '../contract';
 import { usagePagePart } from './start';
 
 const USAGE: UsageAgentEvent = {
@@ -38,12 +42,12 @@ const SNAPSHOT: UsageSnapshot = {
   ],
 };
 
+const EMPTY_SNAPSHOT: UsageSnapshot = { plans: [], sessions: [] };
+
 // The part on the harness, over fakes that file each handle with
-// `consumer.track`, as the real views do. `invoke` answers the part's
-// `channel.invoke`.
-function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
-  return startPagePart(usagePagePart, {
-    invoke,
+// `consumer.track`, as the real views do.
+function startOnHarness() {
+  const harness = startPagePart(usagePagePart, {
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -57,17 +61,13 @@ function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
         sessionsPageKey,
         (consumer) =>
           ({
-            selectedSessionId: () => 's1',
             addRowPart: () => consumer.track({ dispose() {} }),
           }) as unknown as SessionsPageExports,
       ),
-      fakeDependency(keysPageKey, (consumer) => ({
-        keysFor: () => null,
-        onChanged: () => consumer.track({ dispose() {} }),
-        anchor: () => consumer.track({ dispose() {} }),
-      })),
     ],
   });
+  harness.state.publish(sessionsActiveSlot).set('s1');
+  return harness;
 }
 
 describe('usagePagePart', () => {
@@ -91,28 +91,11 @@ describe('usagePagePart', () => {
     expect(harness.counts()).toEqual(noCounts);
   });
 
-  it('stop_LeavesNoLiveRegistration: snapshot reply after the stop', async () => {
-    let replySnapshot = (_snapshot: UsageSnapshot) => {};
-    const reply = new Promise<UsageSnapshot>((resolve) => {
-      replySnapshot = resolve;
-    });
-    const harness = startOnHarness(() => reply);
-
-    await harness.stop();
-    replySnapshot(SNAPSHOT);
-    await reply;
-    await Promise.resolve();
-
-    expect(harness.counts()).toEqual(noCounts);
-    expect(harness.logs.map((line) => line.message)).not.toContainEqual(
-      expect.stringContaining('status line'),
-    );
-  });
-
   it('stop_RemovesTheDrawnLineAndDetails', async () => {
     const harness = startOnHarness();
-    harness.started().commands.toggleDetails({});
-    harness.send('changed', SNAPSHOT);
+    harness.started().commands.toggleDetails({ arg: undefined });
+    harness.emit('core.pageReady', null);
+    harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
     const remove = vi.spyOn(FakeElement.prototype, 'remove');
 
     await harness.stop();
@@ -151,9 +134,27 @@ describe('usagePagePart', () => {
       .build(wrapper(), 's1');
 
     consumerA.dispose();
-    harness.send('changed', SNAPSHOT);
+    harness.emit('core.pageReady', null);
+    harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
 
     expect(loggedByA).toEqual([]);
     expect(loggedByB).toHaveLength(1);
+  });
+
+  it.each<{ name: string; written: UsageSnapshot | null; draws: boolean }>([
+    { name: 'no snapshot', written: null, draws: false },
+    { name: 'the empty snapshot', written: EMPTY_SNAPSHOT, draws: true },
+  ])('pageReady_DrawsTheZeroLine: $name', ({ written, draws }) => {
+    const harness = startOnHarness();
+    if (written !== null) {
+      harness.state.publish(usageSnapshotSlot).set(written);
+    }
+    const statusLines = () =>
+      harness.logs.filter(({ message }) => message.startsWith('status line'));
+    expect(statusLines()).toEqual([]);
+
+    harness.emit('core.pageReady', null);
+
+    expect(statusLines()).toHaveLength(draws ? 1 : 0);
   });
 });

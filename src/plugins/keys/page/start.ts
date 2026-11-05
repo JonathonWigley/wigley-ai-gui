@@ -1,18 +1,17 @@
 import './keys.css';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../contract';
+import type { KeysPageEvents } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { keysManifest } from '../manifest';
-import { createAnchors } from './anchors';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
-import { keysFor, promptKeysFor } from './keys-for';
 import { createKeysParts, type Drawn } from './layout/keys-parts';
 import { readKeysLayout } from './layout/read-keys-layout';
 import { startUnplacedLog } from './unplaced-log';
@@ -24,7 +23,8 @@ import { mountWhichKeyView } from './which-key-view';
 // carries nothing.
 type KeysApi = PageApi<
   typeof keysManifest,
-  { invoke: Record<never, never>; messages: Record<never, never> }
+  { invoke: Record<never, never>; messages: Record<never, never> },
+  KeysPageEvents
 >;
 
 // Shows which-key over every pending key sequence, on the page and in a box;
@@ -32,37 +32,26 @@ type KeysApi = PageApi<
 // scope under it changes; and the Keys button at the title bar's end, its key
 // prompt inside it, which opens help. Each draws through the `keys.layout`
 // layout: help and the Keys button draw again on a new set, which-key at its
-// next show. Each reads the keymap and settings as they are now, and help and
-// every anchor redraw when the keymap changes.
-// Exports the keys bound to a command, and when they change, and `anchor`,
-// which draws a command's keys into a view's element, shown while its scope is
-// in force and the `showHints` setting is on; each dependent's anchors and
-// listeners are filed under it. Records each scope in force and every anchor
-// named, and checks them for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
+// next show. Each reads the keymap and settings as they are now, and help
+// redraws when the keymap changes. The core holds the anchors: this part tells
+// it the `showHints` setting. Records each scope in force and checks it against
+// the core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
 // `document` listener `dispose` removes.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
-    const { keys, services, platform } = api;
-    const anchors = createAnchors({
-      keysFor: (command, scope, where) =>
-        promptKeysFor(keys.keymap(), command, scope, platform, where),
-      label: keys.label,
-      scope: () => keys.scope(),
-      showHints: () => api.settings().showHints,
-      platform,
-    });
+    const { keys, services } = api;
+    const platform = api.platform.os;
+    let hintsShown = keys.setHintsShown(api.settings().showHints);
     const parts = createKeysParts({
       defaultLayout,
       kit: {
         markdown: services.markdown,
-        keys: {
-          anchor: anchors.anchor,
-          keysFor: (command, scope) =>
-            keysFor(keys.keymap(), command, scope, platform),
-        },
+        keys,
+        state: api.state.forLayouts,
         commands: {
           exists: (id) => keys.command(id) !== undefined,
+          argShape: (id) => keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
         platform,
@@ -92,7 +81,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       helpSections(keys.keymap(), keys.scopes, keys.label, platform);
     const closeHelpCommand = qualify(keysManifest.id, 'closeHelp');
     const closeHint = element('span', 'keys-close-hint');
-    anchors.anchor(closeHint, closeHelpCommand, {
+    keys.anchor(closeHint, closeHelpCommand, {
       scope: qualify(keysManifest.id, 'help'),
     });
     const help = mountHelpView(
@@ -146,29 +135,29 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
 
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());
-      anchors.redraw();
     });
-    keys.onScopeChanged(() => anchors.applyVisibility());
-    api.onSettingsChanged(() => anchors.redraw());
+    api.onSettingsChanged((settings) => {
+      const lastHintsShown = hintsShown;
+      hintsShown = keys.setHintsShown(settings.showHints);
+      lastHintsShown.dispose();
+    });
+    const scopeSlot = api.state.read(coreScopeSlot);
     const unplacedLog = startUnplacedLog({
       keymap: () => keys.keymap(),
       scope: () => keys.scope(),
-      placedIn: anchors.placedIn,
-      onScopeChanged: (listener) => keys.onScopeChanged(listener),
+      placedIn: keys.placedIn,
+      onScopeChanged: (listener) =>
+        scopeSlot.on((scope) => {
+          if (scope !== undefined) {
+            listener(scope);
+          }
+        }),
       log: services.log,
     });
     const checkPlacement = () => unplacedLog.checkSeen();
     document.addEventListener(PLACEMENT_CHECK_EVENT, checkPlacement);
 
     return {
-      exports: (consumer): KeysPageExports => ({
-        keysFor: (command, scope, where) =>
-          keysFor(keys.keymap(), command, scope, platform, where),
-        onChanged: (listener) =>
-          consumer.track(keys.onKeymapChanged(() => listener())),
-        anchor: (element, command, options) =>
-          consumer.track(anchors.anchor(element, command, options)),
-      }),
       dispose() {
         document.removeEventListener(PLACEMENT_CHECK_EVENT, checkPlacement);
       },
@@ -188,6 +177,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           });
           context.editor?.blur();
           help.show();
+          api.events.emit('helpOpened', null);
         },
         closeHelp,
       },

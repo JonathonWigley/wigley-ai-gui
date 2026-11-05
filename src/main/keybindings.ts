@@ -5,23 +5,41 @@ import {
   Menu,
   type MenuItemConstructorOptions,
 } from 'electron';
+import type { CommandId } from '../contracts/commands';
 import type {
   AcceleratorBind,
   InterceptBind,
   Keymap,
 } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
-import type { CommandRegistry } from '../shared/command-registry';
+import type { MainCommandContext } from '../contracts/plugin';
+import { interceptChordText } from '../shared/accelerator';
+import { type KeyCommands, runBound } from '../shared/command-router';
 import { errorText } from '../shared/error-text';
 
 // Main-process commands receive the chord that fired them, e.g. `Control+Tab`.
-export type MainCommands = CommandRegistry<string>;
+export type MainCommands = KeyCommands<MainCommandContext<any>>;
 
-function buildMenu(binds: AcceleratorBind[], commands: MainCommands): Menu {
+// Runs `bind` for `chord`.
+function runChord(
+  bind: { command: CommandId; arg?: unknown },
+  chord: string,
+  commands: MainCommands,
+  log: Log,
+) {
+  runBound(commands, bind, { keys: chord, source: 'keys', log }, { chord });
+}
+
+function buildMenu(
+  binds: AcceleratorBind[],
+  commands: MainCommands,
+  labelOf: (id: CommandId) => string,
+  log: Log,
+): Menu {
   const items: MenuItemConstructorOptions[] = binds.map((bind) => ({
-    label: `${bind.command} (${bind.accelerator})`,
+    label: `${labelOf(bind.command)} (${bind.accelerator})`,
     accelerator: bind.accelerator,
-    click: () => commands.run(bind.command, bind.accelerator),
+    click: () => runChord(bind, bind.accelerator, commands, log),
   }));
   return Menu.buildFromTemplate([
     { role: 'appMenu' },
@@ -29,16 +47,6 @@ function buildMenu(binds: AcceleratorBind[], commands: MainCommands): Menu {
     { label: 'Commands', submenu: items },
     { role: 'viewMenu' },
   ]);
-}
-
-function chordName(bind: InterceptBind): string {
-  const modifiers = [
-    bind.control && 'Control',
-    bind.alt && 'Alt',
-    bind.shift && 'Shift',
-    bind.meta && 'Command',
-  ].filter(Boolean);
-  return [...modifiers, bind.key].join('+');
 }
 
 function matchesChord(input: Input, bind: InterceptBind): boolean {
@@ -73,9 +81,11 @@ export function installWindowKeybindings(
   window: BrowserWindow,
   keymap: Keymap,
   commands: MainCommands,
+  labelOf: (id: CommandId) => string,
+  log: Log,
 ): WindowKeybindings {
   requireMainCommandsRegistered(keymap, commands);
-  Menu.setApplicationMenu(buildMenu(keymap.app, commands));
+  Menu.setApplicationMenu(buildMenu(keymap.app, commands, labelOf, log));
   let intercepts = keymap.intercept;
   window.webContents.on('before-input-event', (event, input) => {
     const bind = intercepts.find((candidate) => matchesChord(input, candidate));
@@ -83,12 +93,12 @@ export function installWindowKeybindings(
       return;
     }
     event.preventDefault();
-    commands.run(bind.command, chordName(bind));
+    runChord(bind, interceptChordText(bind), commands, log);
   });
   return {
     setKeymap(next) {
       requireMainCommandsRegistered(next, commands);
-      Menu.setApplicationMenu(buildMenu(next.app, commands));
+      Menu.setApplicationMenu(buildMenu(next.app, commands, labelOf, log));
       intercepts = next.intercept;
     },
   };
@@ -106,7 +116,7 @@ export function registerGlobalShortcuts(
   for (const bind of binds) {
     try {
       const registered = globalShortcut.register(bind.accelerator, () =>
-        commands.run(bind.command, bind.accelerator),
+        runChord(bind, bind.accelerator, commands, log),
       );
       if (!registered) {
         log('global', `${bind.accelerator} is taken by another app`);

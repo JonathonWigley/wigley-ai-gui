@@ -2,6 +2,7 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
+import type { PluginEvents } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 import type {
@@ -10,7 +11,12 @@ import type {
   NoteTarget,
 } from '../../backlog/contract';
 import type { ChatMainExports } from '../../chat/contract';
-import type { FollowupRequest, NoteDraft, NoteSendResult } from '../contract';
+import type {
+  FollowupRequest,
+  NoteDraft,
+  NoteSendResult,
+  NotesMainEvents,
+} from '../contract';
 import { sendRefusal } from '../draft';
 import { sessionLine } from '../session-ref';
 import type { DraftStore } from './draft-store';
@@ -28,11 +34,13 @@ export interface NoteSenderDeps {
   paths: Paths;
   homeDir: Promise<string>;
   log: PluginLog;
+  emit: PluginEvents<NotesMainEvents>['emit'];
 }
 
-// Sends the kept draft and clears it once the send succeeded; a refused or
-// failed send keeps it. `flattened` holds one entry per draft image, in strip
-// order: the PNG with its markup drawn in, or null to send the stored image.
+// Sends the kept draft, clears it once the send succeeded and emits the send's
+// event; a refused or failed send keeps it and emits nothing. `flattened` holds
+// one entry per draft image, in strip order: the PNG with its markup drawn in,
+// or null to send the stored image.
 // A follow-up files the images at full size, on disk where no API cap
 // applies. A session send shrinks each image over the API's cap first; one
 // that will not shrink under it, or that the encoder rejects, refuses the send
@@ -187,7 +195,9 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if ('refusal' in outcome) {
         return refused(outcome.refusal);
       }
-      return { type: 'sent', draft: await store.clear(), toast: outcome.toast };
+      const cleared = await store.clear();
+      deps.emit('noteFiled', { request });
+      return { type: 'sent', draft: cleared, toast: outcome.toast };
     },
 
     async toSession(projectDir, flattened) {
@@ -217,9 +227,11 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
         return refused(errorText(error));
       }
       const home = await deps.homeDir;
+      const cleared = await store.clear();
+      deps.emit('noteSent', { projectDir });
       return {
         type: 'sent',
-        draft: await store.clear(),
+        draft: cleared,
         toast: `Session started in ${paths.tilde(projectDir, home)}`,
       };
     },

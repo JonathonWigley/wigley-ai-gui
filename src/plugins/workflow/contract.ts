@@ -1,5 +1,5 @@
 // The workflow plugin's records, its workflow and stage extension points and its
-// channel between its main and page parts.
+// flows slot.
 
 import type { Disposable } from '../../contracts/disposable';
 import type {
@@ -8,6 +8,7 @@ import type {
   PageApi,
   PluginManifest,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 import type { RowActivity } from '../sessions/contract';
 import type {
   ChipInput,
@@ -277,8 +278,7 @@ export interface WorkflowMainExports {
   ): void;
   flowOf(sessionId: string): SessionFlow | null;
   flows(): readonly SessionFlow[];
-  // Replaces the current workflow's state with no fold, keeping the save time,
-  // and sends the flows.
+  // Replaces the current workflow's state with no fold, keeping the save time.
   setState(sessionId: string, state: unknown): void;
   observe(observer: WorkflowObserver): Disposable;
   // The engine's layout.d.ts, raw.
@@ -414,15 +414,7 @@ export const workflowPageKey: DependencyKey<
   'workflow'
 > = { id: 'workflow', process: 'page' };
 
-// Main pushes `flows` (every flow, on start and on each change); the page
-// invokes flows().
-export interface WorkflowChannel extends ChannelShape {
-  invoke: {
-    // Every flow main holds, once main has read flows.json.
-    flows(): Promise<SessionFlow[]>;
-  };
-  messages: {
-    // Every flow main holds, sent on each change.
-    flows: SessionFlow[];
-  };
-}
+// Each open session's flow, keyed by the row's sessionId. A store change writes or
+// deletes the one flow it touched.
+export const workflowFlowsSlot: KeyedSlotKey<SessionFlow, 'main', 'workflow'> =
+  { id: 'workflow.flows', process: 'main', kind: 'keyed' };

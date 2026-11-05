@@ -1,10 +1,11 @@
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
-import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { ImageEncoder } from '../../../contracts/images';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
+import type { LayoutState } from '../../../contracts/state';
 import type {
   CommandsRunIn,
+  KeyHints,
   PageChannel,
   PageServices,
   PluginAreas,
@@ -19,14 +20,12 @@ import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { pathOf } from '../../../shared/page/file-drop/file-path';
 import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
-import { createListPicker } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../shared/page/ui/key-anchors';
 import { pngDataUrl } from '../../../shared/png-data-url';
-import type { KeysPageExports } from '../../keys/contract';
 import type {
   FollowupRequest,
   NoteDraft,
@@ -94,12 +93,12 @@ type DraftOperation =
 export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
-  matcher: FuzzyMatcher;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   overlay: PluginAreas['overlay'];
   // The commands a layout's kit runs and checks.
   commands: KitCommands;
-  platform: Platform;
+  platform: OsName;
+  state: LayoutState;
   pushScope(scope: NotesScope): PushedScope;
   // Read each time autosave schedules a save.
   autosaveDelayMs(): number;
@@ -138,6 +137,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
+    state: deps.state,
     log,
   };
   const parts = createNotesParts(partsDeps);
@@ -172,9 +172,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
-  // A new element the keys plugin draws the keys of `command` into, then
+  // A new element the core draws the keys of `command` into, then
   // `label` when given, while `scope` is in force. Each is made once: the
-  // keys plugin disposes the anchor when notes stops.
+  // anchor is disposed when notes stops.
   const anchored = (
     command: NotesPageCommand,
     scope: NotesScope,
@@ -588,13 +588,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     });
 
   // ── Pickers ───────────────────────────────────────────────────────────────
-  const picker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log,
-    matcher: deps.matcher,
-    filterEditor: editorHost,
+  const picker = services.picker.create({
+    filter: true,
+    parent: dialog.element,
   });
-  dialog.element.append(picker.element);
   const pickerFilterHint = anchored('pickerFilter', 'picker', 'filter');
 
   const pick = <T>(

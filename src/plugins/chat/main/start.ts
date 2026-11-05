@@ -21,14 +21,26 @@ import {
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
+  sessionsSelectionSlot,
   type ToolResult,
 } from '../../sessions/contract';
-import type { ChatChannel, ChatMainEvents, ChatMainExports } from '../contract';
+import {
+  type ChatChannel,
+  chatCommandsSlot,
+  chatControlsSlot,
+  chatEntriesSlot,
+  type ChatMainEvents,
+  type ChatMainExports,
+  chatQueuedSlot,
+  chatReturnedSlot,
+  chatSessionSlot,
+} from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatManifest } from '../manifest';
 import { createAccounts } from './accounts';
 import { createArchivedSessions } from './archived-sessions';
 import { type ChatSessions, createChatSessions } from './chat-sessions';
+import { createChatSlots } from './chat-slots';
 import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
 import { requireChatHarness } from './lookups';
@@ -258,6 +270,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
   start(api: ChatApi) {
     const { services } = api;
     const sessions = api.dependency(sessionsMainKey);
+    const selection = api.state.read(sessionsSelectionSlot);
     const recent = createRecentFolders({
       data: api.data,
       clock: services.clock,
@@ -283,14 +296,24 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       log: services.log,
     });
     const saved = createOpenSessions(api.data);
+    const slots = createChatSlots({
+      session: api.state.publish(chatSessionSlot),
+      entries: api.state.publish(chatEntriesSlot),
+      controls: api.state.publish(chatControlsSlot),
+      commands: api.state.publish(chatCommandsSlot),
+      queued: api.state.publish(chatQueuedSlot),
+      returned: api.state.publish(chatReturnedSlot),
+    });
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
+      selectedSessionId: () => selection.get() ?? null,
       profiles,
       randomUuid: services.randomUuid,
       recent,
       archived: createArchivedSessions(api.data),
       saved,
+      slots,
       send: (message, data) => api.channel.send(message, data),
       emit: (event, data) => api.events.emit(event, data),
       alerts: services.alerts,
@@ -302,7 +325,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     });
     const preview = createChatPreview({
       sessions,
-      send: (message, data) => api.channel.send(message, data),
+      slots,
       emit: (event, data) => api.events.emit(event, data),
       log: services.log,
       clock: services.clock,
@@ -319,10 +342,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // The page announces each load: a sign-in running then was started by a
     // page that is gone, and would refuse every later one.
     api.channel.handle('loaded', () => accounts.cancelRunning());
-    api.channel.handle('sessions', () => [
-      ...chat.sessions(),
-      ...preview.states(),
-    ]);
     api.channel.handle('start', (request) => chat.start(request));
     api.channel.handle('pastSessions', (projectDir, profile) =>
       chat.pastSessions(projectDir, profile),
@@ -395,7 +414,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('stopAll', () => chat.stopAll());
     api.channel.handle('openPreview', () => preview.open());
     api.channel.handle('recentFolders', () => folderChoices.list());
-    api.channel.handle('chooseFolder', () => services.window.chooseFolder());
     api.events.on('sessions.closed', ({ sessionId }) => {
       chat.closed(sessionId, 'user');
       preview.closed(sessionId);
@@ -414,9 +432,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       endWaits.get(sessionId)?.();
       endWaits.delete(sessionId);
     });
-    api.events.on('sessions.selected', ({ sessionId }) =>
-      chat.selected(sessionId),
-    );
+    selection.on((sessionId) => chat.selected(sessionId ?? null));
     api.events.on('sessions.titleChanged', ({ sessionId }) =>
       chat.titleChanged(sessionId),
     );

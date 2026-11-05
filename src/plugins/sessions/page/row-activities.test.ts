@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../contract';
+import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  NEEDS_YOU_ACTIVITY,
+  type RowActivity,
+  sessionsActivitySlot,
+} from '../contract';
 import { createRowActivities } from './row-activities';
 
 const WORKING: RowActivity = { word: 'working', tone: 'running', rank: 20 };
@@ -8,12 +13,26 @@ const LOOKED: RowActivity = { word: 'looked', tone: 'warning', rank: 10 };
 
 type Step = { set: [string, string, RowActivity | null] } | { forget: string };
 
+// Row activities over a real slot store's writer; `notices` holds the key of each
+// change the slot's readers hear.
+function activitiesOnSlot() {
+  const store = createSlotStore(() => undefined);
+  const slot = store.publish(sessionsActivitySlot);
+  const notices: string[] = [];
+  store
+    .read(sessionsActivitySlot, 'test')
+    .on((sessionId) => notices.push(sessionId));
+  return { slot, notices, activities: createRowActivities(slot) };
+}
+
 describe('createRowActivities', () => {
   it.each<{
     case: string;
     steps: Step[];
     top: string | null;
     lastChanged: boolean;
+    // The sources of `s1` the slot holds, in order.
+    sources: string[];
   }>([
     {
       case: 'highest rank shows',
@@ -23,6 +42,7 @@ describe('createRowActivities', () => {
       ],
       top: 'needs you',
       lastChanged: true,
+      sources: ['chat', 'forms'],
     },
     {
       case: 'a lower rank set later leaves the top',
@@ -32,12 +52,14 @@ describe('createRowActivities', () => {
       ],
       top: 'needs you',
       lastChanged: false,
+      sources: ['forms', 'chat'],
     },
     {
       case: 'tie goes to the last set',
       steps: [{ set: ['s1', 'chat', DONE] }, { set: ['s1', 'notes', LOOKED] }],
       top: 'looked',
       lastChanged: true,
+      sources: ['chat', 'notes'],
     },
     {
       case: 'tie goes to the last set, the first source setting again',
@@ -48,6 +70,7 @@ describe('createRowActivities', () => {
       ],
       top: 'done',
       lastChanged: true,
+      sources: ['notes', 'chat'],
     },
     {
       case: 'null removes the source',
@@ -58,6 +81,7 @@ describe('createRowActivities', () => {
       ],
       top: 'working',
       lastChanged: true,
+      sources: ['chat'],
     },
     {
       case: 'the same activity again is unchanged',
@@ -67,6 +91,7 @@ describe('createRowActivities', () => {
       ],
       top: 'working',
       lastChanged: false,
+      sources: ['chat'],
     },
     {
       case: 'the same word and tone with another emphasis is a change',
@@ -76,12 +101,14 @@ describe('createRowActivities', () => {
       ],
       top: 'done',
       lastChanged: true,
+      sources: ['chat'],
     },
     {
       case: 'null for a source holding none is unchanged',
       steps: [{ set: ['s1', 'chat', WORKING] }, { set: ['s1', 'forms', null] }],
       top: 'working',
       lastChanged: false,
+      sources: ['chat'],
     },
     {
       case: 'another session is untouched',
@@ -91,6 +118,7 @@ describe('createRowActivities', () => {
       ],
       top: 'working',
       lastChanged: true,
+      sources: ['chat'],
     },
     {
       case: 'forget drops every source',
@@ -102,9 +130,10 @@ describe('createRowActivities', () => {
       ],
       top: null,
       lastChanged: false,
+      sources: [],
     },
   ])('set_Sequence_TopIsHighestRankLatestOnTie ($case)', (row) => {
-    const activities = createRowActivities();
+    const { slot, activities } = activitiesOnSlot();
     let lastChanged: boolean | null = null;
     for (const step of row.steps) {
       if ('forget' in step) {
@@ -116,5 +145,90 @@ describe('createRowActivities', () => {
 
     expect(activities.top('s1')?.word ?? null).toBe(row.top);
     expect(lastChanged).toBe(row.lastChanged);
+    expect((slot.get('s1') ?? []).map((source) => source.sourceId)).toEqual(
+      row.sources,
+    );
+  });
+
+  it.each<{
+    case: string;
+    sets: [string, RowActivity | null][];
+    writes: number;
+  }>([
+    {
+      case: 'the same activity again',
+      sets: [
+        ['chat', WORKING],
+        ['chat', WORKING],
+      ],
+      writes: 1,
+    },
+    {
+      case: 'another rank with the same look',
+      sets: [
+        ['chat', DONE],
+        ['chat', { ...DONE, rank: 11 }],
+      ],
+      writes: 2,
+    },
+    {
+      case: 'another emphasis',
+      sets: [
+        ['chat', DONE],
+        ['chat', { ...DONE, emphasis: 'urgent' }],
+      ],
+      writes: 2,
+    },
+    {
+      case: 'an earlier source setting the same activity moves it last',
+      sets: [
+        ['chat', DONE],
+        ['notes', LOOKED],
+        ['chat', DONE],
+      ],
+      writes: 3,
+    },
+    {
+      case: 'null for a source holding none beside another',
+      sets: [
+        ['chat', WORKING],
+        ['forms', null],
+      ],
+      writes: 1,
+    },
+    {
+      case: 'null on a session holding none',
+      sets: [['chat', null]],
+      writes: 0,
+    },
+  ])('set_SourcesUnchanged_WritesNothing ($case)', ({ sets, writes }) => {
+    const { notices, activities } = activitiesOnSlot();
+
+    for (const [sourceId, activity] of sets) {
+      activities.set('s1', sourceId, activity);
+    }
+
+    expect(notices).toHaveLength(writes);
+  });
+
+  it('rowActivities_NoSourcesLeft_HoldsNoKey', () => {
+    const { slot, activities } = activitiesOnSlot();
+    activities.set('s1', 'chat', WORKING);
+    activities.set('s2', 'chat', DONE);
+
+    activities.set('s1', 'chat', null);
+
+    expect([...slot.all().keys()]).toEqual(['s2']);
+  });
+
+  it('rowActivities_Forget_HoldsNoKey', () => {
+    const { slot, activities } = activitiesOnSlot();
+    activities.set('s1', 'chat', WORKING);
+    activities.set('s1', 'forms', NEEDS_YOU_ACTIVITY);
+    activities.set('s2', 'chat', DONE);
+
+    activities.forget('s1');
+
+    expect([...slot.all().keys()]).toEqual(['s2']);
   });
 });

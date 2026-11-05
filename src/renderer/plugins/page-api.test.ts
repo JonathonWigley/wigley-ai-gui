@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../contracts/ambient';
 import type { Bridge } from '../../contracts/bridge';
 import type { Disposable } from '../../contracts/disposable';
@@ -14,7 +14,7 @@ import type {
   FenceContribution,
   MarkdownRenderer,
 } from '../../contracts/markdown';
-import type { Keymap } from '../../contracts/keymap';
+import type { HintWhere, Keymap } from '../../contracts/keymap';
 import type {
   FocusTarget,
   OuterPanes,
@@ -26,14 +26,37 @@ import type {
   ModeHandle,
   Modes,
   PageChannel,
+  PageCommandContext,
   PageTransparency,
   PluginManifest,
   ShellLayout,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+  type RuntimeCatalog,
+} from '../../contracts/core-state';
+import type { SlotKey } from '../../contracts/state';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
+import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
+import { fakeFuzzyMatcher } from '../../shared/fake-fuzzy-matcher.test-support';
+import { createListeners } from '../../shared/listeners';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  installFakeDom,
+} from '../../shared/page/test-dom';
+import { fakePlatform } from '../../shared/platform.test-support';
 import { createRegistrations } from '../../shared/registrations';
+import {
+  createRuntimeCommands,
+  EMPTY_RUNTIME_CATALOG,
+} from '../../shared/runtime-commands';
+import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
+import { createAnchors } from '../key-anchors';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
 import { createPageUiState } from '../ui-state';
@@ -46,6 +69,7 @@ import {
 const manifest: PluginManifest = {
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: { review: 'In review' },
   settings: {},
@@ -60,6 +84,12 @@ interface TestChannel {
 
 // A Bridge recording the plugin calls it receives, whose `send` delivers a
 // message as main would; the rest is unused here.
+const ownSlot: SlotKey<number, 'page', 'p'> = {
+  id: 'p.v',
+  process: 'page',
+  kind: 'value',
+};
+
 function fakeBridge() {
   const invoked: [string, string, unknown[]][] = [];
   const listeners: [string, string, (data: unknown) => void][] = [];
@@ -107,7 +137,7 @@ function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     commands: {},
     scopes: [],
     pluginSettings: { p: { delayMs: 1 }, q: { delayMs: 1 } },
-    platform: 'macos',
+    platform: fakePlatform('macos'),
     problems: [],
     ...overrides,
   } as AppConfig;
@@ -115,6 +145,24 @@ function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 
 function liveConfig(initial: AppConfig = appConfig()) {
   return createLiveConfig(initial, () => {});
+}
+
+// The page's commands over `state`, served `served` and sending remote runs to
+// `remote`.
+function pageCommandsOver(
+  state: SlotStore,
+  served: AppConfig['commands'] = {},
+  remote: (id: string, arg: unknown) => Promise<void> = () => Promise.resolve(),
+) {
+  return createRuntimeCommands<PageCommandContext<any>>({
+    process: 'page',
+    registry: new CommandRegistry(() => {}),
+    writer: state.publish(coreRuntimePageSlot),
+    other: state.read(coreRuntimeMainSlot, 'core'),
+    served: () => served,
+    leader: () => '<Space>',
+    remote,
+  });
 }
 
 function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
@@ -133,7 +181,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     config: liveConfig(),
     services: {} as PageApiServices,
     uiState: createPageUiState({}, () => {}),
-    run: () => {},
+    commands: pageCommandsOver(createSlotStore(() => {})),
     dependency: () => undefined,
     registrations: createRegistrations(),
     bus: createEventBus(),
@@ -148,11 +196,80 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       addTarget: () => ({ dispose: () => {} }),
       savePasted: async () => '',
     },
+    state: createSlotStore(() => {}),
+    anchors: createAnchors({
+      keysFor: () => null,
+      label: (id) => id,
+      scope: () => 'any',
+      platform: 'macos',
+    }),
+    boxFocus: { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
     ...overrides,
   };
 }
 
 describe('createPageApi', () => {
+  // An API over real anchors, one revealed anchor in them, and its hidden state.
+  function hintsApi() {
+    const anchors = createAnchors({
+      keysFor: () => null,
+      label: (id) => id,
+      scope: () => 'any',
+      platform: 'macos',
+    });
+    const span = new FakeElement('span');
+    const registrations = createRegistrations();
+    anchors.reveal();
+    anchors.anchor(asHtml(span), 'p.x');
+    const api = createPageApi(manifest, deps({ anchors, registrations }));
+    const isHidden = () => span.classList.contains('is-hint-hidden');
+    return { api, isHidden, registrations };
+  }
+
+  it('setHintsShown_PartStops_ShowsHintsAgain', () => {
+    const { api, isHidden, registrations } = hintsApi();
+
+    api.keys.setHintsShown(false);
+    expect(isHidden()).toBe(true);
+
+    registrations.dispose();
+
+    expect(isHidden()).toBe(false);
+  });
+
+  it('setHintsShown_OldHandleDisposedAfterNewCall_KeepsTheNewValue', () => {
+    const { api, isHidden } = hintsApi();
+    const first = api.keys.setHintsShown(true);
+    const second = api.keys.setHintsShown(false);
+
+    first.dispose();
+    expect(isHidden()).toBe(true);
+
+    second.dispose();
+    expect(isHidden()).toBe(false);
+  });
+
+  it('onWhereChanged_PartStops_HearsNothing', () => {
+    const moved = createListeners<HintWhere>();
+    const registrations = createRegistrations();
+    const api = createPageApi(
+      manifest,
+      deps({
+        registrations,
+        boxFocus: { where: () => 'box', onChanged: moved.add },
+      }),
+    );
+    const heard: HintWhere[] = [];
+    api.keys.onWhereChanged((where) => heard.push(where));
+
+    moved.tell('page');
+    registrations.dispose();
+    moved.tell('box');
+
+    expect(api.keys.where()).toBe('box');
+    expect(heard).toEqual(['page']);
+  });
+
   it('qualifies the scope a plugin sets', () => {
     const scopeStack = createScopeStack('any');
     const api = createPageApi(manifest, deps({ scopeStack }));
@@ -538,11 +655,11 @@ const RECORDED_ROWS: RecordedRow[] = [
     register: (api) => api.modes.add({ id: 'browse' } as Mode),
   },
   {
-    member: 'modes.onChanged',
+    member: 'state.publish',
     dep: (handle) => ({
-      modes: { onChanged: () => handle } as unknown as Modes,
+      state: { publish: () => handle } as unknown as SlotStore,
     }),
-    register: (api) => api.modes.onChanged(() => {}),
+    register: (api) => api.state.publish(ownSlot),
   },
   {
     member: 'keys.onPending',
@@ -581,8 +698,8 @@ type HearingWorld = {
   api: ReturnType<typeof createPageApi>;
   send: ReturnType<typeof fakeBridge>['send'];
   bus: EventBus;
-  scopeStack: ScopeStack;
   config: ReturnType<typeof liveConfig>;
+  state: SlotStore;
 };
 
 const HEARING_ROWS: {
@@ -601,9 +718,17 @@ const HEARING_ROWS: {
     speak: ({ bus }) => bus.emit('q.done', 1),
   },
   {
-    member: 'keys.onScopeChanged',
-    listen: ({ api }, heard) => api.keys.onScopeChanged(heard),
-    speak: ({ scopeStack }) => scopeStack.setBase('q.view'),
+    member: 'state.read().on',
+    listen: ({ api }, heard) => api.state.read(ownSlot).on(heard),
+    speak: ({ state }) =>
+      state.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
+  },
+  {
+    member: 'state.forLayouts.read().on',
+    listen: ({ api }, heard) =>
+      api.state.forLayouts.read('p.v').on((value) => heard(value)),
+    speak: ({ state }) =>
+      state.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
   },
   {
     member: 'keys.onKeymapChanged',
@@ -653,6 +778,203 @@ function countingEditors() {
   return { editor, destroys };
 }
 
+describe('createPageApi services.picker', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const REQUEST = {
+    title: 'T',
+    items: ['a'],
+    label: (item: string) => item,
+    chosen: () => {},
+  };
+
+  // A plugin's API over a real scope stack and store, its overlay holding what
+  // the plugin placed and its editor host recording each editor.
+  function pickerApi() {
+    const scopeStack = createScopeStack('any');
+    const registrations = createRegistrations();
+    const overlay: HTMLElement[] = [];
+    const destroyEditor = vi.fn();
+    let editorsCreated = 0;
+    const api = createPageApi(
+      {
+        ...manifest,
+        scopes: { picker: 'In a list', resume: 'In a session list' },
+      },
+      deps({
+        scopeStack,
+        registrations,
+        areas: {
+          overlay: {
+            contribute(element: HTMLElement) {
+              overlay.push(element);
+              return {
+                dispose: () => overlay.splice(overlay.indexOf(element), 1),
+              };
+            },
+          },
+        } as unknown as PageApiDeps['areas'],
+        services: {
+          log: () => {},
+          fuzzy: fakeFuzzyMatcher,
+          editor: {
+            create() {
+              editorsCreated += 1;
+              return {
+                setText: () => {},
+                blur: () => {},
+                destroy: destroyEditor,
+              };
+            },
+          },
+        } as unknown as PageApiServices,
+      }),
+    );
+    return {
+      picker: api.services.picker,
+      scopeStack,
+      registrations,
+      overlay,
+      destroyEditor,
+      editorsCreated: () => editorsCreated,
+    };
+  }
+
+  it.each([
+    { case: 'the overlay', hasParent: false, inOverlay: 1, inParent: 0 },
+    { case: 'a parent', hasParent: true, inOverlay: 0, inParent: 1 },
+  ])(
+    'picker_Create_PushesTheQualifiedScopeAndPlacesInOverlay: $case',
+    ({ hasParent, inOverlay, inParent }) => {
+      const { picker, scopeStack, overlay } = pickerApi();
+      const parent = asHtml(new FakeElement('div'));
+
+      const list = picker.create(hasParent ? { parent } : undefined);
+      list.open(REQUEST);
+
+      expect(scopeStack.current()).toBe('p.picker');
+      expect(overlay.filter((held) => held === list.element)).toHaveLength(
+        inOverlay,
+      );
+      expect(asFake(parent).children).toHaveLength(inParent);
+    },
+  );
+
+  it('picker_ScopeFunction_ReadAtEachPush', () => {
+    const { picker, scopeStack } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope });
+
+    list.open(REQUEST);
+    const first = scopeStack.current();
+    list.close();
+    scope = 'resume';
+    list.open(REQUEST);
+
+    expect([first, scopeStack.current()]).toEqual(['p.picker', 'p.resume']);
+  });
+
+  it.each([
+    { case: 'a string', scope: 'nope' },
+    { case: 'a function', scope: () => 'nope' },
+  ])('picker_UndeclaredScope_ThrowsAtCreate: $case', ({ scope }) => {
+    const { picker, overlay } = pickerApi();
+
+    expect(() => picker.create({ scope })).toThrow(/"p".*"nope"/);
+    expect(overlay).toEqual([]);
+  });
+
+  it('picker_ScopeFunctionLaterBadValue_ThrowsAtThePushAndLeavesItClosed', () => {
+    const { picker, scopeStack } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope });
+    scope = 'nope';
+
+    expect(() => list.open(REQUEST)).toThrow(/"nope"/);
+
+    expect(list.isOpen()).toBe(false);
+    expect(asFake(list.element).hidden).toBe(true);
+    expect(scopeStack.current()).toBe('any');
+  });
+
+  it('picker_PartStops_ClosesWithNoCancel', () => {
+    const { picker, scopeStack, registrations, overlay } = pickerApi();
+    const cancelled = vi.fn();
+    const list = picker.create();
+    list.open({ ...REQUEST, cancelled });
+
+    registrations.dispose();
+
+    expect(list.isOpen()).toBe(false);
+    expect(scopeStack.current()).toBe('any');
+    expect(cancelled).not.toHaveBeenCalled();
+    expect(overlay).toEqual([]);
+  });
+
+  it.each([
+    { case: 'with a filter', filter: true, boxes: 1 },
+    { case: 'with no filter', filter: false, boxes: 0 },
+  ])('picker_FilterOption_UsesThePluginsEditor: $case', ({ filter, boxes }) => {
+    const { picker, registrations, destroyEditor, editorsCreated } =
+      pickerApi();
+
+    picker.create({ filter });
+    registrations.dispose();
+
+    expect(editorsCreated()).toBe(boxes);
+    expect(destroyEditor).toHaveBeenCalledTimes(boxes);
+  });
+
+  it.each([
+    {
+      case: 'chooseFolder',
+      call: (api: ReturnType<typeof createPageApi>) =>
+        api.services.chooseFolder(),
+      expected: ['chooseFolder'],
+    },
+    {
+      case: 'openExternal',
+      call: (api: ReturnType<typeof createPageApi>) =>
+        api.services.openExternal('https://example.invalid'),
+      expected: ['openExternal', 'https://example.invalid'],
+    },
+  ])(
+    'chooseFolder_And_openExternal_ReachTheBridge: $case',
+    async ({ call, expected }) => {
+      const calls: unknown[][] = [];
+      const bridge = {
+        ...fakeBridge().bridge,
+        chooseFolder: async () => {
+          calls.push(['chooseFolder']);
+          return null;
+        },
+        openExternal: async (url: string) => {
+          calls.push(['openExternal', url]);
+        },
+      };
+      const api = createPageApi(
+        manifest,
+        deps({
+          bridge,
+          services: {
+            log: () => {},
+            editor: {},
+            chooseFolder: () => bridge.chooseFolder(),
+            openExternal: (url: string) => bridge.openExternal(url),
+          } as unknown as PageApiServices,
+        }),
+      );
+
+      await call(api);
+
+      expect(calls).toEqual([expected]);
+    },
+  );
+});
+
 describe('createPageApi recording', () => {
   it.each(RECORDED_ROWS)(
     "disposes what $member returned when the plugin's registrations are disposed",
@@ -680,14 +1002,14 @@ describe('createPageApi recording', () => {
     ({ listen, speak }) => {
       const { bridge, send } = fakeBridge();
       const bus = createEventBus();
-      const scopeStack = createScopeStack('any');
       const config = liveConfig();
       const registrations = createRegistrations();
+      const state = createSlotStore(() => {});
       const api = createPageApi(
         manifest,
-        deps({ bridge, bus, scopeStack, config, registrations }),
+        deps({ bridge, bus, config, registrations, state }),
       );
-      const world = { api, send, bus, scopeStack, config };
+      const world = { api, send, bus, config, state };
       const heard: unknown[] = [];
       listen(world, (data) => heard.push(data));
 
@@ -880,5 +1202,180 @@ describe('createPageApi recording', () => {
 
     channel.on('shown', () => {});
     expect(listeners.length).toBe(1);
+  });
+});
+
+describe('createPageApi commands', () => {
+  const DECL = { label: 'Go', group: 'g', runsIn: 'page' } as const;
+  const MAIN_CATALOG: RuntimeCatalog = {
+    ...EMPTY_RUNTIME_CATALOG,
+    commands: [
+      {
+        id: 'm.go',
+        plugin: 'm',
+        label: 'Main go',
+        group: 'g',
+        runsIn: 'main',
+        runtime: true,
+      },
+    ],
+    binds: {
+      binds: [{ keys: 'z', scope: 'any', command: 'm.go' }],
+      app: [],
+      intercept: [],
+    },
+  };
+
+  function commandsSetup(served: AppConfig['commands'] = {}) {
+    const state = createSlotStore(() => {});
+    const registrations = createRegistrations();
+    const remoteRuns: [string, unknown][] = [];
+    const commands = pageCommandsOver(state, served, async (id, arg) => {
+      remoteRuns.push([id, arg]);
+    });
+    const api = createPageApi(
+      manifest,
+      deps({ state, registrations, commands }),
+    );
+    const catalog = () => state.read(coreRuntimePageSlot, 'core').get();
+    return { api, commands, registrations, state, catalog, remoteRuns };
+  }
+
+  it('register_DisposedWithThePart_LeavesRegistryAndSlot', () => {
+    const { api, commands, registrations, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+    api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' });
+    expect(commands.registry.has('p.go')).toBe(true);
+    expect(catalog()?.commands.map((info) => info.id)).toEqual(['p.go']);
+
+    registrations.dispose();
+
+    expect(commands.registry.has('p.go')).toBe(false);
+    expect(catalog()?.commands).toEqual([]);
+    expect(catalog()?.binds.binds).toEqual([]);
+  });
+
+  it('register_OwnHandleDisposed_TakesItsBindsOut', () => {
+    const { api, catalog } = commandsSetup();
+    const handle = api.commands.register('go', DECL, () => {});
+    api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' });
+
+    handle.dispose();
+
+    expect(catalog()?.commands).toEqual([]);
+    expect(catalog()?.binds.binds).toEqual([]);
+  });
+
+  it('register_OtherProcessDecl_Throws', () => {
+    const { api } = commandsSetup();
+
+    expect(() =>
+      api.commands.register('go', { ...DECL, runsIn: 'main' }, () => {}),
+    ).toThrow('p.go runs in main');
+  });
+
+  it('register_IdInTheCatalog_Throws', () => {
+    const { api } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+
+    expect(() => api.commands.register('go', DECL, () => {})).toThrow(
+      'Command "p.go" is already registered',
+    );
+  });
+
+  it('bind_ClashesWithRuntimeBindOfEitherProcess_ThrowsAtTheCall', () => {
+    const { api, state } = commandsSetup();
+    state.applyRemote({
+      id: coreRuntimeMainSlot.id,
+      kind: 'value',
+      value: MAIN_CATALOG,
+    });
+    api.commands.register('go', DECL, () => {});
+    api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' });
+
+    expect(() =>
+      api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' }),
+    ).toThrow();
+    expect(() =>
+      api.keys.bind({ keys: 'z', scope: 'any', command: 'p.go' }),
+    ).toThrow();
+  });
+
+  it('bind_UnknownCommandOrBadArg_ThrowsAtTheCall', () => {
+    const { api } = commandsSetup();
+    api.commands.register('pick', { ...DECL, arg: 'number' }, () => {});
+
+    expect(() =>
+      api.keys.bind({ keys: 'x', scope: 'any', command: 'p.gone' }),
+    ).toThrow('No command is registered as "p.gone"');
+    expect(() =>
+      api.keys.bind({ keys: 'x', scope: 'any', command: 'p.pick', arg: 'a' }),
+    ).toThrow('command "p.pick" needs a number');
+  });
+
+  it('bind_OnDefaultOrUserKey_Accepted', () => {
+    const { api, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+
+    api.keys.bind({ keys: 'j', scope: 'any', command: 'p.go' });
+
+    expect(catalog()?.binds.binds).toHaveLength(1);
+  });
+
+  it('infoOf_OtherProcessRuntimeCommand_ReadsItsSlotBeforeTheServedConfig', async () => {
+    const { api, state, remoteRuns } = commandsSetup();
+    state.applyRemote({
+      id: coreRuntimeMainSlot.id,
+      kind: 'value',
+      value: MAIN_CATALOG,
+    });
+
+    await api.commands.run('m.go');
+
+    expect(remoteRuns).toEqual([['m.go', undefined]]);
+  });
+
+  it('intercept_PartStops_WrapGone', async () => {
+    const { api, commands, registrations } = commandsSetup();
+    const ran: string[] = [];
+    commands.registry.register('p.go', () => void ran.push('handler'), 'p');
+    api.commands.intercept('p.go', () => void ran.push('wrap'));
+
+    registrations.dispose();
+    await commands.registry.run('p.go', { arg: undefined });
+
+    expect(ran).toEqual(['handler']);
+  });
+
+  it('onDidRun_PartStops_ListenerGone', async () => {
+    const { api, commands, registrations } = commandsSetup();
+    const heard: string[] = [];
+    commands.registry.register('p.go', () => {}, 'p');
+    api.commands.onDidRun((id) => heard.push(id));
+
+    registrations.dispose();
+    await commands.registry.run('p.go', { arg: undefined });
+
+    expect(heard).toEqual([]);
+  });
+
+  it('bind_PartStops_LeavesTheCatalog', () => {
+    const { commands, registrations, catalog, state } = commandsSetup();
+    commands.registry.register('o.go', () => {}, 'o');
+    const other = createPageApi(
+      { ...manifest, id: 'o' },
+      deps({ state, commands }),
+    );
+    other.commands.register('kept', DECL, () => {});
+    const api = createPageApi(
+      manifest,
+      deps({ state, registrations, commands }),
+    );
+    api.keys.bind({ keys: 'b', scope: 'any', command: 'o.kept' });
+
+    registrations.dispose();
+
+    expect(catalog()?.binds.binds).toEqual([]);
+    expect(catalog()?.commands.map((info) => info.id)).toEqual(['o.kept']);
   });
 });

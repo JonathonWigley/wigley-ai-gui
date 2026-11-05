@@ -23,13 +23,14 @@ import { workflowLightPagePart } from './workflow-light/page/start';
 import { workflowMediumPagePart } from './workflow-medium/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
-// otherwise.
+// otherwise. `keys` starts first, so its Keys button contributes to the title
+// bar's end ahead of every other plugin's.
 export const pageParts: readonly PagePart[] = [
+  keysPagePart,
   sessionsPagePart,
   chatPagePart,
   formsPagePart,
   primerPagePart,
-  keysPagePart,
   agentsPagePart,
   agentLinesPagePart,
   workflowPagePart,

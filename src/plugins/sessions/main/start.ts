@@ -1,4 +1,3 @@
-import os from 'node:os';
 import type {
   DriveHost,
   MainApi,
@@ -27,17 +26,15 @@ import {
   type SessionsChannel,
   type SessionsMainEvents,
   type SessionsMainExports,
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
 import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
-import {
-  endedDriveRunLaunch,
-  launchCommand,
-  writeEndpointFiles,
-} from './relay/endpoint';
+import { endedDriveRunLaunch, writeEndpointFiles } from './relay/endpoint';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
@@ -73,12 +70,12 @@ function createList(api: SessionsApi): SessionList {
     clock: api.services.clock,
     log: api.services.log,
     emit: (event, data) => api.events.emit(event, data),
-    stateChanged: (state) => api.channel.send('stateChanged', state),
+    rows: api.state.publish(sessionsRowsSlot),
+    selection: api.state.publish(sessionsSelectionSlot),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
     projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
   });
-  api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId) =>
     list.closeSession(sessionId),
@@ -98,9 +95,9 @@ function createList(api: SessionsApi): SessionList {
 // it again, except a drive run's, which stays ended and names the run's home.
 function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
   const channel = channelPath(
-    api.services.platform,
+    api.services.platform.os,
     api.services.homeDir,
-    os.userInfo().username,
+    api.services.platform.relay.username,
     api.services.appInstance.id,
     '',
   );
@@ -116,13 +113,8 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
     channel,
     launch:
       api.services.runMode === 'drive'
-        ? endedDriveRunLaunch(api.services.platform, api.services.homeDir)
-        : launchCommand(
-            process.env,
-            process.execPath,
-            process.cwd(),
-            api.services.appInstance.isDev,
-          ),
+        ? endedDriveRunLaunch(api.services.platform.os, api.services.homeDir)
+        : api.services.platform.relay.launch,
   };
   return { relay, endpoint };
 }
@@ -274,7 +266,6 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       activate: (sessionId) => list.activate(sessionId),
       activateExistingRow: (sessionId) => list.activateExistingRow(sessionId),
       release: (sessionId) => list.release(sessionId),
-      selectedSessionId: () => list.selectedSessionId(),
       label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
       setTitle: (sessionId, source, title) =>

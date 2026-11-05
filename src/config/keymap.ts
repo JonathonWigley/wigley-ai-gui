@@ -5,7 +5,6 @@ import type { CommandDecl, ScopeInfo } from '../contracts/plugin';
 // The core's own commands and scopes; its default keys sit with every
 // plugin's in `src/plugins/keymap.ts`.
 export const coreCommands: Record<CommandId, CommandDecl> = {
-  'window.summon': { label: 'show the app', group: 'window', runsIn: 'main' },
   [PANE_RESIZE_COMMANDS.left]: {
     label: 'move the pane divider left',
     group: 'panes',

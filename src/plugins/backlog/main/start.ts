@@ -9,6 +9,7 @@ import type {
   MainChannel,
   MainPart,
   MainServices,
+  PluginEvents,
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -30,6 +31,7 @@ import type {
   BacklogEdit,
   BacklogFollowupFile,
   BacklogHome,
+  BacklogMainEvents,
   BacklogMainExports,
   BacklogPlan,
   BacklogRead,
@@ -62,7 +64,7 @@ import { backlogSelfTestScript } from './selftest-script';
 type BacklogApi = MainApi<
   typeof backlogManifest,
   BacklogChannel,
-  Record<never, never>,
+  BacklogMainEvents,
   QualifiedEvents<'docs', DocsMainEvents>
 >;
 
@@ -84,6 +86,7 @@ interface BacklogDeps {
   clock: Clock;
   log: PluginLog;
   channel: Pick<MainChannel<BacklogChannel>, 'send'>;
+  emit: PluginEvents<BacklogMainEvents>['emit'];
 }
 
 type MarkedHome = HomeShape & {
@@ -392,11 +395,32 @@ interface SavedImages {
   numbers: number[];
 }
 
+function emitFollowupEvent(
+  emit: PluginEvents<BacklogMainEvents>['emit'],
+  homeRoot: string,
+  edit: BacklogEdit,
+): void {
+  switch (edit.type) {
+    case 'create':
+      emit('followupCreated', { homeRoot, title: edit.draft.title });
+      return;
+    case 'edit':
+      emit('followupEdited', { homeRoot, title: edit.draft.title });
+      return;
+    case 'setTags':
+      emit('followupEdited', { homeRoot, title: edit.title });
+      return;
+    case 'delete':
+      emit('followupDeleted', { homeRoot, title: edit.title });
+      return;
+  }
+}
+
 // Serves the channel and the exports: the last load's homes answer
 // `applyEdit`, `fileNote` and `commit`, and its follow-up files are the ones
 // watched.
 function createBacklogMain(deps: BacklogDeps) {
-  const { docs, git, files, paths, clock, log, channel } = deps;
+  const { docs, git, files, paths, clock, log, channel, emit } = deps;
   let last: BacklogRead | null = null;
   let watches: Disposable[] = [];
   // Counts loads, so only the newest load keeps its watches.
@@ -572,6 +596,7 @@ function createBacklogMain(deps: BacklogDeps) {
       for (const folder of orphaned) {
         await trashLogged(folder);
       }
+      emitFollowupEvent(emit, home.root, edit);
     }
     return result;
   }
@@ -882,6 +907,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       clock: services.clock,
       log: services.log,
       channel,
+      emit: (event, data) => api.events.emit(event, data),
     });
     const exports: BacklogMainExports = {
       load: backlog.load,

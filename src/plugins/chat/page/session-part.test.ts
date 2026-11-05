@@ -86,7 +86,7 @@ function partOver(source: ReturnType<typeof fakeSource>['source'] | null) {
   const part = createSessionPart({
     markdown: {},
     keys: { anchor: () => ({ dispose: log }), keysFor: () => null },
-    commands: { exists: () => true, run: log },
+    commands: { exists: () => true, argShape: () => undefined, run: log },
     platform: 'macos',
     layouts,
     log,

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageCommandContext } from '../../../contracts/plugin';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   countingEditors,
@@ -10,7 +11,11 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import { keysPagePart } from '../../keys/page/start';
+import {
+  sessionsRowsSlot,
+  sessionsSelectionSlot,
+} from '../../sessions/contract';
+import { sessionRow } from '../../sessions/page/session-fakes';
 import { sessionsPagePart } from '../../sessions/page/start';
 import type { FormsPageExports } from '../contract';
 import { formsPagePart } from './start';
@@ -44,8 +49,12 @@ describe('forms page part', () => {
   it('stops with nothing live and starts again', async () => {
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      parts: [sessionsPagePart],
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
     harness.send('formShown', openForm());
     expect(editors.live()).toBeGreaterThan(0);
@@ -61,9 +70,13 @@ describe('forms page part', () => {
     const read = deferred<ReturnType<typeof openForm>[]>();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: () => read.promise,
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
 
     await harness.stop();
@@ -76,9 +89,13 @@ describe('forms page part', () => {
   it('an open-rounds read that lands before stop shows its round', async () => {
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: async () => [openForm()],
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
 
     await settle();
@@ -93,7 +110,7 @@ describe('forms page part', () => {
     const drafts: unknown[] = [];
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: (method, ...args) => {
         if (method === 'draft') {
           drafts.push(args);
@@ -101,7 +118,11 @@ describe('forms page part', () => {
         }
         return new Promise(() => undefined);
       },
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
     harness.send('formShown', openForm());
     editors.type('typed');
@@ -122,13 +143,23 @@ describe('forms page part', () => {
     const finishing = deferred<void>();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart],
       invoke: (method) =>
         method === 'finish' ? finishing.promise : new Promise(() => undefined),
-      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
     });
     harness.send('formShown', openForm());
-    harness.emit('sessions.activeChanged', { sessionId: openForm().sessionId });
+    const { sessionId } = openForm();
+    harness.state
+      .publish(sessionsRowsSlot)
+      .set(sessionId, sessionRow(sessionId));
+    harness.state.publish(sessionsSelectionSlot).set(sessionId);
+    harness.emit('core.pageReady', null);
+    await settle();
     const { commands } = harness.started();
     commands.openReview({} as PageCommandContext);
     commands.askCancel({} as PageCommandContext);
@@ -167,7 +198,8 @@ describe('forms page part', () => {
     "a dependent's contribution leaves when the dependent stops ($member)",
     async ({ add }) => {
       const harness = startPagePart(formsPagePart, {
-        parts: [sessionsPagePart, keysPagePart],
+        parts: [sessionsPagePart],
+        services: { picker: fakeListPickerService() },
       });
       const started = harness.started();
       const dependent = createRegistrations();

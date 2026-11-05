@@ -1,7 +1,9 @@
 import type { CommandId } from '../../../../contracts/commands';
+import type { Disposable } from '../../../../contracts/disposable';
 import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
+import type { OsName } from '../../../../contracts/platform';
+import type { LayoutState } from '../../../../contracts/state';
 import { errorText } from '../../../../shared/error-text';
 import { button, element } from '../../../../shared/page/dom';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
@@ -20,7 +22,7 @@ import {
 import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
-import type { KeysPageExports } from '../../../keys/contract';
+import type { KeyHints } from '../../../../contracts/plugin';
 import type { FormsItemRef, FormsView } from '../../contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
@@ -75,13 +77,14 @@ import type { LayoutPick } from './layout-resolver';
 // anchors that show them, the forms state and its actions, a forms command,
 // the round's text boxes, the forms view now, which decides what a rail click
 // does, the registered commands `kit.command` checks and runs, the review
-// columns other plugins added, and where each markdown mount a pane makes is
-// recorded for disposal.
+// columns other plugins added, the slots `kit.state` reads, where each anchor
+// the kit names and each slot subscription a pane makes is recorded, and where
+// each markdown mount it makes is recorded for disposal.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
-  platform: Platform;
+  platform: OsName;
   log: PluginLog;
-  keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;
@@ -90,6 +93,8 @@ export interface PaneDeps {
   shownView(): FormsView;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'reviewColumns'>;
+  state: LayoutState;
+  recordAnchor(anchor: Disposable): void;
   recordMount(mount: MarkdownMount): void;
 }
 
@@ -302,7 +307,7 @@ function drawReview(
   deps.recordMount(mount);
   // The cursor row's prompt, which each draw of the rows moves to that row.
   const jumpPrompt = element('span', 'review-jump-prompt');
-  anchor(jumpPrompt, formsCommand('reviewJump'), true);
+  anchor(jumpPrompt, formsCommand('reviewJump'), { label: true });
   let drawn: RoundState | null = null;
   // The rows the latest update redraws; null when they were unchanged.
   let changedRows: ReviewRow[] | null = null;

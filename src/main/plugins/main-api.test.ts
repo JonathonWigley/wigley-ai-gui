@@ -7,15 +7,28 @@ import type {
   ChannelShape,
   DriveHost,
   MainChannel,
+  MainCommandContext,
   PluginManifest,
   SelfTestHost,
 } from '../../contracts/plugin';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+  type RuntimeCatalog,
+} from '../../contracts/core-state';
+import type { SlotKey } from '../../contracts/state';
 import type { UserConfig } from '../../contracts/user-config';
+import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
 import { FakeProcesses } from '../../shared/fake-processes';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { createRegistrations } from '../../shared/registrations';
+import {
+  createRuntimeCommands,
+  EMPTY_RUNTIME_CATALOG,
+} from '../../shared/runtime-commands';
+import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import type { LayoutService } from '../layouts/layout-service';
 import {
   createMainApi,
@@ -26,11 +39,18 @@ import {
 const manifest: PluginManifest = {
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
   settingInfo: {},
   themeTokens: {},
+};
+
+const ownSlot: SlotKey<number, 'main', 'p'> = {
+  id: 'p.v',
+  process: 'main',
+  kind: 'value',
 };
 
 const fixedSettings = {
@@ -61,6 +81,22 @@ function liveSettings(initial: Record<string, object>) {
   };
 }
 
+// Main's commands over `state`, sending remote runs to `remote`.
+function mainCommandsOver(
+  state: SlotStore,
+  remote: (id: string, arg: unknown) => Promise<void> = () => Promise.resolve(),
+) {
+  return createRuntimeCommands<MainCommandContext<any>>({
+    process: 'main',
+    registry: new CommandRegistry(() => {}),
+    writer: state.publish(coreRuntimeMainSlot),
+    other: state.read(coreRuntimePageSlot, 'core'),
+    served: () => ({}),
+    leader: () => '<Space>',
+    remote,
+  });
+}
+
 function apiOver(
   settings: ReturnType<typeof liveSettings>,
   layouts = {} as LayoutService,
@@ -79,6 +115,8 @@ function apiOver(
     bus: createEventBus(),
     dataRoot: '/d',
     layouts,
+    state: createSlotStore(() => {}),
+    commands: mainCommandsOver(createSlotStore(() => {})),
     ...overrides,
   };
   return { api: createMainApi(manifest, deps), registrations };
@@ -198,6 +236,13 @@ const RETURNED_HANDLE_ROWS: {
     }),
     register: (api) => api.services.userConfig.onChanged(() => undefined),
   },
+  {
+    member: 'state.publish',
+    deps: (handle) => ({
+      state: { publish: () => handle } as unknown as SlotStore,
+    }),
+    register: (api) => api.state.publish(ownSlot),
+  },
 ];
 
 // One listener registered through `api`, and what makes the source speak: the
@@ -206,6 +251,7 @@ type HearingWorld = {
   api: TestApi;
   bus: EventBus;
   settings: ReturnType<typeof liveSettings>;
+  state: SlotStore;
 };
 
 const HEARING_ROWS: {
@@ -222,6 +268,12 @@ const HEARING_ROWS: {
     member: 'onSettingsChanged',
     listen: ({ api }, heard) => api.onSettingsChanged(heard),
     speak: ({ settings }) => settings.change({ p: { a: 2 } }),
+  },
+  {
+    member: 'state.read().on',
+    listen: ({ api }, heard) => api.state.read(ownSlot).on(heard),
+    speak: ({ state }) =>
+      state.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
   },
 ];
 
@@ -324,6 +376,8 @@ describe('createMainApi', () => {
       bus,
       dataRoot: '/d',
       layouts: {} as LayoutService,
+      state: createSlotStore(() => {}),
+      commands: mainCommandsOver(createSlotStore(() => {})),
     });
 
     api.events.emit('x', 3);
@@ -346,6 +400,8 @@ describe('createMainApi', () => {
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
+        state: createSlotStore(() => {}),
+        commands: mainCommandsOver(createSlotStore(() => {})),
       },
     );
 
@@ -377,6 +433,8 @@ describe('createMainApi', () => {
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
+        state: createSlotStore(() => {}),
+        commands: mainCommandsOver(createSlotStore(() => {})),
       },
     );
 
@@ -414,6 +472,8 @@ describe('createMainApi', () => {
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
+        state: createSlotStore(() => {}),
+        commands: mainCommandsOver(createSlotStore(() => {})),
       },
     );
 
@@ -497,10 +557,12 @@ describe('createMainApi recording', () => {
     ({ listen, speak }) => {
       const bus = createEventBus();
       const settings = liveSettings({ p: { a: 1 } });
+      const state = createSlotStore(() => {});
       const { api, registrations } = apiOver(settings, undefined, undefined, {
         bus,
+        state,
       });
-      const world = { api, bus, settings };
+      const world = { api, bus, settings, state };
       const heard: unknown[] = [];
       listen(world, (data) => heard.push(data));
 
@@ -579,4 +641,143 @@ describe('createMainApi recording', () => {
       await callAndCheck();
     },
   );
+});
+
+describe('createMainApi commands', () => {
+  const DECL = { label: 'Go', group: 'g', runsIn: 'main' } as const;
+  const PAGE_CATALOG: RuntimeCatalog = {
+    ...EMPTY_RUNTIME_CATALOG,
+    commands: [
+      {
+        id: 'q.go',
+        plugin: 'q',
+        label: 'Page go',
+        group: 'g',
+        runsIn: 'page',
+        runtime: true,
+      },
+    ],
+    binds: {
+      binds: [],
+      app: [{ accelerator: 'Alt+Z', command: 'q.go' }],
+      intercept: [],
+    },
+  };
+
+  function commandsSetup() {
+    const state = createSlotStore(() => {});
+    const remoteRuns: [string, unknown][] = [];
+    const commands = mainCommandsOver(state, async (id, arg) => {
+      remoteRuns.push([id, arg]);
+    });
+    const { api, registrations } = apiOver(
+      liveSettings({ p: {} }),
+      undefined,
+      undefined,
+      { state, commands },
+    );
+    const catalog = () => state.read(coreRuntimeMainSlot, 'core').get();
+    const writePage = () =>
+      state.applyRemote({
+        id: coreRuntimePageSlot.id,
+        kind: 'value',
+        value: PAGE_CATALOG,
+      });
+    return { api, commands, registrations, catalog, writePage, remoteRuns };
+  }
+
+  it('register_DisposedWithThePart_LeavesRegistryAndSlot', () => {
+    const { api, commands, registrations, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+    api.keys.bind({
+      kind: 'app',
+      bind: { accelerator: 'Alt+G', command: 'p.go' },
+    });
+
+    registrations.dispose();
+
+    expect(commands.registry.has('p.go')).toBe(false);
+    expect(catalog()?.commands).toEqual([]);
+    expect(catalog()?.binds.app).toEqual([]);
+  });
+
+  it('register_OtherProcessDecl_Throws', () => {
+    const { api } = commandsSetup();
+
+    expect(() =>
+      api.commands.register('go', { ...DECL, runsIn: 'page' }, () => {}),
+    ).toThrow('p.go runs in page');
+  });
+
+  it('bind_ClashesWithRuntimeBindOfEitherProcess_ThrowsAtTheCall', () => {
+    const { api, writePage } = commandsSetup();
+    writePage();
+    api.commands.register('go', DECL, () => {});
+    const bindOn = (accelerator: string) => ({
+      kind: 'app' as const,
+      bind: { accelerator, command: 'p.go' },
+    });
+    api.keys.bind(bindOn('Alt+G'));
+
+    expect(() => api.keys.bind(bindOn('Alt+G'))).toThrow();
+    expect(() => api.keys.bind(bindOn('Alt+Z'))).toThrow();
+  });
+
+  it('bind_OnDefaultOrUserKey_Accepted', () => {
+    const { api, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+
+    api.keys.bind({
+      kind: 'intercept',
+      bind: { key: 'Tab', control: true, command: 'p.go' },
+    });
+
+    expect(catalog()?.binds.intercept).toHaveLength(1);
+  });
+
+  it('infoOf_OtherProcessRuntimeCommand_ReadsItsSlotBeforeTheServedConfig', async () => {
+    const { api, writePage, remoteRuns } = commandsSetup();
+    writePage();
+
+    await api.commands.run('q.go');
+
+    expect(remoteRuns).toEqual([['q.go', undefined]]);
+  });
+
+  it('intercept_PartStops_WrapGone', async () => {
+    const { api, commands, registrations } = commandsSetup();
+    const ran: string[] = [];
+    commands.registry.register('p.go', () => void ran.push('handler'), 'p');
+    api.commands.intercept('p.go', () => void ran.push('wrap'));
+
+    registrations.dispose();
+    await commands.registry.run('p.go', { arg: undefined });
+
+    expect(ran).toEqual(['handler']);
+  });
+
+  it('onDidRun_PartStops_ListenerGone', async () => {
+    const { api, commands, registrations } = commandsSetup();
+    const heard: string[] = [];
+    commands.registry.register('p.go', () => {}, 'p');
+    api.commands.onDidRun((id) => heard.push(id));
+
+    registrations.dispose();
+    await commands.registry.run('p.go', { arg: undefined });
+
+    expect(heard).toEqual([]);
+  });
+
+  it('bind_PartStops_LeavesTheCatalog', () => {
+    const { api, registrations, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+    api.keys.bind({
+      kind: 'app',
+      bind: { accelerator: 'Alt+G', command: 'p.go' },
+    });
+
+    registrations.dispose();
+
+    expect(catalog()?.binds.app).toEqual([]);
+  });
 });

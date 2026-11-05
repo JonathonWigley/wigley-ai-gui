@@ -72,6 +72,7 @@ function startNotesPart() {
         handlers.set(name, handler),
       send: () => undefined,
     },
+    events: { emit: () => undefined },
     settings: () => ({ launchBrief: 'Fix it.', autosaveDelayMs: 400 }),
     services: {
       files: data,

@@ -6,13 +6,15 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
-import type { Platform } from '../../../contracts/platform';
+import type { OsName } from '../../../contracts/platform';
 import type {
+  KeyHints,
   PluginAreas,
   PushedScope,
   ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
+import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
 import { callEach } from '../../../shared/call-each';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
@@ -29,7 +31,6 @@ import {
   formOfSession,
   sessionPaneView,
 } from '../../../shared/page/session-forms';
-import type { KeysPageExports } from '../../keys/contract';
 import {
   NEEDS_YOU_ACTIVITY,
   type SessionsPageExports,
@@ -55,9 +56,10 @@ import { sessionTitle } from './view-model';
 // round's split, or null while idle. `pushConfirmScope` lays the cancel
 // prompt's scope over it. `platform` is the OS key hints are drawn for;
 // `uiState` keeps the rail's dragged width, which every round's rail opens at;
-// `timers` runs each round's split resize prompt linger. `commands` and
-// `contributions` reach every round view's kits and cards. Each round view is
-// a drop target through `drops`, typing files into the round's box used last.
+// `timers` runs each round's split resize prompt linger. `commands`,
+// `contributions` and `state` reach every round view's kits and cards. Each
+// round view is a drop target through `drops`, typing files into the round's
+// box used last.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
@@ -68,11 +70,12 @@ export interface FormsViewDeps {
   store: FormsStore;
   boxes: EditorBoxes<BoxRef>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
+  keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'>;
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
-  platform: Platform;
+  platform: OsName;
+  state: LayoutState;
   uiState: UiState;
   timers: Timers;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
@@ -336,6 +339,7 @@ function showRound(
       commands: deps.commands,
       contributions: deps.contributions,
       platform: deps.platform,
+      state: deps.state,
       uiState: deps.uiState,
       timers: deps.timers,
       log: deps.log,

@@ -228,7 +228,7 @@ The keyboard is first; the mouse works everywhere.
   as glyphs (⌃ ⌥ ⇧ ⌘, ↩ ⇥ ⎋ ⌫ ⌦ ← ↑ → ↓), and every other named key by name, Space included, as
   macOS menus write it; elsewhere they print as words (`Ctrl+`, `Enter`, `Esc`). A view draws a hint only when its command has a bind.
 - **A key shows where it acts,** the way a game puts a button prompt beside the thing it moves:
-  the app has no bottom key list. Each hint is a KeyPrompt the keys plugin draws into an anchor
+  the app has no bottom key list. Each hint is a KeyPrompt the core draws into an anchor
   the view places (AGENTS.md § Architecture, Key hints), in one of four placement kinds:
   - **Edge prompt:** a navigation chord at the edges of what it moves through, with a chevron
     toward its direction: `⌥I ‹` and `› ⌥O` at the tab strip's ends, `⌥⇧I ▲ ▼ ⌥⇧O` on the session
@@ -273,11 +273,11 @@ The primitives, each a builder in `src/shared/page/ui/`:
 
 - **Kbd** (`kbd`): a key hint, chords in `font-mono`.
 - **KeyPrompt** (`keyPrompt`): a Kbd with an optional label after it in `fg-tertiary`; the one
-  thing the keys plugin draws into an anchor. A view places a chevron (`keyChevron`, `‹ › ▲ ▼ ◂ ▸`)
+  thing the core draws into an anchor. A view places a chevron (`keyChevron`, `‹ › ▲ ▼ ◂ ▸`)
   beside the anchor element when the prompt points a direction; the chevron hides and shows with its
   anchor. The parts around anchors are builders in `key-anchors.ts`: an edge prompt (`keyEdge`),
   which `is-no-target` hides keeping its space; a box hint (`boxHint`); and a stack of one
-  command's anchors in several scopes in one cell (`keyStack`). The keys plugin marks each anchor
+  command's anchors in several scopes in one cell (`keyStack`). The core marks each anchor
   element `ui-key-anchor`; an anchor, box hint or stack holding no KeyPrompt (its commands unbound, or hints off)
   takes no space, and a box hint whose prompts are all hidden paints nothing.
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
@@ -338,7 +338,7 @@ Conventions every primitive follows:
   enumerated value is `data-<name>`; `is-hover` and `is-pressed` exist only so the gallery can show
   those states.
 - Buttons never take focus.
-- A hint is an anchor element handed in, which the keys plugin fills.
+- A hint is an anchor element handed in, which the core fills.
 
 ## Surfaces
 

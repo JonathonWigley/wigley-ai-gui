@@ -6,8 +6,8 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type DocsPageExports, docsPageKey } from '../../docs/contract';
-import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import { backlogPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
 const fakeDocs = fakeDependency(
   docsPageKey,
@@ -16,14 +16,10 @@ const fakeDocs = fakeDependency(
 
 function startBacklogPage() {
   installFakeDom(vi.stubGlobal);
-  const keys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
-    keysFor: () => null,
-    onChanged: () => consumer.track({ dispose: () => undefined }),
-    anchor: () => consumer.track({ dispose: () => undefined }),
-  }));
   return startPagePart(backlogPagePart, {
-    dependencies: [keys, fakeDocs],
+    dependencies: [fakeDocs],
     firstModeTaken: true,
+    services: { picker: fakeListPickerService() },
   });
 }
 

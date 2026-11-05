@@ -43,7 +43,7 @@ import {
 
 // `workflows` holds each workflow's page half, its stages in stage order. `flowOf`
 // is the flow a session draws (the preview's sample while it shows, else the
-// pushed flow or a new one); `nameOf` names the session in the log; `isPreview` is
+// slot's flow or a new one); `nameOf` names the session in the log; `isPreview` is
 // whether the session shows the preview, which runs nothing. `setRowActivity` sets
 // what the session's row says for its stage, null for nothing.
 export interface WorkflowViewDeps {

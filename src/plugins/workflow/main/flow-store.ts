@@ -2,6 +2,7 @@ import type { Clock } from '../../../contracts/ambient';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
+import type { KeyedSlotWriter } from '../../../contracts/state';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject } from '../../../shared/json';
 import type { ChecklistItem, SessionFlow } from '../contract';
@@ -16,7 +17,10 @@ export const FLOWS_FILE = 'flows.json';
 // write the whole file, one write after another in call order; a write that
 // fails is logged and the next change writes again. `rekey`, `put`,
 // `putKeepingSavedAt` and `drop` ignore a session the store does not hold. A
-// saved entry no open session took stays in the file.
+// saved entry no open session took stays in the file. An open session's flow
+// sits in the `flows` slot, keyed by session id, and only there: each change sets
+// or deletes that session's key. The file is the truth across a restart, so
+// creating a store deletes every key the slot still holds.
 export interface FlowStore {
   load(): Promise<void>;
   // Open sessions only.
@@ -51,11 +55,6 @@ export interface FlowStore {
   forgetFlows(projectDir: string): string[];
 }
 
-interface OpenFlow {
-  hostSessionId: string;
-  flow: SessionFlow;
-}
-
 interface SavedFlow {
   flow: SessionFlow;
   savedAt: number;
@@ -70,16 +69,22 @@ interface SavedEntry {
 
 // `files` is workflow's data folder.
 export function createFlowStore(deps: {
+  flows: KeyedSlotWriter<SessionFlow>;
   files: Files;
   log: PluginLog;
   paths: Paths;
   clock: Clock;
 }): FlowStore {
-  const { files, log, paths, clock } = deps;
+  const { flows, files, log, paths, clock } = deps;
   // Every entry `flows.json` holds, open sessions' included, by host id.
   const saved = new Map<string, SavedFlow>();
-  const opened = new Map<string, OpenFlow>();
+  // Each open session's host session id, in `open` order.
+  const opened = new Map<string, string>();
   let lastWrite: Promise<void> = Promise.resolve();
+
+  for (const sessionId of flows.all().keys()) {
+    flows.delete(sessionId);
+  }
 
   const write = () => {
     const entries: SavedEntry[] = [...saved].map(
@@ -103,8 +108,9 @@ export function createFlowStore(deps: {
     flow: SessionFlow,
     savedAt: number,
   ) => {
-    opened.set(sessionId, { hostSessionId, flow });
+    opened.set(sessionId, hostSessionId);
     saved.set(hostSessionId, { flow, savedAt });
+    flows.set(sessionId, flow);
   };
 
   const savedAtOfHost = (hostSessionId: string) =>
@@ -114,11 +120,10 @@ export function createFlowStore(deps: {
     flow: SessionFlow,
     savedAt: (hostSessionId: string) => number,
   ) => {
-    const held = opened.get(flow.sessionId);
-    if (held === undefined) {
+    const hostSessionId = opened.get(flow.sessionId);
+    if (hostSessionId === undefined) {
       return;
     }
-    const { hostSessionId } = held;
     hold(flow.sessionId, hostSessionId, flow, savedAt(hostSessionId));
     write();
   };
@@ -145,13 +150,14 @@ export function createFlowStore(deps: {
         });
       }
     },
-    get: (sessionId) => opened.get(sessionId)?.flow ?? null,
-    hostIdOf: (sessionId) => opened.get(sessionId)?.hostSessionId ?? null,
+    get: (sessionId) =>
+      opened.has(sessionId) ? (flows.get(sessionId) ?? null) : null,
+    hostIdOf: (sessionId) => opened.get(sessionId) ?? null,
     savedAtOf(sessionId) {
-      const held = opened.get(sessionId);
-      return held === undefined ? 0 : savedAtOfHost(held.hostSessionId);
+      const hostSessionId = opened.get(sessionId);
+      return hostSessionId === undefined ? 0 : savedAtOfHost(hostSessionId);
     },
-    all: () => [...opened.values()].map(({ flow }) => flow),
+    all: () => [...opened.keys()].flatMap((id) => flows.get(id) ?? []),
     open(sessionId, hostSessionId, projectDir) {
       const savedFlow = saved.get(hostSessionId)?.flow;
       const flow =
@@ -163,34 +169,38 @@ export function createFlowStore(deps: {
       return flow;
     },
     rekey(sessionId, hostSessionId) {
-      const held = opened.get(sessionId);
-      if (held === undefined) {
+      const heldHostId = opened.get(sessionId);
+      const flow = flows.get(sessionId);
+      if (heldHostId === undefined || flow === undefined) {
         return;
       }
-      const savedAt = savedAtOfHost(held.hostSessionId);
-      saved.delete(held.hostSessionId);
-      hold(sessionId, hostSessionId, held.flow, savedAt);
+      const savedAt = savedAtOfHost(heldHostId);
+      saved.delete(heldHostId);
+      hold(sessionId, hostSessionId, flow, savedAt);
       write();
     },
     put: (flow) => putAt(flow, () => clock.now()),
     putKeepingSavedAt: (flow) => putAt(flow, savedAtOfHost),
     drop(sessionId) {
-      const held = opened.get(sessionId);
-      if (held === undefined) {
+      const hostSessionId = opened.get(sessionId);
+      if (hostSessionId === undefined) {
         return;
       }
       opened.delete(sessionId);
-      saved.delete(held.hostSessionId);
+      saved.delete(hostSessionId);
+      flows.delete(sessionId);
       write();
     },
     forgetFlows(projectDir) {
       const inFolder = (flow: SessionFlow) =>
         paths.samePath(flow.projectDir, projectDir);
       const forgotten: string[] = [];
-      for (const [sessionId, held] of opened) {
-        if (inFolder(held.flow)) {
+      for (const [sessionId, hostSessionId] of opened) {
+        const flow = flows.get(sessionId);
+        if (flow !== undefined && inFolder(flow)) {
           opened.delete(sessionId);
-          saved.delete(held.hostSessionId);
+          saved.delete(hostSessionId);
+          flows.delete(sessionId);
           forgotten.push(sessionId);
         }
       }

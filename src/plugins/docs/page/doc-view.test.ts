@@ -950,6 +950,27 @@ describe('createDocView', () => {
     expect(frameCounts(view)).toEqual({ old: 0, new: 1 });
   });
 
+  it('followLink_ExternalTarget_CallsOpenExternalAndLogs', async () => {
+    const url = 'https://example.invalid/page';
+    const { view, deps } = docViewOver(() =>
+      withUser(defaultLayout, paneLayout('pane')),
+    );
+    const logged: string[] = [];
+    deps.log = (line) => logged.push(line);
+    deps.openExternal = vi.fn(async () => undefined);
+    await view.open(target(null));
+    const [body] = findAll(asFake(view.element), 'docs-body');
+
+    body.fire('click', {
+      target: { closest: () => ({ dataset: { href: url } }) },
+    });
+    await vi.waitFor(() => {
+      expect(logged).toContain(`opened link ${url}`);
+    });
+
+    expect(deps.openExternal).toHaveBeenCalledWith(url);
+  });
+
   it('open_DocNoEntryNames_DrawsNoChips', async () => {
     const headers: DocHeaderInput[] = [];
     const header: Layout = {

@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type { ListPicker } from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
@@ -42,7 +43,12 @@ import {
   type TreeWikiLink,
 } from '../tree';
 import { parseWikiTarget } from '../wiki-main';
-import { type DocDetail, type DocTarget, createDocView } from './doc-view';
+import {
+  type DocDetail,
+  type DocTarget,
+  type DocView,
+  createDocView,
+} from './doc-view';
 import { createDocsDialogs } from './docs-dialogs';
 import {
   applyChange,
@@ -86,7 +92,7 @@ import { createTreeView, type LeafMarks } from './tree-view';
 import { createWikiMainSource, type MainFileState } from './wiki-main-source';
 
 // The scopes a docs view pushes over its pane's scope.
-export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
+export type DocsPushedScope = 'conflict' | 'box' | 'confirm';
 
 // What each page command does on this view.
 export interface DocsViewCommands {
@@ -217,9 +223,12 @@ export interface DocsViewDeps {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   matcher: FuzzyMatcher;
+  // This view's handle on the docs plugin's one list (`createDocsPicker`).
+  picker: ListPicker;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  openExternal(url: string): Promise<void>;
   // Where the doc pane's editor registers its drop target.
   drops: Pick<PageDrops, 'addTarget'>;
   // The star set every docs view shares; each view redraws on its toggles.
@@ -239,6 +248,9 @@ export interface DocsViewDeps {
   // Hears the open doc's path each time a doc opens or the open one moves,
   // and null once the doc pane holds no file.
   openChanged(path: string | null): void;
+  // Hears each doc the view opened, once it shows; a refused or failed open is
+  // not told.
+  docOpened(path: string): void;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
   // Whether the tree's container shows it now.
@@ -515,13 +527,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         focusDocAndLog();
         return;
       }
-      void doc
-        .open(targetFor(entry.path, entry, entry.line, null))
-        .then((opened) => {
+      void openAndTell(targetFor(entry.path, entry, entry.line, null)).then(
+        (opened) => {
           if (opened) {
             openedFromTree(focusesDoc);
           }
-        });
+        },
+      );
     },
     openHeading: (match: TreeHeadingMatch, focusesDoc: boolean) => {
       const entry = entriesById.get(match.entryId);
@@ -590,6 +602,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
+    openExternal: deps.openExternal,
     drops: deps.drops,
     now: deps.now,
     chipsOf: (entryId, path) => {
@@ -635,6 +648,19 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
+  // Opens `target` and tells `docOpened` once it shows; resolves to whether it
+  // did.
+  const openAndTell = async (
+    target: DocTarget,
+    options?: Parameters<DocView['open']>[1],
+  ): Promise<boolean> => {
+    const opened = await doc.open(target, options);
+    if (opened) {
+      deps.docOpened(target.path);
+    }
+    return opened;
+  };
+
   const isListed = (path: string): boolean =>
     document !== null && isIndexedPath(path, document.entries, deps.paths);
 
@@ -654,7 +680,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
-    const opened = await doc.open(
+    const opened = await openAndTell(
       targetFor(path, entry, line, fragment),
       options,
     );
@@ -714,7 +740,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const openInEditor = async (entry: IndexEntry, line: number) => {
-    if (await doc.open(targetFor(entry.path, entry, line, null))) {
+    if (await openAndTell(targetFor(entry.path, entry, line, null))) {
       doc.edit(line);
       focusDoc();
     }
@@ -726,7 +752,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
-    matcher: deps.matcher,
+    picker: deps.picker,
     parts: newParts(),
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
@@ -860,7 +886,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (entry === undefined) {
       return false;
     }
-    const opened = await doc.open(
+    const opened = await openAndTell(
       targetFor(entry.path, entry, entry.line, null),
     );
     if (opened) {
@@ -970,7 +996,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       case 'openFile':
         runningMainOpens++;
         void askingMainPane(() =>
-          doc.open(targetFor(path, entryAt(path), null, null)),
+          openAndTell(targetFor(path, entryAt(path), null, null)),
         )
           .then((opened) => {
             if (opened) {

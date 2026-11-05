@@ -1,5 +1,4 @@
 import type { Timers } from '../../contracts/ambient';
-import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type { ResizeTarget } from '../../contracts/panes';
 import type {
@@ -8,11 +7,11 @@ import type {
   Area,
   AreaName,
   ContributeOptions,
+  KeyHints,
   ShellLayout,
 } from '../../contracts/plugin';
 import type { UiState } from '../../contracts/ui-state';
-import type { BaseKitDeps } from '../../shared/page/layout-host/base-kit';
-import { type AnchorNamer, NO_ANCHOR } from '../../shared/page/ui/key-anchors';
+import { NO_ANCHOR } from '../../shared/page/ui/key-anchors';
 import { createSplitDivider } from '../../shared/page/ui/split';
 import { clampSplitWidth } from '../../shared/page/ui/split-width';
 import type { SideBarLayout } from './modes';
@@ -103,10 +102,8 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // the side bar is beside the content; the right bar resizes by its handle's
 // drag alone. `reloadBarOpenWidths` reads the `sidebar-width` and
 // `rightbar-width` tokens again, after a theme is applied, and redraws each
-// bar at its token while the user has stored no width for it. `setKeys`
-// anchors the side bar handle's resize prompt through `keys`, again on each
-// call. `dispose` disposes both dividers, stops watching the root's width and
-// removes both handles.
+// bar at its token while the user has stored no width for it. `dispose` disposes
+// both dividers, stops watching the root's width and removes both handles.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
@@ -114,7 +111,6 @@ export interface Shell {
   setChromeLayout(name: string): void;
   sideBarDivider: ResizeTarget;
   reloadBarOpenWidths(): void;
-  setKeys(keys: BaseKitDeps['keys']): void;
   dispose(): void;
 }
 
@@ -149,46 +145,6 @@ function openWidthState(uiState: UiState, openWidth: () => number): UiState {
       return Number.isFinite(stored) ? stored : openWidth();
     },
     set: (key, value) => uiState.set(key, value),
-  };
-}
-
-// An anchor function that anchors through the keys `setKeys` hands it, nothing
-// before the first; each `setKeys` disposes every live anchor and anchors it
-// again through the new keys.
-function createForwardingAnchor(): {
-  anchor: AnchorNamer<never>;
-  setKeys(keys: BaseKitDeps['keys']): void;
-} {
-  interface Forwarded {
-    element: HTMLElement;
-    command: CommandId;
-    live: Disposable | null;
-  }
-  const forwarded = new Set<Forwarded>();
-  let keys: BaseKitDeps['keys'] | null = null;
-  return {
-    anchor(element, command) {
-      const entry: Forwarded = {
-        element,
-        command,
-        live: keys?.anchor(element, command) ?? null,
-      };
-      forwarded.add(entry);
-      return {
-        dispose() {
-          entry.live?.dispose();
-          entry.live = null;
-          forwarded.delete(entry);
-        },
-      };
-    },
-    setKeys(next) {
-      keys = next;
-      for (const entry of forwarded) {
-        entry.live?.dispose();
-        entry.live = next.anchor(entry.element, entry.command);
-      }
-    },
   };
 }
 
@@ -339,6 +295,7 @@ export function mountShell(
   layout: ShellLayout,
   uiState: UiState,
   timers: Timers,
+  keys: KeyHints,
 ): Shell {
   const initialLayout = layout;
   let currentLayout = layout;
@@ -548,7 +505,6 @@ export function mountShell(
     drawSideBarWidth();
   };
 
-  const promptAnchor = createForwardingAnchor();
   const sideBarDivider = createSplitDivider({
     ...sideBarLimits,
     uiState: openWidthState(uiState, () => sideBarOpen),
@@ -559,7 +515,7 @@ export function mountShell(
       sideBarWidth = width;
       drawSideBarWidth();
     },
-    anchor: promptAnchor.anchor,
+    anchor: keys.anchor,
     timers,
   });
   const rightBarDivider = createSplitDivider({
@@ -629,7 +585,6 @@ export function mountShell(
       sideBarDivider.reloadWidth();
       rightBarDivider.reloadWidth();
     },
-    setKeys: (keys) => promptAnchor.setKeys(keys),
     dispose() {
       sideBarDivider.dispose();
       rightBarDivider.dispose();
