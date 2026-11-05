@@ -498,6 +498,10 @@ stdout {"type":"result","subtype":"success","is_error":false,"result":"Usage: /e
   | then `/effort auto` | `claude-opus-5-5` | `medium` |
   | then `/effort max` | `claude-opus-5-5` | `max` |
   | Opus, `/effort ultracode on` | `claude-opus-5-5` | `medium`, with `applied.ultracode` `true` |
+  | `--model sonnet`, then `plan` mode | `claude-sonnet-5-5` | `medium` |
+  | `--model opusplan`, then `plan` mode, then `auto` | `claude-sonnet-5-5` each time | `medium` |
+
+  `applied.model` does not follow plan mode's model switch, as `init.model` does not (§ Mode change).
 
 ## Model
 
