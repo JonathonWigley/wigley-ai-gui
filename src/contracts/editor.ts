@@ -145,7 +145,8 @@ export interface CompletionItem {
 // after `prefix`, best first, each word once; with nothing typed, every item in the order `items()` gives
 // them. Accepting one replaces that text with `prefix`, the word and one space. `drawRow` hears each row's
 // word as the popup draws it, with a new element inside the row, after the `prefix` and word text, to
-// append to or replace the children of. `offered` hears the offered words each time the list changes
+// append to or replace the children of: a one-line flex box holding the width the text leaves, whose
+// children past it are cut. `offered` hears the offered words each time the list changes
 // while it is open; `accepted` hears the word accepted.
 export interface EditorCompletions {
   prefix: string;
@@ -181,6 +182,9 @@ export interface EditorHost {
   ): DocumentEditor;
   // Whether the element sits inside an editor this host created.
   contains(element: Element): boolean;
+  // Whether the editor holding the event's target takes the key press itself,
+  // ahead of the page's chord binds: an open completion popup's keys.
+  takesKey(event: KeyboardEvent): boolean;
   // Delivers `keys`, named as KeyboardEvent.key names them, to the editor
   // holding `element` as typed keys: each runs in the vim mode the keys before
   // it left, so in insert mode a character types itself.

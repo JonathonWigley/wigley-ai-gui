@@ -79,7 +79,7 @@ describe('slash commands', () => {
         name: 'wigley:feature',
         description: "the agent's wigley:feature",
         argumentHint: '<wigley:feature args>',
-        aliases: ['f'],
+        aliases: ['f', 'feature'],
         source: 'agent',
       },
     ]);
@@ -92,6 +92,16 @@ describe('slash commands', () => {
     );
 
     expect(kept.name).toBe('x');
+    expect(kept.aliases).toEqual(['y']);
+  });
+
+  it('completionCommands_NameAfterPluginEqualToAppName_Dropped', () => {
+    const [, kept] = completionCommands(
+      [command('status')],
+      [agentCommand('wigley:status', ['y'])],
+    );
+
+    expect(kept.name).toBe('wigley:status');
     expect(kept.aliases).toEqual(['y']);
   });
 });

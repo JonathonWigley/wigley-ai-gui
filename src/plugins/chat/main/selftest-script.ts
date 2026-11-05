@@ -657,7 +657,16 @@ const ARCHIVE_STEPS: SelfTestStep[] = [
 
 const SLASH_COMPLETION_STEPS: SelfTestStep[] = [
   {
-    keys: ['/', 'a', 'l', 'i'],
+    keys: ['/', 'l', 'o', 'g'],
+    expect: '[chat] completions offered: /login, /logout',
+  },
+  {
+    keys: ['<C-n>', '<C-p>', '<C-n>', 'Tab'],
+    expect: '[chat] completion accepted: /logout',
+    why: "With the popup open Ctrl+n and Ctrl+p move its selection, ahead of the Chat scope's Ctrl+n.",
+  },
+  {
+    keys: ['Escape', 'c', 'c', '/', 'a', 'l', 'i'],
     expect: '[chat] completions offered: /fake-command',
   },
   { keys: ['Tab'], expect: '[chat] completion accepted: /fake-command' },
@@ -830,7 +839,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'slash completion',
-    why: "/ and ali offer the fake's command by its alias alone, Tab accepts it and Esc Enter sends it.",
+    why: "Ctrl+n and Ctrl+p move the open popup; / and ali offer the fake's command by its alias alone, Tab accepts it and Esc Enter sends it.",
     steps: SLASH_COMPLETION_STEPS,
   },
   {

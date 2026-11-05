@@ -156,7 +156,7 @@ export function createPendingTimeout(
 }
 
 // Non-chord keys fire when no editor has focus; chord binds fire everywhere,
-// inside an editor too, ahead of it. A page sequence never outlives the place
+// inside an editor too, ahead of it, unless the editor takes the key itself. A page sequence never outlives the place
 // it was typed: focus entering an editor, or the window losing focus, drops
 // the pending page keys, held ones included. A bind fires only in the scope
 // `currentScope` reads. `report` hears the pending page keys each time they
@@ -200,6 +200,9 @@ export function installPageKeys(
   document.addEventListener(
     'keydown',
     (event) => {
+      if (editors.takesKey(event)) {
+        return;
+      }
       const isConsumed = feedChordKey(chords, matcher, event, {
         scope: currentScope,
         run: runBind,

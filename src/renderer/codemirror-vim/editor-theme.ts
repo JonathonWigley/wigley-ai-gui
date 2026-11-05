@@ -98,7 +98,25 @@ export const editorTheme = EditorView.theme({
     zIndex: 'calc(var(--wg-z-dialog) + 1)',
     // Autocomplete's base theme sets `monospace` on the list itself.
     '& > ul': { fontFamily: 'var(--wg-font-mono)' },
-    '& > ul > li': { padding: 'var(--wg-space-0_5) var(--wg-space-2)' },
+    // One line: the word stays whole until it alone fills the row, and the
+    // `drawRow` element takes what the word leaves.
+    '& > ul > li': {
+      alignItems: 'baseline',
+      display: 'flex',
+      padding: 'var(--wg-space-0_5) var(--wg-space-2)',
+    },
+    '& .cm-completionLabel': {
+      flexShrink: '0',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    },
+    '& .wg-completion-row': {
+      alignItems: 'baseline',
+      display: 'flex',
+      minWidth: '0',
+      overflow: 'hidden',
+    },
     '& > ul > li[aria-selected]': {
       backgroundColor: 'var(--wg-list-active-background)',
       color: 'var(--wg-fg)',

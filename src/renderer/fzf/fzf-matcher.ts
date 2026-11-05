@@ -1,4 +1,4 @@
-import { Fzf } from 'fzf';
+import { byLengthAsc, Fzf } from 'fzf';
 import type { FuzzyMatcher, FuzzyTiers } from '../../contracts/fuzzy';
 
 const MATCH_OPTIONS = {
@@ -48,8 +48,10 @@ export function createFzfMatcher(): FuzzyMatcher {
         const finder = new Fzf(textsInTier(tiersByItem, tier, placed), {
           ...MATCH_OPTIONS,
           selector: (itemText) => itemText.text,
+          tiebreakers: [byLengthAsc],
         });
-        // fzf returns best score first, list order inside one score.
+        // fzf returns best score first; inside one score, shortest text first,
+        // then list order.
         for (const { item } of finder.find(term)) {
           if (!placed.has(item.itemIndex)) {
             placed.add(item.itemIndex);

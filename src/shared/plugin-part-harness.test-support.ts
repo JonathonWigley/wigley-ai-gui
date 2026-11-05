@@ -1329,6 +1329,7 @@ export function countingEditors() {
       throw new Error('part harness: countingEditors makes no document editor');
     },
     contains: () => false,
+    takesKey: () => false,
     typeInto() {},
     onPendingKeys: () => ({ dispose() {} }),
     cancelPendingKeys() {},

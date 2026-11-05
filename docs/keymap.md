@@ -65,7 +65,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   shown, the Chat tab and its agent strip, the docs tree and doc, the Backlog list and detail, the
   Settings sections and rows, the gallery) **Ctrl+n** opens the new-session prompt with only its
   folder and profile steps, bound per scope since a key cannot sit in `any` beside a scope's bind.
-  A new main view adds its scope to that list in `src/plugins/keymap.ts`.
+  A new main view adds its scope to that list in `src/plugins/keymap.ts`. While a box's completion popup is open,
+  both keys move the popup's selection instead, ahead of every bind.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (the docs tree and the doc, while the tree shows; the Backlog list and detail, the Settings
   sections and rows, and the Primer tab's tasks, items and card columns), then, at the view's edge,

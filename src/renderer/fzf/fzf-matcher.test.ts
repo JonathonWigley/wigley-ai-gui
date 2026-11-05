@@ -86,6 +86,22 @@ describe('rank', () => {
     expect(rankedIds(rows, 'feat')).toEqual(['feature', 'fix-each-attribute']);
   });
 
+  it('rank_ExactAliasOutranksLongerNames', () => {
+    const rows = [
+      row('publish-feature-catalog', ['publish-feature-catalog']),
+      row('wigley:feature-primer', ['wigley:feature-primer', 'feature-primer']),
+      row('wigley:feature-spec', ['wigley:feature-spec', 'feature-spec']),
+      row('wigley:feature', ['wigley:feature', 'feature']),
+    ];
+
+    expect(rankedIds(rows, 'feature')).toEqual([
+      'wigley:feature',
+      'wigley:feature-spec',
+      'wigley:feature-primer',
+      'publish-feature-catalog',
+    ]);
+  });
+
   it('rank_EarlierTierOutranksLaterTier', () => {
     const rows = [
       row(

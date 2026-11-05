@@ -114,7 +114,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   kind is a group after the known kinds, an unknown source a node under Mine after the repos holding kind groups, each
   titled from its id (`my-kind` → `My kind`). An unknown source offers no create place, and only its entries' own
   files are changeable, never the rest of its root. Follow-up items open at their `line`. The filter fuzzy-matches each
-  doc's title and path through the `FuzzyMatcher` page service and keeps the tree's order. A filter that matches nothing
+  doc's title through the `FuzzyMatcher` page service, matches its path as a plain case-insensitive substring, since a
+  fuzzy match over a full path matches almost any query, and keeps the tree's order. A filter that matches nothing
   shows `No docs match "<filter>"` with `/` then `Esc` to clear it; an empty index shows `No docs in this index` with
   `R` to rescan; while a filter is on and rows show, one muted line above them reads `Filtered: <filter>` with `/` to
   change it. Each key shows as a Kbd and follows a rebind. No line shows until a read returns an index, or after one

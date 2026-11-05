@@ -138,15 +138,16 @@ such line: its list comes from `init`, as today.
 - Fuzzy matching goes through the `fzf` npm package (round 4), behind a `FuzzyMatcher` contract with one adapter folder
   (Decided). It ranks by fzf's score, and the list's own order breaks ties (Decided).
 - `rank` takes each item's texts as **tiers**: a match in an earlier tier always outranks a match in a later tier, and
-  inside a tier an item takes its best text's score. The slash completion puts name and aliases in one tier (Decided).
+  inside a tier an item takes its best text's score, the shorter text then input order breaking ties. The slash completion puts name and aliases in one tier (Decided).
 - **A row's name outranks its path** in the pickers whose labels hold a name and a path: the Notes target, chat's Folder
   step, and Docs' place and `Load states for` pickers (the user, 2026-11-04, from `followups.md`). With a filter typed, a
   picker's cursor goes to the first ranked row, so Enter picks the best match (Decided 2026-11-04). Recency stays a follow-up: `NoteHome` has no updated time, and "updated"
   has no definition yet.
 - Every list picker ranks with the matcher, best first (rounds 2 and 3), so all six `createListPicker` callers take it
   (Decided 2026-11-04). Settings rows, keymap rows, the Docs tree and Backlog rows filter with it and keep their order.
-  A setting's description and a Backlog item's one-line summary keep plain substring matching (round 3; the user for
-  Backlog, 2026-11-04), because a fuzzy match over a sentence matches almost any query.
+  A setting's description, a Backlog item's one-line summary and a Docs entry's path keep plain substring matching
+  (round 3; the user for Backlog, 2026-11-04; the Docs path from task 07's drive run), because a fuzzy match over a
+  sentence or a full path matches almost any query.
 - The docs path completion (`src/plugins/docs/path-completion.ts`) keeps prefix matching (Decided).
 - This plan draws no match highlighting (Decided): rows and picker labels draw as today.
 

@@ -415,18 +415,16 @@
 }
 
 /* A / completion row's description. The popup mounts on the body, so this
-   holds outside the Chat tab; the width bounds a long description's line, since
-   an inline box cuts nothing. */
+   holds outside the Chat tab; the row is a flex line that cuts it to what the
+   name leaves, and the width bounds how wide it can make the popup. */
 .chat-completion-description {
   color: var(--wg-fg-tertiary);
-  display: inline-block;
   font-family: var(--wg-font-ui);
   font-size: var(--wg-text-ui);
   margin-left: var(--wg-space-3);
   max-width: calc(var(--wg-space-8) * 14);
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: bottom;
   white-space: nowrap;
 }
 

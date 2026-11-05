@@ -27,10 +27,9 @@ const STYLE_RELOADED = '# Style\n\nWrite short lines.\nChanged on disk.\n';
 const STYLE_CHANGED_WHILE_EDITING =
   '# Style\n\nWrite short lines.\nChanged while editing.\n';
 
-// Filters only one rule's path matches: `neat` and `style` alone fuzzily match
-// other docs' paths too.
-const NEAT_RULE_FILTER = 'rulesneat';
-const STYLE_RULE_FILTER = 'rulesstyle';
+// Filters only one rule's path holds.
+const NEAT_RULE_FILTER = 'neat.md';
+const STYLE_RULE_FILTER = 'style.md';
 
 // A filter matching nothing, with no break in it, wider than the session
 // split's narrowest tree pane.

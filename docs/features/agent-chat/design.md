@@ -476,16 +476,18 @@ interview on 2026-10-23; this file is the record of both.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
   the row is marked.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
-  and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name and
-  aliases through the app's fuzzy matcher (fzf), best match first, the list's own order breaking ties; a row shows
-  and inserts the full name, so `/feature` offers `/wigley:feature`. It runs through CodeMirror's completion
+  and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name,
+  aliases and name after its plugin's `:` through the app's fuzzy matcher (fzf), best match first, the shorter text and
+  then the list's own order breaking ties; a row shows and inserts the full name, so `/feature` offers
+  `/wigley:feature` first. It runs through CodeMirror's completion
   (`@codemirror/autocomplete` 6.20.3, already on disk, added as a direct dependency) inside the editor adapter,
-  behind an option on the editor contract.
+  behind an option on the editor contract. While the popup is open its keys (`Ctrl+n` and `Ctrl+p` among them) run
+  ahead of the page's chord binds.
 - **Completion rows**: chat's page exports `addCompletionRow(draw)`, returning a `Disposable`. `draw(command, row)`
   gets the row's command (name, description, argument hint, aliases, and whether it is the app's or the agent's)
   and the row's element, which holds the drawn name, and returns `true` when it drew. The most recently added draw
   goes first, and the first to return `true` ends the row; a row no draw takes shows the name alone. Chat adds its own
-  draw through the same export: the description after the name in a dim box cut to one line (the `completionDescription` chat layout part), while the `completionDescriptions`
+  draw through the same export: the description after the name in a dim box cut to one line, to the width the name leaves, so a long name still shows as much description as fits (the `completionDescription` chat layout part), while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the

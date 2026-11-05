@@ -75,6 +75,7 @@ function fakeHost(inserted: Inserted[]): EditorHost {
       throw new Error('not used by the primer');
     },
     contains: () => false,
+    takesKey: () => false,
     typeInto: () => {},
     onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},

@@ -97,9 +97,11 @@ export function expandNewStarred(
 }
 
 // Unfiltered, a group's children show while it is expanded; a filter of only
-// spaces is none. Filtered, only leaves whose title or path the filter fuzzily
-// matches show, in the tree's order, under every group above them, each such
-// group expanded. `pathOf` reads a leaf's entry path, for the filter.
+// spaces is none. Filtered, only leaves whose title the filter fuzzily matches
+// or whose path holds the trimmed filter, ignoring case, show, in the tree's
+// order, under every group above them, each such group expanded: a fuzzy match
+// over a full path matches almost any query. `pathOf` reads a leaf's entry
+// path, for the filter.
 export function visibleRows(
   tree: readonly TreeNode[],
   state: TreeState,
@@ -108,9 +110,10 @@ export function visibleRows(
 ): TreeRow[] {
   const { filter } = state;
   const isFiltered = filter.trim() !== '';
+  const lowered = filter.trim().toLowerCase();
   const matches = (node: TreeLeaf) =>
     matcher.matches(filter, node.title) ||
-    matcher.matches(filter, pathOf(node.entryId));
+    pathOf(node.entryId).toLowerCase().includes(lowered);
   // Recursive: a filtered group's row shows only once its children are known
   // to hold a match.
   const rowsOf = (node: TreeNode, depth: number): TreeRow[] => {

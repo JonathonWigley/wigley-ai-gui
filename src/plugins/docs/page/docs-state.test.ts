@@ -148,6 +148,22 @@ describe('visibleRows', () => {
     expect(rows.map((row) => row.node.id)).not.toContain('other');
   });
 
+  it.each([
+    { filter: ' RULES/style ', expected: ['style'] },
+    { filter: 'rstyl', expected: [] },
+  ])('visibleRows_PathIsSubstringOnly ($filter)', ({ filter, expected }) => {
+    const rows = visibleRows(
+      FILTER_TREE,
+      state({ filter }),
+      pathOf,
+      fakeFuzzyMatcher,
+    );
+
+    expect(
+      rows.filter((row) => row.node.type === 'entry').map((row) => row.node.id),
+    ).toEqual(expected);
+  });
+
   it('visibleRows_FuzzyTitle_ShowsLeafUnderGroups', () => {
     const tree = [
       group('root', 'Root', [

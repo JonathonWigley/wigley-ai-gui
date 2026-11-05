@@ -9,7 +9,8 @@ import {
   moveCompletionSelection,
   pickedCompletion,
 } from '@codemirror/autocomplete';
-import { Prec } from '@codemirror/state';
+import { type EditorState, Prec } from '@codemirror/state';
+import type { Command } from '@codemirror/view';
 import { EditorView } from 'codemirror';
 import { getCM } from '@replit/codemirror-vim';
 import type { CompletionItem, EditorCompletions } from '../../contracts/editor';
@@ -97,29 +98,51 @@ export function completionRowRender(
   };
 }
 
-// The popup's keys run only while it is open: Tab accepts, Ctrl+n and
-// ArrowDown move down, Ctrl+p and ArrowUp move up. Highest precedence runs
-// them ahead of vim's and the keymap's keydown handlers wherever the
-// extension sits.
+export type PopupAction = 'accept' | 'down' | 'up';
+
+const POPUP_COMMANDS: Record<PopupAction, Command> = {
+  accept: acceptCompletion,
+  down: moveCompletionSelection(true),
+  up: moveCompletionSelection(false),
+};
+
+// What `event` does to an open popup: Tab accepts, Ctrl+n and ArrowDown move
+// down, Ctrl+p and ArrowUp move up.
+export function popupActionOf(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey'>,
+): PopupAction | null {
+  if (event.key === 'Tab') {
+    return 'accept';
+  }
+  if (event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n')) {
+    return 'down';
+  }
+  if (event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p')) {
+    return 'up';
+  }
+  return null;
+}
+
+// Whether `state`'s popup is open and takes `event`, which the page's chord
+// binds then leave to the editor.
+export function popupTakesKey(
+  event: KeyboardEvent,
+  state: EditorState,
+): boolean {
+  return completionStatus(state) === 'active' && popupActionOf(event) !== null;
+}
+
+// Highest precedence runs the popup's keys ahead of vim's and CodeMirror's
+// keymap's keydown handlers wherever the extension sits.
 function popupKeys() {
   return Prec.highest(
     EditorView.domEventHandlers({
       keydown: (event, view) => {
-        if (completionStatus(view.state) !== 'active') {
+        const action = popupActionOf(event);
+        if (action === null || !popupTakesKey(event, view.state)) {
           return false;
         }
-        const isDown =
-          event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n');
-        const isUp =
-          event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p');
-        let isHandled = false;
-        if (event.key === 'Tab') {
-          isHandled = acceptCompletion(view);
-        } else if (isDown) {
-          isHandled = moveCompletionSelection(true)(view);
-        } else if (isUp) {
-          isHandled = moveCompletionSelection(false)(view);
-        }
+        const isHandled = POPUP_COMMANDS[action](view);
         if (isHandled) {
           event.preventDefault();
         }
@@ -199,9 +222,11 @@ export function prefixCompletion(
       interactionDelay: 0,
       addToOptions: [
         {
-          render: completionRowRender(completions, () =>
-            document.createElement('span'),
-          ),
+          render: completionRowRender(completions, () => {
+            const row = document.createElement('span');
+            row.className = 'wg-completion-row';
+            return row;
+          }),
           position: 60,
         },
       ],

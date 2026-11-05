@@ -54,7 +54,7 @@ import { exBindName } from './ex-command-name';
 import { isScrolledToEnd, scrollStepPx } from '../../shared/content-scroll';
 import { createListeners } from '../../shared/listeners';
 import { findLanguageByFile, loadLanguage } from './languages';
-import { prefixCompletion } from './prefix-completion';
+import { popupTakesKey, prefixCompletion } from './prefix-completion';
 import {
   appliedMappings,
   type BindGroup,
@@ -985,6 +985,12 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     },
     contains: (element) =>
       hosted.some(({ view }) => view.dom.contains(element)),
+    takesKey(event) {
+      const target = hosted.find(({ view }) =>
+        view.dom.contains(event.target as Element),
+      );
+      return target !== undefined && popupTakesKey(event, target.view.state);
+    },
     typeInto(element, keys) {
       const view = hostedViewOf(element, hosted);
       const cm = vimEditorOf(view);

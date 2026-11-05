@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CompletionItem } from '../../contracts/editor';
 import type { FuzzyMatcher } from '../../contracts/fuzzy';
-import { completionRowRender, prefixMatch } from './prefix-completion';
+import {
+  completionRowRender,
+  popupActionOf,
+  prefixMatch,
+} from './prefix-completion';
 
 function isSubsequence(query: string, text: string): boolean {
   const lowerText = text.toLowerCase();
@@ -152,5 +156,20 @@ describe('completionRowRender', () => {
 
     expect(render({ label: '/model' })).toBeNull();
     expect(createElement).not.toHaveBeenCalled();
+  });
+});
+
+describe('popupActionOf', () => {
+  it.each([
+    { key: 'Tab', ctrlKey: false, expected: 'accept' },
+    { key: 'ArrowDown', ctrlKey: false, expected: 'down' },
+    { key: 'n', ctrlKey: true, expected: 'down' },
+    { key: 'ArrowUp', ctrlKey: false, expected: 'up' },
+    { key: 'p', ctrlKey: true, expected: 'up' },
+    { key: 'n', ctrlKey: false, expected: null },
+    { key: 'p', ctrlKey: false, expected: null },
+    { key: 'h', ctrlKey: true, expected: null },
+  ])('$key ctrl=$ctrlKey → $expected', ({ key, ctrlKey, expected }) => {
+    expect(popupActionOf({ key, ctrlKey })).toBe(expected);
   });
 });
