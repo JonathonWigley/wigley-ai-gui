@@ -326,6 +326,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   // The elements carrying `is-cursor` or `is-range`.
   const markedElements: HTMLElement[] = [];
   let lastScrollTop = list.scrollTop;
+  // Where the last scroll to the bottom landed.
+  let followedTop: number | null = null;
 
   const slotElement = (id: string) =>
     slots.get(id)?.element ??
@@ -384,6 +386,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     }
   };
 
+  const scrollToBottom = () => {
+    list.scrollTop = list.scrollHeight;
+    followedTop = list.scrollTop;
+  };
+
   // Whether a `slot` scroll shows the stop itself, rather than the list's bottom.
   const scrollsToStop = (stop: HTMLElement) =>
     !focus.following ||
@@ -408,7 +415,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         focus.following && isScrolledToEnd(list, 1),
       );
     } else if (scroll === 'bottom' || focus.following) {
-      list.scrollTop = list.scrollHeight;
+      scrollToBottom();
     }
   };
 
@@ -546,7 +553,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
 
   const followBottom = () => {
     if (focus.following) {
-      list.scrollTop = list.scrollHeight;
+      scrollToBottom();
     }
   };
 
@@ -592,7 +599,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     }
     const direction = scrollTop > lastScrollTop ? 1 : -1;
     lastScrollTop = scrollTop;
-    settleInBand(direction, isScrolledToEnd(list, 1));
+    const isAtBottom = isScrolledToEnd(list, 1);
+    // A scroll event fires a frame after its scroll, so a visual that took its
+    // height in between has left the bottom behind with no scroll of the user's.
+    const isFollowOvertaken =
+      focus.following && scrollTop === followedTop && !isAtBottom;
+    if (isFollowOvertaken) {
+      scrollToBottom();
+      return;
+    }
+    settleInBand(direction, isAtBottom);
   };
   list.addEventListener('scroll', onListScroll);
 

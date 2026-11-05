@@ -1175,6 +1175,28 @@ describe('slots and focus', () => {
     },
   );
 
+  it('followsGrowth_ContentGrowsBeforeTheFollowsScrollEvent_KeepsFollowing', () => {
+    const { list, put } = setUpList(blocksShown());
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+      clientHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.clientHeight = 100;
+    scroller.scrollHeight = 400;
+    put(assistantText('a', 'one\n\ntwo'));
+    expect(scroller.scrollTop).toBe(400);
+
+    // A visual's frame takes its height after the scroll, before its event.
+    scroller.scrollHeight = 900;
+    scroller.fire('scroll');
+
+    expect(scroller.scrollTop).toBe(900);
+    scroller.fire('scroll');
+    put(notice('n'));
+    expect(cursorLabel(list)).toBe('n');
+  });
+
   it('focusedElement_Stops_ReturnsTheFocusedSlot', () => {
     const empty = setUpList(defaultShown());
     expect(empty.list.focusedElement()).toBeNull();
