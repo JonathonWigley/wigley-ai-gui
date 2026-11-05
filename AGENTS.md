@@ -247,7 +247,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
+                 to visual and workflow, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -279,7 +279,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/ (hosts the row chip,
                  the composer strip and the side pane, each drawn through the flow's workflow's layout, and the preview;
                  exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
-                 layout of its own); it names no skill, stage or plan; `docs/features/workflow/design.md`,
+                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the `No workflow` tag is the exception to
+                 the layout rule: the engine draws it with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
   workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, plan-reader.ts (ticked, total, wave and review rounds from a
                  plan.md), stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan

@@ -32,7 +32,7 @@ Where each part lives:
 - **Level** — the user's word for a workflow in its size order. The app's **Effort** control is
   Claude's reasoning effort, a different thing, so nothing here is called effort.
 - **Engine** — the `workflow` plugin: it keeps each session's flow and hosts the row, composer and
-  side parts. It names no skill, stage or plan.
+  side parts. It names no skill and no workflow's stages beyond idle.
 - **Trail** — the composer's row of step words with the current step's progress.
 - **Checklist** — the work items the side pane shows. Heavy's comes from `plan.md`; the others' from
   the agent.
@@ -43,7 +43,7 @@ Where each part lives:
 workflow          engine: flows, the fold, the tools, part hosts, the run log, addWorkflow
 ├─ workflow-light    stages, skill rule, layout
 ├─ workflow-medium   stages, skill rule, layout
-└─ workflow-heavy    today's stages, plan reading, Clear & make, auto-start, layout
+└─ workflow-heavy    Heavy's stages, plan reading, Clear & make, auto-start, layout
 ```
 
 A plugin registers through `addWorkflow` in each process. Only the flow's current workflow folds its
@@ -78,7 +78,9 @@ user asks to tune `workflows.md`, and it is the evidence for judging Heavy's age
 ## Decisions
 
 - **Three levels.** No study sets the number; ITIL's three change types and vendor guidance are the
-  precedents. A fourth is one plugin away.
+  precedents. A fourth is one plugin away, plus its skill in `LEVEL_SKILLS` in
+  `~/wigley-agents/tools/workflow-gate/workflow-gate` and a row in `~/wigley-agents/workflows.md`: without them the gate
+  denies that level's sessions' edits.
 - **Heavy stays exactly as it was.** The user asked for no change to it. Published guidance argues
   against many agents on coding work, but it is vendor evidence, and the run log will give the user's
   own.

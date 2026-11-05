@@ -477,7 +477,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
   or H) in the plugin token `--wg-workflow-light-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
   or `--wg-workflow-heavy-badge` (`status-warning`), then the stage and its status as an accent Tag, unless the row's
-  label says it, and Heavy's countdown; an idle session draws no stage, and a session that finished a turn with no
+  label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes; a session that finished a turn with no
   workflow started draws one error Tag, `No workflow`, in `status-error`. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still

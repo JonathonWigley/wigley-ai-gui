@@ -770,8 +770,8 @@ because the earlier items rewrite many of these tests anyway.
   `help-sections.test.ts` and `docs-state.test.ts`.
 - **`$name_<suffix>` vitest titles lose their case name** — *agent-ready*: vitest reads `$name_BadId…` as one key
   `name_BadId…`, so each row's title loses its name (the repo's own note, `src/shared/fake-agent-harness.test.ts:999`).
-  Four sites: `src/plugins/usage/main/drive-actions.test.ts:101`, `src/plugins/workflow/main/flow-store.test.ts:101`
-  and `src/main/drive/drive-commands.test.ts:132` and `:153`. Fix as the note says: each row carries its whole name, and
+  Three sites: `src/plugins/usage/main/drive-actions.test.ts:101` and
+  `src/main/drive/drive-commands.test.ts:132` and `:153`. Fix as the note says: each row carries its whole name, and
   the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
 - **Hosted process reads busy with no way out** — *needs a feature plan*: a process that reads busy leaves only on a
   `result`. Reached by a background subagent's `assistant` line after `result`, then an interrupt that prints no

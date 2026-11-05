@@ -140,7 +140,7 @@ derive from the registered stages (§ Signals). Its entry rule still decides whe
 
 A workflow plugin hands its stages to the engine through the engine's `addWorkflow` export, once in each process: main
 takes a `MainWorkflow` (its claims, first stage and `MainStage`s, and optionally its state fold), the page a
-`PageWorkflow` (its label, badge, `PageStage`s and its draw). The engine names no workflow and no stage. It folds each
+`PageWorkflow` (its label, badge, `PageStage`s and its draw). The engine names no skill and no workflow's stages beyond idle (`IDLE_STAGE`). It folds each
 signal through the flow's current workflow alone (`foldFlow(flow, signal, workflows)`): the claim first, then the
 checklist, the workflow's state and that workflow's stages in order, the first entry rule that answers wins, and the flow
 keeps its stage when none answers. Two workflows may hold a stage with one id or one `reportedAs`.
@@ -158,7 +158,9 @@ To change a workflow:
 
 To add a workflow: add a plugin folder (`manifest.ts`, `contract.ts`, `main/start.ts`, `page/start.ts`) that depends on
 `workflow` in both processes, with the skills it claims, its stages and its layout folder, and call `addWorkflow` in each
-process. It joins `manifests.ts`, `main.ts` and `page.ts`, and the engine needs no edit.
+process. It joins `manifests.ts`, `main.ts` and `page.ts`, and the engine needs no edit. The new level's skill also joins
+`LEVEL_SKILLS` in `~/wigley-agents/tools/workflow-gate/workflow-gate`, with a row in `~/wigley-agents/workflows.md`;
+without both, the gate denies that level's sessions' edits.
 
 ## Signals
 
@@ -192,7 +194,9 @@ folder is deleted. Make in new session and Dismiss signal `handedOff` and `dismi
 run inside the level. A claim by a workflow other than the flow's current one sets `movedUpFrom` to the current workflow
 (null for a session in none), sets the new workflow, its first stage, a null `state` and a null checklist, and clears
 `missedLevel`. The engine does not check that the move is upward: moving down is the user's word, by the same skill
-load. A claim by the current workflow changes nothing, and its stage rules may restart it. When two workflows claim one
+load. A claim by the current workflow (an own claim) nulls the checklist, so a second ask shows no old list; it changes nothing
+else on the flow's identity (`movedUpFrom` stays), and its stage rules may restart it. A claim from a stage with
+`finishes` starts a new run, so `movedUpFrom` is null for it, whichever workflow claims. When two workflows claim one
 skill, the lowest `order` wins (Light 10, Medium 20, Heavy 30).
 
 The engine contributes `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools`, so every
@@ -213,8 +217,9 @@ leaves the flow in its last step.
 
 **The run log.** When a fold enters a stage with `finishes`, main appends one JSON line to `runs.jsonl` in the engine's
 plugin data. The keys are pinned: `at`, `sessionId`, `projectDir`, `workflow`, `movedUpFrom`, `activeMs`, `costUsd` and
-`fixCycles`. `activeMs` is active time since the workflow's first claim, `costUsd` is spend through the last finished
-turn (null when none is known), and `fixCycles` is the workflow's own review fix count. Nothing draws the log.
+`fixCycles`. `activeMs` is active time since the run began (the session's first claim, or the last finished run), `costUsd` is
+spend since then (null when no spend arrived since the run began; a process figure that falls counts as a new process
+and carries), and `fixCycles` is the workflow's own review fix count. Nothing draws the log.
 
 A re-attach replays its process's whole log, each event flagged `replayed`, over the saved flow. `flows.json` holds each
 flow's save time, stamped by a change from a live event or from Make in new session or Dismiss, not by a plan read, a
@@ -226,7 +231,8 @@ turn that ended while the app was closed, folds as usual. A flow saved without t
 
 Each workflow draws through its own layout, over the engine's contract and kit: the built-in `default` of each workflow
 plugin, a user's override in `layouts/<workflow plugin>/<name>/` (for Heavy `layouts/workflow-heavy/<name>/`), set by the
-plugin's own `layout` setting. The layout preview is on `Space z l w`.
+plugin's own `layout` setting. The layout preview is on `Space z l w`. One exception to Intent's layout rule: the
+`No workflow` tag is drawn by the engine with no layout, since no workflow owns such a flow, so a layout cannot restyle it.
 
 - **Row label** — a stage that waits on the user declares a `rowActivity`, set through sessions' `setActivity` while
   the flow is not busy: plan ready's `Ready to make` in `attention` and closed's `Closed` in `success`. Each is
@@ -287,7 +293,7 @@ when the workflow plugins split; `ww`, `ws` and `wf` stay engine commands (`work
 | `<Leader>wt` | Retro |
 | `<Leader>wd` | Dismiss |
 | `<Leader>ws` | Show or hide the side pane, in every session |
-| `<Leader>wf` | Open or fold the selected session's finished waves; with no fold to draw, log `nothing to run` and leave it |
+| `<Leader>wf` | Open or fold the selected session's finished waves; with no finished group, log `nothing to run`; on a Light or Medium flat list the key flips the fold and nothing shows |
 
 The layout preview opens on `<Leader>zlw`.
 
