@@ -1,6 +1,7 @@
 import type { ActiveTime } from '../../contracts/active-time';
 import type {
   AccountStatus,
+  AgentCommand,
   AgentEvent,
   ChatEntry,
   CompactionTrigger,
@@ -129,9 +130,8 @@ export interface ChatSessionState {
   // any other row at 0, and `/clear` resets it to 0. `since` is epoch ms on the
   // wall clock main and the page share, so the page reads it with `activeMsAt`.
   activeTime: ActiveTime;
-  // The session's slash commands and skills, as typed after `/`; [] until the
-  // harness reports them.
-  commands: string[];
+  // The session's slash commands and skills; [] until the harness reports them.
+  commands: AgentCommand[];
   // True while the session's process runs; false while it rests, with no
   // process yet or its process exited.
   running: boolean;
@@ -268,7 +268,7 @@ export interface ChatChannel extends ChannelShape {
     background: { sessionId: string; background: number };
     // The session's clock started, stopped or was reset.
     activeTime: { sessionId: string; activeTime: ActiveTime };
-    commands: { sessionId: string; names: string[] };
+    commands: { sessionId: string; commands: AgentCommand[] };
     // Replaces the session's whole entry list, as when restored history
     // arrives.
     entries: { sessionId: string; entries: ChatEntry[] };

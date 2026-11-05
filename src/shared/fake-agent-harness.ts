@@ -467,7 +467,7 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     entry: (entry) => whileAttached(() => events.entry(entry)),
     controls: (controls) => whileAttached(() => events.controls(controls)),
     activity: (activity) => whileAttached(() => events.activity(activity)),
-    commands: (names) => whileAttached(() => events.commands(names)),
+    commands: (commands) => whileAttached(() => events.commands(commands)),
     planUsage: (update) => whileAttached(() => events.planUsage(update)),
     agentEvent: (event) => whileAttached(() => events.agentEvent(event)),
     messageDropped: (entryId, message) =>
@@ -1548,7 +1548,14 @@ export function createFakeAgentHarness(
       queueMicrotask(() => {
         events.agentEvent({ type: 'sessionStarted', at: clock.now() });
         events.controls(controls);
-        events.commands(['fake-command']);
+        events.commands([
+          {
+            name: 'fake-command',
+            description: 'A fake agent command',
+            argumentHint: '',
+            aliases: ['fake-alias'],
+          },
+        ]);
         events.activity('idle');
       });
     }

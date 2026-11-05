@@ -200,7 +200,7 @@ const REPLY_LINE =
 const RESULT_LINE =
   '{"type":"result","subtype":"success","is_error":false,"result":"ok","stop_reason":"end_turn","total_cost_usd":0.25,"duration_ms":1850,"num_turns":1,"modelUsage":{"claude-opus-5-5":{"contextWindow":1000000,"maxOutputTokens":64000,"costUSD":0.25,"costBasis":"list"}}}';
 const CONTEXT_REPLY_LINE =
-  '{"type":"control_response","response":{"subtype":"success","request_id":"wigley-1","response":{"autoCompactThreshold":967000,"autocompactSource":"model-default","maxTokens":1000000,"rawMaxTokens":1000000,"isAutoCompactEnabled":true}}}';
+  '{"type":"control_response","response":{"subtype":"success","request_id":"wigley-2","response":{"autoCompactThreshold":967000,"autocompactSource":"model-default","maxTokens":1000000,"rawMaxTokens":1000000,"isAutoCompactEnabled":true}}}';
 
 // A `get_context_usage` reply to `requestId` reporting `maxTokens` and `autoCompactThreshold`.
 const contextReply = (
@@ -220,6 +220,12 @@ const contextUsageRequest = (requestId: string) => ({
   type: 'control_request',
   request_id: requestId,
   request: { subtype: 'get_context_usage' },
+});
+
+const initializeRequest = (requestId: string) => ({
+  type: 'control_request',
+  request_id: requestId,
+  request: { subtype: 'initialize' },
 });
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -416,6 +422,15 @@ describe('createClaudeCodeHarness', () => {
     ]);
   });
 
+  it('start_WritesInitializeFirst', async () => {
+    const run = await startedQuiet();
+
+    expect(run.written).toEqual([
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+    ]);
+  });
+
   it('send_WritesUserMessageAndEmitsWorking', async () => {
     const run = await startedQuiet();
 
@@ -423,7 +438,11 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     const message = userMessage({ text: 'hi', images: [] }, 'uuid-1');
-    expect(run.written).toEqual([contextUsageRequest('wigley-1'), message]);
+    expect(run.written).toEqual([
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      message,
+    ]);
     expect(run.heard).toEqual([['activity', 'working']]);
   });
 
@@ -613,15 +632,16 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-2',
+        request_id: 'wigley-3',
         response: { mode: 'plan' },
       },
     });
     await settle();
 
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      controlMessage('mode', 'plan', 'wigley-2'),
+      initializeRequest('wigley-1'),
+      contextUsageRequest('wigley-2'),
+      controlMessage('mode', 'plan', 'wigley-3'),
     ]);
     const [name, controls] = run.heard[run.heard.length - 1];
     expect(name).toBe('controls');
@@ -654,9 +674,10 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      controlMessage('effort', 'high', '00000000-1'),
+      initializeRequest('wigley-1'),
       contextUsageRequest('wigley-2'),
+      controlMessage('effort', 'high', '00000000-1'),
+      contextUsageRequest('wigley-3'),
     ]);
     expect(
       run.heard.some(
@@ -685,9 +706,9 @@ describe('createClaudeCodeHarness', () => {
       .filter((entry) => entry.kind === 'notice')
       .map((entry) => entry.id);
     expect(noticeIds).toEqual(['notice-1', 'control-notice-1']);
-    expect(run.written[4]).toEqual({
+    expect(run.written[5]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-3',
+      request_id: 'wigley-4',
       request: { subtype: 'interrupt' },
     });
   });
@@ -705,7 +726,7 @@ describe('createClaudeCodeHarness', () => {
     for (const text of [CONTEXT_REPLY_LINE, REPLY_LINE, RESULT_LINE]) {
       run.stdout.write(`${text}\n`);
     }
-    writeLine(run.stdout, contextReply('wigley-2', 200_000, 167_000));
+    writeLine(run.stdout, contextReply('wigley-3', 200_000, 167_000));
     await settle();
 
     // A new session knows its context from the start: the settings read and
@@ -742,9 +763,10 @@ describe('createClaudeCodeHarness', () => {
         .map(([, event]) => event),
     ).toEqual([settingsRead, contextReplied, first, second, third]);
     expect(run.written).toEqual([
-      contextUsageRequest('wigley-1'),
-      userMessage({ text: 'hi', images: [] }, 'uuid-1'),
+      initializeRequest('wigley-1'),
       contextUsageRequest('wigley-2'),
+      userMessage({ text: 'hi', images: [] }, 'uuid-1'),
+      contextUsageRequest('wigley-3'),
     ]);
   });
 
@@ -899,7 +921,7 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-2',
+        request_id: 'wigley-3',
         response: { mode: 'plan' },
       },
     };
@@ -970,9 +992,9 @@ describe('createClaudeCodeHarness', () => {
 
     run.agent.interrupt();
 
-    expect(run.written[4]).toEqual({
+    expect(run.written[5]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-3',
+      request_id: 'wigley-4',
       request: { subtype: 'interrupt' },
     });
   });
@@ -1094,13 +1116,13 @@ describe('createClaudeCodeHarness', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'wigley-2',
+            request_id: 'wigley-3',
             response: { still_queued: [] },
           },
         }
       : {
           type: 'control_response',
-          response: { subtype: 'error', request_id: 'wigley-2', error },
+          response: { subtype: 'error', request_id: 'wigley-3', error },
         };
 
   it.each([
@@ -1426,7 +1448,7 @@ describe('createClaudeCodeHarness', () => {
         run.stdout.write(`${text}\n`);
       });
 
-    await out(contextReply('wigley-1', 1000000, 967000));
+    await out(contextReply('wigley-2', 1000000, 967000));
     await step(() => run.agent.send({ text: 'hi', images: [] }));
     await out(lifecycleInit);
     await out(lifecycle('uuid-1', 'started'));
@@ -1435,7 +1457,7 @@ describe('createClaudeCodeHarness', () => {
     await step(() => run.agent.setControl('mode', 'plan'));
     await out({
       type: 'control_response',
-      response: { subtype: 'success', request_id: 'wigley-3' },
+      response: { subtype: 'success', request_id: 'wigley-4' },
     });
     await step(() => run.agent.setControl('effort', 'high'));
     await out(successResult('Set effort level to high', ['00000000-2']));
@@ -2309,7 +2331,7 @@ describe('createClaudeCodeHarness', () => {
             type: 'control_response',
             response: {
               subtype: 'success',
-              request_id: 'wigley-2',
+              request_id: 'wigley-3',
               response: { still_queued: [] },
             },
           },
@@ -2410,7 +2432,7 @@ describe('createClaudeCodeHarness', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'wigley-2',
+            request_id: 'wigley-3',
             response: { still_queued: [] },
           },
         },
@@ -3085,7 +3107,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       },
     });
     expect(host.processes[0].writes[0]).toBe(
-      JSON.stringify(contextUsageRequest('wigley-1')),
+      JSON.stringify(initializeRequest('wigley-1')),
     );
   });
 
@@ -3157,7 +3179,17 @@ describe('createClaudeCodeHarness on the session host', () => {
     const out = (line: object | string) =>
       step(() => host.output('p-1', 'out', asText(line)));
 
-    await out(contextReply('wigley-1', 1000000, 967000));
+    await out({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-1',
+        response: {
+          commands: [{ name: 'compact', description: 'Compact the context' }],
+        },
+      },
+    });
+    await out(contextReply('wigley-2', 1000000, 967000));
     await step(() => agent.send({ text: 'hi', images: [] }));
     await out(lifecycleInit);
     await out(lifecycle('uuid-1', 'started'));
@@ -3166,7 +3198,7 @@ describe('createClaudeCodeHarness on the session host', () => {
     await step(() => agent.setControl('mode', 'plan'));
     await out({
       type: 'control_response',
-      response: { subtype: 'success', request_id: 'wigley-3' },
+      response: { subtype: 'success', request_id: 'wigley-4' },
     });
     await step(() => agent.setControl('effort', 'high'));
     await out(successResult('Set effort level to high', ['00000000-2']));
@@ -3344,6 +3376,16 @@ describe('createClaudeCodeHarness on the session host', () => {
       );
     },
   );
+
+  it('attach_WritesNoInitialize', async () => {
+    const host = createFakeSessionHost(clock);
+    const record = host.addRunning(running(logOf([])));
+
+    await hostHarness(host, clock).attach(request, recordingEvents().events);
+    await settle();
+
+    expect(record.writes).toEqual([]);
+  });
 
   it.each([
     {

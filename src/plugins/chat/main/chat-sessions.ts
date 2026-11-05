@@ -27,6 +27,7 @@ import {
   stopActiveTime,
 } from '../../../shared/active-time';
 import { errorText } from '../../../shared/error-text';
+import { isSameJson } from '../../../shared/json';
 import { refusalOf } from '../image-rules';
 import { isWorkRunning } from '../session-work';
 import {
@@ -494,13 +495,6 @@ function isHeldRow(queued: QueuedMessage): boolean {
 
 function isHoldUp(session: HeldSession): boolean {
   return session.state.queued.some(isHeldRow);
-}
-
-function sameNames(held: readonly string[], names: readonly string[]): boolean {
-  return (
-    held.length === names.length &&
-    held.every((name, index) => name === names[index])
-  );
 }
 
 function shownActivity(held: HeldSession): ProcessActivity {
@@ -1171,15 +1165,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         session.harnessActivity = activity;
         updateActivity(session, replay.isReplaying);
       },
-      commands(names) {
+      commands(commands) {
         if (
           !isLive(session, processStart) ||
-          sameNames(session.state.commands, names)
+          isSameJson(session.state.commands, commands)
         ) {
           return;
         }
-        session.state.commands = [...names];
-        send('commands', { sessionId, names: [...names] });
+        session.state.commands = [...commands];
+        send('commands', { sessionId, commands: [...commands] });
       },
       planUsage(update) {
         if (isLive(session, processStart) && !replay.isReplaying) {

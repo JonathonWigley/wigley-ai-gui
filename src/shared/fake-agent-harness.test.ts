@@ -77,7 +77,7 @@ function recordingEvents() {
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
-    commands: (names) => hear('commands', names),
+    commands: (commands) => hear('commands', commands),
     planUsage: (update) => hear('planUsage', update),
     agentEvent: (event) => {
       if (event.type === 'usage') {
@@ -192,6 +192,17 @@ describe('createFakeAgentHarness', () => {
       'effort',
       'model',
       'verbosity',
+    ]);
+    expect(heard[1]).toEqual([
+      'commands',
+      [
+        {
+          name: 'fake-command',
+          description: 'A fake agent command',
+          argumentHint: '',
+          aliases: ['fake-alias'],
+        },
+      ],
     ]);
     expect(heard[2]).toEqual(['activity', 'idle']);
   });

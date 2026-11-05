@@ -359,6 +359,15 @@ function createClaudeSession(
 
   const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
+  // `init` waits for the first message; this answers at once.
+  const requestCommands = () => {
+    writeMessage({
+      type: 'control_request',
+      request_id: nextRequestId(),
+      request: { subtype: 'initialize' },
+    });
+  };
+
   // Asked at start and after every turn, a control command's included:
   // `/model` changes the window and the limit.
   const requestContextUsage = () => {
@@ -488,6 +497,7 @@ function createClaudeSession(
       events.controls(state.controls.map((control) => ({ ...control }))),
     );
     emitActivity('idle');
+    requestCommands();
     requestContextUsage();
   };
 

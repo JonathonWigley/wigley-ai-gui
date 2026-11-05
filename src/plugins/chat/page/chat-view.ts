@@ -423,10 +423,10 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         : `${tab.name} is in ${repo} on ${branch}`,
     );
   });
-  channel.on('commands', ({ sessionId, names }) => {
+  channel.on('commands', ({ sessionId, commands }) => {
     const tab = heldFor('commands', sessionId);
     if (tab !== undefined) {
-      tab.state = { ...tab.state, commands: names };
+      tab.state = { ...tab.state, commands };
     }
   });
   channel.on('entries', ({ sessionId, entries }) => {
@@ -836,7 +836,10 @@ function createTab(
         // Read each call: commands can arrive or register after the box
         // exists.
         words: () =>
-          completionWords(deps.slashCommandNames(), tab.state.commands),
+          completionWords(
+            deps.slashCommandNames(),
+            tab.state.commands.map((command) => command.name),
+          ),
         offered: (words) =>
           deps.log(
             `completions offered: ${words.map((word) => `/${word}`).join(', ')}`,

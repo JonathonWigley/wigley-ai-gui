@@ -1,4 +1,5 @@
 import {
+  type AgentCommand,
   type AgentEvent,
   type AgentStart,
   type ChatEntry,
@@ -15,6 +16,7 @@ import type { EntryDraft } from '../../shared/entry-stamp';
 import { isSameJson } from '../../shared/json';
 import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
 import type { AgentDefinitions } from './agent-definitions';
+import { commandRecordsOf, mergeInitNames } from './claude-commands';
 import {
   CLAUDE_CONTROLS,
   type ClaudeControlId,
@@ -110,7 +112,8 @@ export function heldUserMessage({ draft }: HeldMessage): UserMessage {
 export type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
-  | { kind: 'contextUsage' };
+  | { kind: 'contextUsage' }
+  | { kind: 'initialize' };
 
 // A `/compact` written and not yet taken by a compaction or ended.
 interface ArmedCompact {
@@ -156,6 +159,8 @@ export interface SessionFoldState {
   // Empty until the harness sets the loaded ones.
   definitions: AgentDefinitions;
   controls: SessionControl[];
+  // From the `initialize` answer, each `init` merged over them.
+  commandRecords: AgentCommand[];
   activity: ProcessActivity;
   // User entry ids are `user-<n>`.
   sendCount: number;
@@ -186,7 +191,7 @@ export type FoldEffect =
   | { kind: 'agentEvent'; event: AgentEvent }
   | { kind: 'controls'; controls: SessionControl[] }
   | { kind: 'activity'; activity: ProcessActivity }
-  | { kind: 'commands'; commands: string[] }
+  | { kind: 'commands'; commands: AgentCommand[] }
   | { kind: 'planUsage'; update: PlanRowUpdate }
   | { kind: 'messageDropped'; entryId: string; message: UserMessage }
   | { kind: 'requestContextUsage' }
@@ -204,9 +209,13 @@ export interface FoldStep {
 export function createSessionFoldState(request: AgentStart): SessionFoldState {
   const pendingRequests = new Map<string, PendingRequest>();
   const state: SessionFoldState = {
-    // The adapter's own `get_context_usage` replies stay out of the chat.
+    // The adapter's own `get_context_usage` and `initialize` replies stay out of
+    // the chat.
     decoder: createStreamDecoder(
-      (requestId) => pendingRequests.get(requestId)?.kind === 'contextUsage',
+      (requestId) => {
+        const kind = pendingRequests.get(requestId)?.kind;
+        return kind === 'contextUsage' || kind === 'initialize';
+      },
       (agentType) => state.definitions.get(agentType) ?? null,
     ),
     tracker: createTurnTracker(),
@@ -215,6 +224,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
       ...control,
       value: request.controls[control.id] ?? null,
     })),
+    commandRecords: [],
     activity: 'idle',
     sendCount: 0,
     requestCount: 0,
@@ -803,6 +813,8 @@ function foldRequestLine(
   if (request.subtype === 'get_context_usage') {
     state.pendingRequests.set(requestId, { kind: 'contextUsage' });
     state.isContextRequestOwed = false;
+  } else if (request.subtype === 'initialize') {
+    state.pendingRequests.set(requestId, { kind: 'initialize' });
   } else if (request.subtype === 'interrupt') {
     state.pendingRequests.set(requestId, { kind: 'interrupt' });
     state.graceDeadline = at + INTERRUPT_GRACE_MS;
@@ -926,6 +938,45 @@ function foldLineUsage(
   }
 }
 
+// A failed answer only logs: the list waits for `init`, and the user lost nothing
+// they can act on.
+function foldInitializeAnswer(
+  state: SessionFoldState,
+  response: NonNullable<DecodedLine['controlResponse']>,
+  effects: FoldEffect[],
+): void {
+  if (response.error !== null) {
+    effects.push({
+      kind: 'log',
+      text: `Could not list commands: ${response.error}`,
+    });
+    return;
+  }
+  if (!Array.isArray(response.response.commands)) {
+    effects.push({
+      kind: 'log',
+      text: 'Could not list commands: no list in the answer',
+    });
+    return;
+  }
+  state.commandRecords = commandRecordsOf(response.response);
+  effects.push({ kind: 'commands', commands: state.commandRecords });
+}
+
+// An `init` with no names leaves the held list, so a malformed line cannot empty
+// a good one.
+function foldInitNames(
+  state: SessionFoldState,
+  names: readonly string[],
+  effects: FoldEffect[],
+): void {
+  if (names.length === 0) {
+    return;
+  }
+  state.commandRecords = mergeInitNames(state.commandRecords, names);
+  effects.push({ kind: 'commands', commands: state.commandRecords });
+}
+
 function answerControlResponse(
   state: SessionFoldState,
   response: NonNullable<DecodedLine['controlResponse']>,
@@ -974,6 +1025,10 @@ function answerControlResponse(
     if (state.tracker.activity() === 'idle') {
       forgetEndedCompaction(state.compaction);
     }
+    return;
+  }
+  if (pending.kind === 'initialize') {
+    foldInitializeAnswer(state, response, effects);
     return;
   }
   if (response.error !== null) {
@@ -1036,7 +1091,7 @@ function foldOutLine(
   foldCompactionLine(state, decoded, at, effects);
   foldControlValues(state, decoded, command, effects);
   if (decoded.commands !== null) {
-    effects.push({ kind: 'commands', commands: decoded.commands });
+    foldInitNames(state, decoded.commands, effects);
   }
   foldLineUsage(state, decoded, at, effects);
   if (decoded.controlResponse !== null) {
@@ -1216,7 +1271,7 @@ export function replayPipeLog(
   }
   folded.push(...advanceFold(state, now).effects);
   const lastEntries = new Map<string, ChatEntry>();
-  let lastCommands: string[] | null = null;
+  let lastCommands: AgentCommand[] | null = null;
   for (const effect of folded) {
     if (effect.kind === 'entry') {
       lastEntries.set(effect.entry.id, effect.entry);

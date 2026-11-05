@@ -15,6 +15,7 @@ import {
   type Json,
   numberOrNull,
   parsed,
+  stringItems,
 } from './json-fields';
 import { CONTEXT_SUFFIX, replySpendUsd } from './model-prices';
 import { rateLimitRows } from './plan-usage';
@@ -211,11 +212,6 @@ function commandNames(init: Json): string[] {
     (name) => asString(name).replace(/^\//, ''),
   );
   return [...new Set(names)];
-}
-
-// The string items of a list field; [] when the field is no list.
-function stringItems(value: unknown): string[] {
-  return asArray(value).filter((item) => typeof item === 'string');
 }
 
 // The agent whose line `event` is: a subagent's lines carry its Agent call's id.
