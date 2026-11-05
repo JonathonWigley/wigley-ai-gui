@@ -11,6 +11,7 @@ import {
   replayPipeLog,
   type SessionFoldState,
 } from './session-fold';
+import { withConfiguredPercent } from './session-usage';
 
 const request: AgentStart = {
   processId: 'p-1',
@@ -417,6 +418,50 @@ describe('session-fold', () => {
     ]);
     expect(state.heldMessages.size).toBe(0);
   });
+
+  it.each([
+    { name: 'WithAnOverride', percent: 30, limit: 300_000 },
+    { name: 'WithNoOverride', percent: null, limit: null },
+  ])(
+    'foldPipeLine_SubagentReply_AutocompactLimit_$name',
+    ({ percent, limit }) => {
+      const state = foldedState([
+        outLine({
+          type: 'result',
+          subtype: 'success',
+          modelUsage: { 'claude-opus-5-5': { contextWindow: 1_000_000 } },
+        }),
+      ]);
+      foldUsageInput(
+        state,
+        (usage) => withConfiguredPercent(usage, percent),
+        200,
+      );
+
+      const { effects } = foldPipeLine(
+        state,
+        outLine({
+          type: 'assistant',
+          parent_tool_use_id: 'toolu_1',
+          message: {
+            id: 'msg_sub',
+            model: 'claude-opus-5-5',
+            content: [],
+            usage: { input_tokens: 174_000 },
+          },
+        }),
+      );
+
+      expect(effects).toContainEqual({
+        kind: 'agentEvent',
+        event: expect.objectContaining({
+          type: 'agentReplied',
+          contextWindow: 1_000_000,
+          autocompactLimit: limit,
+        }),
+      });
+    },
+  );
 
   it('foldPipeLine_StampsWithTheLineTime', () => {
     const state = createSessionFoldState(request);

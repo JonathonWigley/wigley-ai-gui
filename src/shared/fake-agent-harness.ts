@@ -690,6 +690,7 @@ const FAKE_SUBAGENTS = [
       spendUsd: 0.0421,
       contextTokens: 84_000,
       contextWindow: 200_000,
+      autocompactLimit: null,
     },
     tool: {
       name: 'Read',
@@ -709,6 +710,7 @@ const FAKE_SUBAGENTS = [
       spendUsd: 0.0019,
       contextTokens: 166_000,
       contextWindow: 200_000,
+      autocompactLimit: null,
     },
     tool: {
       name: 'Grep',

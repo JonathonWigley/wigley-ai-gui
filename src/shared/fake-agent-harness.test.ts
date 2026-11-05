@@ -826,6 +826,7 @@ describe('createFakeAgentHarness', () => {
         spendUsd: number;
         contextTokens: number;
         contextWindow: number;
+        autocompactLimit: null;
       },
       isLaunched: boolean,
     ) => [
@@ -888,6 +889,7 @@ describe('createFakeAgentHarness', () => {
           spendUsd: 0.0421,
           contextTokens: 84_000,
           contextWindow: 200_000,
+          autocompactLimit: null,
         },
         false,
       ),
@@ -900,6 +902,7 @@ describe('createFakeAgentHarness', () => {
           spendUsd: 0.0019,
           contextTokens: 166_000,
           contextWindow: 200_000,
+          autocompactLimit: null,
         },
         true,
       ),

@@ -52,6 +52,7 @@ const runningA: RosterAgent = {
   isBackground: false,
   contextTokens: null,
   contextWindow: null,
+  autocompactLimit: null,
   tools: [],
 };
 const runningB: RosterAgent = {
@@ -66,6 +67,7 @@ const runningB: RosterAgent = {
   isBackground: false,
   contextTokens: null,
   contextWindow: null,
+  autocompactLimit: null,
   tools: [],
 };
 

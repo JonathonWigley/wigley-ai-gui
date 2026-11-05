@@ -22,6 +22,7 @@ const a: RosterAgent = {
   isBackground: false,
   contextTokens: null,
   contextWindow: null,
+  autocompactLimit: null,
   tools: [],
 };
 const b: RosterAgent = {
@@ -36,6 +37,7 @@ const b: RosterAgent = {
   isBackground: true,
   contextTokens: 84_000,
   contextWindow: 200_000,
+  autocompactLimit: null,
   tools: [
     {
       toolUseId: 'toolu_b1',
@@ -117,6 +119,7 @@ function replied(
   spendUsd: number | null,
   contextTokens: number | null = null,
   contextWindow: number | null = null,
+  autocompactLimit: number | null = null,
 ): AgentEvent {
   return {
     type: 'agentReplied',
@@ -126,6 +129,7 @@ function replied(
     spendUsd,
     contextTokens,
     contextWindow,
+    autocompactLimit,
   };
 }
 
@@ -220,6 +224,7 @@ describe('foldAgentEvent', () => {
           isBackground: false,
           contextTokens: null,
           contextWindow: null,
+          autocompactLimit: null,
           tools: [],
         },
       ]),
@@ -241,6 +246,7 @@ describe('foldAgentEvent', () => {
           spendUsd: 0.0019,
           contextTokens: 84_000,
           contextWindow: 200_000,
+          autocompactLimit: null,
         },
         b,
       ]),
@@ -265,6 +271,28 @@ describe('foldAgentEvent', () => {
       event: replied(b.agentId, 'claude-opus-5-5', 0.0031, 84_000, 1_000_000),
       after: roster([
         { ...b, model: 'claude-opus-5-5', contextWindow: 1_000_000 },
+      ]),
+    },
+    {
+      case: 'RepliedReplacesOnlyAutocompactLimit',
+      before: roster([
+        { ...b, model: 'claude-opus-5-5', contextWindow: 1_000_000 },
+      ]),
+      event: replied(
+        b.agentId,
+        'claude-opus-5-5',
+        0.0031,
+        84_000,
+        1_000_000,
+        300_000,
+      ),
+      after: roster([
+        {
+          ...b,
+          model: 'claude-opus-5-5',
+          contextWindow: 1_000_000,
+          autocompactLimit: 300_000,
+        },
       ]),
     },
     {

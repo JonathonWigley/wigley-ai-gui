@@ -756,6 +756,7 @@ function agentBoxInput(
     spendUsd: agent.spendUsd,
     contextTokens: agent.contextTokens,
     contextWindow: agent.contextWindow,
+    autocompactLimit: agent.autocompactLimit,
     elapsedMs: now - agent.startedAt,
     recentTools: agent.tools.slice(-RECENT_TOOLS).map(toolLineInput),
     isSelected: state.isSelected,

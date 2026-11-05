@@ -16,6 +16,7 @@ function agent(agentId: string, startedAt: number): RosterAgent {
     isBackground: false,
     contextTokens: null,
     contextWindow: null,
+    autocompactLimit: null,
     tools: [],
   };
 }

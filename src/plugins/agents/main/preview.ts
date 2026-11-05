@@ -58,6 +58,7 @@ function sampleRoster(now: number): Roster {
       isBackground: false,
       contextTokens: 84_000,
       contextWindow: 200_000,
+      autocompactLimit: null,
       tools: [
         {
           toolUseId: 'preview-agent-1-tool-1',
@@ -80,6 +81,7 @@ function sampleRoster(now: number): Roster {
       isBackground: true,
       contextTokens: 166_000,
       contextWindow: 200_000,
+      autocompactLimit: null,
       tools: Array.from({ length: 12 }, (_, i) => {
         const n = i + 1;
         return {

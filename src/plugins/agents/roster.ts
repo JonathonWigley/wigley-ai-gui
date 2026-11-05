@@ -32,6 +32,7 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
                 isBackground: false,
                 contextTokens: null,
                 contextWindow: null,
+                autocompactLimit: null,
                 tools: [],
               },
             ],
@@ -42,7 +43,8 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
         agent.model === event.model &&
         agent.spendUsd === event.spendUsd &&
         agent.contextTokens === event.contextTokens &&
-        agent.contextWindow === event.contextWindow
+        agent.contextWindow === event.contextWindow &&
+        agent.autocompactLimit === event.autocompactLimit
           ? agent
           : {
               ...agent,
@@ -50,6 +52,7 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
               spendUsd: event.spendUsd,
               contextTokens: event.contextTokens,
               contextWindow: event.contextWindow,
+              autocompactLimit: event.autocompactLimit,
             },
       );
     case 'agentLaunched':

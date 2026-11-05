@@ -495,6 +495,8 @@ export function createStreamDecoder(
       spendUsd: spendOf(agentId),
       contextTokens,
       contextWindow,
+      // The profile's override is the fold's, which fills this in.
+      autocompactLimit: null,
     });
   }
 

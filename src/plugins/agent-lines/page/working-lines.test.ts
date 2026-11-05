@@ -33,6 +33,7 @@ function runningAgent(agentId: string, ageMs: number): RosterAgent {
     isBackground: false,
     contextTokens: null,
     contextWindow: null,
+    autocompactLimit: null,
     tools: [],
   };
 }

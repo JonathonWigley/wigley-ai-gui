@@ -135,6 +135,16 @@ export function withConfiguredPercent(
   return { ...state, configuredPercent: percent };
 }
 
+// The tokens `percent` of `contextWindow` comes to; null when either is unknown.
+export function configuredAutocompactLimit(
+  percent: number | null,
+  contextWindow: number | null,
+): number | null {
+  return percent === null || contextWindow === null
+    ? null
+    : Math.round((percent / 100) * contextWindow);
+}
+
 // The main agent's `usage` event at `at`; null while the state does not know the context.
 export function usageEvent(
   state: SessionUsageState,
@@ -143,11 +153,11 @@ export function usageEvent(
   if (!state.isContextKnown) {
     return null;
   }
-  const { configuredPercent, contextWindow } = state;
-  const configured =
-    configuredPercent === null || contextWindow === null
-      ? null
-      : Math.round((configuredPercent / 100) * contextWindow);
+  const { contextWindow } = state;
+  const configured = configuredAutocompactLimit(
+    state.configuredPercent,
+    contextWindow,
+  );
   return {
     type: 'usage',
     agentId: MAIN_AGENT_ID,

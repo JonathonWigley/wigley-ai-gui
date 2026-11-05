@@ -250,6 +250,8 @@ export type AgentEvent =
       spendUsd: number | null;
       contextTokens: number | null;
       contextWindow: number | null;
+      // The profile's autocompact limit for this window, in tokens; null when it sets none or the window is unknown.
+      autocompactLimit: number | null;
     }
   // A subagent now runs in the background: its Agent call returned at launch, and it runs on until its `agentFinished`.
   | { type: 'agentLaunched'; at: number; agentId: string }
