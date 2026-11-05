@@ -221,3 +221,4 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - Task 14's real-script setup was wrong: drive start does not set HOME and the real script uses Path.home(), so the first attempt overwrote the user's ~/.agents/wigley-docs/index.json and refreshed loads.json. Lead rebuilt both with the installed 1.17.0 script at 15:46 (schema 4, 1828 entries). Checks 1 and 3 reran with HOME=<run home> on a restart without a reseed, which departs from the doc's do-not-restart. · group 14
 ### Review rounds
 ### Test gate
+- Gate at ee11e7ae: tsc and lint clean; npm test whole unit suite; docs-index unittest 276 OK; selftest --plugin docs,backlog all passed before this fix. First unit run found 2 failures in start.test.ts from d2a5afb0's observer, fixed in ee11e7ae. Log scan clean. Whole self-test not run, needs the user's ask, so the placement check did not run.
