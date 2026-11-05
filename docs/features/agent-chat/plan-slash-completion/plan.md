@@ -237,6 +237,8 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - 06 · 0f106a88 · diff read against the landed code; each listed check reported; docs only · concerns: DESIGN.md has no line for the description, left while a peer holds edits there; init.slash_commands holding the same 101 entries is unverified on 2.1.318; design.md still says the row's element holds the drawn name
 - 07 · 04bc4ebf · Live drive against real Claude, reports 07-1 and 07-fix-1. Checks 1, 3, 4, 5, 6 pass and the added merge check passes (110 to 117 commands, none lost). Check 2 and three extra bugs failed, were fixed in 04bc4ebf and re-checked: long-name rows, Ctrl+n and Ctrl+p with the popup open, /feature Tab, Docs path over-match. Notes Target exact-word case not reachable; substitute query tes put the name match first. · concerns: A worker's stray keys sent one real Claude message in the temp home, 0.32 dollars; byLengthAsc changes rank's tie rule for every picker; a name that alone fills the row not seen on screen; Ctrl+n before the popup opens still starts a new session; literal &lt; entities in some descriptions, source unconfirmed
 ### Contract changes
+- EditorHost gains takesChordKey (04bc4ebf as takesKey, renamed 61684b5d): consumers src/renderer/page-keys.ts and five fakes
+- CreatePlace loses owner, FuzzyMatcher.rank keeps input-order ties after a byLengthAsc detour, AgentProcessEvents.commands aliases hold a plugin command's name after its colon, CompletionRowDraw row cut to one line and cleared after a declining draw (61684b5d)
 ### Rulings
 - sameNames replaced by the existing isSameJson — compares all four fields with no new helper — a reordered alias list sends one extra message · group 02 · group 02
 - commandRecordsOf drops an item with no string name — an empty name would draw a blank row — a nameless item goes missing, none measured · group 02 · group 02
@@ -264,7 +266,9 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - AGENTS.md allows a whole self-test run only when the user asks, so the plan's npm run selftest lines run as the touched plugins' groups; tasks 04 and 05 had each run it whole before this was caught — costs nothing a filtered run proves · lead
 - fake-fuzzy-matcher.test-support.ts added to AGENTS.md's src/shared line beside the fake agent harness · group 06 · group 06
 - design.md says the description follows the name in a dim box, not a column — it does not line up across rows · group 06 · group 06
+- Supersedes earlier lines: self-test filters are neat.md and style.md, not rulesneat; an exact init name beats an alias; the description is a dim column by label min-width; task 07 captures named in /tmp reports 07-1, 07-fix-1 and review-fix-1 · lead
 ### Review rounds
+- Round 1, seven commits at 1ae7d7fc, lanes correctness x3 and plan-and-design x2: NEEDS FIXES, 25 findings, 0 critical, 7 important; every item took its recommended pick per AGENTS.md § Review; applied in 61684b5d; 23 and 24 left, 25 follow-up
 ### Test gate
 - Picks: typecheck, lint, npm test, and the touched plugins' self-test groups (chat, settings, docs, backlog, notes, sessions, agent-lines), since AGENTS.md keeps the whole self-test for the user's ask in that turn · typecheck 0, lint 0, npm test 463 files 8309 pass; self-test 582 PASS, 1 FAIL (Escape␣zla fits the held width: session-row 156px in 149px), no page reload lines; the failure sits in the Sessions row layout, which this run's commits do not touch
 - After task 07's fixes (04bc4ebf), in the worktree: typecheck 0, lint 0, npm test 8366 pass; self-test chat, docs, notes, settings, backlog, forms, primer 816 PASS, 0 FAIL, no page reload lines; forms and primer added because page-keys changed
