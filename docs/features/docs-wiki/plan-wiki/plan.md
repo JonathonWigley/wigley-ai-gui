@@ -139,7 +139,7 @@ wigley-ai-gui, git:
 - [x] [Main page and list pages](11-main-list-pages.md) — after 03 to 10
 
 ### Wave 8
-- [ ] [Self-test groups](12-selftest.md) — after 11
+- [x] [Self-test groups](12-selftest.md) — after 11
 
 ### Wave 9
 - [ ] [Doc re-read](13-doc-re-read.md) — after 12
@@ -163,6 +163,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 09 · ce659133 · diff read, every Produces present, tsc clean; worker ran the task tests (123 pass), lint and the live run: all 6 steps pass after scrollToSectionNotice; the 950px breakpoint held the body at 670px down to where the column goes; the switch click focuses the tree · concerns: self-test anchor check has not seen the three new binds; short section has about 36px spare below its text, the height using prose metrics; On this page clicks use old lines after a :w until the editor closes; scrollToSectionNotice has no unit test; section editor logs editing <name>, the same as whole-file
 - 10 · 33b55c73 · diff read, every Produces present, tsc clean; worker ran the task tests (162 pass), lint and the live run, steps 1-5 pass with synthetic keys over the real schema-5 index · concerns: a link to a heading that cannot reach the top leaves one doc holding two places, so Ctrl+o can stop twice on it; focus falls to body after a link opens another doc, as every md-link already does; closest('a.md-link') is live-only under the fake DOM; a match could in theory enclose an a between its runs
 - 11 · fbf589cb · Diff read; Produces found by grep (newestLoadedFirst, findSkillEntry, parseWikiTarget, createListPane, MAIN_STARTER_TEXT, createRecentReader, showPage, updateList, shownPage, isBlank, setRecentChanges, listOpen); tsc clean; worker: 7 test files 273 pass, lint, both greps, live steps 1-10 PASS on runs w11, w11b, w11c. · concerns: At first show focus stays on the tree, so i on the empty Main page does nothing and its hint hides until Alt+l. Ctrl+o/i are docs.doc scope only. A list's scroll is not remembered per place (cursor is). Main.md deleted while shown: gh logs already shows and the empty state does not draw. Header title reads Main.md with a provisional entry until rebuild. Focus after a recent link click falls to body. No layout.css rule for .docs-main-hint or .docs-recent-page. Live run's stand-in index had links: [], so section links on Main were not exercised live. Root AGENTS.md docs paragraph possibly stale.
+- 12 · d2a5afb0 · Diff read: the four exports, wikiEntries, three log lines and the observer's disconnect present; tsc clean; worker: lint, typecheck, 27 tests in the two files, the Rules|Workflow grep prints nothing. npm run selftest -- --plugin docs ended PASS docs result as expected and all passed (log line checked by the lead). The placement check did not run: a filtered run skips it and a whole run waits for the user's ask. · concerns: doc-view.test.ts not run by the worker, the gate picks it. editing <name> and editing section <title> in <name> both fire on a section edit. While Main.md is gone main prints an ENOENT handler error that reads like a failure in a self-test log. .shell-side-bar-handle joins SCROLLS_ITSELF though it does not end in an ellipsis (precedent: agent-skills and agent-lines scripts). isAsideInSight starts false, so the first doc with headings logs right column in sight. Task 12 doc is stale on 920 and on heading edit buttons taking Tab.
 ### Contract changes
 - 11: the main hint in docPane sits between back and forward inside div.docs-history (order back, main, forward), not first, because layout.css hides those by :first-child and :last-child.
 ### Rulings
@@ -211,5 +212,9 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - .docs-list-rows .ui-row-label gets flex: none and max-width: 60% in docs.css, a look fix for truncated titles. · group 11
 - doc-view.test.ts assigns ownerDocument on the pane since the fake has none. · group 11
 - Task 11's live run used a stand-in fixture index. · group 11
+- switchControl_Click_CallsSwitchView not added: sidebarSwitch_DrawnForTheShownViewAndItsClickSwitches already clicks the drawn control with hasWiki true and catches the named break. · group 12
+- links and disk changes keeps Tab, Enter: kit.button sets tabindex -1, so heading edit buttons take no Tab; the task's Tab, Tab step failed the group. · group 12
+- wiki with no Main.md gains a step collapsing Third-party, since wiki list pages step 8 expands it through tree.selectEntry and later groups count rows with it collapsed. · group 12
+- wiki narrow window step 4's why says 950, the breakpoint since 1e87a69e. · group 12
 ### Review rounds
 ### Test gate

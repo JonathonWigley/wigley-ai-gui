@@ -1,6 +1,6 @@
 # 12 — Self-test groups for the wiki
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -378,3 +378,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d2a5afb0 · proof: Diff read: the four exports, wikiEntries, three log lines and the observer's disconnect present; tsc clean; worker: lint, typecheck, 27 tests in the two files, the Rules|Workflow grep prints nothing. npm run selftest -- --plugin docs ended PASS docs result as expected and all passed (log line checked by the lead). The placement check did not run: a filtered run skips it and a whole run waits for the user's ask. · concerns: doc-view.test.ts not run by the worker, the gate picks it. editing <name> and editing section <title> in <name> both fire on a section edit. While Main.md is gone main prints an ENOENT handler error that reads like a failure in a self-test log. .shell-side-bar-handle joins SCROLLS_ITSELF though it does not end in an ellipsis (precedent: agent-skills and agent-lines scripts). isAsideInSight starts false, so the first doc with headings logs right column in sight. Task 12 doc is stale on 920 and on heading edit buttons taking Tab.
