@@ -39,11 +39,13 @@ setting.
 
 The start prompt asks chat for its resume sections, and `session-log` registers one, Recently closed, through chat's
 `addResumeSection`. It shows at the top of the Folder step across every folder and profile, where a pick resumes at
-once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it, and 0 hides it. The newest row sits last, next to the cursor, so `k` then Enter reopens the session
-closed last.
+once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it, and
+0 hides it. The newest row sits last, next to the cursor, so `k` then Enter reopens the session closed last.
 
 A session lists when the user closed it or cleared it, it was sent a message, and it is neither open nor archived. Each
-session shows once, under the title it had in the side bar.
+session shows once, under the title it had in the side bar. It stays out until its process has ended, as a past session
+does. The Session step lists it only when its transcript is found; the Folder step reads no transcripts, so a pick there
+can fail with the resume toast.
 
 ## Decisions
 
@@ -57,3 +59,6 @@ session shows once, under the title it had in the side bar.
   beside the cleared one.
 - **Terminal sessions log and never list.** The app does not know a terminal session's profile, so it cannot resume one.
 - **The file is never trimmed.** A line is small and a close is a rare event, and old lines answer later questions.
+- **A Folder step row spells only the folder's base.** Two folders with one base look alike. A full path in the row's
+  label, which is also its filter text, was tried and dropped: a filter naming a parent path then put the cursor on a
+  closed session, so Enter resumed it instead of opening the folder.
