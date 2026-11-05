@@ -3,6 +3,7 @@ import type { Timers } from '../../../contracts/ambient';
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { CommandId } from '../../../contracts/commands';
+import { element } from '../../../shared/page/dom';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
@@ -335,6 +336,8 @@ function fakeTimers() {
 // back.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
+const TURN_LINE_CLASS = 'chat-turn-line-slot';
+
 function setUpList(shown: ShownLayouts<ChatLayout>) {
   const logs: string[] = [];
   const pulled: string[] = [];
@@ -373,6 +376,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     timers,
     clock,
     pullBack: (queuedId) => pulled.push(queuedId),
+    turnLine: element('li', TURN_LINE_CLASS),
   });
   const held = new Map<string, ChatEntry>();
   const put = (entry: ChatEntry) => {
@@ -395,9 +399,17 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   };
 }
 
-// Each of the list's slots as `<classes>`, ` hidden` added while hidden.
+// The list's slots but the turn line.
+function drawnSlots(list: HTMLElement): FakeElement[] {
+  return asFake(list).children.filter(
+    (slot) => !slot.classList.contains(TURN_LINE_CLASS),
+  );
+}
+
+// Each of the list's slots but the turn line as `<classes>`, ` hidden` added while
+// hidden.
 function slotClasses(list: HTMLElement): string[] {
-  return asFake(list).children.map(
+  return drawnSlots(list).map(
     (slot) => `${slot.className}${slot.hidden ? ' hidden' : ''}`,
   );
 }
@@ -467,7 +479,7 @@ describe('entry list', () => {
       put(entry);
     }
 
-    const slots = asFake(list.element).children.map((slot) =>
+    const slots = drawnSlots(list.element).map((slot) =>
       slot.children.map(
         (child: FakeElement) =>
           `${child.className}@${child.dataset.layout ?? ''}`,
@@ -701,6 +713,26 @@ describe('pending rows', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('turnLine_EntriesPendingRowsAndRebuild_StaysBetweenEntriesAndPendingRows', () => {
+    const { list, put, entries } = setUpList(defaultShown());
+    const placed = () =>
+      asFake(list.element).children.map((slot) =>
+        slot.classList.contains(TURN_LINE_CLASS)
+          ? 'line'
+          : slot.classList.contains('chat-queued-slot')
+            ? 'pending'
+            : 'entry',
+      );
+
+    put(user('u1'));
+    list.setQueued([queued('q1')]);
+    put(notice('n1'));
+    expect(placed()).toEqual(['entry', 'entry', 'line', 'pending']);
+
+    list.rebuild(entries());
+    expect(placed()).toEqual(['entry', 'entry', 'line', 'pending']);
   });
 
   it('pending_FocusOnLastEntryThenRowLeaves_StopsAfterEntriesAndFollowsLatest', () => {
@@ -1070,7 +1102,7 @@ describe('activity hidden', () => {
     expect(focused === null ? null : stopId(focused)).toBe(row.focused);
     expect(slotClasses(list.element)).toEqual(row.slots);
     expect(
-      asFake(list.element).children.map((slot) =>
+      drawnSlots(list.element).map((slot) =>
         slot.children[0].className
           .split(' ')
           .find((name) => name !== 'chat-entry'),

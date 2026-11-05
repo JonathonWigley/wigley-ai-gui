@@ -422,7 +422,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
   skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its
   value ellipsized). While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
-  or its finished line. While the session
+  or its finished line; while the hub is visible and the turn runs, the transcript's **turn line** shows that header
+  under the last entry in `fg-tertiary`. While the session
   works on a turn, the dock shows a header (the turn's time as `m:ss` in tabular numerals and a state word,
   `1:05 Working…`), a `radius-md` card listing the main agent's latest three tool calls in mono (the newest in `fg`,
   the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim

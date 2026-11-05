@@ -72,7 +72,8 @@ import { resultStepCount } from './working-turn';
 // `toastedKinds` the kinds whose failed draw has toasted since they were
 // shown, shared by every session's list. `timers` and `clock` tick a live
 // activity line's time. `pullBack` is what a click on a pending row calls
-// with its message's id.
+// with its message's id. `turnLine` is the element the list keeps as its row after
+// the last entry; its owner draws and hides it.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -82,6 +83,7 @@ export interface EntryListDeps {
   timers: Timers;
   clock: Clock;
   pullBack(queuedId: string): void;
+  turnLine: HTMLElement;
 }
 
 export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
@@ -102,8 +104,8 @@ export interface TranscriptScroll extends ContentScroll {
 // slot; a closed run's step slots are hidden. While the shown layouts leave
 // activity out of the transcript, steps get no slot, so no run or step is drawn
 // or stopped on; the flag is read when the list is created and at each rebuild.
-// The session's queued messages follow the last entry as pending rows, oldest
-// first. The cursor stops on each block a user or assistant entry drew (its
+// The turn line follows the last entry and is no stop; the session's queued
+// messages follow it as pending rows, oldest first. The cursor stops on each block a user or assistant entry drew (its
 // `[data-md-lines]` elements, read as the slot builds and redraws), on any other
 // entry but a turn or compaction divider, on each activity line, on each step of
 // an open run, then on each pending row; the focused block, else the focused
@@ -355,9 +357,6 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     slot.blocks = readBlocks(slot.element, slot.entry);
     blockCounts.set(slot.entry.id, slot.blocks.length);
   };
-
-  // Where a new entry slot goes: before the first pending row, else last.
-  const entryPlace = () => [...queuedSlots.values()].at(0)?.element ?? null;
 
   // The stop the list ends on: the newest pending row, else the last row's.
   const lastStopId = () =>
@@ -647,6 +646,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const slotSizes = new ResizeObserver(followBottom);
   const observeSlot = (slot: HTMLElement) =>
     slotSizes.observe(slot, { box: 'border-box' });
+  list.append(deps.turnLine);
+  observeSlot(deps.turnLine);
 
   return {
     element: list,
@@ -660,7 +661,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         holdBlocks(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
-        list.insertBefore(created.element, entryPlace());
+        list.insertBefore(created.element, deps.turnLine);
       } else if (slot !== undefined) {
         redrawSlot(slot, entry, entryInput(entry, next), deps);
         holdBlocks(slot);
@@ -691,6 +692,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         observeSlot(created.element);
         list.append(created.element);
       }
+      list.append(deps.turnLine);
+      observeSlot(deps.turnLine);
       putQueued(queued);
       changed();
     },

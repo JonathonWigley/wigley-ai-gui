@@ -39,6 +39,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **Activity line** in the composer — chat's `workingLine` layout part: the dock's time and state on one line, shown
   only while the hub is not visible. (`agent-chat/design.md` § Activity line names a different thing: a run of steps in
   the transcript.)
+- **Turn line** in the transcript — the same `workingLine` part under the last entry: the time and state while the turn
+  runs, dim, shown only while the hub is visible, and never the finished line.
 - **Context line** — the session's context bar and cache countdown above the box, drawn by the `usage` plugin.
 - **Status line** — the line under the Chat composer's box that replaces the composer bar.
 - **Stop** — a place the chat's entry cursor (`j`/`k`) can rest that is not a transcript entry: a composer part
@@ -146,8 +148,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **Display only:** the dock is not a stop and has no keys.
 - **Where it shows:** in the hub's Main agent section, whose summary is the turn's time while the turn runs. While the
   hub is not visible, the composer's activity line shows the same time and state (`1:05 Working…`), or the finished line
-  once the turn ends. The two read one dock, so they cannot disagree. CSS alone picks which one shows, so no code
-  measures the Chat tab.
+  once the turn ends. While the hub is visible, the transcript's turn line shows that time and state under the last
+  entry, ahead of any pending rows, and hides once the turn ends. All of them read one dock, so they cannot disagree.
+  CSS alone picks which line shows, so no code measures the Chat tab.
 - **The transcript shows messages and turn dividers:** the default chat layout sets `activityInTranscript` to `false`,
   so the activity lines and their steps leave the transcript and the entry cursor. A user layout that sets it `true`
   brings them back. Each `result` entry stays as a dim turn divider, so a turn's end shows with no user message after it. The rules for the dock's lines are in `agent-chat/design.md` § Activity dock.
