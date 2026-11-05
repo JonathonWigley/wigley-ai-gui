@@ -1,0 +1,158 @@
+# Docs wiki — plan
+
+Feature: Docs wiki · Implements: none · Ticket: none
+Target: `main` in wigley-ai-gui and wigley-ai-marketplace · Written: 2026-11-05
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+## Goal
+
+Docs mode opens on a wiki over the user's own agent docs. `~/wigley-agents/wiki/Main.md` gives the Main page and the sidebar. A page shows its title first, edits one section in place, and lists On this page and Linked from. `§` references become links. `../design.md` holds every settled decision.
+
+## Architecture
+
+Systems touched:
+
+- **Docs index** (wigley-ai-marketplace, `plugins/wigley/scripts/docs-index/`): schema 5 adds each entry's headings and outgoing links, and walks `~/wigley-agents/wiki/`.
+- **Docs plugin** (wigley-ai-gui, `src/plugins/docs/`): pure modules, the sidebar, the page, section editing, links, history, the Main page and list pages.
+- **Git adapter** (wigley-ai-gui, `src/contracts/git.ts`, `src/main/git/`): a log call.
+- **Keys** (wigley-ai-gui, `src/plugins/keymap.ts`, the docs manifest).
+
+The index holds the only link parser. The page reads its result. Schema 5 replaces schema 4 with no fallback, per `AGENTS.md` § Intent. Both repos land together.
+
+## Preconditions
+
+Each check ran at plan time on 2026-11-05. `wigley:make` re-runs each one before the first dispatch.
+
+- The index is schema 4 on both sides: `grep -n 'SCHEMA_VERSION =' plugins/wigley/scripts/docs-index/model.py` in wigley-ai-marketplace shows `4`, and `grep -n 'INDEX_SCHEMA_VERSION =' src/plugins/docs/index-document.ts` in wigley-ai-gui shows `4`.
+- The new keys are free: `grep -c -E "<Leader>vw|'<C-o>'|'<C-i>'|'gh'" src/plugins/keymap.ts` shows `0`, and `grep -n -E "keys: '<C-[hl]>'" src/plugins/keymap.ts` shows no `docs.` scope.
+- `Git` has no log member: `grep -n 'log' src/contracts/git.ts` shows no method.
+- No user docs layout exists: `test -f ~/.config/wigley-ai-gui/layouts/docs/layout.js` fails. So a layout contract change orphans no user layout.
+- `~/wigley-agents/wiki/Main.md` is on `main` of wigley-agents: `git -C ~/wigley-agents ls-files wiki/Main.md` prints the path.
+- `l` and `<CR>` are free in `docs.doc`: `grep -n -E "keys: '(l|<CR>)', scope: 'docs.doc'" src/plugins/keymap.ts` shows nothing.
+
+## Docs written ahead
+
+wigley-ai-gui commit `4b3aea5c`:
+
+- `docs/features/docs-wiki/design.md` (new)
+- `docs/features/docs-browser/design.md` (pointer)
+- `AGENTS.md` (the docs plugin entry)
+- `docs/keymap.md` (the `v` group)
+
+wigley-agents commit `43a7f2c`:
+
+- `wiki/Main.md` (new)
+
+The docs index `README.md` states the schema that the script writes, so task 01 changes it with the code. The file then never states a schema that no script writes.
+
+## Mandatory Reads
+
+- wigley-ai-gui: `AGENTS.md` (§ Intent, § Architecture: a plugin, a registration, a key, an event, a layout; § Running and testing), `DESIGN.md` (UI tasks), `docs/keymap.md` (key tasks), `docs/features/docs-wiki/design.md`, `docs/features/docs-browser/design.md`, `docs/features/layouts/design.md` (layout tasks).
+- wigley-ai-marketplace (task 01): root `AGENTS.md`, `plugins/wigley/scripts/docs-index/README.md`.
+
+## Design Overview
+
+```
+~/wigley-agents/wiki/Main.md ──read by the page──► parseWikiMain ─► WikiShelf[] ─► buildWikiTree ─► TreeView (sidebar)
+                                                                      │
+docs_index.py ─► index.json (schema 5: headings, links per entry)     │ wiki: links
+      │                                                               ▼
+      ▼                                                         list page, All pages
+ IndexEntry[] ──► linkedFrom ─► right column
+      │      └──► sectionsOf ─► On this page, section edit (spliceSection ─► writeDoc)
+      │      └──► § links in the mounted body ─► followFile(path, line)
+      ▼
+ Main page = Main.md rendered + Recent changes (Git.log over the linked pages)
+```
+
+Decisions: `../design.md`. Out of scope: `../design.md` § Out of scope.
+
+Boundaries:
+
+- The app holds no shelf name and no knowledge of a workflow. A test or a source line that names `Rules` or `Workflow` outside a test's own built data is wrong.
+- `Main.md` has one parser (`wiki-main.ts`). `§` references have one parser (the index).
+- All pages is the existing `buildTree`, unchanged.
+
+## File Structure
+
+Names below are shared across tasks. A task uses each one word for word.
+
+Marketplace, `plugins/wigley/scripts/docs-index/`:
+
+- Each entry in `index.json` gains two fields, both always present, both `[]` for an entry with no body:
+  - `headings`: `[{ "level": int, "text": str, "line": int }]`. `line` is 1-based in the file.
+  - `links`: `[{ "form": "markdown" | "section", "raw": str, "target": str, "line": int, "targetLine": int | null }]`. `raw` is the exact source text of the reference. `target` is the real path of the target file. `line` is the source line, 1-based. `targetLine` is the target heading's 1-based line, or null when the link names a file only.
+- A follow-up item entry (`#L<n>` id) holds `[]` for both. No whole-file entry exists for a follow-up file, so no entry holds the fields of a follow-up file. A link in a follow-up file does not appear in Linked from. A link into a follow-up file still resolves.
+
+wigley-ai-gui, `src/plugins/docs/`:
+
+- `contract.ts` (modify): `IndexHeading { level: number; text: string; line: number }`, `IndexLink { form: 'markdown' | 'section'; raw: string; target: string; line: number; targetLine: number | null }`, `IndexEntry.headings: IndexHeading[]`, `IndexEntry.links: IndexLink[]`.
+- `index-document.ts` (modify): `INDEX_SCHEMA_VERSION = 5`, and parses the two fields.
+- `linked-from.ts` (new): `linkedFrom(entries: readonly IndexEntry[], targetPath: string): LinkedFromRow[]`, with `LinkedFromRow { entryId: string; title: string; path: string; line: number }`. Clones of one repo show once.
+- `wiki-main.ts` (new): `parseWikiMain(text: string): WikiShelf[]`, with
+  - `WikiShelf { title: string; items: WikiItem[] }`
+  - `WikiItem = { type: 'label'; title: string } | { type: 'page'; title: string; target: WikiTarget }`
+  - `WikiTarget = { type: 'path'; path: string } | { type: 'skill'; name: string } | { type: 'kind'; kind: string } | { type: 'owner'; owner: 'third-party' } | { type: 'all' }`
+- `sections.ts` (new): `sectionsOf(text: string): DocSection[]`, `spliceSection(text: string, section: DocSection, next: string): string`, with `DocSection { title: string; level: number; startLine: number; endLine: number }`. Lines are 1-based and inclusive, and count from the file's first line, frontmatter included.
+- `page/doc-history.ts` (new): `createDocHistory(): DocHistory`, with `DocHistory { push(place: DocPlace): void; back(): DocPlace | null; forward(): DocPlace | null; canBack(): boolean; canForward(): boolean }` and `DocPlace { path: string; line: number | null }`.
+- `tree.ts` (modify): `buildWikiTree(shelves: readonly WikiShelf[], entries: readonly IndexEntry[], mainFolder: string, homeDir: string, paths: Paths): TreeNode[]`. `TreeNode` gains `TreeWikiLink { type: 'wikiLink'; id: string; title: string; target: WikiTarget; count: number | null; isDangling: boolean }`, `TreeWikiLabel { type: 'wikiLabel'; id: string; title: string }` and `TreeHeadingMatch { type: 'headingMatch'; id: string; title: string; entryId: string; line: number; docTitle: string; leafId: string }`. Path and skill pages are `TreeLeaf` rows. Also `buildWikiFilterTree(entries, homeDir, paths)` and `wikiListEntries(target, entries)`.
+- `page/section-edit.ts`, `page/section-links.ts`, `page/wiki-main-source.ts`, `page/list-page.ts`, `page/main-page.ts`, `main/recent-changes.ts` (new). Each owner task gives the signatures.
+- `DocPlace.path` also holds a list page's `wiki:` place (task 11).
+- The channel call `wikiMainPath()`, and `TreeView.setWikiTree(tree, filterTree, hasIndex)` (task 08).
+- `contract.ts` (modify, task 04): the channel call `recentChanges(paths: string[]): Promise<RecentChange[]>`, with `RecentChange { sha: string; subject: string; at: string; paths: string[] }`.
+- `manifest.ts`, `../keymap.ts` (modify): commands `docs.editSection`, `docs.prevSection`, `docs.nextSection`, `docs.historyBack`, `docs.historyForward`, `docs.openMain`, `docs.toggleWikiView`, `docs.listOpen`.
+- `layouts/layout.d.ts`, `layouts/default/layout.js`, `layouts/default/layout.css`, `page/layout/docs-parts.ts`, `page/layout/read-layout.ts`, `page/docs.css`, `manifest.ts` (themeTokens) and `DESIGN.md` (modify): new parts `pageFrame`, `pageAside`, `asideHeading`, `asideLink`, `sectionEditControl`, `recentChanges`, `listPage`, `listRow`, `sidebarSwitch`, `mainEmpty`.
+
+wigley-ai-gui, git:
+
+- `src/contracts/git.ts`, `src/main/git/process-git.ts` (modify): `log(root: string, paths: string[], limit: number): Promise<GitCommit[]>`, with `GitCommit { sha: string; subject: string; at: string; paths: string[] }`, newest first. `paths` holds the repo-relative paths the commit touched, from those asked for.
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Index schema 5](01-index-schema-5.md)
+- [ ] [Entry fields and Linked from](02-entry-fields-linked-from.md)
+- [ ] [Main parser, sections, history](03-pure-modules.md)
+
+### Wave 2
+- [ ] [Git log and Recent changes call](04-git-log.md) — after 02
+- [ ] [Wiki tree and search rows](06-wiki-tree.md) — after 02, 03
+
+### Wave 3
+- [ ] [Layout parts](05-layout-parts.md) — after 02, 04, 06
+
+### Wave 4
+- [ ] [Article page and right column](07-article-page.md) — after 03, 05
+- [ ] [Wiki sidebar and All pages](08-wiki-sidebar.md) — after 03, 04, 05, 06
+
+### Wave 5
+- [ ] [Section editing](09-section-editing.md) — after 03, 07, 08
+
+### Wave 6
+- [ ] [Section links and history](10-links-history.md) — after 03, 09
+
+### Wave 7
+- [ ] [Main page and list pages](11-main-list-pages.md) — after 03 to 10
+
+### Wave 8
+- [ ] [Self-test groups](12-selftest.md) — after 11
+
+### Wave 9
+- [ ] [Doc re-read](13-doc-re-read.md) — after 12
+
+### Wave 10
+- [ ] [Final verification](14-final-verification.md) — after 13
+
+## Run log
+
+Review base: <sha, written by wigley:make at preflight>
+
+### Groups
+### Contract changes
+### Rulings
+### Review rounds
+### Test gate
