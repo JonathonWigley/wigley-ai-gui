@@ -3,7 +3,9 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { IndexDocument } from '../contract';
 import { parseIndexDocument } from '../index-document';
-import { writeDocsFixture } from './selftest-fixture';
+import { buildWikiTree, type TreeNode } from '../tree';
+import { parseWikiMain } from '../wiki-main';
+import { WIKI_MAIN_TEXT, writeDocsFixture } from './selftest-fixture';
 
 const HOME = '/home';
 const LOAD_STATES = `${HOME}/.claude/load-states`;
@@ -45,6 +47,28 @@ async function readIndex(
 }
 
 const STAND_IN_SCRIPT = `${HOME}/.claude/plugins/cache/wigley-ai-marketplace/wigley/0.0.0/scripts/docs-index/docs_index.py`;
+
+// The rows of `nodes` top to bottom, a group before its children.
+function wikiRows(nodes: readonly TreeNode[]): unknown[] {
+  return nodes.flatMap((node) => {
+    switch (node.type) {
+      case 'group':
+        return [{ group: node.title }, ...wikiRows(node.children)];
+      case 'wikiLink':
+        return [
+          {
+            link: node.title,
+            count: node.count,
+            isDangling: node.isDangling,
+          },
+        ];
+      case 'wikiLabel':
+        return [{ label: node.title }];
+      default:
+        return [{ leaf: node.title }];
+    }
+  });
+}
 
 describe('writeDocsFixture', () => {
   it.each([
@@ -92,6 +116,31 @@ describe('writeDocsFixture', () => {
 
     const parsed = parseIndexDocument(await files.read(INDEX_FIXTURE));
     expect(parsed.ok || parsed.message).toBe(true);
+  });
+
+  it('GIVEN the fixture WHEN its Main.md builds the wiki tree THEN only Gone page dangles and each list row counts its docs', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths);
+
+    const tree = buildWikiTree(
+      parseWikiMain(WIKI_MAIN_TEXT),
+      (await readIndex(files)).entries,
+      `${HOME}/wigley-agents/wiki`,
+      HOME,
+      posixPaths,
+    );
+    expect(wikiRows(tree)).toEqual([
+      { group: 'Shelf one' },
+      { label: 'Label one' },
+      { leaf: 'Guide page' },
+      { leaf: 'Commit page' },
+      { link: 'Gone page', count: null, isDangling: true },
+      { link: 'Fixture guides', count: 2, isDangling: false },
+      { group: 'Shelf two' },
+      { link: 'Every page', count: null, isDangling: false },
+      { link: 'Vendor docs', count: 2, isDangling: false },
+    ]);
   });
 
   it('GIVEN loadStates on then off WHEN the files are listed THEN no load-state doc remains on disk or in the index', async () => {

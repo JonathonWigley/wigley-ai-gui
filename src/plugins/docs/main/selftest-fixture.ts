@@ -27,6 +27,49 @@ const LOAD_STATE_DOCS: readonly LoadStateRecord[] = [
   { state: 'not-loaded', reason: 'not read at launch' },
 ];
 
+// The wiki's `Main.md`, relative to the temp home, and its text: the links on
+// the first line sit before the first shelf, so they draw no sidebar rows.
+export const WIKI_MAIN_FILE = 'wigley-agents/wiki/Main.md';
+export const WIKI_MAIN_TEXT = `Start at [Fixture guides](wiki:kind/feature-doc) or [Every page](wiki:all).
+
+## Shelf one
+
+### Label one
+
+- [Guide page](../../wigley-features/selftest-repo/wiki-fixture/guide.md)
+- [Commit page](../../dev/backlog-repo/docs/features/backlog-x/plan-x/plan.md)
+- [Gone page](gone.md)
+- [Fixture guides](wiki:kind/feature-doc)
+
+## Shelf two
+
+- [Every page](wiki:all)
+- [Vendor docs](wiki:owner/third-party)
+`;
+
+// A doc with no `#` heading, relative to the temp home, whose first line holds
+// a `§` link with backticks and a bare one.
+export const WIKI_GUIDE_FILE =
+  'wigley-features/selftest-repo/wiki-fixture/guide.md';
+export const WIKI_GUIDE_TEXT = `Read \`target.md\` § Target part for the target, and § Closing notes for the end.
+
+## Opening notes
+
+Opening text.
+
+## Middle notes
+
+Middle text.
+
+## Closing notes
+
+Closing text.
+`;
+
+const WIKI_TARGET_FILE = 'wigley-features/selftest-repo/wiki-fixture/target.md';
+const WIKI_TARGET_TEXT =
+  '# Fixture target\n\nText above.\n\n## Target part\n\nText below.\n';
+
 export interface DocsFixtureOptions {
   // Adds the `LOAD_STATE_DOCS` docs under `.claude/load-states/` and their
   // states in the home folder's context.
@@ -79,6 +122,9 @@ export async function writeDocsFixture(
       fixture.vendorSkill,
       '---\nname: vendored\ndescription: A third-party plugin skill.\n---\n\n# Vendored\n',
     ],
+    [fixture.wikiMain, WIKI_MAIN_TEXT],
+    [fixture.wikiGuide, WIKI_GUIDE_TEXT],
+    [fixture.wikiTarget, WIKI_TARGET_TEXT],
     ...loadStateDocs(options, fixture, paths).map((doc): [string, string] => [
       doc.path,
       `# ${doc.title}\n`,
@@ -151,6 +197,9 @@ function fixturePaths(home: string, paths: Paths) {
       'dev/backlog-repo/docs/features/backlog-x/plan-x',
     ),
     followups: paths.join(home, 'wigley-features/selftest-repo/followups.md'),
+    wikiMain: paths.join(home, WIKI_MAIN_FILE),
+    wikiGuide: paths.join(home, WIKI_GUIDE_FILE),
+    wikiTarget: paths.join(home, WIKI_TARGET_FILE),
     wigleyInstall: paths.join(
       claudeDir,
       'plugins/cache/wigley-ai-marketplace/wigley/0.0.0',
@@ -245,6 +294,77 @@ function backlogEntries(fixture: FixturePaths, paths: Paths): IndexEntry[] {
     }),
     task('01-first.md', 'First task', 'done'),
     task('02-second.md', 'Second task', 'not started'),
+  ];
+}
+
+// The docs the wiki's `Main.md` links, with the headings and links the index
+// holds for them, and `Main.md` itself.
+function wikiEntries(fixture: FixturePaths): IndexEntry[] {
+  const featureDoc = { repo: 'selftest-repo', root: fixture.featuresHome };
+  const meta = { feature: 'wiki-fixture' };
+  return [
+    entry({
+      kind: 'reference',
+      source: 'global',
+      path: fixture.wikiMain,
+      title: 'Fixture main page',
+      meta: {},
+      headings: [
+        { level: 2, text: 'Shelf one', line: 3 },
+        { level: 3, text: 'Label one', line: 5 },
+        { level: 2, text: 'Shelf two', line: 12 },
+      ],
+      links: [
+        {
+          form: 'markdown',
+          raw: '[Guide page](../../wigley-features/selftest-repo/wiki-fixture/guide.md)',
+          target: fixture.wikiGuide,
+          line: 7,
+          targetLine: null,
+        },
+      ],
+    }),
+    entry({
+      kind: 'feature-doc',
+      source: 'features',
+      ...featureDoc,
+      path: fixture.wikiGuide,
+      title: 'Fixture guide',
+      meta,
+      headings: [
+        { level: 2, text: 'Opening notes', line: 3 },
+        { level: 2, text: 'Middle notes', line: 7 },
+        { level: 2, text: 'Closing notes', line: 11 },
+      ],
+      links: [
+        {
+          form: 'section',
+          raw: '`target.md` § Target part',
+          target: fixture.wikiTarget,
+          line: 1,
+          targetLine: 5,
+        },
+        {
+          form: 'section',
+          raw: '§ Closing notes',
+          target: fixture.wikiGuide,
+          line: 1,
+          targetLine: 11,
+        },
+      ],
+    }),
+    entry({
+      kind: 'feature-doc',
+      source: 'features',
+      ...featureDoc,
+      path: fixture.wikiTarget,
+      title: 'Fixture target',
+      meta,
+      headings: [
+        { level: 1, text: 'Fixture target', line: 1 },
+        { level: 2, text: 'Target part', line: 5 },
+      ],
+    }),
   ];
 }
 
@@ -362,6 +482,7 @@ function indexDocument(
       meta: { name: 'vendored', description: 'A third-party plugin skill.' },
     }),
     ...backlogEntries(fixture, paths),
+    ...wikiEntries(fixture),
     ...loadStates.map((doc) =>
       entry({
         kind: 'instructions',

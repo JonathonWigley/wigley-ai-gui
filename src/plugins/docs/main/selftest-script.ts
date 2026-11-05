@@ -10,7 +10,14 @@ import type {
   OwnedSession,
   SessionsMainExports,
 } from '../../sessions/contract';
-import { type DocsFixtureOptions, writeDocsFixture } from './selftest-fixture';
+import {
+  type DocsFixtureOptions,
+  WIKI_GUIDE_FILE,
+  WIKI_GUIDE_TEXT,
+  WIKI_MAIN_FILE,
+  WIKI_MAIN_TEXT,
+  writeDocsFixture,
+} from './selftest-fixture';
 
 export interface DocsSelfTestDeps {
   files: Files;
@@ -35,11 +42,18 @@ const STYLE_RULE_FILTER = 'style.md';
 // split's narrowest tree pane.
 const UNMATCHED_FILTER = 'zqzq'.repeat(10);
 
+const RELOADED_MAIN = /^\[docs\] reloaded Main\.md$/;
+const ONE_RECENT_COMMIT = /^\[docs\] recent changes: 1 commits$/;
+
+// The section write's wait, and how often it reads the file.
+const SECTION_WRITE_TIMEOUT_MS = 120_000;
+const SECTION_WRITE_POLL_MS = 100;
+
 function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   // A path below the home as the page shows it.
   const shown = (relative: string) =>
     paths.tilde(paths.join(homeDir, relative), homeDir);
-  const docEditor: SelfTestStep[] = [
+  const wikiStart: SelfTestStep[] = [
     {
       keys: [' ', 'k', 'd'],
       expect: '[page] showed Docs mode',
@@ -47,9 +61,271 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       keys: ['R'],
-      expect: '[docs] machine index rebuilt: 16 entries',
+      expect: '[docs] machine index rebuilt: 19 entries',
       why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture.",
     },
+    {
+      keys: ['g', 'h'],
+      expect: '[docs] Main page ready',
+      why: 'gh in docs.tree. Main.md shows after this line, whether the first show landed first (the page already shows) or gh opened it.',
+    },
+    {
+      keys: ['<C-k>'],
+      expect: '[docs] Main.md did not scroll up',
+      why: 'The scroll key opens nothing. Step 3 made Main.md the shown doc, so its name is in the line.',
+    },
+    { keys: ['G'], expect: '[docs] selected Vendor docs' },
+    {
+      keys: ['g', 'g'],
+      expect: '[docs] selected Shelf one',
+      checksFit: true,
+      screenshot: 'wiki-main',
+      why: 'The screenshot shows the title first, Recent changes under the body and the shelves.',
+    },
+    {
+      writeFile: {
+        path: WIKI_MAIN_FILE,
+        text: `${WIKI_MAIN_TEXT}\n## Shelf three\n\n- [Late page](late.md)\n`,
+      },
+      keys: [],
+      expect: '[docs] read Main.md: 3 shelves',
+      alsoExpect: [RELOADED_MAIN],
+    },
+    { keys: ['G'], expect: '[docs] selected Late page' },
+    {
+      writeFile: { path: WIKI_MAIN_FILE, text: WIKI_MAIN_TEXT },
+      keys: [],
+      expect: '[docs] read Main.md: 2 shelves',
+      alsoExpect: [RELOADED_MAIN],
+      why: 'The selected row went, so the first row is selected.',
+    },
+  ];
+  const wikiSidebar: SelfTestStep[] = [
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows All pages' },
+    { keys: ['g', 'g'], expect: '[docs] selected Mine' },
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows the wiki' },
+    { keys: ['g', 'g'], expect: '[docs] selected Shelf one' },
+    { keys: ['l'], expect: '[docs] selected Label one' },
+    { keys: ['j', 's'], expect: '[docs] stars stay in All pages' },
+    { keys: ['l'], expect: '[docs] opened guide.md' },
+    {
+      keys: ['j', 'j', 'l'],
+      expect: '[docs] refused Gone page: not in the index',
+      why: 'Guide page, Commit page, then Gone page.',
+    },
+    {
+      keys: ['G', 'k', 'l'],
+      expect: '[docs] sidebar shows All pages',
+      why: 'wiki:all switches the view.',
+    },
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows the wiki' },
+  ];
+  const wikiSectionEditor: SelfTestStep[] = [
+    { keys: ['<A-l>'], expect: '[docs] doc focused' },
+    { keys: ['<C-l>'], expect: '[docs] section Opening notes' },
+    { keys: ['<C-l>'], expect: '[docs] section Middle notes' },
+    { keys: ['<C-l>'], expect: '[docs] section Closing notes' },
+    { keys: ['<C-l>'], expect: '[docs] no next section' },
+    { keys: ['<C-h>'], expect: '[docs] section Middle notes' },
+    {
+      keys: ['e'],
+      expect: '[docs] editing section Middle notes in guide.md',
+      checksFit: true,
+      screenshot: 'section-editor',
+    },
+    { keys: ['<C-l>'], expect: '[docs] not moved: the editor is open' },
+    {
+      keys: ['o', ...'added', 'Escape', ':', 'w', 'Enter'],
+      expect: '[docs] wrote guide.md',
+      why: 'The result checks the file.',
+    },
+    {
+      keys: [':', 'q', 'Enter'],
+      expect: '[docs] closed the editor on guide.md',
+    },
+  ];
+  const wikiLinksAndHistory: SelfTestStep[] = [
+    {
+      keys: ['<A-h>', '<A-l>'],
+      expect: '[docs] doc focused',
+      screenshot: 'section-links',
+      why: "Focus on the pane starts Tab at the doc's first link.",
+    },
+    {
+      keys: ['Tab', 'Enter'],
+      expect: '[docs] opened target.md',
+      why: 'The backticks split the reference across a code element and a text node, so this fails if the DOM walk or the wrap fails.',
+    },
+    { keys: ['<C-o>'], expect: '[docs] opened guide.md' },
+    { keys: ['<C-i>'], expect: '[docs] opened target.md' },
+    { keys: ['<C-o>'], expect: '[docs] opened guide.md' },
+    { keys: ['<A-h>', '<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['Tab', 'Tab', 'Enter'],
+      expect: '[docs] moved within guide.md to line 11',
+      why: 'A same-file § link moves and reads nothing.',
+    },
+    {
+      keys: ['<C-i>'],
+      expect: '[docs] no later place',
+      why: 'The move dropped the forward places.',
+    },
+    {
+      keys: ['g', 'h'],
+      expect: '[docs] opened the Main page',
+      alsoExpect: [ONE_RECENT_COMMIT],
+      why: "gh in docs.doc; the count is the fixture's one commit of plan.md.",
+    },
+    { keys: ['<A-h>', '<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['Tab', 'Enter'],
+      expect: '[docs] listed Fixture guides: 2 docs',
+      why: "Enter on a focused link is the link's click.",
+    },
+  ];
+  const wikiListPages: SelfTestStep[] = [
+    {
+      keys: ['j', 'l'],
+      expect: '[docs] opened target.md',
+      why: 'Fixture target is the second row.',
+    },
+    {
+      keys: ['<C-o>'],
+      expect: '[docs] listed Fixture guides: 2 docs',
+      checksFit: true,
+      screenshot: 'list-page',
+    },
+    {
+      keys: ['Enter'],
+      expect: '[docs] opened target.md',
+      why: 'The cursor stayed on the row opened.',
+    },
+    { keys: ['<C-o>'], expect: '[docs] listed Fixture guides: 2 docs' },
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    {
+      keys: ['g', 'g', ...Array<string>(5).fill('j'), 'l'],
+      expect: '[docs] listed Fixture guides: 2 docs',
+      why: "l on the sidebar's row lists it and stays in the tree.",
+    },
+    {
+      keys: ['G', 'Enter'],
+      expect: '[docs] listed Vendor docs: 2 docs',
+      alsoExpect: [/^\[docs\] doc focused$/],
+    },
+    {
+      keys: ['l'],
+      expect: '[docs] opened SKILL.md',
+      why: 'synced-demo is the first row.',
+    },
+    {
+      keys: ['i'],
+      expect: '[docs] refused to edit SKILL.md, a downloaded copy',
+    },
+  ];
+  const wikiFromSessionTab: SelfTestStep[] = [
+    { keys: [' ', 'k', 's'], expect: '[docs] Docs tab shown' },
+    {
+      keys: ['g', 'h'],
+      expect: '[docs] opened the Main page',
+      alsoExpect: [
+        /^\[page\] (showed Docs mode|marked Docs in the activity bar)$/,
+        ONE_RECENT_COMMIT,
+      ],
+    },
+  ];
+  const wikiNarrowWindow: SelfTestStep[] = [
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    { keys: ['g', 'g', 'j', 'j', 'l'], expect: '[docs] opened guide.md' },
+    { width: 1600, keys: ['<A-l>'], expect: '[docs] doc focused' },
+    {
+      width: 800,
+      keys: [],
+      expect: '[docs] right column out of sight',
+      checksFit: 'held',
+      screenshot: 'aside-narrow',
+      why: "800 is above the side bar's 680 and leaves .docs-doc under 950.",
+    },
+    {
+      width: 1600,
+      keys: [],
+      expect: '[docs] right column in sight',
+      screenshot: 'aside-wide',
+    },
+    { width: 'start', keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
+  const wikiWithNoMain: SelfTestStep[] = [
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows All pages' },
+    {
+      keys: ['/', ...'Main.md', 'Enter'],
+      expect: '[docs] filtered the tree: Main.md',
+    },
+    {
+      keys: ['g', 'g', 'Enter', 'Enter', 'Enter'],
+      expect: '[docs] selected Fixture main page',
+      why: 'Mine, Global, References, then the page.',
+    },
+    { keys: ['d'], expect: '[docs] asked to move Main.md to the Trash' },
+    {
+      keys: ['y'],
+      expect: '[docs] moved Main.md to the Trash',
+      alsoExpect: [/^\[docs\] no Main\.md: /],
+    },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows the wiki' },
+    {
+      keys: ['g', 'h'],
+      expect: '[docs] showed the empty Main page',
+      checksFit: true,
+      screenshot: 'main-empty',
+      why: 'The doc pane showed guide.md, so the step also proves the empty page replaces a doc. The screenshot shows the ~ path and No pages in Main.md.',
+    },
+    { keys: ['<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['i'],
+      expect: '[docs] created Main.md',
+      alsoExpect: [
+        /^\[docs\] read Main\.md: 0 shelves$/,
+        /^\[docs\] editing Main\.md$/,
+      ],
+    },
+    {
+      keys: [':', 'q', 'Enter'],
+      expect: '[docs] closed the editor on Main.md',
+    },
+    {
+      writeFile: { path: WIKI_MAIN_FILE, text: WIKI_MAIN_TEXT },
+      keys: [],
+      expect: '[docs] read Main.md: 2 shelves',
+      alsoExpect: [RELOADED_MAIN],
+    },
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    {
+      keys: ['R'],
+      expect: '[docs] machine index rebuilt: 19 entries',
+      why: "The stand-in lists the fixture's entry again, with its title.",
+    },
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows All pages' },
+    {
+      keys: ['/', ...'Main.md', 'Enter'],
+      expect: '[docs] filtered the tree: Main.md',
+    },
+    {
+      keys: ['g', 'g', 'Enter', 'Enter', 'Enter'],
+      expect: '[docs] selected Fixture main page',
+    },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+    {
+      keys: ['h', 'h'],
+      expect: '[docs] collapsed References',
+      why: "The filter's end expanded References. The later groups count rows with it collapsed, as tree filter's end does for Rules.",
+    },
+    {
+      keys: ['G', 'k', ...Array<string>(6).fill('h')],
+      expect: '[docs] collapsed Third-party',
+      why: "The list page's row selected its skill, which expanded Third-party. h steps up from the skill and collapses each group on the way, as ownership's end does: ownership expects them collapsed.",
+    },
+  ];
+  const docEditor: SelfTestStep[] = [
     { keys: ['G'], expect: '[docs] selected Third-party' },
     { keys: ['g', 'g'], expect: '[docs] selected Mine' },
     {
@@ -312,7 +588,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       checksFit: true,
     },
     { keys: ['y'], expect: '[docs] moved fresh.md to the Trash' },
-    { keys: ['R'], expect: '[docs] machine index rebuilt: 17 entries' },
+    { keys: ['R'], expect: '[docs] machine index rebuilt: 20 entries' },
   ];
   const treeFilter: SelfTestStep[] = [
     {
@@ -328,7 +604,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['Enter'],
       expect: '[docs] selected Rules',
-      why: "Global's first child, Instructions, holds no match, so Enter steps into Rules, the first child the filter shows.",
+      why: "Global's first children hold no match, so Enter steps into Rules, the first child the filter shows.",
     },
     { keys: ['Enter'], expect: '[docs] selected neat.md' },
     {
@@ -396,16 +672,16 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: 'Unstarring the only starred doc removes the Starred group.',
     },
     {
-      keys: [...Array<string>(6).fill('j'), 's'],
+      keys: [...Array<string>(7).fill('j'), 's'],
       expect: '[docs] starred neat.md',
-      why: 'Global, Instructions, CLAUDE.md, Rules, Style, then neat.md.',
+      why: 'Global, Instructions, CLAUDE.md, References, Rules, Style, then neat.md.',
     },
     { keys: ['g', 'g'], expect: '[docs] selected Starred' },
     { keys: ['h'], expect: '[docs] collapsed Starred' },
     {
-      keys: [...Array<string>(7).fill('j'), 'r'],
+      keys: [...Array<string>(8).fill('j'), 'r'],
       expect: '[docs] rename: type the new path',
-      why: "Below the collapsed Starred row, neat.md's usual row is seven rows down.",
+      why: "Below the collapsed Starred row, neat.md's usual row is eight rows down.",
     },
     {
       keys: [...Array<string>(7).fill('Backspace'), ...'tidy.md', 'Enter'],
@@ -428,9 +704,9 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       expect: '[docs] renamed tidy.md to neat.md',
     },
     {
-      keys: ['g', 'g', 'j', 'j', 'j', 'j', 'h'],
+      keys: ['g', 'g', 'j', 'j', 'j', 'j', 'j', 'h'],
       expect: '[docs] collapsed Rules',
-      why: 'Mine, Global, Instructions, CLAUDE.md, then Rules; h collapses it, where detail views starts.',
+      why: 'Mine, Global, Instructions, CLAUDE.md, References, then Rules; h collapses it, where detail views starts.',
     },
   ];
   const detailViews: SelfTestStep[] = [
@@ -670,8 +946,48 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   ];
   return [
     {
+      name: 'wiki start',
+      why: "gh leaves Main.md shown whichever of the first show and gh opened it, and the sidebar's shelves come from the file and follow an outside change to it. The first show's own proof is task 11's live run, since a log line it makes can come before this script's mark in a whole run.",
+      steps: wikiStart,
+    },
+    {
+      name: 'wiki sidebar',
+      why: 'Space v w switches between the wiki and All pages, each keeping its own cursor; a page row opens its doc, a dangling row refuses with its toast, a wiki:all row switches the view, and stars stay in All pages.',
+      steps: wikiSidebar,
+    },
+    {
+      name: 'wiki section editor',
+      why: "Ctrl+l and Ctrl+h move by section and stop at the end; e opens the section in place, the moves refuse while it is open, and :w writes only that section's change, which the result checks on disk.",
+      steps: wikiSectionEditor,
+    },
+    {
+      name: 'wiki links and history',
+      why: "A § link with backticks and a bare § link each draw as one link in the mounted body, which only this group's steps reach; one opens its target, the other moves in the doc; Ctrl+o and Ctrl+i go back and forward; gh from the doc opens Main with Recent changes; and a wiki: link in the body opens its list.",
+      steps: wikiLinksAndHistory,
+    },
+    {
+      name: 'wiki list pages',
+      why: "A list page lists the docs of its link's kind, grouped by repo; j moves its cursor and l or Enter opens the row, Ctrl+o returns with the same row as the cursor, and a third-party list's row opens read-only.",
+      steps: wikiListPages,
+    },
+    {
+      name: 'wiki from a session tab',
+      why: "gh on a session's Docs tab shows Docs mode and opens Main there, and leaves the session's tab as it was.",
+      steps: wikiFromSessionTab,
+    },
+    {
+      name: 'wiki narrow window',
+      why: "The doc's right column shows at a wide width and hides at a narrow one, with the tree still shown, so the article keeps its width.",
+      steps: wikiNarrowWindow,
+    },
+    {
+      name: 'wiki with no Main.md',
+      why: 'With Main.md gone the sidebar empties and gh shows the empty Main page, i creates the file from the starter text and edits it, and an outside write brings the shelves back. The group leaves All pages shown, with References and Third-party collapsed, for the groups after it.',
+      steps: wikiWithNoMain,
+    },
+    {
       name: 'doc editor',
-      why: "Docs mode shows and opens CLAUDE.md from a fresh index; the tree scrolls the doc beside it, and Enter on its row focuses the doc. The doc and its editor scroll by lines and half pages, the editor's cursor and a visual selection following the scroll, and Esc in normal mode closes the editor.",
+      why: "The tree opens CLAUDE.md and scrolls the doc beside it, and Enter on its row focuses the doc. The doc and its editor scroll by lines and half pages, the editor's cursor and a visual selection following the scroll, and Esc in normal mode closes the editor.",
       steps: docEditor,
     },
     {
@@ -753,13 +1069,15 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
 }
 
 // Paths, the status line and the filtered line end in an ellipsis; the field
-// table's box and the editor scroll themselves.
+// table's box and the editor scroll themselves. The side bar's handle holds its
+// resize prompt, hidden until hovered, past its box.
 const SCROLLS_ITSELF = [
   '.docs-path',
   '.docs-status',
   '.docs-filtered',
   '.docs-frontmatter-box',
   '.docs-editor',
+  '.shell-side-bar-handle',
 ];
 
 // Rewrites the fixture under `homeDir` with `options` and opens a session in
@@ -794,9 +1112,34 @@ export async function openDocsFixtureSession(
   return opened;
 }
 
+// The problem with the section editor's write, empty when the guide on disk
+// differs from the fixture's text only by the line the steps add.
+async function followSectionWrite(
+  files: Files,
+  homeDir: string,
+  paths: Paths,
+): Promise<string[]> {
+  const guide = paths.join(await files.realPath(homeDir), WIKI_GUIDE_FILE);
+  const deadline = Date.now() + SECTION_WRITE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const text = await files.read(guide).catch(() => WIKI_GUIDE_TEXT);
+    if (text !== WIKI_GUIDE_TEXT) {
+      const expected = WIKI_GUIDE_TEXT.replace(
+        '## Middle notes\n',
+        '## Middle notes\nadded\n',
+      );
+      return text === expected
+        ? []
+        : [`guide.md after the section write: ${text}`];
+    }
+    await new Promise((resolve) => setTimeout(resolve, SECTION_WRITE_POLL_MS));
+  }
+  return ['guide.md never changed'];
+}
+
 // Each run ends the previous run's docs session and opens a fresh one over a
-// rewritten fixture. The result is null once that chain has run, else the
-// error it failed with.
+// rewritten fixture. The result lists what was wrong with the fixture or with
+// the section editor's write, empty when nothing was.
 export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
   const { files, homeDir, sessions, paths } = deps;
   let previous: OwnedSession | null = null;
@@ -807,7 +1150,7 @@ export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
     open(run) {
       previous?.end();
       previous = null;
-      const result = (async (): Promise<string | null> => {
+      const result = (async (): Promise<string[]> => {
         try {
           previous = await openDocsFixtureSession(
             files,
@@ -816,15 +1159,14 @@ export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
             `docs-selftest-${run}`,
             paths,
           );
-          return null;
         } catch (error) {
-          return errorText(error);
+          return [`fixture not ready: ${errorText(error)}`];
         }
+        return followSectionWrite(files, homeDir, paths);
       })();
       return { shownLine: '[sessions] activated selftest-repo', result };
     },
     groups: docsGroups(paths, homeDir),
-    problems: (result) =>
-      result === null ? [] : [`fixture not ready: ${String(result)}`],
+    problems: (result) => result as string[],
   };
 }

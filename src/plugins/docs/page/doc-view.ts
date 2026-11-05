@@ -475,6 +475,19 @@ export function createDocView(deps: DocViewDeps): DocView {
   );
   const aside = element('div', 'docs-aside');
   aside.hidden = true;
+  // The narrow rule that takes the column out of sight is CSS alone.
+  let isAsideInSight = false;
+  const asideObserver = new ResizeObserver(() => {
+    if (aside.hidden) {
+      return;
+    }
+    const isInSight = aside.offsetWidth > 0;
+    if (isInSight !== isAsideInSight) {
+      isAsideInSight = isInSight;
+      deps.log(`right column ${isInSight ? 'in' : 'out of'} sight`);
+    }
+  });
+  asideObserver.observe(aside);
   const onThisPageSection = element('div', 'docs-aside-section');
   const linkedFromSection = element('div', 'docs-aside-section');
   const body = element('div', 'md docs-body');
@@ -1071,6 +1084,9 @@ export function createDocView(deps: DocViewDeps): DocView {
       path: doc.target.path,
       line: landedLine(line, fragment, doc.bodyStartLine),
     });
+    if (line !== null) {
+      deps.log(`moved within ${doc.name} to line ${line}`);
+    }
   };
 
   // Where `anchor` leads: a section link holds its target, any other its href.
@@ -1530,6 +1546,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       pane.scrollTop = topIn(pane, drawnEditorFrame.element);
     }
     startEditing(doc, editor);
+    deps.log(`editing section ${section.title} in ${doc.name}`);
   };
 
   // Opens the section the heading at `anchor` starts, in the body drawn now.
@@ -2086,6 +2103,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           () => bodyMount.dispose(),
           () => disposeSectionControls(),
           () => listPane.dispose(),
+          () => asideObserver.disconnect(),
           ...drawn.map((part) => () => part?.dispose()),
         ],
         (step) => step(),
