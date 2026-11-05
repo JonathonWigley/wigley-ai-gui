@@ -4,6 +4,7 @@ import type {
   SessionControl,
 } from '../../../contracts/agent';
 import type { KeyedSlotWriter, ListSlotWriter } from '../../../contracts/state';
+import { listWithPut } from '../../../shared/state/slot-store';
 import type {
   ChatSessionInfo,
   ChatSessionState,
@@ -61,16 +62,6 @@ function required<V>(value: V | undefined, slot: string, key: string): V {
     throw new Error(`${slot} holds no key ${key}`);
   }
   return value;
-}
-
-function withEntry(
-  entries: readonly ChatEntry[],
-  entry: ChatEntry,
-): ChatEntry[] {
-  const index = entries.findIndex(({ id }) => id === entry.id);
-  return index === -1
-    ? [...entries, entry]
-    : entries.map((held, at) => (at === index ? entry : held));
 }
 
 export function createChatSlots(writers: ChatSlotWriters): ChatSlots {
@@ -137,7 +128,7 @@ export function createChatSlots(writers: ChatSlotWriters): ChatSlots {
         entries,
         putEntry(entry) {
           if (detached !== null) {
-            detached.entries = withEntry(detached.entries, entry);
+            detached.entries = listWithPut(detached.entries, entry);
             return;
           }
           writers.entries.put(sessionId, entry);

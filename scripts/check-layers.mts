@@ -1,9 +1,9 @@
 // Fails when a source file (`.ts` or `.js`) imports across a layer boundary its
 // rules do not allow. The rules are CORE_LAYERS, written here, and each plugin's
 // entries, derived in `layer-rules.mts` from the plugin folders and each
-// manifest's `dependsOn` and `reads`, with PLUGIN_EXTRAS added. A file belongs to the layer
-// with the longest matching path; imports inside a file's own layer are always
-// allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
+// manifest's `dependsOn` and `reads`, with PLUGIN_EXTRAS added. A file belongs to
+// the layer with the longest matching path; imports inside a file's own layer are
+// always allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
 // `.test-support.ts` module of shared test cases) may also import the test
 // packages. An import is allowed when the imported file's own layer is listed
 // exactly: allowing `src/shared` does not admit `src/shared/page`. It also fails

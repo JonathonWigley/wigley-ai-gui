@@ -25,6 +25,10 @@ Core seams that most items below assume.
   mode, so view and interaction behaviours (the completion row's description, key hints and the like) ship as
   plugins the user switches on and off rather than settings inside the plugin they change. Builds on
   disposable registrations landed (plan-foundation-sweeps).
+- **Parts that follow at `core.pageReady` follow nothing after a part restart** — *needs a feature plan*: `core.pageReady`
+  fires once per page load, and about ten page parts subscribe inside it (`src/plugins/docs/page/start.ts` is one), so a
+  part restarted later never subscribes again. No path reaches this until a reload lands. To decide, with the reload
+  above: a catch-up for a part that starts after the page is ready, or subscribing at `start`.
 - **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
   (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (forms' on an
   unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Chat stops after
@@ -512,7 +516,7 @@ Duplication and drift with no user-visible defect.
   `.ui-input > input` in `src/shared/page/ui/input-frame.css`, or a class `textBoxInput` adds) and delete the five
   copies, checking each box's look in a drive capture.
 - **Sessions split picker rows through the sessions layout** — *agent-ready*: the split's "Show session" picker
-  (`openSplitPicker`, `src/plugins/sessions/page/start.ts`) passes no `drawRow` to `createListPicker`, so its rows do
+  (`openSplitPicker`, `src/plugins/sessions/page/start.ts`) passes no `drawRow` to the picker's `open`, so its rows do
   not draw through `sessions.layout`, against `docs/features/layouts/design.md`'s "a dialog follows its opener". Add a
   picker-row part to the sessions layout contract and `default` layout, as docs, chat, settings, notes and backlog
   do.
@@ -784,7 +788,9 @@ because the earlier items rewrite many of these tests anyway.
   (`src/plugins/sessions/main/session-list.ts`). A process the session host kept running and chat re-attached keeps
   the old id in its environment. Its first `/clear` hands off under the old row id and starts the new process under
   the new one. The pool then misses the handoff, and the claim falls back to the expiry rules
-  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id. To
+  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id when the
+  claim names one; a claim naming only its row (`holderRow`, `src/plugins/unity-pool/page/pool-view-model.ts`) loses the
+  badge. To
   decide: keep a row's app id across relaunch, or have `/clear` pass the old row id to the new process.
 - **Backlog `/` with no home open does nothing and leaves the letters as commands** — *agent-ready*: `openFilter` in
   `src/plugins/backlog/page/backlog-view.ts` returns silently when no home is open, so `backlog.filter` logs, no box
@@ -795,3 +801,16 @@ because the earlier items rewrite many of these tests anyway.
   nothing refocuses the box and the next keys go to the page until `i`. To decide: whether a cancelled step hands focus
   back to the box. Pre-existing since 80edb99c. Source session: Claude Code a65d02f6-eab9-453b-be96-34ac71d33876 in
   wigley-ai-gui.
+- **Agent-lines row overflows at the side bar's least width** — *agent-ready*: `npm run selftest -- --plugin agent-lines`,
+  group `working line`, fails `session-row holds 156px in 149px`: row content needs 156px at the side bar's 160px least
+  width, and the header breaks `Sessions` beside its hints. The same on the base of plan-commands-and-state.
+- **`[chat] session <id> closed (code 0)` after a session's close** — *needs a decision*: main's record of the turn it
+  ended logs after `[chat] session closed: <label>`, by id, since the row is gone. To decide: keep it as main's record, or
+  name the session from what main still holds.
+- **Each chat tab draws twice per page load** — *agent-ready*: each load logs `Chat tab shown` twice and mounts each
+  visual frame twice, the same on the base of plan-commands-and-state. By reading and log order, not confirmed:
+  `show-layouts.ts` always calls `setLayouts` on a first load, which runs sessions' `checkVisible(true)` and chat's rebuild
+  of the entries.
+- **A user layout logs `layout st shown` then `layout default shown`** — *needs a decision*: `layout-loader.ts` loads
+  `default` on every load and `show-layouts.ts` logs each one, though the user's layout draws. To decide: log only the
+  layout in use, or log the default as loaded.

@@ -449,7 +449,7 @@ interview on 2026-10-23; this file is the record of both.
   tool calls are refused, and a late hello for the old id is refused rather than adding a row. The new process's relay
   joins the same row by the new id. Chat's saved record (with nothing sent yet), the session's docs source
   (`sessions.hostSessionChanged` disposes it and adds it again, and the page's `followRows` `hostChanged` rebuilds a
-  Docs tab that has shown) and the notes page's session (`followRows` `hostChanged`) follow the new id, so a later
+  Docs tab that has shown) and the notes page's session (read from the row in `sessions.rows`) follow the new id, so a later
   resume reopens only the conversation after the clear; the earlier one stays in the past-sessions list. A resting row
   clears the same way, with no process to end, starting its fresh process; a start that fails leaves it resting under
   the new id. A clear for an unknown session, or after chat stops, logs `clear for unknown session <id> ignored` or

@@ -88,8 +88,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
-                 `command-router.ts`: the run, intercept and `onDidRun` chain each process builds its commands on,
-                 `runtime-commands.ts`: the commands and binds parts add while they run, as each process's catalog,
+                 `command-router.ts`: the run and intercept chain each process builds its commands on, over
+                 `command-registry.ts`, which holds `onDidRun`,
+                 `runtime-commands.ts`: the commands and binds parts add while they run, as each process's catalog, and a
+                 part's `commands.onDidRun`,
                  `keys-for.ts`: the keys that run a command, as help and hints read them)
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
@@ -133,8 +135,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot)), the reducer store, autosave,
                  editor boxes, the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
-                 events queue), and `layout-host/fake-layout-state.test-support.ts` (`noLayoutState`: the `kit.state` of a
-                 kit under test that reads no slot)
+                 events queue)
                  → imported only by src/renderer and plugins' page/ parts
     pane-tree/   the pane tree: panes as leaves of nested splits, kept as proportions (`pane-tree.ts`: split, close,
                  the pane toward a direction, focus, swap and nudge → pure), and its view (`pane-tree-view.ts`: a slot
@@ -273,7 +274,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
                  to visual, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
-  keys/          manifest.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
+  keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the placement check over the core's anchors), layouts/
                  (the keys Layout contract and the built-in `default` layout)
   gallery/       manifest.ts, main/ (registers the layouts only), page/ (Gallery mode: every primitive in every state,
@@ -374,8 +375,9 @@ round; primer: an open primer), since main, not the page, decides.
   values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
   writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
   `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
-  included, so the value outlives an owner's stop and a page reload, not an app restart; `sessions.activity` is the
-  one slot that clears itself at each page start, since its sources set their activities again. A new start publishes the
+  included, so the value outlives an owner's stop and a page reload, not an app restart. `sessions.activity` clears
+  itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
+  the first panes are placed. A new start publishes the
   same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
   reads a slot or hears an event lists its owner in the manifest's `reads`, which carries no start order. A value
   belongs in a slot and a moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`,
@@ -520,9 +522,9 @@ round; primer: an open primer), since main, not the page, decides.
   `TextEditor.insert`, keeping focus and the vim mode. A file's path comes from the Bridge's `pathForFile`; a file with
   none (a screenshot) is saved through `savePasted` first. What each surface makes of a file is
   `docs/features/file-drop/design.md`.
-- **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
-  `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no
-  bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
+- **Key hints** read the merged keymap. The core draws every hint in place. The `keys` plugin keeps which-key after a
+  pending prefix, help on `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), the `showHints` setting and
+  the placement check. The app has no bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
   (`docs/features/key-hints/design.md`).
   - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through
     `api.keys.anchor`, which returns a Disposable. The core (`src/renderer/key-anchors.ts`) draws the KeyPrompt
@@ -767,7 +769,7 @@ round; primer: an open primer), since main, not the page, decides.
   allow. A plugin's rules are derived in `scripts/layer-rules.mts` from the folder convention and its manifest's
   per-process `dependsOn` and `reads`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main` or
   `reads.main`, and its `page/` those in `dependsOn.page` or `reads.page`. Each plugin's `contract.ts` is a layer of its own, with `src/contracts` and the
-  contracts of the plugin's dependencies. `src/shared/paths` and `src/shared/followups` are allowed in every
+  contracts of the plugins it depends on or reads. `src/shared/paths` and `src/shared/followups` are allowed in every
   plugin root, `main/` and `page/`, and the four page kits (`src/shared/page` and its `ui`, `layout-host` and `file-drop`
   folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
   `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or

@@ -28,14 +28,17 @@ import { createListeners, type Listeners } from '../listeners';
 // harness share. `publish` takes the key's one live claim, throwing
 // `Slot "<id>" is held by a live part` while another writer holds it, and a slot's
 // value outlives its writer. A writer's change updates the slot, then runs `onWrite`,
-// then the listeners, so a listener that writes again sends its own change second;
-// a throw from `onWrite` leaves the slot updated and reaches the writer's caller.
-// `applyRemote` updates the slot and runs the listeners only, and `load` does
-// neither. `publish`, `load` and `applyRemote` create an absent slot, which is no
-// change. A delete of an absent key or list is no change either: nothing runs. Every
-// `set` on a value slot is a change, also with an equal value. A slot id used with
-// two kinds throws. Listeners are held by id apart from the slots, so one added
-// before the slot exists hears the first write.
+// then the listeners; a throw from `onWrite` leaves the slot updated, runs no
+// listener and reaches the writer's caller. `applyRemote` updates the slot and runs
+// the listeners only, and `load` does neither. A write from inside a listener updates
+// its slot and runs `onWrite` at once, and its listeners wait for every listener of
+// the change before it, on any slot: each listener hears the changes in the order
+// they were made. One added while a change waits its turn hears that change.
+// `publish`, `load` and `applyRemote` create an absent slot, which is no change. A
+// delete of an absent key or list is no change either: nothing runs. Every `set` on a
+// value slot is a change, also with an equal value. `publish` and `applyRemote` throw
+// for an id held as another kind. Listeners are held by id apart from the slots, so
+// one added before the slot exists hears the first write.
 // `isHeld` is whether a live writer holds the id. `readById` follows the rule on
 // `LayoutSlotReader`.
 export interface SlotStore {
@@ -102,17 +105,24 @@ function snapshotOfSlot(slot: Slot): SlotSnapshot {
     : { kind: 'list', entries: [...slot.entries] };
 }
 
+// A new list with `item` in place of the item holding its id, else appended.
+export function listWithPut<V extends ListItem>(
+  items: readonly V[],
+  item: V,
+): V[] {
+  const index = items.findIndex(({ id }) => id === item.id);
+  return index === -1
+    ? [...items, item]
+    : items.map((held, at) => (at === index ? item : held));
+}
+
 function listWithChange(
   items: readonly ListItem[],
   change: Exclude<ListSlotChange<ListItem>, { kind: 'delete' }>,
 ): readonly ListItem[] {
-  if (change.kind === 'replace') {
-    return [...change.items];
-  }
-  const index = items.findIndex(({ id }) => id === change.item.id);
-  return index === -1
-    ? [...items, change.item]
-    : items.map((item, at) => (at === index ? change.item : item));
+  return change.kind === 'replace'
+    ? [...change.items]
+    : listWithPut(items, change.item);
 }
 
 // Applies `change` to `slot`, which is of the change's kind; false when it changed
@@ -176,8 +186,27 @@ export function createSlotStore(log: Log): SlotStore {
     return existing;
   };
 
+  // Changes whose listeners have not run, oldest first.
+  const untold: SlotChange[] = [];
+  let isTelling = false;
+
   const tellListeners = (change: SlotChange) => {
-    listenersById.get(change.id)?.tell(listenerArguments(change));
+    untold.push(change);
+    if (isTelling) {
+      return;
+    }
+    isTelling = true;
+    try {
+      for (
+        let next = untold.shift();
+        next !== undefined;
+        next = untold.shift()
+      ) {
+        listenersById.get(next.id)?.tell(listenerArguments(next));
+      }
+    } finally {
+      isTelling = false;
+    }
   };
 
   const on = (

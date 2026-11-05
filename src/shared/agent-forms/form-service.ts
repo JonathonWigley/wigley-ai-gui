@@ -21,6 +21,8 @@ export interface AgentFormServiceDeps<Form, Body, Payload> {
   wake: AgentFormWake;
   // Reads the soft deadline when the host names none, once per session.
   defaultDeadlineSeconds(): number;
+  // A plugin's timers cap a long delay at the longest a timer takes, and its stop
+  // clears them with no wake, so its part ends each session before they clear.
   timers: Timers;
 }
 

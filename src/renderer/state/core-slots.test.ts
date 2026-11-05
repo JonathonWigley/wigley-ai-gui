@@ -62,7 +62,7 @@ describe('startPageCoreSlots', () => {
       slot: 'mode' as const,
       expected: 'p.browse',
     },
-  ])('scopeChange_WritesScopeSlot: $change', ({ act, slot, expected }) => {
+  ])('changeAfterStart_WritesItsSlot: $change', ({ act, slot, expected }) => {
     const started = startSlots();
 
     act(started);
@@ -77,7 +77,7 @@ describe('startPageCoreSlots', () => {
       name: 'dawn',
       writes: [{ id: 'core.theme', kind: 'value', value: 'dawn' }],
     },
-  ])('themeApplied_SameName_WritesNothing: $row', ({ name, writes }) => {
+  ])('themeApplied_WritesOnlyANewName: $row', ({ name, writes }) => {
     const { store, slots } = startSlots();
     const written: unknown[] = [];
     store.onWrite((change) => written.push(change));

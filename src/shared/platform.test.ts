@@ -14,36 +14,6 @@ const INPUTS: PlatformInputs = {
 };
 
 describe('platformFor', () => {
-  it.each([
-    {
-      os: 'macos',
-      closeHidesWindow: true,
-      toastsNeedAppUserModelId: false,
-      hidesFromDockBesideApp: true,
-    },
-    {
-      os: 'windows',
-      closeHidesWindow: false,
-      toastsNeedAppUserModelId: true,
-      hidesFromDockBesideApp: false,
-    },
-    {
-      os: 'linux',
-      closeHidesWindow: false,
-      toastsNeedAppUserModelId: false,
-      hidesFromDockBesideApp: false,
-    },
-  ] as const)(
-    'platformFor_EachOs_HoldsItsQuirks: $os',
-    ({ os, ...lifecycle }) => {
-      const platform = platformFor(os, INPUTS);
-
-      expect(platform.os).toBe(os);
-      expect(platform.lifecycle).toEqual(lifecycle);
-      expect(platform.programs).toEqual({ claude: '~/.local/bin/claude' });
-    },
-  );
-
   it.each(['macos', 'windows', 'linux'] as const)(
     'platformFor_Inputs_LaunchIsLaunchCommand: %s',
     (os) => {

@@ -273,74 +273,46 @@ describe('pluginLayers reads', () => {
   );
 });
 
-describe('readReads', () => {
+describe.each([
+  { member: 'dependsOn', read: readDependsOn },
+  { member: 'reads', read: readReads },
+])('$member reader', ({ member, read }) => {
   const FILE = 'src/plugins/notes/manifest.ts';
-  const manifest = (reads: string): string =>
-    `export const m = definePlugin({ id: 'notes', ${reads}, commands: {} });`;
+  const manifest = (property: string): string =>
+    `export const m = definePlugin({ id: 'notes', ${property}, commands: {} });`;
 
   it.each([
-    { case: 'Literal', value: "reads: { main: ['chat'], page: [] }" },
-    { case: 'AsConst', value: "reads: { main: ['chat'], page: [] } as const" },
-  ])('readReads_$case', ({ value }) => {
-    expect(readReads(FILE, manifest(value))).toEqual({
+    { case: 'Literal', lists: "{ main: ['chat'], page: [] }" },
+    { case: 'AsConst', lists: "{ main: ['chat'], page: [] } as const" },
+    { case: 'ArrayAsConst', lists: "{ main: ['chat'] as const, page: [] }" },
+  ])('read_$case', ({ lists }) => {
+    expect(read(FILE, manifest(`${member}: ${lists}`))).toEqual({
       main: ['chat'],
       page: [],
     });
   });
 
   it.each([
-    { case: 'Identifier', value: 'reads: LISTS' },
-    { case: 'NoPage', value: "reads: { main: ['chat'] }" },
-    { case: 'Absent', value: "label: 'notes'" },
-  ])('readReads_$case', ({ value }) => {
-    expect(() => readReads(FILE, manifest(value))).toThrow(
-      `${FILE}: reads must be an object literal with main and page arrays of string literals`,
-    );
-  });
-});
-
-describe('readDependsOn', () => {
-  const FILE = 'src/plugins/notes/manifest.ts';
-  const manifest = (dependsOn: string): string =>
-    `export const m = definePlugin({ id: 'notes', ${dependsOn}, commands: {} });`;
-  const MUST_BE_LITERAL = `${FILE}: dependsOn must be an object literal with main and page arrays of string literals`;
-
-  it.each([
-    { case: 'Literal', value: "dependsOn: { main: ['chat'], page: [] }" },
-    {
-      case: 'AsConst',
-      value: "dependsOn: { main: ['chat'], page: [] } as const",
-    },
-    {
-      case: 'ArrayAsConst',
-      value: "dependsOn: { main: ['chat'] as const, page: [] }",
-    },
-  ])('readDependsOn_$case', ({ value }) => {
-    expect(readDependsOn(FILE, manifest(value))).toEqual({
-      main: ['chat'],
-      page: [],
-    });
-  });
-
-  it.each([
-    { case: 'Identifier', value: 'dependsOn: DEPS' },
-    { case: 'FlatArray', value: "dependsOn: ['chat']" },
-    { case: 'Spread', value: 'dependsOn: { main: [...SHARED], page: [] }' },
+    { case: 'Identifier', property: `${member}: LISTS` },
+    { case: 'FlatArray', property: `${member}: ['chat']` },
+    { case: 'Spread', property: `${member}: { main: [...SHARED], page: [] }` },
     {
       case: 'SpreadProperty',
-      value: "dependsOn: { ...SHARED, main: ['chat'], page: [] }",
+      property: `${member}: { ...SHARED, main: ['chat'], page: [] }`,
     },
-    { case: 'NoPage', value: "dependsOn: { main: ['chat'] }" },
-    { case: 'Absent', value: "label: 'notes'" },
-  ])('readDependsOn_$case', ({ value }) => {
-    expect(() => readDependsOn(FILE, manifest(value))).toThrow(MUST_BE_LITERAL);
+    { case: 'NoPage', property: `${member}: { main: ['chat'] }` },
+    { case: 'Absent', property: "label: 'notes'" },
+  ])('read_$case', ({ property }) => {
+    expect(() => read(FILE, manifest(property))).toThrow(
+      `${FILE}: ${member} must be an object literal with main and page arrays of string literals`,
+    );
   });
 
   it.each([
     { case: 'NoDefinePlugin', source: 'export const m = {}' },
     { case: 'ArgumentNotALiteral', source: 'export const m = definePlugin(x)' },
-  ])('readDependsOn_$case', ({ source }) => {
-    expect(() => readDependsOn(FILE, source)).toThrow(
+  ])('read_$case', ({ source }) => {
+    expect(() => read(FILE, source)).toThrow(
       `${FILE}: no definePlugin({ … }) call`,
     );
   });

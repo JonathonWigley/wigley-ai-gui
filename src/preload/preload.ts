@@ -15,6 +15,17 @@ function mainErrorText(error: unknown): string {
   return errorText(error).replace(REMOTE_ERROR_PREFIX, '');
 }
 
+async function invokeMain<Result>(
+  channel: string,
+  ...args: readonly unknown[]
+): Promise<Result> {
+  try {
+    return (await ipcRenderer.invoke(channel, ...args)) as Result;
+  } catch (error) {
+    throw new Error(mainErrorText(error));
+  }
+}
+
 const stateChanges = createListeners<{ seq: number; change: SlotChange }>();
 ipcRenderer.on(
   BRIDGE_CHANNELS.stateChanged,
@@ -55,11 +66,7 @@ const bridge: Bridge = {
   onStateChange: (listener) =>
     stateChanges.add(({ seq, change }) => listener(seq, change)),
   runCommand: async (id, arg) => {
-    try {
-      await ipcRenderer.invoke(BRIDGE_CHANNELS.commandRun, id, arg);
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
+    await invokeMain(BRIDGE_CHANNELS.commandRun, id, arg);
   },
   onRunCommand: (listener) => {
     ipcRenderer.on(
@@ -73,18 +80,8 @@ const bridge: Bridge = {
       },
     );
   },
-  invoke: async (pluginId, method, args) => {
-    try {
-      return await ipcRenderer.invoke(
-        BRIDGE_CHANNELS.pluginInvoke,
-        pluginId,
-        method,
-        args,
-      );
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
-  },
+  invoke: (pluginId, method, args) =>
+    invokeMain(BRIDGE_CHANNELS.pluginInvoke, pluginId, method, args),
   onMessage: createPluginMessageSubscribe((deliver) => {
     ipcRenderer.on(
       BRIDGE_CHANNELS.pluginMessage,
@@ -93,30 +90,11 @@ const bridge: Bridge = {
     );
   }),
   pathForFile: (file) => webUtils.getPathForFile(file),
-  savePasted: async (bytes, mediaType) => {
-    try {
-      return await ipcRenderer.invoke(
-        BRIDGE_CHANNELS.savePasted,
-        bytes,
-        mediaType,
-      );
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
-  },
-  chooseFolder: async () => {
-    try {
-      return await ipcRenderer.invoke(BRIDGE_CHANNELS.chooseFolder);
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
-  },
+  savePasted: (bytes, mediaType) =>
+    invokeMain(BRIDGE_CHANNELS.savePasted, bytes, mediaType),
+  chooseFolder: () => invokeMain(BRIDGE_CHANNELS.chooseFolder),
   openExternal: async (url) => {
-    try {
-      await ipcRenderer.invoke(BRIDGE_CHANNELS.openExternal, url);
-    } catch (error) {
-      throw new Error(mainErrorText(error));
-    }
+    await invokeMain(BRIDGE_CHANNELS.openExternal, url);
   },
 };
 

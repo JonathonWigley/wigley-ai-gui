@@ -5,6 +5,7 @@ import type {
   ListSlotKey,
   SlotChange,
   SlotKey,
+  SlotWriter,
 } from '../../contracts/state';
 import { createSlotStore, pluginState, type SlotStore } from './slot-store';
 
@@ -125,18 +126,15 @@ describe('list slots', () => {
       act: (writer) => writer.delete('z'),
       expected: [A1, B2],
     },
-  ])(
-    'listPut_ExistingAndNewIds_ReplacesInPlaceOrAppends: $case',
-    ({ act, expected }) => {
-      const writer = publishList();
-      writer.replace('s', [A1, B2]);
+  ])('listChange_ByKind_LeavesTheItems: $case', ({ act, expected }) => {
+    const writer = publishList();
+    writer.replace('s', [A1, B2]);
 
-      act(writer);
+    act(writer);
 
-      expect(writer.get('s')).toEqual(expected);
-      expect(writer.get('absent')).toEqual([]);
-    },
-  );
+    expect(writer.get('s')).toEqual(expected);
+    expect(writer.get('absent')).toEqual([]);
+  });
 
   it('listPut_HeldArray_DoesNotChange', () => {
     const writer = publishList();
@@ -233,20 +231,77 @@ describe('changes', () => {
     expect(heard).toEqual([2]);
   });
 
-  it('write_ListenerWritesAgain_OnWriteSeesWritesInOrder', () => {
+  it.each<{
+    case: string;
+    change(store: SlotStore, writer: SlotWriter<number>): void;
+    expected: string[];
+  }>([
+    {
+      case: 'a writer',
+      change: (_store, writer) => writer.set(1),
+      expected: ['sent 1', 'L1 1', 'sent 2', 'L2 1', 'L1 2', 'L2 2'],
+    },
+    {
+      case: 'applyRemote',
+      change: (store) =>
+        store.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
+      expected: ['L1 1', 'sent 2', 'L2 1', 'L1 2', 'L2 2'],
+    },
+  ])(
+    'change_ListenerWritesAgain_OnWriteAtOnceAndListenersHearInOrder: $case',
+    ({ change, expected }) => {
+      const { store } = storeWithLogs();
+      const order: string[] = [];
+      store.onWrite((write) =>
+        order.push(`sent ${String((write as { value: unknown }).value)}`),
+      );
+      const writer = store.publish(valueKey);
+      store.read(valueKey, 'first').on((value) => {
+        order.push(`L1 ${String(value)}`);
+        if (value === 1) {
+          writer.set(2);
+        }
+      });
+      store
+        .read(valueKey, 'second')
+        .on((value) => order.push(`L2 ${String(value)}`));
+
+      change(store, writer);
+
+      expect(order).toEqual(expected);
+    },
+  );
+
+  it('write_ListenerWritesAnotherSlot_ItsListenersHearAfterThisChange', () => {
     const { store } = storeWithLogs();
-    const sent: unknown[] = [];
-    store.onWrite((change) => sent.push((change as { value: unknown }).value));
     const writer = store.publish(valueKey);
-    store.read(valueKey, 'q').on((value) => {
-      if (value === 1) {
-        writer.set(2);
-      }
+    const keyed = store.publish(keyedKey);
+    const heard: string[] = [];
+    store.read(valueKey, 'first').on(() => {
+      heard.push('value first');
+      keyed.set('a', 1);
     });
+    store.read(keyedKey, 'keyed').on(() => heard.push('keyed'));
+    store.read(valueKey, 'second').on(() => heard.push('value second'));
 
     writer.set(1);
 
-    expect(sent).toEqual([1, 2]);
+    expect(heard).toEqual(['value first', 'value second', 'keyed']);
+  });
+
+  it('write_OnWriteThrows_SlotUpdatedAndCallerHearsIt', () => {
+    const { store } = storeWithLogs();
+    const writer = store.publish(valueKey);
+    const heard: unknown[] = [];
+    store.read(valueKey, 'q').on((value) => heard.push(value));
+    store.onWrite(() => {
+      throw new Error('no page');
+    });
+
+    expect(() => writer.set(1)).toThrow('no page');
+
+    expect(writer.get()).toBe(1);
+    expect(heard).toEqual([]);
   });
 
   it('applyRemote_TellsListenersAndNotOnWrite', () => {
@@ -365,7 +420,7 @@ describe('readById', () => {
     { case: 'list unwritten', id: 'p.empty', key: 'absent', expected: [] },
     { case: 'no slot get()', id: 'p.none', expected: undefined },
     { case: 'no slot get(key)', id: 'p.none', key: 'k', expected: undefined },
-  ])('readById_ByKind_GetAndOnArguments: $case', ({ id, key, expected }) => {
+  ])('readById_ByKind_Get: $case', ({ id, key, expected }) => {
     expect(filled().readById(id, 'q').get(key)).toEqual(expected);
   });
 

@@ -7,7 +7,7 @@
 - **Shell and areas** — the permanent areas and who fills them.
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
-- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
+- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 
@@ -188,8 +188,8 @@ and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds
   nobody has measured, and they can come later behind the same slot.
 - **A slot outlives its owner's stop.** The next start publishes the same key, reads the last value and rebuilds from it.
   A key another live part holds throws, and a page load releases the previous page's claims. A disabled or never-started
-  owner reads undefined. `sessions.activity` is the one slot that clears itself at a page start, since each source sets its
-  activity again. Clearing a slot for a plugin switched off live falls to Wave 4.
+  owner reads undefined. `sessions.activity` clears itself at a page start, since each source sets its activity again, and
+  `sessions.active` goes back to null until the first panes are placed. Clearing a slot for a plugin switched off live falls to Wave 4.
 - **Soft reads.** A manifest's `reads` list allows a slot read, or hearing an event, with the contract import and no
   start order. `dependsOn` stays for exports and for needing the other plugin started first.
 - **Forms' and primer's rounds stay on their channels.** Their owners' state is mostly live `ask_round` calls, so a slot

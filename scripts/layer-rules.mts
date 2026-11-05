@@ -1,7 +1,7 @@
 // The plugin layer rules `check-layers.mts` enforces: each plugin's entries,
 // derived from the plugin folder convention and its manifest's `dependsOn` and
-// `reads`, and the check of the composition roots. Pure functions over folder facts and
-// source text, so the rules are tested without walking `src/`.
+// `reads`, and the check of the composition roots. Pure functions over folder
+// facts and source text, so the rules are tested without walking `src/`.
 import ts from 'typescript';
 
 export interface LayerRule {
@@ -266,8 +266,8 @@ function folderEntries(
 }
 
 // Every plugin entry and the entries of src/plugins/main.ts, page.ts and
-// manifests.ts. Throws at the first dependency or extras key that names no
-// folder, and at an extra for a part its folder lacks.
+// manifests.ts. Throws at the first `dependsOn` name, `reads` name or extras key
+// that names no folder, and at an extra for a part its folder lacks.
 export function pluginLayers(
   folders: readonly PluginFolder[],
   extras: Readonly<Record<string, PluginExtra>>,

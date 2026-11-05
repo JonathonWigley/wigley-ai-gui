@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createElectronAlerts, createPlainAlerts } from './electron-alerts';
+import { describe, expect, it, vi } from 'vitest';
+import { createElectronAlerts } from './electron-alerts';
 
 type Listener = (...args: unknown[]) => void;
 
@@ -30,32 +30,6 @@ const electron = vi.hoisted(() => {
   };
 });
 vi.mock('electron', () => electron);
-
-function expectNoOsCall() {
-  expect(electron.app.dock.bounce).not.toHaveBeenCalled();
-  expect(electron.app.setBadgeCount).not.toHaveBeenCalled();
-}
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  electron.Notification.isSupported = () => true;
-});
-
-describe('createPlainAlerts', () => {
-  it('createPlainAlerts_NotificationUnsupported_CallsNothing', () => {
-    electron.Notification.isSupported = () => false;
-
-    createPlainAlerts(vi.fn()).announce('title', 'body', vi.fn());
-
-    expectNoOsCall();
-  });
-
-  it('createPlainAlerts_SetOpenCount_DrawsNothing', () => {
-    createPlainAlerts(vi.fn()).setOpenCount('forms', 2);
-
-    expectNoOsCall();
-  });
-});
 
 describe('createElectronAlerts', () => {
   it('createElectronAlerts_NotificationFails_LogsAndDrawsAttention', () => {

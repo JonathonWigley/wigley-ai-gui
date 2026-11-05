@@ -643,7 +643,7 @@ export interface KeyHints {
 // `scope` or with no scope during this page load.
 // `settings` reads the plugin's settings as the user config now sets them, and
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
-// `platform` is the OS the app runs on, fixed for the page load.
+// `platform` is the record of the OS the app runs on, fixed for the page load.
 // `modes.add` qualifies the mode's id by the plugin (`browse` in plugin `p`
 // is `p.browse`), and `modes.shown` and `coreModeSlot` read qualified ids.
 // `shell.setLayout` places the shell's areas by `layout` in place of the one
@@ -851,7 +851,8 @@ export interface DriveHost {
 // `runMode` is how the app was started. `selfTest` is the plugin's own
 // self-test host, null outside the self-test. `log` logs under the plugin's
 // id, called as `log(message)`.
-// `timers` runs one-shot timers, the `Timers` seam the page shares.
+// `timers` runs one-shot timers, the `Timers` seam the page shares, and caps a
+// delay at the longest a timer takes.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `paths` handles full paths by the rules of the OS main runs on, and
 // `platform` is the record of that OS, picked by the composition root.
