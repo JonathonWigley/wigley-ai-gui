@@ -239,6 +239,7 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 ### Contract changes
 - EditorHost gains takesChordKey (04bc4ebf as takesKey, renamed 61684b5d): consumers src/renderer/page-keys.ts and five fakes
 - CreatePlace loses owner, FuzzyMatcher.rank keeps input-order ties after a byLengthAsc detour, AgentProcessEvents.commands aliases hold a plugin command's name after its colon, CompletionRowDraw row cut to one line and cleared after a declining draw (61684b5d)
+- A Claude plugin:name command holds its bare name only when no other record answers to it (4eac62f5), superseding the plan's wording
 ### Rulings
 - sameNames replaced by the existing isSameJson — compares all four fields with no new helper — a reordered alias list sends one extra message · group 02 · group 02
 - commandRecordsOf drops an item with no string name — an empty name would draw a blank row — a nameless item goes missing, none measured · group 02 · group 02
@@ -269,6 +270,7 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - Supersedes earlier lines: self-test filters are neat.md and style.md, not rulesneat; an exact init name beats an alias; the description is a dim column by label min-width; task 07 captures named in /tmp reports 07-1, 07-fix-1 and review-fix-1 · lead
 ### Review rounds
 - Round 1, seven commits at 1ae7d7fc, lanes correctness x3 and plan-and-design x2: NEEDS FIXES, 25 findings, 0 critical, 7 important; every item took its recommended pick per AGENTS.md § Review; applied in 61684b5d; 23 and 24 left, 25 follow-up
+- Re-review of 61684b5d: NEEDS FIXES, 1 important (repeat of 12: the derived alias tied with the real holder), 2 minor; 21 of 22 fixed findings closed; applied in 4eac62f5. Follow-up: chat picker focus after Escape, pre-existing since 80edb99c
 ### Test gate
 - Picks: typecheck, lint, npm test, and the touched plugins' self-test groups (chat, settings, docs, backlog, notes, sessions, agent-lines), since AGENTS.md keeps the whole self-test for the user's ask in that turn · typecheck 0, lint 0, npm test 463 files 8309 pass; self-test 582 PASS, 1 FAIL (Escape␣zla fits the held width: session-row 156px in 149px), no page reload lines; the failure sits in the Sessions row layout, which this run's commits do not touch
 - After task 07's fixes (04bc4ebf), in the worktree: typecheck 0, lint 0, npm test 8366 pass; self-test chat, docs, notes, settings, backlog, forms, primer 816 PASS, 0 FAIL, no page reload lines; forms and primer added because page-keys changed
