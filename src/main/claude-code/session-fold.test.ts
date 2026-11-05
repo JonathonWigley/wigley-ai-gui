@@ -7,6 +7,7 @@ import {
   createSessionFoldState,
   type FoldEffect,
   foldPipeLine,
+  foldProcessClosed,
   foldUsageInput,
   replayPipeLog,
   type SessionFoldState,
@@ -117,6 +118,20 @@ const messageStart = (id: string) =>
     type: 'message_start',
     message: { id, type: 'message', role: 'assistant', content: [] },
   });
+const SUBAGENT_START = {
+  ...messageStart('sub-1'),
+  parent_tool_use_id: 'call-1',
+};
+const requesting = (
+  uuids: string[],
+  parentToolUseId: string | null = null,
+) => ({
+  type: 'system',
+  subtype: 'status',
+  status: 'requesting',
+  user_message_uuids: uuids,
+  parent_tool_use_id: parentToolUseId,
+});
 const textStart = streamLine({
   type: 'content_block_start',
   index: 0,
@@ -175,6 +190,12 @@ function snapshot(state: SessionFoldState) {
 }
 
 const SEND_U1 = inLine(send('hi', 'u1'), 500);
+
+const STARTED_U1 = [
+  SEND_U1,
+  outLine(lifecycleInit, 600),
+  outLine(lifecycle('u1', 'started'), 700),
+];
 
 const COMPACTING = { type: 'system', subtype: 'status', status: 'compacting' };
 const BOUNDARY = {
@@ -828,14 +849,221 @@ describe('session-fold', () => {
     expect(state.graceDeadline).toBe(deadlineAfter);
   });
 
+  it.each<{
+    case: string;
+    lines: PipeLine[];
+    closesProcess?: boolean;
+    deliveries: Record<string, string | null>;
+  }>([
+    {
+      case: 'started',
+      lines: [...STARTED_U1],
+      deliveries: { 'user-1': 'sent' },
+    },
+    {
+      case: 'requested and responded',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
+      ],
+      deliveries: { 'user-1': 'received' },
+    },
+    {
+      case: 'a response with no request',
+      lines: [...STARTED_U1, outLine(messageStart('m1'))],
+      deliveries: { 'user-1': 'sent' },
+    },
+    {
+      case: 'a response to a request naming another message',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u0'])),
+        outLine(messageStart('m1')),
+      ],
+      deliveries: { 'user-1': 'sent' },
+    },
+    {
+      case: 'a subagent response',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(SUBAGENT_START),
+      ],
+      deliveries: { 'user-1': 'sent' },
+    },
+    {
+      case: 'a subagent request',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'], 'call-1')),
+        outLine(messageStart('m1')),
+      ],
+      deliveries: { 'user-1': 'sent' },
+    },
+    {
+      case: 'a folded message before its own request',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
+        inLine(send('two', 'u2')),
+        outLine(lifecycle('u2', 'started')),
+        outLine(messageStart('m2')),
+      ],
+      deliveries: { 'user-1': 'received', 'user-2': 'sent' },
+    },
+    {
+      case: 'a folded message at its own request',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
+        inLine(send('two', 'u2')),
+        outLine(lifecycle('u2', 'started')),
+        outLine(requesting(['u1', 'u2'])),
+        outLine(messageStart('m2')),
+      ],
+      deliveries: { 'user-1': 'received', 'user-2': 'received' },
+    },
+    {
+      case: 'plain text ending with no response',
+      lines: [...STARTED_U1, outLine(lifecycle('u1', 'cancelled'))],
+      deliveries: { 'user-1': 'notReceived' },
+    },
+    {
+      case: 'a requested message ending with no response',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(lifecycle('u1', 'discarded')),
+      ],
+      deliveries: { 'user-1': 'notReceived' },
+    },
+    {
+      case: 'a slash command ending with no response',
+      lines: [
+        inLine(send('/status', 'u1')),
+        outLine(lifecycleInit),
+        outLine(lifecycle('u1', 'started')),
+        outLine(lifecycle('u1', 'completed')),
+      ],
+      deliveries: { 'user-1': null },
+    },
+    {
+      case: 'another message ending',
+      lines: [
+        ...STARTED_U1,
+        inLine(send('two', 'u2')),
+        outLine(lifecycle('u2', 'started')),
+        outLine(lifecycle('u2', 'refused')),
+      ],
+      deliveries: { 'user-1': 'sent', 'user-2': 'notReceived' },
+    },
+    {
+      case: 'received, then completed',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
+        outLine(lifecycle('u1', 'completed')),
+      ],
+      deliveries: { 'user-1': 'received' },
+    },
+    {
+      case: 'the process closing',
+      lines: [...STARTED_U1],
+      closesProcess: true,
+      deliveries: { 'user-1': 'notReceived' },
+    },
+    {
+      case: 'the process closing after received',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
+      ],
+      closesProcess: true,
+      deliveries: { 'user-1': 'received' },
+    },
+    {
+      case: 'fallback mode',
+      lines: [
+        outLine(plainInit),
+        inLine(send('hi', 'u1')),
+        outLine(lifecycle('u1', 'started')),
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
+        outLine(lifecycle('u1', 'completed')),
+      ],
+      closesProcess: true,
+      deliveries: { 'user-1': null },
+    },
+    {
+      case: 'held, then ending without started',
+      lines: [
+        inLine(send('hi', 'u1')),
+        outLine(lifecycleInit),
+        outLine(lifecycle('u1', 'cancelled')),
+      ],
+      closesProcess: true,
+      deliveries: {},
+    },
+  ])('fold_Delivery ($case)', ({ lines, closesProcess, deliveries }) => {
+    const state = createSessionFoldState(request);
+    const effects = lines.flatMap((line) => foldPipeLine(state, line).effects);
+    if (closesProcess === true) {
+      effects.push(...foldProcessClosed(state, 9000).effects);
+    }
+
+    const finalDeliveries = effects.flatMap((effect) =>
+      effect.kind === 'entry' && effect.entry.kind === 'user'
+        ? [[effect.entry.id, effect.entry.delivery]]
+        : [],
+    );
+    expect(Object.fromEntries(finalDeliveries)).toEqual(deliveries);
+  });
+
+  it('foldPipeLine_ReceivedEntry_KeepsItsAtAddsNoEventsThenStaysFinal', () => {
+    const state = foldedState([
+      inLine(send('/skill arg', 'u1'), 500),
+      outLine(lifecycleInit, 600),
+      outLine(lifecycle('u1', 'started'), 700),
+      outLine(requesting(['u1']), 800),
+    ]);
+
+    const received = foldPipeLine(state, outLine(messageStart('m1'), 900));
+
+    expect(received.effects).toEqual([
+      {
+        kind: 'entry',
+        entry: expect.objectContaining({
+          id: 'user-1',
+          at: 700,
+          delivery: 'received',
+        }),
+      },
+    ]);
+    const completed = foldPipeLine(
+      state,
+      outLine(lifecycle('u1', 'completed'), 1000),
+    );
+    const userEntries = completed.effects.filter(
+      (effect) => effect.kind === 'entry' && effect.entry.kind === 'user',
+    );
+    expect(userEntries).toEqual([]);
+  });
+
   it('replayPipeLog_Emissions_CollapsedAndFiltered', () => {
     const messages: (object | string)[] = [
+      lifecycle('u1', 'started'),
       {
         type: 'system',
         subtype: 'init',
         capabilities: ['msg_lifecycle_v1'],
         slash_commands: ['/compact'],
       },
+      requesting(['u1']),
       messageStart('m1'),
       textStart,
       textDelta('a'),
@@ -843,6 +1071,7 @@ describe('session-fold', () => {
       textDelta('c'),
       RATE_LIMIT_LINE,
       successResult('ok'),
+      lifecycle('u1', 'completed'),
       {
         type: 'control_request',
         request_id: 'r-1',
@@ -850,6 +1079,7 @@ describe('session-fold', () => {
       },
     ];
     const log = [
+      inLine(send('hi', 'u1'), 500),
       ...messages.map((message, index) => outLine(message, 1000 * (index + 1))),
       pipeLine('err', 'warn', 1000 * (messages.length + 1)),
     ];
@@ -863,7 +1093,7 @@ describe('session-fold', () => {
 
     expect(effects[0]).toEqual({
       kind: 'agentEvent',
-      event: { type: 'sessionStarted', at: 1000 },
+      event: { type: 'sessionStarted', at: 500 },
     });
     const assistant = effects.flatMap((effect) =>
       effect.kind === 'entry' && effect.entry.kind === 'assistant'
@@ -871,7 +1101,15 @@ describe('session-fold', () => {
         : [],
     );
     expect(assistant).toEqual([
-      expect.objectContaining({ text: 'abc', at: 3000 }),
+      expect.objectContaining({ text: 'abc', at: 5000 }),
+    ]);
+    const user = effects.flatMap((effect) =>
+      effect.kind === 'entry' && effect.entry.kind === 'user'
+        ? [effect.entry]
+        : [],
+    );
+    expect(user).toEqual([
+      expect.objectContaining({ id: 'user-1', at: 1000, delivery: 'received' }),
     ]);
     const kinds = effects.map((effect) => effect.kind);
     for (const dropped of [

@@ -321,6 +321,78 @@ const TURN_STARTED = { type: 'turnStarted' };
 const TURN_ENDED = { type: 'turnEnded' };
 
 describe('createStreamDecoder', () => {
+  it.each<{
+    case: string;
+    event: object;
+    requestedMessages: string[];
+    responseStarted: boolean;
+  }>([
+    {
+      case: 'main requesting',
+      event: {
+        type: 'system',
+        subtype: 'status',
+        status: 'requesting',
+        user_message_uuids: ['u1', 'u2'],
+        parent_tool_use_id: null,
+      },
+      requestedMessages: ['u1', 'u2'],
+      responseStarted: false,
+    },
+    {
+      case: 'subagent requesting',
+      event: {
+        type: 'system',
+        subtype: 'status',
+        status: 'requesting',
+        user_message_uuids: ['u1', 'u2'],
+        parent_tool_use_id: 'call-1',
+      },
+      requestedMessages: [],
+      responseStarted: false,
+    },
+    {
+      case: 'another status',
+      event: {
+        type: 'system',
+        subtype: 'status',
+        status: 'compacting',
+        user_message_uuids: ['u1', 'u2'],
+        parent_tool_use_id: null,
+      },
+      requestedMessages: [],
+      responseStarted: false,
+    },
+    {
+      case: 'main message_start',
+      event: {
+        type: 'stream_event',
+        event: { type: 'message_start', message: { id: 'm1' } },
+        parent_tool_use_id: null,
+      },
+      requestedMessages: [],
+      responseStarted: true,
+    },
+    {
+      case: 'subagent message_start',
+      event: {
+        type: 'stream_event',
+        event: { type: 'message_start', message: { id: 'm1' } },
+        parent_tool_use_id: 'call-1',
+      },
+      requestedMessages: [],
+      responseStarted: false,
+    },
+  ])(
+    'decode_DeliveryFields ($case)',
+    ({ event, requestedMessages, responseStarted }) => {
+      const decoded = createStreamDecoder().decode(line(event));
+
+      expect(decoded.requestedMessages).toEqual(requestedMessages);
+      expect(decoded.responseStarted).toBe(responseStarted);
+    },
+  );
+
   it('decode_Init_ReportsCommandsAndControls', () => {
     const decoder = createStreamDecoder();
     const init = {

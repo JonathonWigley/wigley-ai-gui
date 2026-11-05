@@ -16,7 +16,15 @@ import {
 } from './chat-state';
 
 function user(id: string, text: string): ChatEntry {
-  return { kind: 'user', id, at: 1000, text, images: [], raw: [] };
+  return {
+    kind: 'user',
+    id,
+    at: 1000,
+    text,
+    images: [],
+    delivery: null,
+    raw: [],
+  };
 }
 
 function permission(id: string, answered: boolean): ChatEntry {

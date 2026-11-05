@@ -676,6 +676,7 @@ const userEntry = (id: string, at: number): ChatEntry => ({
   at,
   text: 'ask',
   images: [],
+  delivery: null,
   raw: [],
 });
 

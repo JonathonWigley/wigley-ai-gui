@@ -417,7 +417,15 @@ function sentEntryIdOf(test: ReturnType<typeof setUp>, index: number): string {
 }
 
 function userEntry(id: string, text: string): ChatEntry {
-  return { kind: 'user', id, at: 1000, text, images: [], raw: [] };
+  return {
+    kind: 'user',
+    id,
+    at: 1000,
+    text,
+    images: [],
+    delivery: null,
+    raw: [],
+  };
 }
 
 const REFUSED_TEXT = 'refused write';

@@ -18,7 +18,7 @@ const SUBAGENT_ID = 'agent-1';
 function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
   switch (kind) {
     case 'user':
-      return { kind, id, at, text: 'ask', images: [], raw: [] };
+      return { kind, id, at, text: 'ask', images: [], delivery: null, raw: [] };
     case 'assistant':
     case 'thinking':
       return { kind, id, at, text: 'text', streaming: false, raw: [] };

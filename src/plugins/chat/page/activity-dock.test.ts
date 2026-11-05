@@ -50,6 +50,7 @@ const user = (id: string, at: number): ChatEntry => ({
   at,
   text: 'ask',
   images: [],
+  delivery: null,
   raw: [],
 });
 

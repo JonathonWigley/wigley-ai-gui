@@ -283,6 +283,7 @@ describe('transcriptEntries', () => {
         at: 0,
         text: 'hi',
         images: [],
+        delivery: null,
         raw: [u1],
       },
       {
@@ -530,6 +531,7 @@ describe('transcriptEntries', () => {
         at: 0,
         text: '!ls',
         images: [],
+        delivery: null,
         raw: [u1],
       },
       { kind: 'raw', id: 'history:u2', at: 0, raw: [u2] },
@@ -547,6 +549,7 @@ describe('transcriptEntries', () => {
         at: 0,
         text: typed,
         images: [],
+        delivery: null,
         raw: [u1],
       },
     ]);
@@ -564,6 +567,7 @@ describe('transcriptEntries', () => {
         at: 0,
         text: 'why did I see [Request interrupted by user]?',
         images: [],
+        delivery: null,
         raw: [u1],
       },
     ]);
@@ -591,6 +595,7 @@ describe('transcriptEntries', () => {
         at: 0,
         text: 'What colour is this?',
         images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
+        delivery: null,
         raw: [u1],
       },
       {
@@ -599,6 +604,7 @@ describe('transcriptEntries', () => {
         at: 0,
         text: '',
         images: [{ mediaType: 'image/jpeg', data: '/9j/4AAQ' }],
+        delivery: null,
         raw: [u2],
       },
     ]);

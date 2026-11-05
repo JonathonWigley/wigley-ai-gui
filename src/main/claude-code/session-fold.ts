@@ -9,6 +9,7 @@ import {
   type ProcessActivity,
   type SessionControl,
   type UsageAgentEvent,
+  type UserDelivery,
   type UserMessage,
 } from '../../contracts/agent';
 import type { PipeLine } from '../../contracts/session-host';
@@ -64,6 +65,12 @@ import {
 // and the same lines give equal state and equal effects, so a live process and a
 // replay of its pipe log share it. The state is mutable and one process owns it.
 //
+// A user entry's `delivery` reads the lines by message uuid: `sent` on its
+// `started` line, `received` on the first main `message_start` after a main
+// `requesting` line named it, and on its terminal state or the process's close
+// with neither, `notReceived`, or null for text that starts with `/`. A fallback
+// mode entry stays null.
+//
 // Replay matches live except for:
 // - the "Interrupted again" notice: a call makes it, not a line, and the process
 //   ends right after;
@@ -106,7 +113,7 @@ export function appCommandUuid(uuid: string): string {
 }
 
 // A sent message's user entry and the skill it starts (null for none), held
-// until the CLI takes the message in.
+// until the CLI takes the message in. `draft.delivery` is null while held.
 export interface HeldMessage {
   draft: Extract<EntryDraft, { kind: 'user' }>;
   skill: TypedSkill | null;
@@ -114,6 +121,13 @@ export interface HeldMessage {
 
 export function heldUserMessage({ draft }: HeldMessage): UserMessage {
   return { text: draft.text, images: draft.images };
+}
+
+// A started message's `sent` draft, until a response marks it received or it
+// ends. `isRequested` means a main `requesting` line named it.
+interface AwaitingResponse {
+  draft: HeldMessage['draft'];
+  isRequested: boolean;
 }
 
 export type PendingRequest =
@@ -180,6 +194,8 @@ export interface SessionFoldState {
   pendingRequests: Map<string, PendingRequest>;
   // By message uuid, in write order; never filled in fallback mode.
   heldMessages: Map<string, HeldMessage>;
+  // By message uuid, in write order; never filled in fallback mode.
+  awaitingResponses: Map<string, AwaitingResponse>;
   // Each entry id's first `at`.
   firstAt: Map<string, number>;
   usage: SessionUsageState;
@@ -255,6 +271,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     noticeCount: 0,
     pendingRequests,
     heldMessages: new Map(),
+    awaitingResponses: new Map(),
     firstAt: new Map(),
     usage: request.resume
       ? EMPTY_SESSION_USAGE
@@ -809,6 +826,7 @@ function foldUserLine(
       id: `user-${state.sendCount}`,
       text,
       images,
+      delivery: null,
       raw: [message],
     },
     // Claude prints no skill line for a typed skill, so it starts with the
@@ -903,7 +921,9 @@ function releaseHeldMessage(
   }
   if (lifecycle.state === 'started') {
     state.heldMessages.delete(lifecycle.uuid);
-    pushUserMessage(state, held, at, effects);
+    const draft: HeldMessage['draft'] = { ...held.draft, delivery: 'sent' };
+    pushUserMessage(state, { ...held, draft }, at, effects);
+    state.awaitingResponses.set(lifecycle.uuid, { draft, isRequested: false });
   } else if (TERMINAL_STATES.has(lifecycle.state)) {
     state.heldMessages.delete(lifecycle.uuid);
     effects.push({
@@ -923,6 +943,51 @@ function releaseAllHeldMessages(
     pushUserMessage(state, held, at, effects);
   }
   state.heldMessages.clear();
+}
+
+// Sends the entry again in its final state. It sends no `userMessage` or skill
+// event: those went out with `sent`.
+function endAwaitingResponse(
+  state: SessionFoldState,
+  uuid: string,
+  { draft }: AwaitingResponse,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const delivery: UserDelivery | null = draft.text.startsWith('/')
+    ? null
+    : 'notReceived';
+  pushEntry(state, { ...draft, delivery }, at, effects);
+  state.awaitingResponses.delete(uuid);
+}
+
+function foldMessageDelivery(
+  state: SessionFoldState,
+  { requestedMessages, responseStarted, lifecycle }: DecodedLine,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const { awaitingResponses } = state;
+  for (const uuid of requestedMessages) {
+    const awaiting = awaitingResponses.get(uuid);
+    if (awaiting !== undefined) {
+      awaiting.isRequested = true;
+    }
+  }
+  if (responseStarted) {
+    for (const [uuid, { draft, isRequested }] of awaitingResponses) {
+      if (isRequested) {
+        pushEntry(state, { ...draft, delivery: 'received' }, at, effects);
+        awaitingResponses.delete(uuid);
+      }
+    }
+  }
+  if (lifecycle !== null && TERMINAL_STATES.has(lifecycle.state)) {
+    const awaiting = awaitingResponses.get(lifecycle.uuid);
+    if (awaiting !== undefined) {
+      endAwaitingResponse(state, lifecycle.uuid, awaiting, at, effects);
+    }
+  }
 }
 
 // A control command's success sets the control, since the turn's init still
@@ -1158,6 +1223,7 @@ function foldOutLine(
   if (decoded.lifecycle !== null) {
     releaseHeldMessage(state, decoded.lifecycle, at, effects);
   }
+  foldMessageDelivery(state, decoded, at, effects);
   if (fellBack) {
     releaseAllHeldMessages(state, at, effects);
   }
@@ -1311,12 +1377,15 @@ function endCompactionGrace(
 }
 
 // The process closed: a compaction still running ends here, before `sessionEnded`,
-// and so does a command that never got to run.
+// and so do a command that never got to run and a message awaiting its response.
 export function foldProcessClosed(
   state: SessionFoldState,
   at: number,
 ): FoldStep {
   const effects: FoldEffect[] = [];
+  for (const [uuid, awaiting] of state.awaitingResponses) {
+    endAwaitingResponse(state, uuid, awaiting, at, effects);
+  }
   const fold = state.compaction;
   const { open } = fold;
   if (open !== null && !open.hasEnded) {

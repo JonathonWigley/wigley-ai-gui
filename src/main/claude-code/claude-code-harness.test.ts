@@ -3929,8 +3929,12 @@ describe('createClaudeCodeHarness on the session host', () => {
       'agentEvent',
       { type: 'sessionStarted', at: 1000 },
     ]);
-    expect(timeline.slice(-3)).toEqual([
+    expect(timeline.slice(-4)).toEqual([
       ['activity', 'idle'],
+      [
+        'entry',
+        expect.objectContaining({ id: 'user-1', delivery: 'notReceived' }),
+      ],
       ['agentEvent', { type: 'sessionEnded', at: 1000 }],
       ['ended', { code: 0, error: null }],
     ]);

@@ -241,6 +241,7 @@ const user = (id: string): ChatEntry => ({
   at: 1000,
   text: 'ask',
   images: [],
+  delivery: null,
   raw: [],
 });
 const thinking = (id: string): ChatEntry => ({
@@ -1301,6 +1302,7 @@ const userText = (id: string, text: string): ChatEntry => ({
   at: 1000,
   text,
   images: [],
+  delivery: null,
   raw: [],
 });
 const assistantText = (id: string, text: string): ChatEntry => ({

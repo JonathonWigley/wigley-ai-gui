@@ -49,6 +49,7 @@ export function previewEntries(): ChatEntry[] {
       at: previewAt(0),
       text: 'Draw this chat in your layout.',
       images: FAKE_HISTORY_IMAGES.map((image) => ({ ...image })),
+      delivery: null,
       raw: [{ preview: 'user' }],
     },
     {

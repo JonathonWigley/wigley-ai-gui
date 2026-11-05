@@ -41,6 +41,7 @@ const userEntry: ChatEntry = {
   kind: 'user',
   text: 'hi',
   images: [],
+  delivery: null,
   raw: [],
 };
 

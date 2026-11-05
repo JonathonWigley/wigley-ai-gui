@@ -1038,6 +1038,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
       at: FAKE_HISTORY_AT,
       text: 'fake earlier message',
       images: FAKE_HISTORY_IMAGES.map((image) => ({ ...image })),
+      delivery: null,
       raw: [{ fake: 'history-user' }],
     },
     {
@@ -1573,6 +1574,7 @@ export function createFakeAgentHarness(
             id: `user-${sentTurn}`,
             text,
             images,
+            delivery: null,
             raw: [{ fake: 'user', text }],
           });
           events.agentEvent({ type: 'userMessage', at: clock.now() });

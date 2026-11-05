@@ -366,6 +366,7 @@ function addUserEntries(
       at,
       text,
       images: userImages(line),
+      delivery: null,
       raw: [line],
     });
   }

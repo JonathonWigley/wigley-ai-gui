@@ -46,8 +46,15 @@ export interface UserMessage {
 // `harness`, the harness compacted on its own.
 export type CompactionTrigger = 'app' | 'manual' | 'harness';
 
+// How far a user message got toward the model.
+// `sent`: a turn took it in, and no response to a request naming it has started.
+// `received`: a response to a request naming it has started.
+// `notReceived`: it ended, or its process closed, before such a response.
+export type UserDelivery = 'sent' | 'received' | 'notReceived';
+
 // `id` is unique among one process's entries (one `start`): a resumed session's new process numbers its
-// entries afresh. An entry sent again with the same id replaces the earlier one.
+// entries afresh. An entry sent again with the same id replaces the earlier one, which is how a user entry's
+// `delivery` changes.
 // `at` is when the entry first appeared, epoch milliseconds; a later version of the entry (same id) keeps its first
 // `at`.
 // `raw` holds the harness events the entry was built from, oldest first; a harness adapter may leave out
@@ -59,6 +66,9 @@ export type ChatEntry =
       at: number;
       text: string;
       images: ChatImage[];
+      // Null when nothing tracks it: saved history, a harness with no message lifecycle, a slash command that ended
+      // with no response.
+      delivery: UserDelivery | null;
       raw: unknown[];
     }
   | {

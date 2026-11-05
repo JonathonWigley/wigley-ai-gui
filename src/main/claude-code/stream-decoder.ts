@@ -40,6 +40,9 @@ import { SYNTHETIC_MODEL } from './transcripts';
 // init's `capabilities` strings, null on any other line; `lifecycle` is a
 // `command_lifecycle` line's `command_uuid` and `state`; `turnOpener` is a
 // `result`'s `user_message_uuid` and `turnMessages` its `user_message_uuids`.
+// `requestedMessages` is a main `system/status` `requesting` line's
+// `user_message_uuids`, `[]` on every other line; `responseStarted` is true on a
+// main `message_start`.
 // `compaction` is what a main-conversation line says about a compaction, null on
 // every other line; the session fold owns the compaction's state and events.
 // `agentEvents` are the line's agent events other than
@@ -60,6 +63,8 @@ export interface DecodedLine {
   lifecycle: { uuid: string; state: string } | null;
   turnOpener: string | null;
   turnMessages: string[];
+  requestedMessages: string[];
+  responseStarted: boolean;
   controlResponse: {
     requestId: string;
     error: string | null;
@@ -173,6 +178,8 @@ function emptyLine(): DecodedLine {
     lifecycle: null,
     turnOpener: null,
     turnMessages: [],
+    requestedMessages: [],
+    responseStarted: false,
     controlResponse: null,
     hostRequest: null,
     planRows: null,
@@ -782,6 +789,13 @@ export function createStreamDecoder(
         asString(asJson(task).task_id),
       );
     }
+    const isMainRequest =
+      event.subtype === 'status' &&
+      event.status === 'requesting' &&
+      typeof event.parent_tool_use_id !== 'string';
+    if (isMainRequest) {
+      out.requestedMessages = stringItems(event.user_message_uuids);
+    }
     out.compaction = compactionOf(event);
     if (out.compaction?.phase === 'done') {
       isAfterBoundary = true;
@@ -836,6 +850,7 @@ export function createStreamDecoder(
     const blockKey = `${stream ?? ''}:${String(inner.index)}`;
     if (inner.type === 'message_start') {
       currentMessage.set(stream, asString(asJson(inner.message).id));
+      out.responseStarted = stream === null;
       return;
     }
     if (inner.type === 'content_block_start') {
