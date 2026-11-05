@@ -12,6 +12,7 @@ import { galleryMainPart } from './gallery/main/start';
 import { keysMainPart } from './keys/main/start';
 import { notesMainPart } from './notes/main/start';
 import { primerMainPart } from './primer/main/start';
+import { sessionLogMainPart } from './session-log/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
 import { unityPoolMainPart } from './unity-pool/main/start';
@@ -28,6 +29,7 @@ export const mainParts: readonly MainPart[] = [
   primerMainPart,
   chatMainPart,
   autoCompactMainPart,
+  sessionLogMainPart,
   agentsMainPart,
   agentLinesMainPart,
   agentStripMainPart,

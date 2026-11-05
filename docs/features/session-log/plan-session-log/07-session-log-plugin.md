@@ -1,6 +1,6 @@
 # 07 — The session-log plugin
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)

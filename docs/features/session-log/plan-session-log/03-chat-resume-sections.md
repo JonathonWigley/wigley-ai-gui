@@ -1,6 +1,6 @@
 # 03 — Chat resume sections
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -36,3 +36,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 415c67bf · proof: diff read; typecheck and lint pass · concerns: the send gate's consumer.track has no consumer-disposed test, unlike the new section's; the single archivedIdsOrNone read has no test; isResumable reads archived ids from a snapshot at the top of the call and held and open rows live

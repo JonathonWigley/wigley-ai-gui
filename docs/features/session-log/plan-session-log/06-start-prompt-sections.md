@@ -1,6 +1,6 @@
 # 06 — Start prompt sections
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 03, 05
 Plan: [plan.md](plan.md)
