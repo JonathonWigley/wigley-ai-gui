@@ -58,5 +58,9 @@ function sameActivity(
   if (first === null || second === null) {
     return first === second;
   }
-  return first.word === second.word && first.tone === second.tone;
+  return (
+    first.word === second.word &&
+    first.tone === second.tone &&
+    first.emphasis === second.emphasis
+  );
 }

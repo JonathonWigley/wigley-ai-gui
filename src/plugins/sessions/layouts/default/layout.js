@@ -6,9 +6,10 @@
 // grip) over its rows,
 // each row a compact card of two lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
-// activity, a needs you label for its `marked` round, and its on-screen mark,
-// over a footer line that never wraps, holding its status then other plugins'
-// row parts (`contributedParts`),
+// activity, a needs you label for its `marked` round, a status edge for an
+// activity with an emphasis, and its on-screen mark,
+// over a footer line that never wraps, holding other plugins' row parts
+// (`contributedParts`); its status shows only in the row's tooltip,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the
@@ -18,18 +19,32 @@
 const UNTITLED_ROW_TEXT = 'New Chat';
 
 /** @type {NonNullable<import('../layout').SessionRowInput['activity']>} */
-const MARKED_ROW_ACTIVITY = { word: 'needs you', tone: 'attention' };
+const MARKED_ROW_ACTIVITY = {
+  word: 'needs you',
+  tone: 'attention',
+  emphasis: 'urgent',
+};
 
-// A state the user should act on takes a Tag; any other is plain text.
+// A state the user should act on, or one with an emphasis, takes a Tag, solid
+// when urgent; a success Tag opens on a check. Any other is plain text.
 /**
  * @param {HTMLElement} parent
  * @param {NonNullable<import('../layout').SessionRowInput['activity']>} activity
  * @param {Parameters<import('../layout').CompleteLayout['row']>[2]} kit
  */
-function drawActivityLabel(parent, { word, tone }, kit) {
+function drawActivityLabel(parent, { word, tone, emphasis }, kit) {
   const text = word.charAt(0).toUpperCase() + word.slice(1);
-  if (tone === 'attention' || tone === 'warning' || tone === 'error') {
-    kit.tag(parent, text, tone);
+  if (
+    emphasis !== null ||
+    tone === 'attention' ||
+    tone === 'warning' ||
+    tone === 'error'
+  ) {
+    const tag = kit.tag(parent, text, tone === 'idle' ? 'neutral' : tone);
+    tag.classList.toggle('session-row-tag--solid', emphasis === 'urgent');
+    if (tone === 'success') {
+      tag.prepend(kit.icon(tag, 'check', 'session-row-activity-check'));
+    }
     return;
   }
   kit.el(
@@ -82,11 +97,11 @@ const layout = {
       input.activity ?? (input.marked ? MARKED_ROW_ACTIVITY : null);
     if (activity !== null) {
       drawActivityLabel(kit.rowTrailing(element), activity, kit);
+      if (activity.emphasis !== null) {
+        element.classList.add(`session-row-edge--${activity.tone}`);
+      }
     }
     const foot = kit.el(element, 'div', 'session-row-foot');
-    if (input.status !== null) {
-      kit.el(foot, 'span', 'session-row-status', input.status);
-    }
     kit.contributedParts(foot);
     return { element };
   },

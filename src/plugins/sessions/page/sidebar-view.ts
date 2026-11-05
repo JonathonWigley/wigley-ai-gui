@@ -256,7 +256,13 @@ function drawRow(
     harness: harnessText(session.harness),
     marked: session.marked,
     activity:
-      activity === null ? null : { word: activity.word, tone: activity.tone },
+      activity === null
+        ? null
+        : {
+            word: activity.word,
+            tone: activity.tone,
+            emphasis: activity.emphasis ?? null,
+          },
     status,
     onScreen,
   });

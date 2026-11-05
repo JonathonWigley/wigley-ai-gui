@@ -9,6 +9,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import type { RowActivity } from '../../sessions/contract';
 import type {
   PageStage,
   SessionFlow,
@@ -121,6 +122,7 @@ function setUp(previews: readonly string[] = []) {
   const logged: string[] = [];
   const invoked: WorkflowActionRequest[] = [];
   const flows = new Map<string, SessionFlow>();
+  const rowActivities = new Map<string, RowActivity | null>();
   let isFlowOfBroken = false;
   const stages = createStageList<PageStage>();
   for (const stage of BUILT_IN_PAGE_STAGES) {
@@ -159,6 +161,8 @@ function setUp(previews: readonly string[] = []) {
     },
     nameOf: () => 'proj',
     isPreview: (sessionId) => previews.includes(sessionId),
+    setRowActivity: (sessionId, activity) =>
+      rowActivities.set(sessionId, activity),
     openDoc: () => undefined,
     runAction: async (request) => {
       invoked.push(request);
@@ -184,6 +188,7 @@ function setUp(previews: readonly string[] = []) {
     clears,
     logged,
     invoked,
+    rowActivities,
   };
 }
 
@@ -479,6 +484,32 @@ describe('workflow view', () => {
     built.build(asHtml(wrapper), 'a');
 
     expect(wrapper.children).toHaveLength(0);
+  });
+
+  it.each([
+    { stage: 'planReady', fields: {}, word: 'ready to make', tag: false },
+    { stage: 'closed', fields: {}, word: 'closed', tag: false },
+    { stage: 'planReady', fields: BUSY.turn, word: null, tag: true },
+    { stage: 'closed', fields: BUSY.subagent, word: null, tag: true },
+    { stage: 'make', fields: {}, word: null, tag: true },
+  ])('setFlow_$stage_RowLabelReads$word', ({ stage, fields, word, tag }) => {
+    const { view, put, rowActivities } = setUp();
+    const wrapper = new FakeElement('div');
+
+    put(flowIn(stage, fields));
+    view.chipPart.build(asHtml(wrapper), 'a');
+
+    expect(rowActivities.get('a')?.word ?? null).toBe(word);
+    expect(findAll(wrapper, 'ui-tag').length > 0).toBe(tag);
+  });
+
+  it('setFlow_LeavesWaitingStage_ClearsTheRowLabel', () => {
+    const { put, rowActivities } = setUp();
+
+    put(flowIn('closed'));
+    put(flowIn('idle'));
+
+    expect(rowActivities.get('a')).toBeNull();
   });
 
   it('log_SameStageRedrawn_LogsOnce', () => {

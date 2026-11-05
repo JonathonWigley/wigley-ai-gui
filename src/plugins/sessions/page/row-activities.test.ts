@@ -69,6 +69,15 @@ describe('createRowActivities', () => {
       lastChanged: false,
     },
     {
+      case: 'the same word and tone with another emphasis is a change',
+      steps: [
+        { set: ['s1', 'chat', DONE] },
+        { set: ['s1', 'chat', { ...DONE, emphasis: 'raised' }] },
+      ],
+      top: 'done',
+      lastChanged: true,
+    },
+    {
       case: 'null for a source holding none is unchanged',
       steps: [{ set: ['s1', 'chat', WORKING] }, { set: ['s1', 'forms', null] }],
       top: 'working',

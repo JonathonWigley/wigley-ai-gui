@@ -356,7 +356,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done), and a second line holding the status then other
+  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
   plugins' row parts on one line that never wraps, the context bar, the run time and the cache mark at its end in slots of fixed least width, so the bars line up from row to row, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
@@ -474,8 +474,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
   top.
 - **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
-  The chip is one line under a session row: the stage and its status as an accent Tag and the countdown; an idle
-  session draws no chip. The strip sits above the Chat composer: the status mark and line, the stepper only until the
+  The chip is one line under a session row: the stage and its status as an accent Tag, unless the row's label says it,
+  and the countdown; an idle session draws no chip. The strip sits above the Chat composer: the status mark and line, the stepper only until the
   session has a plan (pending in `fg-tertiary`, running in `status-running`, ready in `accent`, paused in `status-warning`,
   done in `status-success`), the countdown and the main action as a button; every stage's strip keeps the height of a line
   holding the action and starts on the composer's left edge; an idle session draws no strip. The side

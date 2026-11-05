@@ -1,4 +1,9 @@
-import { detailLine, isBusy, type PageStage } from '../../contract';
+import {
+  detailLine,
+  isBusy,
+  type PageStage,
+  STAGE_ACTIVITY_RANK,
+} from '../../contract';
 
 export const closedPageStage: PageStage = {
   id: 'closed',
@@ -28,5 +33,11 @@ export const closedPageStage: PageStage = {
   statusProgress(flow) {
     const progress = flow.progress;
     return progress === null ? '' : ` · ${progress.checked}/${progress.total}`;
+  },
+  rowActivity: {
+    word: 'closed',
+    tone: 'success',
+    rank: STAGE_ACTIVITY_RANK,
+    emphasis: 'raised',
   },
 };

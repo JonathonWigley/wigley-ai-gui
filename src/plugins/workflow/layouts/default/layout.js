@@ -1,7 +1,8 @@
 // @ts-check
 
 // The built-in workflow look: a one-line chip under the session row (the
-// stage and its status as an accent tag and the countdown), a strip above the
+// stage and its status as an accent tag, unless the row's label says it, and
+// the countdown), a strip above the
 // composer (the stepper until a plan is read, the status mark and line when the
 // stepper does not show the stage, the countdown and the main action), and the
 // side pane beside the transcript (the
@@ -105,7 +106,9 @@ function drawChecklist(parent, input, kit) {
 const layout = {
   chip(parent, input, kit) {
     const chip = kit.el(parent, 'div', 'workflow-chip');
-    kit.tag(chip, input.statusText, 'accent');
+    if (!input.onRowLabel) {
+      kit.tag(chip, input.statusText, 'accent');
+    }
     if (input.countdown !== null) {
       kit.countdown(chip, input.countdown);
     }

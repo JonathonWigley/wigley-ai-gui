@@ -88,6 +88,7 @@ function chipInput(): ChipInput {
     detail: '',
     countdown: null,
     mainAction: null,
+    onRowLabel: false,
   };
 }
 
@@ -140,6 +141,18 @@ describe('default layout chip', () => {
     const chip = layout.chip(asHtml(parent), chipInput(), fakeKit());
 
     expect(drawn(chip)).toEqual(['tag:Make · running']);
+  });
+
+  it('chip_StateOnRowLabel_DrawsOnlyTheCountdown', () => {
+    const parent = new FakeElement('parent');
+
+    const chip = layout.chip(
+      asHtml(parent),
+      { ...chipInput(), onRowLabel: true, countdown: '9s' },
+      fakeKit(),
+    );
+
+    expect(drawn(chip)).toEqual(['countdown:9s']);
   });
 });
 

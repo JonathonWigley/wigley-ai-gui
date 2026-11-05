@@ -11,11 +11,12 @@ import type {
   ChatSidePart,
   ChatSideSection,
 } from '../../chat/contract';
-import type { SessionPart } from '../../sessions/contract';
+import type { RowActivity, SessionPart } from '../../sessions/contract';
 import {
   IDLE_STAGE,
   type PageStage,
   type SessionFlow,
+  shownRowActivity,
   type StageActionSpec,
   type StageStatus,
   statusLine,
@@ -53,7 +54,9 @@ export interface PageStages {
 // `flowOf` is the flow a session draws (the preview's sample while it shows,
 // else the pushed flow or a new idle one); `nameOf` names the session in the
 // log; `isPreview` is whether the session shows the preview, which runs
-// nothing. The rest run the actions: `openDoc` the page one, `runAction` main's.
+// nothing. `setRowActivity` sets what the session's row says for its stage, null
+// for nothing. The rest run the actions: `openDoc` the page one, `runAction`
+// main's.
 export interface WorkflowViewDeps {
   kit: OwnerKitServices;
   log: PluginLog;
@@ -65,6 +68,7 @@ export interface WorkflowViewDeps {
   flowOf(sessionId: string): SessionFlow;
   nameOf(sessionId: string): string;
   isPreview(sessionId: string): boolean;
+  setRowActivity(sessionId: string, activity: RowActivity | null): void;
   openDoc(path: string): void;
   runAction(request: WorkflowActionRequest): Promise<void>;
 }
@@ -73,7 +77,8 @@ export interface WorkflowViewDeps {
 // its Chat composer, and `sidePart` its side pane in the session hub's Plan
 // section. Every held part draws again on `setFlow` for its session, on
 // `setLayouts` and on `redraw`, and each second while it shows a countdown, the
-// side pane aside. Each side pane draw sets the section's summary:
+// side pane aside. `setFlow`, and `redraw` for each session with a chip, also
+// set the session's row activity. Each side pane draw sets the section's summary:
 // `<checked>/<total>` while it draws a plan with boxes, else null. The side
 // pane's list keeps its scroll across those draws, and while the pane has no
 // layout box. `setFlow` also logs the session's stage, progress and countdown
@@ -205,8 +210,15 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       detail: stage.detail(flow),
       countdown: countdown(flow),
       mainAction: actionInputs(flow)[0] ?? null,
+      onRowLabel: shownRowActivity(stage, flow) !== null,
     };
   };
+
+  const showRowActivity = (flow: SessionFlow) =>
+    deps.setRowActivity(
+      flow.sessionId,
+      shownRowActivity(pageStageOf(flow), flow),
+    );
 
   const stripInput = (flow: SessionFlow): StripInput => {
     const stage = pageStageOf(flow);
@@ -455,6 +467,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       try {
         logFlow(flow);
       } finally {
+        showRowActivity(flow);
         drawSession(flow.sessionId);
       }
     },
@@ -468,7 +481,17 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       parts.setLayouts(shown);
       drawAll();
     },
-    redraw: drawAll,
+    redraw() {
+      const rowSessions = new Set(
+        [...held]
+          .filter((part) => part.kind === 'chip')
+          .map((part) => part.sessionId),
+      );
+      for (const sessionId of rowSessions) {
+        showRowActivity(deps.flowOf(sessionId));
+      }
+      drawAll();
+    },
     setSidePaneHidden(hidden) {
       isSidePaneHidden = hidden;
       drawEach([...held].filter((part) => part.kind === 'sidePane'));

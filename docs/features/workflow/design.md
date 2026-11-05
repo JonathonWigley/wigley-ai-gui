@@ -120,9 +120,14 @@ turn that ended while the app was closed, folds as usual. A flow saved without t
 
 Everything draws through the `workflow` layout, its built-in `default`, and the preview on `Space z l w`.
 
+- **Row label** — a stage that waits on the user declares a `rowActivity`, set through sessions' `setActivity` while
+  the flow is not busy: plan ready's `Ready to make` in `attention` and closed's `Closed` in `success`. Each is
+  `raised`, so the built-in sessions layout draws it as a tinted Tag in place of a finished turn's `Done`, with a status
+  edge on the card, one step under the solid Tag of an `urgent` Needs you. Its rank sits above chat's done and below chat's working, so a running turn, an error and a waiting round still
+  take the label.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layout draws the label and status as one accent tag
-  (`Make · running`) and the countdown. A user layout can also draw the progress and the main action's button, which
-  the chip's input carries. Idle draws nothing.
+  (`Make · running`), unless the row label says it, and the countdown. A user layout can also draw the progress and the
+  main action's button, which the chip's input carries. Idle draws nothing.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the countdown and the main action,
   with the stepper until the session has a plan and the status mark and line otherwise. A stage outside the stepper
   keeps the status mark and line, since the stepper does not show it. Once a plan is read the side pane holds the

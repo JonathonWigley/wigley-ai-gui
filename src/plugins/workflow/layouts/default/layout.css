@@ -10,6 +10,11 @@
   font-size: var(--wg-text-12);
 }
 
+/* A chip with nothing to say gives its row part's room back. */
+.session-row-part[data-part='workflow.chip']:has(> .workflow-chip:empty) {
+  display: none;
+}
+
 .workflow-strip {
   display: flex;
   flex-wrap: wrap;

@@ -168,10 +168,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Each row is a compact card, so its title, status and parts read as one
-   session: `card-background` under a `card-border` hairline with `radius-md`,
-   the title and activity's label on the first line and the status and parts on
-   a second line under them, `space-1` above and below and `space-1_5` at the
+/* Each row is a compact card, so its title and parts read as one session:
+   `card-background` under a `card-border` hairline with `radius-md`, the title
+   and activity's label on the first line and the parts on a second line under
+   them, `space-1` above and below and `space-1_5` at the
    sides. Hover strengthens the border; the selected card keeps the row
    primitive's accent fill, and the keyboard cursor its focus ring. */
 .ui-row.session-row {
@@ -183,8 +183,59 @@
   overflow: hidden;
 }
 
-/* The footer is the card's second line: the status then other plugins' row
-   parts, on one line that never wraps. A footer with nothing in it takes no
+/* An activity with an emphasis draws an edge on the card's start in its tone. A
+   pseudo-element, so the edge survives the cursor's and on-screen's box
+   shadows. */
+.ui-row.session-row[class*='session-row-edge--'] {
+  position: relative;
+}
+
+.ui-row.session-row[class*='session-row-edge--']::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--wg-indicator-width);
+  background: var(--session-row-edge-colour);
+}
+
+.session-row-edge--running {
+  --session-row-edge-colour: var(--wg-status-running);
+}
+
+.session-row-edge--success {
+  --session-row-edge-colour: var(--wg-status-success);
+}
+
+.session-row-edge--warning {
+  --session-row-edge-colour: var(--wg-status-warning);
+}
+
+.session-row-edge--attention {
+  --session-row-edge-colour: var(--wg-status-attention);
+}
+
+.session-row-edge--error {
+  --session-row-edge-colour: var(--wg-status-error);
+}
+
+/* An urgent activity's Tag fills with the edge's colour. */
+.ui-tag.session-row-tag--solid {
+  background: var(--session-row-edge-colour);
+  color: var(--wg-fg-on-accent);
+  font-weight: var(--wg-weight-semibold);
+}
+
+/* Beats the icon primitive's size, so the check leaves the Tag's height alone. */
+.ui-tag .session-row-activity-check.codicon {
+  margin-inline-end: var(--wg-space-0_5);
+  font-size: var(--wg-text-11);
+  line-height: var(--wg-leading-tight);
+  vertical-align: text-bottom;
+}
+
+/* The footer is the card's second line: other plugins' row parts, on one line
+   that never wraps. A footer with nothing in it takes no
    space. */
 .session-row-foot {
   display: flex;
@@ -197,9 +248,7 @@
   padding: 0;
 }
 
-.session-row-foot:not(
-  :has(> .session-row-status, .session-row-part:not(:empty))
-) {
+.session-row-foot:not(:has(.session-row-part:not(:empty))) {
   display: none;
 }
 
@@ -233,8 +282,8 @@
    and its ellipsis. The footer takes the whole second line. Each part has its
    own column, so a row missing its trailing cell keeps the title in place. The
    trailing column's least width is the trailing cell's own, so the footer,
-   which spans every column, ellipsizes its status inside the row rather than
-   widens it. Two classes, so the grid beats the row primitive's flex line
+   which spans every column, stays inside the row rather than widens it. Two
+   classes, so the grid beats the row primitive's flex line
    whichever sheet loads last. */
 .ui-row.session-row {
   display: grid;
@@ -290,18 +339,6 @@
   .session-row-activity--running {
     animation: none;
   }
-}
-
-/* Shrinks far faster than the row's parts, so it ellipsizes before they give
-   up any width. */
-.session-row-status {
-  flex: 0 1000 auto;
-  color: var(--wg-fg-secondary);
-  font-size: var(--wg-text-12);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W` and the

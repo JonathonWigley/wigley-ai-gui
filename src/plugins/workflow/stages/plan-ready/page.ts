@@ -1,4 +1,9 @@
-import { detailLine, isBusy, type PageStage } from '../../contract';
+import {
+  detailLine,
+  isBusy,
+  type PageStage,
+  STAGE_ACTIVITY_RANK,
+} from '../../contract';
 
 export const planReadyPageStage: PageStage = {
   id: 'planReady',
@@ -42,4 +47,10 @@ export const planReadyPageStage: PageStage = {
       ? ''
       : detailLine(flow.progress.title, `${flow.progress.total} tasks`),
   status: () => 'ready',
+  rowActivity: {
+    word: 'ready to make',
+    tone: 'attention',
+    rank: STAGE_ACTIVITY_RANK,
+    emphasis: 'raised',
+  },
 };

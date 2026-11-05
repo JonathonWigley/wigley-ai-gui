@@ -107,6 +107,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       flowOf,
       nameOf,
       isPreview,
+      setRowActivity: (sessionId, activity) =>
+        sessions.setActivity(sessionId, workflowManifest.id, activity),
       openDoc: (path) => docs.openDoc(path),
       runAction: (request) => api.channel.invoke('runAction', request),
     });

@@ -3,6 +3,7 @@
 
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type { RowActivity } from '../sessions/contract';
 import type { PlanProgress } from './plan-reader';
 
 // A stage module's id: 'idle', 'primer', 'feature', 'planReady', 'make',
@@ -165,6 +166,22 @@ export interface PageStage {
   // True when the current wave's open tasks draw the stage's status; left out,
   // they draw `pending`.
   runsTasks?: boolean;
+  // What the session's row says while the stage waits on the user and the flow
+  // is not busy, in place of the chip's tag. Left out, the row keeps its other
+  // activities and the chip its tag.
+  rowActivity?: RowActivity;
+}
+
+// Above chat's done, below chat's working: the stage's word replaces a finished
+// turn's and gives way to a running one.
+export const STAGE_ACTIVITY_RANK = 15;
+
+// The row activity `stage` shows for `flow`, null for none.
+export function shownRowActivity(
+  stage: PageStage,
+  flow: SessionFlow,
+): RowActivity | null {
+  return isBusy(flow) ? null : (stage.rowActivity ?? null);
 }
 
 export interface WorkflowMainExports {

@@ -332,12 +332,17 @@ export type ActivityTone =
 
 // What a session is doing, as one plugin sees it: the word its row and tooltip
 // show and the `tone` of its label. Of a session's activities its row shows the
-// one of highest `rank`.
+// one of highest `rank`. `emphasis` asks the row to catch the eye at a scan of
+// the list: `raised` for a state the user may come to when ready, `urgent` for
+// one blocked on the user. Left out, the row does not.
 export interface RowActivity {
   word: string;
   tone: ActivityTone;
   rank: number;
+  emphasis?: RowEmphasis;
 }
+
+export type RowEmphasis = 'raised' | 'urgent';
 
 // A round or primer waiting on the user: the one copy chat, forms and primer
 // set.
@@ -345,6 +350,7 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
   word: 'needs you',
   tone: 'attention',
   rank: 40,
+  emphasis: 'urgent',
 };
 
 // `addTab` attaches the tab's element before returning and selects the tab
