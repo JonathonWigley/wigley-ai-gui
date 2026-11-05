@@ -1,7 +1,7 @@
 import { type MainStage, startsSkill } from '../../../workflow/contract';
 
 // The first claim sets `firstStage`; this rule moves a second Medium ask in one session
-// back here, since a claim by the flow's own workflow changes nothing.
+// back here, since a claim by the flow's own workflow leaves the stage where it is.
 export const interviewMainStage: MainStage = {
   id: 'interview',
   order: 10,
