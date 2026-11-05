@@ -753,15 +753,13 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
 }
 
 // Paths, the status line and the filtered line end in an ellipsis; the field
-// table's box and the editor scroll themselves; and Sessions mode's row status
-// ends in an ellipsis.
+// table's box and the editor scroll themselves.
 const SCROLLS_ITSELF = [
   '.docs-path',
   '.docs-status',
   '.docs-filtered',
   '.docs-frontmatter-box',
   '.docs-editor',
-  '.session-row-status',
 ];
 
 // Rewrites the fixture under `homeDir` with `options` and opens a session in

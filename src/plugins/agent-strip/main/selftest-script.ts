@@ -179,7 +179,6 @@ export function agentStripSelfTestScript(
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',
-      '.session-row-status',
       '.session-bar-parts',
     ],
     open() {

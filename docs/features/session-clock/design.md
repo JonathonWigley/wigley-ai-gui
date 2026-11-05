@@ -45,7 +45,7 @@ Built.
 
 ## The side-bar row
 
-The row's second line holds the status chip, then the context meter and its used tokens, the run time and the cache
+The row's second line holds other plugins' parts, then the context meter and its used tokens, the run time and the cache
 mark at the line's end:
 
 - `chat.rowClock`, chat's row part, draws the run time through chat's `rowClock` layout part, again once a second
@@ -66,7 +66,7 @@ mark at the line's end:
 - **The cache mark is its own usage row part**: the run time sits between the meter and the cache mark, and parts
   from two plugins order only as whole parts.
 - **The second line never wraps**: the parts stay whole and the row stays two lines. When the line is too narrow the
-  status gives way first (it ellipsizes, to nothing), then the meter's bar shrinks to nothing, the used tokens
+  meter's bar shrinks to nothing, the used tokens
   staying whole (under the default layout `usage.rowLine` shrinks, its bar the only part of it that can). No container query is used on
   `div.session-row-parts`: `container-type: inline-size` gives the holder no intrinsic width. Below that the other
   parts clip at the card edge with no ellipsis: measured at 12m 05s clocks, a plain row (meter, clock, cache) needs

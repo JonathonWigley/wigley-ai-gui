@@ -61,13 +61,12 @@ export function agentSkillsSelfTestScript(
     pageBinds: [],
     settings: {},
     // A skill's name ends in an ellipsis in its row, as its CSS says. So do
-    // a session row's status, a project group's name, and the activity dock's
+    // a project group's name, and the activity dock's
     // tool calls and its done line; the tab bar's parts and the dock's one line clip
     // in their own box. The side bar's handle holds its resize prompt, hidden until
     // hovered, past its box.
     scrollsItself: [
       '.agent-skills-name',
-      '.session-row-status',
       '.session-group-name',
       '.session-bar-parts',
       '.chat-working-action',
