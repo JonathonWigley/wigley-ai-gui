@@ -1,6 +1,6 @@
 # 03 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -25,3 +25,4 @@ Commit:    no code. Fix anything the checks find, in its own commit.
 
 ## Proof
 
+Commit none · proof: preview draws all three labels, Received on the last only; 10 real logs: 36 of 36 named messages received, 5 /wigley:* among them, typed /compact null, no mismatch; notReceived has no real-log evidence · concerns: notReceived and an early interrupt are unproved against real lines

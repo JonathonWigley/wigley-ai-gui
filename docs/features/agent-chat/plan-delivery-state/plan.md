@@ -127,7 +127,7 @@ so that the compiler finds every place that builds a user entry.
 - [x] [Draw the delivery state](02-draw-delivery.md) — after 01
 
 ### Wave 3
-- [ ] [Final verification](03-final-verification.md) — after 02
+- [x] [Final verification](03-final-verification.md) — after 02
 
 ## Run log
 
@@ -136,6 +136,7 @@ Review base: 37c3020e57be67f8aa41edfbb3e771c5eacebfee
 ### Groups
 - 01 · d5951325 · diff read: every Produces item present; tsc clean · concerns: started before init with an unadvertised lifecycle would leave sent outside fallback; a reply with no message_start ends notReceived; saved records hold no delivery at runtime
 - 02 · 41fd97f4 · diff read: Produces present on UserInput; tsc and lint clean · concerns: label look unchecked on screen until task 03; an older received entry's redraw refills its whole card, so thumbnails could flicker
+- 03 · none · preview draws all three labels, Received on the last only; 10 real logs: 36 of 36 named messages received, 5 /wigley:* among them, typed /compact null, no mismatch; notReceived has no real-log evidence · concerns: notReceived and an early interrupt are unproved against real lines
 ### Contract changes
 ### Rulings
 - Three test files outside the task's list took delivery: null or a new close assertion, since literal toEqual fixtures turned red — the compiler does not name them — a wider diff · group 01 · group 01
@@ -144,3 +145,4 @@ Review base: 37c3020e57be67f8aa41edfbb3e771c5eacebfee
 - Redraw also runs holdBlocks and the label has margin-top space-1, neither named by the plan — the cursor would hold detached blocks, and the label would sit flush — one line each · group 02 · group 02
 ### Review rounds
 ### Test gate
+- stream-decoder, session-fold, transcripts, claude-code-harness, fake-agent-harness (the fold and every entry source), layout-contracts (UserInput contract), src/plugins/chat/ (entry-list, layout, preview, literal fixtures) · 46 files, 1821 tests passed, no type errors
