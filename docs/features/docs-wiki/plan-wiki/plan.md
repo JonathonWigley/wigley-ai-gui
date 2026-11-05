@@ -223,5 +223,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 ### Review rounds
 - Round 1 at 81e7f36c: NEEDS FIXES, 44 own findings (9 Important, 35 Minor, no Critical), 5 prose fixes lead-applied. Report: review-81e7f36c4ac779d49352e5049d763050aba740e7.md in the scratchpad. ee11e7ae's reach into shared disposeAnchors and split.ts is kept: one mechanism, tested, named to the user.
 - Re-review 1 of 22e589de, 868418af, 575e1d3: NEEDS FIXES, 14 Minor (no Critical or Important), plus 1 pre-existing, in scratchpad/review-r2.md. Repeats on the paragraph sentinel, fence rule, line splitting, retarget, title and Main-against-file: minor edge cases, no redesign; each takes the fix.
+- Re-review 2 of c6d9d6dd, 34e7f758: NEEDS FIXES, 1 Important (repeat: first read of Main.md rejected strands the app-start pane), 6 Minor, 1 pre-existing. Cycle cap reached; AGENTS.md § Review takes each recommended pick: Step back on the two repeats, Fix now on the rest.
 ### Test gate
 - Gate at ee11e7ae: tsc and lint clean; npm test whole unit suite; docs-index unittest 276 OK; selftest --plugin docs,backlog all passed before this fix. First unit run found 2 failures in start.test.ts from d2a5afb0's observer, fixed in ee11e7ae. Log scan clean. Whole self-test not run, needs the user's ask, so the placement check did not run.
+- Post-fix gate at c6d9d6dd, 34e7f758: typecheck, lint, npm test, docs-index 286 OK, check_pointers, selftest --plugin docs,backlog all exit 0. Whole self-test not run: it needs the user's ask.
