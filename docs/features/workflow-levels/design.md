@@ -75,8 +75,7 @@ user asks to tune `workflows.md`, and it is the evidence for judging Heavy's age
 - **No hook blocks finishing until tests pass.** The suites here run past fifteen minutes, and the
   project rules run them filtered to the change.
 - **Sessions outside the app draw nothing.** A tool call with the app closed would start the app, so
-  only the note in app-started sessions tells an agent to call the tools. Skills skip them on a host
-  without the tools.
+  only the note in app-started sessions tells an agent to call the tools.
 
 ## Out of scope
 

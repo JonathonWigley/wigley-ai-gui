@@ -1,0 +1,245 @@
+# Workflow levels — plan
+
+Feature: Workflow levels · Implements: none · Ticket: none
+Target: `main` of wigley-ai-gui, wigley-ai-marketplace and wigley-agents, through the `workflow-levels` branches · Written: 2026-11-04
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+## Goal
+
+Every session runs one of three workflows: Light, Medium or Heavy. The agent picks the level from `~/wigley-agents/workflows.md`. The app shows the level as an L, M or H badge on the session row, and shows that workflow's trail and checklist. Each workflow is one app plugin with its own stages and layout, so a new workflow needs no engine edit. Heavy behaves exactly as it does today.
+
+## Architecture
+
+Systems touched:
+
+- wigley-ai-gui: the `workflow` plugin becomes an engine. New plugins `workflow-heavy`, `workflow-light` and `workflow-medium`.
+- wigley-ai-marketplace: skills `light` and `medium` (written ahead); a version bump at landing. The relay does not change.
+- wigley-agents: `workflows.md` and `AGENTS.md` (written ahead); new tool `tools/workflow-gate/`.
+- This machine: hook wiring in `~/.claude/settings.json` (`~/.claude-personal/settings.json` is a symlink to it, so one real file) and `~/.agents/AGENTS.local.md`.
+
+## Preconditions
+
+Run from `~/Documents/ai-dev`. wigley:make re-runs each one before the first dispatch.
+
+1. The peer's trail work is on `main`, verified at plan time:
+   - `git -C wigley-ai-gui merge-base --is-ancestor abe4d1d6 main`
+   - `git -C wigley-ai-marketplace merge-base --is-ancestor 9872886 main`
+2. Each `workflow-levels` branch holds only the docs written ahead, on `main`. Rebase when `main` moved.
+3. The tool exists: `grep -n "SET_WORKFLOW_STEP_TOOL = " wigley-ai-gui/src/plugins/workflow/main/step-tool.ts`
+4. The user has no workflow setting, keymap entry or layout to move, checked at plan time, re-verify:
+   - `grep -c workflow ~/.config/wigley-ai-gui/settings.json` prints 0
+   - `grep -c workflow ~/.config/wigley-ai-gui/keymap.json` prints 0, or the file is missing
+   - `ls ~/.config/wigley-ai-gui/layouts/workflow` lists only `layout.d.ts`
+
+## Docs written ahead
+
+Each is a hypothesis until task 11 re-reads it against the landed code.
+
+- wigley-agents, branch `workflow-levels`, commit 936f725: `workflows.md`, `AGENTS.md`
+- wigley-ai-marketplace, branch `workflow-levels`, commit 3dcabfe: `plugins/wigley/skills/light/SKILL.md`, `plugins/wigley/skills/medium/SKILL.md`, the `description` of `plugins/wigley/skills/feature/SKILL.md`
+- wigley-ai-gui, branch `workflow-levels`, commit 6295f86f: `docs/features/workflow-levels/design.md`
+
+## Mandatory Reads
+
+- `wigley-ai-gui/AGENTS.md`: every implementer reads Intent, and the Architecture entries for a plugin, a registration, a session part, a composer part, a side part, a row activity, a key, an event, a setting, a theme, plugin data, a layout, an MCP tool, and the layer checks. Task 05 also reads Running and testing.
+- `wigley-ai-gui/DESIGN.md`: every task that draws.
+- `wigley-ai-gui/docs/keymap.md`: task 05.
+- `wigley-ai-gui/docs/features/workflow/design.md` and `docs/features/workflow-levels/design.md`
+- `wigley-ai-marketplace/AGENTS.md` and `~/wigley-agents/AgentsStandardMapping.md` § Tools: task 09.
+
+## Design Overview
+
+```
+session ── reads workflows.md ── loads a level skill
+                                    │  skillStarted
+                                    ▼
+workflow (engine)  claims → flow.workflow, flow.stage = firstStage
+   │  folds only that workflow's stage rules        ◄── set_workflow_step
+   │  flow.checklist                                ◄── set_workflow_checklist
+   │  a stage with `finishes` entered → one line in runs.jsonl
+   ├─ workflow-light    Scope › Build › Check › Land
+   ├─ workflow-medium   Interview › Build › Review › Fix › Land
+   └─ workflow-heavy    Primer/Explore › Interview › Plan › Cold read › Make › Review › Fix › Close
+   draws: row badge + stage text · composer trail · side pane checklist · No workflow tag
+```
+
+Decisions:
+
+- The level comes only from the skill that started. A workflow claims skills: Light `wigley:light`; Medium `wigley:medium`; Heavy `wigley:feature`, `wigley:feature-primer`, `wigley:make`. `wigley:review` and every other skill claim nothing, so they run inside the level.
+- A claim by a different workflow than the flow's current one sets `movedUpFrom` to the current one. The engine does not check that the move is upward: moving down happens on the user's word, by the same skill load.
+- Only the flow's current workflow folds its stage rules. Two workflows may hold a stage with one id or one `reportedAs`.
+- Heavy's skills do not change and Heavy never calls `set_workflow_checklist`. Heavy's checklist comes from `plan.md`.
+- Each workflow plugin owns a layout folder (`layouts/workflow-light/<name>/`) over one contract and one kit that the engine exports.
+- The engine holds no plan, wave, countdown or Clear & make concept. They move to `workflow-heavy`. The stage actions become commands the owner plugin declares, which closes the follow-up "Workflow stage actions as commands".
+- A flow shape change has no migration (`wigley-ai-gui/AGENTS.md` § Intent): an old `flows.json` fails validation and the app starts with no flows.
+- Only a session the app starts gets the note that names the tools.
+- A standalone `wigley:explore` or `wigley:review` shows its level and trail through the level skill. This replaces the workflow-trail work's rule that standalone runs show nothing.
+- The edit gate is a Claude Code `PreToolUse` command hook on `Edit|Write|NotebookEdit`. It reads the session transcript for a level skill. A subagent's call passes.
+
+Out of scope: any change to `wigley:feature` or `wigley:make` steps, a screen for the run log, Codex's adapter, a runtime plugin loader, a Stop hook that runs tests.
+
+## File Structure
+
+Paths are under `wigley-ai-gui/src/plugins/` unless named.
+
+New plugins, each with `manifest.ts`, `contract.ts`, `main/start.ts`, `page/start.ts`, `layouts/default/layout.js`, `layouts/default/layout.css`, `layouts/layout.d.ts` as needed, joining `manifests.ts`, `main.ts` and `page.ts`:
+
+- `workflow-heavy/`: takes `workflow/stages/*`, `workflow/plan-reader.ts`, `workflow/main/plan-watch.ts`, `workflow/main/actions.ts`, `workflow/main/countdown.ts`, `workflow/page/countdown.ts`, and the current default layout
+- `workflow-light/`: `stages/{scope,build,check,land,done}/`
+- `workflow-medium/`: `stages/{interview,build,review,fix,land,done}/`
+
+Boundary rules: a workflow plugin imports only `src/contracts`, `src/shared`, its own folder, `workflow/contract.ts`, and the contract of a plugin in its `dependsOn` (Heavy: `chat`, `sessions`, `docs`). The engine imports no workflow plugin. `dependsOn` for each workflow plugin names `workflow` in both processes.
+
+Shared names, pinned here. Every part uses these words exactly. `workflow/contract.ts`:
+
+```ts
+export type WorkflowId = string;
+export interface ChecklistItem { text: string; done: boolean }
+
+export interface SessionFlow {
+  sessionId: string;
+  projectDir: string;
+  workflow: WorkflowId | null;       // null until a workflow claims a skill
+  movedUpFrom: WorkflowId | null;
+  stage: StageId;
+  checklist: readonly ChecklistItem[] | null;  // from set_workflow_checklist
+  state: unknown;                    // the current workflow's own; null on a new claim
+  missedLevel: boolean;              // a live turn ended with workflow === null
+  turnRunning: boolean;
+  runningSubagents: readonly string[];
+}
+
+// signal added: { type: 'checklistReported'; items: readonly ChecklistItem[] }
+
+export interface MainWorkflow {
+  id: WorkflowId;
+  order: number;                     // light 10, medium 20, heavy 30
+  claims(signal: WorkflowSignal): boolean;
+  firstStage: StageId;
+  stages: readonly MainStage[];
+  // Heavy's bookkeeping; returns the new state, or `flow.state` for no change.
+  foldState?(flow: SessionFlow, signal: WorkflowSignal): unknown;
+  // Compares states for sameFlow. Left out: by reference.
+  sameState?(a: unknown, b: unknown): boolean;
+  // Review fix cycles for the run log. Left out: 0.
+  fixCycles?(flow: SessionFlow): number;
+}
+
+// signal added: { type: 'custom'; event: unknown }. planChanged, planGone, handedOff, dismissed leave the union.
+export type SignalOrigin = 'live' | 'replay' | 'observed';
+export interface FoldEvent { sessionId: string; before: SessionFlow; after: SessionFlow; signal: WorkflowSignal; origin: SignalOrigin; whole: boolean }
+export interface WorkflowObserver {
+  folded(event: FoldEvent): void;
+  opened(flow: SessionFlow): void;
+  closed(sessionId: string): void;
+  replaying(sessionId: string): void;
+}
+
+export interface WorkflowMainExports {
+  addWorkflow(workflow: MainWorkflow): Disposable;
+  ready: Promise<void>;
+  signal(sessionId: string, signal: WorkflowSignal, origin: 'live' | 'observed'): void;
+  flowOf(sessionId: string): SessionFlow | null;
+  flows(): readonly SessionFlow[];
+  setState(sessionId: string, state: unknown): void;  // no fold; keeps savedAt
+  observe(observer: WorkflowObserver): Disposable;
+  layoutTypes: string;
+  selfTestHooks: WorkflowSelfTestHooks | null;
+}
+
+export interface ChecklistGroup { title: string; items: readonly ChecklistItem[] }
+export interface ChecklistView { title: string; checked: number; total: number; groups: readonly ChecklistGroup[] }
+
+export interface PageWorkflow {
+  id: WorkflowId;
+  label: string;                     // 'Light'
+  badge: string;                     // 'L'
+  stages: readonly PageStage[];
+  draw: WorkflowDraw;                // from createWorkflowDraw
+  // Left out: one group built from flow.checklist; null when that is null.
+  checklist?(flow: SessionFlow): ChecklistView | null;
+  runAction(sessionId: string, command: string): Promise<void>;
+  countdownText?(flow: SessionFlow, now: number): string | null;
+  progressText?(flow: SessionFlow): string | null;
+  hasPlan?(flow: SessionFlow): boolean;   // left out: checklist(flow) !== null
+  previewFlows?(sessionId: string, now: number): readonly SessionFlow[];
+}
+
+export type PagePluginApi = Pick<PageApi<PluginManifest, ChannelShape>, 'layouts'>;
+export interface WorkflowDrawOptions {
+  manifest: Pick<PluginManifest, 'id' | 'commands'>;
+  defaultLayout: CompleteLayout;
+  defaultStylesheet: string;
+  userLayout(): string;
+  sideTitle: string;
+}
+
+export interface WorkflowPageExports {
+  addWorkflow(workflow: PageWorkflow): Disposable;
+  createWorkflowDraw(api: PagePluginApi, options: WorkflowDrawOptions): WorkflowDraw;
+  runCommand(sessionId: string, command: string): Promise<void>;
+}
+```
+
+- `MainStage` gains `finishes?: boolean`: entering the stage writes one run log line. Heavy `closed`, Light and Medium `done`.
+- `addStage` is removed from both exports. `MainStage` loses `autoCommand`, `clearsPlan` and `recordsReviewRounds` (`HeavyMainStage` holds them). `StageActionSpec` loses `side`, and `command` is the owner's short id. `WorkflowSelfTestHooks` moves to the contract.
+- Layout input names in `workflow/layouts/layout.d.ts`: `ChipInput.badge`, `ChipInput.workflowLabel`, `StripInput.hasChecklist`, `SidePaneInput.checklistTitle`, `finishedGroups`, `currentGroup`, `laterGroups`, `SideGroupInput`, `SideItemInput`, `WorkflowKit.badge`. Each workflow has one side part, `<workflow.id>.sidePane`.
+- `WorkflowSelfTestHooks` gains `callChecklistTool(sessionId, items)` (07). Drive actions `workflow.reportStep` and `workflow.reportChecklist`, each returning `{ accepted: boolean }`, live in `workflow/main/drive-actions.ts`. View log lines: `<name> level <badge>`, `<name> trail <labels>`, `<name> no workflow`. A flow with no `PageWorkflow` still logs `<name> shows idle`.
+- `sideTitle` is `Plan` for Heavy and `Checklist` for Light and Medium. Light's and Medium's `runAction` reject with `Light has no actions` and `Medium has no actions`. Each has `LIGHT_WORKFLOW_ID` or `MEDIUM_WORKFLOW_ID` in its contract; Medium adds `MediumState`, `mediumStateOf`, `foldMediumState`, `mediumFixCycles`.
+- `workflow-heavy/contract.ts` holds `HEAVY_WORKFLOW_ID`, `HeavyState`, `heavyStateOf`, `withHeavyState`, `HeavyEvent`, `heavySignal`, `heavyEventOf`, `HeavyMainStage`.
+- Step words and `reportedAs` values are the values in the skills: Light `build`, `check`, `land`, `done`; Medium `build`, `review`, `fix`, `land`, `done`. Each `done` stage shares its `stepSlot` with `land`, so the trail still reads `Land`.
+- Tool `set_workflow_checklist`, argument `items`: an array of `{ text: string, done: boolean }`. The tool name constant is `SET_WORKFLOW_CHECKLIST_TOOL` in `workflow/main/checklist-tool.ts`.
+- Run log: `runs.jsonl` in the `workflow` plugin data. One JSON object per line, with the keys `at`, `sessionId`, `projectDir`, `workflow`, `movedUpFrom`, `activeMs`, `costUsd`, `fixCycles`.
+- Theme tokens: `workflow-light.badge` default `var(--wg-status-info)`; `workflow-medium.badge` default `var(--wg-accent)`; `workflow-heavy.badge` default `var(--wg-status-warning)`.
+- Row words: the tag `No workflow` draws with `--wg-status-error`.
+- Commands: `workflow.mainAction`, `workflow.toggleSidePane`, `workflow.toggleFinishedWaves` and `workflow.openPreview` stay in the engine. `clearAndMake`, `cancelCountdown`, `makeInNewSession`, `resumeMake`, `openPlan`, `retro` and `dismiss` move to `workflow-heavy.<name>`. Their keys do not change.
+- Settings: `workflow.autoClearAndMake` and `workflow.autoStartSeconds` move to `workflow-heavy`. Each workflow plugin has its own `layout` setting.
+
+wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.md`, `tools/workflow-gate/tests/`.
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Engine: workflows in main](01-engine-main.md)
+- [ ] [Edit gate hook](09-edit-gate.md)
+
+### Wave 2
+- [ ] [Engine: workflows on the page](02-engine-page.md) — after 01
+
+### Wave 3
+- [ ] [Checklist tool, scoped step tool, session note](03-workflow-tools.md) — after 01
+
+### Wave 4
+- [ ] [Run log](04-run-log.md) — after 03
+
+### Wave 5
+- [ ] [workflow-heavy](05-workflow-heavy.md) — after 02, 04
+
+### Wave 6
+- [ ] [workflow-light](07-light.md) — after 05
+
+### Wave 7
+- [ ] [workflow-medium](08-medium.md) — after 07
+
+### Wave 8
+- [ ] [Project docs and follow-ups](10-project-docs.md) — after 08, 09
+
+### Wave 9
+- [ ] [Doc re-read](11-doc-re-read.md) — after 10
+
+### Wave 10
+- [ ] [Final verification and landing](12-final-verification.md) — after 11
+
+## Run log
+
+Review base: <sha, written by wigley:make at preflight>
+
+### Groups
+### Contract changes
+### Rulings
+### Review rounds
+### Test gate
