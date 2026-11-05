@@ -47,6 +47,16 @@ export interface ListPickerRequest<T> {
   // `redraw()`, the old and new cursor rows on a cursor move) and when it
   // closes.
   drawRow?(parent: HTMLElement, item: T, input: DrawRowInput): DrawnPickerRow;
+  // The section `item` sits under; null for none. The list draws a heading
+  // above a row whose section is not null and differs from the previous row's;
+  // it does not sort, so the caller keeps a section's items together. A heading
+  // takes no cursor and no click, and hides while a filter is typed.
+  section?(item: T): string | null;
+  // Draws a heading into `parent`, the heading's `li`, and returns the draw;
+  // the title is the `li`'s text when left out. The picker runs its dispose
+  // before every row draws again (a filter change or `redraw()`, never a cursor
+  // move) and when it closes.
+  drawHeading?(parent: HTMLElement, title: string): DrawnPickerRow;
 }
 
 // What a request's `drawRow` draws one row with.
@@ -76,6 +86,8 @@ export interface DrawnPickerRow {
 // nothing. A request's `drawRow` draws each row; the picker sets the row's
 // title, `is-selected` and `is-cursor`, and the click that chooses its item.
 // A cursor move draws only the row the cursor left and the row it reached.
+// A request's `section` adds headings between the rows while no filter is
+// typed; the cursor and `cursorIndex` count items only.
 export interface ListPicker {
   // The transparent layer holding the panel, filling the positioned box the
   // caller places it in.
@@ -121,6 +133,9 @@ interface OpenRequest {
     index: number,
     input: DrawRowInput,
   ): DrawnPickerRow | null;
+  sectionAt(index: number): string | null;
+  // The request's own heading drawn into `parent`; null when it draws none.
+  drawHeadingIn(parent: HTMLElement, title: string): DrawnPickerRow | null;
 }
 
 const NO_DISPOSE = () => undefined;
@@ -152,10 +167,12 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
 
   // Each drawn row by its item index, with the dispose of its draw.
   const drawnRows = new Map<number, DrawnPickerRow>();
+  const drawnHeadings: DrawnPickerRow[] = [];
   const disposeRows = () => {
-    const rows = [...drawnRows.values()];
+    const draws = [...drawnRows.values(), ...drawnHeadings];
     drawnRows.clear();
-    for (const drawn of rows) {
+    drawnHeadings.length = 0;
+    for (const drawn of draws) {
       drawn.dispose();
     }
   };
@@ -194,13 +211,35 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     return drawn;
   };
 
+  // Draws a heading titled `title`, appended to the list.
+  const drawHeading = (title: string): DrawnPickerRow => {
+    const heading = element('li', 'ui-picker-heading');
+    heading.addEventListener('mousedown', (event) => event.preventDefault());
+    list.append(heading);
+    const drawn = request?.drawHeadingIn(heading, title) ?? null;
+    if (drawn !== null) {
+      return drawn;
+    }
+    heading.textContent = title;
+    return { element: heading, dispose: NO_DISPOSE };
+  };
+
   const scrollToCursor = () =>
     list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
 
   const draw = () => {
     disposeRows();
     list.replaceChildren();
+    const showsHeadings = state.filter.trim() === '';
+    let previousSection: string | null = null;
     for (const index of visibleIndexes(state, deps.matcher)) {
+      if (showsHeadings) {
+        const section = request?.sectionAt(index) ?? null;
+        if (section !== null && section !== previousSection) {
+          drawnHeadings.push(drawHeading(section));
+        }
+        previousSection = section;
+      }
       drawnRows.set(index, drawRowAt(index));
     }
     scrollToCursor();
@@ -286,6 +325,9 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
         cursorEndAt: (index) => next.cursorEnd?.(next.items[index]) ?? null,
         drawRowAt: (parent, index, input) =>
           next.drawRow?.(parent, next.items[index], input) ?? null,
+        sectionAt: (index) => next.section?.(next.items[index]) ?? null,
+        drawHeadingIn: (parent, title) =>
+          next.drawHeading?.(parent, title) ?? null,
       };
       state = openPicker(
         next.items.map(next.label),

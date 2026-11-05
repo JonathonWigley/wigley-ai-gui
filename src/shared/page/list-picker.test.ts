@@ -112,6 +112,28 @@ function rows(layer: FakeElement): FakeElement[] {
   return findAll(layer, 'ui-row');
 }
 
+// A request with one item, named `item<n>`, per entry of `sections`.
+function sectionedRequest(
+  sections: readonly (string | null)[],
+  extra: Partial<ListPickerRequest<string>> = {},
+): ListPickerRequest<string> {
+  const items = sections.map((_section, index) => `item${index}`);
+  return request({
+    items,
+    section: (item) => sections[items.indexOf(item)],
+    ...extra,
+  });
+}
+
+// The list's children top to bottom, a heading as `# <title>`.
+function drawnOrder(layer: FakeElement): string[] {
+  return findAll(layer, 'ui-picker-list')[0].children.map((child) =>
+    child.classList.contains('ui-picker-heading')
+      ? `# ${child.textContent}`
+      : child.textContent,
+  );
+}
+
 describe('list picker', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -277,5 +299,124 @@ describe('list picker', () => {
     expect(picker.cursorIndex()).toBe(1);
     picker.choose();
     expect(chosen).toHaveBeenCalledWith('a/b');
+  });
+
+  it('open_Sections_DrawsHeadingsAtEachEdge', () => {
+    const { picker, layer } = pickerSetup();
+    const chosen = vi.fn();
+
+    picker.open(sectionedRequest(['A', 'A', 'B'], { chosen }));
+
+    expect(drawnOrder(layer)).toEqual([
+      '# A',
+      'item0',
+      'item1',
+      '# B',
+      'item2',
+    ]);
+    const [heading] = findAll(layer, 'ui-picker-heading');
+    expect(heading.tagName.toLowerCase()).toBe('li');
+    expect(heading.fire('mousedown').defaultPrevented).toBe(true);
+    heading.click();
+    expect(chosen).not.toHaveBeenCalled();
+    expect(picker.isOpen()).toBe(true);
+  });
+
+  it('down_OverAHeading_MovesToNextItem', () => {
+    const { picker, layer } = pickerSetup();
+    picker.open(sectionedRequest(['A', 'A', 'B'], { selected: 1 }));
+
+    picker.down();
+
+    expect(picker.cursorIndex()).toBe(2);
+    expect(drawnOrder(layer)).toEqual([
+      '# A',
+      'item0',
+      'item1',
+      '# B',
+      'item2',
+    ]);
+    expect(findAll(layer, 'is-cursor').map((row) => row.textContent)).toEqual([
+      'item2',
+    ]);
+
+    picker.up();
+
+    expect(picker.cursorIndex()).toBe(1);
+    expect(drawnOrder(layer)).toEqual([
+      '# A',
+      'item0',
+      'item1',
+      '# B',
+      'item2',
+    ]);
+  });
+
+  it('filter_Typed_HidesHeadings', () => {
+    const { picker, layer, type } = filteredPickerSetup();
+    const whole = ['# A', 'item0', '# B', 'item1'];
+    picker.open(sectionedRequest(['A', 'B']));
+
+    type('item');
+    expect(findAll(layer, 'ui-picker-heading')).toEqual([]);
+    expect(rows(layer)).toHaveLength(2);
+
+    type(' ');
+    expect(drawnOrder(layer)).toEqual(whole);
+
+    type('item');
+    type('');
+    expect(drawnOrder(layer)).toEqual(whole);
+  });
+
+  it.each([
+    {
+      sections: [null, null],
+      expected: ['item0', 'item1'],
+    },
+    {
+      sections: ['A', null, 'A'],
+      expected: ['# A', 'item0', 'item1', '# A', 'item2'],
+    },
+  ])(
+    'open_NullSections_DrawsNoHeadings: $sections',
+    ({ sections, expected }) => {
+      const { picker, layer } = pickerSetup();
+
+      picker.open(sectionedRequest(sections));
+
+      expect(drawnOrder(layer)).toEqual(expected);
+    },
+  );
+
+  it('redraw_DrawnHeading_DisposesItsDraw', () => {
+    const { picker, layer } = pickerSetup();
+    const made: string[] = [];
+    const disposed: string[] = [];
+    const drawHeading: ListPickerRequest<string>['drawHeading'] = (
+      parent,
+      title,
+    ) => {
+      const owned = new FakeElement('span');
+      owned.append(title);
+      parent.append(asHtml(owned));
+      const name = `${title}#${made.length + 1}`;
+      made.push(name);
+      return { element: asHtml(owned), dispose: () => disposed.push(name) };
+    };
+    picker.open(sectionedRequest(['A', 'B'], { drawHeading }));
+    expect(drawnOrder(layer)).toEqual(['# A', 'item0', '# B', 'item1']);
+
+    picker.down();
+    expect(made).toEqual(['A#1', 'B#2']);
+    expect(disposed).toEqual([]);
+
+    picker.redraw();
+    expect(disposed).toEqual(['A#1', 'B#2']);
+    expect(made.slice(2)).toEqual(['A#3', 'B#4']);
+
+    picker.close();
+    expect(disposed.slice(2)).toEqual(['A#3', 'B#4']);
+    expect(made).toHaveLength(4);
   });
 });

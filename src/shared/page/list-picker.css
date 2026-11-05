@@ -40,3 +40,13 @@
   max-height: 50vh;
   overflow-y: auto;
 }
+
+.ui-picker-heading {
+  display: flex;
+  align-items: center;
+  min-height: var(--wg-row-tree);
+  padding: 0 var(--wg-space-2);
+  font-size: var(--wg-text-12);
+  font-weight: var(--wg-weight-semibold);
+  color: var(--wg-fg-secondary);
+}
