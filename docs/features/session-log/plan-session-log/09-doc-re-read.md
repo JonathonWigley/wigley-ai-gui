@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -20,3 +20,4 @@ Commit:    one commit for the group, or none when nothing is stale
 
 ## Proof
 
+Commit 165af537 · proof: diff read; the sweep's lines checked against the code by the worker; AGENTS.md and the agent-chat design needed no edit · concerns: none
