@@ -110,8 +110,9 @@ type RowPartOf<P extends keyof RowInputs> = { part: P; input: RowInputs[P] };
 
 export type RowPart = { [P in keyof RowInputs]: RowPartOf<P> }[keyof RowInputs];
 
-// One row: `key` names it in the cursor and log lines (a setting's path, a
-// command id, `leader` or `advanced`); `draw` is the part that draws it.
+// One row: `key` names it in the cursor and log lines (a setting's path,
+// `commandTarget(id, arg)`, `leader` or `advanced`); `draw` is the part that
+// draws it.
 export interface SettingsRow {
   key: string;
   file: ConfigFile;
@@ -190,7 +191,6 @@ export interface SettingsViewDeps {
   isSideBarShown(): boolean;
   pushScope(scope: 'box'): PushedScope;
   picker: ListPickerService;
-  addOverlay(element: HTMLElement): Disposable;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
   // `scope` is in force, followed by `label` (true: the command's label): the
   // cursor prompt's keys, which the app draws in each layout.
@@ -373,6 +373,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let hasOpenedSection = false;
   let focus: 'sections' | 'rows' = 'sections';
   let query = '';
+  let drawnQuery = '';
   let filterScope: PushedScope | null = null;
   let rows: SettingsRow[] = [];
   // Each drawn row by its key, and the dispose of every part drawn into the
@@ -507,9 +508,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       section === undefined
         ? keymapSection(context, query)
         : settingSection(section, context, query);
+    const cursorIndex = rows.findIndex((row) => row.key === cursorKey);
+    const isSameFilter = query === drawnQuery;
+    drawnQuery = query;
     rows = drawing.rows;
     if (!rows.some((row) => row.key === cursorKey)) {
-      setCursor(rows[0]?.key ?? null);
+      // A row that left the list hands the cursor to the row now in its place;
+      // a row the filter hid hands it to the best match.
+      const place = isSameFilter ? Math.max(cursorIndex, 0) : 0;
+      setCursor(rows[Math.min(place, rows.length - 1)]?.key ?? null);
     }
     disposeEntries();
     const { problem, rowList } = rowsPane.built;

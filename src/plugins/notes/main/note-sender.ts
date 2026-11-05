@@ -38,8 +38,9 @@ export interface NoteSenderDeps {
 }
 
 // Sends the kept draft, clears it once the send succeeded and emits the send's
-// event; a refused or failed send keeps it and emits nothing. `flattened` holds one entry per draft image, in strip
-// order: the PNG with its markup drawn in, or null to send the stored image.
+// event; a refused or failed send keeps it and emits nothing. `flattened` holds
+// one entry per draft image, in strip order: the PNG with its markup drawn in,
+// or null to send the stored image.
 // A follow-up files the images at full size, on disk where no API cap
 // applies. A session send shrinks each image over the API's cap first; one
 // that will not shrink under it, or that the encoder rejects, refuses the send

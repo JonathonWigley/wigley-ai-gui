@@ -75,7 +75,7 @@ describe('createDocsPicker', () => {
     { case: 'another view', closer: 'other', staysOpen: true },
     { case: 'the opening view', closer: 'opener', staysOpen: false },
   ])(
-    'forView_OtherViewCloses_ListStaysOpen: $case',
+    'forView_Close_ClosesOnlyTheOpeningViewsList: $case',
     ({ closer, staysOpen }) => {
       const list = fakeListPickerService().create();
       const docsPicker = createDocsPicker(list);

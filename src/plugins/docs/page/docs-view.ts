@@ -442,9 +442,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         focusDocAndLog();
         return;
       }
-      void doc
-        .open(targetFor(entry.path, entry, entry.line, null))
-        .then((opened) => {
+      void openAndTell(targetFor(entry.path, entry, entry.line, null)).then(
+        (opened) => {
           if (!opened) {
             return;
           }
@@ -452,7 +451,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           if (focusesDoc) {
             focusDocAndLog();
           }
-        });
+        },
+      );
     },
     pushBoxScope: () => deps.pushScope('box'),
     filterClosed: () => {
@@ -512,6 +512,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     parts: newParts(),
   });
 
+  // Opens `target` and tells `docOpened` once it shows; resolves to whether it
+  // did.
+  const openAndTell = async (target: DocTarget): Promise<boolean> => {
+    const opened = await doc.open(target);
+    if (opened) {
+      deps.docOpened(target.path);
+    }
+    return opened;
+  };
+
   const isListed = (path: string): boolean =>
     document !== null && isIndexedPath(path, document.entries, deps.paths);
 
@@ -530,10 +540,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
-    void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
-      if (opened) {
-        deps.docOpened(path);
-      }
+    void openAndTell(targetFor(path, entry, line, fragment)).then((opened) => {
       if (opened && entry !== null) {
         tree.selectEntry(entry.id);
       }
@@ -583,8 +590,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const openInEditor = async (entry: IndexEntry, line: number) => {
-    if (await doc.open(targetFor(entry.path, entry, line, null))) {
-      deps.docOpened(entry.path);
+    if (await openAndTell(targetFor(entry.path, entry, line, null))) {
       doc.edit(line);
       focusDoc();
     }

@@ -6,6 +6,7 @@ import type {
 } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import type { CoreEvents } from '../../../contracts/core-state';
+import type { KeyedSlotReader, SlotReader } from '../../../contracts/state';
 import {
   followRows,
   sessionsActiveSlot,
@@ -18,7 +19,7 @@ import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { notesManifest } from '../manifest';
 import { readNotesLayout } from './layout/read-notes-layout';
-import { createNotePopup } from './popup';
+import { createNotePopup, type NotePopupDeps } from './popup';
 
 type NotesApi = PageApi<
   typeof notesManifest,
@@ -34,6 +35,23 @@ function noteSessionOf(row: SessionRow | undefined): NoteSession | null {
   }
   const { sessionId, harness, hostSessionId, projectDir } = row;
   return { sessionId, harness, hostSessionId, projectDir };
+}
+
+// The popup's reads of the session rows: `selectedSession` is the active row
+// when it carries a host session id, and `sessionRows` every row that does, in
+// row order.
+export function noteSessions(
+  rows: Pick<KeyedSlotReader<SessionRow>, 'get' | 'all'>,
+  active: Pick<SlotReader<string | null>, 'get'>,
+): Pick<NotePopupDeps, 'selectedSession' | 'sessionRows'> {
+  return {
+    selectedSession() {
+      const selected = active.get() ?? null;
+      return selected === null ? null : noteSessionOf(rows.get(selected));
+    },
+    sessionRows: () =>
+      [...rows.all().values()].flatMap((row) => noteSessionOf(row) ?? []),
+  };
 }
 
 // The note popup over any mode, on `Space n n`, drawn with the layout the
@@ -68,12 +86,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       state: api.state.forLayouts,
       pushScope: (scope) => api.keys.pushScope(scope),
       autosaveDelayMs: () => api.settings().autosaveDelayMs,
-      selectedSession: () => {
-        const selected = active.get() ?? null;
-        return selected === null ? null : noteSessionOf(rows.get(selected));
-      },
-      sessionRows: () =>
-        [...rows.all().values()].flatMap((row) => noteSessionOf(row) ?? []),
+      ...noteSessions(rows, active),
       drops: api.drops,
       encoder: canvasEncoder,
     });

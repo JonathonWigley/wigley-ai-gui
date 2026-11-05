@@ -17,7 +17,7 @@ import {
   type SessionTabHandle,
   type SessionTabView,
 } from '../../sessions/contract';
-import type { DocsPageExports } from '../contract';
+import { type DocsPageExports, sessionSourceId } from '../contract';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
@@ -50,16 +50,26 @@ function disposeThrowingOn(
   };
 }
 
-// `tabs` holds each tab's title; its handle files under the dependent.
-function fakeSessions(tabs: string[], throwsNext: ThrowsNext) {
+// `tabs` holds each tab's title and `liveTabs` each undisposed tab by session;
+// its handle files under the dependent.
+function fakeSessions(
+  tabs: string[],
+  liveTabs: Map<string, SessionTabView>,
+  throwsNext: ThrowsNext,
+) {
+  const throwFromDispose = disposeThrowingOn(throwsNext, 'tab');
   return fakeDependency(
     sessionsPageKey,
     (consumer) =>
       ({
-        addTab(_sessionId: string, tab: SessionTabView) {
+        addTab(sessionId: string, tab: SessionTabView) {
           tabs.push(tab.title);
+          liveTabs.set(sessionId, tab);
           return consumer.track({
-            dispose: disposeThrowingOn(throwsNext, 'tab'),
+            dispose() {
+              liveTabs.delete(sessionId);
+              throwFromDispose();
+            },
           } as SessionTabHandle);
         },
       }) as unknown as SessionsPageExports,
@@ -71,6 +81,7 @@ function startDocsPage(
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
+  const liveTabs = new Map<string, SessionTabView>();
   const throwsNext: ThrowsNext = { anchor: false, tab: false };
   const picker = fakeListPickerService();
   const harness = startPagePart(docsPagePart, {
@@ -83,14 +94,42 @@ function startDocsPage(
         ...NO_FENCES,
       },
     },
-    dependencies: [fakeSessions(tabs, throwsNext)],
+    dependencies: [fakeSessions(tabs, liveTabs, throwsNext)],
     anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
     firstModeTaken: true,
     invoke,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, tabs, throwsNext, picker };
+  return { harness, exportsTo, tabs, liveTabs, throwsNext, picker };
+}
+
+type DocsPage = ReturnType<typeof startDocsPage>;
+
+// Opens `path` through Docs mode's `openDoc` message.
+function openByMessage({ harness }: DocsPage, path: string) {
+  harness.send('openDoc', { path, line: null });
+}
+
+// Shows an added view, then steps its tree down to the only leaf and opens it:
+// `treeOpen` expands or enters a group until it reaches the leaf, which reads
+// its doc.
+async function openFromTree(
+  { harness, exportsTo }: DocsPage,
+  _path: string,
+  readDocs: readonly unknown[],
+) {
+  exportsTo(createRegistrations())
+    .addView('source', { isVisible: () => true })
+    .shown();
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const { commands } = harness.started();
+  await settle();
+  commands.treeDown({ arg: undefined });
+  for (let press = 0; press < 8 && readDocs.length === 0; press += 1) {
+    commands.treeOpen({ arg: undefined });
+    await settle();
+  }
 }
 
 describe('docs page part lifecycle', () => {
@@ -159,53 +198,114 @@ describe('docs page part lifecycle', () => {
   });
 
   it.each([
-    { case: 'a doc that reads', path: '/p/kept.md', opened: ['/p/kept.md'] },
-    { case: 'a missing doc', path: '/p/gone.md', opened: [] },
-  ])('docOpened_DocOpens_FiresOnlyThen ($case)', async ({ path, opened }) => {
-    const entries = ['/p/kept.md', '/p/gone.md'].map((entryPath) => ({
-      id: entryPath,
-      kind: 'instructions',
-      source: 'global',
-      owner: 'mine',
-      repo: null,
-      root: null,
-      plugin: null,
-      path: entryPath,
-      line: null,
-      title: entryPath,
-      meta: {},
-      walked: [],
-      lastLoaded: null,
-    }));
-    const { harness } = startDocsPage(async (method, ...args) => {
-      if (method === 'loadIndex') {
-        return {
-          document: {
-            schemaVersion: 4,
-            generatedAt: '2026-11-05T00:00:00Z',
-            entries,
-            contexts: [],
-          },
-          message: null,
-          title: 'index',
-          canRebuild: false,
-        };
+    {
+      case: 'a message opening a doc that reads',
+      open: openByMessage,
+      path: '/p/kept.md',
+      opened: ['/p/kept.md'],
+    },
+    {
+      case: 'a message opening a missing doc',
+      open: openByMessage,
+      path: '/p/gone.md',
+      opened: [],
+    },
+    {
+      case: 'the tree opening a doc that reads',
+      open: openFromTree,
+      path: '/p/kept.md',
+      opened: ['/p/kept.md'],
+    },
+    {
+      case: 'the tree opening a missing doc',
+      open: openFromTree,
+      path: '/p/gone.md',
+      opened: [],
+    },
+  ])(
+    'docOpened_DocOpens_FiresOnlyThen ($case)',
+    async ({ open, path, opened }) => {
+      const entry = {
+        id: path,
+        kind: 'instructions',
+        source: 'global',
+        owner: 'mine',
+        repo: null,
+        root: null,
+        plugin: null,
+        path,
+        line: null,
+        title: path,
+        meta: {},
+        walked: [],
+        lastLoaded: null,
+      };
+      const readDocs: unknown[] = [];
+      const page = startDocsPage(async (method, ...args) => {
+        if (method === 'loadIndex') {
+          return {
+            document: {
+              schemaVersion: 4,
+              generatedAt: '2026-11-05T00:00:00Z',
+              entries: [entry],
+              contexts: [],
+            },
+            message: null,
+            title: 'index',
+            canRebuild: false,
+          };
+        }
+        if (method !== 'readDoc') {
+          return { clones: [] };
+        }
+        readDocs.push(args[0]);
+        if (args[0] === '/p/gone.md') {
+          throw new Error('no such file');
+        }
+        return '# Doc';
+      });
+      const { harness } = page;
+
+      await open(page, path, readDocs);
+      const hasSettled = () =>
+        dataEmitted(harness, 'docs.docOpened').length > 0 ||
+        harness.logs.some(({ message }) => message.includes('Could not open'));
+      await vi.waitFor(() => expect(hasSettled()).toBe(true));
+
+      expect(dataEmitted(harness, 'docs.docOpened')).toEqual(
+        opened.map((each) => ({ path: each })),
+      );
+      await harness.stop();
+    },
+  );
+
+  it('rows_HostChangedOrRemoved_ReachOnlyThatRowsView', async () => {
+    const rebuilt: unknown[] = [];
+    const { harness, liveTabs } = startDocsPage(async (method, ...args) => {
+      if (method === 'rebuildIndex') {
+        rebuilt.push(args[0]);
       }
-      if (method === 'readDoc' && args[0] === '/p/gone.md') {
-        throw new Error('no such file');
-      }
-      return method === 'readDoc' ? '# Doc' : { clones: [] };
+      return method === 'pluginStatus'
+        ? { clones: [] }
+        : { document: null, message: null, title: 'index', canRebuild: false };
     });
+    const rows = harness.state.publish(sessionsRowsSlot);
+    for (const sessionId of ['s1', 's2']) {
+      rows.set(sessionId, projectRow(sessionId));
+    }
+    harness.emit('core.pageReady', null);
+    for (const tab of liveTabs.values()) {
+      tab.shown?.();
+    }
 
-    harness.send('openDoc', { path, line: null });
-    const hasSettled = () =>
-      dataEmitted(harness, 'docs.docOpened').length > 0 ||
-      harness.logs.some(({ message }) => message.includes('Could not open'));
-    await vi.waitFor(() => expect(hasSettled()).toBe(true));
-
-    expect(dataEmitted(harness, 'docs.docOpened')).toEqual(
-      opened.map((each) => ({ path: each })),
+    rows.set('s1', { ...projectRow('s1'), hostSessionId: 'moved' });
+    await vi.waitFor(() =>
+      expect(rebuilt).toEqual([sessionSourceId('s1')]),
     );
+
+    rows.delete('s1');
+    expect([...liveTabs.keys()]).toEqual(['s2']);
+    expect(harness.counts().observers).toBe(1);
     await harness.stop();
   });
 

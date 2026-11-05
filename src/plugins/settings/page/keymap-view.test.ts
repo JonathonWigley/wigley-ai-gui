@@ -4,12 +4,16 @@ import type {
   AcceleratorBind,
   KeyBind,
   UserKeymap,
+  ViewScope,
 } from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { keymapRows } from './keymap-rows';
 import { keymapSection, keyRowInput } from './keymap-view';
-import type { RowContext } from './settings-view';
+import type { PickRequest, RowContext } from './settings-view';
+
+type BoxRequest = Parameters<RowContext['openBox']>[0];
+type RowBox = Parameters<RowContext['closeBox']>[0];
 
 function command(id: string, runsIn: 'page' | 'main' = 'page'): CommandInfo {
   const [plugin] = id.split('.');
@@ -34,9 +38,13 @@ function schema(defaultBinds: KeyBind[], app: AcceleratorBind[]) {
   } satisfies UserConfigSchema;
 }
 
-// A row context over the schema and keymap layer; the input reads nothing
-// else.
-function context(given: UserConfigSchema, layer: UserKeymap): RowContext {
+// A row context over the schema and keymap layer; beyond `overrides`, it reads
+// nothing else.
+function context(
+  given: UserConfigSchema,
+  layer: UserKeymap,
+  overrides: Partial<RowContext> = {},
+): RowContext {
   const unread = () => {
     throw new Error('not read by keyRowInput');
   };
@@ -54,6 +62,7 @@ function context(given: UserConfigSchema, layer: UserKeymap): RowContext {
     commitSettings: unread,
     commitKeymap: unread,
     toast: unread,
+    ...overrides,
   };
 }
 
@@ -66,6 +75,58 @@ describe('keymapSection', () => {
     const { rows } = keymapSection(context(schema([], []), {}), query);
 
     expect(rows.some((row) => row.key === 'advanced')).toBe(isShown);
+  });
+});
+
+describe('a row of a command that takes an argument', () => {
+  const PICK: CommandInfo = { ...command('p.pick'), arg: 'number' };
+  const pickSchema = { ...schema([], []), commands: { 'p.pick': PICK } };
+  const bind = (keys: string, arg: number): KeyBind => ({
+    keys,
+    scope: 'any',
+    command: 'p.pick',
+    arg,
+  });
+  const layer: UserKeymap = { binds: [bind('a', 1), bind('b', 2)] };
+
+  // The row of argument 2 over `layer`, with each commit, box and picker kept.
+  function secondRow() {
+    const committed: UserKeymap[] = [];
+    const boxes: BoxRequest[] = [];
+    const pickers: PickRequest<ViewScope>[] = [];
+    const ctx = context(pickSchema, layer, {
+      commitKeymap: (written) => committed.push(written),
+      openBox: (box) => boxes.push(box),
+      openPicker: <T>(picker: PickRequest<T>) =>
+        pickers.push(picker as unknown as PickRequest<ViewScope>),
+    });
+    const { rows } = keymapSection(ctx, '');
+    const row = rows.find((each) => each.key === 'p.pick 2');
+    if (row === undefined) {
+      throw new Error(`no p.pick 2 in ${rows.map((each) => each.key).join()}`);
+    }
+    return { row, committed, boxes, pickers };
+  }
+
+  it('reset writes back only the binds of the other arguments', () => {
+    const { row, committed } = secondRow();
+
+    row.actions.reset?.();
+
+    expect(committed).toEqual([{ binds: [bind('a', 1)] }]);
+  });
+
+  it('addBind opens its box under the row key and writes the bind with its argument', () => {
+    const { row, committed, boxes, pickers } = secondRow();
+
+    row.actions.addBind?.();
+    expect(boxes.map((box) => box.key)).toEqual([row.key]);
+    boxes[0].accept({ text: () => ' z ' } as RowBox);
+    pickers[0].chosen('any', null);
+
+    expect(committed).toEqual([
+      { binds: [bind('a', 1), bind('b', 2), bind('z', 2)] },
+    ]);
   });
 });
 

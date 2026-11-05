@@ -416,12 +416,14 @@ describe('docs main part', () => {
   describe('doc events', () => {
     const REPO = '/p';
     const DOC = `${REPO}/notes.md`;
+    const REAL_DOC = `${REPO}/real.md`;
 
     // Docs over a repo source whose loaded entry allows changes inside `/p`.
     async function startOverRepo() {
       const docs = startDocsPart();
       await docs.files.makeFolder(REPO);
       await docs.files.write(DOC, 'one');
+      await docs.files.write(REAL_DOC, 'real');
       docs.exports.addSource({
         id: 'repo',
         title: 'repo',
@@ -452,6 +454,24 @@ describe('docs main part', () => {
       await docs.invoke('loadIndex', 'repo');
       docs.emitted.length = 0;
       return docs;
+    }
+
+    // `DOC` becomes a link to `REAL_DOC`, so a trash of it moves `REAL_DOC`, then
+    // fails on the link.
+    function makeDocALinkThatWillNotTrash({
+      files,
+    }: Awaited<ReturnType<typeof startOverRepo>>) {
+      const { stat, realPath, trash } = files;
+      vi.spyOn(files, 'stat').mockImplementation(async (path) => {
+        const found = await stat(path);
+        return found && { ...found, isLink: path === DOC };
+      });
+      vi.spyOn(files, 'realPath').mockImplementation((path) =>
+        path === DOC ? Promise.resolve(REAL_DOC) : realPath(path),
+      );
+      vi.spyOn(files, 'trash').mockImplementation((path) =>
+        path === DOC ? Promise.reject(new Error('in use')) : trash(path),
+      );
     }
 
     it.each<{
@@ -494,6 +514,14 @@ describe('docs main part', () => {
         case: 'trash with targets',
         act: (docs) => docs.invoke('trashDoc', DOC),
         emitted: [['docTrashed', { path: DOC, trashed: [DOC] }]],
+      },
+      {
+        case: 'trash whose second target fails',
+        act: (docs) => {
+          makeDocALinkThatWillNotTrash(docs);
+          return docs.invoke('trashDoc', DOC);
+        },
+        emitted: [['docTrashed', { path: DOC, trashed: [REAL_DOC] }]],
       },
     ])('docEvents_CallLands_FireOnlyThen ($case)', async ({ act, emitted }) => {
       const docs = await startOverRepo();

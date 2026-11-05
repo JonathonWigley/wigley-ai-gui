@@ -122,7 +122,7 @@ const MARKUP_COMMANDS: readonly { command: MarkupCommand; label: string }[] = [
   { command: 'closeMarkup', label: 'Done' },
 ];
 
-// What every notes part draw reads: the page services and the keys export.
+// What every notes part draw reads: the page services and the part's key hints.
 export interface NotesPartsDeps extends OwnerKitServices {
   log: PluginLog;
 }

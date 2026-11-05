@@ -218,11 +218,11 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
 
 // Serves the page every registered index source (the machine index and one
 // per live session, plus any a plugin adds through `addSource`), the guarded
-// doc changes, one watched file per view, external links, and the git
-// statuses of the marketplace clones among a source's entries. A source's
-// index entries stay writable while it is registered. The page's own index
-// reads emit `indexLoaded`; the exports' reads do not. A change that lands emits
-// its event, from the page or an export alike.
+// doc changes, one watched file per view, and the git statuses of the
+// marketplace clones among a source's entries. A source's index entries stay
+// writable while it is registered. The page's own index reads emit
+// `indexLoaded`; the exports' reads do not. A change that lands emits its event,
+// from the page or an export alike.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {

@@ -204,8 +204,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const { channel, paths, homeDir } = deps;
   const tilde = (path: string) => paths.tilde(path, homeDir);
   // A new element, made once for the view's life, that the core draws
-  // the keys of `command` in `scope` into, then `label` when given. The keys
-  // plugin disposes the anchor when backlog stops.
+  // the keys of `command` in `scope` into, then `label` when given. The anchor
+  // is disposed when backlog stops.
   const anchored = (
     command: BacklogCommand,
     scope: BacklogBaseScope,

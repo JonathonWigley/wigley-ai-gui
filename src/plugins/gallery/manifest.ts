@@ -3,7 +3,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // Gallery mode, a debug view of every design primitive in every state, with a
 // switch between full and reduced transparency that holds for the page load
 // only and a swap of the shell to a test layout and back. Its main part only
-// registers the layout contract. Names only `keys`, for its key hints.
+// registers the layout contract.
 export const galleryManifest = definePlugin({
   id: 'gallery',
   dependsOn: { main: [], page: [] },

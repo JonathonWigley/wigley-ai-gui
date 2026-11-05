@@ -43,7 +43,6 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       isSideBarShown: () => mode.sideBarShown(),
       pushScope: (scope) => api.keys.pushScope(scope),
       picker: services.picker,
-      addOverlay: (element) => api.areas.overlay.contribute(element),
       anchor: (element, command, scope, label) =>
         api.keys.anchor(element, qualify(settingsManifest.id, command), {
           scope: qualify(settingsManifest.id, scope),
