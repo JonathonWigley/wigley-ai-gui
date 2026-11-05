@@ -124,7 +124,7 @@ export interface BaseKit {
     options?: KeyHintOptions,
   ): HTMLElement;
   // A runner for any plugin's command by its qualified id (as `docs.openDoc`): each call runs the command, and getting
-  // it runs nothing. It checks the id when called, so call it while the part builds: an id no plugin registers throws
+  // it runs nothing. It checks the id when called, so call it while the part builds: an id the app does not serve throws
   // `no command <id>`, a command that needs an argument throws too, as a runner passes none, and the part falls back to
   // `default` like any that throws.
   command(qualifiedId: string): () => void;

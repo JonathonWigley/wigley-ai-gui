@@ -585,6 +585,20 @@ describe('plugin part harness', () => {
       shown: 'sample.a',
     },
     {
+      row: 'the first mode added is the slot start value',
+      steps: [],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
+      row: 'an old handle does nothing once its id is added again',
+      steps: ['b.dispose', 'b.add', 'b.oldShow', 'b.oldDispose'],
+      calls: ['a shown'],
+      heard: [],
+      shown: 'sample.a',
+    },
+    {
       row: 'a disposed handle does nothing',
       steps: ['b.dispose', 'b.show', 'b.dispose'],
       calls: ['a shown'],
@@ -603,32 +617,50 @@ describe('plugin part harness', () => {
     ({ steps, calls, heard, shown }) => {
       const called: string[] = [];
       const handles = new Map<string, ModeHandle>();
+      const olds = new Map<string, ModeHandle>();
       let modes!: PageSampleApi['modes'];
+      let modesApi!: PageSampleApi;
+      const addMode = (api: PageSampleApi, id: string) =>
+        api.modes.add({
+          ...browseMode,
+          id,
+          shown: () => called.push(`${id} shown`),
+          hidden: () => called.push(`${id} hidden`),
+        });
       const harness = startPagePart(
         pagePart((api) => {
           modes = api.modes;
+          modesApi = api;
           for (const id of ['a', 'b', 'c']) {
-            const handle = api.modes.add({
-              ...browseMode,
-              id,
-              shown: () => called.push(`${id} shown`),
-              hidden: () => called.push(`${id} hidden`),
-            });
-            handles.set(id, handle);
+            handles.set(id, addMode(api, id));
           }
           return { commands: { run() {} } };
         }),
       );
+      const reader = harness.state.read(coreModeSlot, 'test');
       const told: unknown[] = [];
-      harness.state.read(coreModeSlot, 'test').on((id) => told.push(id));
+      reader.on((id) => told.push(id));
 
       for (const step of steps) {
-        const [id, action] = step.split('.') as [string, 'show' | 'dispose'];
-        handles.get(id)?.[action]();
+        const [id, action] = step.split('.') as [
+          string,
+          'show' | 'dispose' | 'add' | 'oldShow' | 'oldDispose',
+        ];
+        if (action === 'add') {
+          olds.set(id, handles.get(id) as ModeHandle);
+          handles.set(id, addMode(modesApi, id));
+        } else if (action === 'oldShow') {
+          olds.get(id)?.show();
+        } else if (action === 'oldDispose') {
+          olds.get(id)?.dispose();
+        } else {
+          handles.get(id)?.[action]();
+        }
       }
 
       expect(called).toEqual(calls);
       expect(told).toEqual(heard);
+      expect(reader.get()).toBe(shown ?? '');
       if (shown === null) {
         expect(() => modes.shown()).toThrow('no mode is live');
       } else {

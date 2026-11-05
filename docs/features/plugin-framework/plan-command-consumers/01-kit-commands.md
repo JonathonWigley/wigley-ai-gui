@@ -166,10 +166,17 @@ No added command takes a key.
 - `command` and `button` take a qualified id only, as `command` does today.
 - `kitCommandsOf` runs `api.commands.run(id)` when `arg` is undefined, and `api.commands.run({ id }, arg)` otherwise. It reads `exists` and `argShape` from `api.keys.command(id)`. It voids the promise: a handler failure is logged by the command core.
 - `keyRunner` is for a click that runs a typed `CommandKey`, as tasks 03 and 05 do. It calls `commands.run(key, arg)` in a `try` and voids the promise, which never rejects. It logs a throw at the call as `command <id> failed: <error text>`.
-- The shell's `commands` literal in `renderer.ts` does not use `kitCommandsOf`, because the shell has no `PageApi`:
-  - `exists` stays `commands.has(id)`.
-  - `argShape` reads `live.current().commands[id]?.arg`.
+- The shell's `commands` literal in `renderer.ts` does not use `kitCommandsOf`, because the shell has no `PageApi`. It reads the router's `infoOf` (see **One command source**):
+  - `exists` is `infoOf(id) !== undefined`.
+  - `argShape` is `infoOf(id)?.arg`.
   - `run` calls `router.run(id, arg, {})` and voids the promise. The router makes the arg check, so a bad `modes.show` arg throws at the call.
+
+**One command source.** Every kit's `exists`, `argShape` and run read one source, the router's `infoOf`, so a build check and a click agree. Two reads of two sources let a command pass the build check and then throw on the click.
+
+- `plan-commands-and-state` stacked two patches on the old reads: the arg check in `commandRunner`, and the shell's `exists` reading served commands (`live.current().commands`). This task replaces both with the `infoOf` read, and `KitCommands` keeps its three members.
+- `commandRunner` logs and runs nothing for a command that is served and has no handler. Today `CommandRegistry.run` throws on a click, uncaught and unlogged. The case covers a disabled plugin's command, and the 21 `run: (id) => api.commands.run(id)` sites in the plugin kits, which share the throw. The fix lives in `commandRunner` and `kitCommandsOf`, so no site changes.
+- A runtime page command registered at part start counts at the first shell draw, because `infoOf` reads the freshest catalog the process has. A shell layout that names such a command therefore keeps its part, where the served-commands read made it fall back to `default` with no recovery. No part registers one today.
+- One wiring proof pins the shell's `exists` in `renderer.ts`: a shell layout names a command that is registered and not yet served, and the part draws. A unit test of `commandRunner` does not reach this literal.
 - No kit overrides `button` or `command`, and no `layout.d.ts` redeclares them (measured at plan time, re-verify). Every wrapper takes the change through its `...base` spread.
 
 **Unity-pool moves here, not in task 05.** `layouts/default/layout.js` is the only `kit.button` caller, and it passes a function. Task 01 changes that signature, so task 01 moves the caller, or the panel breaks through Wave 1.
@@ -242,6 +249,8 @@ Runtime checks collect in [Final verification](11-final-verification.md). This t
 
 - `base-kit.test.ts`: `button_Click_RunsCommandWithItsArg`. Catches a button that drops `arg`.
 - `base-kit.test.ts`: rows added to `commandRunner_UnknownId_ThrowsAtCreationAndRunsOnlyOnCall` for a bad `arg`, a missing declared `arg`, and an `arg` on a command with none. Catches a layout mistake surfacing only on a click.
+- `base-kit.test.ts`: `commandRunner_ServedCommandWithNoHandler_LogsAndRunsNothing`. Catches a click on a disabled plugin's command throwing uncaught and unlogged.
+- The wiring proof for the shell's `exists`, beside `renderer.ts` or its nearest seam: `shellCommands_RuntimeCommandRegisteredAtPartStart_CountsAtFirstDraw`. Catches the shell `exists` reading served commands, which the part-start command is not in yet.
 - `base-kit.test.ts`: `keyRunner_RunThrows_LogsAndDoesNotThrow`. Catches a stale arg throwing out of the DOM listener, where the click dies with no log line.
 - `base-kit.test.ts`: `kitCommandsOf_ArgGiven_RunsThroughCommandKey`. Catches a helper that drops `arg` on the way to `commands.run`.
 - `layout-contracts.test.ts`: `every owner contract type-checks beside kit.d.ts` runs on the new text. Catches a `layout.d.ts` that clashes with the new `button`.

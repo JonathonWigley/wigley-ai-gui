@@ -119,7 +119,7 @@ export interface KitCommands {
 }
 
 // A runner for the command `qualifiedId`, which runs it on each call and
-// never on creation. Throws at once for an id no plugin registers and for a
+// never on creation. Throws at once for an id the app does not serve and for a
 // command that needs an argument, since a runner passes none, so a part asking
 // for either fails while it builds.
 export function commandRunner(
@@ -152,7 +152,7 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
   // registers it yet, so a command registered after the draw fills its hint.
   const hintedId = (name: string) =>
     name.includes('.') ? name : deps.commandNamed(name);
-  // As `hintedId`, null for a qualified id no plugin registers now.
+  // As `hintedId`, null for a qualified id the app does not serve now.
   const registeredId = (name: string) => {
     const id = hintedId(name);
     return id === name && !deps.commands.exists(name) ? null : id;

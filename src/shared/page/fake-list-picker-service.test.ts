@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ListPicker } from '../../contracts/list-picker';
 import type { PagePart } from '../../contracts/plugin';
 import { definePlugin } from '../define-plugin';
@@ -19,29 +19,31 @@ const manifest = definePlugin({
 
 afterEach(() => vi.unstubAllGlobals());
 
-it('harness picker_ScopeFunctionTurnsToOneTheManifestLacks_ThrowsAtOpen', () => {
-  installFakeDom((name, value) => vi.stubGlobal(name, value));
-  let scope = 'list';
-  let picker!: ListPicker;
-  const service = fakeListPickerService();
-  const part: PagePart<typeof manifest> = {
-    manifest,
-    start(api) {
-      picker = api.services.picker.create({ scope: () => scope });
-      return { commands: {} };
-    },
-  };
-  startPagePart(part, { services: { picker: service } });
+describe('harness', () => {
+  it('picker_ScopeFunctionTurnsToOneTheManifestLacks_ThrowsAtOpen', () => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    let scope = 'list';
+    let picker!: ListPicker;
+    const service = fakeListPickerService();
+    const part: PagePart<typeof manifest> = {
+      manifest,
+      start(api) {
+        picker = api.services.picker.create({ scope: () => scope });
+        return { commands: {} };
+      },
+    };
+    startPagePart(part, { services: { picker: service } });
 
-  scope = 'nope';
+    scope = 'nope';
 
-  expect(() =>
-    picker.open({
-      title: 'Pick',
-      items: [],
-      label: () => '',
-      chosen() {},
-    }),
-  ).toThrow('declares no scope');
-  expect(service.scopes).toEqual([]);
+    expect(() =>
+      picker.open({
+        title: 'Pick',
+        items: [],
+        label: () => '',
+        chosen() {},
+      }),
+    ).toThrow('declares no scope');
+    expect(service.scopes).toEqual([]);
+  });
 });
