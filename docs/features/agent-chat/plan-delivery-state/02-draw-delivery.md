@@ -1,6 +1,6 @@
 # 02 — Draw the delivery state
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -38,3 +38,4 @@ Commit:    one commit for the group. Stage by pathspec: peers hold other uncommi
 
 ## Proof
 
+Commit 41fd97f4 · proof: diff read: Produces present on UserInput; tsc and lint clean · concerns: label look unchecked on screen until task 03; an older received entry's redraw refills its whole card, so thumbnails could flicker
