@@ -1332,6 +1332,15 @@ describe('session-fold', () => {
     ]);
     expect(state.commandRecords).toEqual([brief]);
 
+    const initWithNameFree = foldPipeLine(
+      state,
+      outLine({ ...lifecycleInit, slash_commands: ['wigley:brief'] }),
+    );
+
+    expect(commandsEffects(initWithNameFree.effects)).toEqual([
+      { kind: 'commands', commands: [offered] },
+    ]);
+
     const { effects } = foldPipeLine(
       state,
       outLine({
