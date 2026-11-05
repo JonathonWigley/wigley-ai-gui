@@ -125,13 +125,16 @@ function sectionedRequest(
   });
 }
 
-// The list's children top to bottom, a heading as `# <title>`.
+// A list child's text, a heading as `# <title>`.
+function drawnName(child: FakeElement): string {
+  return child.classList.contains('ui-picker-heading')
+    ? `# ${child.textContent}`
+    : child.textContent;
+}
+
+// The list's children top to bottom.
 function drawnOrder(layer: FakeElement): string[] {
-  return findAll(layer, 'ui-picker-list')[0].children.map((child) =>
-    child.classList.contains('ui-picker-heading')
-      ? `# ${child.textContent}`
-      : child.textContent,
-  );
+  return findAll(layer, 'ui-picker-list')[0].children.map(drawnName);
 }
 
 describe('list picker', () => {
@@ -351,6 +354,51 @@ describe('list picker', () => {
       'item2',
     ]);
   });
+
+  it.each([
+    {
+      name: "up to a section's first row",
+      sections: ['A', 'A', 'B'],
+      selected: 1,
+      move: 'up',
+      scrolled: ['# A', 'item0'],
+    },
+    {
+      name: "down to a later section's first row",
+      sections: ['A', 'A', 'B'],
+      selected: 1,
+      move: 'down',
+      scrolled: ['# B', 'item2'],
+    },
+    {
+      name: 'within a section',
+      sections: ['A', 'A', 'B'],
+      selected: 0,
+      move: 'down',
+      scrolled: ['item1'],
+    },
+    {
+      name: 'no headings',
+      sections: [null, null, null],
+      selected: 0,
+      move: 'down',
+      scrolled: ['item1'],
+    },
+  ] as const)(
+    'move_ScrollsTheCursorRowLast: $name',
+    ({ sections, selected, move, scrolled }) => {
+      const { picker } = pickerSetup();
+      picker.open(sectionedRequest(sections, { selected }));
+      const scrolling = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+
+      picker[move]();
+
+      expect(
+        scrolling.mock.contexts.map((child) => drawnName(child as FakeElement)),
+      ).toEqual(scrolled);
+      scrolling.mockRestore();
+    },
+  );
 
   it('filter_Typed_HidesHeadings', () => {
     const { picker, layer, type } = filteredPickerSetup();

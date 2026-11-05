@@ -224,8 +224,16 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     return { element: heading, dispose: NO_DISPOSE };
   };
 
-  const scrollToCursor = () =>
-    list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
+  // A section's first row brings its heading into view above it; the cursor
+  // row scrolls last so it ends in view.
+  const scrollToCursor = () => {
+    const cursorRow = list.querySelector('.is-cursor');
+    const above = cursorRow?.previousElementSibling;
+    if (above?.classList.contains('ui-picker-heading')) {
+      above.scrollIntoView({ block: 'nearest' });
+    }
+    cursorRow?.scrollIntoView({ block: 'nearest' });
+  };
 
   const draw = () => {
     disposeRows();

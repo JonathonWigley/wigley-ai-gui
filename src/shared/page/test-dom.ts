@@ -77,6 +77,11 @@ export class FakeElement {
     return siblings[siblings.indexOf(this) + 1] ?? null;
   }
 
+  get previousElementSibling(): FakeElement | null {
+    const siblings = this.parentNode?.children ?? [];
+    return siblings[siblings.indexOf(this) - 1] ?? null;
+  }
+
   get textContent(): string {
     return (
       this.ownText + this.childNodes.map((node) => node.textContent).join('')

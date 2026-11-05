@@ -4,6 +4,7 @@
   position: absolute;
   inset: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   align-items: start;
   padding: var(--wg-space-8) var(--wg-space-4);

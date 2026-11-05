@@ -847,6 +847,9 @@ const layout = {
       detail: section?.detail,
       trailing: kit.cursorEnd(),
     });
+    if (section !== null) {
+      row.classList.add('chat-picker-section-row');
+    }
     return { element: row };
   },
   pickerHeading(parent, input, kit) {

@@ -1,7 +1,7 @@
 /* The default Chat layout's look: entry text, the turn and compaction dividers, activity
    lines, the activity dock and its one line, queued messages, permission heads,
-   the composer and its status line, a / completion row's description, the dialog
-   and image viewer parts, the run
+   the composer and its status line, a / completion row's description, a picker
+   section row's title and details, the dialog and image viewer parts, the run
    time under a session's row, the session hub's section heads and Session rows,
    and the width below which a Chat tab drops its hub for the one line. */
 .chat-assistant {
@@ -412,6 +412,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A picker section row's title gives way first: its details stay whole up to
+   their cap, then both end in an ellipsis. */
+[data-layout-owner='chat'][data-layout='default'].chat-picker-section-row
+  .ui-row-detail {
+  flex-shrink: 0;
+  max-width: 60%;
 }
 
 /* A / completion row's description. The popup mounts on the body, so this
