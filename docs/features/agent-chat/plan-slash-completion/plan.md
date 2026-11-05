@@ -218,7 +218,7 @@ harness type.
 - [x] [Chat completion, descriptions setting and row hook](05-chat-completion.md) — after 02, 03, 04
 
 ### Wave 4
-- [ ] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
+- [x] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
 
 ### Wave 5
 - [ ] [Final verification](07-final-verification.md) — after 06
@@ -233,6 +233,7 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - 03 · 2f5e9016 · diff read; every Produces present; typecheck no errors; lint exit 0 per worker; prefix-completion tests pass · concerns: one added test pins the single tier and matcher order; drawRow runs per list rebuild and only for rendered rows, so task 05 must not assume one call per word; a selection the user moved down follows its word as ranks change, check live in 07; row drawing has no automated test, checked in 07
 - 04 · 33d71b2a · diff read; every Produces present; typecheck no errors; plugin and picker tests 1414 pass; filtered selftest docs,settings,backlog,notes 328 pass per worker; full selftest 949 pass, 1 fail in session-row fit, attributed to a peer's staged Sessions layout edit, re-checked at the test gate · concerns: self-test in a shared tree spoiled by peer page reloads; session-row fit failure unconfirmed as the peer's; Load states names the home folder by base, check live in 07; docs selftest commit split from a peer's staged line
 - 05 · d907ce67 · diff read; every Produces present; typecheck no errors; lint exit 0 per worker; five test files 133 pass; selftest --plugin chat 195 pass, no fail · concerns: one full selftest run had three unexplained chat close failures that did not reproduce; agent-lines session-row fit failure, same as task 04, unconfirmed as the peer's; descriptions follow each name so do not line up as a column; DESIGN.md has no line for completion descriptions; the long-description ellipsis was not seen on screen, check in 07; drawRow rebuilds the command list per row
+- 06 · 0f106a88 · diff read against the landed code; each listed check reported; docs only · concerns: DESIGN.md has no line for the description, left while a peer holds edits there; init.slash_commands holding the same 101 entries is unverified on 2.1.318; design.md still says the row's element holds the drawn name
 ### Contract changes
 ### Rulings
 - sameNames replaced by the existing isSameJson — compares all four fields with no new helper — a reordered alias list sends one extra message · group 02 · group 02
@@ -259,5 +260,7 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - A draw that throws after appending leaves what it appended, and the next draw adds to it — stated in the CompletionRows comment — a plugin's bug can leave stray row content · group 05 · group 05
 - Each add is its own holder, so one function added twice is two draws · group 05 · group 05
 - AGENTS.md allows a whole self-test run only when the user asks, so the plan's npm run selftest lines run as the touched plugins' groups; tasks 04 and 05 had each run it whole before this was caught — costs nothing a filtered run proves · lead
+- fake-fuzzy-matcher.test-support.ts added to AGENTS.md's src/shared line beside the fake agent harness · group 06 · group 06
+- design.md says the description follows the name in a dim box, not a column — it does not line up across rows · group 06 · group 06
 ### Review rounds
 ### Test gate
