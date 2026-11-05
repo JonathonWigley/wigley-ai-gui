@@ -347,15 +347,26 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   Codex's config the next; no file format or key name leaves its adapter. The first question is where each harness's
   key list and types come from (a schema, its CLI, or the adapter's own table) and whether a change reaches a running
   session.
+- **Reload plugins and skills in a running session** — *needs a feature plan*: the user reloads a session's plugins
+  and its skills from the app, with no `/clear`, so the conversation stays and a changed skill or plugin applies at
+  once. Today a chat session picks up a change only through `/clear`, which restarts the process under a new session
+  id, because `/reload-plugins` is terminal-only in print mode (`agent-chat/claude-stream.md` § Init). The stream has
+  controls for both, measured on 2.1.318 with no message sent: `control_request` subtype `reload_plugins` answers with
+  `commands`, `agents`, `plugins`, `mcpServers` and `error_count`, and `reload_skills` answers with `skills`. Add a
+  reload to `AgentHarness`, so no control name leaves the Claude adapter, then an app slash command or key for each
+  reload. Each reply also refreshes what the app read from init: the `/` completion and the agent-skills list. Open for
+  the plan: whether the reload runs one session or every session of a profile; whether it waits while a turn runs; and
+  how the app shows `error_count`. `reload_plugins` also takes `hold_on_cache_impact`, which declines a reload that
+  would change the tool list and break the prompt cache, so the plan decides whether to use it and what the user sees
+  when a reload is held. Source session: Claude Code b35fd8f9-6b58-4dd4-b32c-fc67f930e763 in ~/Documents/ai-dev.
 - **Agent plugin management and sync** — *needs a feature plan*: list each profile's installed plugins and
   marketplaces (version, enabled, scope), and install, update, enable, disable, uninstall and reload them from the
   app, behind the harness seam: Claude Code's adapter runs `claude plugin` (`list`, `install`, `update`, `enable`,
   `disable`, `uninstall`, `marketplace`), Codex's its own commands. The Docs view then syncs the user's own plugins:
   commit, push, update the plugin for each harness and reload, acting on the docs-browser statuses (uncommitted,
   unpushed, not installed, session stale; `docs-browser/design.md`). A push still needs the user's press each time.
-  `/reload-plugins` is terminal-only in print mode (`agent-chat/claude-stream.md` § Init), so the first questions are
-  how a running chat session picks up a changed plugin (a restart with `--resume`, or a stream control) and which
-  statuses each sync step acts on.
+  The first question is which statuses each sync step acts on. Builds on **Reload plugins and skills in a running
+  session**.
 
 ## Platform and packaging
 
@@ -496,6 +507,16 @@ User-facing features, those other work builds on first.
   `Space f s` (search text), all ranked by the `FuzzyMatcher` page service (Foundations; `docs/keymap.md` reserves
   the keys). Builds on the runtime command API (command labels) and the core picker service. Deferred from the docs
   browser (`docs-browser/design.md`).
+- **Terminal in the app** — *needs a feature plan*: a real interactive shell inside the app, so the user runs terminal
+  commands without leaving it: a sign-in such as `gcloud auth login`, and the commands print mode refuses. The app has
+  no terminal today: `package.json` holds no pty or terminal emulator, and `ProcessRunner` only runs a program to its
+  exit and returns its output. It needs a pty and an emulator, each behind a contract and its own adapter, with the
+  default shell picked per platform for macOS and Windows; each package is a third-party ask, and a pty is a native
+  module the Electron build must compile. Open for the plan: where it lives (a session tab that starts in the session's
+  folder, the shell's `panel` area, or a mode of its own); whether a shell outlives an app restart through the session
+  host; how keys reach it, since chord binds fire ahead of a text box and a shell needs most of them; and what the
+  layout draws, since the emulator draws its own grid. Source session: Claude Code
+  b35fd8f9-6b58-4dd4-b32c-fc67f930e763 in ~/Documents/ai-dev.
 - **Codex harness adapter** — *needs a feature plan*: a Codex adapter behind `AgentHarness`, declaring Codex's own
   session controls (`agent-chat/design.md`). With it: a Codex process started from a shell Claude Code spawned
   inherits `CLAUDECODE=1`, so its row reads `Claude`; and Codex last-loaded times in the docs index (docs-browser
