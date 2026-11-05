@@ -170,7 +170,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
   `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` (the core's `panes.focusRight` / `panes.focusLeft`) move focus between tree and doc while the tree shows (the doc pane's `‹ tree ⌥H` edge prompt hides with the tree, and the empty doc's hint names `Esc tree`); `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
-  The wiki adds `e`, `Ctrl+h`, `Ctrl+l`, `Ctrl+o`, `Ctrl+i`, `gh` and `l` on the doc (`../docs-wiki/design.md` § Keys), and `s` refuses on a wiki row.
+  The wiki adds `e`, `Ctrl+h`, `Ctrl+l`, `Ctrl+o`, `Ctrl+i`, `gh`, `l` and Enter on the doc, and `gh` on the tree (`../docs-wiki/design.md` § Keys), and `s` refuses on a wiki row.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
   editor too while editing, `i` edit, Esc (`docs.backToTree`) focuses the tree, showing it first when hidden; Esc in the editor's normal mode closes
   the editor as `:q` does.

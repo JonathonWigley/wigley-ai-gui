@@ -90,6 +90,7 @@ because a `§` target has no end delimiter and runs into prose.
   a bare `§ <Section>` that matches a heading in the same file. A `›` names a subsection.
 - A bare file name resolves only when one target is clear. It stays plain text otherwise, since
   `AGENTS.md` exists in many repos. No link is a guess.
+- A link to the shown doc's own file moves within it and reads nothing, so an open section editor stays.
 - Linked from is a reverse lookup over the loaded entries, in the page. Clones of one repo show once.
   A link inside a follow-up file has no entry of its own, so it never appears under Linked from.
 - Links refresh on each index build, so they can lag a save until the next build.

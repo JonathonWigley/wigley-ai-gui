@@ -177,8 +177,12 @@ Defects seen in a drive run, a transcript or the user's own use.
   `s` do nothing until the user moves. Star toggles already reselect the doc's usual row (`starChange`,
   `src/plugins/docs/page/docs-view.ts`); `outsideChange` could select the renamed doc's new row, or the nearest row
   after a trash.
-- **One newest-wins open rule** — *agent-ready*: docs opens race each other with no shared rule: `openDoc` drops a
-  waiting request only for a newer `openDoc`, so a doc the user opens from the tree or a link while it waits on a
+- **Docs editor session module** — *needs a feature plan*: `createDocView` (`src/plugins/docs/page/doc-view.ts`) reads
+  `editingSection` at about a dozen sites across the section editor, the conflict flow, `closeEditor` and `writeEditor`.
+  An editor-session module owning those, with the mode as data (full text from the edit, saved text, restore, reload),
+  would collapse most of them; it also moves the paste and drop code, so it is its own plan.
+- **One newest-wins open rule** — *agent-ready*: docs opens race each other with no shared rule: `openDoc` and `gh` drop
+  a waiting request only for a newer one of either, so a doc the user opens from the tree or a link while it waits on a
   rebuild is replaced when the rebuild lands. One open-intent sequence shared by `openDoc`, tree leaf opens and
   in-doc links, checked where the open happens, gives one newest-wins rule (`src/plugins/docs/page/docs-view.ts`
   `openDoc`, `followFile`). A path snapshot was tried and dropped: it could not tell an earlier `openDoc`'s own open
@@ -814,7 +818,7 @@ because the earlier items rewrite many of these tests anyway.
 - **Docs tab's first show has no test** — *agent-ready*: `handle.shown` runs `showFirstTime`
   (`src/plugins/docs/page/start.ts`), which runs `loadIndex` (`docs-view.ts`). The forms self-test used to pin it live
   through its `y` step, and now presses `R`, because rows draw in no fixed order and an earlier step can pass the Codex
-  row first. No test creates `createDocsView` (about 20 deps) and `page/start.ts` has no test, so a pin needs a small
+  row first. `page/start.test.ts` covers the part's lifecycle and no test asserts a first show, so a pin needs a small
   seam first. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
 - **Chat self-test steps by single presses** — *agent-ready*: rows draw most recent first and rows opened in one
   millisecond tie, so the chat script's single `<A-S-o>` and `<A-S-i>` steps between its two rows may land elsewhere.

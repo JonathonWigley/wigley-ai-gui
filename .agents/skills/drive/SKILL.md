@@ -117,11 +117,12 @@ A run folder holds `home/` (the app's home: config, plugin data, ui-state), `use
 
 `home/` is the app's own idea of home: `start` leaves `HOME` in the app's environment as the CLI's,
 so a child that asks the system for the home reaches the user's. The real `docs_index.py` uses
-`Path.home()`, so a run that swaps it over the stand-in and presses `R` writes the user's
-`~/.agents/wigley-docs/index.json` and `loads.json`. Such a run starts with `HOME=<absolute run home>
-npm run drive -- start --run <id>`, which keeps those writes in the home; the script still reads the
-user's `~/.claude` through an inherited `CLAUDE_CONFIG_DIR`, read-only. That `HOME` also moves where
-`--user-config` looks.
+`Path.home()`, so a run that swaps it over the stand-in writes the user's
+`~/.agents/wigley-docs/index.json` and `loads.json` on any rebuild: `R`, the first show, an in-app doc
+change. Such a run starts with `HOME=<absolute run home> npm run drive -- start --run <id>`, and every
+`restart` of it takes the same prefix, which keeps those writes in the home; the script then reads
+`.claude` under that home, unless the home's `config.json` names other `claudeConfigDirs`. That `HOME`
+also moves where `--user-config` looks.
 
 ## Commands
 
