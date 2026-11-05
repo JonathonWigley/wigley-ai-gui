@@ -99,7 +99,9 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 ### Rulings
 - No test owned foldControlValues, so the same-value row is a new table foldPipeLine_ControlCommandResult_ReportsControls in session-fold.test.ts — the fold owns the rule — the row moves file if wrong · group 01 · group 01
 - No chat-sessions test added: restart_StartCarriesHeldModeAndConfirmedPicks (ReportedOnly1mModelAndEffort) already fails if a report joins userSetControls — one row missing if wrong · group 01 · group 01
+- Only /effort auto clears a control; any other command value outside the choices leaves the control and its pick alone — a probe shows Claude answers /effort hihg, /effort ultracode and /model nosuchmodel with subtype success and changes nothing — a typed /model best still shows through the reply and goes back to the pick at a restart · lead
 ### Review rounds
 - 1 · 1047872c · NEEDS FIXES
+- 2 · 96f0c3d6 · NEEDS FIXES (re-review: typed non-choice value dropped a pick; repeat of round 1, settled by the agent on the user's note to take its decisions)
 ### Test gate
 - claude-controls, session-fold, claude-code-harness tests (edited with the change); chat-sessions.test.ts (confirmPicks and the reported-value restart row read the controls report) · 569 passed

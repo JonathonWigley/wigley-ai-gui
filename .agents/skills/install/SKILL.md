@@ -57,7 +57,9 @@ asks again. A certificate's identity outlasts a rebuild, so these steps run once
 
 - Running sessions keep going: the session host stays up on the build it started from, so a change
   under `src/session-host` reaches them only once a new host starts. Restarting the host ends those
-  sessions, so that is the user's call.
+  sessions, so that is the user's call. A build with a new `SESSION_HOST_PROTOCOL` is the exception: it
+  drains the older host at its first run, so each running process ends at its turn end and resumes under
+  the new host on its next message.
 - A peer's uncommitted edits stay as they are: the build runs in its own worktree,
   `../.wigley-ai-gui-build`.
 - Windows has no signing step: each build installs in its own folder under
