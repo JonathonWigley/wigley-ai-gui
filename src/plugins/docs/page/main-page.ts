@@ -67,6 +67,35 @@ export function emptyMainTakesFocus({
   return cause === 'picked' || isFirstShowFree;
 }
 
+export interface FirstShowState {
+  // Every open and page asked of the doc pane, one in flight included.
+  paneOpens: number;
+  // How many of `paneOpens` a Main page open asked, a `gh` that failed included.
+  mainPaneOpens: number;
+  // An outside ask to open a doc, which reaches the pane only after it waits.
+  isDocAsked: boolean;
+  hasMainDrawn: boolean;
+  // A `gh` waiting on the first reads, or a Main page open in flight.
+  isMainOpening: boolean;
+  file: MainFileState;
+}
+
+// A first show stays owed until a Main page draws or anything else is asked of the
+// pane. It runs once a read has said what to draw, and a running Main page open
+// answers first, so the two never replace each other's read.
+export function isFirstShowDue({
+  paneOpens,
+  mainPaneOpens,
+  isDocAsked,
+  hasMainDrawn,
+  isMainOpening,
+  file,
+}: FirstShowState): boolean {
+  const isOtherAsked = isDocAsked || paneOpens > mainPaneOpens;
+  const isOwed = !hasMainDrawn && !isOtherAsked;
+  return isOwed && !isMainOpening && file !== 'unreadable';
+}
+
 // Whether a change to the file leaves the Main page shown out of step with it: a
 // file that appeared under the empty page, or went from under its own page,
 // whichever of the trash and the read landed first. A file that could not be read

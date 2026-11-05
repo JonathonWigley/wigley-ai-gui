@@ -2330,32 +2330,32 @@ describe('createDocView', () => {
       act(view: DocView): Promise<unknown> | void;
       expected: boolean;
     }>([
-      { name: 'a new view', act: () => undefined, expected: true },
+      { name: 'a new view', act: () => undefined, expected: false },
       {
         name: 'an open in flight',
         act: (view) => {
           void view.open(target(null));
         },
-        expected: false,
+        expected: true,
       },
       {
         name: 'a doc shown',
         act: (view) => view.open(target(null)),
-        expected: false,
+        expected: true,
       },
       {
         name: 'a page shown',
         act: (view) => {
           view.showPage(list(['a']));
         },
-        expected: false,
+        expected: true,
       },
-    ])('isBlank $name', async ({ act, expected }) => {
+    ])('opensAsked rose: $name', async ({ act, expected }) => {
       const { view } = pageView();
 
       await act(view);
 
-      expect(view.isBlank()).toBe(expected);
+      expect(view.opensAsked() > 0).toBe(expected);
     });
 
     it('history_ListPlace_ReachesFollowPlace', async () => {

@@ -73,6 +73,7 @@ import {
 import {
   createRecentReader,
   emptyMainTakesFocus,
+  isFirstShowDue,
   isMainPageStale,
   linkedPages,
   MAIN_STARTER_TEXT,
@@ -143,10 +144,11 @@ export interface DocsView {
   // statuses, again after a fetch, and rebuilds the index when the source
   // can; later calls do nothing. Every rebuild reads the statuses again once
   // it settles. The machine view's first call also starts reading `Main.md`,
-  // and each index run that lands reads it again; once the first read of each
-  // has settled it shows the Main page, unless an open was asked by then; the
-  // empty Main page takes focus while this view is active with no filter box or
-  // dialog open, and a Main page with a file leaves it.
+  // and each index run that lands reads it again; the first show stays owed until
+  // a Main page draws or anything else is asked of the pane, and runs on a read
+  // that answers once the first index run has settled; the empty Main page takes
+  // focus while this view is active with no filter box or dialog open, and a Main
+  // page with a file leaves it.
   showFirstTime(): void;
   // Rebuilds the source's index, then reads its statuses and reads them
   // again after a fetch, and reads `Main.md` again in the machine view: `R`.
@@ -343,6 +345,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Each `openDoc` or `openMain` ask's number; one that waited opens only if it
   // is still the newest.
   let askedOpens = 0;
+  // What `isFirstShowDue` reads besides the doc view's own count.
+  let mainPaneOpens = 0;
+  let isDocAsked = false;
+  let hasMainDrawn = false;
+  let runningMainOpens = 0;
   // Each list place's title, set by each `openList`; every history place of a
   // list came from one.
   const listTitles = new Map<string, string>();
@@ -479,6 +486,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         channel: deps.channel,
         log,
         changed: () => wikiMainChanged(),
+        answered: () => {
+          void firstRead.promise.then(showOwedMain);
+        },
       })
     : null;
 
@@ -898,6 +908,15 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     };
   };
 
+  // Runs a Main page's ask of the doc view, whose rise of its count is no other ask;
+  // a refused ask raises nothing.
+  const askingMainPane = <T>(ask: () => T): T => {
+    const before = doc.opensAsked();
+    const result = ask();
+    mainPaneOpens += doc.opensAsked() - before;
+    return result;
+  };
+
   const focusEmptyMain = (cause: MainShowCause) => {
     const takesFocus = emptyMainTakesFocus({
       cause,
@@ -920,6 +939,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return;
     }
     const mainReady = () => {
+      hasMainDrawn = true;
       log('Main page ready');
       if (cause === 'picked') {
         deps.leafOpened();
@@ -935,10 +955,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       case 'showEmptyPage':
         if (
-          doc.showPage({
-            type: 'mainEmpty',
-            path: deps.paths.tilde(path, deps.homeDir),
-          })
+          askingMainPane(() =>
+            doc.showPage({
+              type: 'mainEmpty',
+              path: deps.paths.tilde(path, deps.homeDir),
+            }),
+          )
         ) {
           log('showed the empty Main page');
           mainReady();
@@ -946,13 +968,18 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         }
         return;
       case 'openFile':
-        void doc
-          .open(targetFor(path, entryAt(path), null, null))
+        runningMainOpens++;
+        void askingMainPane(() =>
+          doc.open(targetFor(path, entryAt(path), null, null)),
+        )
           .then((opened) => {
             if (opened) {
               log('opened the Main page');
               mainReady();
             }
+          })
+          .finally(() => {
+            runningMainOpens--;
           });
         return;
       case 'leavePane':
@@ -960,9 +987,19 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
-  // Runs the first show on a pane nothing has been asked of yet.
-  const showMainOnBlankPane = () => {
-    if (askedOpens === 0 && doc.isBlank()) {
+  const showOwedMain = () => {
+    if (wikiMain === null) {
+      return;
+    }
+    const isDue = isFirstShowDue({
+      paneOpens: doc.opensAsked(),
+      mainPaneOpens,
+      isDocAsked,
+      hasMainDrawn,
+      isMainOpening: runningMainOpens > 0,
+      file: wikiMain.fileState(),
+    });
+    if (isDue) {
       showMain('firstShow');
     }
   };
@@ -1004,8 +1041,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   // `Main.md` read another text: its links changed, a file that appeared replaces
   // the empty Main page, and the empty page replaces a file that went from under
-  // the pane, unless an editor holds unsaved edits on it. A read that answers
-  // runs the first show a rejected read left undone, once the index has read.
+  // the pane, unless an editor holds unsaved edits on it. The owed first show
+  // listens to `answered`, not to this.
   const wikiMainChanged = () => {
     if (wikiMain === null) {
       return;
@@ -1014,9 +1051,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     const isStale = isMainPageStale(mainPageState(wikiMain.fileState()));
     if (isStale && !doc.hasUnsavedEdits()) {
       showMain('fileChanged');
-    }
-    if (wikiMain.fileState() !== 'unreadable') {
-      void firstRead.promise.then(showMainOnBlankPane);
     }
     refreshRecentOnMain();
   };
@@ -1409,11 +1443,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       void runs.then(() => {
         firstShowRuns = null;
       });
-      if (wikiMain !== null) {
-        void Promise.all([wikiMain.start(), firstRead.promise]).then(
-          showMainOnBlankPane,
-        );
-      }
     },
     rescan() {
       hasRun = true;
@@ -1436,6 +1465,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     openDoc(path, line) {
       const number = ++askedOpens;
+      isDocAsked = true;
       void (async () => {
         await firstRead.promise;
         const awaitedRebuild = firstShowRuns ?? runningRebuild;
@@ -1453,7 +1483,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       const number = ++askedOpens;
+      runningMainOpens++;
       void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
+        runningMainOpens--;
         if (number === askedOpens) {
           showMain('picked');
         }

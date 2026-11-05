@@ -9,6 +9,8 @@ import {
   createRecentReader,
   type EmptyMainFocusState,
   emptyMainTakesFocus,
+  type FirstShowState,
+  isFirstShowDue,
   isMainPageStale,
   linkedPages,
   MAIN_STARTER_TEXT,
@@ -249,6 +251,104 @@ describe('emptyMainTakesFocus', () => {
     '$given → $takes',
     ({ takes, given: _given, ...state }) => {
       expect(emptyMainTakesFocus(state)).toBe(takes);
+    },
+  );
+});
+
+describe('isFirstShowDue', () => {
+  const UNTOUCHED = {
+    paneOpens: 0,
+    mainPaneOpens: 0,
+    isDocAsked: false,
+    hasMainDrawn: false,
+    isMainOpening: false,
+  };
+  const GH_FAILED = { ...UNTOUCHED, paneOpens: 1, mainPaneOpens: 1 };
+
+  it.each([
+    {
+      given: 'a first read that answered a text',
+      ...UNTOUCHED,
+      file: 'exists',
+      due: true,
+    },
+    {
+      given: 'first read rejected, then gh failed, then a read answered',
+      ...GH_FAILED,
+      file: 'exists',
+      due: true,
+    },
+    {
+      given: 'first read answered, a watch read rejected, then a read answered',
+      ...UNTOUCHED,
+      file: 'absent',
+      due: true,
+    },
+    {
+      given: 'a file still unreadable',
+      ...UNTOUCHED,
+      file: 'unreadable',
+      due: false,
+    },
+    {
+      given: 'gh failed and the file still unreadable',
+      ...GH_FAILED,
+      file: 'unreadable',
+      due: false,
+    },
+    {
+      given: 'a gh waiting on the first reads',
+      ...UNTOUCHED,
+      isMainOpening: true,
+      file: 'exists',
+      due: false,
+    },
+    {
+      given: 'a Main page open in flight',
+      ...GH_FAILED,
+      isMainOpening: true,
+      file: 'exists',
+      due: false,
+    },
+    {
+      given: 'a gh that drew the file',
+      ...GH_FAILED,
+      hasMainDrawn: true,
+      file: 'exists',
+      due: false,
+    },
+    {
+      given: 'a first show that drew the empty page',
+      ...GH_FAILED,
+      hasMainDrawn: true,
+      file: 'absent',
+      due: false,
+    },
+    {
+      given: 'a tree or link open, in flight or done',
+      ...UNTOUCHED,
+      paneOpens: 1,
+      file: 'exists',
+      due: false,
+    },
+    {
+      given: 'a tree or link open after a gh that failed',
+      ...GH_FAILED,
+      paneOpens: 2,
+      file: 'absent',
+      due: false,
+    },
+    {
+      given: 'an outside open still waiting on the index',
+      ...UNTOUCHED,
+      isDocAsked: true,
+      file: 'exists',
+      due: false,
+    },
+  ] satisfies (FirstShowState & { given: string; due: boolean })[])(
+    '$given → $due',
+    ({ due, given: _given, ...state }) => {
+      expect(isFirstShowDue(state)).toBe(due);
     },
   );
 });

@@ -330,6 +330,56 @@ describe('runScript', () => {
   );
 
   it.each([
+    {
+      given: 'the expect line',
+      logs: ['[t] id', '[t] end'],
+      missing: '[t] j',
+    },
+    {
+      given: 'one alsoExpect pattern',
+      logs: ['[t] j', '[t] end'],
+      missing: '/^\\[t\\] id$/',
+    },
+    {
+      given: 'a pattern past a missing expect line',
+      logs: ['[t] end'],
+      missing: '[t] j and /^\\[t\\] id$/',
+    },
+  ])(
+    "a step's FAIL line names the lines never logged: $given",
+    async ({ logs, missing }) => {
+      const { window, log } = page((_key, pageLog) => {
+        pageLog.unshift(...logs);
+      });
+
+      await runGroups(
+        window,
+        log,
+        [
+          {
+            name: 'lines',
+            why: 'the step logs its lines',
+            steps: [
+              {
+                keys: ['j'],
+                expect: '[t] j',
+                alsoExpect: [/^\[t\] id$/, /^\[t\] end$/],
+              },
+            ],
+          },
+        ],
+        new Map(),
+        () => true,
+        50,
+      );
+
+      expect(lines).toContain(
+        `[selftest] FAIL j -> [t] j and /^\\[t\\] id$/ and /^\\[t\\] end$/: ${missing} never logged`,
+      );
+    },
+  );
+
+  it.each([
     ['[t] id 4f2a', 0],
     ['[t] id none', 1],
   ])(
@@ -373,6 +423,11 @@ describe('runScript', () => {
       );
 
       expect(failures).toBe(expected);
+      expect(lines).toContain(
+        expected === 0
+          ? '[selftest] PASS [t] shown and /^\\[t\\] id [0-9a-f]+$/'
+          : '[selftest] FAIL [t] shown and /^\\[t\\] id [0-9a-f]+$/: /^\\[t\\] id [0-9a-f]+$/ never logged',
+      );
     },
   );
 

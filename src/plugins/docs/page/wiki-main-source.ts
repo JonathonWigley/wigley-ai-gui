@@ -11,6 +11,9 @@ export interface WikiMainSourceDeps {
   // Hears the first settled read, a rejection included, and each read after it
   // that says another thing of the file than the last answer did.
   changed(): void;
+  // Hears each read that answers, text or absent, whatever it says: after `changed`
+  // when both run, and never for a rejection or a read dropped as older.
+  answered(): void;
 }
 
 // What the newest settled read says of `Main.md`: `unreadable` is a rejected read
@@ -42,7 +45,7 @@ export interface WikiMainSource {
   // Reads the file again, after `start` when it has not run or not settled;
   // never rejects.
   reread(): Promise<void>;
-  // Stops the watch; nothing read after it calls `changed`.
+  // Stops the watch; nothing read after it calls `changed` or `answered`.
   dispose(): void;
 }
 
@@ -63,9 +66,6 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   let shownRead = 0;
 
   const settleAbsent = () => {
-    if (isDisposed) {
-      return;
-    }
     isUnreadable = false;
     if (known.type === 'absent') {
       return;
@@ -90,9 +90,6 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   };
 
   const settleText = (text: string) => {
-    if (isDisposed) {
-      return;
-    }
     isUnreadable = false;
     if (known.type === 'text' && known.text === text) {
       return;
@@ -101,6 +98,18 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     shelves = parseWikiMain(text);
     log(`read Main.md: ${shelves.length} shelves`);
     deps.changed();
+  };
+
+  const settleAnswer = (text: string | null) => {
+    if (isDisposed) {
+      return;
+    }
+    if (text === null) {
+      settleAbsent();
+    } else {
+      settleText(text);
+    }
+    deps.answered();
   };
 
   const findPath = async () => {
@@ -141,7 +150,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const read = async (path: string) => {
     const number = ++startedReads;
     const settle = await channel.invoke('readDocIfPresent', path).then(
-      (text) => () => (text === null ? settleAbsent() : settleText(text)),
+      (text) => () => settleAnswer(text),
       (error: unknown) => () => settleUnreadable(errorText(error)),
     );
     if (number >= shownRead) {

@@ -46,14 +46,25 @@ function setUp(
     return watchDoc(args[0] as string, args[1] as string | null);
   };
   const changed = vi.fn();
+  const answered = vi.fn();
   const logs: string[] = [];
   const source = createWikiMainSource({
     viewId: 'machine',
     channel: { invoke } as unknown as PageChannel<DocsChannel>,
     log: (line) => logs.push(line),
     changed,
+    answered,
   });
-  return { source, reads, readDoc, watchDoc, wikiMainPath, changed, logs };
+  return {
+    source,
+    reads,
+    readDoc,
+    watchDoc,
+    wikiMainPath,
+    changed,
+    answered,
+    logs,
+  };
 }
 
 describe('createWikiMainSource', () => {
@@ -305,6 +316,58 @@ describe('createWikiMainSource', () => {
     expect(test.changed).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { given: 'a text', reads: [ONE_SHELF], answers: 1, changes: 1 },
+    {
+      given: 'one text twice',
+      reads: [ONE_SHELF, ONE_SHELF],
+      answers: 2,
+      changes: 1,
+    },
+    { given: 'absent twice', reads: [null, null], answers: 2, changes: 1 },
+    { given: 'a rejection', reads: ['reject'], answers: 0, changes: 1 },
+    {
+      given: 'a text, a rejection and the same text',
+      reads: [ONE_SHELF, 'reject', ONE_SHELF],
+      answers: 2,
+      changes: 1,
+    },
+    {
+      given: 'absent, a rejection and absent',
+      reads: [null, 'reject', null],
+      answers: 2,
+      changes: 1,
+    },
+    {
+      given: 'a rejection and a text',
+      reads: ['reject', ONE_SHELF],
+      answers: 1,
+      changes: 2,
+    },
+  ])(
+    'answered_HearsEachReadThatAnswers: $given',
+    async ({ reads, answers, changes }) => {
+      const left = [...reads];
+      const test = setUp({
+        read: () => {
+          const next = left.shift() as string | null;
+          return next === 'reject'
+            ? Promise.reject(new Error('denied'))
+            : Promise.resolve(next);
+        },
+      });
+
+      for (const _read of reads) {
+        await test.source.reread();
+      }
+
+      expect({
+        answers: test.answered.mock.calls.length,
+        changes: test.changed.mock.calls.length,
+      }).toEqual({ answers, changes });
+    },
+  );
+
   it('diskChanged_AnotherViewsId_StartsNoRead', async () => {
     const test = setUp();
     await test.source.start();
@@ -329,9 +392,11 @@ describe('createWikiMainSource', () => {
 
     newer.resolve(TWO_SHELVES);
     await settled();
+    test.answered.mockClear();
     older.resolve('## Stale\n');
     await settled();
 
+    expect(test.answered).not.toHaveBeenCalled();
     expect(test.changed).toHaveBeenCalledOnce();
     expect(test.source.shelves().map((shelf) => shelf.title)).toEqual([
       'Shelf one',
@@ -378,5 +443,6 @@ describe('createWikiMainSource', () => {
 
     expect(test.watchDoc).toHaveBeenLastCalledWith('machine:main', null);
     expect(test.changed).not.toHaveBeenCalled();
+    expect(test.answered).not.toHaveBeenCalled();
   });
 });

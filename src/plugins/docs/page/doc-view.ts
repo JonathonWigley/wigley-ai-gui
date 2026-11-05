@@ -195,8 +195,8 @@ export interface DocView {
   // nothing while no list shows.
   updateList(content: ListPageContent): void;
   shownPage(): DocPage | null;
-  // True until any open or page is asked, one in flight included.
-  isBlank(): boolean;
+  // How many opens, pages and clears were asked, one in flight or failed included.
+  opensAsked(): number;
   // Draws Recent changes under the body, or removes it on null.
   setRecentChanges(input: RecentChangesInput | null): void;
   // Opens the list's cursor row; on any other page, clicks the focused link or
@@ -1812,7 +1812,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       pane.scrollTop = scrollTop;
     },
     shownPage: () => page,
-    isBlank: () => openCount === 0 && shown === null && page === null,
+    opensAsked: () => openCount,
     setRecentChanges(input) {
       if (isDisposed) {
         return;

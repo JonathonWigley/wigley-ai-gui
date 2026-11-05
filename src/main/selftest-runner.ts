@@ -210,9 +210,36 @@ async function repeatUntil(
   }
 }
 
+// Which of `lines` `waitForLine` never saw, waiting for each in turn: after the
+// first one missed, the rest share one wait, so a failure costs at most one more.
+async function missingLines(
+  lines: readonly (string | RegExp)[],
+  waitForLine: (line: string | RegExp) => Promise<boolean>,
+): Promise<(string | RegExp)[]> {
+  for (const [index, line] of lines.entries()) {
+    if (!(await waitForLine(line))) {
+      const rest = lines.slice(index + 1);
+      const isLogged = await Promise.all(rest.map(waitForLine));
+      return [line, ...rest.filter((_, each) => !isLogged[each])];
+    }
+  }
+  return [];
+}
+
+// The report text of `lines`, naming those missing.
+function linesReport(
+  lines: readonly (string | RegExp)[],
+  missing: readonly (string | RegExp)[],
+): string {
+  const expected = lines.join(' and ');
+  return missing.length === 0
+    ? expected
+    : `${expected}: ${missing.join(' and ')} never logged`;
+}
+
 // Waits up to `timeoutMs` for the step's line, then for a line each of its
-// `alsoExpect` patterns matches, and reports them, then saves the window to
-// `png` when the step has one.
+// `alsoExpect` patterns matches, and reports them, naming any that never came,
+// then saves the window to `png` when the step has one.
 async function waitForStepLine(
   window: DrivenWindow,
   step: SelfTestStep,
@@ -223,12 +250,12 @@ async function waitForStepLine(
   isCurrent: () => boolean,
 ): Promise<{ passed: boolean; isSaved: boolean }> {
   const lines = [step.expect, ...(step.alsoExpect ?? [])];
-  let passed = true;
-  for (const line of lines) {
-    passed &&= await waitForNewLogLine(window, line, mark, timeoutMs);
-  }
+  const missing = await missingLines(lines, (line) =>
+    waitForNewLogLine(window, line, mark, timeoutMs),
+  );
+  const passed = missing.length === 0;
   if (isCurrent()) {
-    report(passed, `${label} -> ${lines.join(' and ')}`);
+    report(passed, `${label} -> ${linesReport(lines, missing)}`);
   }
   const isSaved =
     png === undefined || !isCurrent()
@@ -446,18 +473,18 @@ export async function runScript(
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
   const shownLines = [shownLine, ...(alsoShown ?? [])];
-  let isShown = true;
-  for (const line of shownLines) {
-    isShown &&= await Promise.race([
+  const missingShown = await missingLines(shownLines, (line) =>
+    Promise.race([
       waitForNewLogLine(window, line, mark, stepTimeoutMs),
       rejection,
-    ]);
-  }
+    ]),
+  );
+  const isShown = missingShown.length === 0;
   if (!isShown) {
     failures++;
   }
   if (isCurrent()) {
-    report(isShown, shownLines.join(' and '));
+    report(isShown, linesReport(shownLines, missingShown));
   }
 
   const scrollsItself = withPrimitiveClipping(script.scrollsItself);
