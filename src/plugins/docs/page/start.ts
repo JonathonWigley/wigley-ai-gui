@@ -42,6 +42,7 @@ import {
   type DocsView,
   type DocsViewCommands,
 } from './docs-view';
+import { createDocsPicker } from './docs-dialogs';
 import { commandOfKeysIn } from './hidden-tree-keys';
 import type { DocsScope } from './layout/docs-parts';
 import { readDocsLayout } from './layout/read-layout';
@@ -175,6 +176,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
     };
 
+    // The one list every view opens, contributed under each view's dialogs.
+    const docsPicker = createDocsPicker(services.picker.create());
+
     // `changed` reads the view only once a change is made, after creation.
     // Each scope the view sets is followed by `resizeTarget`, the divider the
     // resize keys move while the view has the keys (null moves the side bar),
@@ -196,8 +200,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         editor: services.editor,
         markdown: services.markdown,
         matcher: services.fuzzy,
+        picker: docsPicker.forView(viewId),
         paths: services.paths,
         toast: services.toast,
+        openExternal: services.openExternal,
         drops: api.drops,
         starred,
         now: () => services.clock.now(),

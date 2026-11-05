@@ -142,10 +142,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const completionRows = createCompletionRows(services.log);
     const picker = createPicker({
       ...partDeps,
-      overlay: api.areas.overlay,
-      editor: services.editor,
-      matcher: services.fuzzy,
-      pushScope: (scope) => api.keys.pushScope(scope),
+      picker: services.picker,
     });
     const viewer = createImageViewer({
       ...partDeps,
@@ -257,6 +254,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       picker,
       signIn,
       channel: api.channel,
+      chooseFolder: services.chooseFolder,
       profiles: () => api.settings().profiles,
       reveal: (sessionId) => view.reveal(sessionId),
       paths: services.paths,

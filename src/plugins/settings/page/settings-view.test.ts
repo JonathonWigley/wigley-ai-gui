@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { PageChannel } from '../../../contracts/plugin';
@@ -116,6 +117,11 @@ async function shownView(isSideBarShown = true) {
       pop: () => undefined,
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
+    picker: fakeListPickerService({
+      place(element) {
+        overlay.append(asFake(element));
+      },
     }),
     addOverlay(element) {
       overlay.append(asFake(element));

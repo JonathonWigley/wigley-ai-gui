@@ -316,7 +316,6 @@ export interface DocsChannel extends ChannelShape {
     // One watched file per view; `path` null stops that view's watch.
     watchDoc(viewId: string, path: string | null): Promise<void>;
     unwatchAll(): Promise<void>;
-    openExternal(url: string): Promise<void>;
     // The config file that lists plugin `key` (`<plugin>@<marketplace>`) and
     // the 1-based line holding it; null when none lists it.
     pluginConfigFile(

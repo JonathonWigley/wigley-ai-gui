@@ -11,7 +11,6 @@ import {
   type PartStore,
 } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
-import { createListPicker } from '../../../shared/page/list-picker';
 import {
   leafIds,
   type PaneTree,
@@ -671,12 +670,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const openPreview = previewToggle(mode, view, log);
 
-    const picker = createListPicker({
-      pushScope: () => api.keys.pushScope('picker'),
-      log,
-      matcher: api.services.fuzzy,
-    });
-    api.areas.overlay.contribute(picker.element);
+    const picker = api.services.picker.create();
 
     // Acts on the focused pane's session, as `closeSession` does.
     const renameSession = () => {

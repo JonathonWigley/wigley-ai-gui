@@ -12,6 +12,7 @@ import type { Disposable, Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
 import type { FuzzyMatcher } from '../contracts/fuzzy';
+import type { ListPickerService } from '../contracts/list-picker';
 import type { Git } from '../contracts/git';
 import type { ImageEncoder } from '../contracts/images';
 import type { AnchorOptions, HintWhere, Keymap } from '../contracts/keymap';
@@ -472,6 +473,15 @@ function commonApi(
     ),
     clock: { now: world.scheduler.now },
     state: pluginState(world.state, manifest.id, process, register),
+  };
+}
+
+// A service function that throws when called.
+function notFakedCall(name: string): () => never {
+  return () => {
+    throw new Error(
+      `part harness: services.${name} is not faked; pass it in options`,
+    );
   };
 }
 
@@ -1246,6 +1256,9 @@ function fakePageApi(
     },
     services: {
       fuzzy: notFaked<FuzzyMatcher>('fuzzy'),
+      picker: notFaked<ListPickerService>('picker'),
+      chooseFolder: notFakedCall('chooseFolder'),
+      openExternal: notFakedCall('openExternal'),
       markup: notFaked<MarkupEditor>('markup'),
       visualFrames: notFaked<VisualFrames>('visualFrames'),
       toast(text, tone) {

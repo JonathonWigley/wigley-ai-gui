@@ -6,6 +6,7 @@ import type {
   UserConfigSchema,
 } from '../../../contracts/user-config';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
@@ -56,6 +57,7 @@ describe('settings page part', () => {
   it('stops with nothing live and starts again', async () => {
     const harness = startPagePart(settingsPagePart, {
       firstModeTaken: true,
+      services: { picker: fakeListPickerService() },
     });
 
     await harness.stop();
@@ -80,7 +82,11 @@ describe('settings page part', () => {
           land = resolve;
         });
       },
-      services: { markdown: PLAIN_MARKDOWN, fuzzy: fakeFuzzyMatcher },
+      services: {
+        markdown: PLAIN_MARKDOWN,
+        fuzzy: fakeFuzzyMatcher,
+        picker: fakeListPickerService(),
+      },
     });
     await settle();
     const { commands } = harness.started();

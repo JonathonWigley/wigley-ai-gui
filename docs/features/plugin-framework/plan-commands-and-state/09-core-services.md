@@ -1,6 +1,6 @@
 # 09 — Core picker and folder services
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 8 · Depends on: 08
 Plan: [plan.md](plan.md)

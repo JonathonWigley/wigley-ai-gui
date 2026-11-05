@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -14,7 +14,11 @@ import {
 } from '../../../shared/page/test-dom';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { createDocsDialogs, type DocsDialogsDeps } from './docs-dialogs';
+import {
+  createDocsDialogs,
+  createDocsPicker,
+  type DocsDialogsDeps,
+} from './docs-dialogs';
 import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
 
 // A layout whose picker rows and box body are marked `marker`.
@@ -48,7 +52,7 @@ function dialogsOver(layouts: () => ShownLayouts<Layout>) {
     paths: posixPaths,
     toast: () => undefined,
     log: () => undefined,
-    matcher: fakeFuzzyMatcher,
+    picker: createDocsPicker(fakeListPickerService().create()).forView('view'),
     parts,
     pushScope: fakePushedScope,
     entries: () => [],
@@ -58,6 +62,34 @@ function dialogsOver(layouts: () => ShownLayouts<Layout>) {
   } as unknown as DocsDialogsDeps;
   return createDocsDialogs(deps);
 }
+
+describe('createDocsPicker', () => {
+  beforeEach(() =>
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
+  );
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { case: 'another view', closer: 'other', staysOpen: true },
+    { case: 'the opening view', closer: 'opener', staysOpen: false },
+  ])(
+    'forView_OtherViewCloses_ListStaysOpen: $case',
+    ({ closer, staysOpen }) => {
+      const list = fakeListPickerService().create();
+      const docsPicker = createDocsPicker(list);
+      docsPicker.forView('other');
+      docsPicker
+        .forView('opener')
+        .open({ title: 'T', items: ['a'], label: String, chosen: () => {} });
+
+      docsPicker.forView(closer).close();
+
+      expect(list.isOpen()).toBe(staysOpen);
+    },
+  );
+});
 
 describe('createDocsDialogs', () => {
   beforeEach(() =>
@@ -93,7 +125,7 @@ describe('createDocsDialogs', () => {
     let shown = withUser(defaultLayout, markedLayout('box-1'));
     const dialogs = dialogsOver(() => shown);
     dialogs.createByPath(null);
-    const box = asFake(dialogs.elements[1]);
+    const box = asFake(dialogs.elements[0]);
     const input = findAll(box, 'docs-box')[0] as FocusFakeElement;
     input.value = 'notes';
 

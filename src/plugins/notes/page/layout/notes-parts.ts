@@ -1,7 +1,7 @@
 import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import { appended, element } from '../../../../shared/page/dom';
-import type { DrawnPickerRow } from '../../../../shared/page/list-picker';
+import type { DrawnPickerRow } from '../../../../contracts/list-picker';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   createBaseKit,

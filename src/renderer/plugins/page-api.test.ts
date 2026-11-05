@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../contracts/ambient';
 import type { Bridge } from '../../contracts/bridge';
 import type { Disposable } from '../../contracts/disposable';
@@ -41,7 +41,13 @@ import type { SlotKey } from '../../contracts/state';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
-import { asHtml, FakeElement } from '../../shared/page/test-dom';
+import { fakeFuzzyMatcher } from '../../shared/fake-fuzzy-matcher.test-support';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  installFakeDom,
+} from '../../shared/page/test-dom';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { createRegistrations } from '../../shared/registrations';
 import {
@@ -750,6 +756,203 @@ function countingEditors() {
   } as unknown as EditorHost;
   return { editor, destroys };
 }
+
+describe('createPageApi services.picker', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const REQUEST = {
+    title: 'T',
+    items: ['a'],
+    label: (item: string) => item,
+    chosen: () => {},
+  };
+
+  // A plugin's API over a real scope stack and store, its overlay holding what
+  // the plugin placed and its editor host recording each editor.
+  function pickerApi() {
+    const scopeStack = createScopeStack('any');
+    const registrations = createRegistrations();
+    const overlay: HTMLElement[] = [];
+    const destroyEditor = vi.fn();
+    let editorsCreated = 0;
+    const api = createPageApi(
+      {
+        ...manifest,
+        scopes: { picker: 'In a list', resume: 'In a session list' },
+      },
+      deps({
+        scopeStack,
+        registrations,
+        areas: {
+          overlay: {
+            contribute(element: HTMLElement) {
+              overlay.push(element);
+              return {
+                dispose: () => overlay.splice(overlay.indexOf(element), 1),
+              };
+            },
+          },
+        } as unknown as PageApiDeps['areas'],
+        services: {
+          log: () => {},
+          fuzzy: fakeFuzzyMatcher,
+          editor: {
+            create() {
+              editorsCreated += 1;
+              return {
+                setText: () => {},
+                blur: () => {},
+                destroy: destroyEditor,
+              };
+            },
+          },
+        } as unknown as PageApiServices,
+      }),
+    );
+    return {
+      picker: api.services.picker,
+      scopeStack,
+      registrations,
+      overlay,
+      destroyEditor,
+      editorsCreated: () => editorsCreated,
+    };
+  }
+
+  it.each([
+    { case: 'the overlay', hasParent: false, inOverlay: 1, inParent: 0 },
+    { case: 'a parent', hasParent: true, inOverlay: 0, inParent: 1 },
+  ])(
+    'picker_Create_PushesTheQualifiedScopeAndPlacesInOverlay: $case',
+    ({ hasParent, inOverlay, inParent }) => {
+      const { picker, scopeStack, overlay } = pickerApi();
+      const parent = asHtml(new FakeElement('div'));
+
+      const list = picker.create(hasParent ? { parent } : undefined);
+      list.open(REQUEST);
+
+      expect(scopeStack.current()).toBe('p.picker');
+      expect(overlay.filter((held) => held === list.element)).toHaveLength(
+        inOverlay,
+      );
+      expect(asFake(parent).children).toHaveLength(inParent);
+    },
+  );
+
+  it('picker_ScopeFunction_ReadAtEachPush', () => {
+    const { picker, scopeStack } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope });
+
+    list.open(REQUEST);
+    const first = scopeStack.current();
+    list.close();
+    scope = 'resume';
+    list.open(REQUEST);
+
+    expect([first, scopeStack.current()]).toEqual(['p.picker', 'p.resume']);
+  });
+
+  it.each([
+    { case: 'a string', scope: 'nope' },
+    { case: 'a function', scope: () => 'nope' },
+  ])('picker_UndeclaredScope_ThrowsAtCreate: $case', ({ scope }) => {
+    const { picker, overlay } = pickerApi();
+
+    expect(() => picker.create({ scope })).toThrow(/"p".*"nope"/);
+    expect(overlay).toEqual([]);
+  });
+
+  it('picker_ScopeFunctionLaterBadValue_ThrowsAtThePushAndLeavesItClosed', () => {
+    const { picker, scopeStack } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope });
+    scope = 'nope';
+
+    expect(() => list.open(REQUEST)).toThrow(/"nope"/);
+
+    expect(list.isOpen()).toBe(false);
+    expect(asFake(list.element).hidden).toBe(true);
+    expect(scopeStack.current()).toBe('any');
+  });
+
+  it('picker_PartStops_ClosesWithNoCancel', () => {
+    const { picker, scopeStack, registrations, overlay } = pickerApi();
+    const cancelled = vi.fn();
+    const list = picker.create();
+    list.open({ ...REQUEST, cancelled });
+
+    registrations.dispose();
+
+    expect(list.isOpen()).toBe(false);
+    expect(scopeStack.current()).toBe('any');
+    expect(cancelled).not.toHaveBeenCalled();
+    expect(overlay).toEqual([]);
+  });
+
+  it.each([
+    { case: 'with a filter', filter: true, boxes: 1 },
+    { case: 'with no filter', filter: false, boxes: 0 },
+  ])('picker_FilterOption_UsesThePluginsEditor: $case', ({ filter, boxes }) => {
+    const { picker, registrations, destroyEditor, editorsCreated } =
+      pickerApi();
+
+    picker.create({ filter });
+    registrations.dispose();
+
+    expect(editorsCreated()).toBe(boxes);
+    expect(destroyEditor).toHaveBeenCalledTimes(boxes);
+  });
+
+  it.each([
+    {
+      case: 'chooseFolder',
+      call: (api: ReturnType<typeof createPageApi>) =>
+        api.services.chooseFolder(),
+      expected: ['chooseFolder'],
+    },
+    {
+      case: 'openExternal',
+      call: (api: ReturnType<typeof createPageApi>) =>
+        api.services.openExternal('https://example.invalid'),
+      expected: ['openExternal', 'https://example.invalid'],
+    },
+  ])(
+    'chooseFolder_And_openExternal_ReachTheBridge: $case',
+    async ({ call, expected }) => {
+      const calls: unknown[][] = [];
+      const bridge = {
+        ...fakeBridge().bridge,
+        chooseFolder: async () => {
+          calls.push(['chooseFolder']);
+          return null;
+        },
+        openExternal: async (url: string) => {
+          calls.push(['openExternal', url]);
+        },
+      };
+      const api = createPageApi(
+        manifest,
+        deps({
+          bridge,
+          services: {
+            log: () => {},
+            editor: {},
+            chooseFolder: () => bridge.chooseFolder(),
+            openExternal: (url: string) => bridge.openExternal(url),
+          } as unknown as PageApiServices,
+        }),
+      );
+
+      await call(api);
+
+      expect(calls).toEqual([expected]);
+    },
+  );
+});
 
 describe('createPageApi recording', () => {
   it.each(RECORDED_ROWS)(

@@ -7,6 +7,7 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { type DocsPageExports, docsPageKey } from '../../docs/contract';
 import { backlogPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
 const fakeDocs = fakeDependency(
   docsPageKey,
@@ -18,6 +19,7 @@ function startBacklogPage() {
   return startPagePart(backlogPagePart, {
     dependencies: [fakeDocs],
     firstModeTaken: true,
+    services: { picker: fakeListPickerService() },
   });
 }
 

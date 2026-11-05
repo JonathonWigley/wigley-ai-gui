@@ -15,6 +15,7 @@ import {
 } from '../../sessions/contract';
 import type { ChatPageExports, ChatSessionState } from '../contract';
 import { chatPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
 const SESSION: ChatSessionState = {
   sessionId: 's1',
@@ -46,6 +47,7 @@ function startChatPage(
   return startPagePart(chatPagePart, {
     invoke,
     services: {
+      picker: fakeListPickerService(),
       editor: {
         create: () => ({ destroy: destroyEditor, focus() {} }),
       } as unknown as EditorHost,

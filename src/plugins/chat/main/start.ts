@@ -395,7 +395,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('stopAll', () => chat.stopAll());
     api.channel.handle('openPreview', () => preview.open());
     api.channel.handle('recentFolders', () => folderChoices.list());
-    api.channel.handle('chooseFolder', () => services.window.chooseFolder());
     api.events.on('sessions.closed', ({ sessionId }) => {
       chat.closed(sessionId, 'user');
       preview.closed(sessionId);

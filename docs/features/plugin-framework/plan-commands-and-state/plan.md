@@ -291,7 +291,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 - [x] [Runtime command API](07-command-api.md) — after 06
 
 ### Wave 7
-- [ ] [keysFor, anchor and box focus in core](08-core-keys.md) — after 07
+- [x] [keysFor, anchor and box focus in core](08-core-keys.md) — after 07
 
 ### Wave 8
 - [ ] [Core picker and folder services](09-core-services.md) — after 08
@@ -327,12 +327,16 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 05 · c0704474 · Diff read; state.ts, slot-store, slot-holder, page-state, bridge members and 22 manifests' reads present; typecheck and lint clean. · concerns: main.ts serveSlots and renderer createPageState have no test (task 16); kind-mismatch throw in applyPageWrite surfaces as main's uncaught exception; contracts/state.ts and plugin.ts import each other's types; onWrite throwing leaves the page store updated and skips local listeners; applyPageWrite steps seq on any unrefused change.
 - 06 · dd6d5088 · Diff read; core-state, startPageCoreSlots, startWindowFocusSlot, the definePlugin throw and the callers' moves present; typecheck and lint clean; the hooks grep prints nothing. · concerns: core.mode stays '' after the first mode shows until the first switch, and keeps the old id when the last mode is disposed, because createModes.add tells no change: a layout reading core.mode through task 10 sees this; renderer and main wiring reach no test (task 16); three stateWrites at each page load.
 - 07 · 59acab31 · Report and core diffs read; the new modules and PluginCommands present; typecheck and lint clean; the choose and chord greps as required. · concerns: main.ts and renderer.ts wiring first runs at task 16; 'declared twice' logs each re-serve during the race; a user layout naming choose through the forms kit's commandNamed gets no arg and throws at the click, where choose1 used to work; a Settings write naming an unknown id is now written, with the problem appearing once both processes started.
+- 08 · f3c93b48 · Diff stat and Produces read; new core modules present; typecheck and lint clean; all four Done-when greps as required. · concerns: renderer.ts wiring and the flash-free load with showHints off reach no test (task 16); deleting the chrome's redraw leaves a chrome keyHint on a command with no handler at its draw empty until the next draw; holdShown's rule is written twice, in key-anchors.ts and the harness fake; api.keys.where and onWhereChanged have no consumer; pushSettings tells listeners but does not change settings().
 ### Contract changes
 - 07 CommandRouter gains intercept(id, wrap, owner); KeyCommands<Context> is exported from shared/command-router.ts.
 - 07 new shared/runtime-commands.ts (createRuntimeCommands, RuntimeCommands, EMPTY_RUNTIME_CATALOG); createPageApi and createMainApi take commands: RuntimeCommands, and the page's run dep is gone.
 - 07 ConfigStore gains runtime(); checkKeymapText also returns layer; new exports checkUserKeymap, CheckedKeymap, RuntimeCatalogs; RuntimeWiringDeps.config is structural.
 - 07 ScopedAnchor's third param is options?: { arg?; label? }; installWindowKeybindings gains trailing log; chordName moves to interceptChordText in shared/accelerator.ts; PartHarness gains commandRuns.
 - 07 configSchema_DefaultBindBadArg_Throws sits in main/config/config-store.test.ts; helpSections_FormsChooseDigits_OneMergedLine builds its binds in the test; renderer/editor-binds.ts is unchanged.
+- 08 Anchors also gains holdShown(shown): Disposable; onChangedPart moves to renderer/live-config.ts; new liveKeysFor(config) in renderer/plugins/page-api.ts.
+- 08 recordingAnchors().keys is KeyHints; PagePartHarness gains anchors, setWhere, hintsShown, pushSettings; PagePartHarnessOptions gains anchorDispose.
+- 08 scripts/check-layers.mts gains a src/plugins/page.test.ts entry.
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
 - Task 03: keymap.test's commandInfos takes {} for core commands, not coreCommands: the layer rule forbids the import and the bind's plugin comes from the manifest. · group 03
@@ -345,5 +349,7 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 07: a command's dispose also removes the catalog's binds naming it; wireRuntime feeds setRuntime once at wiring; one tick's burst batches through a microtask. · group 07
 - Task 07: the registry's promise waits for the handler even when a wrap does not await next; register throws on an id in either catalog or a served non-runtime id. · group 07
 - Task 07: the harness has no fake-command option, since no harness test failed once run became real. · group 07
+- Task 08: setShown(false) empties each anchor as well as hiding it, since DESIGN.md and key-hints/design.md say hints switched off take no space. · group 08
+- Task 08: stale prose fixed beyond Files: AGENTS.md, DESIGN.md, key-hints/design.md and plugin-framework/design.md § Keys plugin. · group 08
 ### Review rounds
 ### Test gate

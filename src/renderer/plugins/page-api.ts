@@ -1,7 +1,10 @@
 import type { Bridge } from '../../contracts/bridge';
 import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
-import type { Log } from '../../contracts/log';
+import type { EditorHost } from '../../contracts/editor';
+import type { FuzzyMatcher } from '../../contracts/fuzzy';
+import type { ListPickerService } from '../../contracts/list-picker';
+import type { Log, PluginLog } from '../../contracts/log';
 import type {
   FocusTarget,
   OuterPanes,
@@ -30,6 +33,7 @@ import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { keysFor } from '../../shared/keys-for';
+import { createListPicker } from '../../shared/page/list-picker';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
 import { qualify } from '../../shared/plugin-manifests';
@@ -37,6 +41,7 @@ import {
   trackedEditor,
   trackedMarkdown,
 } from '../../shared/plugin-service-views';
+import { createRegistrations } from '../../shared/registrations';
 import {
   layoutState,
   pluginState,
@@ -51,9 +56,12 @@ import { type LiveConfig, onChangedPart } from '../live-config';
 import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
 
-// The services the page core hands the plugin APIs: each plugin's `uiState` and
-// scoped `log` are made from these, `log` being the core's own.
-export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
+// The services the page core hands the plugin APIs: each plugin's `uiState`,
+// `picker` and scoped `log` are made from these, `log` being the core's own.
+export type PageApiServices = Omit<
+  PageServices,
+  'uiState' | 'log' | 'picker'
+> & {
   log: Log;
 };
 
@@ -120,6 +128,7 @@ export function liveKeysFor(
 // Every registration it makes through the API is filed in
 // `deps.registrations`. Editors, timers, pane targets and the transparency
 // override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
+// `services.picker` builds lists under its scopes, log, editor and overlay;
 // `services.visualFrames`, `services.markup` and `uiState` are not recorded,
 // and the plugin closes what it opens through them.
 export function createPageApi(
@@ -133,8 +142,11 @@ export function createPageApi(
   const track = <T extends Disposable>(handle: T) =>
     registrations.track(handle);
   const pluginCommands = deps.commands.forPlugin(manifest.id, track);
+  const areas = pluginAreas(deps.areas, registrations);
+  const log = pluginLog(deps.services.log, manifest.id);
+  const editor = trackedEditor(deps.services.editor, registrations);
   return {
-    areas: pluginAreas(deps.areas, registrations),
+    areas,
     channel: {
       invoke: channel.invoke,
       on: (message, listener) =>
@@ -199,8 +211,16 @@ export function createPageApi(
     commands: pluginCommands.commands,
     services: {
       ...deps.services,
-      log: pluginLog(deps.services.log, manifest.id),
-      editor: trackedEditor(deps.services.editor, registrations),
+      log,
+      editor,
+      picker: pluginPicker(manifest, {
+        scopeStack: deps.scopeStack,
+        log,
+        matcher: deps.services.fuzzy,
+        editor,
+        overlay: areas.overlay,
+        registrations,
+      }),
       markdown: trackedMarkdown(deps.services.markdown, registrations),
       timers: trackedTimers(deps.services.timers, registrations),
       uiState: deps.uiState.scoped(manifest.id),
@@ -234,6 +254,55 @@ function trackedPushedScope(
     dispose: () => pushed.dispose(),
   };
   return registrations.track(view);
+}
+
+function requireDeclaredScope(manifest: PluginManifest, scope: string) {
+  if (!Object.hasOwn(manifest.scopes, scope)) {
+    throw new Error(`Plugin "${manifest.id}" declares no scope "${scope}"`);
+  }
+}
+
+// One plugin's list pickers. `pushedScopes` is filed ahead of each list's close,
+// because the store disposes in reverse: the close pops the scope it holds, and
+// a second pop throws.
+function pluginPicker(
+  manifest: PluginManifest,
+  deps: {
+    scopeStack: ScopeStack;
+    log: PluginLog;
+    matcher: FuzzyMatcher;
+    editor: EditorHost;
+    overlay: Area;
+    registrations: Registrations;
+  },
+): ListPickerService {
+  return {
+    create({ scope = 'picker', filter = false, parent } = {}) {
+      const scopeName = typeof scope === 'string' ? () => scope : scope;
+      requireDeclaredScope(manifest, scopeName());
+      const pushedScopes = deps.registrations.track(createRegistrations());
+      const picker = createListPicker({
+        pushScope() {
+          const name = scopeName();
+          requireDeclaredScope(manifest, name);
+          return trackedPushedScope(
+            deps.scopeStack.push(qualify(manifest.id, name)),
+            pushedScopes,
+          );
+        },
+        log: deps.log,
+        matcher: deps.matcher,
+        filterEditor: filter ? deps.editor : undefined,
+      });
+      if (parent === undefined) {
+        deps.overlay.contribute(picker.element);
+      } else {
+        parent.append(picker.element);
+      }
+      deps.registrations.track({ dispose: () => picker.close() });
+      return picker;
+    },
+  };
 }
 
 // Keeps the last value this plugin handed each slot, and releases the non-null

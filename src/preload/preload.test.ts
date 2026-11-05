@@ -1,16 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { SlotChange } from '../contracts/state';
+import { gateExternalLinks } from '../shared/external-links';
 import './preload';
 
 const electron = vi.hoisted(() => {
   const exposed: { wigley?: unknown } = {};
   const onCalls: [string, (...args: unknown[]) => void][] = [];
   const sends: unknown[][] = [];
+  const handlers: Record<string, (...args: unknown[]) => unknown> = {};
   return {
     exposed,
     onCalls,
     sends,
+    handlers,
     contextBridge: {
       exposeInMainWorld: (name: 'wigley', api: unknown) => {
         exposed[name] = api;
@@ -22,6 +25,16 @@ const electron = vi.hoisted(() => {
       },
       on: (channel: string, listener: (...args: unknown[]) => void) => {
         onCalls.push([channel, listener]);
+      },
+      // Rejects as Electron does: main's error under the channel's prefix.
+      invoke: async (channel: string, ...args: unknown[]) => {
+        try {
+          return await handlers[channel](...args);
+        } catch (error) {
+          throw new Error(
+            `Error invoking remote method '${channel}': ${String(error)}`,
+          );
+        }
       },
     },
     webUtils: {},
@@ -115,6 +128,40 @@ describe('preload onMessage', () => {
     sendFromMain('reentrant', 'shown', 2);
 
     expect(late).toEqual([2]);
+  });
+});
+
+describe('preload chooseFolder and openExternal', () => {
+  it.each([
+    {
+      case: 'chooseFolder',
+      channel: BRIDGE_CHANNELS.chooseFolder,
+      call: () => bridge.chooseFolder(),
+    },
+    {
+      case: 'openExternal',
+      channel: BRIDGE_CHANNELS.openExternal,
+      call: () => bridge.openExternal('https://example.invalid'),
+    },
+  ])(
+    'chooseFolder_And_openExternal_MainRejects_CarryMainsText: $case',
+    async ({ channel, call }) => {
+      electron.handlers[channel] = () => {
+        throw new Error('main said no');
+      };
+
+      await expect(call()).rejects.toThrow(/^main said no$/);
+    },
+  );
+
+  it('openExternal_FileUrl_RejectsWithTheGateText', async () => {
+    const open = gateExternalLinks(async () => undefined);
+    electron.handlers[BRIDGE_CHANNELS.openExternal] = (url) =>
+      open(url as string);
+
+    await expect(bridge.openExternal('file:///x')).rejects.toThrow(
+      /^Refused to open file:\/\/\/x: /,
+    );
   });
 });
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   dataEmitted,
@@ -34,6 +35,7 @@ describe('sessions page part', () => {
     async ({ state, barPartDisposes }) => {
       const harness = startPagePart(sessionsPagePart, {
         invoke: async () => state,
+        services: { picker: fakeListPickerService() },
       });
       await settle();
       const dispose = vi.fn();
@@ -56,7 +58,10 @@ describe('sessions page part', () => {
     const written = vi.fn();
     const harness = startPagePart(sessionsPagePart, {
       invoke: () => read.promise,
-      services: { uiState: { get: () => undefined, set: written } },
+      services: {
+        picker: fakeListPickerService(),
+        uiState: { get: () => undefined, set: written },
+      },
     });
 
     const logsBeforeStop = harness.logs.length;
@@ -76,7 +81,10 @@ describe('sessions page part', () => {
         rows: [sessionRow('s1')],
         selectedSessionId: 's1',
       }),
-      services: { uiState: { get: () => undefined, set: written } },
+      services: {
+        picker: fakeListPickerService(),
+        uiState: { get: () => undefined, set: written },
+      },
     });
 
     await settle();

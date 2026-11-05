@@ -1,6 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type { ListPickerService } from '../../../contracts/list-picker';
 import type { UserKeymap } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -33,10 +34,6 @@ import {
   createLayoutParts,
   type LayoutParts,
 } from '../../../shared/page/layout-host/layout-parts';
-import {
-  createListPicker,
-  type ListPicker,
-} from '../../../shared/page/list-picker';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
@@ -189,7 +186,8 @@ export interface SettingsViewDeps {
   // True while the side bar lies beside or over the rows: the focus keys
   // move to the sections only then.
   isSideBarShown(): boolean;
-  pushScope(scope: 'box' | 'picker'): PushedScope;
+  pushScope(scope: 'box'): PushedScope;
+  picker: ListPickerService;
   addOverlay(element: HTMLElement): Disposable;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
   // `scope` is in force, followed by `label` (true: the command's label): the
@@ -354,12 +352,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const filterBox = textBoxInput('settings-box-input');
   filterFrame.append(filterBox);
 
-  const picker: ListPicker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log,
-    matcher: deps.matcher,
-  });
-  deps.addOverlay(picker.element);
+  const picker = deps.picker.create();
 
   let schema: UserConfigSchema | null = null;
   let latest: UserConfigRead | null = null;

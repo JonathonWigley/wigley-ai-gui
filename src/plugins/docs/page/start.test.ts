@@ -16,6 +16,7 @@ import {
 } from '../../sessions/contract';
 import type { DocsPageExports } from '../contract';
 import { docsPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
 // What throws the next time one is disposed, once.
 interface ThrowsNext {
@@ -55,14 +56,16 @@ function startDocsPage() {
   installFocusFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
   const throwsNext: ThrowsNext = { anchor: false, tab: false };
+  const picker = fakeListPickerService();
   const harness = startPagePart(docsPagePart, {
+    services: { picker },
     dependencies: [fakeSessions(tabs, throwsNext)],
     anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
     firstModeTaken: true,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, tabs, throwsNext };
+  return { harness, exportsTo, tabs, throwsNext, picker };
 }
 
 describe('docs page part lifecycle', () => {
@@ -156,6 +159,16 @@ describe('docs page part lifecycle', () => {
     await harness.stop();
 
     expect(harness.counts().frames).toBe(0);
+  });
+
+  it('start_TwoViews_CreatesOnePicker', () => {
+    const { exportsTo, picker } = startDocsPage();
+
+    exportsTo(createRegistrations()).addView('extra', {
+      isVisible: () => false,
+    });
+
+    expect(picker.created).toHaveLength(1);
   });
 
   it('exports_ConsumerDisposed_DisposesItsView', () => {

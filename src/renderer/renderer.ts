@@ -310,6 +310,8 @@ async function start() {
     paths,
     homeDir: config.homeDir,
     runMode: config.runMode,
+    chooseFolder: () => bridge.chooseFolder(),
+    openExternal: (url) => bridge.openExternal(url),
   };
   // Listens from here with no binds: a key pressed while the parts start matches
   // nothing and reaches nothing.

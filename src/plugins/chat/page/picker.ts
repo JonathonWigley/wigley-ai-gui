@@ -1,13 +1,10 @@
-import type { EditorHost } from '../../../contracts/editor';
-import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type {
+  DrawnPickerRow,
+  DrawRowInput,
+  ListPickerService,
+} from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
-import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
-import {
-  createListPicker,
-  type DrawnPickerRow,
-  type DrawRowInput,
-} from '../../../shared/page/list-picker';
 import {
   type ChatCommandName,
   type ChatScopeName,
@@ -89,13 +86,9 @@ export interface Picker {
 }
 
 export interface PickerDeps extends SurfaceKitDeps {
-  overlay: PluginAreas['overlay'];
-  editor: EditorHost;
-  // Pushes the named chat scope.
-  pushScope(scope: ChatScopeName): PushedScope;
+  picker: ListPickerService;
   layouts: ChatLayouts;
   log: PluginLog;
-  matcher: FuzzyMatcher;
 }
 
 type PickerScope = NonNullable<PickerRequest<unknown>['scope']>;
@@ -103,13 +96,7 @@ type PickerScope = NonNullable<PickerRequest<unknown>['scope']>;
 export function createPicker(deps: PickerDeps): Picker {
   // The scope of the request being opened, then of the open one.
   let scope: ChatScopeName = 'picker';
-  const list = createListPicker({
-    pushScope: () => deps.pushScope(scope),
-    log: deps.log,
-    matcher: deps.matcher,
-    filterEditor: deps.editor,
-  });
-  deps.overlay.contribute(list.element);
+  const list = deps.picker.create({ scope: () => scope, filter: true });
   deps.layouts.onChange(() => list.redraw());
   // An empty span holding `command`'s keys in `scopeName`, then `label`.
   const anchored = (

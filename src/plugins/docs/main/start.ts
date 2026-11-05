@@ -34,7 +34,6 @@ import {
   sessionSourceId,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
-import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import {
@@ -321,13 +320,6 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('unwatchAll', async () => {
       await docs;
       watches.closeAll();
-    });
-    channel.handle('openExternal', async (url) => {
-      await docs;
-      if (!EXTERNAL_SCHEME.test(url)) {
-        throw new Error('Only http and https links open outside the app');
-      }
-      await services.openExternal(url);
     });
     channel.handle('pluginConfigFile', async (key, harness) =>
       (await docs).docFiles.pluginConfigFile(key, harness),

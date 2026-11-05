@@ -1,6 +1,6 @@
 # 08 — keysFor, anchor and box focus in the core keys API
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -291,3 +291,4 @@ One commit for the group.
 
 ## Proof
 
+Commit f3c93b48 · proof: Diff stat and Produces read; new core modules present; typecheck and lint clean; all four Done-when greps as required. · concerns: renderer.ts wiring and the flash-free load with showHints off reach no test (task 16); deleting the chrome's redraw leaves a chrome keyHint on a command with no handler at its draw empty until the next draw; holdShown's rule is written twice, in key-anchors.ts and the harness fake; api.keys.where and onWhereChanged have no consumer; pushSettings tells listeners but does not change settings().

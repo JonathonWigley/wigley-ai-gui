@@ -104,6 +104,20 @@ const bridge: Bridge = {
       throw new Error(mainErrorText(error));
     }
   },
+  chooseFolder: async () => {
+    try {
+      return await ipcRenderer.invoke(BRIDGE_CHANNELS.chooseFolder);
+    } catch (error) {
+      throw new Error(mainErrorText(error));
+    }
+  },
+  openExternal: async (url) => {
+    try {
+      await ipcRenderer.invoke(BRIDGE_CHANNELS.openExternal, url);
+    } catch (error) {
+      throw new Error(mainErrorText(error));
+    }
+  },
 };
 
 contextBridge.exposeInMainWorld('wigley', bridge);

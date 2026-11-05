@@ -29,6 +29,7 @@ import type {
   RuntimeBind,
   ViewScope,
 } from './keymap';
+import type { ListPickerService } from './list-picker';
 import type { PluginLog } from './log';
 import type { MarkdownRenderer } from './markdown';
 import type { MarkupEditor } from './markup';
@@ -541,6 +542,13 @@ export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   fuzzy: FuzzyMatcher;
+  // Builds the shared list picker, wired to the plugin's scope, log and overlay.
+  picker: ListPickerService;
+  // The native folder dialog over the window; null when the user dismisses it.
+  chooseFolder(): Promise<string | null>;
+  // Opens an http or https URL in the user's default app; rejects with main's
+  // `Refused to open <url>: …` for any other.
+  openExternal(url: string): Promise<void>;
   markup: MarkupEditor;
   // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
   visualFrames: VisualFrames;

@@ -4,6 +4,11 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type {
+  DrawnPickerRow,
+  DrawRowInput,
+  ListPickerService,
+} from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type {
@@ -41,12 +46,6 @@ import type {
   RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
-import {
-  createListPicker,
-  type DrawnPickerRow,
-  type DrawRowInput,
-  type ListPicker,
-} from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { textLineHeightPx } from '../../../shared/page/text-line';
@@ -113,7 +112,7 @@ const TAGS_PICKER = 'Tags';
 // boxes.
 type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 
-type BacklogPushedScope = 'box' | 'confirm' | 'picker';
+type BacklogPushedScope = 'box' | 'confirm';
 
 // Every page command but `showMode`, which the page part runs itself.
 export type BacklogCommand = Exclude<
@@ -159,6 +158,7 @@ export interface BacklogViewDeps {
   // Sets the panes the focus keys move between, after each `setScope`.
   setFocusTarget(target: FocusTarget | null): void;
   pushScope(scope: BacklogPushedScope): PushedScope;
+  picker: ListPickerService;
   addOverlay(element: HTMLElement): Disposable;
   run(command: CommandId): void;
   isShown(): boolean;
@@ -318,12 +318,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   contentSheet.classList.add('backlog-sheet');
   contentSheet.append(split.element);
 
-  const picker: ListPicker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log: deps.log,
-    matcher,
-  });
-  deps.addOverlay(picker.element);
+  const picker = deps.picker.create();
 
   // A prompt's `drawBody`: the layout's `confirmBody` for `kind`, with the
   // prompt's own buttons; each kind's last body draw is disposed as it draws

@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type { ListPicker } from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
@@ -61,7 +62,7 @@ import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
 
 // The scopes a docs view pushes over its pane's scope.
-export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
+export type DocsPushedScope = 'conflict' | 'box' | 'confirm';
 
 // What each page command does on this view.
 export interface DocsViewCommands {
@@ -176,9 +177,12 @@ export interface DocsViewDeps {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   matcher: FuzzyMatcher;
+  // This view's handle on the docs plugin's one list (`createDocsPicker`).
+  picker: ListPicker;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  openExternal(url: string): Promise<void>;
   // Where the doc pane's editor registers its drop target.
   drops: Pick<PageDrops, 'addTarget'>;
   // The star set every docs view shares; each view redraws on its toggles.
@@ -487,6 +491,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
+    openExternal: deps.openExternal,
     drops: deps.drops,
     now: deps.now,
     chipsOf: (entryId, path) => {
@@ -584,7 +589,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
-    matcher: deps.matcher,
+    picker: deps.picker,
     parts: newParts(),
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],

@@ -941,6 +941,13 @@ function createWindow(
     BRIDGE_CHANNELS.commandRun,
     (_event, id: string, arg: unknown) => commands.router.run(id, arg),
   );
+  const windowServices = modeServices.forWindow({
+    window,
+    store,
+    homeDir: inputs.homeDir,
+    log,
+    sessionHost,
+  });
   mainHost = startMainParts(
     window,
     store,
@@ -964,13 +971,7 @@ function createWindow(
       runMode,
       appInstance,
       sessionHost,
-      ...modeServices.forWindow({
-        window,
-        store,
-        homeDir: inputs.homeDir,
-        log,
-        sessionHost,
-      }),
+      ...windowServices,
     },
     selfTest,
     driveRun,
@@ -1022,6 +1023,12 @@ function createWindow(
     BRIDGE_CHANNELS.savePasted,
     (_event, bytes: Uint8Array, mediaType: string) =>
       pasted.save(bytes, mediaType),
+  );
+  ipcMain.handle(BRIDGE_CHANNELS.chooseFolder, () =>
+    windowServices.window.chooseFolder(),
+  );
+  ipcMain.handle(BRIDGE_CHANNELS.openExternal, (_event, url: string) =>
+    windowServices.openExternal(url),
   );
   // The push to the page runs ahead of the keymap step `wireRuntime` adds.
   store.onChanged(() => {

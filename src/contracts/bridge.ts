@@ -6,6 +6,7 @@ import type { AppConfig } from './settings';
 import type { SlotChange, StateSnapshot } from './state';
 
 export const BRIDGE_CHANNELS = {
+  chooseFolder: 'bridge:choose-folder',
   commandRun: 'bridge:command-run',
   commandRunDone: 'bridge:command-run-done',
   commandRunInPage: 'bridge:command-run-in-page',
@@ -14,6 +15,7 @@ export const BRIDGE_CHANNELS = {
   layoutsRead: 'bridge:layouts-read',
   layoutsChanged: 'bridge:layouts-changed',
   log: 'bridge:log',
+  openExternal: 'bridge:open-external',
   pluginInvoke: 'plugin:invoke',
   pluginMessage: 'plugin:message',
   savePasted: 'bridge:save-pasted',
@@ -80,4 +82,10 @@ export interface Bridge {
   // and resolves with its full path; rejects with main's own error text when
   // the save fails.
   savePasted(bytes: Uint8Array, mediaType: string): Promise<string>;
+  // The native folder dialog over the window; null when the user dismisses it.
+  // Rejects with main's own error text when it fails.
+  chooseFolder(): Promise<string | null>;
+  // Opens an http or https URL in the user's default app; rejects with main's
+  // own error text for any other URL.
+  openExternal(url: string): Promise<void>;
 }

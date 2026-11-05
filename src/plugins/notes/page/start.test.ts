@@ -17,6 +17,7 @@ import {
 } from '../../sessions/contract';
 import { emptyDraft } from '../draft';
 import { notesPagePart } from './start';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
 const NONE_LIVE: PartCounts = noCounts;
 
@@ -44,7 +45,7 @@ function startNotes() {
     dependencies: [
       fakeDependency(sessionsPageKey, () => ({}) as SessionsPageExports),
     ],
-    services: { editor },
+    services: { editor, picker: fakeListPickerService({ editor }) },
     invoke(method) {
       return Promise.resolve(
         method === 'loadDraft'

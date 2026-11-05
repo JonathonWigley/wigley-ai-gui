@@ -1,4 +1,7 @@
-import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type {
+  ListPicker,
+  ListPickerRequest,
+} from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -8,11 +11,6 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import {
-  createListPicker,
-  type ListPicker,
-  type ListPickerRequest,
-} from '../../../shared/page/list-picker';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -44,7 +42,7 @@ import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-
 import { textBoxInput } from '../../../shared/page/text-box';
 
 // The scopes the dialogs push over the view's pane scope.
-export type DialogScope = 'picker' | 'box' | 'confirm';
+export type DialogScope = 'box' | 'confirm';
 
 interface BoxRequest {
   label: string;
@@ -413,7 +411,8 @@ export interface DocsDialogsDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
-  matcher: FuzzyMatcher;
+  // The handle `createDocsPicker` gave this view.
+  picker: ListPicker;
   // Draws the dialogs' bodies and the list picker's rows through the docs
   // layout.
   parts: DocsParts;
@@ -429,9 +428,10 @@ export interface DocsDialogsDeps {
   dialogClosed(): void;
 }
 
-// The view's dialogs: the list picker, the name and path boxes and the Trash
-// confirm, and the create, rename and trash flows that run through them and
-// main. Each flow's refusals before a dialog opens are the view's.
+// The view's dialogs: its handle on the list picker, the name and path boxes and
+// the Trash confirm, and the create, rename and trash flows that run through
+// them and main. Each flow's refusals before a dialog opens are the view's.
+// `elements` are the box and confirm; the list sits in the overlay already.
 export interface DocsDialogs {
   elements: HTMLElement[];
   picker: ListPicker;
@@ -459,13 +459,31 @@ export interface DocsDialogs {
   dispose(): void;
 }
 
+// Every docs view's handle on the one list. A handle's `open` marks its view as
+// the opener, and its `close` does nothing unless its view opened the open
+// request, so one view's closing leaves a list another view has open.
+export function createDocsPicker(list: ListPicker): {
+  forView(viewId: string): ListPicker;
+} {
+  let openerViewId: string | null = null;
+  return {
+    forView: (viewId) => ({
+      ...list,
+      open(request) {
+        list.open(request);
+        openerViewId = viewId;
+      },
+      close() {
+        if (openerViewId === viewId) {
+          list.close();
+        }
+      },
+    }),
+  };
+}
+
 export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
-  const { channel, log, paths, toast } = deps;
-  const picker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log,
-    matcher: deps.matcher,
-  });
+  const { channel, log, paths, toast, picker } = deps;
   const { parts } = deps;
   const box = createTextBox({
     channel,
@@ -571,7 +589,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   };
 
   const dialogs: DocsDialogs = {
-    elements: [picker.element, box.element, confirm.element],
+    elements: [box.element, confirm.element],
     picker,
     createByKind() {
       const title = 'New doc by kind';

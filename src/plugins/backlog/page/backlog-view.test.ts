@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
@@ -185,6 +186,11 @@ async function backlogSetup() {
       pop: () => undefined,
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
+    picker: fakeListPickerService({
+      place(element) {
+        overlays.push(asFake(element));
+      },
     }),
     addOverlay: (element) => {
       overlays.push(asFake(element));

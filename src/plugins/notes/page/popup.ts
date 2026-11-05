@@ -1,6 +1,5 @@
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
-import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { ImageEncoder } from '../../../contracts/images';
 import type { OsName } from '../../../contracts/platform';
 import type {
@@ -20,7 +19,6 @@ import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { pathOf } from '../../../shared/page/file-drop/file-path';
 import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
-import { createListPicker } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { createDialog } from '../../../shared/page/ui/dialog';
@@ -94,7 +92,6 @@ type DraftOperation =
 export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
-  matcher: FuzzyMatcher;
   keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   overlay: PluginAreas['overlay'];
   // The commands a layout's kit runs and checks.
@@ -588,13 +585,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     });
 
   // ── Pickers ───────────────────────────────────────────────────────────────
-  const picker = createListPicker({
-    pushScope: () => deps.pushScope('picker'),
-    log,
-    matcher: deps.matcher,
-    filterEditor: editorHost,
+  const picker = services.picker.create({
+    filter: true,
+    parent: dialog.element,
   });
-  dialog.element.append(picker.element);
   const pickerFilterHint = anchored('pickerFilter', 'picker', 'filter');
 
   const pick = <T>(

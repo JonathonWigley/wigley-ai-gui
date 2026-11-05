@@ -196,7 +196,6 @@ export interface ChatChannel extends ChannelShape {
     // folder each profile's harness saved sessions in, one per folder, missing
     // folders and those in the OS's temp folders left out.
     recentFolders(): Promise<RecentFolder[]>;
-    chooseFolder(): Promise<string | null>;
     // The new row's sessionId.
     start(request: StartRequest): string;
     // Newest first; a session open in the app on a row chat does not hold is
