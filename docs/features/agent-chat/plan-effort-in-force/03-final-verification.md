@@ -1,6 +1,6 @@
 # 03 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -29,3 +29,4 @@ Commit:    none.
 
 ## Proof
 
+Commit dc3f68c6 · proof: drive run effort-check on the real CLI: 5 of 5 checks pass, screenshots read by the driver, no model turn, spend 0.00, run quit; no commit of its own · concerns: check 4 kept Medium, the default, so keeping a non-default effort across /model was not exercised live; a brief unset in the log during new session, /effort auto and /clear; Mode shows unset on a new session until the first control reply

@@ -82,10 +82,10 @@ Boundary rule: nothing outside `src/main/claude-code/` names `get_settings`.
 - [x] [Read the applied settings](01-read-applied-settings.md)
 
 ### Wave 2
-- [ ] [Doc re-read](02-doc-re-read.md) — after 01
+- [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
-- [ ] [Final verification](03-final-verification.md) — after 02
+- [x] [Final verification](03-final-verification.md) — after 02
 
 ## Run log
 
@@ -93,9 +93,12 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 
 ### Groups
 - 01 · 8175b432 · diff read: all four Produces present, Decisions matched; typecheck passes; worker ran lint and the four test files (569 passed) · concerns: same-value report also fires for a typed /effort with no pick (extra controls event, confirmPicks no-op); two tests passed on stale wigley-2 ids and moved to wigley-3; row name "request already written" now means the context request only; AGENTS.md module map names get_context_usage only
+- 02 · dc3f68c6 · diff read: one row changed, three written-ahead passages true against 8175b432 · concerns: none
+- 03 · dc3f68c6 · drive run effort-check on the real CLI: 5 of 5 checks pass, screenshots read by the driver, no model turn, spend 0.00, run quit; no commit of its own · concerns: check 4 kept Medium, the default, so keeping a non-default effort across /model was not exercised live; a brief unset in the log during new session, /effort auto and /clear; Mode shows unset on a new session until the first control reply
 ### Contract changes
 ### Rulings
 - No test owned foldControlValues, so the same-value row is a new table foldPipeLine_ControlCommandResult_ReportsControls in session-fold.test.ts — the fold owns the rule — the row moves file if wrong · group 01 · group 01
 - No chat-sessions test added: restart_StartCarriesHeldModeAndConfirmedPicks (ReportedOnly1mModelAndEffort) already fails if a report joins userSetControls — one row missing if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate
+- claude-controls, session-fold, claude-code-harness tests (edited with the change); chat-sessions.test.ts (confirmPicks and the reported-value restart row read the controls report) · 569 passed

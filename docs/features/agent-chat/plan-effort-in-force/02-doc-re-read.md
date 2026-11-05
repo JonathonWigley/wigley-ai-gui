@@ -1,6 +1,6 @@
 # 02 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -12,3 +12,4 @@ Commit:    one commit, only when a line changed.
 
 ## Proof
 
+Commit dc3f68c6 · proof: diff read: one row changed, three written-ahead passages true against 8175b432 · concerns: none
