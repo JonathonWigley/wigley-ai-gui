@@ -25,12 +25,12 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'skill list',
-    why: "A typed slash command starts a skill, so the session hub's Skills section lists it with the main agent's tag.",
+    why: "A typed slash command starts a skill, so the session hub's Skills section lists it by name.",
     steps: [
       {
         width: 1200,
         keys: sendKeys(`/${SELFTEST_SKILL}`),
-        expect: `[agent-skills] skills in ${SELFTEST_PROJECT_NAME}: ${SELFTEST_SKILL} (main)`,
+        expect: `[agent-skills] skills in ${SELFTEST_PROJECT_NAME}: ${SELFTEST_SKILL}`,
         checksFit: 'held',
         screenshot: 'skill-list',
         why: 'The hub shows only in a Chat tab at least 640px wide, so the fit check and the screenshot hold a window wide enough for that tab: at the minimum width the section is hidden and neither sees it.',
@@ -60,7 +60,7 @@ export function agentSkillsSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A skill's name ends in an ellipsis inside its row, as its CSS says. So do
+    // A skill's name ends in an ellipsis in its row, as its CSS says. So do
     // a session row's status, a project group's name, and the activity dock's
     // tool calls and its done line; the tab bar's parts and the dock's one line clip
     // in their own box. The side bar's handle holds its resize prompt, hidden until

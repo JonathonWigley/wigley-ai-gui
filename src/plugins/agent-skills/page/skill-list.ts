@@ -9,14 +9,13 @@ import {
 } from '../../../shared/page/layout-host/base-kit';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
-import type { Roster, RosterSkill } from '../../agents/contract';
+import type { Roster } from '../../agents/contract';
 import type { ChatSidePart, ChatSideSection } from '../../chat/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   AgentSkillsPart,
   CompleteLayout,
   Layout,
-  SkillListInput,
 } from '../layouts/layout';
 import { agentSkillsManifest } from '../manifest';
 
@@ -29,8 +28,8 @@ export interface SkillListDeps {
   roster(sessionId: string): Roster;
 }
 
-// `part` draws a session's skills into its section of the session hub.
-// `rosterChanged` redraws a session whose skills changed; `setLayouts` redraws
+// `part` draws the main agent's skills into a session's section of the session
+// hub. `rosterChanged` redraws a session whose list changed; `setLayouts` redraws
 // every session's; `forget` drops a session that left.
 export interface SkillList {
   part: ChatSidePart;
@@ -50,21 +49,21 @@ interface HeldParent {
 
 const NONE_TEXT = 'none';
 
-function skillListInput(skills: readonly RosterSkill[]): SkillListInput {
-  return {
-    skills: skills.map(({ skill, agentId, ownerName }) => ({
-      skill,
-      ownerName,
-      isMain: agentId === MAIN_AGENT_ID,
-    })),
-  };
+// A project-scoped skill's name as Claude Code reports it: `<folder path>:<name>`.
+const SKILL_FOLDER_PREFIX = /^.*\/[^/:]*:/;
+
+function mainAgentSkillNames(roster: Roster): string[] {
+  const names = roster.skills
+    .filter(({ agentId }) => agentId === MAIN_AGENT_ID)
+    .map(({ skill }) => skill.replace(SKILL_FOLDER_PREFIX, ''));
+  return [...new Set(names)];
 }
 
 // The list is drawn directly into `parent`, leaving it empty with no skills, so
 // the section hides. Every subagent tool call changes the roster, so a change
-// that leaves the skills as they were draws nothing, keeping a row's open
-// tooltip. After a draw it logs `skills in <name>: <skill> (<owner>), …` when
-// the text differs from the last logged for that session, and `none` when the
+// that leaves the list as it was draws nothing, keeping a row's open tooltip.
+// After a draw it logs `skills in <name>: <skill>, …` when the text differs
+// from the last logged for that session, and `none` when the
 // list empties; a session that has listed no skill logs nothing.
 export function createSkillList(deps: SkillListDeps): SkillList {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
@@ -81,24 +80,19 @@ export function createSkillList(deps: SkillListDeps): SkillList {
     list?.dispose();
   };
 
-  const drawList = (holder: HeldParent, skills: readonly RosterSkill[]) =>
+  const drawList = (holder: HeldParent, skills: readonly string[]) =>
     layoutParts.draw('skillList', holder.parent, (skillList, slot, rollback) =>
       skillList(
         slot,
-        skillListInput(skills),
+        { skills },
         createBaseKit(
           ownerBaseKitDeps(agentSkillsManifest, deps.kit, null, rollback),
         ),
       ),
     );
 
-  const logSkills = (sessionId: string, skills: readonly RosterSkill[]) => {
-    const text =
-      skills.length === 0
-        ? NONE_TEXT
-        : skills
-            .map(({ skill, ownerName }) => `${skill} (${ownerName})`)
-            .join(', ');
+  const logSkills = (sessionId: string, skills: readonly string[]) => {
+    const text = skills.length === 0 ? NONE_TEXT : skills.join(', ');
     const logged = loggedTexts.get(sessionId);
     const isFirstAndEmpty = logged === undefined && skills.length === 0;
     if (text === logged || isFirstAndEmpty) {
@@ -109,7 +103,7 @@ export function createSkillList(deps: SkillListDeps): SkillList {
   };
 
   const draw = (sessionId: string, holder: HeldParent) => {
-    const { skills } = deps.roster(sessionId);
+    const skills = mainAgentSkillNames(deps.roster(sessionId));
     try {
       disposeList(holder);
     } finally {
@@ -119,8 +113,9 @@ export function createSkillList(deps: SkillListDeps): SkillList {
     if (skills.length > 0) {
       holder.list = drawList(holder, skills);
     }
-    const skillCount = new Set(skills.map(({ skill }) => skill)).size;
-    holder.section.setSummary(skillCount === 0 ? null : String(skillCount));
+    holder.section.setSummary(
+      skills.length === 0 ? null : String(skills.length),
+    );
     logSkills(sessionId, skills);
   };
 
@@ -151,7 +146,8 @@ export function createSkillList(deps: SkillListDeps): SkillList {
     rosterChanged(sessionId) {
       const holder = held.get(sessionId);
       const isUnchanged =
-        holder?.drawnSkills === JSON.stringify(deps.roster(sessionId).skills);
+        holder?.drawnSkills ===
+        JSON.stringify(mainAgentSkillNames(deps.roster(sessionId)));
       if (holder !== undefined && !isUnchanged) {
         draw(sessionId, holder);
       }

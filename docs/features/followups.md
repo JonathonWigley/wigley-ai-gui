@@ -84,12 +84,11 @@ Core seams that most items below assume.
   redrawn composer), but a page reload starts the box empty (`docs/features/layouts/design.md`). Forms: focus, review
   row and view (review, confirm) go into the draft or the slot; pending autosaves flush on `pagehide`; restored rounds
   do not take over their session again.
-- **Fuzzy matcher ranks every picker** — the `FuzzyMatcher` page service lands with
-  `docs/features/agent-chat/plan-slash-completion/` (not started; it adds the fzf adapter under `src/renderer/fzf/`
-  and ranks every list picker). Today no matcher exists and pickers filter without ranking. The user's ranking
-  requirement, for that plan's matcher: a match in a row's name outranks a match in its path, and a recently updated
-  target ranks higher — typing `gui` in the Notes target picker puts `wigley-ai-gui` first, where today a backlog
-  repo with `wigley-ai-gui` in its path wins.
+- **Picker ranks recent targets higher** — *needs a feature plan*: the user's ranking requirement has two parts.
+  `docs/features/agent-chat/plan-slash-completion/` (not started) lands the first: the `FuzzyMatcher` page service,
+  every list picker ranked, and a row's name outranking its path, so `gui` in the Notes target picker puts
+  `wigley-ai-gui` first. This item is the second: a recently updated target ranks higher. Build it after that plan.
+  `NoteHome` has no updated time, and "updated" still needs a definition (for example the home's latest commit).
 - **Core picker and folder services** — *agent-ready*: core page services for what plugins duplicate:
   `services.picker` (chat-private today, `src/plugins/chat/page/picker.ts`; docs needs it), and `chooseFolder()` and
   `openExternal(url)` on `PageServices` with the scheme check inside (both are `MainServices` only today), deleting
