@@ -57,7 +57,7 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 │ │    │              │ └────────┴─────────────────────┴───┘ │ │
 │ └────┴──────────────┴──────────────────────────────────────┘ │
 │ L1 right bar (glass, dense) sits beside the sheet, hidden    │
-│   while empty (usage details)                                │
+│   while empty (usage details, the unity pool panel)          │
 │ L1 status bar (glass; only while a plugin contributes to it) │
 └──────────────────────────────────────────────────────────────┘
   L0 backdrop: crust with two faint washes, seen only through L1
@@ -391,6 +391,18 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with no profile it holds a muted `No profiles` line. A meter's percent is never narrower than `100%`, so the meters
   line up from row to row. In the status line and the details, the 5h and Week rows always show; any other row (a
   model-scoped limit) shows only while used, and extra usage only while on and spent.
+- **Unity pool:** a session row holding a pool clone carries a neutral Tag, `Unity 3`, in its row parts' line, and
+  one waiting in a pool's queue an `attention` Tag, `Unity: queued 2nd`; one Tag per pool. While the shown session is
+  in a pool, the right bar holds the pool panel after the usage details: a section header `Unity pool · <pool>` over
+  one row per clone, which wraps in the bar's width: the title, the branch in `font-mono`, a `warning` `dirty` Tag
+  while the tree is dirty, the editor's state in `fg-tertiary`, then the holder (a session's row label in `fg-link`,
+  a click selecting its row; `Held by you` or `session <id>` in `fg-secondary`) and the Hold or Release button at the
+  row's end, disabled while its run is in flight. A `text-12` line under the row shows an open handoff's time left,
+  a stranded mark in `status-warning`, a warm-up in `status-running` while it runs or `status-error` with its error
+  once it failed, and the last Hold or Release's result (`status-error` for a failure). While a queue ticket waits
+  long, each clone that blocks the queue takes the `status-attention-tint` fill and edge and shows `idle <time>`. The
+  queue follows under a `Queue` section header, one row per ticket: its position, the waiting session, its branch in
+  mono and `waited <time>`; no queue draws no header.
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.

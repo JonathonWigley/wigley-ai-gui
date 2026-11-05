@@ -23,9 +23,9 @@ the user changes it.
 - **B — docs** (landed): the core `files` and `processes` services, the markdown document render and code
   highlighter, the document editor, the `docs` plugin (Docs mode and each session's Docs tab), and the docs index's
   `claudeConfigDirs` (wigley-ai-marketplace).
-- **C — ownership and plugin-source status**: the docs index's `owner`, marketplace clones and merged installs
-  (schema 3, wigley-ai-marketplace); the Mine and Third-party tree, read-only third-party docs and the git statuses
-  (`plan-ownership/`).
+- **C — ownership and plugin-source status** (landed): the docs index's `owner`, marketplace clones and merged
+  installs (schema 3, wigley-ai-marketplace); the Mine and Third-party tree, read-only third-party docs and the git
+  statuses.
 - **D — recency and stars** (landed): the docs index's `lastLoaded` (schema 4, wigley-ai-marketplace); docs ordered
   newest loaded first, the time on each row and in the doc view, and the Starred group.
 

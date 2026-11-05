@@ -20,9 +20,9 @@ release a clone.
 
 ## Status
 
-Not built. The plan is `~/wigley-agents/docs/features/unity-pool/plan-unity-pool/` (tasks 08–10): the launch
-variable in `src/main/claude-code/claude-launch.ts` and `src/contracts/agent.ts`, and the `unity-pool` plugin in
-`src/plugins/unity-pool/`.
+Built, in `src/contracts/agent.ts` and `src/main/claude-code/claude-launch.ts` (the launch variable) and
+`src/plugins/unity-pool/` (the state watch, the CLI runs and the self-test script in `main/`; the row badge, the
+right-bar panel and their view model in `page/`; the layout contract and the `default` layout in `layouts/`).
 
 ## The pool
 
