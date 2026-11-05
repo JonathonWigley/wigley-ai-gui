@@ -6,8 +6,8 @@ import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 import type { RowActivity } from '../sessions/contract';
 import type { PlanProgress } from './plan-reader';
 
-// A stage module's id: 'idle', 'primer', 'feature', 'planReady', 'make',
-// 'review', 'closed'.
+// A stage module's id: 'idle', 'primer', 'explore', 'interview', 'plan',
+// 'coldRead', 'planReady', 'make', 'review', 'fix', 'closed'.
 export type StageId = string;
 
 export const IDLE_STAGE: StageId = 'idle';
@@ -41,6 +41,8 @@ export type WorkflowSignal =
       argsPath: string | null;
     }
   | { type: 'fileWritten'; path: string }
+  // From `set_workflow_step`: the agent says the session moved to this stage.
+  | { type: 'stepReported'; step: StageId }
   | { type: 'turnStarted' }
   // Also from a sessionEnded of the flow's current host session (a crash
   // mid-turn).
@@ -59,8 +61,8 @@ export type WorkflowSignal =
 
 export interface MainStage {
   id: StageId;
-  // Stage order: idle 0, primer 10, feature 20, planReady 30, make 40,
-  // review 50, closed 60.
+  // Stage order: idle 0, primer 10, explore 20, interview 22, plan 24,
+  // coldRead 26, planReady 30, make 40, review 50, fix 55, closed 60.
   order: number;
   // The stage this signal moves the flow to, or null to leave the decision to
   // the next stage. Pure. `flow` is the flow after the fold's bookkeeping for
@@ -70,9 +72,13 @@ export interface MainStage {
   // while `workflow.autoClearAndMake` is on, after `workflow.autoStartSeconds`;
   // left out, entering the stage starts no countdown.
   autoCommand?: string;
-  // True for a stage that starts a new plan (primer, feature): entering it
-  // clears planDir and progress.
+  // True for a stage whose skill starts a new plan (primer, explore): a
+  // `skillStarted` answered with this stage clears planDir and progress, and a
+  // reported step back to it clears neither.
   clearsPlan?: boolean;
+  // The value `set_workflow_step` names this stage by; left out, no report can
+  // name it. The stage's own `enter` rule answers the `stepReported` signal.
+  reportedAs?: string;
   // True for the stage that starts a make run (make): entering it, or entering
   // it again, records the plan's review rounds as reviewRoundsAtMake.
   recordsReviewRounds?: boolean;
@@ -101,6 +107,11 @@ export function startsSkill(signal: WorkflowSignal, skill: string): boolean {
   }
   const bareName = skill.slice(skill.indexOf(':') + 1);
   return signal.skill === skill || signal.skill === bareName;
+}
+
+// True when `signal` reports the step of stage `stage`.
+export function reportsStep(signal: WorkflowSignal, stage: StageId): boolean {
+  return signal.type === 'stepReported' && signal.step === stage;
 }
 
 // A stage's detail from its parts, joined by ` · `, each empty part left out.
@@ -145,7 +156,7 @@ export interface PageStage {
   // Idle is false.
   inStepper: boolean;
   // Stages sharing a slot take one place in the stepper: the one the flow is
-  // in, otherwise the slot's last by order ('start': primer, feature; 'make':
+  // in, otherwise the slot's last by order ('start': primer, explore; 'make':
   // planReady, make).
   stepSlot?: string;
   // Equal to the main half's order (page-stages.test.ts pins it); the stepper
@@ -160,8 +171,9 @@ export interface PageStage {
   detail(flow: SessionFlow): string;
   // What the stage is doing for this flow; null for a stage with no status.
   status(flow: SessionFlow): StageStatus | null;
-  // What follows the status text in the status line, its separator included:
-  // ' 3/9', ' · round 2', ' · 9/9'. Left out, nothing follows.
+  // What follows the status text in the status line and the label of the
+  // stepper's current step, its separator included: ' 3/9', ' · round 2',
+  // ' · cycle 1', ' · 9/9'. Left out, nothing follows.
   statusProgress?(flow: SessionFlow): string;
   // True when the current wave's open tasks draw the stage's status; left out,
   // they draw `pending`.

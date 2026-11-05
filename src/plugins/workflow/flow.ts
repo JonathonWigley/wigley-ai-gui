@@ -123,6 +123,7 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
       next.turnRunning = false;
       next.runningSubagents = [];
       break;
+    case 'stepReported':
     case 'planGone':
     case 'handedOff':
     case 'dismissed':
@@ -146,7 +147,7 @@ function applyStageRules(
       clearPlan(next);
     }
   }
-  if (entered.stage?.clearsPlan === true) {
+  if (entered.stage?.clearsPlan === true && signal.type === 'skillStarted') {
     clearPlan(next);
   }
   if (entered.stage?.recordsReviewRounds === true) {

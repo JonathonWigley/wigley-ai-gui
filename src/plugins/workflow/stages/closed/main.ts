@@ -7,7 +7,7 @@ export const closedMainStage: MainStage = {
   id: 'closed',
   order: 60,
   enter(flow, signal) {
-    const inRun = flow.stage === 'make' || flow.stage === 'review';
+    const inRun = ['make', 'review', 'fix'].includes(flow.stage);
     const planWasRead = flow.progress !== null;
     return signal.type === 'planGone' && inRun && planWasRead ? 'closed' : null;
   },

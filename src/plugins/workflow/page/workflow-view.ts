@@ -184,13 +184,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       main: index === 0,
     }));
 
-  const steps = (stage: PageStage, status: StageStatus | null): StepInput[] => {
+  const steps = (
+    stage: PageStage,
+    flow: SessionFlow,
+    status: StageStatus | null,
+  ): StepInput[] => {
     const shown = stepperStages(deps.stages.all(), stage);
     const current = shown.indexOf(stage);
     return shown.map((step, index) => ({
       id: step.id,
       label: step.label,
       state: stepState(index, current, status),
+      progress: index === current ? (step.statusProgress?.(flow) ?? '') : '',
     }));
   };
 
@@ -231,7 +236,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       statusLine: statusLine(stage, flow),
       detail: stage.detail(flow),
       countdown: countdown(flow),
-      steps: steps(stage, status),
+      steps: steps(stage, flow, status),
       actions: actionInputs(flow),
       hasPlan: flow.progress !== null,
     };

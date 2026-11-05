@@ -209,6 +209,29 @@ function recordingLayout() {
   return { layout, strips, sidePanes };
 }
 
+// The trail's words, in order, the first holding the primer and explore slot.
+const TRAIL = [
+  'Explore',
+  'Interview',
+  'Plan',
+  'Cold read',
+  'Make',
+  'Review',
+  'Fix',
+  'Close',
+];
+
+// The trail's `label:state` texts with the step at `current` reading `label` in
+// `state`, the steps before it done and those after it pending.
+function trail(current: number, label: string, state: string): string[] {
+  return TRAIL.map((step, index) => {
+    if (index === current) {
+      return `${label}:${state}`;
+    }
+    return `${step}:${index < current ? 'done' : 'pending'}`;
+  });
+}
+
 function stepTexts(input: { steps: StripInput['steps'] }): string[] {
   return input.steps.map((step) => `${step.label}:${step.state}`);
 }
@@ -331,7 +354,7 @@ describe('workflow view', () => {
       actions: [],
     },
     {
-      stage: 'feature',
+      stage: 'explore',
       busy: 'none',
       countdownMs: null,
       fields: {},
@@ -558,52 +581,52 @@ describe('workflow view', () => {
     {
       stage: 'primer',
       busy: 'none',
-      steps: [
-        'Primer:paused',
-        'Make:pending',
-        'Review:pending',
-        'Close:pending',
-      ],
+      steps: trail(0, 'Primer', 'paused'),
     },
     {
-      stage: 'feature',
+      stage: 'explore',
       busy: 'turn',
-      steps: [
-        'Feature:running',
-        'Make:pending',
-        'Review:pending',
-        'Close:pending',
-      ],
+      steps: trail(0, 'Explore', 'running'),
+    },
+    {
+      stage: 'interview',
+      busy: 'turn',
+      steps: trail(1, 'Interview', 'running'),
+    },
+    {
+      stage: 'coldRead',
+      busy: 'none',
+      steps: trail(3, 'Cold read', 'paused'),
     },
     {
       stage: 'planReady',
       busy: 'none',
-      steps: ['Feature:done', 'Make:ready', 'Review:pending', 'Close:pending'],
+      steps: trail(4, 'Make', 'ready'),
     },
     {
       stage: 'make',
       busy: 'subagent',
-      steps: [
-        'Feature:done',
-        'Make:running',
-        'Review:pending',
-        'Close:pending',
-      ],
+      steps: trail(4, 'Make', 'running'),
     },
     {
       stage: 'make',
       busy: 'none',
-      steps: ['Feature:done', 'Make:paused', 'Review:pending', 'Close:pending'],
+      steps: trail(4, 'Make', 'paused'),
     },
     {
       stage: 'review',
       busy: 'turn',
-      steps: ['Feature:done', 'Make:done', 'Review:running', 'Close:pending'],
+      steps: trail(5, 'Review', 'running'),
+    },
+    {
+      stage: 'fix',
+      busy: 'turn',
+      steps: trail(6, 'Fix', 'running'),
     },
     {
       stage: 'closed',
       busy: 'none',
-      steps: ['Feature:done', 'Make:done', 'Review:done', 'Close:done'],
+      steps: trail(7, 'Close', 'done'),
     },
   ])(
     'steps_FlowIn_$stage_$busy_CarryThePinnedStates',
@@ -636,39 +659,51 @@ describe('workflow view', () => {
 
     put(flowIn('aside'));
 
-    expect(stepTexts(recording.strips.at(-1)!)).toEqual([
-      'Feature:pending',
-      'Make:pending',
-      'Review:pending',
-      'Close:pending',
-    ]);
+    expect(stepTexts(recording.strips.at(-1)!)).toEqual(
+      TRAIL.map((label) => `${label}:pending`),
+    );
   });
 
-  it('stepper_NoPlan_DrawsAMarkLabelAndStatusPerStep', () => {
-    const { view, put } = setUp();
-    const wrapper = new FakeElement('div');
-    view.stripPart.build(asHtml(wrapper), 'a');
+  it.each([
+    {
+      name: 'make with progress',
+      stage: 'make',
+      fields: { progress: progressOf(1, [3]) },
+      labels: {
+        Make: 'Make 1/3',
+      },
+    },
+    {
+      name: 'plan ready with no progress',
+      stage: 'planReady',
+      fields: { progress: null },
+      labels: {},
+    },
+  ])(
+    'stepper_DrawsEachLabelTheCurrentOneWithProgressAndNoMark ($name)',
+    ({ stage, fields, labels }) => {
+      const { view, put } = setUp();
+      const wrapper = new FakeElement('div');
+      view.stripPart.build(asHtml(wrapper), 'a');
 
-    put(flowIn('planReady', { progress: null }));
+      put(flowIn(stage, fields));
 
-    expect(
-      findAll(wrapper, 'workflow-step').map((step) => [
-        step.dataset.state,
-        findAll(step, 'workflow-mark')[0].dataset.state,
-        findAll(step, 'workflow-step-label')[0].textContent,
-        findAll(step, 'workflow-step-status')[0].textContent,
-      ]),
-    ).toEqual([
-      ['done', 'done', 'Feature', 'done'],
-      ['ready', 'ready', 'Make', 'ready'],
-      ['pending', 'pending', 'Review', 'pending'],
-      ['pending', 'pending', 'Close', 'pending'],
-    ]);
-  });
+      expect(findAll(wrapper, 'workflow-mark')).toEqual([]);
+      expect(
+        findAll(wrapper, 'workflow-step-label').map(
+          (label) => label.textContent,
+        ),
+      ).toEqual(
+        TRAIL.map(
+          (label) => (labels as Record<string, string>)[label] ?? label,
+        ),
+      );
+    },
+  );
 
   it.each<{ state: MarkState; icon: string }>([
     { state: 'pending', icon: 'codicon-circle-large' },
-    { state: 'running', icon: 'codicon-loading' },
+    { state: 'running', icon: 'codicon-circle-filled' },
     { state: 'ready', icon: 'codicon-play-circle' },
     { state: 'paused', icon: 'codicon-debug-pause' },
     { state: 'done', icon: 'codicon-pass-filled' },
@@ -1196,10 +1231,14 @@ describe('workflow view', () => {
     put(flowIn('make', { progress: progressOf(1, [3]) }));
 
     expect(recording.strips.at(-1)!.steps.map((step) => step.label)).toEqual([
-      'Feature',
+      'Explore',
+      'Interview',
+      'Plan',
+      'Cold read',
       'Checking',
       'Make',
       'Review',
+      'Fix',
       'Close',
     ]);
   });

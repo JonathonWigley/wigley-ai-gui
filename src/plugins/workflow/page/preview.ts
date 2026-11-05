@@ -15,12 +15,16 @@ export const PREVIEW_SAMPLES: readonly {
 }[] = [
   { stage: 'idle', busy: false, countdown: false },
   { stage: 'primer', busy: true, countdown: false },
-  { stage: 'feature', busy: false, countdown: false },
+  { stage: 'explore', busy: false, countdown: false },
+  { stage: 'interview', busy: true, countdown: false },
+  { stage: 'plan', busy: false, countdown: false },
+  { stage: 'coldRead', busy: true, countdown: false },
   { stage: 'planReady', busy: false, countdown: false },
   { stage: 'planReady', busy: false, countdown: true },
   { stage: 'make', busy: true, countdown: false },
   { stage: 'make', busy: false, countdown: false },
   { stage: 'review', busy: true, countdown: false },
+  { stage: 'fix', busy: true, countdown: false },
   { stage: 'closed', busy: false, countdown: false },
 ];
 
@@ -43,10 +47,12 @@ const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done'>[] = [
 const PREVIEW_PROGRESS: Readonly<
   Record<StageId, { checked: number; reviewRounds: number }>
 > = {
-  feature: { checked: 0, reviewRounds: 0 },
+  plan: { checked: 0, reviewRounds: 0 },
+  coldRead: { checked: 0, reviewRounds: 0 },
   planReady: { checked: 0, reviewRounds: 0 },
   make: { checked: 3, reviewRounds: 0 },
   review: { checked: 6, reviewRounds: 1 },
+  fix: { checked: 6, reviewRounds: 1 },
   closed: { checked: 7, reviewRounds: 1 },
 };
 

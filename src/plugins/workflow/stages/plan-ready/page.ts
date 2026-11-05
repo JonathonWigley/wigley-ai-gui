@@ -4,6 +4,7 @@ import {
   type PageStage,
   STAGE_ACTIVITY_RANK,
 } from '../../contract';
+import { OPEN_PLAN_ACTION } from '../stage-parts';
 
 export const planReadyPageStage: PageStage = {
   id: 'planReady',
@@ -33,14 +34,7 @@ export const planReadyPageStage: PageStage = {
       available: () => true,
       enabled: () => true,
     },
-    {
-      command: 'openPlan',
-      label: 'Open plan',
-      side: 'page',
-      keyOnly: true,
-      available: (flow) => flow.planDir !== null,
-      enabled: () => true,
-    },
+    OPEN_PLAN_ACTION,
   ],
   detail: (flow) =>
     flow.progress === null

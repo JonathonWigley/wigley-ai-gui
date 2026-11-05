@@ -29,6 +29,11 @@ const NO_SETTINGS = '{}';
 
 const FEATURE_SEND = `/wigley:feature ${FAKE_WORKFLOW_FEATURE_TEXT}`;
 
+// A send the fake answers as any other, whose turn end makes the
+// `set_workflow_step` call this step would come with from a real agent.
+const REPORT_SEND_PREFIX = 'fake: report ';
+const REPORT_FIX_SEND = `${REPORT_SEND_PREFIX}fix`;
+
 export interface WorkflowSelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'makeFolder' | 'realPath' | 'trash' | 'write'>;
@@ -110,8 +115,19 @@ const GROUPS: SelfTestGroup[] = [
     ],
   },
   {
+    name: 'reported fix',
+    why: 'A set_workflow_step call from review moves the session to fix, and the strip draws the trail at Fix with its cycle.',
+    steps: [
+      {
+        keys: sendKeys(REPORT_FIX_SEND),
+        expect: line('shows fix'),
+        screenshot: 'strip-fix',
+      },
+    ],
+  },
+  {
     name: 'close and dismiss',
-    why: 'The plan folder deleted closes the run, and wd returns the session to idle.',
+    why: 'The plan folder deleted closes the run, from fix too, and wd returns the session to idle.',
     steps: [
       {
         keys: sendKeys(FAKE_WORKFLOW_STEP_TEXT),
@@ -174,6 +190,7 @@ function expectedSends(project: string): string[] {
     `/wigley:make ${planFolder}`,
     FAKE_WORKFLOW_STEP_TEXT,
     FAKE_WORKFLOW_STEP_TEXT,
+    REPORT_FIX_SEND,
     FAKE_WORKFLOW_STEP_TEXT,
     FEATURE_SEND,
   ];
@@ -215,8 +232,9 @@ function runProblems(
 // the project, waiting for their rows to go so the new row takes the first
 // label, and the flows of the project's sessions. It then launches one session
 // in the project, counting the main turn ends main hears until the next run
-// opens. The fake writes, ticks and deletes the plan itself; problems reads
-// its records, which the steps keep changing in place, when it runs.
+// opens, and makes the step call a report send asks for at that send's turn end.
+// The fake writes, ticks and deletes the plan itself; problems reads its records,
+// which the steps keep changing in place, when it runs.
 export function workflowSelfTestScript(
   deps: WorkflowSelfTestDeps,
 ): SelfTestScript {
@@ -257,6 +275,13 @@ export function workflowSelfTestScript(
     const turnEnds: string[] = [];
     turnEndListener = hooks.onMainTurnEnded((sessionId) => {
       turnEnds.push(sessionId);
+      const lastSend = projectRecords(marks, project).flatMap(sendTexts).at(-1);
+      if (lastSend?.startsWith(REPORT_SEND_PREFIX) === true) {
+        hooks.callStepTool(
+          sessionId,
+          lastSend.slice(REPORT_SEND_PREFIX.length),
+        );
+      }
     });
     try {
       const sessionId = await chat.launch({

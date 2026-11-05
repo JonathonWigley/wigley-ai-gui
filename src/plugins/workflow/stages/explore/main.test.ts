@@ -11,25 +11,25 @@ function skillStarted(skill: string): WorkflowSignal {
   return { type: 'skillStarted', skill, args: '', argsPath: null };
 }
 
-describe('featureMainStage', () => {
+describe('exploreMainStage', () => {
   it.each([
     {
       name: 'wigley:feature from idle',
       from: 'idle',
       skill: 'wigley:feature',
-      stage: 'feature',
+      stage: 'explore',
     },
     {
       name: 'wigley:feature from primer',
       from: 'primer',
       skill: 'wigley:feature',
-      stage: 'feature',
+      stage: 'explore',
     },
     {
       name: 'wigley:feature from closed',
       from: 'closed',
       skill: 'wigley:feature',
-      stage: 'feature',
+      stage: 'explore',
     },
     {
       name: 'wigley:featurex keeps the stage',

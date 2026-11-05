@@ -1,4 +1,5 @@
-import { busyStatus, detailLine, isBusy, type PageStage } from '../../contract';
+import { busyStatus, detailLine, type PageStage } from '../../contract';
+import { OPEN_PLAN_ACTION, RESUME_MAKE_ACTION } from '../stage-parts';
 
 export const makePageStage: PageStage = {
   id: 'make',
@@ -7,27 +8,7 @@ export const makePageStage: PageStage = {
   stepSlot: 'make',
   runsTasks: true,
   order: 40,
-  actions: [
-    {
-      command: 'resumeMake',
-      label: 'Resume make',
-      side: 'main',
-      keyOnly: true,
-      available: (flow) =>
-        !isBusy(flow) &&
-        flow.progress !== null &&
-        flow.progress.checked < flow.progress.total,
-      enabled: () => true,
-    },
-    {
-      command: 'openPlan',
-      label: 'Open plan',
-      side: 'page',
-      keyOnly: true,
-      available: (flow) => flow.planDir !== null,
-      enabled: () => true,
-    },
-  ],
+  actions: [RESUME_MAKE_ACTION, OPEN_PLAN_ACTION],
   detail(flow) {
     const progress = flow.progress;
     if (progress === null) {

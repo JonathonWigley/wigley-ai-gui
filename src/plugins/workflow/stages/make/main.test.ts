@@ -19,6 +19,7 @@ describe('makeMainStage', () => {
     { name: 'wigley:make from planReady', from: 'planReady', stage: 'make' },
     { name: 'wigley:make from idle', from: 'idle', stage: 'make' },
     { name: 'wigley:make from review', from: 'review', stage: 'make' },
+    { name: 'wigley:make from fix', from: 'fix', stage: 'make' },
     { name: 'wigley:make from closed', from: 'closed', stage: 'make' },
   ])('$name', ({ from, stage }) => {
     expect(

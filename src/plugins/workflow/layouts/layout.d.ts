@@ -2,11 +2,12 @@
 // the user's wigley workflow with. The app draws three parts for a session:
 // - `chip`, under the session's row in the side bar, in the row part's wrapper: the stage's label and status as one
 //   tag, and the countdown. Its input also carries the detail and the main action. An idle session draws no chip.
-// - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper until the session has a plan,
-//   the status mark and status line when the stepper does not show the stage, the countdown and the main action. Its
+// - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper's trail while it shows the
+//   stage; for a stage outside it, the status mark and status line, with the trail until the session has a plan. Then the
+//   countdown and the main action. Its
 //   input also carries the detail and every action. An idle session draws no strip.
-// - `sidePane`, beside the Chat tab's transcript, in the side part's wrapper: the status mark and line, the detail, the
-//   stepper, a progress bar, the plan's checklist (finished waves folded, the current wave in full, a line per later
+// - `sidePane`, beside the Chat tab's transcript, in the side part's wrapper: the status mark and line, the detail, a
+//   progress bar, the plan's checklist (finished waves folded, the current wave in full, a line per later
 //   wave) and every action of the stage. An idle session, a session with no plan read, and a hidden pane draw no pane.
 //   The app does not draw it again for the countdown, so a pane that shows the countdown updates on the next flow push.
 // The app sets `data-layout-owner="workflow"` and `data-layout="<name>"` on the element each part returns, `<name>`
@@ -33,12 +34,14 @@ export type StageStatus = 'running' | 'paused' | 'ready' | 'done';
 export type MarkState = StageStatus | 'pending';
 
 // One stage in the stepper: done before the session's stage, the stage's status at it, pending after it. A stage added
-// with `inStepper: false` leaves every step pending. Stages sharing a step take one place: primer and feature the one
-// the session is in, otherwise feature; plan ready and make the one the session is in, otherwise make.
+// with `inStepper: false` leaves every step pending. Stages sharing a step take one place: primer and explore the one
+// the session is in, otherwise explore; plan ready and make the one the session is in, otherwise make. `progress` is
+// what follows the current step's label, its separator included (` 3/9`, ` · round 2`); '' on every other step.
 export interface StepInput {
   id: string;
   label: string;
   state: MarkState;
+  progress: string;
 }
 
 // One action the stage offers: the workflow command it runs (`clearAndMake`), its button text, whether it can run
@@ -124,13 +127,14 @@ export interface WorkflowKit extends BaseKit {
     action: ActionInput,
     options?: ActionButtonOptions,
   ): HTMLButtonElement;
-  // `ol.workflow-stepper`: one `li.workflow-step` per step, carrying `data-state`, holding a `statusMark`, a
-  // `span.workflow-step-label` and a `span.workflow-step-status` reading the state, which shows only in a rule that
-  // sets its `display`.
+  // `ol.workflow-stepper`: one `li.workflow-step` per step, carrying `data-state`, holding a `span.workflow-step-label`
+  // reading the step's label and progress: a trail of words, `›` between them. The word's colour and weight show its
+  // state, and a running word pulses.
   stepper(parent: HTMLElement, steps: readonly StepInput[]): HTMLElement;
   // `span.workflow-countdown` reading `text`, in tabular numerals.
   countdown(parent: HTMLElement, text: string): HTMLElement;
-  // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark pulses,
+  // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark, a filled
+  // circle, pulses,
   // and a redraw of a showing mark never jumps the pulse.
   statusMark(parent: HTMLElement, state: MarkState): HTMLElement;
   // `button.workflow-finished-fold` reading `▸ <text>`, or `▾ <text>` while `open`, with `aria-expanded` and the key of

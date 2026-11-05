@@ -42,22 +42,21 @@ function flowWith(fields: Partial<SessionFlow>): SessionFlow {
   };
 }
 
+const FEATURE_GROUP = ['explore', 'interview', 'plan', 'coldRead'] as const;
+
 describe('BUILT_IN_PAGE_STAGES', () => {
   it.each<{ name: string; stage: string; flow: SessionFlow; detail: string }>([
     { name: 'idle', stage: 'idle', flow: flowWith({}), detail: '' },
     { name: 'primer', stage: 'primer', flow: flowWith({}), detail: '' },
-    {
-      name: 'feature',
-      stage: 'feature',
-      flow: flowWith({}),
-      detail: 'Claim grants',
-    },
-    {
-      name: 'feature unread',
-      stage: 'feature',
-      flow: flowWith({ progress: null }),
-      detail: '',
-    },
+    ...FEATURE_GROUP.flatMap((stage) => [
+      { name: stage, stage, flow: flowWith({}), detail: 'Claim grants' },
+      {
+        name: `${stage} unread`,
+        stage,
+        flow: flowWith({ progress: null }),
+        detail: '',
+      },
+    ]),
     {
       name: 'planReady',
       stage: 'planReady',
@@ -99,6 +98,24 @@ describe('BUILT_IN_PAGE_STAGES', () => {
       stage: 'review',
       flow: flowWith({}),
       detail: '3/7 · Claim grants',
+    },
+    {
+      name: 'fix with rounds',
+      stage: 'fix',
+      flow: flowWith({ progress: progress({ checked: 6, reviewRounds: 2 }) }),
+      detail: 'cycle 2 · 6/7 · Claim grants',
+    },
+    {
+      name: 'fix with no round',
+      stage: 'fix',
+      flow: flowWith({}),
+      detail: '3/7 · Claim grants',
+    },
+    {
+      name: 'fix unread',
+      stage: 'fix',
+      flow: flowWith({ progress: null }),
+      detail: '',
     },
     ...(['planReady', 'make', 'review', 'closed'] as const).map((stage) => ({
       name: `${stage} with an untitled plan`,
@@ -202,7 +219,7 @@ describe('BUILT_IN_PAGE_STAGES', () => {
         ['openPlan', true],
       ],
     },
-    ...(['make', 'review'] as const).flatMap((stage) => [
+    ...(['make', 'review', 'fix'] as const).flatMap((stage) => [
       {
         name: `${stage} with open boxes`,
         stage,
@@ -243,18 +260,20 @@ describe('BUILT_IN_PAGE_STAGES', () => {
         actions: [['openPlan', true]] as [string, boolean][],
       },
     ]),
-    {
-      name: 'feature with a plan folder',
-      stage: 'feature',
-      flow: flowWith({}),
-      actions: [['openPlan', true]],
-    },
-    {
-      name: 'feature with no plan folder',
-      stage: 'feature',
-      flow: flowWith({ planDir: null }),
-      actions: [],
-    },
+    ...FEATURE_GROUP.flatMap((stage) => [
+      {
+        name: `${stage} with a plan folder`,
+        stage,
+        flow: flowWith({}),
+        actions: [['openPlan', true]] as [string, boolean][],
+      },
+      {
+        name: `${stage} with no plan folder`,
+        stage,
+        flow: flowWith({ planDir: null }),
+        actions: [] as [string, boolean][],
+      },
+    ]),
     {
       name: 'closed with a turn running',
       stage: 'closed',
@@ -291,11 +310,35 @@ describe('BUILT_IN_PAGE_STAGES', () => {
       statusLine: 'Primer · running',
     },
     {
-      name: 'feature not busy',
-      stage: 'feature',
+      name: 'explore not busy',
+      stage: 'explore',
       flow: flowWith({}),
       status: 'paused',
-      statusLine: 'Feature · paused',
+      statusLine: 'Explore · paused',
+    },
+    {
+      name: 'cold read busy',
+      stage: 'coldRead',
+      flow: turnRunning,
+      status: 'running',
+      statusLine: 'Cold read · running',
+    },
+    {
+      name: 'fix busy with 2 rounds',
+      stage: 'fix',
+      flow: flowWith({
+        turnRunning: true,
+        progress: progress({ reviewRounds: 2 }),
+      }),
+      status: 'running',
+      statusLine: 'Fix · running · cycle 2',
+    },
+    {
+      name: 'fix not busy with 0 rounds',
+      stage: 'fix',
+      flow: flowWith({}),
+      status: 'paused',
+      statusLine: 'Fix · paused',
     },
     {
       name: 'planReady busy',

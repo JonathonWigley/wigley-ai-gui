@@ -8,16 +8,21 @@ import {
 } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
+  fakeDependency,
   noCounts,
   startMainPart,
   type MainPartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
-import type {
-  AgentSession,
-  SessionsMainEvents,
-  SessionsMainExports,
+import {
+  type AgentSession,
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolCallContext,
+  type ToolDefinition,
+  type ToolSession,
 } from '../../sessions/contract';
 import type { MainStage, SessionFlow, WorkflowMainExports } from '../contract';
 import { newFlow } from '../flow';
@@ -149,9 +154,22 @@ function startWorkflowPart(
       launch: async () => 's2',
       profileOf: () => 'personal',
     };
-  const sessions: Pick<SessionsMainExports, 'label'> = {
+  const stepTools: {
+    tools: ToolDefinition[];
+    start: (session: AgentSession) => ToolSession;
+  }[] = [];
+  const sessions: Pick<SessionsMainExports, 'label' | 'contributeTools'> = {
     label: (sessionId) =>
       sessionId === 's1' ? (options.sessionLabel ?? null) : null,
+    contributeTools: (tools, start) => {
+      const contribution = { tools, start };
+      stepTools.push(contribution);
+      return {
+        dispose: () => {
+          stepTools.splice(stepTools.indexOf(contribution), 1);
+        },
+      };
+    },
   };
   const dependencies: Record<string, unknown> = { chat, sessions };
   const api = {
@@ -188,7 +206,7 @@ function startWorkflowPart(
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof workflowMainPart.start>[0];
-  workflowMainPart.start(api);
+  const part = workflowMainPart.start(api);
 
   const emit = async <Name extends keyof WorkflowHeard & string>(
     event: Name,
@@ -251,8 +269,37 @@ function startWorkflowPart(
     changeSettings,
     runAction: (command: string) =>
       handlers.get('runAction')?.({ sessionId: 's1', command }),
+    stepTools,
+    addStage(stage: MainStage) {
+      const exported = part.exports?.(
+        createRegistrations(),
+      ) as WorkflowMainExports;
+      return exported.addStage(stage);
+    },
+    // A `set_workflow_step` call from session `id`.
+    callStepTool: async (id: string, step: string) => {
+      const pending = stepTools[0]
+        .start(session(id, 'h1'))
+        .call('set_workflow_step', { step }, NO_CALL_CONTEXT);
+      await settled();
+      return pending;
+    },
   };
 }
+
+// Sessions for the harness's parts: every contribution taken and disposable.
+const FAKE_SESSIONS = fakeDependency(
+  sessionsMainKey,
+  (consumer) =>
+    ({
+      contributeTools: () => consumer.track({ dispose: () => undefined }),
+    }) as unknown as SessionsMainExports,
+);
+
+const NO_CALL_CONTEXT: ToolCallContext = {
+  toolUseId: null,
+  signal: new AbortController().signal,
+};
 
 const SETTINGS: WorkflowTestSettings = {
   layout: 'default',
@@ -500,14 +547,14 @@ describe('workflowMainPart', () => {
       },
     },
     {
-      name: 'a feature flow the open arms before the replay says it runs',
-      saved: { stage: 'feature', planDir: PLAN_DIR },
+      name: 'an explore flow the open arms before the replay says it runs',
+      saved: { stage: 'explore', planDir: PLAN_DIR },
       replay: [{ type: 'turnStarted', at: BEFORE_SAVE }],
       expected: { stage: 'planReady', turnRunning: true },
     },
     {
       name: 'a countdown the user cancelled before the replay, a newer make',
-      saved: { stage: 'feature', planDir: PLAN_DIR },
+      saved: { stage: 'explore', planDir: PLAN_DIR },
       actionFirst: 'cancelCountdown',
       replay: [{ ...skill('wigley:make', PLAN_DIR), at: AFTER_SAVE }],
       expected: { stage: 'make', planDir: PLAN_DIR },
@@ -690,6 +737,88 @@ describe('workflowMainPart', () => {
     expect(workflow.lastFlow()?.turnRunning).toBe(true);
   });
 
+  it('stepTool_ReportFromAFeatureRun_MovesTheFlowAndStampsTheSave', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:feature', ''));
+    workflow.time.advance(5);
+
+    const result = await workflow.callStepTool('s1', 'cold_read');
+
+    expect(workflow.lastFlow()?.stage).toBe('coldRead');
+    expect(result.content[0].text).toContain('cold_read');
+    await settled();
+    const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
+      flows: { flow: SessionFlow; savedAt: number }[];
+    };
+    expect(saved.flows[0]).toMatchObject({
+      flow: { stage: 'coldRead' },
+      savedAt: START + 5,
+    });
+  });
+
+  it.each([
+    { name: 'an idle flow', session: 's1', opens: true },
+    { name: 'a session with no flow', session: 's-terminal', opens: true },
+    { name: 'a connected session not yet opened', session: 's1', opens: false },
+  ])('stepTool_ReportIsIgnored ($name)', async ({ session: id, opens }) => {
+    const workflow = startWorkflowPart(SETTINGS);
+    if (opens) {
+      await workflow.openS1();
+    }
+    await settled();
+    const sentBefore = workflow.sent.length;
+
+    const result = await workflow.callStepTool(id, 'interview');
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('Ignored');
+    expect(workflow.sent).toHaveLength(sentBefore);
+  });
+
+  it('stepTool_StageAddedByAPlugin_JoinsTheToolUntilDisposed', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    const stepsOffered = () =>
+      (
+        workflow.stepTools[0].tools[0].inputSchema as {
+          properties: { step: { enum: string[] } };
+        }
+      ).properties.step.enum;
+    expect(workflow.stepTools).toHaveLength(1);
+    expect(stepsOffered()).not.toContain('extra');
+
+    const added = workflow.addStage({
+      id: 'extra',
+      order: 23,
+      reportedAs: 'extra',
+      enter: (_flow, signal) =>
+        signal.type === 'stepReported' && signal.step === 'extra'
+          ? 'extra'
+          : null,
+    });
+
+    expect(workflow.stepTools).toHaveLength(1);
+    expect(stepsOffered()).toContain('extra');
+    await workflow.openS1();
+    await workflow.callStepTool('s1', 'extra');
+    expect(workflow.lastFlow()?.stage).toBe('extra');
+
+    added.dispose();
+    expect(stepsOffered()).not.toContain('extra');
+  });
+
+  it('savedFlowInAStageNoLongerRegistered_OpensAndFoldsWithoutThrowing', async () => {
+    const data = await savedFlowData({ stage: 'feature', planDir: PLAN_DIR });
+    const workflow = startWorkflowPart(SETTINGS, { data });
+
+    await workflow.openS1();
+    await workflow.agentEvent({ type: 'turnEnded', at: AFTER_SAVE });
+    expect(workflow.lastFlow()?.stage).toBe('feature');
+
+    await workflow.agentEvent(skill('wigley:feature', ''));
+    expect(workflow.lastFlow()?.stage).toBe('explore');
+  });
+
   it.each([
     { seconds: 3, line: 'settings: autoClearAndMake on, autoStartSeconds 3' },
     { seconds: 0, line: 'settings: autoClearAndMake on, autoStartSeconds 1' },
@@ -742,6 +871,7 @@ describe('workflowMainPart', () => {
     async ({ replacesFiles, act, liveTimers }) => {
       const project = holdableReads();
       const harness = startMainPart(workflowMainPart, {
+        dependencies: [FAKE_SESSIONS],
         settings: { ...SETTINGS, autoClearAndMake: true },
         services: replacesFiles ? { files: project.files } : {},
       });
@@ -760,7 +890,9 @@ describe('workflowMainPart', () => {
   );
 
   it('stopThenStart_StartsAgain', async () => {
-    const harness = startMainPart(workflowMainPart);
+    const harness = startMainPart(workflowMainPart, {
+      dependencies: [FAKE_SESSIONS],
+    });
 
     await harness.restart();
 
@@ -768,7 +900,9 @@ describe('workflowMainPart', () => {
   });
 
   it('exports_ConsumerDisposed_FreesTheStageId', () => {
-    const harness = startMainPart(workflowMainPart);
+    const harness = startMainPart(workflowMainPart, {
+      dependencies: [FAKE_SESSIONS],
+    });
     const exportsFor = (consumer: ReturnType<typeof createRegistrations>) =>
       harness.started().exports?.(consumer) as WorkflowMainExports;
     const stage: MainStage = { id: 'extra', order: 70, enter: () => null };

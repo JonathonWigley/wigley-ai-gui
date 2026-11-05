@@ -64,10 +64,22 @@ describe('reviewMainStage', () => {
       stages: ['review'],
     },
     {
-      name: 'wigley:review in feature',
-      from: 'feature',
+      name: 'wigley:review in fix',
+      from: 'fix',
       signals: [REVIEW_STARTED],
-      stages: ['feature'],
+      stages: ['review'],
+    },
+    {
+      name: 'wigley:review in explore',
+      from: 'explore',
+      signals: [REVIEW_STARTED],
+      stages: ['explore'],
+    },
+    {
+      name: 'a round logged in fix stays in fix',
+      from: 'fix',
+      signals: [planChanged(1), planChanged(2)],
+      stages: ['fix', 'fix'],
     },
     {
       name: 'a flow saved before reviewRoundsAtMake counts its rounds from the first read',

@@ -46,7 +46,11 @@ const STAGES: readonly MainStage[] = [
   fake(
     'e',
     40,
-    (_f, s) => (s.type === 'skillStarted' && s.skill === 'x:e' ? 'e' : null),
+    (_f, s) => {
+      const startedE = s.type === 'skillStarted' && s.skill === 'x:e';
+      const reportedE = s.type === 'stepReported' && s.step === 'e';
+      return startedE || reportedE ? 'e' : null;
+    },
     { clearsPlan: true },
   ),
   fake(
@@ -306,6 +310,12 @@ const FOLD_ROWS: FoldRow[] = [
     flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
     signal: skill('x:e', null),
     expected: flowWith({ stage: 'e' }),
+  },
+  {
+    name: 'a report entering a clearsPlan stage keeps the plan',
+    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
+    signal: { type: 'stepReported', step: 'e' },
+    expected: flowWith({ stage: 'e', planDir: PLAN_X, progress: PROGRESS }),
   },
   {
     name: 're-entering a clearsPlan stage drops the plan',

@@ -20,18 +20,23 @@ export const SIDE_LIST_CLASS = 'workflow-side-list';
 
 const MARK_ICONS: Record<MarkState, string> = {
   pending: 'circle-large',
-  running: 'loading',
+  running: 'circle-filled',
   ready: 'play-circle',
   paused: 'debug-pause',
   done: 'pass-filled',
 };
+
+// Sets the time an element's pulse animation starts from.
+function placePulse(pulsing: HTMLElement, clock: Clock): void {
+  pulsing.style.setProperty('--workflow-mark-clock', `${clock.now()}ms`);
+}
 
 // The kit one part draw builds with: the base kit with no key scope, naming
 // workflow's own commands by their short names, plus the action button, the
 // stepper, the countdown, the status mark, the finished waves' fold and the
 // side pane's list. `run` runs a workflow command for the session the part
 // draws; the main action's button runs `mainAction`, as `<Leader>ww` does. Each anchor it names is recorded in `rollback`. Each status
-// mark carries `clock`'s time, which places its pulse.
+// mark and running step carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
@@ -63,9 +68,15 @@ export function createWorkflowKit(
       for (const step of steps) {
         const item = appended(stepper, element('li', 'workflow-step'));
         item.dataset.state = step.state;
-        kit.statusMark(item, step.state);
-        appended(item, element('span', 'workflow-step-label', step.label));
-        appended(item, element('span', 'workflow-step-status', step.state));
+        placePulse(item, clock);
+        appended(
+          item,
+          element(
+            'span',
+            'workflow-step-label',
+            `${step.label}${step.progress}`,
+          ),
+        );
       }
       return stepper;
     },
@@ -74,7 +85,7 @@ export function createWorkflowKit(
     statusMark(parent, state) {
       const mark = appended(parent, element('span', 'workflow-mark'));
       mark.dataset.state = state;
-      mark.style.setProperty('--workflow-mark-clock', `${clock.now()}ms`);
+      placePulse(mark, clock);
       base.icon(mark, MARK_ICONS[state]);
       return mark;
     },

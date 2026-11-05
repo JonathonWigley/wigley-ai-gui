@@ -3,10 +3,11 @@
 // The built-in workflow look: a one-line chip under the session row (the
 // stage and its status as an accent tag, unless the row's label says it, and
 // the countdown), a strip above the
-// composer (the stepper until a plan is read, the status mark and line when the
-// stepper does not show the stage, the countdown and the main action), and the
+// composer (the stepper's trail while it shows the stage; for a stage outside
+// it, the status mark and line, with the trail until a plan is read; the
+// countdown and the main action), and the
 // side pane beside the transcript (the
-// status mark and line, the detail, the stepper, the progress bar, the
+// status mark and line, the detail, the progress bar, the
 // checklist and every action).
 
 /** @typedef {import('../layout').SideWaveInput} SideWaveInput */
@@ -117,12 +118,13 @@ const layout = {
 
   strip(parent, input, kit) {
     const strip = kit.el(parent, 'div', 'workflow-strip');
-    const stepperShowsStage =
-      !input.hasPlan && input.steps.some((step) => step.id === input.stage);
+    const stepperShowsStage = input.steps.some(
+      (step) => step.id === input.stage,
+    );
     if (!stepperShowsStage) {
       drawStatusLine(strip, input, kit);
     }
-    if (!input.hasPlan) {
+    if (stepperShowsStage || !input.hasPlan) {
       kit.stepper(strip, input.steps);
     }
     if (input.countdown !== null) {
@@ -139,7 +141,6 @@ const layout = {
     const pane = kit.el(parent, 'div', 'workflow-side-pane');
     drawStatusLine(kit.el(pane, 'div', 'workflow-side-status'), input, kit);
     kit.el(pane, 'p', 'workflow-side-detail', input.detail);
-    kit.stepper(pane, input.steps);
     const percent = input.total === 0 ? 0 : (input.checked / input.total) * 100;
     kit.meter(pane, percent, 'normal');
     drawChecklist(pane, input, kit);

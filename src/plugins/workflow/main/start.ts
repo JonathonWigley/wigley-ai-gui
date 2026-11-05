@@ -14,6 +14,7 @@ import {
 import type {
   MainStage,
   SessionFlow,
+  StageId,
   WorkflowChannel,
   WorkflowMainExports,
   WorkflowSignal,
@@ -28,6 +29,11 @@ import { createCountdown } from './countdown';
 import { createFlowStore } from './flow-store';
 import { createPlanWatch } from './plan-watch';
 import { workflowSelfTestScript } from './selftest-script';
+import {
+  SET_WORKFLOW_STEP_TOOL,
+  startStepTool,
+  stepToolDefinition,
+} from './step-tool';
 
 // Where a fold's signal came from. 'live' is a live event or a stage action
 // (Make in new session, Dismiss); only it stamps the flow's save time, which a
@@ -51,18 +57,22 @@ type WorkflowApi = MainApi<
 // flow in the folder, saved ones included, stopping each open one's countdown
 // and plan watch, for a run that closed the folder's sessions;
 // `onMainTurnEnded` hears each main-agent `turnEnded` once main applied it,
-// whether or not the flow changed.
+// whether or not the flow changed; `callStepTool` makes a `set_workflow_step`
+// call from the session, since the fake harness calls no MCP tool.
 export interface WorkflowSelfTestHooks {
   forgetFlows(projectDir: string): void;
   onMainTurnEnded(listener: (sessionId: string) => void): Disposable;
+  callStepTool(sessionId: string, step: string): void;
 }
 
 // Folds each owned Chat-tab session's agent events and session events into its
 // flow through the registered stages, keeps the flows in `flows.json` keyed by
 // host session id, folds a re-attach's replay only past the flow's last save,
 // watches each flow's plan folder, runs the main-side
-// workflow commands for the page and the plan-ready auto-start countdown, and
-// sends every flow to the page on each change. Exports `addStage`.
+// workflow commands for the page and the plan-ready auto-start countdown,
+// contributes `set_workflow_step`, whose steps are the registered stages'
+// `reportedAs`, and sends every flow to the page on each change. Exports
+// `addStage`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -238,9 +248,46 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       );
     }
 
+    // Folds a reported step as a live event; resolves whether the flow is now in
+    // that stage. No flow, or a stage rule that ignores it, resolves false.
+    const reportStep = (sessionId: string, stage: StageId) =>
+      ready.then(() => {
+        apply(sessionId, { type: 'stepReported', step: stage }, 'live');
+        return store.get(sessionId)?.stage === stage;
+      });
+    const startStepToolSession = startStepTool({
+      stages: () => stages.all(),
+      reportStep,
+    });
+
+    // Contributes the tool again when the reportable stages change, so its
+    // schema lists a stage a plugin added.
+    let stepTool: Disposable | null = null;
+    const contributeStepTool = () => {
+      stepTool?.dispose();
+      stepTool = sessions.contributeTools(
+        [stepToolDefinition(stages.all())],
+        startStepToolSession,
+      );
+    };
+    const addStage = (stage: MainStage): Disposable => {
+      const added = stages.add(stage);
+      if (stage.reportedAs === undefined) {
+        return added;
+      }
+      contributeStepTool();
+      return {
+        dispose() {
+          added.dispose();
+          contributeStepTool();
+        },
+      };
+    };
+
     for (const stage of BUILT_IN_MAIN_STAGES) {
       stages.add(stage);
     }
+    contributeStepTool();
 
     events.on('sessions.connected', ({ id, info }) => {
       const { sessionId: hostSessionId, projectDir } = info;
@@ -346,6 +393,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           }
           sendFlows();
         },
+        callStepTool(sessionId, step) {
+          void startStepToolSession({ id: sessionId }).call(
+            SET_WORKFLOW_STEP_TOOL,
+            { step },
+            { toolUseId: null, signal: new AbortController().signal },
+          );
+        },
         onMainTurnEnded(listener) {
           const registered = (sessionId: string) => listener(sessionId);
           turnEndedListeners.add(registered);
@@ -367,7 +421,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     return {
       commands: {},
       exports: (consumer): WorkflowMainExports => ({
-        addStage: (stage) => consumer.track(stages.add(stage)),
+        addStage: (stage) => consumer.track(addStage(stage)),
       }),
       dispose: () => planWatch.dispose(),
     };

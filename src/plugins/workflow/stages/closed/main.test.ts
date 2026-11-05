@@ -65,10 +65,16 @@ describe('closedMainStage', () => {
       stage: 'closed',
     },
     {
-      name: 'planGone in feature',
-      from: 'feature',
+      name: 'planGone in fix',
+      from: 'fix',
       signals: [PLAN_GONE],
-      stage: 'feature',
+      stage: 'closed',
+    },
+    {
+      name: 'planGone in explore',
+      from: 'explore',
+      signals: [PLAN_GONE],
+      stage: 'explore',
     },
     {
       name: 'planGone in planReady',

@@ -1,11 +1,11 @@
-/* The workflow parts the kit draws: the stepper, its steps, the status marks,
-   the side pane's list and the fold over it, and the countdown. The default
+/* The workflow parts the kit draws: the stepper's trail of step words, the status
+   marks, the side pane's list and the fold over it, and the countdown. The default
    layout's chip, strip and side pane are in its `layout.css`. */
 
 .workflow-stepper {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--wg-space-2);
+  gap: var(--wg-space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -15,35 +15,31 @@
   display: inline-flex;
   align-items: center;
   gap: var(--wg-space-1);
+  white-space: nowrap;
 }
 
-.workflow-step-status {
-  display: none;
+/* The separator is decoration, so its alt text is empty. */
+.workflow-step + .workflow-step::before {
+  content: '›' / '';
+  color: var(--wg-border-strong);
+  font-weight: var(--wg-weight-regular);
 }
 
-.workflow-step[data-state='pending'],
-.workflow-mark[data-state='pending'] {
+.workflow-step[data-state='pending'] {
   color: var(--wg-fg-tertiary);
 }
 
+.workflow-step[data-state='done'] {
+  color: var(--wg-fg-secondary);
+}
+
+.workflow-step[data-state='paused'] {
+  color: var(--wg-fg);
+}
+
 .workflow-step[data-state='running'],
-.workflow-mark[data-state='running'] {
-  color: var(--wg-status-running);
-}
-
-.workflow-step[data-state='ready'],
-.workflow-mark[data-state='ready'] {
+.workflow-step[data-state='ready'] {
   color: var(--wg-accent);
-}
-
-.workflow-step[data-state='paused'],
-.workflow-mark[data-state='paused'] {
-  color: var(--wg-status-warning);
-}
-
-.workflow-step[data-state='done'],
-.workflow-mark[data-state='done'] {
-  color: var(--wg-status-success);
 }
 
 .workflow-step[data-state='running'],
@@ -52,17 +48,38 @@
   font-weight: var(--wg-weight-semibold);
 }
 
+.workflow-mark[data-state='pending'] {
+  color: var(--wg-fg-tertiary);
+}
+
+.workflow-mark[data-state='running'] {
+  color: var(--wg-status-running);
+}
+
+.workflow-mark[data-state='ready'] {
+  color: var(--wg-accent);
+}
+
+.workflow-mark[data-state='paused'] {
+  color: var(--wg-status-warning);
+}
+
+.workflow-mark[data-state='done'] {
+  color: var(--wg-status-success);
+}
+
 .workflow-mark {
   display: inline-flex;
   flex: none;
   align-items: center;
 }
 
-/* A running mark reports the agent at work, so it loops at `duration-pulse`.
-   Each draw builds a new mark, so the clock starts its animation where the
-   last mark had it, and a redraw of a showing mark never jumps the pulse. A
-   mark drawn out of view starts when it shows, so its next draw may jump once.
-   Under reduced motion it is static. */
+/* A running mark or step word reports the agent at work, so it loops at
+   `duration-pulse`. Each draw builds a new element, so the clock starts its
+   animation where the last one had it, and a redraw of a showing element never
+   jumps the pulse. One drawn out of view starts when it shows, so its next draw
+   may jump once. Under reduced motion it is static. The step's label pulses, not
+   the step, so its separator holds still. */
 @keyframes workflow-mark-pulse {
   0%,
   100% {
@@ -74,13 +91,15 @@
   }
 }
 
-.workflow-mark[data-state='running'] {
+.workflow-mark[data-state='running'],
+.workflow-step[data-state='running'] .workflow-step-label {
   animation: workflow-mark-pulse var(--wg-duration-pulse) ease-in-out infinite;
   animation-delay: calc(var(--workflow-mark-clock) * -1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workflow-mark[data-state='running'] {
+  .workflow-mark[data-state='running'],
+  .workflow-step[data-state='running'] .workflow-step-label {
     animation: none;
   }
 }

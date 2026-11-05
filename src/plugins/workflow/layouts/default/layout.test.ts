@@ -158,58 +158,54 @@ describe('default layout chip', () => {
 
 describe('default layout strip', () => {
   it.each([
-    { hasPlan: false, isStepperDrawn: true },
-    { hasPlan: true, isStepperDrawn: false },
-  ])(
-    'strip_HasPlan$hasPlan_DrawsTheStepperOnlyWithNoPlanAndOneAction',
-    ({ hasPlan, isStepperDrawn }) => {
-      const parent = new FakeElement('parent');
-
-      const parts = drawn(
-        layout.strip(asHtml(parent), stripInput(hasPlan), fakeKit()),
-      );
-
-      expect(parts.includes('stepper')).toBe(isStepperDrawn);
-      expect(parts.filter((part) => part.startsWith('action:'))).toEqual([
-        'action:Resume make',
-      ]);
-    },
-  );
-
-  it.each([
     {
-      name: 'no plan, stage in the stepper: the stepper alone shows it',
+      name: 'no plan, stage in the stepper',
       hasPlan: false,
       stepId: 'make',
-      statusParts: [],
+      parts: ['stepper'],
     },
     {
-      name: 'no plan, stage outside the stepper: the status line shows it',
-      hasPlan: false,
-      stepId: 'review',
-      statusParts: ['mark:running', 'el:workflow-status-line'],
-    },
-    {
-      name: 'a plan, no stepper: the status line shows it',
+      name: 'a plan, stage in the stepper',
       hasPlan: true,
       stepId: 'make',
-      statusParts: ['mark:running', 'el:workflow-status-line'],
+      parts: ['stepper'],
     },
-  ])('strip_StatusLine_$name', ({ hasPlan, stepId, statusParts }) => {
+    {
+      name: 'no plan, stage outside the stepper',
+      hasPlan: false,
+      stepId: 'review',
+      parts: ['mark:running', 'el:workflow-status-line', 'stepper'],
+    },
+    {
+      name: 'a plan, stage outside the stepper',
+      hasPlan: true,
+      stepId: 'review',
+      parts: ['mark:running', 'el:workflow-status-line'],
+    },
+  ])('strip_DrawsThePinnedParts ($name)', ({ hasPlan, stepId, parts }) => {
     const parent = new FakeElement('parent');
     const input: StripInput = {
       ...stripInput(hasPlan),
-      steps: [{ id: stepId, label: stepId, state: 'running' }],
+      steps: [{ id: stepId, label: stepId, state: 'running', progress: '' }],
     };
 
-    const parts = drawn(layout.strip(asHtml(parent), input, fakeKit()));
+    const drawnParts = drawn(layout.strip(asHtml(parent), input, fakeKit()));
 
-    expect(
-      parts.filter(
-        (part) =>
-          part.startsWith('mark:') || part === 'el:workflow-status-line',
+    expect(drawnParts).toEqual([...parts, 'action:Resume make']);
+  });
+
+  it('strip_Countdown_DrawsBeforeTheMainAction', () => {
+    const parent = new FakeElement('parent');
+
+    const parts = drawn(
+      layout.strip(
+        asHtml(parent),
+        { ...stripInput(true), countdown: '9s' },
+        fakeKit(),
       ),
-    ).toEqual(statusParts);
+    );
+
+    expect(parts.slice(-2)).toEqual(['countdown:9s', 'action:Resume make']);
   });
 });
 
@@ -324,7 +320,6 @@ describe('default layout sidePane', () => {
       'mark:running',
       'el:workflow-status-line',
       'el:workflow-side-detail',
-      'stepper',
       expect.stringMatching(/^meter:/),
       'list',
       'fold:1 wave · 1 done:false',

@@ -51,10 +51,18 @@ const SAMPLE_SIGNALS: readonly WorkflowSignal[] = [
   { type: 'planGone' },
   { type: 'handedOff' },
   { type: 'dismissed' },
+  ...REGISTERED.map((step): WorkflowSignal => ({ type: 'stepReported', step })),
 ];
 
 function signalKey(signal: WorkflowSignal): string {
-  return signal.type === 'skillStarted' ? signal.skill : signal.type;
+  switch (signal.type) {
+    case 'skillStarted':
+      return signal.skill;
+    case 'stepReported':
+      return `report:${signal.step}`;
+    default:
+      return signal.type;
+  }
 }
 
 interface Answers {
@@ -90,6 +98,8 @@ function answersOf(stage: MainStage): Answers {
 // A renamed stage id left in another stage's rule turns this red: the rule
 // returns an id no stage registers, or a comparison against the old id stops
 // it answering a signal or a stage it answered before.
+const FEATURE_RUN = ['explore', 'interview', 'plan', 'coldRead', 'planReady'];
+
 const RULE_ROWS: readonly {
   id: string;
   signals: readonly string[];
@@ -102,22 +112,34 @@ const RULE_ROWS: readonly {
     fromStages: REGISTERED,
   },
   {
-    id: 'feature',
-    signals: ['wigley:feature', 'feature'],
+    id: 'explore',
+    signals: ['wigley:feature', 'feature', 'report:explore'],
     fromStages: REGISTERED,
   },
   {
+    id: 'interview',
+    signals: ['report:interview'],
+    fromStages: FEATURE_RUN,
+  },
+  { id: 'plan', signals: ['report:plan'], fromStages: FEATURE_RUN },
+  { id: 'coldRead', signals: ['report:coldRead'], fromStages: FEATURE_RUN },
+  {
     id: 'planReady',
     signals: ['turnEnded', 'planChanged'],
-    fromStages: ['feature'],
+    fromStages: ['explore', 'interview', 'plan', 'coldRead'],
   },
   { id: 'make', signals: ['wigley:make', 'make'], fromStages: REGISTERED },
   {
     id: 'review',
     signals: ['wigley:review', 'review', 'planChanged'],
-    fromStages: ['make'],
+    fromStages: ['make', 'fix'],
   },
-  { id: 'closed', signals: ['planGone'], fromStages: ['make', 'review'] },
+  { id: 'fix', signals: ['report:fix'], fromStages: ['make', 'review'] },
+  {
+    id: 'closed',
+    signals: ['planGone'],
+    fromStages: ['make', 'review', 'fix'],
+  },
 ];
 
 describe('built-in stage rules name only registered stages', () => {
