@@ -279,6 +279,9 @@ Defects seen in a drive run, a transcript or the user's own use.
   bottom; the three items above are the same mechanism again. Each patch was kept rather than stepped back from, because
   the run's two fix cycles ran out. To decide: whether one settle step run after every programmatic scroll and redraw,
   owning the band and following together, replaces the scroll event path and these exceptions. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **Row title takes a local command's text** — *agent-ready*: a new session whose first message is a control
+  command (`/effort auto`, seen in a live run) names its row after that command, though it starts no conversation.
+  The first-message title source should wait for a message that reaches the model.
 
 ## Harness seams
 
