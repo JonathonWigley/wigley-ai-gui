@@ -1,6 +1,6 @@
 # 05 — Chat heading part and section row input
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -26,3 +26,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 27b4edd7 · proof: diff read; scoped typecheck clean; layout and layout-contract tests pass · concerns: picker wiring of section and drawHeading has no test, by the task's decision, so drive check 1 of task 10 proves it; the h3 inside the heading li has not been seen on screen; the comment on PickerItemInput rests on task 06's plan text

@@ -147,7 +147,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
       try {
         sessions.activate(sessionId);
       } catch (error) {
-        chat.closed(sessionId);
+        chat.closed(sessionId, 'start-failed');
         throw error;
       }
       const hostSessionId = chat.hostSessionIdOf(sessionId);
@@ -395,7 +395,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('recentFolders', () => folderChoices.list());
     api.channel.handle('chooseFolder', () => services.window.chooseFolder());
     api.events.on('sessions.closed', ({ sessionId }) => {
-      chat.closed(sessionId);
+      chat.closed(sessionId, 'user');
       preview.closed(sessionId);
     });
     api.events.on('sessions.connected', (session) =>
@@ -504,7 +504,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
             new Promise<void>((resolve) => endWaits.set(sessionId, resolve)),
         );
         for (const sessionId of closing) {
-          chat.closed(sessionId);
+          chat.closed(sessionId, 'project-closed');
         }
         await Promise.all(ended);
       },

@@ -250,7 +250,14 @@ function startWorkflowPart(
       ...session('s1', 'h1'),
       owned: false,
     });
-    await emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
+    await emit('chat.sessionOpened', {
+      sessionId: 's1',
+      profileDir: '~/.c',
+      hostSessionId: 'h1',
+      projectDir: '/p',
+      profile: 'personal',
+      origin: 'new',
+    });
   };
   const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
   const changeSettings = async (next: WorkflowTestSettings) => {
@@ -397,7 +404,14 @@ async function reachPlanReady(
     await settled();
   };
   harness.emit('sessions.connected', { ...session('s1', 'h1'), owned: false });
-  harness.emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
+  harness.emit('chat.sessionOpened', {
+    sessionId: 's1',
+    profileDir: '~/.c',
+    hostSessionId: 'h1',
+    projectDir: '/p',
+    profile: 'personal',
+    origin: 'new',
+  });
   await settled();
   await agentEvent(skill('wigley:feature', ''));
   await agentEvent({ type: 'turnStarted', at: 1 });

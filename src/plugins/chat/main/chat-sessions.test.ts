@@ -1498,7 +1498,7 @@ describe('createChatSessions', () => {
     test.process.events.ended({ code: 0, error: null });
     const callsBefore = test.process.calls.length;
 
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
 
     expect(test.ownedEnds()).toBe(1);
     expect(test.chat.sessions()).toEqual([]);
@@ -1527,7 +1527,7 @@ describe('createChatSessions', () => {
     const test = await started();
     test.harness.holdEnd();
 
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
     test.process.events.entry(assistant('late', 'z'));
 
     expect(test.chat.sessions()).toEqual([]);
@@ -1550,7 +1550,7 @@ describe('createChatSessions', () => {
     const [heldProcess, closedProcess, exitedProcess] = test.harness.processes;
     exitedProcess.events.ended({ code: 0, error: null });
     test.harness.holdEnd();
-    test.chat.closed('row-2');
+    test.chat.closed('row-2', 'user');
 
     test.chat.detachAll();
     const emittedBefore = test.emitted.length;
@@ -1604,7 +1604,7 @@ describe('createChatSessions', () => {
     test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
     await flush();
 
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
     await flush();
 
     expect(test.ownedEnds()).toBe(1);
@@ -1629,7 +1629,7 @@ describe('createChatSessions', () => {
     test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
     await flush();
 
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
     await flush();
 
     expect(test.logged).toContainEqual(
@@ -1643,7 +1643,7 @@ describe('createChatSessions', () => {
     const test = await started();
     const sentBefore = test.messages.length;
 
-    test.chat.closed('row-x');
+    test.chat.closed('row-x', 'user');
     await flush();
 
     expect(test.process.calls).toEqual([]);
@@ -2452,7 +2452,7 @@ describe('createChatSessions', () => {
       });
     const entriesBefore = test.sent('entry').length;
 
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
 
     expect(replyText(await settled(call))).toBe(
       JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
@@ -2726,7 +2726,7 @@ describe('createChatSessions saved sessions', () => {
   it.each([
     {
       given: 'the row closed',
-      act: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID),
+      act: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID, 'user'),
     },
     {
       given: 'the row cleared',
@@ -2947,7 +2947,7 @@ describe('createChatSessions saved sessions', () => {
     await flush();
     expect(test.saved.last()?.sessions).toHaveLength(1);
 
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
 
     expect(test.saved.last()?.sessions).toEqual([]);
   });
@@ -3209,7 +3209,8 @@ describe('createChatSessions saved sessions', () => {
   it.each([
     {
       given: 'the row closed',
-      duringRead: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID),
+      duringRead: (test: ReturnType<typeof setUp>) =>
+        test.chat.closed(ROW_ID, 'user'),
       logged: `send for session ${ROW_ID} closed while reading ignored`,
     },
     {
@@ -3267,7 +3268,7 @@ describe('createChatSessions saved sessions', () => {
     );
 
     const reading = test.chat.loadHistory(ROW_ID);
-    test.chat.closed(ROW_ID);
+    test.chat.closed(ROW_ID, 'user');
     await reading;
 
     expect(test.sent('entries')).toEqual([]);
@@ -3402,7 +3403,7 @@ describe('createChatSessions branch', () => {
         test: Awaited<ReturnType<typeof started>>,
         reads: ((branch: string) => void)[],
       ) => {
-        test.chat.closed(ROW_ID);
+        test.chat.closed(ROW_ID, 'user');
         reads[0]('main');
       },
       sent: [],
@@ -3452,7 +3453,7 @@ describe('createChatSessions usage forwarding', () => {
   ])('agentEvent_$case_ReachesTheBusWithBothIds', async ({ close, event }) => {
     const test = await started();
     if (close) {
-      test.chat.closed(ROW_ID);
+      test.chat.closed(ROW_ID, 'user');
     }
     test.emitted.length = 0;
 
@@ -3512,7 +3513,7 @@ describe('createChatSessions usage forwarding', () => {
     {
       given: 'an agent event after the row closed',
       act: (test: Awaited<ReturnType<typeof started>>) => {
-        test.chat.closed(ROW_ID);
+        test.chat.closed(ROW_ID, 'user');
         test.process.events.agentEvent(fakeUsageEvent(1, 1000));
       },
       emitted: [],
@@ -3533,53 +3534,11 @@ describe('createChatSessions usage forwarding', () => {
 
       act(test);
 
-      expect(test.emitted).toEqual(emitted);
-    },
-  );
-
-  it.each([
-    {
-      given: 'a started row',
-      open: (test: ReturnType<typeof setUp>) =>
-        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
-      opened: [{ sessionId: ROW_ID, profileDir: '~/.claude-personal' }],
-    },
-    {
-      given: 'a restored row',
-      open: (test: ReturnType<typeof setUp>) =>
-        test.chat.restore(
-          {
-            sessions: [record('host-a', { profile: 'personal' })],
-            selectedHostSessionId: null,
-          },
-          [],
-        ),
-      opened: [{ sessionId: ROW_ID, profileDir: '~/.claude-personal' }],
-    },
-    {
-      given: 'a restored row whose profile is missing',
-      open: (test: ReturnType<typeof setUp>) =>
-        test.chat.restore(
-          {
-            sessions: [record('host-a', { profile: 'gone' })],
-            selectedHostSessionId: null,
-          },
-          [],
-        ),
-      opened: [],
-    },
-  ])(
-    'openRow_SessionOpened_EmitsTheRowsProfileDir given $given',
-    ({ open, opened }) => {
-      const test = setUp();
-
-      open(test);
-
       expect(
-        test.emitted
-          .filter((emitted) => emitted.event === 'sessionOpened')
-          .map((emitted) => emitted.data),
-      ).toEqual(opened);
+        test.emitted.filter(
+          ({ event }) => event === 'agentEvent' || event === 'planUsage',
+        ),
+      ).toEqual(emitted);
     },
   );
 });
@@ -4872,7 +4831,7 @@ describe('createChatSessions attaching', () => {
     },
     {
       given: 'a closed row',
-      act: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID),
+      act: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID, 'user'),
       replayEnds: false,
       calls: [{ method: 'end' }],
       ownedEnds: 1,
@@ -4882,7 +4841,7 @@ describe('createChatSessions attaching', () => {
     {
       given: 'a closed row, then detachAll',
       act: (test: ReturnType<typeof setUp>) => {
-        test.chat.closed(ROW_ID);
+        test.chat.closed(ROW_ID, 'user');
         test.chat.detachAll();
       },
       replayEnds: false,
@@ -5516,7 +5475,7 @@ describe('createChatSessions unheld processes', () => {
     async ({ arrange }) => {
       const test = await arrange();
 
-      test.chat.closed(ROW_ID);
+      test.chat.closed(ROW_ID, 'user');
       await flush();
 
       expect(test.logged).toContain(
@@ -6538,6 +6497,306 @@ describe('createChatSessions send gate and hold', () => {
       );
       if (logged !== null) {
         expect(test.logged).toContain(logged);
+      }
+    },
+  );
+});
+
+function emittedOf<K extends Emitted['event']>(
+  test: ReturnType<typeof setUp>,
+  event: K,
+) {
+  return test.emitted.flatMap((emitted) =>
+    emitted.event === event ? [emitted.data as ChatMainEvents[K]] : [],
+  );
+}
+
+const AGENT_TITLES: SessionTitles = {
+  user: null,
+  agent: 'agent title',
+  firstMessage: 'first message',
+};
+
+describe('createChatSessions lifecycle events', () => {
+  const START = { projectDir: PROJECT_DIR, profile: 'personal' };
+  const OPENED_NEW = {
+    sessionId: ROW_ID,
+    profileDir: '~/.claude-personal',
+    hostSessionId: 'uuid-1',
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+    origin: 'new',
+  };
+  const RESUME = {
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+    hostSessionId: PAST_ONE.sessionId,
+    title: PAST_ONE.title,
+  };
+
+  it.each([
+    {
+      given: 'a new start',
+      list: [],
+      open: (test: ReturnType<typeof setUp>) => test.chat.start(START),
+      opened: [OPENED_NEW],
+    },
+    {
+      given: 'a launch',
+      list: [],
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.launch({ ...START, message: IDLE_SEND }),
+      opened: [{ ...OPENED_NEW, origin: 'launched' }],
+    },
+    {
+      given: 'a resume by a fresh start',
+      list: [],
+      open: (test: ReturnType<typeof setUp>) => test.chat.resume(RESUME),
+      opened: [
+        {
+          ...OPENED_NEW,
+          hostSessionId: PAST_ONE.sessionId,
+          origin: 'resumed',
+        },
+      ],
+    },
+    {
+      given: 'a resume by a re-attach',
+      list: [HOSTED_PAST_ONE],
+      open: (test: ReturnType<typeof setUp>) => test.chat.resume(RESUME),
+      opened: [
+        {
+          ...OPENED_NEW,
+          hostSessionId: PAST_ONE.sessionId,
+          origin: 'resumed',
+        },
+      ],
+    },
+    {
+      given: 'a resume of a session a row holds',
+      list: [],
+      open: async (test: ReturnType<typeof setUp>) => {
+        await test.chat.resume(RESUME);
+        test.emitted.length = 0;
+        await test.chat.resume(RESUME);
+      },
+      opened: [],
+    },
+    {
+      given: 'a restore',
+      list: [],
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.restore(
+          {
+            sessions: [
+              record('host-a', {
+                projectDir: PROJECT_DIR,
+                profile: 'personal',
+              }),
+            ],
+            selectedHostSessionId: null,
+          },
+          [],
+        ),
+      opened: [{ ...OPENED_NEW, hostSessionId: 'host-a', origin: 'restored' }],
+    },
+    {
+      given: 'a restore whose profile is missing',
+      list: [],
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.restore(
+          {
+            sessions: [record('host-a', { profile: 'gone' })],
+            selectedHostSessionId: null,
+          },
+          [],
+        ),
+      opened: [],
+    },
+  ])(
+    'sessionOpened_EachPath_CarriesOrigin given $given',
+    async ({ list, open, opened }) => {
+      const test = setUp({
+        sessionHost: { list: () => Promise.resolve(list) },
+      });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      await open(test);
+      await flush();
+
+      expect(emittedOf(test, 'sessionOpened')).toEqual(opened);
+    },
+  );
+
+  it.each([
+    { given: 'a sent row', sends: true, sent: true },
+    { given: 'an unsent row', sends: false, sent: false },
+  ])(
+    'sessionClosed_RestingRow_CarriesTitlesBeforeEnded given $given',
+    async ({ sends, sent }) => {
+      const test = await started();
+      if (sends) {
+        await test.chat.send(ROW_ID, IDLE_SEND);
+      }
+      test.process.events.ended({ code: 0, error: null });
+      test.setRowTitles(ROW_ID, AGENT_TITLES);
+      let closedAtOwnedEnd: unknown[] = [];
+      test.setOnOwnedEnd(() => {
+        closedAtOwnedEnd = emittedOf(test, 'sessionClosed');
+      });
+
+      test.chat.closed(ROW_ID, 'user');
+      await flush();
+
+      expect(closedAtOwnedEnd).toEqual([
+        {
+          sessionId: ROW_ID,
+          hostSessionId: 'uuid-1',
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          titles: AGENT_TITLES,
+          sent,
+          reason: 'user',
+        },
+      ]);
+      expect(test.ownedEnds()).toBe(1);
+    },
+  );
+
+  it.each([
+    { given: 'a sent row', sends: true, failsRestart: false, sent: true },
+    { given: 'an unsent row', sends: false, failsRestart: false, sent: false },
+    { given: 'a failed restart', sends: true, failsRestart: true, sent: true },
+  ])(
+    'sessionCleared_SentRow_CarriesBothIds given $given',
+    async ({ sends, failsRestart, sent }) => {
+      const test = await started();
+      if (sends) {
+        await test.chat.send(ROW_ID, IDLE_SEND);
+      }
+      test.setRowTitles(ROW_ID, AGENT_TITLES);
+      if (failsRestart) {
+        test.harness.failNextStart('spawn failed');
+        expect(() => test.chat.clear(ROW_ID)).toThrow('spawn failed');
+      } else {
+        test.chat.clear(ROW_ID);
+      }
+
+      expect(emittedOf(test, 'sessionCleared')).toEqual([
+        {
+          sessionId: ROW_ID,
+          oldHostSessionId: 'uuid-1',
+          newHostSessionId: 'uuid-2',
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          titles: AGENT_TITLES,
+          sent,
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    {
+      given: 'a stop',
+      stops: true,
+      exit: { code: 1, error: null },
+      reason: 'stopped',
+    },
+    {
+      given: 'an exit with code 0',
+      stops: false,
+      exit: { code: 0, error: null },
+      reason: 'clean',
+    },
+    {
+      given: 'an exit with code 1',
+      stops: false,
+      exit: { code: 1, error: null },
+      reason: 'crash',
+    },
+    {
+      given: 'an exit with code 0 and an error',
+      stops: false,
+      exit: { code: 0, error: 'stdin closed early' },
+      reason: 'crash',
+    },
+  ])(
+    'processEnded_EachExit_CarriesReason given $given',
+    async ({ stops, exit, reason }) => {
+      const test = await started();
+      if (stops) {
+        test.chat.stopAll();
+      }
+
+      test.process.events.ended(exit);
+
+      expect(emittedOf(test, 'processEnded')).toEqual([
+        { sessionId: ROW_ID, hostSessionId: 'uuid-1', reason, ...exit },
+      ]);
+    },
+  );
+
+  it('processEnded_DuringReplay_FiresNothing', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      turns: 1,
+      replay(events) {
+        events.ended({ code: 0, error: null });
+      },
+    });
+
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(noticesOf(test)).not.toEqual([]);
+    expect(emittedOf(test, 'processEnded')).toEqual([]);
+  });
+
+  it('sessionClosed_FailedStart_SaysStartFailed', () => {
+    const test = setUp();
+    test.harness.failNextStart('spawn failed');
+
+    expect(() => test.chat.start(START)).toThrow('spawn failed');
+
+    expect(emittedOf(test, 'sessionClosed')).toEqual([
+      {
+        sessionId: ROW_ID,
+        hostSessionId: 'uuid-1',
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        titles: NO_TITLES,
+        sent: false,
+        reason: 'start-failed',
+      },
+    ]);
+  });
+
+  it.each([
+    { given: 'a write that lands', rejects: false, archived: [true] },
+    { given: 'a rejected write', rejects: true, archived: [] },
+  ])(
+    'sessionArchived_AfterWrite_Fires given $given',
+    async ({ rejects, archived }) => {
+      const test = setUp();
+      if (rejects) {
+        test.archived.set = () => Promise.reject(new Error('disk full'));
+      }
+
+      const writing = test.chat.setArchived('host-a', true);
+      expect(emittedOf(test, 'sessionArchived')).toEqual([]);
+      await writing.catch(() => undefined);
+
+      expect(emittedOf(test, 'sessionArchived')).toEqual(
+        archived.map((flag) => ({ hostSessionId: 'host-a', archived: flag })),
+      );
+      if (rejects) {
+        await expect(writing).rejects.toThrow('disk full');
       }
     },
   );

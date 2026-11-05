@@ -51,11 +51,14 @@ import {
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
+  type ProcessEndReason,
   type QueuedMessage,
   type ResumeRequest,
   type ReturnedMessage,
   type SendGate,
+  type SessionCloseReason,
   type SessionCompaction,
+  type SessionOrigin,
   type StartRequest,
 } from '../contract';
 import type { ArchivedSessions } from './archived-sessions';
@@ -148,6 +151,8 @@ export interface ChatSessions {
   // archived-sessions file cannot be read, every row lists as not archived
   // and the failure is logged; the file is left as it is.
   pastSessions(projectDir: string, profile: string): Promise<PastSessionRow[]>;
+  // Writes the archived flag, then fires `sessionArchived`; a rejected write
+  // fires nothing.
   setArchived(hostSessionId: string, archived: boolean): Promise<void>;
   // Opens a row for a saved session, its earlier conversation as the first
   // entries and the request's title as its first-message title, and resumes
@@ -202,8 +207,9 @@ export interface ChatSessions {
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
   // is missing, or while the row attaches; a fresh start that throws leaves the
-  // row resting under the new id, then rethrows. An unheld process is left
-  // running on the host, since the fresh process shares no transcript with it.
+  // row resting under the new id, then rethrows, with `sessionCleared` already
+  // fired. An unheld process is left running on the host, since the fresh
+  // process shares no transcript with it.
   // Logs and does nothing for a session chat does not hold, or after
   // `detachAll`.
   clear(sessionId: string): void;
@@ -241,12 +247,13 @@ export interface ChatSessions {
     entryId: string,
     answer: PermissionAnswer,
   ): void;
-  // The sessions plugin's `closed` event for `sessionId`: drops its saved
-  // record, ends the process, then the owned session, which drops its row; a
-  // resting session has its owned session ended at once. During an attach it
-  // waits for the attach to settle first. An unheld process is left running on
-  // the host: chat holds nothing to end it with.
-  closed(sessionId: string): void;
+  // Closes the row of a session chat holds, for `reason`: fires `sessionClosed`,
+  // drops its saved record, ends the process, then the owned session, which
+  // drops its row; a resting session has its owned session ended at once.
+  // During an attach it waits for the attach to settle first. An unheld process
+  // is left running on the host: chat holds nothing to end it with. Any other
+  // session id does nothing.
+  closed(sessionId: string, reason: SessionCloseReason): void;
   // Kills every process chat holds, a closed session's still ending included,
   // and rests its row with a notice. A row still attaching or an unheld row's
   // process is not stopped.
@@ -514,6 +521,16 @@ function isHoldUp(session: HeldSession): boolean {
 
 function shownActivity(held: HeldSession): ProcessActivity {
   return held.pending.size > 0 ? 'waiting' : held.harnessActivity;
+}
+
+function processEndReasonOf(
+  isStopRequested: boolean,
+  isCleanExit: boolean,
+): ProcessEndReason {
+  if (isStopRequested) {
+    return 'stopped';
+  }
+  return isCleanExit ? 'clean' : 'crash';
 }
 
 function savedSessionOf(
@@ -1091,6 +1108,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     cancelPending(session);
   }
 
+  // Runs before the owned session ends: a resting row's titles end with it.
+  function fireSessionClosed(session: HeldSession, reason: SessionCloseReason) {
+    const { sessionId, projectDir, profile } = session.state;
+    deps.emit('sessionClosed', {
+      sessionId,
+      hostSessionId: session.hostId,
+      projectDir,
+      profile,
+      titles: sessions.titles(sessionId) ?? NO_TITLES,
+      sent: session.sent,
+      reason,
+    });
+  }
+
   // The harness emits `ended` before `end()` resolves, so the exit is known here.
   function logCloseExit(session: HeldSession) {
     const { sessionId } = session.state;
@@ -1272,6 +1303,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         clearBackground(session);
         showRestingIdle(session);
         save();
+        if (!replay.isReplaying) {
+          deps.emit('processEnded', {
+            sessionId,
+            hostSessionId,
+            reason: processEndReasonOf(session.isStopRequested, isCleanExit),
+            code,
+            error,
+          });
+        }
       },
     };
   }
@@ -1304,6 +1344,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       confirmedPicks: Record<string, string>;
       returnedDrops: readonly string[];
       activeMs: number;
+      origin: SessionOrigin;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1378,7 +1419,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     };
     held.set(sessionId, session);
     if (profileDir !== null) {
-      deps.emit('sessionOpened', { sessionId, profileDir });
+      deps.emit('sessionOpened', {
+        sessionId,
+        profileDir,
+        hostSessionId: hostId,
+        projectDir,
+        profile: profileName,
+        origin: opening.origin,
+      });
     }
     // The sessions plugin emits `selected` inside `open`, before the row is
     // held, so `selected` cannot record it.
@@ -1809,9 +1857,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Opens the row for `hostId` and starts its process; a start that throws
-  // drops the session, keeping any queued or returned messages it took over
-  // saved, then ends the owned session. After `detachAll` it throws and opens
-  // nothing.
+  // fires `sessionClosed`, drops the session, keeping any queued or returned
+  // messages it took over saved, then ends the owned session. After `detachAll`
+  // it throws and opens nothing.
   function openAndStart(
     harness: AgentHarness,
     profile: ChatProfile,
@@ -1821,6 +1869,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       resume: boolean;
       entries: ChatEntry[];
       titles: SessionTitles;
+      origin: SessionOrigin;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1842,12 +1891,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
+        origin: opening.origin,
       },
       options,
     );
     try {
       startProcess(session, harness, profile, opening.resume);
     } catch (error) {
+      fireSessionClosed(session, 'start-failed');
       drop(session);
       keepSkipped(
         savedSessionOf(
@@ -1895,6 +1946,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
+        origin: 'resumed',
       },
       { select: true },
     );
@@ -1904,7 +1956,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // A new session in the folder, its row selected as `options` says.
-  function startNew(request: StartRequest, options: OpenOptions): HeldSession {
+  function startNew(
+    request: StartRequest,
+    origin: SessionOrigin,
+    options: OpenOptions,
+  ): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
     return openAndStart(
@@ -1916,6 +1972,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         resume: false,
         entries: [],
         titles: NO_TITLES,
+        origin,
       },
       options,
     );
@@ -2208,7 +2265,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(refusal);
       }
     }
-    const session = startNew(request, { select: false });
+    const session = startNew(request, 'launched', { select: false });
     deliverWritten(session, request.message);
     const { sessionId } = session.state;
     log(`launched session ${sessionId} in ${request.projectDir}`);
@@ -2295,6 +2352,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           confirmedPicks: record.confirmedPicks,
           returnedDrops: record.returnedDrops,
           activeMs: record.activeMs,
+          origin: 'restored',
         },
         { select: false },
       );
@@ -2611,6 +2669,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         resume: true,
         entries,
         titles,
+        origin: 'resumed',
       },
       { select: true },
     );
@@ -2741,6 +2800,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     cancelPending(session);
     returnAllHeld(session);
     const oldHostId = session.hostId;
+    const wasSent = session.sent;
     const newHostId = deps.randomUuid();
     session.owned.setHostSessionId(newHostId);
     session.hostId = newHostId;
@@ -2754,6 +2814,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       nextNotice(session, 'Conversation cleared', 'info'),
     ];
     send('entries', { sessionId, entries: [...session.state.entries] });
+    deps.emit('sessionCleared', {
+      sessionId,
+      oldHostSessionId: oldHostId,
+      newHostSessionId: newHostId,
+      projectDir: session.state.projectDir,
+      profile: session.state.profile,
+      titles: sessions.titles(sessionId) ?? NO_TITLES,
+      sent: wasSent,
+    });
     try {
       startProcess(session, harness, profile, false);
     } catch (error) {
@@ -2806,7 +2875,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     sessions: () =>
       [...held.values()].map((session) => copyState(session.state)),
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
-    start: (request) => startNew(request, { select: true }).state.sessionId,
+    start: (request) =>
+      startNew(request, 'new', { select: true }).state.sessionId,
     launch,
     restore,
     loadHistory,
@@ -2824,8 +2894,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       save();
     },
     pastSessions,
-    setArchived: (hostSessionId, archived) =>
-      deps.archived.set(hostSessionId, archived),
+    async setArchived(hostSessionId, archived) {
+      await deps.archived.set(hostSessionId, archived);
+      deps.emit('sessionArchived', { hostSessionId, archived });
+    },
     resume,
     send: sendMessage,
     notice(sessionId, text, tone) {
@@ -2934,11 +3006,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
       settlePermission(session, pending, answer);
     },
-    closed(sessionId) {
+    closed(sessionId, reason) {
       const session = held.get(sessionId);
       if (!session) {
         return;
       }
+      fireSessionClosed(session, reason);
       drop(session);
       save();
       void afterAttach(session, () => endClosed(session));

@@ -16,6 +16,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { SessionTitles } from '../sessions/contract';
 
 // The `id` of the agent harness chat runs its sessions on: chat's profiles are
 // that harness's config folders.
@@ -313,6 +314,10 @@ export interface ChatAgentEvent {
   replayed: boolean;
 }
 
+export type SessionOrigin = 'new' | 'resumed' | 'launched' | 'restored';
+export type SessionCloseReason = 'user' | 'start-failed' | 'project-closed';
+export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
+
 // `agentEvent`: one agent event of a session chat owns, still sent after the
 // row closes for its process's `sessionEnded`; also a restored or resumed
 // row's saved usage, read from its transcript rather than sent by a process,
@@ -322,11 +327,53 @@ export interface ChatAgentEvent {
 // `profileDir` of the profile the row opened under: its `configDir` as the
 // `profiles` setting writes it, unexpanded; null is the harness default, which
 // chat never sends.
-// `sessionOpened`: a session chat now owns, with the profile it opened under.
+// `sessionOpened`: a session chat now owns, with the profile it opened under,
+// its host id and folder, and how it came to open; a row whose profile is not
+// in chat's profiles setting fires none.
+// `sessionClosed`: chat closing a row it holds, before its state goes, with the
+// titles and `sent` it had. A quit or relaunch fires none.
+// `sessionCleared`: a clear moving a row to a new host id, with the titles it
+// holds and whether the old conversation was sent a message.
+// `processEnded`: a row's live process exiting, outside a replay;
+// `hostSessionId` is the id it started under.
+// `sessionArchived`: a saved session's archived flag, once written.
 export interface ChatMainEvents extends EventShape {
   agentEvent: ChatAgentEvent;
   planUsage: { profileDir: string | null; update: PlanRowUpdate };
-  sessionOpened: { sessionId: string; profileDir: string };
+  sessionOpened: {
+    sessionId: string;
+    profileDir: string;
+    hostSessionId: string;
+    projectDir: string;
+    profile: string;
+    origin: SessionOrigin;
+  };
+  sessionClosed: {
+    sessionId: string;
+    hostSessionId: string;
+    projectDir: string;
+    profile: string;
+    titles: SessionTitles;
+    sent: boolean;
+    reason: SessionCloseReason;
+  };
+  sessionCleared: {
+    sessionId: string;
+    oldHostSessionId: string;
+    newHostSessionId: string;
+    projectDir: string;
+    profile: string;
+    titles: SessionTitles;
+    sent: boolean;
+  };
+  processEnded: {
+    sessionId: string;
+    hostSessionId: string;
+    reason: ProcessEndReason;
+    code: number | null;
+    error: string | null;
+  };
+  sessionArchived: { hostSessionId: string; archived: boolean };
 }
 
 // The main part's exports.
@@ -357,7 +404,7 @@ export interface ChatMainExports {
   // Drops every session chat holds in `projectDir` (compared as samePath
   // does), a resting one included, as a `sessions.closed` would, without
   // asking the close guards: for a self-test that starts its project over.
-  // Resolves once each one's owned session has ended and its row is gone, or
+  // Each fires `sessionClosed` with reason `project-closed`. Resolves once each one's owned session has ended and its row is gone, or
   // chat stops.
   closeSessionsIn(projectDir: string): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after

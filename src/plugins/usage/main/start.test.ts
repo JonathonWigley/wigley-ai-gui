@@ -219,6 +219,10 @@ describe('usageMainPart', () => {
     usage.emit('chat.sessionOpened', {
       sessionId: 's1',
       profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
+      projectDir: '/p',
+      profile: 'personal',
+      origin: 'new',
     });
     expect(usage.sent.map((snapshot) => snapshot.sessions)).toEqual([
       [
@@ -393,6 +397,10 @@ describe('sessionUsage', () => {
         ? usage.emit('chat.sessionOpened', {
             sessionId: heard.sessionId,
             profileDir: '~/.claude-personal',
+            hostSessionId: 'h1',
+            projectDir: '/p',
+            profile: 'personal',
+            origin: 'new',
           })
         : usage.emit('chat.agentEvent', {
             sessionId: heard.sessionId,

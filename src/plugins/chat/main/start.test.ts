@@ -26,7 +26,12 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
-import type { ChatMainExports, ChatSessionState } from '../contract';
+import type {
+  ChatMainExports,
+  ChatSessionState,
+  SessionCloseReason,
+  SessionOrigin,
+} from '../contract';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart } from './start';
 
@@ -39,7 +44,7 @@ function fakeChat(running = true) {
   return {
     replies,
     calls,
-    closed: vi.fn<(sessionId: string) => void>(),
+    closed: vi.fn<(sessionId: string, reason: SessionCloseReason) => void>(),
     start: () => 'started',
     hostSessionIdOf: () => 'host-started',
     sessions: () => [
@@ -90,14 +95,14 @@ describe('chat drive actions', () => {
     });
   });
 
-  it('start closes the session it started when activating its row throws', async () => {
+  it('driveStart_ActivateFails_SaysStartFailed', async () => {
     const chat = fakeChat();
     const drive = chatDriveActions(chat, () => {
       throw new Error('no row');
     });
 
     await expect(drive.run('start')).rejects.toThrow('no row');
-    expect(chat.closed).toHaveBeenCalledWith('started');
+    expect(chat.closed).toHaveBeenCalledWith('started', 'start-failed');
   });
 
   it('permissionAnswer is pending until the user answers, then the reply', async () => {
@@ -217,6 +222,7 @@ function startChatPart(
   const processDetach = vi.fn<() => void>();
   const processKill = vi.fn<() => void>();
   const sent: { message: string; data: unknown }[] = [];
+  const emitted: { event: string; data: unknown }[] = [];
   const logged: string[] = [];
   const starts = { count: 0 };
   const startInstructions: (readonly string[])[] = [];
@@ -328,7 +334,7 @@ function startChatPart(
         listeners.set(name, listener);
         return { dispose: () => undefined };
       },
-      emit: () => undefined,
+      emit: (event: string, data: unknown) => emitted.push({ event, data }),
     },
     settings: () => ({
       profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
@@ -380,6 +386,18 @@ function startChatPart(
     cancelLogIn,
     processSends,
     sent,
+    closeReasons: () =>
+      emitted.flatMap(({ event, data }) =>
+        event === 'sessionClosed'
+          ? [(data as { reason: SessionCloseReason }).reason]
+          : [],
+      ),
+    openOrigins: () =>
+      emitted.flatMap(({ event, data }) =>
+        event === 'sessionOpened'
+          ? [(data as { origin: SessionOrigin }).origin]
+          : [],
+      ),
     logged,
     starts,
     startInstructions,
@@ -702,6 +720,36 @@ describe('chat main part', () => {
     expect(chat.ended).toEqual(['row-3', 'row-1']);
     const listed = chat.invoke('sessions') as ChatSessionState[];
     expect(listed.map((state) => state.sessionId)).toEqual(['row-2']);
+  });
+
+  it('exports_CloseSessionsIn_ClosesWithProjectClosed', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+
+    await chat.exports.closeSessionsIn('/p');
+
+    expect(chat.closeReasons()).toEqual(['project-closed']);
+  });
+
+  it('sessionsClosed_UserClose_SaysUser', () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    chat.listeners.get('sessions.closed')?.({ sessionId: 'row-1' });
+
+    expect(chat.closeReasons()).toEqual(['user']);
+  });
+
+  it('stop_HeldRows_FiresNoSessionClosed', async () => {
+    const chat = startChatPart({ data: await dataWithSavedRow() });
+    await chat.heldConnects[0];
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    await chat.part.dispose?.();
+
+    expect(chat.openOrigins()).toEqual(['restored', 'new']);
+    expect(chat.closeReasons()).toEqual([]);
   });
 
   it('exports_CloseSessionsIn_EndsNeverCome_ResolvesAtStop', async () => {
