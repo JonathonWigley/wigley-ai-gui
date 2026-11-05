@@ -1,6 +1,6 @@
 # 01 — Read the applied model and effort from `get_settings`
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -58,3 +58,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 8175b432 · proof: diff read: all four Produces present, Decisions matched; typecheck passes; worker ran lint and the four test files (569 passed) · concerns: same-value report also fires for a typed /effort with no pick (extra controls event, confirmPicks no-op); two tests passed on stale wigley-2 ids and moved to wigley-3; row name "request already written" now means the context request only; AGENTS.md module map names get_context_usage only

@@ -79,7 +79,7 @@ Boundary rule: nothing outside `src/main/claude-code/` names `get_settings`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Read the applied settings](01-read-applied-settings.md)
+- [x] [Read the applied settings](01-read-applied-settings.md)
 
 ### Wave 2
 - [ ] [Doc re-read](02-doc-re-read.md) — after 01
@@ -92,7 +92,10 @@ Boundary rule: nothing outside `src/main/claude-code/` names `get_settings`.
 Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 
 ### Groups
+- 01 · 8175b432 · diff read: all four Produces present, Decisions matched; typecheck passes; worker ran lint and the four test files (569 passed) · concerns: same-value report also fires for a typed /effort with no pick (extra controls event, confirmPicks no-op); two tests passed on stale wigley-2 ids and moved to wigley-3; row name "request already written" now means the context request only; AGENTS.md module map names get_context_usage only
 ### Contract changes
 ### Rulings
+- No test owned foldControlValues, so the same-value row is a new table foldPipeLine_ControlCommandResult_ReportsControls in session-fold.test.ts — the fold owns the rule — the row moves file if wrong · group 01 · group 01
+- No chat-sessions test added: restart_StartCarriesHeldModeAndConfirmedPicks (ReportedOnly1mModelAndEffort) already fails if a report joins userSetControls — one row missing if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate
