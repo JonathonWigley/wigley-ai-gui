@@ -237,6 +237,26 @@ const replied = (
 
 const launched = (agentId: string) => ({ type: 'agentLaunched', agentId });
 
+// A `SendMessage` call's `task_started` for a subagent it revives, as measured.
+const reviveStarted = (taskId: string, sendMessageId: string) =>
+  line({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: taskId,
+    tool_use_id: sendMessageId,
+    description: 'read notes',
+    subagent_type: 'Explore',
+    is_backgrounded: true,
+    task_type: 'local_agent',
+  });
+
+// A subagent's first line after a revive: `agent_id` is its `task_id`.
+const revivedReply = (agentCallId: string, taskId: string) =>
+  line({
+    ...JSON.parse(toolUseLine(`t-${agentCallId}`, 'Read', {}, agentCallId)),
+    agent_id: taskId,
+  });
+
 // A `result` whose `modelUsage` names each model's window.
 const resultNaming = (windows: Record<string, number>) =>
   line({
@@ -1794,6 +1814,84 @@ describe('createStreamDecoder', () => {
         taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
       ],
       expected: [spawned('a1'), launched('a1'), finished('a1', 'done')],
+    },
+    {
+      case: "revive in the Agent call's process",
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskNotification('a1', 'stopped', 'a8e9e7aad968da282'),
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a8e9e7aad968da282', 's1'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        taskNotification('s1', 'completed', 'a8e9e7aad968da282'),
+      ],
+      expected: [
+        spawned('a1'),
+        launched('a1'),
+        finished('a1', 'failed'),
+        started('main', 's1', 'SendMessage', ''),
+        spawned('a1'),
+        launched('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: 'revive of a subagent still running spawns nothing',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a8e9e7aad968da282', 's1'),
+      ],
+      expected: [
+        spawned('a1'),
+        launched('a1'),
+        started('main', 's1', 'SendMessage', ''),
+      ],
+    },
+    {
+      case: "revive of an earlier process's subagent, spawned at its first reply",
+      lines: [
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a798a61bb83ca1c3b', 's1'),
+        toolUseLine('s2', 'SendMessage', {}),
+        reviveStarted('a2222222222222222', 's2'),
+        revivedReply('a9', 'a2222222222222222'),
+        revivedReply('a8', 'a798a61bb83ca1c3b'),
+        taskNotification('s1', 'completed', 'a798a61bb83ca1c3b'),
+        taskNotification('s2', 'failed', 'a2222222222222222'),
+      ],
+      expected: [
+        started('main', 's1', 'SendMessage', ''),
+        started('main', 's2', 'SendMessage', ''),
+        spawned('a9'),
+        launched('a9'),
+        started('a9', 't-a9', 'Read', ''),
+        spawned('a8'),
+        launched('a8'),
+        started('a8', 't-a8', 'Read', ''),
+        { type: 'toolFinished', agentId: 'a8', toolUseId: 't-a8', ok: false },
+        finished('a8', 'done'),
+        { type: 'toolFinished', agentId: 'a9', toolUseId: 't-a9', ok: false },
+        finished('a9', 'failed'),
+      ],
+    },
+    {
+      case: 'revive ending before its first reply spawns nothing',
+      lines: [
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a798a61bb83ca1c3b', 's1'),
+        taskNotification('s1', 'stopped', 'a798a61bb83ca1c3b'),
+        revivedReply('a8', 'a798a61bb83ca1c3b'),
+      ],
+      expected: [
+        started('main', 's1', 'SendMessage', ''),
+        started('a8', 't-a8', 'Read', ''),
+      ],
     },
     {
       case: 'task with no type starts nothing',

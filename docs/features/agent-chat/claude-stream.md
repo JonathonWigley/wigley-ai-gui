@@ -1030,6 +1030,23 @@ probes 1, 2, 4, 6 and 7), plus three top-level keys the main agent's lines lack:
   code 0)`, then `background_tasks_changed` with `[]`. In the app's own session (a drive run, 2026-11-02), Claude then
   ran a turn of its own to report the finished command, as it does after a background subagent ends.
 
+**A revive.** `SendMessage` to a subagent that has ended starts it again, in the same process or after a restart
+(2026-11-04: one revive read from a session's pipe log, in a new process, and one driven in the app, in the same process):
+
+- It prints `background_tasks_changed` listing the subagent, then a `task_started` with the subagent's old `task_id`,
+  `task_type` `local_agent`, its `subagent_type` and `description`, `is_backgrounded` true, and `tool_use_id` naming the
+  **`SendMessage` call**, then that call's `tool_result` (`{"success":true,"message":"Resuming agent …","resumedAgentId":"…"}`).
+  No line carries the Agent call's `tool_use`.
+- The subagent's own lines keep its **first Agent call's id** as `parent_tool_use_id`, and carry the `task_id` as
+  `agent_id`, the one pair that links the two ids in a process that never saw that call. Its `task_progress` lines
+  carry the `SendMessage` call's id.
+- Its end is a `task_notification` with the same `task_id` and the `SendMessage` call's id as `tool_use_id`.
+- A restart ends a subagent still running: the new process prints `task_notification` with `status` `stopped`, its
+  `task_id` and no `tool_use_id`, ahead of anything else about it.
+
+The decoder keys a revived subagent on its Agent call's id, reports it spawned and launched, at the `task_started` when
+the process knows that call and at the subagent's first `assistant` line when it does not, and ends it by `task_id`.
+
 **The Agent call's `tool_result`.**
 
 - **Background (the default).** It arrives at the launch, 0.07 s after `task_started` and **before any subagent line**,

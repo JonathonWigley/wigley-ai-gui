@@ -300,6 +300,13 @@ export function createStreamDecoder(
   // Each subagent's Agent call id, by the subagent's `task_id`; kept after the
   // subagent ends, so a task it started still names it.
   const subagentTasks = new Map<string, string>();
+  // Revived subagents whose Agent call an earlier process made, by `task_id`:
+  // each `task_started` line and the agent whose call revived it, until the
+  // subagent's first reply names the Agent call's id.
+  const unpairedRevives = new Map<
+    string,
+    { started: Json; parentAgentId: string }
+  >();
   // Tasks started and not yet ended, by `task_id`.
   const startedTasks = new Set<string>();
   // Each subagent's reply spends by message id, by its Agent call id: null for
@@ -409,18 +416,45 @@ export function createStreamDecoder(
       return;
     }
     pendingAgents.set(id, agentId);
-    const agentType = asString(input.subagent_type) || DEFAULT_AGENT_TYPE;
+    reportSpawn(id, agentId, input, out);
+  }
+
+  // A spawn's facts come from `source`, an Agent call's input or a revive's
+  // `task_started`, which name them alike.
+  function reportSpawn(
+    agentId: string,
+    parentAgentId: string,
+    source: Json,
+    out: DecodedLine,
+  ) {
+    const agentType = asString(source.subagent_type) || DEFAULT_AGENT_TYPE;
     const definition = definitionOf(agentType);
     out.agentEvents.push({
       type: 'agentSpawned',
-      agentId: id,
-      parentAgentId: agentId,
+      agentId,
+      parentAgentId,
       agentType,
-      description: asString(input.description),
-      name: asString(input.name) || agentType,
-      model: asString(input.model) || (definition?.model ?? null),
-      effort: asString(input.effort) || (definition?.effort ?? null),
+      description: asString(source.description),
+      name: asString(source.name) || agentType,
+      model: asString(source.model) || (definition?.model ?? null),
+      effort: asString(source.effort) || (definition?.effort ?? null),
     });
+  }
+
+  // A revived subagent runs in the background under its first Agent call's id,
+  // and nothing reports it spawned but this. One still running stays as it is.
+  function respawnAgent(
+    agentCallId: string,
+    parentAgentId: string,
+    started: Json,
+    out: DecodedLine,
+  ) {
+    if (pendingAgents.has(agentCallId) || launchedAgents.has(agentCallId)) {
+      return;
+    }
+    launchedAgents.add(agentCallId);
+    reportSpawn(agentCallId, parentAgentId, started, out);
+    out.agentEvents.push({ type: 'agentLaunched', agentId: agentCallId });
   }
 
   // The subagent's estimated spend over its recorded replies; null before its
@@ -637,23 +671,27 @@ export function createStreamDecoder(
   }
 
   // A subagent's end event; it also comes for other background tasks, whose
-  // `tool_use_id` is no Agent call's.
+  // `tool_use_id` is no Agent call's. A revived subagent's `task_id` names its
+  // Agent call, which its `tool_use_id` may not.
   function finishByNotification(event: Json, out: DecodedLine) {
-    const id = asString(event.tool_use_id);
+    const taskId = asString(event.task_id);
+    unpairedRevives.delete(taskId);
+    const id = subagentTasks.get(taskId) ?? asString(event.tool_use_id);
     if (pendingAgents.has(id) || launchedAgents.has(id)) {
       finishAgent(id, event.status === 'completed', out);
     }
   }
 
-  // A `local_agent` start pairs a subagent's `task_id` with its Agent call;
-  // any other typed start begins a task of the subagent its `parent_task_id`
+  // A `local_agent` start pairs a subagent's `task_id` with its Agent call,
+  // unless another tool call made it: that call revived the subagent. Any other
+  // typed start begins a task of the subagent its `parent_task_id`
   // names, or of the main agent, running the `command` input of the tool call
   // its `tool_use_id` names.
   function startTask(event: Json, out: DecodedLine) {
     const taskId = asString(event.task_id);
     const taskType = asString(event.task_type);
     if (taskType === 'local_agent') {
-      subagentTasks.set(taskId, asString(event.tool_use_id));
+      startSubagentTask(taskId, event, out);
       return;
     }
     if (taskType === '' || startedTasks.has(taskId)) {
@@ -671,6 +709,38 @@ export function createStreamDecoder(
           asJson(toolEntries.get(asString(event.tool_use_id))?.input).command,
         ) || null,
     });
+  }
+
+  function startSubagentTask(taskId: string, event: Json, out: DecodedLine) {
+    const callId = asString(event.tool_use_id);
+    const reviverAgentId = toolAgents.get(callId);
+    if (reviverAgentId === undefined) {
+      subagentTasks.set(taskId, callId);
+      return;
+    }
+    const agentCallId = subagentTasks.get(taskId);
+    if (agentCallId === undefined) {
+      unpairedRevives.set(taskId, {
+        started: event,
+        parentAgentId: reviverAgentId,
+      });
+      return;
+    }
+    respawnAgent(agentCallId, reviverAgentId, event, out);
+  }
+
+  // A subagent's reply carries both its `task_id`, as `agent_id`, and its Agent
+  // call's id, as `parent_tool_use_id`, which pairs a waiting revive.
+  function pairRevive(event: Json, out: DecodedLine) {
+    const taskId = asString(event.agent_id);
+    const revive = unpairedRevives.get(taskId);
+    if (revive === undefined) {
+      return;
+    }
+    unpairedRevives.delete(taskId);
+    const agentCallId = asString(event.parent_tool_use_id);
+    subagentTasks.set(taskId, agentCallId);
+    respawnAgent(agentCallId, revive.parentAgentId, revive.started, out);
   }
 
   function finishTask(event: Json, out: DecodedLine) {
@@ -904,6 +974,7 @@ export function createStreamDecoder(
 
   function decodeAssistant(event: Json, out: DecodedLine) {
     const message = asJson(event.message);
+    pairRevive(event, out);
     readReplyUsage(event, message, out);
     reportSubagentReply(event, message, out);
     if (message.model === SYNTHETIC_MODEL) {
