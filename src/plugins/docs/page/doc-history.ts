@@ -1,3 +1,4 @@
+// `path` is a file's path, or a list page's `wiki:` place.
 export interface DocPlace {
   path: string;
   line: number | null;

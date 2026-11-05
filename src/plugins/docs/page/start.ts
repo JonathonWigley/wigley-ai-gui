@@ -113,7 +113,8 @@ const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 // added view that is visible. A change made in one view reaches every other and
 // the star set every view shares, and a view showing closes the others'
 // overlays, since two views' pane scopes may be equal. `toggleTree` hides or
-// shows the active view's tree. `openDoc` opens a doc in Docs mode.
+// shows the active view's tree. `openDoc` opens a doc in Docs mode, and
+// `openMain` the Main page there, from any docs view.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -484,13 +485,17 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return null;
     };
 
+    const showDocsMode = () => {
+      if (!mode.isShown()) {
+        mode.show();
+      }
+    };
+
     // Shows Docs mode, then opens `path` in the machine view by its
     // `openDoc`, which waits for the view's first index read and, when that
     // does not list `path`, for a rebuild coming or running.
     const openDoc = (path: string, line: number | null) => {
-      if (!mode.isShown()) {
-        mode.show();
-      }
+      showDocsMode();
       machineView.openDoc(path, line);
     };
     api.channel.on('openDoc', ({ path, line }) => openDoc(path, line));
@@ -591,6 +596,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         nextSection: onActiveView('nextSection'),
         historyBack: onActiveView('historyBack'),
         historyForward: onActiveView('historyForward'),
+        openMain: () => {
+          showDocsMode();
+          machineView.openMain();
+        },
+        listOpen: onActiveView('listOpen'),
         quitEditor: onActiveView('quitEditor'),
         conflictReload: onActiveView('conflictReload'),
         conflictOverwrite: onActiveView('conflictOverwrite'),

@@ -80,6 +80,8 @@ export const docsManifest = definePlugin({
     nextSection: { label: 'next section', group: 'doc', runsIn: 'page' },
     historyBack: { label: 'go back', group: 'doc', runsIn: 'page' },
     historyForward: { label: 'go forward', group: 'doc', runsIn: 'page' },
+    openMain: { label: 'open the Main page', group: 'doc', runsIn: 'page' },
+    listOpen: { label: 'open the row', group: 'doc', runsIn: 'page' },
     quitEditor: { label: 'close the editor', group: 'doc', runsIn: 'page' },
     conflictReload: {
       label: 'reload from disk',

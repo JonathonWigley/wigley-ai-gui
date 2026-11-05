@@ -15,7 +15,13 @@ import {
 } from '../../../shared/page/test-dom';
 import type { IndexEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
-import type { AsideLinkInput, DocHeaderInput, Layout } from '../layouts/layout';
+import type {
+  AsideLinkInput,
+  DocHeaderInput,
+  Layout,
+  ListRowInput,
+  RecentChangesInput,
+} from '../layouts/layout';
 import {
   createDocView,
   type DocDetail,
@@ -25,6 +31,7 @@ import {
 } from './doc-view';
 import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
 import { readOnlyText, UNSAVED_TEXT } from './docs-state';
+import type { ListPageContent } from './list-page';
 import {
   fencePlaceholder,
   installMarkdownDom,
@@ -200,6 +207,9 @@ function docViewOver(
     loadedOf: () => null,
     followFile: () => undefined,
     followPlace: () => undefined,
+    openListEntry: () => undefined,
+    createMain: () => undefined,
+    followWikiLink: () => false,
     pushConflictScope: fakePushedScope,
     anchor: (anchoring: HTMLElement, command: string) => {
       anchored[command] = anchoring;
@@ -1749,7 +1759,445 @@ describe('createDocView', () => {
       });
     });
   });
+
+  describe('pages', () => {
+    const PLACE = 'wiki:kind/skill';
+
+    // A list page at `place` with one group, each title also its entry id.
+    function listOf(titles: string[], place = PLACE): ListPageContent {
+      return {
+        place,
+        input: {
+          title: 'Skills',
+          count: titles.length,
+          groups: [
+            {
+              title: 'Global',
+              rows: titles.map((title) => ({
+                title,
+                path: `~/${title}`,
+                time: null,
+              })),
+            },
+          ],
+        },
+        entryIds: [titles],
+      };
+    }
+
+    const list = (titles: string[], place = PLACE) =>
+      ({ type: 'list', content: listOf(titles, place) }) as const;
+
+    // A doc view whose list rows and Recent changes draw through a user layout
+    // that records their inputs.
+    function pageView(extra: Layout = {}) {
+      const rows: ListRowInput[] = [];
+      const recents: RecentChangesInput[] = [];
+      let shown = withUser<Layout>(defaultLayout, {
+        listRow(parent, input, kit) {
+          rows.push(input);
+          return { element: kit.el(parent, 'li', LIST_ROW, input.title) };
+        },
+        recentChanges(parent, input, kit) {
+          recents.push(input);
+          const root = kit.el(parent, 'div', RECENT);
+          for (const row of input.rows) {
+            for (const page of row.pages) {
+              kit.pageLink(root, page.title, page.path);
+            }
+          }
+          return { element: root };
+        },
+        ...extra,
+      });
+      const over = docViewOver(() => shown);
+      const followPlace = vi.fn();
+      over.deps.followPlace = followPlace;
+      return {
+        ...over,
+        rows,
+        recents,
+        followPlace,
+        setLayout: (layout: Layout) => {
+          shown = withUser(defaultLayout, layout);
+        },
+      };
+    }
+
+    const onlyIn = (view: DocView, className: string) =>
+      findAll(asFake(view.element), className)[0];
+
+    const selectedRows = (view: DocView) =>
+      findAll(asFake(view.element), LIST_ROW)
+        .filter((row) => row.classList.contains('is-selected'))
+        .map((row) => row.textContent);
+
+    it('showPage_List_DrawsInTheArticleAndEmptiesTheDoc', async () => {
+      const { view, deps } = pageView();
+      await view.open(target(null));
+      const openChanged = vi.fn();
+      deps.openChanged = openChanged;
+
+      const isShown = view.showPage(list(['a']));
+
+      expect({
+        isShown,
+        path: view.openPath(),
+        state: view.element.dataset.doc,
+        openChanged: openChanged.mock.calls,
+        isAsideHidden: asideOf(view).hidden,
+        pagesInArticle: findAll(onlyIn(view, 'docs-article'), 'docs-list-page')
+          .length,
+      }).toEqual({
+        isShown: true,
+        path: null,
+        state: 'page',
+        openChanged: [[null]],
+        isAsideHidden: true,
+        pagesInArticle: 1,
+      });
+    });
+
+    it('showPage_UnsavedEdits_Refuses', async () => {
+      const { view, editors, toasts } = pageView();
+      await view.open(target(null));
+      view.edit(1);
+      editors[0].change('changed');
+
+      const isShown = view.showPage(list(['a']));
+
+      expect({ isShown, toasts, path: view.openPath() }).toEqual({
+        isShown: false,
+        toasts: [UNSAVED_TEXT],
+        path: DOC,
+      });
+    });
+
+    it('open_FromAListPage_DropsThePage', async () => {
+      const { view } = pageView();
+      view.showPage(list(['a']));
+
+      await view.open(target(null));
+
+      expect({
+        page: view.shownPage(),
+        slotChildren: onlyIn(view, 'docs-page-slot').children.length,
+      }).toEqual({ page: null, slotChildren: 0 });
+    });
+
+    it.each<{
+      name: string;
+      act(view: DocView): Promise<unknown> | void;
+      expected: boolean;
+    }>([
+      { name: 'a new view', act: () => undefined, expected: true },
+      {
+        name: 'an open in flight',
+        act: (view) => {
+          void view.open(target(null));
+        },
+        expected: false,
+      },
+      {
+        name: 'a doc shown',
+        act: (view) => view.open(target(null)),
+        expected: false,
+      },
+      {
+        name: 'a page shown',
+        act: (view) => {
+          view.showPage(list(['a']));
+        },
+        expected: false,
+      },
+    ])('isBlank $name', async ({ act, expected }) => {
+      const { view } = pageView();
+
+      await act(view);
+
+      expect(view.isBlank()).toBe(expected);
+    });
+
+    it('history_ListPlace_ReachesFollowPlace', async () => {
+      const { view, followPlace } = pageView();
+      view.showPage(list(['a']));
+      await view.open(target(null, OTHER_DOC));
+
+      view.historyBack();
+      const back = followPlace.mock.calls.at(-1);
+      view.showPage(list(['a']), { isHistoryMove: true });
+      view.historyForward();
+
+      expect([back, followPlace.mock.calls.at(-1)]).toEqual([
+        [PLACE, null],
+        [OTHER_DOC, null],
+      ]);
+    });
+
+    it('history_MainEmpty_IsNoPlace', async () => {
+      const { view, followPlace } = pageView();
+      await view.open(target(null, DOC));
+      view.showPage({ type: 'mainEmpty', path: '~/Main.md' });
+      await view.open(target(null, OTHER_DOC));
+
+      view.historyBack();
+
+      expect(followPlace.mock.calls).toEqual([[DOC, null]]);
+    });
+
+    it('scroll_ListShown_MovesTheCursorAndNotThePane', () => {
+      const { view } = pageView();
+      view.showPage(list(['a', 'b']));
+      const pane = scroller(view.element);
+      pane.scrollTop = 40;
+
+      view.scroll(1);
+
+      expect({ scrollTop: pane.scrollTop, cursor: selectedRows(view) }).toEqual(
+        { scrollTop: 40, cursor: ['b'] },
+      );
+    });
+
+    describe('listOpen', () => {
+      // A doc view on a doc, its pane's document readable, and `focused`'s
+      // element built by `place` taking focus, its clicks counted.
+      async function focusedIn(
+        place: (
+          body: FakeElement,
+        ) => { focused: ScrollerFakeElement; clicked: FakeElement } | null,
+      ) {
+        const shown = pageView();
+        const openListEntry = vi.fn();
+        shown.deps.openListEntry = openListEntry;
+        await shown.view.open(target(null));
+        Object.assign(scroller(shown.view.element), {
+          ownerDocument: document,
+        });
+        const placed = place(onlyIn(shown.view, 'docs-body'));
+        placed?.focused.focus();
+        const clicks = vi.fn();
+        placed?.clicked.addEventListener('click', clicks);
+        return { ...shown, openListEntry, clicks };
+      }
+
+      const make = (tag: string) =>
+        document.createElement(tag) as unknown as ScrollerFakeElement;
+
+      it('listOpen_ListShown_OpensTheCursor', () => {
+        const { view, deps } = pageView();
+        const openListEntry = vi.fn();
+        deps.openListEntry = openListEntry;
+        view.showPage(list(['a', 'b']));
+        view.scroll(1);
+
+        view.listOpen();
+
+        expect(openListEntry.mock.calls).toEqual([['b']]);
+      });
+
+      it.each<{
+        name: string;
+        place(body: FakeElement): {
+          focused: ScrollerFakeElement;
+          clicked: FakeElement;
+        } | null;
+        clicks: number;
+      }>([
+        {
+          name: 'a link in the pane',
+          place: (body) => {
+            const link = make('a');
+            body.append(link);
+            return { focused: link, clicked: link };
+          },
+          clicks: 1,
+        },
+        {
+          name: 'a span inside a button',
+          place: (body) => {
+            const button = make('button');
+            const span = make('span');
+            button.append(span);
+            body.append(button);
+            return { focused: span, clicked: button };
+          },
+          clicks: 1,
+        },
+        {
+          name: 'a plain div in the pane',
+          place: (body) => {
+            const div = make('div');
+            body.append(div);
+            return { focused: div, clicked: div };
+          },
+          clicks: 0,
+        },
+        {
+          name: 'a link outside the pane',
+          place: () => {
+            const link = make('a');
+            return { focused: link, clicked: link };
+          },
+          clicks: 0,
+        },
+        { name: 'nothing focused', place: () => null, clicks: 0 },
+      ])('listOpen_DocShown $name', async ({ place, clicks }) => {
+        const shown = await focusedIn(place);
+
+        shown.view.listOpen();
+
+        expect({
+          clicks: shown.clicks.mock.calls.length,
+          opened: shown.openListEntry.mock.calls,
+        }).toEqual({ clicks, opened: [] });
+      });
+    });
+
+    it('updateList_ListShown_KeepsScrollAndHistory', async () => {
+      const { view, followPlace } = pageView();
+      view.showPage(list(['a']));
+      const pane = scroller(view.element);
+      pane.scrollTop = 80;
+
+      view.updateList(listOf(['a', 'b']));
+      const afterUpdate = {
+        scrollTop: pane.scrollTop,
+        rows: titlesOf(view, LIST_ROW),
+      };
+      await view.open(target(null, OTHER_DOC));
+      view.historyBack();
+
+      expect({
+        afterUpdate,
+        followed: followPlace.mock.calls,
+        canBack: view.element.dataset.historyBack,
+      }).toEqual({
+        afterUpdate: { scrollTop: 80, rows: ['a', 'b'] },
+        followed: [[PLACE, null]],
+        canBack: 'false',
+      });
+    });
+
+    it('edit_MainEmpty_CallsCreateMain', () => {
+      const { view, deps, editors } = pageView();
+      const createMain = vi.fn();
+      deps.createMain = createMain;
+      view.showPage({ type: 'mainEmpty', path: '~/Main.md' });
+
+      view.edit();
+
+      expect({
+        created: createMain.mock.calls.length,
+        editors: editors.length,
+      }).toEqual({ created: 1, editors: 0 });
+    });
+
+    it('mainEmpty_LeavesOutTheHint_AppendsIt', () => {
+      const { view } = pageView({
+        mainEmpty(parent, input, kit) {
+          return { element: kit.el(parent, 'div', 'test-main', input.path) };
+        },
+      });
+
+      view.showPage({ type: 'mainEmpty', path: '~/Main.md' });
+
+      expect(findAll(onlyIn(view, 'test-main'), 'docs-main-hint').length).toBe(
+        1,
+      );
+    });
+
+    it.each([
+      { input: { rows: [] }, parts: 1 },
+      { input: null, parts: 0 },
+    ])('setRecentChanges $parts', ({ input, parts }) => {
+      const { view } = pageView();
+      view.setRecentChanges({ rows: [] });
+
+      view.setRecentChanges(input);
+
+      const article = onlyIn(view, 'docs-article');
+      const bodyIndex = article.children.findIndex(
+        (child) => findAll(child, 'docs-body').length > 0,
+      );
+      expect({
+        parts: onlyIn(view, 'docs-recent-slot').children.length,
+        isUnderTheBody:
+          article.children[bodyIndex + 1].classList.contains(
+            'docs-recent-slot',
+          ),
+      }).toEqual({ parts, isUnderTheBody: true });
+    });
+
+    it('pageLink_Click_FollowsTheFile', () => {
+      const { view, deps } = pageView();
+      const followFile = vi.fn();
+      deps.followFile = followFile;
+      view.setRecentChanges({
+        rows: [
+          {
+            sha: 'abc',
+            subject: 'subject',
+            time: { text: '3h', title: 'then' },
+            pages: [{ title: 'One', path: '/home/one.md' }],
+          },
+        ],
+      });
+
+      onlyIn(view, 'docs-recent-page').click();
+
+      expect(followFile.mock.calls).toEqual([['/home/one.md', null, null]]);
+    });
+
+    it.each([
+      { acts: true, toasts: [] },
+      {
+        acts: false,
+        toasts: ['This link does not open here: wiki:kind/skill'],
+      },
+    ])('followLink_WikiHref $acts', async ({ acts, toasts }) => {
+      const shown = pageView();
+      const followWikiLink = vi.fn(() => acts);
+      shown.deps.followWikiLink = followWikiLink;
+      await shown.view.open(target(null));
+
+      onlyIn(shown.view, 'docs-body').fire('click', {
+        target: {
+          closest: () => ({
+            dataset: { href: 'wiki:kind/skill' },
+            textContent: 'All skills',
+          }),
+        },
+      });
+
+      expect({
+        heard: followWikiLink.mock.calls,
+        toasts: shown.toasts,
+      }).toEqual({ heard: [['wiki:kind/skill', 'All skills']], toasts });
+    });
+
+    it('redraw_ListShown_DrawsThePageAgain', () => {
+      const { view, setLayout } = pageView();
+      view.showPage(list(['a', 'b']));
+      view.scroll(1);
+
+      setLayout({
+        listRow(parent, input, kit) {
+          return { element: kit.el(parent, 'li', 'row-2', input.title) };
+        },
+      });
+      view.redraw();
+
+      expect(
+        findAll(asFake(view.element), 'row-2')
+          .filter((row) => row.classList.contains('is-selected'))
+          .map((row) => row.textContent),
+      ).toEqual(['b']);
+    });
+  });
 });
+
+const LIST_ROW = 'test-list-row';
+const RECENT = 'test-recent';
 
 // The path `target(null)` opens, and another doc's.
 const DOC = '/home/notes.md';

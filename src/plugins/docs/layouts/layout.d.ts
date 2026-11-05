@@ -80,7 +80,7 @@ export interface TreeRowKit extends DocsKit {
 }
 
 // The doc pane, scope `docs.doc`. The app sets `data-doc` on the element the pane draws into: `none` while no doc is
-// open, `open`, or `editing`.
+// open, `open`, `editing`, or `page` while a page with no file shows: a list page or the empty Main page.
 export interface DocPaneKit extends DocsKit {
   // The app's scroller `div.docs-doc`: it holds the doc parts and the editor, scrolls, and takes focus. Appended at
   // the end when left out.
@@ -203,7 +203,8 @@ export interface PickerRowKit extends DocsKit {
 
 // pageFrame, scope docs.doc. Input: Record<string, never>.
 export interface PageFrameKit extends DocsKit {
-  // The app's `div.docs-article`: the header, banner, prompt, body and editor slots. Appended first when left out.
+  // The app's `div.docs-article`: the header, banner, prompt, body, Recent changes, page and editor slots. Appended
+  // first when left out.
   article(parent: HTMLElement): HTMLElement;
   // The app's `div.docs-aside`. The app sets `hidden` on it while it holds nothing, so a layout's CSS does not set
   // `display` on it. Appended last when left out.

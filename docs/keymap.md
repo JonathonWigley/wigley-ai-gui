@@ -39,7 +39,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
   the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, on a
   doc it focuses the docs tree, and in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
-  `y`/`n` confirm (in chat `y` copies with a range open, else allows a waiting permission, else copies), `i`/`a` enter the box, `e` edits the doc's section at the top of sight. Letters are mnemonic verbs.
+  `y`/`n` confirm (in chat `y` copies with a range open, else allows a waiting permission, else copies), `i`/`a` enter the box, `e` edits the doc's section at the top of sight. `gh` opens Docs mode's Main page, from any docs view. On a docs list page `j`/`k` move the row and `l`/`Enter` open it. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `J`/`K` by message beside `j`/`k` by block, `R` rescan. Chat's `V` is vim's line select
   instead, since `v` opens visuals.

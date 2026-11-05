@@ -34,12 +34,14 @@ import {
   buildTree,
   buildWikiFilterTree,
   buildWikiTree,
+  findSkillEntry,
   isStarredLeafId,
   type TreeHeadingMatch,
   type TreeLeaf,
   type TreeNode,
   type TreeWikiLink,
 } from '../tree';
+import { parseWikiTarget } from '../wiki-main';
 import { type DocDetail, type DocTarget, createDocView } from './doc-view';
 import { createDocsDialogs } from './docs-dialogs';
 import {
@@ -54,6 +56,7 @@ import {
   detailFields,
   fileStatuses,
   paneFocusedBy,
+  provisionalEntry,
   readOnlyReason,
   reapplyChange,
   settlePending,
@@ -61,6 +64,17 @@ import {
   treeRowStatus,
 } from './docs-state';
 import { createDocsParts, type DocsScope } from './layout/docs-parts';
+import {
+  listPageContent,
+  listPlace,
+  type ListTarget,
+  listTargetOfPlace,
+} from './list-page';
+import {
+  createRecentReader,
+  linkedPages,
+  MAIN_STARTER_TEXT,
+} from './main-page';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
 import { createWikiMainSource } from './wiki-main-source';
@@ -95,6 +109,7 @@ export interface DocsViewCommands {
   nextSection(): void;
   historyBack(): void;
   historyForward(): void;
+  listOpen(): void;
   quitEditor(): void;
   conflictReload(): void;
   conflictOverwrite(): void;
@@ -123,7 +138,8 @@ export interface DocsView {
   // statuses, again after a fetch, and rebuilds the index when the source
   // can; later calls do nothing. Every rebuild reads the statuses again once
   // it settles. The machine view's first call also starts reading `Main.md`,
-  // and each index run that lands reads it again.
+  // and each index run that lands reads it again; once the first read of each
+  // has settled it shows the Main page, unless an open was asked by then.
   showFirstTime(): void;
   // Rebuilds the source's index, then reads its statuses and reads them
   // again after a fetch, and reads `Main.md` again in the machine view: `R`.
@@ -142,6 +158,9 @@ export interface DocsView {
   // rebuild to settle, resolved or rejected, and checks again; toasts when
   // the index still does not list it.
   openDoc(path: string, line: number | null): void;
+  // Once the first index read and `Main.md`'s have settled, shows the Main page,
+  // unless a newer open was asked; nothing in a view with no wiki.
+  openMain(): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
@@ -208,14 +227,14 @@ export interface DocsViewDeps {
   // Every docs view's `unsavedPath`, this one's included.
   unsavedPaths(): string[];
   // Hears the open doc's path each time a doc opens or the open one moves,
-  // and null once the doc pane is emptied.
+  // and null once the doc pane holds no file.
   openChanged(path: string | null): void;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
   // Whether the tree's container shows it now.
   isTreeShown(): boolean;
-  // Hears each doc opened from the tree, by a leaf's or heading row's click,
-  // `l` or Enter.
+  // Hears each doc or list page opened from the tree, by a row's click, `l` or
+  // Enter, and each Main page `gh` shows.
   leafOpened(): void;
   // Places a dialog element over the window, until the handle's `dispose`.
   addOverlay(element: HTMLElement): Disposable;
@@ -286,7 +305,8 @@ interface AppliedChange {
 // One docs view over an index source: the tree pane and the doc pane, its
 // dialogs placed over the window through `addOverlay`. It reads nothing until
 // its first show. The machine source's view alone has the wiki view in its
-// tree, built from `Main.md`. A change made here shows at once and its paths stay pending
+// tree, built from `Main.md`, the Main page, with Recent changes under it, and
+// the generated list pages. A change made here shows at once and its paths stay pending
 // until an index run asked after it lands; every other view hears it through
 // `changed`.
 export function createDocsView(deps: DocsViewDeps): DocsView {
@@ -315,6 +335,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Each `openDoc` ask's number; one that waited on a rebuild opens only if
   // it is still the newest.
   let askedOpens = 0;
+  // Each list place's title, set by each `openList`; every history place of a
+  // list came from one.
+  const listTitles = new Map<string, string>();
+  // The last shelves tree `showWikiTree` built.
+  let wikiTree: TreeNode[] = [];
   // The plugin-source statuses shown, and their files by entry id.
   let statusRead: PluginStatusRead | null = null;
   let files = fileStatuses(null);
@@ -441,7 +466,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         viewId: deps.viewId,
         channel: deps.channel,
         log,
-        changed: () => showWikiTree(),
+        changed: () => wikiMainChanged(),
       })
     : null;
 
@@ -489,7 +514,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           }
         });
     },
-    openWikiLink: (link: TreeWikiLink) => openWikiLink(link),
+    openWikiLink: (link: TreeWikiLink, focusesDoc: boolean) =>
+      openWikiLink(link, focusesDoc),
     switchView: () => toggleWikiView(),
     pushBoxScope: () => deps.pushScope('box'),
     filterClosed: () => {
@@ -521,9 +547,26 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
   });
 
+  const isMainPath = (path: string | null): boolean => {
+    const mainPath = wikiMain?.path() ?? null;
+    return (
+      path !== null && mainPath !== null && deps.paths.samePath(path, mainPath)
+    );
+  };
+
   const doc = createDocView({
     viewId: deps.viewId,
-    openChanged: deps.openChanged,
+    openChanged: (path) => {
+      deps.openChanged(path);
+      if (wikiMain === null) {
+        return;
+      }
+      if (isMainPath(path)) {
+        recent.refresh();
+      } else {
+        recent.clear();
+      }
+    },
     channel: deps.channel,
     homeDir: deps.homeDir,
     editor: deps.editor,
@@ -543,12 +586,36 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return lastLoaded === null ? null : loadedLine(lastLoaded, deps.now());
     },
     followFile: (path, line, fragment) => followFile(path, line, fragment),
-    followPlace: (path, line) =>
-      openListed(path, line, null, { isHistoryMove: true }),
+    followPlace: (path, line) => {
+      const listTarget = listTargetOfPlace(path);
+      if (listTarget === null) {
+        openListed(path, line, null, { isHistoryMove: true });
+      } else {
+        openList(listTarget, listTitles.get(path)!, { isHistoryMove: true });
+      }
+    },
+    openListEntry: (entryId) => openListEntry(entryId),
+    createMain: () => void createMain(),
+    followWikiLink: (href, title) => followWikiLink(href, title),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
   });
+
+  const recent = createRecentReader({
+    channel: deps.channel,
+    pages: () => linkedPages(wikiTree, (entryId) => entriesById.get(entryId)),
+    now: deps.now,
+    paths: deps.paths,
+    log,
+    show: (input) => doc.setRecentChanges(input),
+  });
+
+  const refreshRecentOnMain = () => {
+    if (isMainPath(doc.openPath())) {
+      recent.refresh();
+    }
+  };
 
   const isListed = (path: string): boolean =>
     document !== null && isIndexedPath(path, document.entries, deps.paths);
@@ -686,6 +753,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       next !== null,
     );
     showWikiTree();
+    const shownPage = doc.shownPage();
+    if (shownPage?.type === 'list') {
+      const { place, input } = shownPage.content;
+      doc.updateList(listContent(listTargetOfPlace(place)!, input.title));
+    }
     doc.setEntries(next?.entries ?? []);
     doc.refreshChips();
   };
@@ -698,7 +770,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     const entries = document?.entries ?? [];
     const mainPath = wikiMain.path();
-    tree.setWikiTree(
+    wikiTree =
       document === null || mainPath === null
         ? []
         : buildWikiTree(
@@ -707,7 +779,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
             deps.paths.parent(mainPath),
             deps.homeDir,
             deps.paths,
-          ),
+          );
+    tree.setWikiTree(
+      wikiTree,
       buildWikiFilterTree(entries, deps.homeDir, deps.paths),
       document !== null && wikiMain.isRead(),
     );
@@ -723,14 +797,166 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     log(`refused ${title}: not in the index`);
   };
 
-  const openWikiLink = (link: TreeWikiLink) => {
+  const listContent = (target: ListTarget, title: string) =>
+    listPageContent(
+      target,
+      title,
+      document?.entries ?? [],
+      deps.homeDir,
+      deps.now(),
+      deps.paths,
+    );
+
+  const openList = (
+    target: ListTarget,
+    title: string,
+    options?: { isHistoryMove?: boolean },
+  ): boolean => {
+    listTitles.set(listPlace(target), title);
+    const content = listContent(target, title);
+    const isShown = doc.showPage({ type: 'list', content }, options);
+    if (isShown) {
+      log(`listed ${title}: ${content.input.count} docs`);
+    }
+    return isShown;
+  };
+
+  const openWikiLink = (link: TreeWikiLink, focusesDoc: boolean) => {
+    const { target } = link;
     if (link.isDangling) {
       refuseMissingPage(link.title);
-    } else if (link.target.type === 'all') {
+    } else if (target.type === 'all') {
       showAllPages();
-    } else {
-      toast('This list page is not drawn yet', 'info');
+    } else if (target.type === 'kind' || target.type === 'owner') {
+      if (openList(target, link.title)) {
+        openedFromTree(focusesDoc);
+      }
     }
+  };
+
+  const openListEntry = (entryId: string) => {
+    const entry = entriesById.get(entryId);
+    if (entry === undefined) {
+      return;
+    }
+    void doc
+      .open(targetFor(entry.path, entry, entry.line, null))
+      .then((opened) => {
+        if (opened) {
+          tree.selectEntry(entry.id);
+        }
+      });
+  };
+
+  // A `wiki:` or `wigley:` link in a rendered body acts as its sidebar row does.
+  const followWikiLink = (href: string, title: string): boolean => {
+    if (!isMachine) {
+      return false;
+    }
+    const target = parseWikiTarget(href);
+    switch (target?.type) {
+      case 'skill': {
+        const entry = findSkillEntry(target.name, document?.entries ?? []);
+        if (entry === null) {
+          refuseMissingPage(title);
+        } else {
+          openListEntry(entry.id);
+        }
+        return true;
+      }
+      case 'kind':
+      case 'owner':
+        openList(target, title);
+        return true;
+      case 'all':
+        deps.revealTree();
+        showAllPages();
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  // Shows `Main.md` as any doc, or the empty Main page with no file. A shown
+  // Main page stays, since a second open would close its editor.
+  const showMain = (isPicked: boolean) => {
+    const path = wikiMain?.path() ?? null;
+    if (wikiMain === null || path === null) {
+      log('no Main page path');
+      return;
+    }
+    const mainReady = () => {
+      log('Main page ready');
+      if (isPicked) {
+        deps.leafOpened();
+      }
+    };
+    const isEmptyMainShown =
+      doc.shownPage()?.type === 'mainEmpty' && !wikiMain.exists();
+    if (isMainPath(doc.openPath()) || isEmptyMainShown) {
+      log('Main page already shows');
+      mainReady();
+      return;
+    }
+    if (!wikiMain.exists()) {
+      const emptyPage = {
+        type: 'mainEmpty',
+        path: deps.paths.tilde(path, deps.homeDir),
+      } as const;
+      if (doc.showPage(emptyPage)) {
+        log('showed the empty Main page');
+        mainReady();
+      }
+      return;
+    }
+    void doc.open(targetFor(path, entryAt(path), null, null)).then((opened) => {
+      if (opened) {
+        log('opened the Main page');
+        mainReady();
+      }
+    });
+  };
+
+  const createMain = async () => {
+    const path = wikiMain?.path() ?? null;
+    if (wikiMain === null || path === null) {
+      return;
+    }
+    try {
+      const created = await deps.channel.invoke('createDoc', {
+        type: 'path',
+        path,
+      });
+      await deps.channel.invoke(
+        'writeDoc',
+        created.path,
+        MAIN_STARTER_TEXT,
+        '',
+      );
+      const entry = provisionalEntry(
+        created.path,
+        'reference',
+        document?.entries ?? [],
+        deps.paths,
+      );
+      applyDocChange({ type: 'created', entry }, null);
+      await wikiMain.reread();
+      await openInEditor(entry, created.line);
+      log('created Main.md');
+    } catch (error) {
+      toast(errorText(error), 'error');
+      log(`Main.md not created: ${errorText(error)}`);
+    }
+  };
+
+  // `Main.md` read another text: its links changed, and a file that appeared
+  // replaces the empty Main page.
+  const wikiMainChanged = () => {
+    showWikiTree();
+    if (doc.shownPage()?.type === 'mainEmpty' && wikiMain?.exists() === true) {
+      showMain(false);
+    }
+    refreshRecentOnMain();
   };
 
   const toggleWikiView = () => {
@@ -777,6 +1003,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
                 built,
               ),
         );
+        refreshRecentOnMain();
         log(resultLine(result, run));
         if (number === startedLoads) {
           tree.setStatus(result.message);
@@ -1036,6 +1263,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     nextSection: () => doc.moveSection(1),
     historyBack: () => doc.historyBack(),
     historyForward: () => doc.historyForward(),
+    listOpen: () => doc.listOpen(),
     quitEditor: () => doc.quitEditor(),
     conflictReload: () => doc.conflictReload(),
     conflictOverwrite: () => doc.conflictOverwrite(),
@@ -1116,6 +1344,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       void runs.then(() => {
         firstShowRuns = null;
       });
+      if (wikiMain !== null) {
+        void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
+          if (askedOpens === 0 && doc.isBlank()) {
+            showMain(false);
+          }
+        });
+      }
     },
     rescan() {
       hasRun = true;
@@ -1149,6 +1384,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         }
         followFile(path, line, null);
       })();
+    },
+    openMain() {
+      if (wikiMain === null) {
+        return;
+      }
+      const number = ++askedOpens;
+      void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
+        if (number === askedOpens) {
+          showMain(true);
+        }
+      });
     },
     closeOverlays() {
       tree.dismissFilter();

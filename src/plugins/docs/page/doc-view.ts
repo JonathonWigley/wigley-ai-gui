@@ -30,6 +30,7 @@ import type {
   AsideHeadingInput,
   AsideLinkInput,
   DocHeaderInput,
+  RecentChangesInput,
 } from '../layouts/layout';
 import { linkedFrom } from '../linked-from';
 import { type LinkTarget, resolveLink } from '../links';
@@ -56,6 +57,8 @@ import {
   relocateSection,
   sectionMoveTarget,
 } from './section-edit';
+import { createListPane } from './list-pane';
+import type { ListPageContent } from './list-page';
 import { linkSections } from './section-links';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import { type DocsParts, type DrawnPart } from './layout/docs-parts';
@@ -82,6 +85,11 @@ export interface DocDetail {
   // Null when there is no file to edit; the finder toasts why.
   editFile(): Promise<DetailFile | null>;
 }
+
+// A page the doc pane shows with no file behind it.
+export type DocPage =
+  | { type: 'list'; content: ListPageContent }
+  | { type: 'mainEmpty'; path: string };
 
 // What the doc pane opens.
 export interface DocTarget {
@@ -128,8 +136,15 @@ export interface DocViewDeps {
   // Draws the pane's parts through the docs layout.
   parts: DocsParts;
   // Hears the open doc's path each time a doc opens or the open one moves,
-  // and null once the pane is emptied.
+  // and null once the pane holds no file.
   openChanged(path: string | null): void;
+  // Opens a list page's row.
+  openListEntry(entryId: string): void;
+  // Creates the Main page the empty Main page offers.
+  createMain(): void;
+  // Acts on a `wiki:` or `wigley:` link in the rendered body with the link's
+  // text; false when it is no link this view acts on.
+  followWikiLink(href: string, title: string): boolean;
 }
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
@@ -159,7 +174,11 @@ export interface DocViewDeps {
 // `open` resolves to whether the doc opened. The body's section references the
 // index lists draw as links, and the pane keeps one history of the places shown:
 // every open and every move within the doc records, and `historyBack` and
-// `historyForward` move through them.
+// `historyForward` move through them. A page with no file (a generated list page,
+// or the empty Main page) draws in the same frame in place of a doc: `openPath`
+// is null while one shows, and a list page is a history place. Recent changes
+// draws under the rendered body whenever its input is set, and hides with the
+// body under the whole-file editor.
 export interface DocView {
   element: HTMLElement;
   // `isHistoryMove` records no place, for an open the history itself asked for.
@@ -168,18 +187,33 @@ export interface DocView {
     options?: { isHistoryMove?: boolean },
   ): Promise<boolean>;
   openPath(): string | null;
+  // Replaces the doc or page shown with `page`, closing a clean editor; false
+  // while unsaved edits refuse. `isHistoryMove` records no place.
+  showPage(page: DocPage, options?: { isHistoryMove?: boolean }): boolean;
+  // Draws the shown list's new content at the scroll it had, recording no place;
+  // nothing while no list shows.
+  updateList(content: ListPageContent): void;
+  shownPage(): DocPage | null;
+  // True until any open or page is asked, one in flight included.
+  isBlank(): boolean;
+  // Draws Recent changes under the body, or removes it on null.
+  setRecentChanges(input: RecentChangesInput | null): void;
+  // Opens the list's cursor row; on any other page, clicks the focused link or
+  // button in the pane, since the bind takes Enter from the browser.
+  listOpen(): void;
   // The open doc's file moved: the pane, its editor included, follows it to
   // `target`, watching the new path. An open editor's frame keeps the name
   // and path it opened with, since the editor never moves while open.
   retarget(target: DocTarget): void;
-  // Empties the pane, its editor dropped and its watch stopped.
+  // Empties the pane, its editor dropped and its watch stopped; a page stays.
   clear(): void;
   refreshChips(): void;
   // Holds the index's entries and draws the right column again, and the body
   // when the shown doc's section links changed and no editor is open.
   setEntries(entries: readonly IndexEntry[]): void;
   diskChanged(path: string): void;
-  // Opens the editor at `line`, else at the top visible line.
+  // Opens the editor at `line`, else at the top visible line. On the empty Main
+  // page it creates the page instead.
   edit(line?: number): void;
   // Opens the section at the top of sight in the editor, or the whole file
   // when no section holds that line; only focuses an editor already open.
@@ -194,7 +228,7 @@ export interface DocView {
   // refusing while it holds unsaved edits, the history's position unmoved.
   historyBack(): void;
   historyForward(): void;
-  // Scrolls the pane a line, logging nothing.
+  // Scrolls the pane a line, logging nothing; moves the cursor on a list page.
   scroll(by: 1 | -1): void;
   // Scrolls the open editor by `step`, else the pane, and logs how far it
   // moved; for the editor, once its scroll has settled, also the line at the
@@ -413,16 +447,32 @@ export function createDocView(deps: DocViewDeps): DocView {
   anchors.push(
     deps.anchor(sectionHint, 'editSection', { scope: 'doc', label: 'section' }),
   );
+  // The empty Main page's offer, for the view's life: `i` is its key.
+  const mainHint = element('span', 'docs-main-hint');
+  anchors.push(
+    deps.anchor(mainHint, 'edit', { scope: 'doc', label: 'create it' }),
+  );
+  rowAction(mainHint, () => deps.createMain());
   const emptySlot = partSlot();
   const frameSlot = partSlot();
   const headerSlot = partSlot();
   const bannerSlot = partSlot();
   const promptSlot = partSlot();
   const bodySlot = partSlot();
+  const recentSlot = element('div', 'docs-slot docs-recent-slot');
+  const pageSlot = element('div', 'docs-slot docs-page-slot');
   const editorSlot = partSlot();
   pane.append(emptySlot, frameSlot);
   const article = element('div', 'docs-article');
-  article.append(headerSlot, bannerSlot, promptSlot, bodySlot, editorSlot);
+  article.append(
+    headerSlot,
+    bannerSlot,
+    promptSlot,
+    bodySlot,
+    recentSlot,
+    pageSlot,
+    editorSlot,
+  );
   const aside = element('div', 'docs-aside');
   aside.hidden = true;
   const onThisPageSection = element('div', 'docs-aside-section');
@@ -431,6 +481,19 @@ export function createDocView(deps: DocViewDeps): DocView {
   const bodyMount = createMarkdownMount(deps.markdown, deps.log);
   body.addEventListener('click', followLink);
   const editorBox = element('div', 'docs-editor');
+  const listPane = createListPane({
+    slot: pageSlot,
+    parts,
+    openEntry: (entryId) => deps.openListEntry(entryId),
+  });
+  pane.addEventListener('focusin', () => listPane.setFocused(true));
+  pane.addEventListener('focusout', (event) => {
+    const next = event.relatedTarget;
+    const isLeavingPane = !(next instanceof Node && pane.contains(next));
+    if (isLeavingPane) {
+      listPane.setFocused(false);
+    }
+  });
 
   let drawnPane: DrawnPart | null = null;
   let drawnFrame: DrawnPart | null = null;
@@ -443,6 +506,9 @@ export function createDocView(deps: DocViewDeps): DocView {
   let drawnPrompt: DrawnPart | null = null;
   let drawnBody: DrawnPart | null = null;
   let drawnEditorFrame: DrawnPart | null = null;
+  let drawnMainEmpty: DrawnPart | null = null;
+  let drawnRecent: DrawnPart | null = null;
+  let recentInput: RecentChangesInput | null = null;
   // The fields the body part shows with the rendered body.
   let bodyFields: [string, string][] = [];
   // A layout reload while the editor was open left the pane's frame and the
@@ -455,6 +521,8 @@ export function createDocView(deps: DocViewDeps): DocView {
   let scrollTopBeforeEdit = 0;
 
   let shown: ShownDoc | null = null;
+  // The page with no file shown; never set while `shown` is.
+  let page: DocPage | null = null;
   // The index's entries, which Linked from and the section links read.
   let entries: readonly IndexEntry[] = [];
   // The JSON of the section links the body drew with.
@@ -518,10 +586,17 @@ export function createDocView(deps: DocViewDeps): DocView {
     drawnEmpty = null;
   };
 
-  // `data-doc` on the pane's root: no doc, a doc open, or its editor open.
+  // `data-doc` on the pane's root: a page with no file, no doc, a doc open, or
+  // its editor open.
   const showDocState = () => {
     root.dataset.doc =
-      shown === null ? 'none' : editor === null ? 'open' : 'editing';
+      page !== null
+        ? 'page'
+        : shown === null
+          ? 'none'
+          : editor === null
+            ? 'open'
+            : 'editing';
   };
 
   // Whether the history can move each way, on the element `data-doc` is on.
@@ -533,6 +608,14 @@ export function createDocView(deps: DocViewDeps): DocView {
   const recordPlace = (place: DocPlace) => {
     history.push(place);
     showHistoryEdges();
+  };
+
+  // The place the shown doc is being left at; a detail or an open editor is no
+  // place to return to.
+  const recordPlaceLeft = () => {
+    if (shown !== null && editor === null && shown.target.detail === null) {
+      recordPlace(placeInSight(shown));
+    }
   };
 
   // `i` and `e` refuse on a read-only doc, and inside the editor both are
@@ -651,6 +734,66 @@ export function createDocView(deps: DocViewDeps): DocView {
       part.placeIfLeftOut(drawnBody.element);
     }
     drawnBody.element.hidden = editor !== null && editingSection === null;
+  };
+
+  const drawMainEmpty = (path: string) => {
+    drawnMainEmpty?.dispose();
+    let placing: AppSlot[] = [];
+    drawnMainEmpty = parts.draw(
+      'mainEmpty',
+      pageSlot,
+      { path },
+      (kit, slotFor) => {
+        const placed = slotFor(mainHint, 'createMainHint');
+        placing = [placed];
+        return { ...kit, createMainHint: placed.place };
+      },
+    );
+    for (const part of placing) {
+      part.placeIfLeftOut(drawnMainEmpty.element);
+    }
+  };
+
+  const drawPage = (shownPage: DocPage) => {
+    if (shownPage.type === 'list') {
+      listPane.show(shownPage.content);
+    } else {
+      drawMainEmpty(shownPage.path);
+    }
+  };
+
+  const disposePage = () => {
+    listPane.clear();
+    drawnMainEmpty?.dispose();
+    drawnMainEmpty = null;
+  };
+
+  // A recent page's link: outside the body, so `followLink` does not hear it.
+  const recentPageLink = (
+    parent: HTMLElement,
+    title: string,
+    path: string,
+  ): HTMLElement => {
+    const link = element('a', 'md-link docs-recent-page', title);
+    link.href = '#';
+    link.title = deps.paths.tilde(path, deps.homeDir);
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      deps.followFile(path, null, null);
+    });
+    parent.append(link);
+    return link;
+  };
+
+  const drawRecent = () => {
+    drawnRecent?.dispose();
+    drawnRecent =
+      recentInput === null
+        ? null
+        : parts.draw('recentChanges', recentSlot, recentInput, (kit) => ({
+            ...kit,
+            pageLink: recentPageLink,
+          }));
   };
 
   const disposeAside = () => {
@@ -969,7 +1112,9 @@ export function createDocView(deps: DocViewDeps): DocView {
         }
         break;
       case 'unsupported':
-        deps.toast(`This link does not open here: ${target.href}`, 'info');
+        if (!deps.followWikiLink(target.href, anchor.textContent ?? '')) {
+          deps.toast(`This link does not open here: ${target.href}`, 'info');
+        }
         break;
     }
   }
@@ -1504,6 +1649,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawAside();
     }
     drawSectionControls();
+    if (page !== null) {
+      drawPage(page);
+    }
+    if (recentInput !== null) {
+      drawRecent();
+    }
   };
 
   // Moves one place through the history, and leaves the position unmoved while
@@ -1568,13 +1719,8 @@ export function createDocView(deps: DocViewDeps): DocView {
         return false;
       }
       const isRecorded = options?.isHistoryMove !== true;
-      if (
-        isRecorded &&
-        shown !== null &&
-        editor === null &&
-        shown.target.detail === null
-      ) {
-        recordPlace(placeInSight(shown));
+      if (isRecorded) {
+        recordPlaceLeft();
       }
       if (shown !== null && editor !== null) {
         closeEditor(shown);
@@ -1587,6 +1733,8 @@ export function createDocView(deps: DocViewDeps): DocView {
         text,
         bodyStartLine: rendered.bodyStartLine,
       };
+      page = null;
+      disposePage();
       deps.openChanged(target.path);
       removeEmpty();
       showDocState();
@@ -1616,6 +1764,65 @@ export function createDocView(deps: DocViewDeps): DocView {
       return true;
     },
     openPath: () => shown?.target.path ?? null,
+    showPage(next, options) {
+      if (view.refuseWithUnsavedEdits()) {
+        return false;
+      }
+      openCount++;
+      const isRecorded = options?.isHistoryMove !== true;
+      if (isRecorded) {
+        recordPlaceLeft();
+      }
+      if (shown !== null && editor !== null) {
+        closeEditor(shown);
+      }
+      if (shown !== null) {
+        watchFile(null, shown.name);
+        shown = null;
+        deps.openChanged(null);
+      }
+      disposePage();
+      removeEmpty();
+      showBanner(false);
+      drawHeader();
+      drawBody({ fields: [], html: '', bodyStartLine: 1, liveFences: true });
+      page = next;
+      showDocState();
+      pane.scrollTop = 0;
+      drawPage(next);
+      if (next.type === 'list' && isRecorded) {
+        recordPlace({ path: next.content.place, line: null });
+      }
+      return true;
+    },
+    updateList(content) {
+      if (page?.type !== 'list') {
+        return;
+      }
+      page = { type: 'list', content };
+      const { scrollTop } = pane;
+      listPane.show(content);
+      pane.scrollTop = scrollTop;
+    },
+    shownPage: () => page,
+    isBlank: () => openCount === 0 && shown === null && page === null,
+    setRecentChanges(input) {
+      if (isDisposed) {
+        return;
+      }
+      recentInput = input;
+      drawRecent();
+    },
+    listOpen() {
+      if (listPane.isShown()) {
+        listPane.openCursor();
+        return;
+      }
+      const active = pane.ownerDocument.activeElement;
+      if (active !== null && pane.contains(active)) {
+        active.closest<HTMLElement>('a, button')?.click();
+      }
+    },
     retarget(target) {
       const doc = shown;
       if (doc === null || isDisposed) {
@@ -1672,6 +1879,10 @@ export function createDocView(deps: DocViewDeps): DocView {
       );
     },
     edit(line) {
+      if (page?.type === 'mainEmpty') {
+        deps.createMain();
+        return;
+      }
       const doc = shown;
       if (doc === null) {
         return;
@@ -1760,6 +1971,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     historyBack: () => moveInHistory(-1),
     historyForward: () => moveInHistory(1),
     scroll(by) {
+      if (listPane.isShown()) {
+        listPane.move(by);
+        return;
+      }
       pane.scrollTop += by * textLineHeightPx(pane);
     },
     scrollBy(step, direction) {
@@ -1858,6 +2073,8 @@ export function createDocView(deps: DocViewDeps): DocView {
         drawnBanner,
         drawnBody,
         drawnEditorFrame,
+        drawnMainEmpty,
+        drawnRecent,
       ];
       callEach<() => void>(
         [
@@ -1868,6 +2085,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           () => disposeAnchors(anchors),
           () => bodyMount.dispose(),
           () => disposeSectionControls(),
+          () => listPane.dispose(),
           ...drawn.map((part) => () => part?.dispose()),
         ],
         (step) => step(),

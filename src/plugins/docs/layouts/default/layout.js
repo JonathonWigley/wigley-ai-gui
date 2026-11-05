@@ -22,6 +22,7 @@ const TREE_HINTS = [
   ['createByPath', 'file'],
   ['rescan', 'rescan'],
   ['pickContext', 'folder'],
+  ['openMain', 'main'],
 ];
 
 /** @type {import('../layout').CompleteLayout} */
@@ -105,6 +106,7 @@ const layout = {
     edge.classList.add('docs-edge', 'docs-edge--start');
     const history = kit.el(top, 'div', 'docs-history');
     kit.edge(history, 'historyBack', { side: 'start', label: 'back' });
+    kit.keyHint(history, 'openMain', { label: 'main' });
     kit.edge(history, 'historyForward', { side: 'end', label: 'forward' });
     kit.scroller(frame);
     return { element: frame };

@@ -58,7 +58,7 @@ function pagesOn(line: string): WikiItem[] {
     );
     const target = isInCodeSpan
       ? null
-      : targetOf(withoutAngleBrackets(link[2]));
+      : parseWikiTarget(withoutAngleBrackets(link[2]));
     if (target !== null) {
       pages.push({ type: 'page', title: link[1], target });
     }
@@ -70,8 +70,9 @@ function withoutAngleBrackets(target: string): string {
   return target.startsWith('<') ? target.slice(1, -1) : target;
 }
 
-// Null is a `wiki:` link no page can act on, which adds no item.
-function targetOf(text: string): WikiTarget | null {
+// What a link's target text names. Null is a `wiki:` link no page can act on,
+// which adds no item.
+export function parseWikiTarget(text: string): WikiTarget | null {
   if (text === 'wiki:all') {
     return { type: 'all' };
   }

@@ -168,11 +168,17 @@ export function buildTree(
 // One leaf per starred entry, ids `owner:starred/entry:<entryId>`, titled as
 // the entry, so each stays unique beside its leaf in its usual place.
 function starredNode(entries: readonly IndexEntry[], paths: Paths): TreeGroup {
-  const leaves = [...entries]
-    .sort(byLoaded(byTitleThenId))
+  const leaves = newestLoadedFirst(entries)
     .map(leaf)
     .map((usual) => ({ ...usual, id: `${STARRED_LEAF_PREFIX}${usual.id}` }));
   return group(STARRED_ROOT_ID, 'Starred', entries, leaves, paths);
+}
+
+// The newest `lastLoaded` first, then the never-loaded, each by title then id.
+export function newestLoadedFirst(
+  entries: readonly IndexEntry[],
+): IndexEntry[] {
+  return [...entries].sort(byLoaded(byTitleThenId));
 }
 
 const STARRED_LEAF_PREFIX = `${STARRED_ROOT_ID}/`;
@@ -730,7 +736,7 @@ function pageEntry(
     return pathEntry(target.path, entries, mainFile, homeDir, paths);
   }
   if (target.type === 'skill') {
-    return skillEntry(target.name, entries);
+    return findSkillEntry(target.name, entries);
   }
   return null;
 }
@@ -761,7 +767,7 @@ function pathEntry(
 const WIKI_SKILL_PLUGIN_PREFIX = 'wigley@';
 
 // The skill titled `name` in the plugin the `wigley:` link form names.
-function skillEntry(
+export function findSkillEntry(
   name: string,
   entries: readonly IndexEntry[],
 ): IndexEntry | null {
