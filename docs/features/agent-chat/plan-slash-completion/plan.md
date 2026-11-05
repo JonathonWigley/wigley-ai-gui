@@ -264,3 +264,4 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - design.md says the description follows the name in a dim box, not a column — it does not line up across rows · group 06 · group 06
 ### Review rounds
 ### Test gate
+- Picks: typecheck, lint, npm test, and the touched plugins' self-test groups (chat, settings, docs, backlog, notes, sessions, agent-lines), since AGENTS.md keeps the whole self-test for the user's ask in that turn · typecheck 0, lint 0, npm test 463 files 8309 pass; self-test 582 PASS, 1 FAIL (Escape␣zla fits the held width: session-row 156px in 149px), no page reload lines; the failure sits in the Sessions row layout, which this run's commits do not touch
