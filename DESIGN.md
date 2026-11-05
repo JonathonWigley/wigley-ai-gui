@@ -171,14 +171,15 @@ means something.
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
   the side bar's opening width `sidebar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
-  `icon-size`. The title bar leaves `traffic-light-inset` at its left for macOS's window
+  `icon-size`, the docs page's right column `docs.aside-width`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
   inputs, cards and code blocks; `radius-lg` for sheets, menus and pickers; `radius-xl` for
   dialogs and the composer. One radius on everything flattens the hierarchy.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
-- **Breakpoints** (raw in `@media` and `@container`): `800px` tightens content padding; `680px` lays the side bar
+- **Breakpoints** (raw in `@media` and `@container`): `920px` on the `docs-doc` container hides the docs page's right
+  column; `800px` tightens content padding; `680px` lays the side bar
   over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
   least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
@@ -471,7 +472,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
 - **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
-  with `radius-md` and no border.
+  with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
+  page and Linked from and sticks while the article scrolls.
 - **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows,
   each a label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the
   user set carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame,

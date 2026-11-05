@@ -7,7 +7,7 @@
 //
 // An app part (a kit member that places one of the app's own elements, such as `filterBox` or `body`) is placed at
 // most once per draw; a second placement throws, and the part draws with `default`. An app part the builder leaves
-// out is appended at the end of the part's root element.
+// out is appended at the end of the part's root element, unless its comment places it elsewhere.
 import type {
   BaseKit,
   ButtonVariant,
@@ -186,6 +186,88 @@ export interface PickerRowKit extends DocsKit {
   trailing(): HTMLElement | null;
 }
 
+// pageFrame, scope docs.doc. Input: Record<string, never>.
+export interface PageFrameKit extends DocsKit {
+  // The app's `div.docs-article`: the header, banner, prompt, body and editor slots. Appended first when left out.
+  article(parent: HTMLElement): HTMLElement;
+  // The app's `div.docs-aside`. The app sets `hidden` on it while it holds nothing, so a layout's CSS does not set
+  // `display` on it. Appended last when left out.
+  aside(parent: HTMLElement): HTMLElement;
+}
+// pageAside, scope docs.doc. Input: Record<string, never>.
+export interface PageAsideKit extends DocsKit {
+  // The app's `div.docs-aside-section` for On this page. The app fills it with one `asideHeading` and an `asideLink`
+  // per heading, and sets `hidden` on it while the doc has no heading. Appended first when left out.
+  onThisPage(parent: HTMLElement): HTMLElement;
+  // The same for Linked from, hidden while no doc links here. Appended last when left out.
+  linkedFrom(parent: HTMLElement): HTMLElement;
+}
+// asideHeading, scope docs.doc. `kind: 'sections'` is the heading of what `Ctrl+h` and `Ctrl+l` move through.
+export interface AsideHeadingInput {
+  title: string;
+  kind: 'sections' | 'linkedFrom';
+}
+// asideLink, scope docs.doc. The app sets the click and the `title` (the tooltip) on the root, and keeps the mouse
+// from taking focus there, so an `asideLink` gives `kit.row` no `onClick`. The app sets the section's `title` on an
+// On this page row, and the `~` path on a Linked from row. `depth` indents a heading under its parent.
+export interface AsideLinkInput {
+  title: string;
+  depth: number;
+}
+// sectionEditControl, scope docs.doc: drawn inside a rendered heading.
+export interface SectionEditControlInput {
+  // The section's heading text.
+  title: string;
+}
+export interface SectionEditControlKit extends DocsKit {
+  // Opens this section in the editor.
+  openSection(): void;
+}
+// recentChanges, scope docs.doc.
+export interface RecentChangesInput {
+  rows: {
+    sha: string;
+    subject: string;
+    time: { text: string; title: string };
+    pages: { title: string; path: string }[];
+  }[];
+}
+export interface RecentChangesKit extends DocsKit {
+  // Appends the app's link to the page at `path` to `parent` and returns it.
+  pageLink(parent: HTMLElement, title: string, path: string): HTMLElement;
+}
+// listRow, scope docs.doc. The app sets `is-selected`, `is-cursor` and the click on the row's root element.
+export interface ListRowInput {
+  title: string;
+  path: string;
+  time: { text: string; title: string } | null;
+}
+// listPage, scope docs.doc.
+export interface ListPageInput {
+  title: string;
+  count: number;
+  groups: { title: string; rows: ListRowInput[] }[];
+}
+export interface ListPageKit extends DocsKit {
+  // The app's `ol.docs-list-rows` for group `groupIndex`, which the app fills with `listRow` parts. One slot per group,
+  // each placed at most once per draw. One left out is appended at the end of the part's root, in group order.
+  rows(parent: HTMLElement, groupIndex: number): HTMLElement;
+}
+// sidebarSwitch, scope docs.tree. Its kit is DocsKit. The app sets the click on the root and keeps the mouse from
+// taking focus there; a click anywhere on the control switches the view.
+export interface SidebarSwitchInput {
+  view: 'wiki' | 'all';
+}
+// mainEmpty, scope docs.doc.
+export interface MainEmptyInput {
+  // The Main page's path, shown with `~`.
+  path: string;
+}
+export interface MainEmptyKit extends DocsKit {
+  // The app's hint that offers to create the Main page. Appended at the end of the part's root when left out.
+  createMainHint(parent: HTMLElement): HTMLElement;
+}
+
 export interface Layout {
   treePane?(
     parent: HTMLElement,
@@ -257,6 +339,52 @@ export interface Layout {
     parent: HTMLElement,
     input: PickerRowInput,
     kit: PickerRowKit,
+  ): LayoutPart;
+  pageFrame?(
+    parent: HTMLElement,
+    input: Record<string, never>,
+    kit: PageFrameKit,
+  ): LayoutPart;
+  pageAside?(
+    parent: HTMLElement,
+    input: Record<string, never>,
+    kit: PageAsideKit,
+  ): LayoutPart;
+  asideHeading?(
+    parent: HTMLElement,
+    input: AsideHeadingInput,
+    kit: DocsKit,
+  ): LayoutPart;
+  asideLink?(
+    parent: HTMLElement,
+    input: AsideLinkInput,
+    kit: DocsKit,
+  ): LayoutPart;
+  sectionEditControl?(
+    parent: HTMLElement,
+    input: SectionEditControlInput,
+    kit: SectionEditControlKit,
+  ): LayoutPart;
+  recentChanges?(
+    parent: HTMLElement,
+    input: RecentChangesInput,
+    kit: RecentChangesKit,
+  ): LayoutPart;
+  listPage?(
+    parent: HTMLElement,
+    input: ListPageInput,
+    kit: ListPageKit,
+  ): LayoutPart;
+  listRow?(parent: HTMLElement, input: ListRowInput, kit: DocsKit): LayoutPart;
+  sidebarSwitch?(
+    parent: HTMLElement,
+    input: SidebarSwitchInput,
+    kit: DocsKit,
+  ): LayoutPart;
+  mainEmpty?(
+    parent: HTMLElement,
+    input: MainEmptyInput,
+    kit: MainEmptyKit,
   ): LayoutPart;
 }
 export interface CompleteLayout extends Required<Layout> {}

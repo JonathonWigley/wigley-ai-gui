@@ -111,8 +111,10 @@
   }
 }
 
-/* The doc pane's scroller. */
+/* The doc pane's scroller, the container the page frame's right column
+   queries. */
 .docs-doc {
+  container: docs-doc / size;
   flex: 1;
   min-height: 0;
   min-width: 0;

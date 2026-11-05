@@ -1,15 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../../shared/fake-fuzzy-matcher.test-support';
 import { element } from '../../../../shared/page/dom';
+import type { BaseKit } from '../../../../shared/page/layout-host/kit';
 import {
   USER_LAYOUT,
   withUser,
 } from '../../../../shared/page/layout-host/test-layouts';
-import { asFake, installFocusFakeDom } from '../../../../shared/page/test-dom';
+import {
+  asFake,
+  findAll,
+  installFocusFakeDom,
+} from '../../../../shared/page/test-dom';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
 import { fakeDocsParts, noAnchor } from '../docs-page-fakes';
 import { createTreeView } from '../tree-view';
+import { createDocsParts, type DocsScope } from './docs-parts';
+
+// A user layout that defines no part.
+const NO_PARTS: Layout = {};
 
 // A layout whose `diskBanner` draws `div.<marker>`.
 function bannerLayout(marker: string): Layout {
@@ -169,6 +178,92 @@ describe('createDocsParts', () => {
     ).toEqual([{ command: 'docs.backToTree', isDisposed: true }]);
     expect(asFake(slot).contains(asFake(editHint))).toBe(false);
   });
+
+  it.each([
+    { part: 'pageFrame', scope: 'doc' },
+    { part: 'pageAside', scope: 'doc' },
+    { part: 'asideHeading', scope: 'doc' },
+    { part: 'asideLink', scope: 'doc' },
+    { part: 'sectionEditControl', scope: 'doc' },
+    { part: 'recentChanges', scope: 'doc' },
+    { part: 'listPage', scope: 'doc' },
+    { part: 'listRow', scope: 'doc' },
+    { part: 'sidebarSwitch', scope: 'tree' },
+    { part: 'mainEmpty', scope: 'doc' },
+  ] as const)('draw_NewPart_FiresInItsScope $part', ({ part, scope }) => {
+    const scopes: DocsScope[] = [];
+    const kitFree = {
+      [part](parent: HTMLElement) {
+        const root = element('div');
+        parent.append(root);
+        return { element: root };
+      },
+    } as Layout;
+    const parts = createDocsParts({
+      layouts: () => withUser(defaultLayout, kitFree),
+      defaultLayout,
+      baseKit(drawScope) {
+        scopes.push(drawScope);
+        return {} as BaseKit;
+      },
+      log: () => undefined,
+    });
+
+    parts.draw(part, slotElement(), {}, (kit) => kit);
+
+    expect(scopes).toEqual([scope]);
+  });
+
+  it('listPage_DefaultDraw_PlacesEachGroupsRowsInOrder', () => {
+    const { parts } = fakeDocsParts(() => withUser(defaultLayout, NO_PARTS));
+    const placed: number[] = [];
+
+    const drawn = parts.draw(
+      'listPage',
+      slotElement(),
+      {
+        title: 'Skills',
+        count: 3,
+        groups: [
+          { title: 'Mine', rows: [] },
+          { title: 'Third-party', rows: [] },
+        ],
+      },
+      (kit) => ({
+        ...kit,
+        rows(parent, groupIndex) {
+          placed.push(groupIndex);
+          return kit.el(parent, 'ol', 'docs-list-rows');
+        },
+      }),
+    );
+
+    expect(placed).toEqual([0, 1]);
+    expect(drawn.layoutName).toBe('default');
+  });
+
+  it.each([
+    { view: 'wiki', shown: 'Wiki' },
+    { view: 'all', shown: 'All pages' },
+  ] as const)(
+    'sidebarSwitch_DefaultDraw_MarksTheShownView $view',
+    ({ view, shown }) => {
+      const { parts } = fakeDocsParts(() => withUser(defaultLayout, NO_PARTS));
+
+      const drawn = parts.draw(
+        'sidebarSwitch',
+        slotElement(),
+        { view },
+        (kit) => kit,
+      );
+
+      expect(
+        findAll(asFake(drawn.element), 'is-active').map(
+          (option) => option.textContent,
+        ),
+      ).toEqual([shown]);
+    },
+  );
 });
 
 function headerInput() {

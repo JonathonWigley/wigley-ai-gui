@@ -129,5 +129,7 @@ export const docsManifest = definePlugin({
       description: "How many commits the Main page's Recent changes lists.",
     },
   },
-  themeTokens: {},
+  themeTokens: {
+    'aside-width': { kind: 'length', default: '240px' },
+  },
 });

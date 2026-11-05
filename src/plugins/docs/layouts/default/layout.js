@@ -195,7 +195,129 @@ const layout = {
       }),
     };
   },
+  pageFrame(parent, _input, kit) {
+    const frame = kit.el(parent, 'div', 'docs-page-frame');
+    kit.article(frame);
+    kit.aside(frame);
+    return { element: frame };
+  },
+  pageAside(parent, _input, kit) {
+    const aside = kit.el(parent, 'div', 'docs-aside-body');
+    kit.onThisPage(aside);
+    kit.linkedFrom(aside);
+    return { element: aside };
+  },
+  asideHeading(parent, input, kit) {
+    const heading = kit.el(parent, 'div', 'docs-aside-heading');
+    if (input.kind === 'sections') {
+      kit.edge(heading, 'prevSection', { side: 'start' });
+    }
+    kit.el(heading, 'span', 'docs-aside-title', input.title);
+    if (input.kind === 'sections') {
+      kit.edge(heading, 'nextSection', { side: 'end' });
+    }
+    return { element: heading };
+  },
+  asideLink(parent, input, kit) {
+    return {
+      element: kit.row(parent, {
+        density: 'tree',
+        label: input.title,
+        depth: input.depth,
+      }),
+    };
+  },
+  sectionEditControl(parent, _input, kit) {
+    const button = kit.button(parent, 'edit', kit.openSection, {
+      variant: 'ghost',
+    });
+    button.classList.add('docs-section-edit');
+    return { element: button };
+  },
+  recentChanges(parent, input, kit) {
+    const recent = kit.el(parent, 'div', 'docs-recent');
+    kit.sectionHeader(recent, 'Recent changes');
+    if (input.rows.length === 0) {
+      kit.el(
+        recent,
+        'p',
+        'docs-recent-empty',
+        'No commits touch these pages yet',
+      );
+    }
+    for (const row of input.rows) {
+      const line = kit.el(recent, 'div', 'docs-recent-row');
+      kit.el(line, 'span', 'docs-recent-time', row.time.text).title =
+        row.time.title;
+      kit.el(line, 'span', 'docs-recent-subject', row.subject).title = row.sha;
+      const pages = kit.el(line, 'span', 'docs-recent-pages');
+      for (const page of row.pages) {
+        kit.pageLink(pages, page.title, page.path);
+      }
+    }
+    return { element: recent };
+  },
+  listPage(parent, input, kit) {
+    const page = kit.el(parent, 'div', 'docs-list-page');
+    kit.el(page, 'h1', 'docs-title', input.title);
+    kit.el(
+      page,
+      'div',
+      'docs-list-count',
+      input.count === 1 ? '1 doc' : `${input.count} docs`,
+    );
+    for (const [index, group] of input.groups.entries()) {
+      kit.sectionHeader(page, group.title);
+      kit.rows(page, index);
+    }
+    return { element: page };
+  },
+  listRow(parent, input, kit) {
+    return {
+      element: kit.row(parent, {
+        density: 'list',
+        tag: 'li',
+        label: input.title,
+        detail: input.path,
+        trailing: listRowTime(parent, input, kit),
+      }),
+    };
+  },
+  sidebarSwitch(parent, input, kit) {
+    const control = kit.el(parent, 'div', 'docs-sidebar-switch');
+    const wiki = kit.el(control, 'span', 'docs-sidebar-switch-option', 'Wiki');
+    const all = kit.el(
+      control,
+      'span',
+      'docs-sidebar-switch-option',
+      'All pages',
+    );
+    (input.view === 'wiki' ? wiki : all).classList.add('is-active');
+    return { element: control };
+  },
+  mainEmpty(parent, input, kit) {
+    const empty = kit.emptyState(parent, `No Main page at ${input.path}`);
+    kit.createMainHint(empty);
+    return { element: empty };
+  },
 };
+
+// A list row's time, or null with no time. Drawn into `parent` and moved into
+// the row by `kit.row`.
+/**
+ * @param {HTMLElement} parent
+ * @param {import('../layout').ListRowInput} input
+ * @param {import('../layout').DocsKit} kit
+ * @returns {HTMLElement | null}
+ */
+function listRowTime(parent, input, kit) {
+  if (input.time === null) {
+    return null;
+  }
+  const time = kit.el(parent, 'span', 'docs-row-time', input.time.text);
+  time.title = input.time.title;
+  return time;
+}
 
 // A leaf's row end: its time, then its status dot; the dot alone with no
 // time; null with neither. Drawn into `parent` and moved into the row by

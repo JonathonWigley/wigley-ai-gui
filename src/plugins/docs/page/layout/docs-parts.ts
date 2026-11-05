@@ -88,6 +88,16 @@ const PART_SCOPES: Record<DocsPartName, DocsScope> = {
   completion: 'box',
   confirmDialog: 'confirm',
   pickerRow: 'picker',
+  pageFrame: 'doc',
+  pageAside: 'doc',
+  asideHeading: 'doc',
+  asideLink: 'doc',
+  sectionEditControl: 'doc',
+  recentChanges: 'doc',
+  listPage: 'doc',
+  listRow: 'doc',
+  sidebarSwitch: 'tree',
+  mainEmpty: 'doc',
 };
 
 type PartBuilder<P extends DocsPartName> = (

@@ -1,5 +1,6 @@
 /* The default Docs layout: the tree pane, the doc pane's header, banners,
-   front matter and box hints. */
+   front matter and box hints, the page frame and its right column, the section
+   edit control, Recent changes, the list pages and the sidebar switch. */
 
 /* The default tree pane's tracks: the header, the status, the filter, the
    line between the filter and the rows, and the rows. */
@@ -249,6 +250,145 @@
 .docs-confirm-text {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* The page: the article beside its right column. */
+.docs-page-frame {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--wg-space-6);
+  min-width: 0;
+}
+
+.docs-article {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The right column sticks while the article scrolls. The app sets `hidden` on
+   it while it holds nothing, so it sets no `display`. */
+.docs-aside {
+  flex: none;
+  max-height: 100cqh;
+  overflow-y: auto;
+  position: sticky;
+  top: 0;
+  width: var(--wg-docs-aside-width);
+}
+
+/* The whole-file editor fills the height, with no right column. */
+.docs-doc.is-editing .docs-page-frame {
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+.docs-doc.is-editing .docs-article {
+  display: flex;
+  flex-direction: column;
+}
+
+.docs-doc.is-editing .docs-aside {
+  display: none;
+}
+
+.docs-aside-heading {
+  align-items: baseline;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1_5);
+}
+
+.docs-aside-section + .docs-aside-section {
+  margin-top: var(--wg-space-4);
+}
+
+/* A rendered heading's edit control shows on the heading's hover and on
+   keyboard focus. */
+.docs-section-edit {
+  margin-inline-start: var(--wg-space-2);
+  opacity: 0;
+  transition: opacity var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.md :is(h1, h2, h3, h4, h5, h6):hover .docs-section-edit,
+.docs-section-edit:focus-visible {
+  opacity: 1;
+}
+
+.docs-recent {
+  margin-top: var(--wg-space-6);
+}
+
+.docs-recent-row {
+  align-items: baseline;
+  color: var(--wg-fg-tertiary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1) var(--wg-space-2);
+  padding: var(--wg-space-1) 0;
+}
+
+.docs-recent-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.docs-recent-subject {
+  color: var(--wg-fg-secondary);
+  min-width: 0;
+}
+
+.docs-recent-pages {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+.docs-recent-empty {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  margin: 0;
+}
+
+.docs-list-count {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--wg-space-3);
+}
+
+.docs-list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The sidebar's Wiki and All pages switch, its shown view in `fg`. */
+.docs-sidebar-switch {
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-1) var(--wg-space-3);
+}
+
+.docs-sidebar-switch-option {
+  color: var(--wg-fg-tertiary);
+}
+
+.docs-sidebar-switch-option.is-active {
+  color: var(--wg-fg);
+}
+
+/* The right column hides before the article gives up width: the article's
+   `76ch` measure at `text-prose`, the `space-6` gap and the default column. */
+@container docs-doc (width < 920px) {
+  .docs-aside {
+    display: none;
+  }
 }
 
 @media (max-width: 800px) {

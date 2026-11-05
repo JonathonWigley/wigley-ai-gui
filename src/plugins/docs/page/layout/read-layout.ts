@@ -17,6 +17,16 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   completion: true,
   confirmDialog: true,
   pickerRow: true,
+  pageFrame: true,
+  pageAside: true,
+  asideHeading: true,
+  asideLink: true,
+  sectionEditControl: true,
+  recentChanges: true,
+  listPage: true,
+  listRow: true,
+  sidebarSwitch: true,
+  mainEmpty: true,
 };
 
 // The docs layout a user's `layout.js` module exports as its default. A
