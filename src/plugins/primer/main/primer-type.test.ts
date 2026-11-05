@@ -6,6 +6,7 @@ import type {
 import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import type { AgentFormStore } from '../../../shared/agent-forms/form-store';
+import { globalTimers } from '../../../shared/agent-forms/global-timers.test-support';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { ScriptedFormPresenter } from '../../../shared/agent-forms/scripted-presenter';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -41,6 +42,7 @@ function startSession(): AgentFormSession<PrimerPayload> {
     store,
     wake: NO_FORM_WAKE,
     defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+    timers: globalTimers,
   }).startSession({ id: 'app-1', info: SESSION });
 }
 

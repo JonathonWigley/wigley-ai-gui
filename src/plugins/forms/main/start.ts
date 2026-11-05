@@ -89,6 +89,7 @@ function createForms(
     store,
     wake: createChatFormWake(chat, services.log),
     defaultDeadlineSeconds,
+    timers: services.timers,
   });
   const previewService = createAgentFormService({
     type: roundType,
@@ -100,6 +101,7 @@ function createForms(
     ),
     wake: NO_FORM_WAKE,
     defaultDeadlineSeconds,
+    timers: services.timers,
   });
   const preview = createLayoutPreview({
     sessions,

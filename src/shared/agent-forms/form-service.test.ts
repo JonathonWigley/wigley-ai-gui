@@ -7,6 +7,7 @@ import type {
   AgentFormSession,
   AgentFormWake,
 } from '../../contracts/agent-forms';
+import type { Timers } from '../../contracts/ambient';
 import { posixPaths } from '../paths/posix-paths';
 import { createAgentFormService } from './form-service';
 import {
@@ -16,6 +17,7 @@ import {
   type SavedAgentForm,
   type SavedOutcome,
 } from './form-store';
+import { globalTimers } from './global-timers.test-support';
 import { ScriptedFormPresenter } from './scripted-presenter';
 import {
   TEST_FORM_ERROR_NAME,
@@ -71,13 +73,14 @@ const wake: AgentFormWake = {
   },
 };
 
-function newService() {
+function newService(timers: Timers = globalTimers) {
   return createAgentFormService({
     type: TEST_FORM_TYPE,
     presenter,
     store,
     wake,
     defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+    timers,
   });
 }
 
@@ -275,8 +278,7 @@ describe('the soft deadline', () => {
     expect((await pending).outcome).toBe('draft');
   });
 
-  // 2_147_484 s is past setTimeout's 2**31-1 ms limit.
-  it.each([0, -5, 2_147_484])(
+  it.each([0, -5])(
     'uses the default for a deadline of %d',
     async (deadlineSeconds) => {
       const pending = startSession({ deadlineSeconds }).open(
@@ -294,6 +296,59 @@ describe('the soft deadline', () => {
       expect((await pending).outcome).toBe('draft');
     },
   );
+
+  it('waits the longest timer delay for a host deadline past the 32-bit limit', async () => {
+    const longestDelayMs = 2147483647;
+    const pending = startSession({ deadlineSeconds: 2_147_484 }).open(
+      NAMING_ARGS,
+      null,
+      live(),
+    );
+    const call = watch(pending);
+
+    await expireDeadline();
+    expect(call.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(
+      longestDelayMs - DEFAULT_DEADLINE_SECONDS * 1000 - 1,
+    );
+    expect(call.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect((await pending).outcome).toBe('draft');
+  });
+
+  it('runs its deadline through the timers it is given', async () => {
+    const runs: { run: () => void; ms: number }[] = [];
+    const timers: Timers = {
+      set(run, ms) {
+        runs.push({ run, ms });
+        return runs.length;
+      },
+      clear: () => {},
+    };
+    const pending = newService(timers)
+      .startSession({ id: 'app-1', info: SESSION })
+      .open(NAMING_ARGS, null, live());
+
+    expect(runs.map(({ ms }) => ms)).toEqual([DEFAULT_DEADLINE_SECONDS * 1000]);
+    runs[0].run();
+
+    expect((await pending).outcome).toBe('draft');
+  });
+
+  it('leaves no timer pending once a call settles', async () => {
+    const session = startSession();
+    const first = session.open(NAMING_ARGS, null, live());
+    const queued = session.open(PLACEMENT_ARGS, null, live());
+    presenter.submit(presenter.latest().formId, body('choice 1'));
+    await first;
+    await vi.advanceTimersByTimeAsync(0);
+    presenter.submit(presenter.latest().formId, body('choice 2'));
+
+    await queued;
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('carries the latest draft the user saved', async () => {
     const pending = startSession().open(NAMING_ARGS, null, live());
@@ -1383,6 +1438,7 @@ describe('a session moved to a new host id', () => {
       store,
       wake,
       defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+      timers: globalTimers,
     }).startSession({ id: 'app-1', info });
     const moveHost = () => {
       info.sessionId = 'session-2';

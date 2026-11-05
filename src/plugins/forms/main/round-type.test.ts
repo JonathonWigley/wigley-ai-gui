@@ -11,6 +11,7 @@ import {
   type SavedAgentForm,
   type SavedOutcome,
 } from '../../../shared/agent-forms/form-store';
+import { globalTimers } from '../../../shared/agent-forms/global-timers.test-support';
 import { ScriptedFormPresenter } from '../../../shared/agent-forms/scripted-presenter';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
@@ -123,6 +124,7 @@ function startSession(info: Partial<AgentFormOwnerInfo> = {}): FormsSession {
       store,
       wake: NO_FORM_WAKE,
       defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+      timers: globalTimers,
     }),
     () => layoutNames,
   ).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
