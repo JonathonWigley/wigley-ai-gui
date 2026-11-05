@@ -1,5 +1,6 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { SessionFlow } from '../contract';
+import { heavyStateOf } from '../stages/heavy-contract';
 
 // One timer per session, armed while its flow's `countdownEndsAt` is set.
 // `sync` arms the timer for a flow counting down that has none and clears it
@@ -27,7 +28,8 @@ export function createCountdown(deps: {
 
   return {
     sync(flow) {
-      const { sessionId, countdownEndsAt } = flow;
+      const { sessionId } = flow;
+      const { countdownEndsAt } = heavyStateOf(flow);
       if (countdownEndsAt === null) {
         stop(sessionId);
         return;

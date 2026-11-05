@@ -2,7 +2,7 @@
 // actions and keys run.
 
 import type { CommandDecl } from '../../../contracts/plugin';
-import type { MainStage, PageStage } from '../contract';
+import type { PageStage } from '../contract';
 import { closedMainStage } from './closed/main';
 import { closedPageStage } from './closed/page';
 import { coldReadMainStage } from './cold-read/main';
@@ -11,6 +11,7 @@ import { exploreMainStage } from './explore/main';
 import { explorePageStage } from './explore/page';
 import { fixMainStage } from './fix/main';
 import { fixPageStage } from './fix/page';
+import type { HeavyMainStage } from './heavy-contract';
 import { idleMainStage } from './idle/main';
 import { idlePageStage } from './idle/page';
 import { interviewMainStage } from './interview/main';
@@ -26,7 +27,7 @@ import { primerPageStage } from './primer/page';
 import { reviewMainStage } from './review/main';
 import { reviewPageStage } from './review/page';
 
-export const BUILT_IN_MAIN_STAGES: readonly MainStage[] = [
+export const BUILT_IN_MAIN_STAGES: readonly HeavyMainStage[] = [
   idleMainStage,
   primerMainStage,
   exploreMainStage,

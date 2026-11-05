@@ -2,10 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../../contract';
 import { foldFlow, newFlow } from '../../flow';
 import type { PlanProgress } from '../../plan-reader';
-import { BUILT_IN_MAIN_STAGES } from '../index';
+import {
+  HEAVY_WORKFLOW_ID,
+  heavySignal,
+  withHeavyState,
+} from '../heavy-contract';
+import { heavyMainWorkflow } from '../heavy-workflow';
 
 function flowIn(stage: string): SessionFlow {
-  return { ...newFlow('s1', '/r'), stage, planDir: '/r/plan-f' };
+  return withHeavyState(
+    { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage },
+    { planDir: '/r/plan-f' },
+  );
 }
 
 function planChanged(reviewRounds: number, checked = 5): WorkflowSignal {
@@ -17,7 +25,7 @@ function planChanged(reviewRounds: number, checked = 5): WorkflowSignal {
     title: 'F',
     tasks: [],
   };
-  return { type: 'planChanged', progress };
+  return heavySignal({ type: 'planChanged', progress });
 }
 
 const REVIEW_STARTED: WorkflowSignal = {
@@ -44,7 +52,7 @@ function stagesAfter(
   const stages: string[] = [];
   let current = flow;
   for (const signal of signals) {
-    current = foldFlow(current, signal, BUILT_IN_MAIN_STAGES);
+    current = foldFlow(current, signal, [heavyMainWorkflow]);
     stages.push(current.stage);
   }
   return stages;
@@ -80,12 +88,6 @@ describe('reviewMainStage', () => {
       from: 'fix',
       signals: [planChanged(1), planChanged(2)],
       stages: ['fix', 'fix'],
-    },
-    {
-      name: 'a flow saved before reviewRoundsAtMake counts its rounds from the first read',
-      from: 'make',
-      signals: [planChanged(1), planChanged(1, 6), planChanged(2, 6)],
-      stages: ['make', 'make', 'review'],
     },
     {
       name: 'planChanged with no review round in make',

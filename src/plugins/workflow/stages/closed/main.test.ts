@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../../contract';
 import { foldFlow, newFlow } from '../../flow';
 import type { PlanProgress } from '../../plan-reader';
-import { BUILT_IN_MAIN_STAGES } from '../index';
+import {
+  HEAVY_WORKFLOW_ID,
+  heavySignal,
+  withHeavyState,
+} from '../heavy-contract';
+import { heavyMainWorkflow } from '../heavy-workflow';
 
 const PROGRESS: PlanProgress = {
   checked: 2,
@@ -15,19 +20,14 @@ const PROGRESS: PlanProgress = {
 
 // A flow in `stage` whose plan folder was read.
 function flowIn(stage: string): SessionFlow {
-  return {
-    ...newFlow('s1', '/r'),
-    stage,
-    planDir: '/r/plan-f',
-    progress: PROGRESS,
-  };
+  return withHeavyState(
+    { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage },
+    { planDir: '/r/plan-f', progress: PROGRESS },
+  );
 }
 
-const PLAN_GONE: WorkflowSignal = { type: 'planGone' };
-const PLAN_CHANGED: WorkflowSignal = {
-  type: 'planChanged',
-  progress: PROGRESS,
-};
+const PLAN_GONE = heavySignal({ type: 'planGone' });
+const PLAN_CHANGED = heavySignal({ type: 'planChanged', progress: PROGRESS });
 const MAKE_OF_A_NEW_FOLDER: WorkflowSignal = {
   type: 'skillStarted',
   skill: 'wigley:make',
@@ -40,7 +40,7 @@ function foldAll(
   signals: readonly WorkflowSignal[],
 ): SessionFlow {
   return signals.reduce(
-    (current, signal) => foldFlow(current, signal, BUILT_IN_MAIN_STAGES),
+    (current, signal) => foldFlow(current, signal, [heavyMainWorkflow]),
     flow,
   );
 }

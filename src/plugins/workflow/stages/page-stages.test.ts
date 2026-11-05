@@ -8,6 +8,11 @@ import {
 import { newFlow } from '../flow';
 import type { PlanProgress } from '../plan-reader';
 import {
+  HEAVY_WORKFLOW_ID,
+  type HeavyState,
+  withHeavyState,
+} from './heavy-contract';
+import {
   BUILT_IN_MAIN_STAGES,
   BUILT_IN_PAGE_STAGES,
   WORKFLOW_COMMANDS,
@@ -33,13 +38,23 @@ function progress(fields: Partial<PlanProgress>): PlanProgress {
   };
 }
 
-function flowWith(fields: Partial<SessionFlow>): SessionFlow {
-  return {
-    ...newFlow('s1', '/r'),
-    planDir: '/r/plan-f',
-    progress: progress({}),
-    ...fields,
-  };
+function flowWith(fields: Partial<SessionFlow & HeavyState>): SessionFlow {
+  const {
+    planDir,
+    progress: read,
+    reviewRoundsAtMake,
+    countdownEndsAt,
+    ...flow
+  } = fields;
+  return withHeavyState(
+    { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, ...flow },
+    {
+      planDir: planDir === undefined ? '/r/plan-f' : planDir,
+      progress: read === undefined ? progress({}) : read,
+      reviewRoundsAtMake: reviewRoundsAtMake ?? null,
+      countdownEndsAt: countdownEndsAt ?? null,
+    },
+  );
 }
 
 const FEATURE_GROUP = ['explore', 'interview', 'plan', 'coldRead'] as const;

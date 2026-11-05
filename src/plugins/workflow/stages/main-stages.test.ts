@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { MainStage, SessionFlow, WorkflowSignal } from '../contract';
-import { newFlow } from '../flow';
+import { foldFlow, newFlow } from '../flow';
 import type { PlanProgress } from '../plan-reader';
+import {
+  HEAVY_WORKFLOW_ID,
+  heavyEventOf,
+  heavySignal,
+  heavyStateOf,
+  withHeavyState,
+} from './heavy-contract';
+import { heavyMainWorkflow } from './heavy-workflow';
 import { BUILT_IN_MAIN_STAGES } from './index';
 
 const REGISTERED = BUILT_IN_MAIN_STAGES.map((stage) => stage.id);
@@ -18,13 +26,10 @@ const PROGRESS: PlanProgress = {
 // A flow in `stage` that meets every other condition a built-in rule checks:
 // a plan read with boxes and a review round since make started, nothing busy.
 function flowIn(stage: string): SessionFlow {
-  return {
-    ...newFlow('s1', '/r'),
-    stage,
-    planDir: '/r/plan-f',
-    progress: PROGRESS,
-    reviewRoundsAtMake: 0,
-  };
+  return withHeavyState(
+    { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage },
+    { planDir: '/r/plan-f', progress: PROGRESS, reviewRoundsAtMake: 0 },
+  );
 }
 
 function skillStarted(skill: string): WorkflowSignal {
@@ -47,10 +52,13 @@ const SAMPLE_SIGNALS: readonly WorkflowSignal[] = [
   { type: 'subagentStarted', agentId: 'a1' },
   { type: 'subagentFinished', agentId: 'a1' },
   { type: 'cleared' },
-  { type: 'planChanged', progress: { ...PROGRESS, reviewRounds: 2 } },
-  { type: 'planGone' },
-  { type: 'handedOff' },
-  { type: 'dismissed' },
+  heavySignal({
+    type: 'planChanged',
+    progress: { ...PROGRESS, reviewRounds: 2 },
+  }),
+  heavySignal({ type: 'planGone' }),
+  heavySignal({ type: 'handedOff' }),
+  heavySignal({ type: 'dismissed' }),
   ...REGISTERED.map((step): WorkflowSignal => ({ type: 'stepReported', step })),
 ];
 
@@ -60,6 +68,8 @@ function signalKey(signal: WorkflowSignal): string {
       return signal.skill;
     case 'stepReported':
       return `report:${signal.step}`;
+    case 'custom':
+      return heavyEventOf(signal)?.type ?? 'custom';
     default:
       return signal.type;
   }
@@ -162,5 +172,55 @@ describe('built-in stage rules name only registered stages', () => {
     expect(RULE_ROWS.map((row) => row.id).sort()).toEqual(
       [...REGISTERED].sort(),
     );
+  });
+});
+
+describe('heavyMainWorkflow', () => {
+  it.each([
+    {
+      name: 'wigley:feature claims a new flow at explore',
+      signal: skillStarted('wigley:feature'),
+      expected: {
+        workflow: HEAVY_WORKFLOW_ID,
+        stage: 'explore',
+        movedUpFrom: null,
+      },
+      planDir: null,
+    },
+    {
+      name: 'wigley:feature-primer claims a new flow, its rule moving it to primer',
+      signal: skillStarted('wigley:feature-primer'),
+      expected: {
+        workflow: HEAVY_WORKFLOW_ID,
+        stage: 'primer',
+        movedUpFrom: null,
+      },
+      planDir: null,
+    },
+    {
+      name: 'wigley:make of a plan claims a new flow at make, naming the plan',
+      signal: {
+        ...skillStarted('wigley:make'),
+        args: '/r/plan-f',
+        argsPath: '/r/plan-f',
+      },
+      expected: {
+        workflow: HEAVY_WORKFLOW_ID,
+        stage: 'make',
+        movedUpFrom: null,
+      },
+      planDir: '/r/plan-f',
+    },
+    {
+      name: 'wigley:review claims nothing',
+      signal: skillStarted('wigley:review'),
+      expected: { workflow: null, stage: 'idle', movedUpFrom: null },
+      planDir: null,
+    },
+  ])('$name', ({ signal, expected, planDir }) => {
+    const folded = foldFlow(newFlow('s1', '/r'), signal, [heavyMainWorkflow]);
+
+    expect(folded).toMatchObject(expected);
+    expect(heavyStateOf(folded).planDir).toBe(planDir);
   });
 });

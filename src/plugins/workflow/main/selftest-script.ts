@@ -14,7 +14,7 @@ import {
 } from '../../../shared/fake-agent-harness';
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { WorkflowSelfTestHooks } from './start';
+import type { WorkflowSelfTestHooks } from '../contract';
 
 // The self-test's project folder, made under the self-test's home. Its name
 // names the session in every page line.

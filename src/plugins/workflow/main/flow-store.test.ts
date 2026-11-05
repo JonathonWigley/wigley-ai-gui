@@ -7,11 +7,13 @@ import { createFlowStore, FLOWS_FILE, type FlowStore } from './flow-store';
 
 const SAVED_H1: SessionFlow = {
   ...newFlow('s-old', '/r'),
-  stage: 'make',
-  planDir: '/r/plan-a',
+  workflow: 'light',
+  movedUpFrom: null,
+  stage: 'build',
+  checklist: [{ text: 'a', done: true }],
+  state: { n: 1 },
   turnRunning: true,
   runningSubagents: ['a1'],
-  countdownEndsAt: 9_000,
 };
 
 const NOW = 50_000;
@@ -59,18 +61,6 @@ describe('createFlowStore', () => {
       logged: 1,
     },
     {
-      name: 'a reviewRoundsAtMake not a number',
-      text: JSON.stringify({
-        flows: [
-          {
-            hostSessionId: 'h1',
-            flow: { ...SAVED_H1, reviewRoundsAtMake: '2' },
-          },
-        ],
-      }),
-      logged: 1,
-    },
-    {
       name: 'a savedAt not a number',
       text: flowsFile([{ hostSessionId: 'h1', flow: SAVED_H1, savedAt: '7' }]),
       logged: 1,
@@ -83,39 +73,75 @@ describe('createFlowStore', () => {
     expect(logs).toHaveLength(logged);
   });
 
-  it.each<{ name: string; flow: SessionFlow }>([
-    { name: 'no reviewRoundsAtMake', flow: SAVED_H1 },
+  it.each<{ name: string; flow: Record<string, unknown> }>([
+    { name: 'a workflow not a string', flow: { ...SAVED_H1, workflow: 7 } },
     {
-      name: 'reviewRoundsAtMake 2',
-      flow: { ...SAVED_H1, reviewRoundsAtMake: 2 },
+      name: 'a movedUpFrom not a string',
+      flow: { ...SAVED_H1, movedUpFrom: 7 },
     },
     {
-      name: 'reviewRoundsAtMake null',
-      flow: { ...SAVED_H1, reviewRoundsAtMake: null },
+      name: 'a checklist item of the wrong shape',
+      flow: { ...SAVED_H1, checklist: [{ text: 1, done: true }] },
+    },
+    {
+      name: 'a missedLevel not a boolean',
+      flow: { ...SAVED_H1, missedLevel: 'x' },
+    },
+    {
+      name: 'no state',
+      flow: (({ state: _state, ...rest }) => rest)(SAVED_H1),
+    },
+    {
+      name: 'the old shape',
+      flow: {
+        sessionId: 's-old',
+        projectDir: '/r',
+        stage: 'make',
+        planDir: null,
+        progress: null,
+        countdownEndsAt: null,
+        turnRunning: false,
+        runningSubagents: [],
+      },
+    },
+  ])('Load_InvalidFlow_DropsAll ($name)', async ({ flow }) => {
+    const { store, logs } = await loadStore(
+      JSON.stringify({ flows: [{ hostSessionId: 'h1', flow }] }),
+    );
+
+    expect(store.open('s9', 'h1', '/r')).toEqual(newFlow('s9', '/r'));
+    expect(logs).toEqual(['flows.json unreadable; starting with no flows']);
+  });
+
+  it.each<{ name: string; flow: SessionFlow }>([
+    { name: 'a workflow, its state and its checklist', flow: SAVED_H1 },
+    {
+      name: 'no workflow',
+      flow: { ...SAVED_H1, workflow: null, checklist: null, state: null },
+    },
+    {
+      name: 'a state the store does not check',
+      flow: { ...SAVED_H1, state: { planDir: 3 } },
     },
     {
       name: 'a field an older app saved',
       flow: { ...SAVED_H1, hasLeftIdle: true } as SessionFlow,
     },
-  ])(
-    'load_SavedFlowWith_$name_OpensAsSavedWithNoTurnSubagentOrCountdown',
-    async ({ flow }) => {
-      const { store } = await loadStore(
-        flowsFile([{ hostSessionId: 'h1', flow }]),
-      );
+  ])('Load_ValidFlow_RoundTrips ($name)', async ({ flow }) => {
+    const { store } = await loadStore(
+      flowsFile([{ hostSessionId: 'h1', flow }]),
+    );
 
-      expect(store.open('s9', 'h1', '/r')).toStrictEqual({
-        ...flow,
-        sessionId: 's9',
-        turnRunning: false,
-        runningSubagents: [],
-        countdownEndsAt: null,
-      });
-      expect(store.hostIdOf('s9')).toBe('h1');
-      store.rekey('s9', 'h2');
-      expect(store.hostIdOf('s9')).toBe('h2');
-    },
-  );
+    expect(store.open('s9', 'h1', '/r')).toStrictEqual({
+      ...flow,
+      sessionId: 's9',
+      turnRunning: false,
+      runningSubagents: [],
+    });
+    expect(store.hostIdOf('s9')).toBe('h1');
+    store.rekey('s9', 'h2');
+    expect(store.hostIdOf('s9')).toBe('h2');
+  });
 
   it('putRekeyDrop_EachWritesTheEntries_KeepingUnopenedOnes', async () => {
     const unopened = { ...newFlow('s-x', '/q'), stage: 'feature' };

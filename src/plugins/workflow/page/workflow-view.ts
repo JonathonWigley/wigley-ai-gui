@@ -34,6 +34,7 @@ import type {
   StripInput,
 } from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
+import { heavyStateOf } from '../stages/heavy-contract';
 import { countdownText } from './countdown';
 import {
   MAIN_ACTION,
@@ -199,10 +200,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     }));
   };
 
-  const countdown = (flow: SessionFlow): string | null =>
-    flow.countdownEndsAt === null
+  const countdown = (flow: SessionFlow): string | null => {
+    const { countdownEndsAt } = heavyStateOf(flow);
+    return countdownEndsAt === null
       ? null
-      : countdownText(flow.countdownEndsAt, clock.now());
+      : countdownText(countdownEndsAt, clock.now());
+  };
 
   const chipInput = (flow: SessionFlow): ChipInput => {
     const stage = pageStageOf(flow);
@@ -238,7 +241,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       countdown: countdown(flow),
       steps: steps(stage, flow, status),
       actions: actionInputs(flow),
-      hasPlan: flow.progress !== null,
+      hasPlan: heavyStateOf(flow).progress !== null,
     };
   };
 
@@ -246,7 +249,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   // plan read, or hidden.
   const sidePaneInput = (flow: SessionFlow): SidePaneInput | null => {
     const stage = pageStageOf(flow);
-    const progress = flow.progress;
+    const { progress } = heavyStateOf(flow);
     if (stage.id === IDLE_STAGE || progress === null || isSidePaneHidden) {
       return null;
     }
@@ -414,14 +417,15 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedStages.set(flow.sessionId, flow.stage);
       log(`${name} shows ${flow.stage}`);
     }
-    if (flow.progress !== null) {
-      const progress = progressText(flow.progress);
+    const heavy = heavyStateOf(flow);
+    if (heavy.progress !== null) {
+      const progress = progressText(heavy.progress);
       if (loggedProgress.get(flow.sessionId) !== progress) {
         loggedProgress.set(flow.sessionId, progress);
         log(`${name} progress ${progress}`);
       }
     }
-    const hasCountdown = flow.countdownEndsAt !== null;
+    const hasCountdown = heavy.countdownEndsAt !== null;
     if (hasCountdown && !countdownShown.has(flow.sessionId)) {
       countdownShown.add(flow.sessionId);
       log(`countdown shown in ${name}`);
@@ -441,12 +445,14 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       return;
     }
     switch (spec.command) {
-      case 'openPlan':
-        if (flow.planDir === null) {
+      case 'openPlan': {
+        const { planDir } = heavyStateOf(flow);
+        if (planDir === null) {
           throw new Error('the session has no plan');
         }
-        deps.openDoc(deps.paths.join(flow.planDir, PLAN_FILE));
+        deps.openDoc(deps.paths.join(planDir, PLAN_FILE));
         return;
+      }
       default:
         throw new Error(`no page action ${spec.command}`);
     }

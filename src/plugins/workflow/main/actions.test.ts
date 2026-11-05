@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { LaunchRequest } from '../../chat/contract';
 import type { SessionFlow, WorkflowSignal } from '../contract';
 import { newFlow } from '../flow';
+import {
+  HEAVY_WORKFLOW_ID,
+  heavySignal,
+  withHeavyState,
+} from '../stages/heavy-contract';
 import { createWorkflowActions } from './actions';
 
-const PLANNED: SessionFlow = {
-  ...newFlow('s1', '/r'),
-  stage: 'planReady',
-  planDir: '/r/plan-a',
-};
-const NO_PLAN: SessionFlow = { ...PLANNED, planDir: null };
+const PLANNED: SessionFlow = withHeavyState(
+  { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage: 'planReady' },
+  { planDir: '/r/plan-a' },
+);
+const NO_PLAN: SessionFlow = withHeavyState(PLANNED, { planDir: null });
 const MAKE = { text: '/wigley:make /r/plan-a', images: [] };
 
 // Workflow actions over a chat fake that records each call in order;
@@ -70,14 +74,18 @@ describe('createWorkflowActions', () => {
       calls: [
         ['launch', { projectDir: '/r', profile: 'personal', message: MAKE }],
       ],
-      signals: [{ type: 'handedOff' }],
+      signals: [heavySignal({ type: 'handedOff' })],
     },
     {
       command: 'retro',
       calls: [['send', 's1', { text: '/wigley:retro', images: [] }]],
       signals: [],
     },
-    { command: 'dismiss', calls: [], signals: [{ type: 'dismissed' }] },
+    {
+      command: 'dismiss',
+      calls: [],
+      signals: [heavySignal({ type: 'dismissed' })],
+    },
     {
       command: 'cancelCountdown',
       calls: [['cancelCountdown', 's1']],

@@ -1,6 +1,7 @@
-import { type MainStage, startsSkill } from '../../contract';
+import { startsSkill } from '../../contract';
+import type { HeavyMainStage } from '../heavy-contract';
 
-export const makeMainStage: MainStage = {
+export const makeMainStage: HeavyMainStage = {
   id: 'make',
   order: 40,
   enter(_flow, signal) {

@@ -6,6 +6,7 @@ import type { PluginLog } from '../../../contracts/log';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { StageId, SessionFlow } from '../contract';
 import type { PlanProgress, PlanTaskLine } from '../plan-reader';
+import { HEAVY_WORKFLOW_ID, type HeavyState } from '../stages/heavy-contract';
 
 // `busy` sets the sample's `turnRunning`; `countdown` starts its auto-start.
 export const PREVIEW_SAMPLES: readonly {
@@ -65,15 +66,23 @@ export function previewFlow(
 ): SessionFlow {
   const { stage, busy, countdown } = PREVIEW_SAMPLES[index];
   const progress = previewProgress(stage);
+  const state: HeavyState = {
+    planDir: progress === null ? null : PREVIEW_PLAN_DIR,
+    progress,
+    reviewRoundsAtMake: null,
+    countdownEndsAt: countdown ? now + autoStartSeconds * 1000 : null,
+  };
   return {
     sessionId,
     projectDir: PREVIEW_PROJECT,
+    workflow: HEAVY_WORKFLOW_ID,
+    movedUpFrom: null,
     stage,
-    planDir: progress === null ? null : PREVIEW_PLAN_DIR,
-    progress,
+    checklist: null,
+    state,
+    missedLevel: false,
     turnRunning: busy,
     runningSubagents: [],
-    countdownEndsAt: countdown ? now + autoStartSeconds * 1000 : null,
   };
 }
 

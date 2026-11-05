@@ -3,6 +3,7 @@ import type { Files } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { WorkflowSignal } from '../contract';
 import { readPlanProgress } from '../plan-reader';
+import { heavySignal } from '../stages/heavy-contract';
 import { createPlanWatch, type PlanWatch } from './plan-watch';
 
 const PLAN_DIR = '/r/docs/features/x/plan-a';
@@ -24,7 +25,7 @@ function startWatch(files: Pick<Files, 'read' | 'stat' | 'watch'>) {
 }
 
 function changed(text: string): WorkflowSignal {
-  return { type: 'planChanged', progress: readPlanProgress(text) };
+  return heavySignal({ type: 'planChanged', progress: readPlanProgress(text) });
 }
 
 describe('createPlanWatch', () => {
@@ -48,7 +49,7 @@ describe('createPlanWatch', () => {
     expect(signals).toEqual([
       changed(PLAN),
       changed(PLAN_TICKED),
-      { type: 'planGone' },
+      heavySignal({ type: 'planGone' }),
     ]);
   });
 
@@ -103,7 +104,7 @@ describe('createPlanWatch', () => {
     watch.follow('s1', PLAN_DIR);
     await settled();
 
-    expect(signals).toEqual([{ type: 'planGone' }]);
+    expect(signals).toEqual([heavySignal({ type: 'planGone' })]);
     expect(await files.stat(PLAN_DIR)).toBeNull();
   });
 

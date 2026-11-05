@@ -4,6 +4,7 @@ import {
   type PageStage,
   STAGE_ACTIVITY_RANK,
 } from '../../contract';
+import { heavyStateOf } from '../heavy-contract';
 
 export const closedPageStage: PageStage = {
   id: 'closed',
@@ -27,11 +28,13 @@ export const closedPageStage: PageStage = {
       enabled: () => true,
     },
   ],
-  detail: (flow) =>
-    flow.progress === null ? '' : detailLine(flow.progress.title, 'done'),
+  detail(flow) {
+    const { progress } = heavyStateOf(flow);
+    return progress === null ? '' : detailLine(progress.title, 'done');
+  },
   status: () => 'done',
   statusProgress(flow) {
-    const progress = flow.progress;
+    const { progress } = heavyStateOf(flow);
     return progress === null ? '' : ` · ${progress.checked}/${progress.total}`;
   },
   rowActivity: {

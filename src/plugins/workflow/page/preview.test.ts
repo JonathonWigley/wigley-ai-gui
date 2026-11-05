@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { SessionFlow } from '../contract';
+import { heavyStateOf } from '../stages/heavy-contract';
 import { PREVIEW_SAMPLES, createPreview, previewFlow } from './preview';
 
 const NOW = 1_000_000;
@@ -31,11 +32,12 @@ describe('previewFlow', () => {
     ({ index, stage, busy, endsAt, checked }) => {
       const flow = previewFlow(index, 'preview', NOW, 7);
 
+      const heavy = heavyStateOf(flow);
       expect({
         stage: flow.stage,
         busy: flow.turnRunning,
-        endsAt: flow.countdownEndsAt,
-        checked: flow.progress?.checked ?? null,
+        endsAt: heavy.countdownEndsAt,
+        checked: heavy.progress?.checked ?? null,
       }).toEqual({ stage, busy, endsAt, checked });
     },
   );

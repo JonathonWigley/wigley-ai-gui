@@ -8,6 +8,7 @@ import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type { WorkflowSignal } from '../contract';
 import { readPlanProgress } from '../plan-reader';
+import { heavySignal } from '../stages/heavy-contract';
 
 // Watches each session's plan folder, signalling `planChanged` with the
 // plan's progress on each read of its plan.md and `planGone` once when the
@@ -66,7 +67,7 @@ export function createPlanWatch(deps: {
     entry.watch = null;
     entry.status = 'gone';
     nextGeneration(sessionId);
-    deps.signal(sessionId, { type: 'planGone' });
+    deps.signal(sessionId, heavySignal({ type: 'planGone' }));
   };
 
   const logFailure = (entry: Watched) => (error: unknown) => {
@@ -89,10 +90,13 @@ export function createPlanWatch(deps: {
         return;
       }
       if (text !== null) {
-        deps.signal(sessionId, {
-          type: 'planChanged',
-          progress: readPlanProgress(text),
-        });
+        deps.signal(
+          sessionId,
+          heavySignal({
+            type: 'planChanged',
+            progress: readPlanProgress(text),
+          }),
+        );
         return;
       }
       const folder = await files.stat(entry.planDir);

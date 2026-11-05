@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../../contract';
 import { foldFlow, newFlow } from '../../flow';
-import { BUILT_IN_MAIN_STAGES } from '../index';
+import { HEAVY_WORKFLOW_ID, heavySignal } from '../heavy-contract';
+import { heavyMainWorkflow } from '../heavy-workflow';
 
 function flowIn(stage: string): SessionFlow {
-  return { ...newFlow('s1', '/r'), stage };
+  return { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage };
 }
 
 describe('idleMainStage', () => {
@@ -17,29 +18,29 @@ describe('idleMainStage', () => {
     {
       name: 'handedOff from make',
       from: 'make',
-      signal: { type: 'handedOff' },
+      signal: heavySignal({ type: 'handedOff' }),
       stage: 'idle',
     },
     {
       name: 'handedOff from planReady',
       from: 'planReady',
-      signal: { type: 'handedOff' },
+      signal: heavySignal({ type: 'handedOff' }),
       stage: 'idle',
     },
     {
       name: 'dismissed from closed',
       from: 'closed',
-      signal: { type: 'dismissed' },
+      signal: heavySignal({ type: 'dismissed' }),
       stage: 'idle',
     },
     {
       name: 'dismissed from make',
       from: 'make',
-      signal: { type: 'dismissed' },
+      signal: heavySignal({ type: 'dismissed' }),
       stage: 'make',
     },
   ])('$name', ({ from, signal, stage }) => {
-    expect(foldFlow(flowIn(from), signal, BUILT_IN_MAIN_STAGES).stage).toBe(
+    expect(foldFlow(flowIn(from), signal, [heavyMainWorkflow]).stage).toBe(
       stage,
     );
   });

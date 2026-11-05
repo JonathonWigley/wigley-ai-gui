@@ -1,4 +1,5 @@
 import { busyStatus, detailLine, type PageStage } from '../../contract';
+import { heavyStateOf } from '../heavy-contract';
 import { OPEN_PLAN_ACTION, RESUME_MAKE_ACTION } from '../stage-parts';
 
 export const makePageStage: PageStage = {
@@ -10,7 +11,7 @@ export const makePageStage: PageStage = {
   order: 40,
   actions: [RESUME_MAKE_ACTION, OPEN_PLAN_ACTION],
   detail(flow) {
-    const progress = flow.progress;
+    const { progress } = heavyStateOf(flow);
     if (progress === null) {
       return '';
     }
@@ -23,7 +24,7 @@ export const makePageStage: PageStage = {
   },
   status: busyStatus,
   statusProgress(flow) {
-    const progress = flow.progress;
+    const { progress } = heavyStateOf(flow);
     return progress === null ? '' : ` ${progress.checked}/${progress.total}`;
   },
 };

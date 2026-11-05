@@ -24,10 +24,22 @@ import {
   type ToolDefinition,
   type ToolSession,
 } from '../../sessions/contract';
-import type { MainStage, SessionFlow, WorkflowMainExports } from '../contract';
+import {
+  type FoldEvent,
+  type MainWorkflow,
+  type SessionFlow,
+  startsSkill,
+  type WorkflowMainExports,
+  type WorkflowSignal,
+} from '../contract';
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { readPlanProgress } from '../plan-reader';
+import {
+  HEAVY_WORKFLOW_ID,
+  type HeavyState,
+  heavyStateOf,
+} from '../stages/heavy-contract';
 import { FLOWS_FILE } from './flow-store';
 import { workflowMainPart } from './start';
 
@@ -91,6 +103,7 @@ function handTime() {
         pending.delete(handle);
       },
     },
+    liveTimers: () => pending.size,
     advance(ms: number) {
       now += ms;
       const due = [...pending]
@@ -121,13 +134,15 @@ function session(id: string, hostSessionId: string): AgentSession {
 // records each `clear` and `send`. `silentWatch` gives the project files a
 // watch that reports nothing, as an OS watcher that misses a delete;
 // `sessionLabel` is the side-bar label sessions gives s1 (none by default);
-// `data` is workflow's data folder as the last run left it.
+// `data` is workflow's data folder as the last run left it; `selfTest` starts the
+// part with the self-test on, its script never run, so its hooks are exported.
 function startWorkflowPart(
   settings: WorkflowTestSettings,
   options: {
     silentWatch?: boolean;
     sessionLabel?: string;
     data?: MemoryFiles;
+    selfTest?: boolean;
   } = {},
 ) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
@@ -199,7 +214,7 @@ function startWorkflowPart(
       clock: time.clock,
       timers: time.timers,
       paths: posixPaths,
-      selfTest: null,
+      selfTest: options.selfTest === true ? { run: () => undefined } : null,
     },
     dependency: (key: { id: string }) => dependencies[key.id] ?? {},
     data,
@@ -260,6 +275,20 @@ function startWorkflowPart(
     });
   };
   const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
+  // The last flow with its Heavy state's fields beside its own.
+  const lastHeavy = () => {
+    const flow = lastFlow();
+    return flow === undefined ? undefined : { ...flow, ...heavyStateOf(flow) };
+  };
+  const exported = () =>
+    part.exports?.(createRegistrations()) as WorkflowMainExports;
+  const savedAt = async () => {
+    await settled();
+    const saved = JSON.parse(await data.read(FLOWS_FILE)) as {
+      flows: { savedAt: number }[];
+    };
+    return saved.flows[0].savedAt;
+  };
   const changeSettings = async (next: WorkflowTestSettings) => {
     settingsListener(next);
     await settled();
@@ -276,16 +305,13 @@ function startWorkflowPart(
     replayBurst,
     openS1,
     lastFlow,
+    lastHeavy,
+    exported,
+    savedAt,
     changeSettings,
     runAction: (command: string) =>
       handlers.get('runAction')?.({ sessionId: 's1', command }),
     stepTools,
-    addStage(stage: MainStage) {
-      const exported = part.exports?.(
-        createRegistrations(),
-      ) as WorkflowMainExports;
-      return exported.addStage(stage);
-    },
     // A `set_workflow_step` call from session `id`.
     callStepTool: async (id: string, step: string) => {
       const pending = stepTools[0]
@@ -347,8 +373,13 @@ const SAVED_AT = START - 1_000;
 const BEFORE_SAVE = START - 5_000;
 const AFTER_SAVE = START - 500;
 
-// Workflow's data folder holding `flow` as s1's saved flow under h1.
-async function savedFlowData(flow: Partial<SessionFlow>): Promise<MemoryFiles> {
+type FlowFields = Partial<SessionFlow & HeavyState>;
+
+// Workflow's data folder holding a Heavy flow of `fields` as s1's saved flow under
+// h1.
+async function savedFlowData(fields: FlowFields): Promise<MemoryFiles> {
+  const { planDir, progress, reviewRoundsAtMake, countdownEndsAt, ...flow } =
+    fields;
   const data = createMemoryFiles();
   await data.write(
     FLOWS_FILE,
@@ -357,13 +388,47 @@ async function savedFlowData(flow: Partial<SessionFlow>): Promise<MemoryFiles> {
         {
           hostSessionId: 'h1',
           savedAt: SAVED_AT,
-          flow: { ...newFlow('s-old', '/r'), ...flow },
+          flow: {
+            ...newFlow('s-old', '/r'),
+            workflow: HEAVY_WORKFLOW_ID,
+            ...flow,
+            state: {
+              planDir: planDir ?? null,
+              progress: progress ?? null,
+              reviewRoundsAtMake: reviewRoundsAtMake ?? null,
+              countdownEndsAt: countdownEndsAt ?? null,
+            },
+          },
         },
       ],
     }),
   );
   return data;
 }
+
+// A workflow that claims the skill `x:stub`.
+function stubWorkflow(fields: Partial<MainWorkflow> = {}): MainWorkflow {
+  return {
+    id: 'stub',
+    order: 10,
+    claims: (signal) => startsSkill(signal, 'x:stub'),
+    firstStage: 'scope',
+    stages: [],
+    ...fields,
+  };
+}
+
+// The main agent's `usage`: it went out for a reply.
+const USAGE: AgentEvent = {
+  type: 'usage',
+  at: 1,
+  agentId: 'main',
+  contextTokens: 10,
+  contextWindow: null,
+  autocompact: { warnAt: null, compactAt: null },
+  cacheExpiresAt: null,
+  spendUsd: null,
+} as unknown as AgentEvent;
 
 // Opens s1 and runs a wigley:feature turn that writes the plan and ends, its
 // events flagged `replayed` as given.
@@ -440,7 +505,7 @@ describe('workflowMainPart', () => {
       await runFeatureTurn(workflow);
 
       const ready = workflow.lastFlow();
-      expect(ready).toMatchObject({
+      expect(workflow.lastHeavy()).toMatchObject({
         stage: 'planReady',
         planDir: PLAN_DIR,
         progress: readPlanProgress(PLAN),
@@ -471,7 +536,7 @@ describe('workflowMainPart', () => {
 
     await runFeatureTurn(workflow, true);
 
-    expect(workflow.lastFlow()).toMatchObject({
+    expect(workflow.lastHeavy()).toMatchObject({
       stage: 'planReady',
       planDir: PLAN_DIR,
       countdownEndsAt: null,
@@ -489,7 +554,7 @@ describe('workflowMainPart', () => {
     await workflow.replayBurst(featureTurnEvents(1));
     await settled();
 
-    expect(workflow.lastFlow()).toMatchObject({
+    expect(workflow.lastHeavy()).toMatchObject({
       stage: 'planReady',
       planDir: PLAN_DIR,
       progress: readPlanProgress(PLAN),
@@ -502,10 +567,10 @@ describe('workflowMainPart', () => {
 
   it.each<{
     name: string;
-    saved: Partial<SessionFlow>;
+    saved: FlowFields;
     actionFirst?: string;
     replay: AgentEvent[];
-    expected: Partial<SessionFlow>;
+    expected: FlowFields;
   }>([
     {
       name: 'a planReady the user cancelled, an older feature turn',
@@ -604,7 +669,7 @@ describe('workflowMainPart', () => {
       await workflow.replayBurst(replay);
       await settled();
 
-      expect(workflow.lastFlow()).toMatchObject({
+      expect(workflow.lastHeavy()).toMatchObject({
         ...expected,
         countdownEndsAt: null,
       });
@@ -646,7 +711,7 @@ describe('workflowMainPart', () => {
         await workflow.agentEvent(event);
       }
 
-      expect(workflow.lastFlow()).toMatchObject({
+      expect(workflow.lastHeavy()).toMatchObject({
         stage: 'planReady',
         countdownEndsAt: START + 10_000,
       });
@@ -683,7 +748,7 @@ describe('workflowMainPart', () => {
     await settled();
 
     expect(workflow.chatCalls).toEqual([]);
-    expect(workflow.lastFlow()?.countdownEndsAt).toBeNull();
+    expect(workflow.lastHeavy()?.countdownEndsAt).toBeNull();
   });
 
   it('turnEndedChangingNoField_StillChecksThePlan', async () => {
@@ -719,7 +784,7 @@ describe('workflowMainPart', () => {
       path: PLAN_FILE,
     });
 
-    expect(workflow.lastFlow()?.progress).toEqual(
+    expect(workflow.lastHeavy()?.progress).toEqual(
       readPlanProgress(PLAN_TICKED),
     );
   });
@@ -804,19 +869,26 @@ describe('workflowMainPart', () => {
     expect(workflow.stepTools).toHaveLength(1);
     expect(stepsOffered()).not.toContain('extra');
 
-    const added = workflow.addStage({
-      id: 'extra',
-      order: 23,
-      reportedAs: 'extra',
-      enter: (_flow, signal) =>
-        signal.type === 'stepReported' && signal.step === 'extra'
-          ? 'extra'
-          : null,
-    });
+    const added = workflow.exported().addWorkflow(
+      stubWorkflow({
+        stages: [
+          {
+            id: 'extra',
+            order: 23,
+            reportedAs: 'extra',
+            enter: (_flow, signal) =>
+              signal.type === 'stepReported' && signal.step === 'extra'
+                ? 'extra'
+                : null,
+          },
+        ],
+      }),
+    );
 
     expect(workflow.stepTools).toHaveLength(1);
     expect(stepsOffered()).toContain('extra');
     await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
     await workflow.callStepTool('s1', 'extra');
     expect(workflow.lastFlow()?.stage).toBe('extra');
 
@@ -916,20 +988,374 @@ describe('workflowMainPart', () => {
     expect(await harness.invoke('flows')).toEqual([]);
   });
 
-  it('exports_ConsumerDisposed_FreesTheStageId', () => {
+  it('exports_ConsumerDisposed_FreesTheWorkflowId', () => {
     const harness = startMainPart(workflowMainPart, {
       dependencies: [FAKE_SESSIONS],
     });
     const exportsFor = (consumer: ReturnType<typeof createRegistrations>) =>
       harness.started().exports?.(consumer) as WorkflowMainExports;
-    const stage: MainStage = { id: 'extra', order: 70, enter: () => null };
     const consumerA = createRegistrations();
-    exportsFor(consumerA).addStage(stage);
+    exportsFor(consumerA).addWorkflow(stubWorkflow());
 
     consumerA.dispose();
 
     expect(() =>
-      exportsFor(createRegistrations()).addStage(stage),
+      exportsFor(createRegistrations()).addWorkflow(stubWorkflow()),
     ).not.toThrow();
+  });
+
+  it('addWorkflow_StagesOutOfOrder_AsksThemByOrderWithTiesInArrayOrder', async () => {
+    const answers = (id: string, order: number) => ({
+      id,
+      order,
+      enter: () => id,
+    });
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(
+      stubWorkflow({
+        stages: [
+          answers('late', 20),
+          answers('tied', 10),
+          answers('tied2', 10),
+        ],
+      }),
+    );
+    await workflow.openS1();
+
+    await workflow.agentEvent(skill('x:stub', ''));
+
+    expect(workflow.lastFlow()?.stage).toBe('tied');
+  });
+
+  it.each<{
+    name: string;
+    events: AgentEvent[];
+    replayed: boolean;
+    missedLevel: boolean;
+    workflow: string | null;
+  }>([
+    {
+      name: 'MissedLevel_LiveTurnWithWork_SetsAndPushes',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        USAGE,
+        { type: 'turnEnded', at: 1 },
+      ],
+      replayed: false,
+      missedLevel: true,
+      workflow: null,
+    },
+    {
+      name: 'MissedLevel_LiveTurnWithNoWork_StaysFalse',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        { type: 'turnEnded', at: 1 },
+      ],
+      replayed: false,
+      missedLevel: false,
+      workflow: null,
+    },
+    {
+      name: 'MissedLevel_ReplayedTurn_StaysFalse',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        USAGE,
+        { type: 'turnEnded', at: 1 },
+      ],
+      replayed: true,
+      missedLevel: false,
+      workflow: null,
+    },
+    {
+      name: 'MissedLevel_ClaimedInTurn_StaysFalse',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        skill('wigley:feature', ''),
+        USAGE,
+        { type: 'turnEnded', at: 1 },
+      ],
+      replayed: false,
+      missedLevel: false,
+      workflow: HEAVY_WORKFLOW_ID,
+    },
+    {
+      name: 'MissedLevel_SessionEnded_Sets',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        USAGE,
+        { type: 'sessionEnded', at: 1 },
+      ],
+      replayed: false,
+      missedLevel: true,
+      workflow: null,
+    },
+  ])(
+    '$name',
+    async ({ events, replayed, missedLevel, workflow: workflowId }) => {
+      const workflow = startWorkflowPart(SETTINGS);
+      await workflow.openS1();
+
+      for (const event of events) {
+        await workflow.agentEvent(event, 'h1', replayed);
+      }
+
+      expect(workflow.lastFlow()).toMatchObject({
+        missedLevel,
+        workflow: workflowId,
+      });
+    },
+  );
+
+  it.each<{
+    name: string;
+    end: (workflow: ReturnType<typeof startWorkflowPart>) => Promise<void>;
+  }>([
+    {
+      name: 'sessions.ended',
+      end: (workflow) => workflow.emit('sessions.ended', { sessionId: 's1' }),
+    },
+    {
+      name: 'forgetFlows',
+      end: async (workflow) => {
+        workflow.exported().selfTestHooks?.forgetFlows('/r');
+      },
+    },
+  ])('TurnWork_ForgottenOnEnd ($name)', async ({ end }) => {
+    const workflow = startWorkflowPart(SETTINGS, { selfTest: true });
+    await workflow.openS1();
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+    await workflow.agentEvent(USAGE);
+
+    await end(workflow);
+    await workflow.openS1();
+    await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+
+    expect(workflow.lastFlow()?.missedLevel).toBe(false);
+  });
+
+  it.each<{
+    name: string;
+    event: AgentEvent;
+    replayed: boolean;
+    origin: string;
+    whole: boolean;
+    changes: boolean;
+  }>([
+    {
+      name: 'a live signal that changes nothing',
+      event: { type: 'turnEnded', at: AFTER_SAVE },
+      replayed: false,
+      origin: 'live',
+      whole: true,
+      changes: false,
+    },
+    {
+      name: 'a replayed event past the save',
+      event: { type: 'turnStarted', at: AFTER_SAVE },
+      replayed: true,
+      origin: 'replay',
+      whole: true,
+      changes: true,
+    },
+    {
+      name: 'a replayed event at the save',
+      event: { type: 'turnStarted', at: SAVED_AT },
+      replayed: true,
+      origin: 'replay',
+      whole: false,
+      changes: true,
+    },
+    {
+      name: 'a replayed turn end at the save over a flow with no turn',
+      event: { type: 'turnEnded', at: SAVED_AT },
+      replayed: true,
+      origin: 'replay',
+      whole: false,
+      changes: false,
+    },
+  ])(
+    'Observer_Folded ($name)',
+    async ({ event, replayed, origin, whole, changes }) => {
+      const data = await savedFlowData({ stage: 'make' });
+      const workflow = startWorkflowPart(SETTINGS, { data });
+      const folded: FoldEvent[] = [];
+      workflow.exported().observe({
+        folded: (fold) => folded.push(fold),
+        opened: () => undefined,
+        closed: () => undefined,
+        replaying: () => undefined,
+      });
+      await workflow.openS1();
+
+      await workflow.agentEvent(event, 'h1', replayed);
+
+      expect(folded).toHaveLength(1);
+      expect(folded[0]).toMatchObject({ sessionId: 's1', origin, whole });
+      expect(folded[0].after === folded[0].before).toBe(!changes);
+    },
+  );
+
+  it('Observer_Members', async () => {
+    const workflow = startWorkflowPart(SETTINGS, { selfTest: true });
+    const calls: unknown[] = [];
+    workflow.exported().observe({
+      folded: ({ whole }) => calls.push(['folded', whole]),
+      opened: (flow) => calls.push(['opened', flow.sessionId]),
+      closed: (sessionId) => calls.push(['closed', sessionId]),
+      replaying: (sessionId) => calls.push(['replaying', sessionId]),
+    });
+
+    await workflow.openS1();
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 }, 'h1', true);
+    await workflow.emit('sessions.ended', { sessionId: 's1' });
+    await workflow.openS1();
+    workflow.exported().selfTestHooks?.forgetFlows('/r');
+
+    expect(calls).toEqual([
+      ['opened', 's1'],
+      ['replaying', 's1'],
+      ['folded', true],
+      ['closed', 's1'],
+      ['opened', 's1'],
+      ['closed', 's1'],
+    ]);
+  });
+
+  it('Observer_Disposed_HearsNothing', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    const opened: string[] = [];
+    const observer = workflow.exported().observe({
+      folded: () => undefined,
+      opened: (flow) => opened.push(flow.sessionId),
+      closed: () => undefined,
+      replaying: () => undefined,
+    });
+
+    observer.dispose();
+    await workflow.openS1();
+
+    expect(opened).toEqual([]);
+  });
+
+  it('Exports_SetState_KeepsSavedAtAndSends', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    const folded: FoldEvent[] = [];
+    workflow.exported().observe({
+      folded: (fold) => folded.push(fold),
+      opened: () => undefined,
+      closed: () => undefined,
+      replaying: () => undefined,
+    });
+    await workflow.openS1();
+    workflow.exported().signal('s1', { type: 'turnStarted' }, 'live');
+    const savedBefore = await workflow.savedAt();
+    folded.length = 0;
+    const sentBefore = workflow.sent.length;
+    workflow.time.advance(5);
+
+    workflow.exported().setState('s1', { n: 1 });
+
+    expect(workflow.exported().flowOf('s1')?.state).toEqual({ n: 1 });
+    expect(await workflow.savedAt()).toBe(savedBefore);
+    expect(workflow.sent).toHaveLength(sentBefore + 1);
+    expect(folded).toEqual([]);
+  });
+
+  it('Exports_SetState_NoFlowOrUndefined', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.openS1();
+
+    workflow.exported().setState('s-none', { n: 1 });
+    workflow.exported().setState('s1', undefined);
+
+    expect(workflow.exported().flowOf('s-none')).toBeNull();
+    expect(workflow.exported().flowOf('s1')?.state).toBeNull();
+  });
+
+  it.each<{ origin: 'live' | 'observed'; stamped: boolean }>([
+    { origin: 'observed', stamped: false },
+    { origin: 'live', stamped: true },
+  ])('Exports_Signal_StampsOnlyLive ($origin)', async ({ origin, stamped }) => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.openS1();
+    const signal: WorkflowSignal = { type: 'turnStarted' };
+    const savedBefore = await workflow.savedAt();
+    workflow.time.advance(5);
+
+    workflow.exported().signal('s1', signal, origin);
+
+    expect(await workflow.savedAt()).toBe(stamped ? START + 5 : savedBefore);
+  });
+
+  it('Open_SavedCountdown_RunsNone', async () => {
+    const data = await savedFlowData({
+      stage: 'planReady',
+      countdownEndsAt: 9000,
+    });
+    const workflow = startWorkflowPart(
+      { ...SETTINGS, autoClearAndMake: true },
+      { data },
+    );
+
+    await workflow.openS1();
+
+    expect(workflow.lastHeavy()?.countdownEndsAt).toBeNull();
+    expect(await workflow.savedAt()).toBe(SAVED_AT);
+    expect(workflow.time.liveTimers()).toBe(0);
+  });
+
+  it('Countdown_CancelStopsTheTimer', async () => {
+    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+    await runFeatureTurn(workflow);
+    expect(workflow.time.liveTimers()).toBe(1);
+
+    await workflow.runAction('cancelCountdown');
+
+    expect(workflow.time.liveTimers()).toBe(0);
+    expect(workflow.lastHeavy()?.countdownEndsAt).toBeNull();
+  });
+
+  it("Countdown_CancelOnAnotherWorkflow'sFlow_LeavesItsState", async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(stubWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    const state = {
+      countdownEndsAt: 5,
+      planDir: null,
+      progress: null,
+      reviewRoundsAtMake: null,
+    };
+    workflow.exported().setState('s1', state);
+
+    await workflow.runAction('cancelCountdown');
+
+    expect(workflow.exported().flowOf('s1')?.state).toBe(state);
+  });
+
+  it('FlowLeavingHeavy_StopsItsWatchAndCountdown', async () => {
+    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+    workflow.exported().addWorkflow(stubWorkflow());
+    await runFeatureTurn(workflow);
+    expect(workflow.time.liveTimers()).toBe(1);
+
+    await workflow.agentEvent(skill('x:stub', ''));
+    const signalsAfterTheClaim: WorkflowSignal[] = [];
+    workflow.exported().observe({
+      folded: ({ signal }) => signalsAfterTheClaim.push(signal),
+      opened: () => undefined,
+      closed: () => undefined,
+      replaying: () => undefined,
+    });
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+
+    expect(signalsAfterTheClaim).toEqual([]);
+    expect(workflow.time.liveTimers()).toBe(0);
+    expect(workflow.lastFlow()).toMatchObject({
+      workflow: 'stub',
+      stage: 'scope',
+      movedUpFrom: HEAVY_WORKFLOW_ID,
+    });
   });
 });

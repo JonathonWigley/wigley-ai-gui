@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../../contract';
 import { foldFlow, newFlow } from '../../flow';
 import type { PlanProgress } from '../../plan-reader';
-import { BUILT_IN_MAIN_STAGES } from '../index';
+import {
+  HEAVY_WORKFLOW_ID,
+  heavySignal,
+  type HeavyState,
+  heavyStateOf,
+  withHeavyState,
+} from '../heavy-contract';
+import { heavyMainWorkflow } from '../heavy-workflow';
 
 const PLAN_DIR = '/r/docs/features/f/plan-f';
 
@@ -17,16 +24,24 @@ function progress(total: number): PlanProgress {
   };
 }
 
+type FlowFields = Partial<SessionFlow & HeavyState>;
+
 // An explore flow with a plan written, its progress read with three boxes, and
 // nothing busy, unless the row's fields say otherwise.
-function flowWith(fields: Partial<SessionFlow>): SessionFlow {
-  return {
-    ...newFlow('s1', '/r'),
-    stage: 'explore',
-    planDir: PLAN_DIR,
-    progress: progress(3),
-    ...fields,
-  };
+function flowWith(fields: FlowFields): SessionFlow {
+  const { planDir, progress: read, ...flow } = fields;
+  return withHeavyState(
+    {
+      ...newFlow('s1', '/r'),
+      workflow: HEAVY_WORKFLOW_ID,
+      stage: 'explore',
+      ...flow,
+    },
+    {
+      planDir: planDir === undefined ? PLAN_DIR : planDir,
+      progress: read === undefined ? progress(3) : read,
+    },
+  );
 }
 
 function skillStarted(skill: string): WorkflowSignal {
@@ -38,7 +53,7 @@ function foldAll(
   signals: readonly WorkflowSignal[],
 ): SessionFlow {
   return signals.reduce(
-    (current, signal) => foldFlow(current, signal, BUILT_IN_MAIN_STAGES),
+    (current, signal) => foldFlow(current, signal, [heavyMainWorkflow]),
     flow,
   );
 }
@@ -48,9 +63,9 @@ const TURN_ENDED: WorkflowSignal = { type: 'turnEnded' };
 describe('planReadyMainStage', () => {
   it.each<{
     name: string;
-    flow: Partial<SessionFlow>;
+    flow: FlowFields;
     signals: readonly WorkflowSignal[];
-    expected: Partial<SessionFlow>;
+    expected: FlowFields;
   }>([
     {
       name: 'turnEnded with a plan with boxes',
@@ -67,7 +82,7 @@ describe('planReadyMainStage', () => {
     {
       name: 'planChanged with boxes',
       flow: { progress: null },
-      signals: [{ type: 'planChanged', progress: progress(3) }],
+      signals: [heavySignal({ type: 'planChanged', progress: progress(3) })],
       expected: { stage: 'planReady' },
     },
     {
@@ -91,7 +106,7 @@ describe('planReadyMainStage', () => {
     {
       name: 'planChanged while a turn runs',
       flow: { turnRunning: true, progress: null },
-      signals: [{ type: 'planChanged', progress: progress(3) }],
+      signals: [heavySignal({ type: 'planChanged', progress: progress(3) })],
       expected: { stage: 'explore' },
     },
     {
@@ -137,6 +152,8 @@ describe('planReadyMainStage', () => {
       expected: { stage: 'explore' },
     },
   ])('$name', ({ flow, signals, expected }) => {
-    expect(foldAll(flowWith(flow), signals)).toMatchObject(expected);
+    const folded = foldAll(flowWith(flow), signals);
+
+    expect({ ...folded, ...heavyStateOf(folded) }).toMatchObject(expected);
   });
 });

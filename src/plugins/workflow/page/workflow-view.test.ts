@@ -26,6 +26,11 @@ import type {
 import type { PlanProgress } from '../plan-reader';
 import { createStageList } from '../stage-list';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
+import {
+  HEAVY_WORKFLOW_ID,
+  type HeavyState,
+  withHeavyState,
+} from '../stages/heavy-contract';
 import { createWorkflowView, type WorkflowView } from './workflow-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
@@ -71,22 +76,38 @@ function progressOf(
   };
 }
 
+type FlowFields = Partial<SessionFlow & HeavyState>;
+
 function flowIn(
   stage: string,
-  fields: Partial<SessionFlow> = {},
+  fields: FlowFields = {},
   sessionId = 'a',
 ): SessionFlow {
   const isIdle = stage === 'idle';
-  return {
-    ...newFlow(sessionId, '/p/proj'),
-    stage,
-    planDir: isIdle ? null : PLAN_DIR,
-    progress: isIdle ? null : progressOf(0, [3, 3, 1]),
-    ...fields,
-  };
+  const { planDir, progress, reviewRoundsAtMake, countdownEndsAt, ...flow } =
+    fields;
+  return withHeavyState(
+    {
+      ...newFlow(sessionId, '/p/proj'),
+      workflow: HEAVY_WORKFLOW_ID,
+      stage,
+      ...flow,
+    },
+    {
+      planDir: planDir === undefined ? (isIdle ? null : PLAN_DIR) : planDir,
+      progress:
+        progress === undefined
+          ? isIdle
+            ? null
+            : progressOf(0, [3, 3, 1])
+          : progress,
+      reviewRoundsAtMake: reviewRoundsAtMake ?? null,
+      countdownEndsAt: countdownEndsAt ?? null,
+    },
+  );
 }
 
-const BUSY: Record<string, Partial<SessionFlow>> = {
+const BUSY: Record<string, FlowFields> = {
   none: {},
   turn: { turnRunning: true },
   subagent: { runningSubagents: ['agent-1'] },

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../../contract';
 import { foldFlow, newFlow } from '../../flow';
-import { BUILT_IN_MAIN_STAGES } from '../index';
+import { HEAVY_WORKFLOW_ID } from '../heavy-contract';
+import { heavyMainWorkflow } from '../heavy-workflow';
 
 function flowIn(stage: string): SessionFlow {
-  return { ...newFlow('s1', '/r'), stage };
+  return { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage };
 }
 
 const PRIMER_STARTED: WorkflowSignal = {
@@ -28,7 +29,7 @@ describe('primerMainStage', () => {
     },
   ])('$name', ({ from, stage }) => {
     expect(
-      foldFlow(flowIn(from), PRIMER_STARTED, BUILT_IN_MAIN_STAGES).stage,
+      foldFlow(flowIn(from), PRIMER_STARTED, [heavyMainWorkflow]).stage,
     ).toBe(stage);
   });
 });

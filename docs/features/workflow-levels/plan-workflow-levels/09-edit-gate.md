@@ -1,6 +1,6 @@
 # 09 — Edit gate hook
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -112,3 +112,4 @@ Commit:    one commit for the group, on `workflow-levels` of wigley-agents, by p
 
 ## Proof
 
+Commit wigley-agents 70a4e4e · proof: diff read against the spec; Produces all present (hook, install, level_skill_started, LEVEL_SKILLS, README); 14 unittest tests pass · concerns: argparse exits 2 on a hand-mistyped wired command; write_settings near-copies unity-pool's; /resume unchecked; Windows stop untested; tests go past the spec's tables

@@ -63,9 +63,11 @@ describe('createStageList', () => {
 
   it('add_HeldId_ThrowsNamingTheIdAndKeepsTheList', () => {
     const list = createStageList<FakeStage>();
-    list.add(stage('a', 10));
+    list.add(stage('build', 10));
 
-    expect(() => list.add(stage('a', 20))).toThrow(/\ba\b.*already added/);
-    expect(list.all()).toEqual([stage('a', 10)]);
+    expect(() => list.add(stage('build', 20))).toThrow(
+      /^build is already added$/,
+    );
+    expect(list.all()).toEqual([stage('build', 10)]);
   });
 });

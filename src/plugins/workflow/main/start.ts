@@ -4,6 +4,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
@@ -12,38 +13,31 @@ import {
   sessionsMainKey,
 } from '../../sessions/contract';
 import type {
-  MainStage,
+  FoldEvent,
+  MainWorkflow,
   SessionFlow,
+  SignalOrigin,
   StageId,
   WorkflowChannel,
   WorkflowMainExports,
+  WorkflowObserver,
+  WorkflowSelfTestHooks,
   WorkflowSignal,
 } from '../contract';
-import { foldFlow, foldRunningState, isPlanFile } from '../flow';
+import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
-import { BUILT_IN_MAIN_STAGES } from '../stages';
-import { createWorkflowActions } from './actions';
+import { heavyMainWorkflow } from '../stages/heavy-workflow';
 import { signalOf } from './agent-signals';
-import { createCountdown } from './countdown';
 import { createFlowStore } from './flow-store';
-import { createPlanWatch } from './plan-watch';
+import { startHeavyRuntime } from './heavy-runtime';
 import { workflowSelfTestScript } from './selftest-script';
 import {
   SET_WORKFLOW_STEP_TOOL,
   startStepTool,
   stepToolDefinition,
 } from './step-tool';
-
-// Where a fold's signal came from. 'live' is a live event or a stage action
-// (Make in new session, Dismiss); only it stamps the flow's save time, which a
-// replayed event is compared against, so a replay of what it decided stays out
-// of the flow. Neither a replay nor a read of the plan file adds to that.
-type SignalOrigin = 'live' | 'replay' | 'planRead';
-
-// Where a change to a flow came from: a fold, or a countdown's Cancel or firing,
-// which says nothing of how far the flow has heard the log and stamps no time.
-type FlowChangeOrigin = SignalOrigin | 'countdown';
+import { createTurnWork } from './turn-work';
 
 type WorkflowApi = MainApi<
   typeof workflowManifest,
@@ -53,26 +47,13 @@ type WorkflowApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// What the self-test script drives main through. `forgetFlows` drops every
-// flow in the folder, saved ones included, stopping each open one's countdown
-// and plan watch, for a run that closed the folder's sessions;
-// `onMainTurnEnded` hears each main-agent `turnEnded` once main applied it,
-// whether or not the flow changed; `callStepTool` makes a `set_workflow_step`
-// call from the session, since the fake harness calls no MCP tool.
-export interface WorkflowSelfTestHooks {
-  forgetFlows(projectDir: string): void;
-  onMainTurnEnded(listener: (sessionId: string) => void): Disposable;
-  callStepTool(sessionId: string, step: string): void;
-}
-
 // Folds each owned Chat-tab session's agent events and session events into its
-// flow through the registered stages, keeps the flows in `flows.json` keyed by
+// flow through the registered workflows, keeps the flows in `flows.json` keyed by
 // host session id, folds a re-attach's replay only past the flow's last save,
-// watches each flow's plan folder, runs the main-side
-// workflow commands for the page and the plan-ready auto-start countdown,
-// contributes `set_workflow_step`, whose steps are the registered stages'
-// `reportedAs`, and sends every flow to the page on each change. Exports
-// `addStage`.
+// marks a live turn with agent work and no workflow as a missed level, tells each
+// observer every fold, open, close and replay, contributes `set_workflow_step`,
+// whose steps are the workflows' stages' `reportedAs`, and sends every flow to the
+// page on each change. Exports `addWorkflow`, `signal`, `setState` and `observe`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -81,7 +62,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const { log, clock } = services;
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
-    const stages = createStageList<MainStage>();
+    const workflows = createStageList<MainWorkflow>();
     const store = createFlowStore({
       files: api.data,
       log,
@@ -98,103 +79,41 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       { hostSessionId: string; projectDir: string }
     >();
     const turnEndedListeners = new Set<(sessionId: string) => void>();
-    // Sessions whose last turn end was replayed, until a live turn starts or
-    // ends: the plan read such a turn causes settles after its replay, as a plain
-    // signal.
-    const replayedTurnEnds = new Set<string>();
+    const turnWork = createTurnWork();
+    const observers: WorkflowObserver[] = [];
 
     const sendFlows = () => channel.send('flows', store.all());
-    const stageOf = (flow: SessionFlow) =>
-      stages.all().find((stage) => stage.id === flow.stage);
 
-    const planWatch = createPlanWatch({
-      files: services.files,
-      log,
-      signal: (sessionId, signal) => apply(sessionId, signal, 'planRead'),
-    });
-    const countdown = createCountdown({
-      timers: services.timers,
-      clock,
-      fire: (sessionId) => fireCountdown(sessionId),
-    });
-    const actions = createWorkflowActions({
-      chat,
-      log,
-      flowOf: (sessionId) => store.get(sessionId),
-      signal: (sessionId, signal) => apply(sessionId, signal, 'live'),
-      cancelCountdown: (sessionId) => cancelCountdown(sessionId),
-    });
-
-    // The countdown a flow that just entered an auto-start stage begins.
-    const withCountdown = (flow: SessionFlow, next: SessionFlow) => {
-      const settings = api.settings();
-      const startsCountdown =
-        !replayedTurnEnds.has(flow.sessionId) &&
-        next.stage !== flow.stage &&
-        stageOf(next)?.autoCommand !== undefined &&
-        next.countdownEndsAt === null &&
-        settings.autoClearAndMake;
-      return startsCountdown
-        ? {
-            ...next,
-            countdownEndsAt:
-              clock.now() + Math.max(1, settings.autoStartSeconds) * 1000,
-          }
-        : next;
-    };
-
-    const putFlow = (next: SessionFlow, origin: FlowChangeOrigin) => {
+    const putFlow = (next: SessionFlow, origin: SignalOrigin) => {
       if (origin === 'live') {
         store.put(next);
       } else {
         store.putKeepingSavedAt(next);
       }
-      countdown.sync(next);
       sendFlows();
     };
 
-    const noteTurnBoundary = (
-      sessionId: string,
-      signal: WorkflowSignal,
-      replayed: boolean,
-    ) => {
-      if (signal.type === 'turnEnded' && replayed) {
-        replayedTurnEnds.add(sessionId);
-      }
-      const isLiveBoundary =
-        !replayed &&
-        (signal.type === 'turnStarted' || signal.type === 'turnEnded');
-      if (isLiveBoundary) {
-        replayedTurnEnds.delete(sessionId);
-      }
-    };
+    const tellObservers = (call: (observer: WorkflowObserver) => void) =>
+      callEach([...observers], call);
 
-    // The one change path every full fold takes. A replayed event's fold starts
-    // no countdown.
+    const tellFolded = (event: FoldEvent) =>
+      tellObservers((observer) => observer.folded(event));
+
+    // The one change path every full fold takes.
     function apply(
       sessionId: string,
       signal: WorkflowSignal,
       origin: SignalOrigin,
     ): void {
-      const flow = store.get(sessionId);
-      if (flow === null) {
+      const before = store.get(sessionId);
+      if (before === null) {
         return;
       }
-      const folded = foldFlow(flow, signal, stages.all());
-      if (signal.type === 'turnEnded') {
-        planWatch.check(sessionId);
+      const after = foldFlow(before, signal, workflows.all());
+      if (after !== before) {
+        putFlow(after, origin);
       }
-      if (signal.type === 'fileWritten' && isPlanFile(signal.path)) {
-        planWatch.follow(sessionId, folded.planDir);
-      }
-      if (folded === flow) {
-        return;
-      }
-      const next = origin === 'replay' ? folded : withCountdown(flow, folded);
-      putFlow(next, origin);
-      if (next.planDir !== flow.planDir) {
-        planWatch.follow(sessionId, next.planDir);
-      }
+      tellFolded({ sessionId, before, after, signal, origin, whole: true });
     }
 
     // A replayed event at or before the flow's last save is already in the flow,
@@ -208,45 +127,34 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, signal, 'replay');
         return;
       }
-      const flow = store.get(sessionId);
-      if (flow !== null) {
-        const next = foldRunningState(flow, signal);
-        if (next !== flow) {
-          putFlow(next, 'replay');
-        }
-      }
-    }
-
-    function cancelCountdown(sessionId: string): void {
-      const flow = store.get(sessionId);
-      if (flow !== null && flow.countdownEndsAt !== null) {
-        putFlow({ ...flow, countdownEndsAt: null }, 'countdown');
-      }
-    }
-
-    function fireCountdown(sessionId: string): void {
-      const flow = store.get(sessionId);
-      if (flow === null || flow.countdownEndsAt === null) {
+      const before = store.get(sessionId);
+      if (before === null) {
         return;
       }
-      putFlow({ ...flow, countdownEndsAt: null }, 'countdown');
-      const command = stageOf(flow)?.autoCommand;
-      if (command === undefined) {
+      const after = foldRunningState(before, signal);
+      if (after !== before) {
+        putFlow(after, 'replay');
+      }
+      tellFolded({
+        sessionId,
+        before,
+        after,
+        signal,
+        origin: 'replay',
+        whole: false,
+      });
+    }
+
+    const applyMissedLevel = (sessionId: string) => {
+      const flow = store.get(sessionId);
+      if (flow === null || !turnWork.worked(sessionId)) {
         return;
       }
-      const name =
-        sessions.label(sessionId) ?? services.paths.base(flow.projectDir);
-      actions.run(sessionId, command).then(
-        (ran) => {
-          if (ran) {
-            log(`ran ${command} in ${name}`);
-          }
-        },
-        (error: unknown) => {
-          log(`auto-start failed: ${errorText(error)}`);
-        },
-      );
-    }
+      const next = markMissedLevel(flow);
+      if (next !== flow) {
+        putFlow(next, 'live');
+      }
+    };
 
     // Folds a reported step as a live event; resolves whether the flow is now in
     // that stage. No flow, or a stage rule that ignores it, resolves false.
@@ -255,24 +163,27 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, { type: 'stepReported', step: stage }, 'live');
         return store.get(sessionId)?.stage === stage;
       });
+    const reportableStages = () =>
+      workflows.all().flatMap((workflow) => workflow.stages);
     const startStepToolSession = startStepTool({
-      stages: () => stages.all(),
+      stages: reportableStages,
       reportStep,
     });
 
     // Contributes the tool again when the reportable stages change, so its
-    // schema lists a stage a plugin added.
+    // schema lists a stage a workflow added.
     let stepTool: Disposable | null = null;
     const contributeStepTool = () => {
       stepTool?.dispose();
       stepTool = sessions.contributeTools(
-        [stepToolDefinition(stages.all())],
+        [stepToolDefinition(reportableStages())],
         startStepToolSession,
       );
     };
-    const addStage = (stage: MainStage): Disposable => {
-      const added = stages.add(stage);
-      if (stage.reportedAs === undefined) {
+    const addWorkflow = (workflow: MainWorkflow): Disposable => {
+      const stages = [...workflow.stages].sort((a, b) => a.order - b.order);
+      const added = workflows.add({ ...workflow, stages });
+      if (!stages.some((stage) => stage.reportedAs !== undefined)) {
         return added;
       }
       contributeStepTool();
@@ -284,10 +195,50 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       };
     };
 
-    for (const stage of BUILT_IN_MAIN_STAGES) {
-      stages.add(stage);
-    }
-    contributeStepTool();
+    const observe = (observer: WorkflowObserver): Disposable => {
+      observers.push(observer);
+      return {
+        dispose() {
+          const index = observers.indexOf(observer);
+          if (index !== -1) {
+            observers.splice(index, 1);
+          }
+        },
+      };
+    };
+
+    const engine = {
+      signal: (
+        sessionId: string,
+        signal: WorkflowSignal,
+        origin: 'live' | 'observed',
+      ) => apply(sessionId, signal, origin),
+      flowOf: (sessionId: string) => store.get(sessionId),
+      flows: () => store.all(),
+      setState(sessionId: string, state: unknown) {
+        const flow = store.get(sessionId);
+        if (flow === null) {
+          return;
+        }
+        store.putKeepingSavedAt({ ...flow, state: state ?? null });
+        sendFlows();
+      },
+      observe,
+      ready,
+    };
+
+    addWorkflow(heavyMainWorkflow);
+    const heavyRuntime = startHeavyRuntime({
+      workflow: engine,
+      chat,
+      label: (sessionId) => sessions.label(sessionId),
+      files: services.files,
+      timers: services.timers,
+      clock,
+      log,
+      paths: services.paths,
+      settings: () => api.settings(),
+    });
 
     events.on('sessions.connected', ({ id, info }) => {
       const { sessionId: hostSessionId, projectDir } = info;
@@ -306,7 +257,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         }
         connected.delete(sessionId);
         const flow = store.open(sessionId, pair.hostSessionId, pair.projectDir);
-        planWatch.follow(sessionId, flow.planDir);
+        tellObservers((observer) => observer.opened(flow));
         sendFlows();
       });
     });
@@ -322,9 +273,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     events.on('sessions.ended', ({ sessionId }) => {
       void ready.then(() => {
         connected.delete(sessionId);
-        countdown.stop(sessionId);
-        planWatch.follow(sessionId, null);
-        replayedTurnEnds.delete(sessionId);
+        turnWork.forget(sessionId);
+        tellObservers((observer) => observer.closed(sessionId));
         store.drop(sessionId);
         sendFlows();
       });
@@ -337,20 +287,22 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           if (flow === null) {
             return;
           }
-          // The open's plan read can arm a countdown before the replay says a
-          // turn still runs.
-          if (replayed && flow.countdownEndsAt !== null) {
-            putFlow({ ...flow, countdownEndsAt: null }, 'replay');
+          if (replayed) {
+            tellObservers((observer) => observer.replaying(sessionId));
+          } else {
+            turnWork.note(sessionId, event);
           }
           const fromCurrentHost = store.hostIdOf(sessionId) === hostSessionId;
           for (const signal of signalOf(event, flow, fromCurrentHost)) {
-            noteTurnBoundary(sessionId, signal, replayed);
             if (replayed) {
               applyReplayed(sessionId, signal, event.at);
             } else {
               apply(sessionId, signal, 'live');
             }
             if (signal.type === 'turnEnded') {
+              if (!replayed) {
+                applyMissedLevel(sessionId);
+              }
               for (const listener of turnEndedListeners) {
                 listener(sessionId);
               }
@@ -368,8 +320,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           `settings: autoClearAndMake ${onOff}, autoStartSeconds ${String(seconds)}`,
         );
         if (!settings.autoClearAndMake) {
-          for (const flow of store.all()) {
-            cancelCountdown(flow.sessionId);
+          for (const flow of engine.flows()) {
+            heavyRuntime.cancelCountdown(flow.sessionId);
           }
         }
       });
@@ -378,34 +330,33 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     channel.handle('flows', () => ready.then(() => store.all()));
     channel.handle('runAction', ({ sessionId, command }) =>
       ready.then(async () => {
-        await actions.run(sessionId, command);
+        await heavyRuntime.run(sessionId, command);
       }),
     );
     void ready.then(sendFlows);
 
+    const selfTestHooks: WorkflowSelfTestHooks = {
+      forgetFlows(projectDir) {
+        for (const sessionId of store.forgetFlows(projectDir)) {
+          turnWork.forget(sessionId);
+          tellObservers((observer) => observer.closed(sessionId));
+        }
+        sendFlows();
+      },
+      callStepTool(sessionId, step) {
+        void startStepToolSession({ id: sessionId }).call(
+          SET_WORKFLOW_STEP_TOOL,
+          { step },
+          { toolUseId: null, signal: new AbortController().signal },
+        );
+      },
+      onMainTurnEnded(listener) {
+        const registered = (sessionId: string) => listener(sessionId);
+        turnEndedListeners.add(registered);
+        return { dispose: () => turnEndedListeners.delete(registered) };
+      },
+    };
     if (services.selfTest !== null) {
-      const selfTestHooks: WorkflowSelfTestHooks = {
-        forgetFlows(projectDir) {
-          for (const sessionId of store.forgetFlows(projectDir)) {
-            countdown.stop(sessionId);
-            planWatch.follow(sessionId, null);
-            replayedTurnEnds.delete(sessionId);
-          }
-          sendFlows();
-        },
-        callStepTool(sessionId, step) {
-          void startStepToolSession({ id: sessionId }).call(
-            SET_WORKFLOW_STEP_TOOL,
-            { step },
-            { toolUseId: null, signal: new AbortController().signal },
-          );
-        },
-        onMainTurnEnded(listener) {
-          const registered = (sessionId: string) => listener(sessionId);
-          turnEndedListeners.add(registered);
-          return { dispose: () => turnEndedListeners.delete(registered) };
-        },
-      };
       services.selfTest.run(
         workflowSelfTestScript({
           homeDir: services.homeDir,
@@ -421,9 +372,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     return {
       commands: {},
       exports: (consumer): WorkflowMainExports => ({
-        addStage: (stage) => consumer.track(addStage(stage)),
+        ...engine,
+        addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
+        observe: (observer) => consumer.track(observe(observer)),
+        layoutTypes,
+        selfTestHooks: services.selfTest === null ? null : selfTestHooks,
       }),
-      dispose: () => planWatch.dispose(),
+      dispose: () => heavyRuntime.dispose(),
     };
   },
 };

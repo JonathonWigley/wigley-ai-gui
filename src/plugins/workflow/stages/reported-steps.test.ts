@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../contract';
 import { foldFlow, newFlow } from '../flow';
 import type { PlanProgress } from '../plan-reader';
-import { BUILT_IN_MAIN_STAGES } from './index';
+import {
+  HEAVY_WORKFLOW_ID,
+  heavyStateOf,
+  withHeavyState,
+} from './heavy-contract';
+import { heavyMainWorkflow } from './heavy-workflow';
 
 const PROGRESS: PlanProgress = {
   checked: 2,
@@ -15,12 +20,10 @@ const PROGRESS: PlanProgress = {
 
 // A flow in `stage` with a plan read and nothing running.
 function flowIn(stage: string): SessionFlow {
-  return {
-    ...newFlow('s1', '/r'),
-    stage,
-    planDir: '/r/plan-f',
-    progress: PROGRESS,
-  };
+  return withHeavyState(
+    { ...newFlow('s1', '/r'), workflow: HEAVY_WORKFLOW_ID, stage },
+    { planDir: '/r/plan-f', progress: PROGRESS },
+  );
 }
 
 function reported(step: string): WorkflowSignal {
@@ -50,7 +53,7 @@ describe('a reported step', () => {
     { from: 'explore', step: 'fix', stage: 'explore' },
     { from: 'planReady', step: 'fix', stage: 'planReady' },
   ])('$step from $from leaves the flow in $stage', ({ from, step, stage }) => {
-    const folded = foldFlow(flowIn(from), reported(step), BUILT_IN_MAIN_STAGES);
+    const folded = foldFlow(flowIn(from), reported(step), [heavyMainWorkflow]);
 
     expect(folded.stage).toBe(stage);
   });
@@ -58,13 +61,11 @@ describe('a reported step', () => {
   it.each(['explore', 'interview'])(
     'back to %s from plan keeps the plan',
     (step) => {
-      const folded = foldFlow(
-        flowIn('plan'),
-        reported(step),
-        BUILT_IN_MAIN_STAGES,
-      );
+      const folded = foldFlow(flowIn('plan'), reported(step), [
+        heavyMainWorkflow,
+      ]);
 
-      expect(folded).toMatchObject({
+      expect(heavyStateOf(folded)).toMatchObject({
         planDir: '/r/plan-f',
         progress: PROGRESS,
       });

@@ -4,6 +4,7 @@ import {
   type PageStage,
   STAGE_ACTIVITY_RANK,
 } from '../../contract';
+import { heavyStateOf } from '../heavy-contract';
 import { OPEN_PLAN_ACTION } from '../stage-parts';
 
 export const planReadyPageStage: PageStage = {
@@ -17,7 +18,7 @@ export const planReadyPageStage: PageStage = {
       command: 'cancelCountdown',
       label: 'Cancel',
       side: 'main',
-      available: (flow) => flow.countdownEndsAt !== null,
+      available: (flow) => heavyStateOf(flow).countdownEndsAt !== null,
       enabled: () => true,
     },
     {
@@ -36,10 +37,12 @@ export const planReadyPageStage: PageStage = {
     },
     OPEN_PLAN_ACTION,
   ],
-  detail: (flow) =>
-    flow.progress === null
+  detail(flow) {
+    const { progress } = heavyStateOf(flow);
+    return progress === null
       ? ''
-      : detailLine(flow.progress.title, `${flow.progress.total} tasks`),
+      : detailLine(progress.title, `${progress.total} tasks`);
+  },
   status: () => 'ready',
   rowActivity: {
     word: 'ready to make',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Timers } from '../../../contracts/ambient';
 import type { SessionFlow } from '../contract';
 import { newFlow } from '../flow';
+import { withHeavyState } from '../stages/heavy-contract';
 import { createCountdown } from './countdown';
 
 const NOW = 50_000;
@@ -31,7 +32,7 @@ function handTimers() {
 }
 
 function countingDown(endsAt: number | null): SessionFlow {
-  return { ...newFlow('s1', '/r'), countdownEndsAt: endsAt };
+  return withHeavyState(newFlow('s1', '/r'), { countdownEndsAt: endsAt });
 }
 
 function startCountdown() {

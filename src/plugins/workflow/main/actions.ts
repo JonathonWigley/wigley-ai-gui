@@ -2,6 +2,7 @@ import type { UserMessage } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { ChatMainExports } from '../../chat/contract';
 import { isBusy, type SessionFlow, type WorkflowSignal } from '../contract';
+import { heavySignal, heavyStateOf } from '../stages/heavy-contract';
 
 export interface WorkflowActionsDeps {
   chat: Pick<ChatMainExports, 'send' | 'clear' | 'launch' | 'profileOf'>;
@@ -47,11 +48,11 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
         profile,
         message: message(makeText(planDir)),
       });
-      deps.signal(sessionId, { type: 'handedOff' });
+      deps.signal(sessionId, heavySignal({ type: 'handedOff' }));
     },
     retro: (sessionId) => chat.send(sessionId, message('/wigley:retro')),
     dismiss: async (sessionId) => {
-      deps.signal(sessionId, { type: 'dismissed' });
+      deps.signal(sessionId, heavySignal({ type: 'dismissed' }));
     },
     cancelCountdown: async (sessionId) => {
       deps.cancelCountdown(sessionId);
@@ -81,10 +82,11 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
 }
 
 function requirePlanDir(flow: SessionFlow): string {
-  if (flow.planDir === null) {
+  const { planDir } = heavyStateOf(flow);
+  if (planDir === null) {
     throw new Error('The session has no plan');
   }
-  return flow.planDir;
+  return planDir;
 }
 
 // The plan folder goes unquoted, as the user types it.

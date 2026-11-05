@@ -1,7 +1,8 @@
-import { type MainStage, reportsStep, startsSkill } from '../../contract';
+import { reportsStep, startsSkill } from '../../contract';
 import { isInFeatureRun } from '../feature-run';
+import type { HeavyMainStage } from '../heavy-contract';
 
-export const exploreMainStage: MainStage = {
+export const exploreMainStage: HeavyMainStage = {
   id: 'explore',
   order: 20,
   reportedAs: 'explore',

@@ -1,18 +1,23 @@
-import { isBusy, type MainStage } from '../../contract';
+import { isBusy } from '../../contract';
 import { isInFeatureRun } from '../feature-run';
+import {
+  heavyEventOf,
+  type HeavyMainStage,
+  heavyStateOf,
+} from '../heavy-contract';
 
 // Waits for nothing busy and a plan with a box: wigley:feature drafts its task
 // documents in background subagents after writing plan.md.
-export const planReadyMainStage: MainStage = {
+export const planReadyMainStage: HeavyMainStage = {
   id: 'planReady',
   order: 30,
   enter(flow, signal) {
     const isPlanSignal =
-      signal.type === 'turnEnded' || signal.type === 'planChanged';
+      signal.type === 'turnEnded' ||
+      heavyEventOf(signal)?.type === 'planChanged';
+    const { planDir, progress } = heavyStateOf(flow);
     const planHasABox =
-      flow.planDir !== null &&
-      flow.progress !== null &&
-      flow.progress.total > 0;
+      planDir !== null && progress !== null && progress.total > 0;
     const inRunBeforeReady = isInFeatureRun(flow) && flow.stage !== 'planReady';
     return isPlanSignal && inRunBeforeReady && !isBusy(flow) && planHasABox
       ? 'planReady'

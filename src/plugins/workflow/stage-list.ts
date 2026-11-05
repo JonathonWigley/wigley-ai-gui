@@ -1,32 +1,30 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { StageId } from './contract';
 
-// The stages one process registers (main's halves or the page's), in stage
-// order, ascending, a stage of an order already held placed after it. `add`
-// throws `stage <id> is already added` on a held id; its dispose removes the
-// stage, and does nothing once the stage is gone.
-export interface StageList<T extends { id: StageId; order: number }> {
+// The workflows or stages one process registers, ascending by order, an entry of
+// an order already held placed after it. `add` throws `<id> is already added` on
+// a held id; its dispose removes the entry, and does nothing once it is gone.
+export interface StageList<T extends { id: string; order: number }> {
   all(): readonly T[];
-  add(stage: T): Disposable;
+  add(entry: T): Disposable;
 }
 
 export function createStageList<
-  T extends { id: StageId; order: number },
+  T extends { id: string; order: number },
 >(): StageList<T> {
-  const stages: T[] = [];
+  const entries: T[] = [];
   return {
-    all: () => stages,
-    add(stage) {
-      if (stages.some((held) => held.id === stage.id)) {
-        throw new Error(`stage ${stage.id} is already added`);
+    all: () => entries,
+    add(entry) {
+      if (entries.some((held) => held.id === entry.id)) {
+        throw new Error(`${entry.id} is already added`);
       }
-      const at = stages.findIndex((held) => held.order > stage.order);
-      stages.splice(at === -1 ? stages.length : at, 0, stage);
+      const at = entries.findIndex((held) => held.order > entry.order);
+      entries.splice(at === -1 ? entries.length : at, 0, entry);
       return {
         dispose() {
-          const index = stages.indexOf(stage);
+          const index = entries.indexOf(entry);
           if (index !== -1) {
-            stages.splice(index, 1);
+            entries.splice(index, 1);
           }
         },
       };

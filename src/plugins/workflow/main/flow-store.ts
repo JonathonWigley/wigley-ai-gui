@@ -5,13 +5,12 @@ import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { SessionFlow } from '../contract';
 import { newFlow } from '../flow';
-import type { PlanProgress, PlanTaskLine } from '../plan-reader';
 
 export const FLOWS_FILE = 'flows.json';
 
 // The open sessions' flows, and every flow saved in `flows.json`, keyed by
 // host session id (a row id is fresh on each launch). `load` reads the file
-// once; a flow read from it runs no turn, no subagent and no countdown.
+// once; a flow read from it runs no turn and no subagent.
 // `put`, `putKeepingSavedAt`, `rekey`, `drop`, `open` and `forgetFlows` each
 // write the whole file, one write after another in call order; a write that
 // fails is logged and the next change writes again. `rekey`, `put`,
@@ -140,7 +139,6 @@ export function createFlowStore(deps: {
             ...flow,
             turnRunning: false,
             runningSubagents: [],
-            countdownEndsAt: null,
           },
           savedAt: savedAt ?? clock.now(),
         });
@@ -239,33 +237,23 @@ function isSessionFlow(value: unknown): value is SessionFlow {
     typeof value.sessionId === 'string' &&
     typeof value.projectDir === 'string' &&
     typeof value.stage === 'string' &&
-    isStringOrNull(value.planDir) &&
-    (value.progress === null || isPlanProgress(value.progress)) &&
-    (value.reviewRoundsAtMake === undefined ||
-      isNumberOrNull(value.reviewRoundsAtMake)) &&
+    isStringOrNull(value.workflow) &&
+    isStringOrNull(value.movedUpFrom) &&
+    (value.checklist === null || isChecklist(value.checklist)) &&
+    'state' in value &&
+    typeof value.missedLevel === 'boolean' &&
     typeof value.turnRunning === 'boolean' &&
-    isStringList(value.runningSubagents) &&
-    isNumberOrNull(value.countdownEndsAt)
+    isStringList(value.runningSubagents)
   );
 }
 
-function isPlanProgress(value: unknown): value is PlanProgress {
-  return (
-    isRecord(value) &&
-    typeof value.checked === 'number' &&
-    typeof value.total === 'number' &&
-    isNumberOrNull(value.wave) &&
-    typeof value.reviewRounds === 'number' &&
-    typeof value.title === 'string' &&
-    Array.isArray(value.tasks) &&
-    (value.tasks as unknown[]).every(isPlanTaskLine)
-  );
+function isChecklist(value: unknown): boolean {
+  return Array.isArray(value) && (value as unknown[]).every(isChecklistItem);
 }
 
-function isPlanTaskLine(value: unknown): value is PlanTaskLine {
+function isChecklistItem(value: unknown): boolean {
   return (
     isRecord(value) &&
-    isNumberOrNull(value.wave) &&
     typeof value.text === 'string' &&
     typeof value.done === 'boolean'
   );
@@ -277,10 +265,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStringOrNull(value: unknown): boolean {
   return value === null || typeof value === 'string';
-}
-
-function isNumberOrNull(value: unknown): boolean {
-  return value === null || typeof value === 'number';
 }
 
 function isStringList(value: unknown): boolean {

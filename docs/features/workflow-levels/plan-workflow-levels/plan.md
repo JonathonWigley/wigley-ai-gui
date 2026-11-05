@@ -207,7 +207,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 
 ### Wave 1
 - [ ] [Engine: workflows in main](01-engine-main.md)
-- [ ] [Edit gate hook](09-edit-gate.md)
+- [x] [Edit gate hook](09-edit-gate.md)
 
 ### Wave 2
 - [ ] [Engine: workflows on the page](02-engine-page.md) — after 01
@@ -238,10 +238,15 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 
 ### Groups
+- 09 · wigley-agents 70a4e4e · diff read against the spec; Produces all present (hook, install, level_skill_started, LEVEL_SKILLS, README); 14 unittest tests pass · concerns: argparse exits 2 on a hand-mistyped wired command; write_settings near-copies unity-pool's; /resume unchecked; Windows stop untested; tests go past the spec's tables
 ### Contract changes
 ### Rulings
+- A settings file of the wrong shape stops install with exit 1, as a parse failure does — merging into it would traceback — such a file blocks install until fixed · group 09 · group 09
+- A transcript line that parses but is not a pinned shape counts as no match, not a hook failure — one odd line should not disable the gate — a Claude Code shape change denies rather than fails open · group 09 · group 09
+- An OSError between install's writes exits 1, and a second run finishes — stops are planned, a disk failure is not — a link with some profiles unwired until rerun · group 09 · group 09
+- Review bases per repo: wigley-ai-gui 52a66bfa, wigley-agents ee97ed1, wigley-ai-marketplace c8e7abb — the plan spans three repos and plan.py holds one base — review ranges name each · lead
 ### Review rounds
 ### Test gate
