@@ -148,7 +148,7 @@ Every task uses these names exactly. A task that needs another shape reports it 
 `src/contracts/state.ts` (new, task 05):
 
 ```ts
-// Maps T to itself when T is JSON and to never otherwise, so a slot of a function, Map, Set or class fails to compile.
+// Maps T to itself when T is JSON and to never otherwise, so a slot of a function, Map, Set or class fails to compile. `unknown` passes.
 export type JsonSafe<T> = /* recursive conditional type */;
 
 export interface SlotKey<V, P extends ProcessName = ProcessName, Plugin extends string = string> {
@@ -191,7 +191,11 @@ export type SlotChange =
   | { id: string; kind: 'value'; value: unknown }
   | { id: string; kind: 'keyed'; key: string; value: unknown | undefined }
   | { id: string; kind: 'list'; key: string; change: ListSlotChange<unknown> };
-export interface StateSnapshot { seq: number; slots: Record<string, unknown>; }
+export type SlotSnapshot =
+  | { kind: 'value'; value: unknown }
+  | { kind: 'keyed'; entries: readonly (readonly [string, unknown])[] }   // first-set order
+  | { kind: 'list'; entries: readonly (readonly [string, readonly unknown[]])[] };
+export interface StateSnapshot { seq: number; slots: Record<string, SlotSnapshot>; }
 ```
 
 A contract declares a key as a typed object literal, as `DependencyKey` does: `export const usageSnapshotSlot: SlotKey<UsageSnapshot, 'main', 'usage'> = { id: 'usage.snapshot', process: 'main', kind: 'value' };`
@@ -221,6 +225,7 @@ Commands (task 07), `src/contracts/commands.ts`:
 export type CommandArgShape = 'number' | 'string' | { readonly [field: string]: 'number' | 'string' };
 export type ArgOf<S> = /* 'number' -> number, 'string' -> string, record -> its fields, undefined -> undefined */;
 export interface CommandKey<A, Id extends string = string> { readonly id: Id; readonly argType?: A; }
+export type CommandArg = number | string | { readonly [field: string]: number | string };
 ```
 
 `CommandDecl` gains `arg?: CommandArgShape`. `PageCommandContext<A = undefined>` is `{ editor?: TextEditor; arg: A }`. `MainCommandContext<A = undefined>` is `{ chord?: string; arg: A }`, replacing the handler's `chord: string`. A handler is `(context) => void | Promise<void>`.
@@ -242,11 +247,13 @@ keys: { bind(bind: RuntimeBind): Disposable; /* main: app and intercept binds; p
 
 `KeyBind` and the `keymap.json` entry format gain `arg?: CommandArg`.
 
-Core keys API (task 08), on `PageApi.keys`: `keysFor(command, scope?, where?)`, `anchor(element, command, options?)`, `onWhereChanged(listener: (where: 'page' | 'box') => void): Disposable`, moved from `KeysPageExports` with the signatures in `src/plugins/keys/contract.ts`.
+Core keys API (task 08), on `PageApi.keys`: `keysFor(command, scope?, where?, arg?)`, `anchor(element, command, options?)` with `AnchorOptions.arg?: CommandArg`, `onWhereChanged(listener: (where: 'page' | 'box') => void): Disposable`, moved from `KeysPageExports` with the signatures in `src/plugins/keys/contract.ts`.
 
-Page services (task 09), on `PageServices`: `picker: ListPickerService`, `chooseFolder(): Promise<string | null>`, `openExternal(url: string): Promise<void>`. The record `Platform` (task 01) replaces today's string under the same member names, with the OS string as `platform.os`.
+Page services (task 09), on `PageServices`: `picker: ListPickerService` (`src/contracts/list-picker.ts`, `create(options?: ListPickerOptions): ListPicker`), `chooseFolder(): Promise<string | null>`, `openExternal(url: string): Promise<void>`. The record `Platform` (task 01) replaces today's string under the same member names, with the OS string as `platform.os`.
 
 Kit (task 10), on `BaseKit`: `state: { read(id: string): { get(key?: string): unknown; on(listener: (...args: unknown[]) => void): void } }`. The subscription files with the draw's recorder. `BaseKitDeps.recordAnchor` becomes required.
+
+Slots of tasks 11, 12 and 13, each in its plugin's `contract.ts`: `sessionsRowsSlot` (`sessions.rows`, keyed, main), `sessionsSelectionSlot` (`sessions.selection`, value, main), `sessionsActiveSlot` (`sessions.active`, value, page), `followRows(rows, { added?, removed?, hostChanged? }): Disposable`; `chat.session`, `chat.entries` (list), `chat.controls`, `chat.commands`, `chat.queued`, `chat.returned` (keyed by session id); `agentsRostersSlot`, `usageSnapshotSlot`, `workflowFlowsSlot`, `unityPoolSnapshotSlot`. Task 14 adds `sessions.activity` (keyed, page).
 
 Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a real slot store on the fake API and task 07 adds fake `commands` members that run through a real registry.
 
@@ -288,22 +295,24 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 
 ### Wave 8
 - [ ] [Core picker and folder services](09-core-services.md) — after 08
-- [ ] [Layouts read slots](10-kit-state.md) — after 08
 
 ### Wave 9
-- [ ] [Sessions rows and selection as slots](11-sessions-slots.md) — after 09, 10
+- [ ] [Layouts read slots](10-kit-state.md) — after 09
 
 ### Wave 10
+- [ ] [Sessions rows and selection as slots](11-sessions-slots.md) — after 10
+
+### Wave 11
 - [ ] [Chat session state as slots](12-chat-slots.md) — after 11
 - [ ] [Agents, usage, workflow and unity-pool as slots](13-small-slots.md) — after 11
 
-### Wave 11
+### Wave 12
 - [ ] [Events for every moment](14-events.md) — after 12, 13
 
-### Wave 12
+### Wave 13
 - [ ] [Doc re-read](15-doc-re-read.md) — after 14
 
-### Wave 13
+### Wave 14
 - [ ] [Final verification](16-final-verification.md) — after 15
 
 ## Run log

@@ -105,11 +105,13 @@ From the interview rounds of 2026-11-04 (the user took every recommendation). Th
 
 Every task uses these names exactly. This plan consumes the names in `plan-commands-and-state/plan.md` § File Structure: `commands.run`, `CommandKey`, `CommandDecl.arg`, `api.state.publish`, `api.state.read`, `kit.state.read`. That folder is gone once the run starts, so each task document copies the signature it consumes.
 
-`BaseKit` (task 01): `button(parent: HTMLElement, label: string, command: CommandId, options?: { arg?: CommandArg; variant?: string; keys?: string }): HTMLElement`, and `command(id: CommandId, arg?: CommandArg): () => void`.
+`BaseKit` (task 01): `button(parent: HTMLElement, label: string, command: CommandId, options?: { arg?: CommandArg; variant?: ButtonVariant; keys?: string | null }): HTMLButtonElement`, and `command(id: CommandId, arg?: CommandArg): () => void`.
 
-`plugin-framework` page reload slots (task 08): each plugin's page slot is a `SlotKey<…, 'page', '<id>'>` named `<id>PlaceSlot`, declared in that plugin's `contract.ts`.
+`plugin-framework` page reload slots (task 08): each plugin's page slot is a `SlotKey<…, 'page', '<id>'>`, or a `KeyedSlotKey` where the place is per session or per form, named `<id>PlaceSlot`, declared in that plugin's `contract.ts`.
 
 Close guard (task 07): `addCloseGuard(mayClose: (sessionId: string) => string | null): Disposable`: a string refuses, and it is the toast sessions shows.
+
+A click on one item and a key on the focused item run two commands: the key's has no `arg`, the click's names the item. Shared list-picker row clicks are task 01's (`picker.chooseRow`, `picker.cancel`).
 
 Each sweep task lists the commands it adds under Produces, each as `<plugin>.<short>` with its `arg` shape and the site it serves.
 
