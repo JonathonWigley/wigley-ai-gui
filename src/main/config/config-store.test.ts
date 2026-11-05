@@ -120,6 +120,18 @@ function resolveTheme(
   );
 }
 
+// A plugin named as a core setting is, declaring no settings.
+const coreNamedPlugin = definePlugin({
+  id: 'window',
+  dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
+  commands: {},
+  scopes: {},
+  settings: {},
+  settingInfo: {},
+  themeTokens: {},
+});
+
 function theme(name: string, source: string): Theme {
   return { name, colorScheme: 'dark', tokens: { name, source }, reduced: {} };
 }
@@ -781,6 +793,41 @@ describe('loadConfigStore', () => {
     expect(store.current().problems).toEqual([
       { file: 'themes', message: expect.stringContaining('not a folder') },
     ]);
+  });
+
+  it.each([
+    {
+      name: 'settings',
+      declared: {
+        settings: { width: 1 },
+        settingInfo: { width: { label: 'Width', description: 'Width.' } },
+      },
+    },
+    {
+      name: 'only an optional setting',
+      declared: {
+        settings: {},
+        optionalSettings: { width: 'number' },
+        settingInfo: { width: { label: 'Width', description: 'Width.' } },
+      },
+    },
+  ] as const)(
+    'rejects a plugin declaring $name under a core name',
+    async ({ declared }) => {
+      const underCoreName = { ...coreNamedPlugin, ...declared };
+
+      await expect(
+        load(createMemoryFiles(), { manifests: [underCoreName] }),
+      ).rejects.toThrow('Plugin "window" declares settings');
+    },
+  );
+
+  it('loads a plugin declaring no settings under a core name', async () => {
+    const store = await load(createMemoryFiles(), {
+      manifests: [coreNamedPlugin],
+    });
+
+    expect(store.current().settings.window).toEqual(DEFAULTS.window);
   });
 
   it('configSchema_DefaultBindBadArg_Throws', async () => {

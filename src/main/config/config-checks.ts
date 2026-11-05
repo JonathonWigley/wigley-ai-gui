@@ -37,6 +37,7 @@ import {
   mergeKeymap,
   pluginOptionalSettings,
   pluginSettings,
+  requireNoSettingsUnderCoreNames,
   runtimeLayerClash,
   scopeInfos,
 } from '../../shared/plugin-manifests';
@@ -92,19 +93,6 @@ export type ConfigFileText =
   | { text: string | null }
   | { problem: ConfigProblem };
 
-function requireNoCoreSettingIds(
-  manifests: readonly PluginManifest[],
-  defaults: Settings,
-) {
-  for (const manifest of manifests) {
-    if (Object.hasOwn(defaults, manifest.id)) {
-      throw new Error(
-        `Plugin "${manifest.id}" has the name of a core setting, so its settings cannot sit under its id`,
-      );
-    }
-  }
-}
-
 // Throws on a default or manifest bind whose `arg` its command does not take.
 function requireFittingArgs(
   deps: ConfigCheckDeps,
@@ -128,12 +116,12 @@ function requireFittingArgs(
   }
 }
 
-// Throws when a plugin's id is a core setting's name or a manifest holds
-// what its own checks reject (a command declared twice, a null default with
-// no kind), or a default bind's `arg` does not fit its command; each is a bug in the
-// app, not in the user's files.
+// Throws when a plugin declaring settings has a core setting's name for its id
+// or a manifest holds what its own checks reject (a command declared twice, a
+// null default with no kind), or a default bind's `arg` does not fit its command;
+// each is a bug in the app, not in the user's files.
 export function configSchema(deps: ConfigCheckDeps): ConfigSchema {
-  requireNoCoreSettingIds(deps.manifests, deps.defaults);
+  requireNoSettingsUnderCoreNames(deps.manifests, deps.defaults);
   const commands = commandInfos(deps.coreCommands, deps.manifests);
   requireFittingArgs(deps, commands);
   return {

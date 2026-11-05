@@ -483,6 +483,32 @@ describe('createUserConfig', () => {
     expect(read[slice]).toEqual(expected);
   });
 
+  it("keeps a core setting's row and writes when a settingless plugin's id shares its name", async () => {
+    const windowPlugin = definePlugin({
+      ...quietPlugin,
+      id: 'window',
+      settings: {},
+      settingInfo: {},
+    });
+    const files = createMemoryFiles();
+    const userConfig = await create(files, [windowPlugin]);
+
+    const schema = userConfig.schema();
+    const result = await userConfig.writeSettings(
+      { window: { width: 1200 } },
+      null,
+    );
+
+    expect(schema.sections.map((section) => section.id)).toEqual(['core']);
+    expect(
+      schema.sections[0].leaves.find((leaf) => leaf.path === 'window.width'),
+    ).toMatchObject({
+      control: { kind: 'number' },
+      fallback: { value: 900 },
+    });
+    expect(result).toEqual({ type: 'written' });
+  });
+
   it('gives each leaf the control and fallback its default and kind call for', async () => {
     const schema = (await create(createMemoryFiles())).schema();
 

@@ -33,6 +33,7 @@ import {
   themeNames,
 } from './config-checks';
 import type { ConfigStore } from './config-store';
+import { settingsFileDefaults } from './user-settings';
 
 // `folder` is the absolute user config folder `store` watches; `settingInfo`
 // declares each core setting by its dotted path.
@@ -244,10 +245,10 @@ function settingLeaf(
   deps: UserConfigDeps,
   fixed: ConfigSchema,
 ): SettingLeaf {
-  const fallback = defaultAt(path, {
-    ...deps.defaults,
-    ...fixed.pluginDefaults,
-  });
+  const fallback = defaultAt(
+    path,
+    settingsFileDefaults(deps.defaults, fixed.pluginDefaults),
+  );
   return {
     path,
     label: info.label,

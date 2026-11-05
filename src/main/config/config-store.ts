@@ -92,8 +92,8 @@ function inServedOrder(problems: ConfigProblem[]): ConfigProblem[] {
 
 // Reads the user config folder into the served config, keeping each slice's
 // last good value when its file is broken. Rejects when the default keys
-// clash, a built-in theme is broken, or a plugin's id is a core setting's
-// name: each is a bug in the app, not in the user's files.
+// clash, a built-in theme is broken, or a plugin declaring settings has a core
+// setting's name for its id: each is a bug in the app, not in the user's files.
 export async function loadConfigStore(
   deps: ConfigStoreDeps,
 ): Promise<ConfigStore> {

@@ -4,6 +4,7 @@ import { fakePlatform } from '../shared/platform.test-support';
 import {
   disabledDependencyProblem,
   pluginSettingInfo,
+  requireNoSettingsUnderCoreNames,
 } from '../shared/plugin-manifests';
 import { manifests } from './manifests';
 
@@ -12,6 +13,15 @@ import { manifests } from './manifests';
 describe('manifests', () => {
   it('manifests_SettingInfo_DeclaresEveryLeafSetting', () => {
     expect(() => pluginSettingInfo(manifests)).not.toThrow();
+  });
+
+  it('manifests_CoreSettingNames_HoldNoPluginSettings', () => {
+    expect(() =>
+      requireNoSettingsUnderCoreNames(
+        manifests,
+        defaultSettingsFor(fakePlatform('macos').programs),
+      ),
+    ).not.toThrow();
   });
 
   it('manifests_DefaultDisabled_BreaksNoDependency', () => {

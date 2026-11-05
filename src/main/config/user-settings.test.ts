@@ -106,6 +106,23 @@ describe('mergeUserSettings', () => {
     ]);
   });
 
+  it("a core setting keeps its name when a settingless plugin's id shares it", () => {
+    const schema = {
+      ...SCHEMA,
+      pluginDefaults: { ...SCHEMA.pluginDefaults, window: {} },
+    };
+
+    const unset = mergeUserSettings('{}', schema);
+    const set = mergeUserSettings('{"window":{"width":1200}}', schema);
+
+    expect(unset.settings.window).toEqual(CORE_DEFAULTS.window);
+    expect(set.settings.window).toEqual({
+      ...CORE_DEFAULTS.window,
+      width: 1200,
+    });
+    expect(set.pluginSettings.window).toEqual({});
+  });
+
   it('an empty default array takes elements of any kind', () => {
     expect(pluginSettings('{"p":{"anything":[1,"a",{}]}}')).toMatchObject({
       anything: [1, 'a', {}],

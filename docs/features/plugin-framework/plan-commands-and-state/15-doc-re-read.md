@@ -1,6 +1,6 @@
 # 15 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 13 · Depends on: 14
 Plan: [plan.md](plan.md)
@@ -94,3 +94,5 @@ Done when: every passage is re-read and every stale line fixed; the greps above 
 Commit: one commit for the group, holding the ticks and the removals together, as the master plan's rule asks.
 
 ## Proof
+
+Commit 9c93b06c · proof: Diff read; landing-tag and plan-folder greps print nothing; master plan's nine boxes ticked; ten follow-ups removed. Stale lines fixed in passing: master plan's Lane H line and ui-design § Out of scope. · concerns: Whether the keys item's editor-bind miss policy moved was checked only by grep: the 'has no bind in' message is in editor-binds.ts.

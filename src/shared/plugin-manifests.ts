@@ -22,6 +22,7 @@ import type {
   SettingInfo,
   SettingKind,
 } from '../contracts/plugin';
+import type { Settings } from '../contracts/settings';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import type { Log } from '../contracts/log';
 import { canonicalAccelerator } from './accelerator';
@@ -726,6 +727,25 @@ function settingDefaults(settings: object): Map<string, unknown> {
     }
   }
   return defaults;
+}
+
+// Throws on a manifest declaring settings whose id is the name of a core
+// setting in `defaults`: a plugin's settings sit under its id in `settings.json`,
+// where that key is the core setting's. A manifest declaring none has nothing there.
+export function requireNoSettingsUnderCoreNames(
+  manifests: readonly PluginManifest[],
+  defaults: Settings,
+): void {
+  for (const manifest of manifests) {
+    const declaresSettings =
+      Object.keys(manifest.settings).length > 0 ||
+      Object.keys(manifest.optionalSettings ?? {}).length > 0;
+    if (declaresSettings && Object.hasOwn(defaults, manifest.id)) {
+      throw new Error(
+        `Plugin "${manifest.id}" declares settings but has the name of a core setting, so they cannot sit under its id`,
+      );
+    }
+  }
 }
 
 // Every manifest's `optionalSettings`, each path qualified as
