@@ -36,9 +36,9 @@ Run from `~/Documents/ai-dev`. wigley:make re-runs each one before the first dis
 
 Each is a hypothesis until task 11 re-reads it against the landed code.
 
-- wigley-agents, branch `workflow-levels`, commit 936f725: `workflows.md`, `AGENTS.md`
-- wigley-ai-marketplace, branch `workflow-levels`, commit 3dcabfe: `plugins/wigley/skills/light/SKILL.md`, `plugins/wigley/skills/medium/SKILL.md`, the `description` of `plugins/wigley/skills/feature/SKILL.md`
-- wigley-ai-gui, branch `workflow-levels`, commit 6295f86f: `docs/features/workflow-levels/design.md`
+- wigley-agents, branch `workflow-levels`, commit ee97ed1: `workflows.md`, `AGENTS.md`
+- wigley-ai-marketplace, branch `workflow-levels`, commit c8e7abb: `plugins/wigley/skills/light/SKILL.md`, `plugins/wigley/skills/medium/SKILL.md`, the `description` of `plugins/wigley/skills/feature/SKILL.md`
+- wigley-ai-gui, branch `workflow-levels`, commit b89c4299: `docs/features/workflow-levels/design.md`
 
 ## Mandatory Reads
 
