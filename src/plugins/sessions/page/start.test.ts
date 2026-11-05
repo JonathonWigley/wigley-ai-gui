@@ -10,6 +10,7 @@ import type { UiState } from '../../../contracts/ui-state';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
+  dataEmitted,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
@@ -18,6 +19,7 @@ import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   followRows,
   sessionsActiveSlot,
+  sessionsActivitySlot,
   type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
@@ -162,6 +164,38 @@ describe('sessions page part', () => {
     });
 
     expect(state.read(sessionsActiveSlot, 'test').get()).toBeNull();
+  });
+
+  it('sessionsStart_OldPageActivities_Cleared', () => {
+    const state = createSlotStore(() => undefined);
+    const oldPage = state.publish(sessionsActivitySlot);
+    oldPage.set('s-old', [
+      {
+        sourceId: 'chat',
+        activity: { word: 'working', tone: 'running', rank: 20 },
+      },
+    ]);
+    oldPage.dispose();
+
+    startPagePart(sessionsPagePart, {
+      state,
+      services: { picker: fakeListPickerService() },
+    });
+
+    expect([...state.read(sessionsActivitySlot, 'test').all().keys()]).toEqual(
+      [],
+    );
+  });
+
+  it('addTab_TabAdded_FiresTabAdded', async () => {
+    const setup = await startApplied(['s1'], 's1');
+
+    setup.addTab('s1');
+
+    expect(dataEmitted(setup.harness, 'sessions.tabAdded')).toEqual([
+      { sessionId: 's1', tabId: 'tab' },
+    ]);
+    await setup.harness.stop();
   });
 
   it('pageReady_AppliesOnceFromTheStore', async () => {

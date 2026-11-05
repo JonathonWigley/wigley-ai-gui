@@ -202,6 +202,9 @@ export interface DocsViewDeps {
   // Hears the open doc's path each time a doc opens or the open one moves,
   // and null once the doc pane is emptied.
   openChanged(path: string | null): void;
+  // Hears each doc the view opened, once it shows; a refused or failed open is
+  // not told.
+  docOpened(path: string): void;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
   // Whether the tree's container shows it now.
@@ -528,6 +531,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
     void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
+      if (opened) {
+        deps.docOpened(path);
+      }
       if (opened && entry !== null) {
         tree.selectEntry(entry.id);
       }
@@ -578,6 +584,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const openInEditor = async (entry: IndexEntry, line: number) => {
     if (await doc.open(targetFor(entry.path, entry, line, null))) {
+      deps.docOpened(entry.path);
       doc.edit(line);
       focusDoc();
     }

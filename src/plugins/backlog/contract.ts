@@ -2,7 +2,11 @@
 // features home's follow-ups, plans and features, read through the docs
 // index, and the follow-up writes and commit the main part makes.
 
-import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  EventShape,
+} from '../../contracts/plugin';
 import type {
   FollowupDraft,
   FollowupEdit,
@@ -118,6 +122,16 @@ export const backlogMainKey: DependencyKey<
   'main',
   'backlog'
 > = { id: 'backlog', process: 'main' };
+
+// One follow-up edit landing, from the page or `fileNote`: a `setTags` is an
+// edit, and a `fileNote` append edits the item it adds to. A refused edit fires
+// none, and neither does a commit. `changed` stays the page's channel, since a
+// file watch has no item to name.
+export interface BacklogMainEvents extends EventShape {
+  followupCreated: { homeRoot: string; title: string };
+  followupEdited: { homeRoot: string; title: string };
+  followupDeleted: { homeRoot: string; title: string };
+}
 
 // Every method rejects with main's own error text when its handler throws.
 export interface BacklogChannel extends ChannelShape {

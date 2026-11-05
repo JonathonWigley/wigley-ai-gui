@@ -1033,7 +1033,9 @@ function fakeModes(
       const isFirst = liveModes.length === 0;
       liveModes.push(id);
       const handle: ModeHandle = common.register({
-        show() {},
+        show() {
+          mode.shown();
+        },
         isShown: () => liveModes[0] === id,
         setContext() {},
         toggleSideBar() {

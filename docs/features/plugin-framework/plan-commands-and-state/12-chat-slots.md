@@ -1,6 +1,6 @@
 # 12 — Chat session state as slots
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 11 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -243,3 +243,5 @@ Done when: compiles and lints; `grep -n "session\.state\|copyState\|heldFor\|inv
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 05b020de · proof: Report and chat-slots read; the six slots and SessionSlots present; delivery and isLatestDelivery intact; whole-tree typecheck and lint clean, which also proves task 13's commit; Done-when greps print nothing per the worker. · concerns: readBranch finishing after stop can log written after stop; clear writes running false then true, so a brief false can draw; applyInfo's fixed order changes log order for a two-field write; view.activeTime reads non-null between a tab's removal and main's key delete; page/chat-commands' 'returned for unknown session' branch is no longer reached by the view; a sendAllNow test's count became a boolean; bridge wiring waits for task 16.

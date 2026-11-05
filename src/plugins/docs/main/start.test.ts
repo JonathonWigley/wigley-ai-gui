@@ -413,6 +413,131 @@ describe('docs main part', () => {
     },
   );
 
+  describe('doc events', () => {
+    const REPO = '/p';
+    const DOC = `${REPO}/notes.md`;
+
+    // Docs over a repo source whose loaded entry allows changes inside `/p`.
+    async function startOverRepo() {
+      const docs = startDocsPart();
+      await docs.files.makeFolder(REPO);
+      await docs.files.write(DOC, 'one');
+      docs.exports.addSource({
+        id: 'repo',
+        title: 'repo',
+        load: async () => ({
+          document: {
+            ...INDEX_DOCUMENT,
+            entries: [
+              {
+                id: DOC,
+                kind: 'instructions',
+                source: 'repo',
+                owner: 'mine',
+                repo: 'p',
+                root: REPO,
+                plugin: null,
+                path: DOC,
+                line: null,
+                title: 'notes',
+                meta: {},
+                walked: [],
+                lastLoaded: null,
+              },
+            ],
+          },
+          message: null,
+        }),
+      });
+      await docs.invoke('loadIndex', 'repo');
+      docs.emitted.length = 0;
+      return docs;
+    }
+
+    it.each<{
+      case: string;
+      act: (docs: Awaited<ReturnType<typeof startOverRepo>>) => unknown;
+      emitted: [string, unknown][];
+    }>([
+      {
+        case: 'written',
+        act: (docs) => docs.invoke('writeDoc', DOC, 'two', 'one'),
+        emitted: [['docSaved', { path: DOC }]],
+      },
+      {
+        case: 'written through the export',
+        act: (docs) => docs.exports.writeDoc(DOC, 'two', 'one'),
+        emitted: [['docSaved', { path: DOC }]],
+      },
+      {
+        case: 'changed on disk',
+        act: (docs) => docs.invoke('writeDoc', DOC, 'two', 'not what it holds'),
+        emitted: [],
+      },
+      {
+        case: 'bytes',
+        act: (docs) => docs.invoke('writeBytes', DOC, new Uint8Array([1])),
+        emitted: [['docSaved', { path: DOC }]],
+      },
+      {
+        case: 'create',
+        act: (docs) =>
+          docs.invoke('createDoc', { type: 'path', path: `${REPO}/new.md` }),
+        emitted: [['docCreated', { path: `${REPO}/new.md` }]],
+      },
+      {
+        case: 'rename',
+        act: (docs) => docs.invoke('renameDoc', DOC, `${REPO}/moved.md`),
+        emitted: [['docRenamed', { from: DOC, to: `${REPO}/moved.md` }]],
+      },
+      {
+        case: 'trash with targets',
+        act: (docs) => docs.invoke('trashDoc', DOC),
+        emitted: [['docTrashed', { path: DOC, trashed: [DOC] }]],
+      },
+    ])('docEvents_CallLands_FireOnlyThen ($case)', async ({ act, emitted }) => {
+      const docs = await startOverRepo();
+
+      await act(docs);
+
+      expect(docs.emitted).toEqual(emitted);
+    });
+
+    it.each<{
+      case: string;
+      act: (docs: Awaited<ReturnType<typeof startOverRepo>>) => unknown;
+    }>([
+      {
+        case: 'write',
+        act: (docs) => docs.invoke('writeDoc', '/elsewhere.md', 'two', null),
+      },
+      {
+        case: 'bytes',
+        act: (docs) =>
+          docs.invoke('writeBytes', '/elsewhere.md', new Uint8Array([1])),
+      },
+      {
+        case: 'create',
+        act: (docs) =>
+          docs.invoke('createDoc', { type: 'path', path: '/elsewhere.md' }),
+      },
+      {
+        case: 'rename',
+        act: (docs) => docs.invoke('renameDoc', DOC, '/elsewhere.md'),
+      },
+      {
+        case: 'trash',
+        act: (docs) => docs.invoke('trashDoc', '/elsewhere.md'),
+      },
+    ])('docEvents_CallLands_FireOnlyThen (rejected $case)', async ({ act }) => {
+      const docs = await startOverRepo();
+
+      await expect(act(docs)).rejects.toThrow();
+
+      expect(docs.emitted).toEqual([]);
+    });
+  });
+
   it('exports_MachineIndexReads_EmitNothing', async () => {
     const docs = startDocsPart();
 

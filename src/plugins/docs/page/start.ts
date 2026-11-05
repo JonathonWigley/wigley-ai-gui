@@ -29,6 +29,7 @@ import {
 } from '../../sessions/contract';
 import {
   type DocsChannel,
+  type DocsPageEvents,
   type DocsPageExports,
   type DocsViewHandle,
   MACHINE_SOURCE_ID,
@@ -53,7 +54,7 @@ import { createStarredDocs } from './starred-docs';
 type DocsApi = PageApi<
   typeof docsManifest,
   DocsChannel,
-  Record<never, never>,
+  DocsPageEvents,
   QualifiedEvents<'core', CoreEvents>
 >;
 
@@ -224,6 +225,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
         openChanged,
+        docOpened: (path) => api.events.emit('docOpened', { path }),
         revealTree,
         isTreeShown: () => !isTreeHiddenIn(view),
         leafOpened,

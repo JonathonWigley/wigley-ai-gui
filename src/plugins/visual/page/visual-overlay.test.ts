@@ -21,6 +21,7 @@ function overlayFixture() {
   const contributed: FakeElement[] = [];
   const scope = { pops: 0, baseChanged: [] as (() => void)[] };
   const layoutsChanged: (() => void)[] = [];
+  const openings: [number, number][] = [];
   const parts = createVisualParts({
     defaultLayout,
     kit: {
@@ -58,6 +59,7 @@ function overlayFixture() {
     parts,
     log: (message: string) => logs.push(message),
     onLayoutsChanged: (listener) => layoutsChanged.push(listener),
+    opened: (count, index) => openings.push([count, index]),
   });
   return {
     overlay,
@@ -66,6 +68,7 @@ function overlayFixture() {
     logs,
     scope,
     layoutsChanged,
+    openings,
   };
 }
 
@@ -95,6 +98,19 @@ describe('createVisualOverlay', () => {
     ]);
     expect(test.backdrop.hidden).toBe(true);
     expect(test.scope.pops).toBe(1);
+  });
+
+  it('overlayOpen_Opens_ReportsCountAndIndex', () => {
+    const test = overlayFixture();
+
+    test.overlay.open(['a', 'b', 'c'], 2);
+    test.overlay.previous();
+    test.overlay.open(['d', 'e'], 1);
+
+    expect(test.openings).toEqual([
+      [3, 2],
+      [2, 1],
+    ]);
   });
 
   it('overlay_BaseChanged_Closes', () => {

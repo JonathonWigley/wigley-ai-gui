@@ -5,6 +5,7 @@ import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
+import type { KeysPageEvents } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -22,7 +23,8 @@ import { mountWhichKeyView } from './which-key-view';
 // carries nothing.
 type KeysApi = PageApi<
   typeof keysManifest,
-  { invoke: Record<never, never>; messages: Record<never, never> }
+  { invoke: Record<never, never>; messages: Record<never, never> },
+  KeysPageEvents
 >;
 
 // Shows which-key over every pending key sequence, on the page and in a box;
@@ -174,6 +176,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           });
           context.editor?.blur();
           help.show();
+          api.events.emit('helpOpened', null);
         },
         closeHelp,
       },

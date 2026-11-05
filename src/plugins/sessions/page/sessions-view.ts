@@ -5,6 +5,7 @@ import {
   type PaneDirection,
 } from '../../../contracts/panes';
 import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
+import type { KeyedSlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
@@ -17,6 +18,7 @@ import {
 import { createPaneTreeView } from '../../../shared/page/pane-tree/pane-tree-view';
 import {
   type RowActivity,
+  type RowActivitySource,
   type SessionPart,
   type SessionRow,
   type SessionsState,
@@ -71,6 +73,8 @@ export interface SessionsViewDeps extends Omit<
   titleMaxLength(): number;
   recency: SessionRecency;
   favorites: ProjectFavorites;
+  // Writes `sessionsActivitySlot`, which holds the rows' activities.
+  activities: KeyedSlotWriter<RowActivitySource[]>;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -202,7 +206,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     deps.timers,
   );
   let state: SessionsState | null = null;
-  const activities = createRowActivities();
+  const activities = createRowActivities(deps.activities);
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
 

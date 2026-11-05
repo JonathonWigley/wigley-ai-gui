@@ -777,6 +777,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     updateActiveTime(session);
     const turnFinished = activity === 'idle' && previous !== 'idle';
     const turnStarted = activity !== 'idle' && previous === 'idle';
+    if (turnStarted && !isReplayed) {
+      deps.emit('turnStarted', { sessionId });
+    }
+    if (turnFinished && !isReplayed) {
+      deps.emit('turnFinished', { sessionId, how: 'idle' });
+    }
     const userIsElsewhere =
       !deps.window.isFocused() || deps.selectedSessionId() !== sessionId;
     const workIsOver = session.backgroundIds.size === 0;
@@ -800,7 +806,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // A resting session runs no turn, so it shows idle; unlike a turn going
-  // idle, its exit announces nothing.
+  // idle, its exit announces nothing, and a crossing outside a replay fires
+  // `turnFinished` as `rested`.
   function showRestingIdle(session: HeldSession) {
     session.harnessActivity = 'idle';
     if (session.slots.info().activity === 'idle') {
@@ -808,6 +815,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     session.slots.setInfo({ activity: 'idle' });
     updateActiveTime(session);
+    if (!session.replay.isReplaying) {
+      deps.emit('turnFinished', {
+        sessionId: session.sessionId,
+        how: 'rested',
+      });
+    }
   }
 
   // Resolves every pending call as cancelled, sending no entry.
@@ -2195,6 +2208,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       throw new Error(`session ${session.sessionId} has no running process`);
     }
     const entryId = process.send(message);
+    deps.emit('messageSent', { sessionId: session.sessionId, entryId });
     session.isOnlyAHoldsCompaction = false;
     if (!session.sent) {
       session.sent = true;

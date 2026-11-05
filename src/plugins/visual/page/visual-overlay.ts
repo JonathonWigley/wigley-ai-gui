@@ -25,7 +25,7 @@ export interface VisualOverlay {
 }
 
 // `pushScope` pushes the overlay's own scope; `onLayoutsChanged` hears each
-// new set of visual layouts.
+// new set of visual layouts; `opened` hears each `open`, not its steps.
 export interface VisualOverlayDeps {
   overlay: PluginAreas['overlay'];
   pushScope(): PushedScope;
@@ -33,6 +33,7 @@ export interface VisualOverlayDeps {
   parts: VisualParts;
   log: PluginLog;
   onLayoutsChanged(listener: () => void): void;
+  opened(count: number, index: number): void;
 }
 
 // The shown visual: its own frame, the slot holding it and the part drawn
@@ -112,6 +113,7 @@ export function createVisualOverlay(deps: VisualOverlayDeps): VisualOverlay {
       open = opened;
       backdrop.hidden = false;
       show(opened, index);
+      deps.opened(sources.length, index);
     },
     next: () => step(1),
     previous: () => step(-1),

@@ -343,6 +343,7 @@ function setUp(
   } = {},
 ) {
   let clockNow = options.clockNow ?? 1000;
+  let onEmit: (emitted: Emitted) => void = () => undefined;
   const clock = { now: () => clockNow };
   const harness = createFakeAgentHarness(
     clock,
@@ -444,7 +445,11 @@ function setUp(
         timeline.push({ rested: data as MessageData['sessionRested'] });
       }
     },
-    emit: (event, data) => emitted.push({ event, data } as Emitted),
+    emit: (event, data) => {
+      const each = { event, data } as Emitted;
+      emitted.push(each);
+      onEmit(each);
+    },
     alerts: {
       announce: (title, body, onClick) =>
         announced.push({ title, body, onClick }),
@@ -506,6 +511,10 @@ function setUp(
       selectedSessionId = sessionId;
     },
     refuseOpen: (hostId: string) => refusedOpens.add(hostId),
+    // Runs as each event is emitted, while chat's emit is on the stack.
+    setOnEmit: (listen: (emitted: Emitted) => void) => {
+      onEmit = listen;
+    },
     setOnOwnedEnd: (act: () => void) => {
       onOwnedEnd = act;
     },
@@ -7004,6 +7013,211 @@ describe('createChatSessions lifecycle events', () => {
       }
     },
   );
+});
+
+describe('createChatSessions message and turn events', () => {
+  type Started = Awaited<ReturnType<typeof started>>;
+  const MESSAGE: UserMessage = { text: 'hi', images: [] };
+  const queueOne = (test: Started) => {
+    test.activity('working');
+    void test.chat.send(ROW_ID, MESSAGE);
+  };
+
+  it.each<{
+    case: string;
+    queue: (test: Started) => void;
+    write: (test: Started) => void;
+    written: number;
+  }>([
+    {
+      case: 'idle send',
+      queue: () => undefined,
+      write: (test) => void test.chat.send(ROW_ID, MESSAGE),
+      written: 1,
+    },
+    {
+      case: 'queued then written',
+      queue: queueOne,
+      write: (test) => test.activity('idle'),
+      written: 1,
+    },
+    {
+      case: 'send now',
+      queue: queueOne,
+      write: (test) => test.chat.sendNow(ROW_ID, 'queued-1'),
+      written: 1,
+    },
+    {
+      case: 'throwing write',
+      queue: (test) => {
+        queueOne(test);
+        test.process.ended = true;
+      },
+      write: (test) => test.chat.sendNow(ROW_ID, 'queued-1'),
+      written: 0,
+    },
+  ])(
+    'messageSent_RowQueuedThenWritten_FiresAtWrite ($case)',
+    async ({ queue, write, written }) => {
+      const test = await started();
+
+      queue(test);
+      await flush();
+      expect(emittedOf(test, 'messageSent')).toEqual([]);
+
+      write(test);
+      await flush();
+
+      expect(emittedOf(test, 'messageSent')).toEqual(
+        Array.from({ length: written }, () => ({
+          sessionId: ROW_ID,
+          entryId: expect.any(String),
+        })),
+      );
+    },
+  );
+
+  // Each turn event, with the row's activity and clock as a listener reads them.
+  function turnEventsHeard(test: ReturnType<typeof setUp>) {
+    const heard: unknown[] = [];
+    test.setOnEmit(({ event, data }) => {
+      if (event === 'turnStarted' || event === 'turnFinished') {
+        const { activity, activeTime } = test.chat.sessions()[0];
+        heard.push({ event, data, activity, activeTime });
+      }
+    });
+    return heard;
+  }
+
+  const startedHeard = (since: number) => ({
+    event: 'turnStarted',
+    data: { sessionId: ROW_ID },
+    activity: 'working',
+    activeTime: { totalMs: 0, since },
+  });
+  const finishedHeard = (how: 'idle' | 'rested', activeTime: ActiveTime) => ({
+    event: 'turnFinished',
+    data: { sessionId: ROW_ID, how },
+    activity: 'idle',
+    activeTime,
+  });
+
+  it.each<{ case: string; act: (test: Started) => void; rest: unknown[] }>([
+    {
+      case: 'start and idle',
+      act: (test) => test.activity('idle'),
+      rest: [finishedHeard('idle', { totalMs: 3000, since: null })],
+    },
+    {
+      case: 'waiting then idle',
+      act: (test) => {
+        test.activity('waiting');
+        test.activity('idle');
+      },
+      rest: [finishedHeard('idle', { totalMs: 3000, since: null })],
+    },
+    {
+      case: 'rest, the process exiting mid-turn',
+      act: (test) => test.process.events.ended({ code: 1, error: 'gone' }),
+      rest: [finishedHeard('rested', { totalMs: 3000, since: null })],
+    },
+    {
+      case: 'stop all, then the exit',
+      act: (test) => {
+        test.chat.stopAll();
+        test.activity('idle');
+        test.process.events.ended({ code: 0, error: null });
+      },
+      rest: [finishedHeard('idle', { totalMs: 3000, since: null })],
+    },
+    {
+      case: 'idle with background work running',
+      act: (test) => {
+        test.process.events.agentEvent({
+          type: 'taskStarted',
+          at: 5000,
+          taskId: 'task-1',
+          agentId: MAIN_AGENT_ID,
+          description: 'server',
+          command: null,
+        });
+        test.activity('idle');
+      },
+      rest: [finishedHeard('idle', { totalMs: 0, since: 2000 })],
+    },
+    {
+      case: 'the user looking at the row',
+      act: (test) => {
+        test.setFocused(true);
+        test.setSelected(ROW_ID);
+        test.activity('idle');
+      },
+      rest: [finishedHeard('idle', { totalMs: 3000, since: null })],
+    },
+  ])(
+    'turnEvents_ActivityCrossesIdle_FireOncePerCrossing ($case)',
+    async ({ act, rest }) => {
+      const test = await started();
+      const heard = turnEventsHeard(test);
+
+      test.setNow(2000);
+      test.activity('working');
+      test.setNow(5000);
+      act(test);
+      await flush();
+
+      expect(heard).toEqual([startedHeard(2000), ...rest]);
+    },
+  );
+
+  it.each<{
+    case: string;
+    replay: (events: AgentProcessEvents) => void;
+  }>([
+    {
+      case: 'a turn that ran and ended',
+      replay: (events) => {
+        events.activity('working');
+        events.activity('idle');
+      },
+    },
+    {
+      case: 'a turn the replayed exit ended',
+      replay: (events) => {
+        events.activity('working');
+        events.ended({ code: 0, error: null });
+      },
+    },
+  ])(
+    'turnEvents_ActivityCrossesIdle_FireOncePerCrossing (replay: $case)',
+    async ({ replay }) => {
+      const test = setUp();
+      const heard = turnEventsHeard(test);
+      test.harness.scriptAttach('p1', { outcome: 'process', replay });
+
+      restoreOne(test, hostedRecord(), [hostedP1()]);
+      await flush();
+
+      expect(heard).toEqual([]);
+    },
+  );
+
+  it('turnEvents_ReplayEndsWorking_TheLiveIdleFiresTheFinish', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay: (events) => events.activity('working'),
+    });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+    expect(emittedOf(test, 'turnStarted')).toEqual([]);
+
+    test.harness.processes[0].events.activity('idle');
+
+    expect(emittedOf(test, 'turnFinished')).toEqual([
+      { sessionId: test.chat.sessions()[0].sessionId, how: 'idle' },
+    ]);
+  });
 });
 
 describe('createChatSessions resume sections', () => {

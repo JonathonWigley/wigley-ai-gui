@@ -403,7 +403,26 @@ export const sessionsPageKey: DependencyKey<
   'sessions'
 > = { id: 'sessions', process: 'page' };
 
-export interface SessionsPageEvents extends EventShape {}
+// `tabAdded`: a plugin's tab added to the session through `addTab`.
+export interface SessionsPageEvents extends EventShape {
+  tabAdded: { sessionId: string; tabId: string };
+}
+
+// One source's activity for a session.
+export interface RowActivitySource {
+  sourceId: string;
+  activity: RowActivity;
+}
+
+// Each session's activities from `setActivity`, by the session id, in last-set
+// order: the highest rank shows, the latest set winning a tie. A session with no
+// sources holds no key. Every page load starts with none, and each source sets
+// its activity again.
+export const sessionsActivitySlot: KeyedSlotKey<
+  RowActivitySource[],
+  'page',
+  'sessions'
+> = { id: 'sessions.activity', process: 'page', kind: 'keyed' };
 
 // Main's rows, keyed by each row's `sessionId`, in side-bar order. In one list
 // operation main writes every row, then the selection, then emits its events, all

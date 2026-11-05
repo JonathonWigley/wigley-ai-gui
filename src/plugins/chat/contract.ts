@@ -376,6 +376,15 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // `processEnded`: a row's live process exiting, outside a replay;
 // `hostSessionId` is the id it started under.
 // `sessionArchived`: a saved session's archived flag, once written.
+// `messageSent`: a message written to the row's process, at the write: a queued
+// message fires when it goes out, not when it queues. `entryId` is the entry the
+// agent adds when it takes the message in.
+// `turnStarted`, `turnFinished`: the row's shown `activity` leaving or reaching
+// idle outside a replay, once per crossing. Hear these for "the row's work began
+// or ended": they cover a compaction with no harness turn, a stopped turn, and an
+// exit with no `turnEnded` (`how: 'rested'`). `agentEvent`'s `turnStarted` and
+// `turnEnded` report the harness stream instead, replays included. A listener
+// reading `chatSessionSlot` finds the new `activity` and a current `activeTime`.
 export interface ChatMainEvents extends EventShape {
   agentEvent: ChatAgentEvent;
   planUsage: { profileDir: string | null; update: PlanRowUpdate };
@@ -413,6 +422,9 @@ export interface ChatMainEvents extends EventShape {
     error: string | null;
   };
   sessionArchived: { hostSessionId: string; archived: boolean };
+  messageSent: { sessionId: string; entryId: string };
+  turnStarted: { sessionId: string };
+  turnFinished: { sessionId: string; how: 'idle' | 'rested' };
 }
 
 // The main part's exports.

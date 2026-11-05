@@ -6,7 +6,12 @@ import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts'
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { UiState } from '../../../contracts/ui-state';
-import type { SessionPart, SessionsState } from '../contract';
+import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  type SessionPart,
+  sessionsActivitySlot,
+  type SessionsState,
+} from '../contract';
 import { createSessionsParts } from './layout/sessions-parts';
 import { createProjectFavorites } from './project-favorites';
 import { fakeUiState, sessionRow } from './session-fakes';
@@ -101,6 +106,7 @@ export function sessionsViewSetup(
     titleMaxLength,
     recency: createSessionRecency(clock, uiState),
     favorites: createProjectFavorites(uiState),
+    activities: createSlotStore(() => undefined).publish(sessionsActivitySlot),
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);

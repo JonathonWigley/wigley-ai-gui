@@ -3,7 +3,7 @@ import { errorText } from '../../../shared/error-text';
 import { backlogMainKey } from '../../backlog/contract';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
-import type { NotesChannel } from '../contract';
+import type { NotesChannel, NotesMainEvents } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { notesManifest } from '../manifest';
 import { addDriveActions } from './drive-actions';
@@ -12,7 +12,7 @@ import { noteHomes } from './note-homes';
 import { createNoteSender } from './note-sender';
 import { notesSelfTestScript } from './selftest-script';
 
-type NotesApi = MainApi<typeof notesManifest, NotesChannel>;
+type NotesApi = MainApi<typeof notesManifest, NotesChannel, NotesMainEvents>;
 
 // Registers notes' layouts, keeps the note draft in notes' data folder and
 // serves it to the page, with the window capture, Backlog's homes and tags,
@@ -42,6 +42,7 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
       paths: services.paths,
       homeDir,
       log: services.log,
+      emit: (event, data) => api.events.emit(event, data),
     });
     channel.handle('loadDraft', () => store.draft());
     channel.handle('saveDraft', (fields) => store.saveFields(fields));

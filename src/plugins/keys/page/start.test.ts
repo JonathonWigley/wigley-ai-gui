@@ -4,6 +4,7 @@ import type { Keymap } from '../../../contracts/keymap';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import {
+  dataEmitted,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
@@ -35,6 +36,21 @@ describe('keys page part', () => {
     expect(harness.counts()).toEqual(noCounts);
 
     await harness.restart();
+    await harness.stop();
+  });
+
+  it('toggleHelp_OpenAndClose_FiresOnOpenOnly', async () => {
+    const harness = startPagePart(keysPagePart);
+    const { toggleHelp } = harness.started().commands;
+
+    toggleHelp({ arg: undefined });
+    expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null]);
+
+    toggleHelp({ arg: undefined });
+    expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null]);
+
+    toggleHelp({ arg: undefined });
+    expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null, null]);
     await harness.stop();
   });
 

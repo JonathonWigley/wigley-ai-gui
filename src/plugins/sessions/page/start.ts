@@ -25,6 +25,7 @@ import {
   type SessionRow,
   type SessionsChannel,
   sessionsActiveSlot,
+  sessionsActivitySlot,
   type SessionsPageEvents,
   type SessionsPageExports,
   sessionsRowsSlot,
@@ -138,7 +139,11 @@ function createExports(
 ): SessionsPageExports {
   const { log } = api.services;
   return {
-    addTab: (sessionId, tab) => view.tabs.add(sessionId, tab),
+    addTab(sessionId, tab) {
+      const handle = view.tabs.add(sessionId, tab);
+      api.events.emit('tabAdded', { sessionId, tabId: tab.id });
+      return handle;
+    },
     cutToTitleLimit: (text) =>
       cutTitle(text, titleLimit(api.settings().titleMaxLength)),
     addRowPart: (part) => rowParts.add(part),
@@ -200,6 +205,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const selection = api.state.read(sessionsSelectionSlot);
     const active = api.state.publish(sessionsActiveSlot);
     active.set(null);
+    const activities = api.state.publish(sessionsActivitySlot);
+    // The old page's sources are gone with it, and the new page's set theirs again.
+    for (const sessionId of activities.all().keys()) {
+      activities.delete(sessionId);
+    }
     let state: SessionsState = { rows: [], selectedSessionId: null };
     // False until the first state's focus is written to `active`.
     let hasPublished = false;
@@ -444,6 +454,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       titleMaxLength: () => api.settings().titleMaxLength,
       recency: createSessionRecency(api.services.clock, uiState),
       favorites: createProjectFavorites(uiState),
+      activities,
     });
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {

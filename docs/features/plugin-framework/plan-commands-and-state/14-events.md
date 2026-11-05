@@ -1,6 +1,6 @@
 # 14 — Events for every moment
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 12 · Depends on: 12, 13
 Plan: [plan.md](plan.md)

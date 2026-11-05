@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { coreModeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
+  dataEmitted,
   fakeDependency,
   noCounts,
   startPagePart,
@@ -64,16 +66,27 @@ function fakeSessions(tabs: string[], throwsNext: ThrowsNext) {
   );
 }
 
-function startDocsPage() {
+function startDocsPage(
+  invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
+) {
   installFocusFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
   const throwsNext: ThrowsNext = { anchor: false, tab: false };
   const picker = fakeListPickerService();
   const harness = startPagePart(docsPagePart, {
-    services: { picker },
+    services: {
+      picker,
+      markdown: {
+        block: (text) => text,
+        inline: (text) => text,
+        document: async (text) => text,
+        ...NO_FENCES,
+      },
+    },
     dependencies: [fakeSessions(tabs, throwsNext)],
     anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
     firstModeTaken: true,
+    invoke,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
@@ -142,6 +155,57 @@ describe('docs page part lifecycle', () => {
 
     shownMode.set('other.mode');
     expect(treeDownActed()).toBe(false);
+    await harness.stop();
+  });
+
+  it.each([
+    { case: 'a doc that reads', path: '/p/kept.md', opened: ['/p/kept.md'] },
+    { case: 'a missing doc', path: '/p/gone.md', opened: [] },
+  ])('docOpened_DocOpens_FiresOnlyThen ($case)', async ({ path, opened }) => {
+    const entries = ['/p/kept.md', '/p/gone.md'].map((entryPath) => ({
+      id: entryPath,
+      kind: 'instructions',
+      source: 'global',
+      owner: 'mine',
+      repo: null,
+      root: null,
+      plugin: null,
+      path: entryPath,
+      line: null,
+      title: entryPath,
+      meta: {},
+      walked: [],
+      lastLoaded: null,
+    }));
+    const { harness } = startDocsPage(async (method, ...args) => {
+      if (method === 'loadIndex') {
+        return {
+          document: {
+            schemaVersion: 4,
+            generatedAt: '2026-11-05T00:00:00Z',
+            entries,
+            contexts: [],
+          },
+          message: null,
+          title: 'index',
+          canRebuild: false,
+        };
+      }
+      if (method === 'readDoc' && args[0] === '/p/gone.md') {
+        throw new Error('no such file');
+      }
+      return method === 'readDoc' ? '# Doc' : { clones: [] };
+    });
+
+    harness.send('openDoc', { path, line: null });
+    const hasSettled = () =>
+      dataEmitted(harness, 'docs.docOpened').length > 0 ||
+      harness.logs.some(({ message }) => message.includes('Could not open'));
+    await vi.waitFor(() => expect(hasSettled()).toBe(true));
+
+    expect(dataEmitted(harness, 'docs.docOpened')).toEqual(
+      opened.map((each) => ({ path: each })),
+    );
     await harness.stop();
   });
 
