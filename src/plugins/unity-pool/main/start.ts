@@ -1,6 +1,6 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
-import { chatMainKey } from '../../chat/contract';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
+import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
 import type { UnityPoolChannel } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -12,8 +12,8 @@ import { unityPoolSelfTestScript } from './selftest-script';
 type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 
 // Watches unity-pool's state files and sends the page each change, and runs the CLI for the panel's Hold and
-// Release, logging each run's outcome and reading every pool again after it in case the OS watcher misses the write. Registers the layouts
-// and hands the self-test the badge and panel script.
+// Release, logging each run's outcome and reading every pool again after it in case the OS watcher misses the
+// write. Registers the layouts and hands the self-test the badge and panel script.
 export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {

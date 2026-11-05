@@ -366,7 +366,8 @@ What Windows support and installers need.
 - **Platform record** — *agent-ready*: a `Platform` record chosen in the composition root (`createMacPlatform` /
   `createWindowsPlatform`), exposed read-only as `services.platform` on both sides: app lifecycle quirks, attention and
   badge (the alerts adapter splits into mac and Windows variants), default program paths, the relay endpoint.
-  Replaces the other `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`) and sessions'
+  Replaces the other `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`, the forms plugin's
+  `main/selftest-script.ts`, and the session host's own composition root `src/session-host/session-host.ts`) and sessions'
   direct `os.userInfo`, `process.env`, `execPath` and `cwd` reads in `openRelay`; path rules already sit behind
   `services.paths`, and main's `services.platform` already names the OS as a `Platform` value, which the plugins read.
 - **Per-platform program lookup and spawning** — *agent-ready*: program lookup and spawning per platform behind

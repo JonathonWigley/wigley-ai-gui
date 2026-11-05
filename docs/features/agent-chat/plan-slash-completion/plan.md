@@ -215,10 +215,10 @@ harness type.
 - [x] [Pickers and `/` filters on the matcher](04-pickers-and-filters.md) — after 01
 
 ### Wave 3
-- [ ] [Chat completion, descriptions setting and row hook](05-chat-completion.md) — after 02, 03, 04
+- [x] [Chat completion, descriptions setting and row hook](05-chat-completion.md) — after 02, 03, 04
 
 ### Wave 4
-- [ ] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
+- [x] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
 
 ### Wave 5
 - [ ] [Final verification](07-final-verification.md) — after 06
@@ -232,6 +232,8 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - 01 · e25dcac6 · diff read; every Produces present; typecheck exit 0 with no errors; lint clean per worker; fzf-matcher tests 17 pass; npm list shows fzf@0.5.2 · concerns: tests beyond the named list for trim and case; notes popup and start tests cast their service fakes so typecheck does not name them; harness fuzzy is notFaked so tasks 04 and 05 need a fake or replacement slot there
 - 03 · 2f5e9016 · diff read; every Produces present; typecheck no errors; lint exit 0 per worker; prefix-completion tests pass · concerns: one added test pins the single tier and matcher order; drawRow runs per list rebuild and only for rendered rows, so task 05 must not assume one call per word; a selection the user moved down follows its word as ranks change, check live in 07; row drawing has no automated test, checked in 07
 - 04 · 33d71b2a · diff read; every Produces present; typecheck no errors; plugin and picker tests 1414 pass; filtered selftest docs,settings,backlog,notes 328 pass per worker; full selftest 949 pass, 1 fail in session-row fit, attributed to a peer's staged Sessions layout edit, re-checked at the test gate · concerns: self-test in a shared tree spoiled by peer page reloads; session-row fit failure unconfirmed as the peer's; Load states names the home folder by base, check live in 07; docs selftest commit split from a peer's staged line
+- 05 · d907ce67 · diff read; every Produces present; typecheck no errors; lint exit 0 per worker; five test files 133 pass; selftest --plugin chat 195 pass, no fail · concerns: one full selftest run had three unexplained chat close failures that did not reproduce; agent-lines session-row fit failure, same as task 04, unconfirmed as the peer's; descriptions follow each name so do not line up as a column; DESIGN.md has no line for completion descriptions; the long-description ellipsis was not seen on screen, check in 07; drawRow rebuilds the command list per row
+- 06 · 0f106a88 · diff read against the landed code; each listed check reported; docs only · concerns: DESIGN.md has no line for the description, left while a peer holds edits there; init.slash_commands holding the same 101 entries is unverified on 2.1.318; design.md still says the row's element holds the drawn name
 ### Contract changes
 ### Rulings
 - sameNames replaced by the existing isSameJson — compares all four fields with no new helper — a reordered alias list sends one extra message · group 02 · group 02
@@ -252,5 +254,13 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - filterPicker with an empty filter and cursor -1 moves to the first row — stays where it is cannot hold with no row under it — pinned by a test · group 04 · group 04
 - A spaces-only filter keeps its text in Settings and Backlog but counts as no filter — only the reopened box shows it · group 04 · group 04
 - Self-test filters lengthened: neat to rulesneat, style to rulesstyle, help to togglehelp — claims kept · group 04 · group 04
+- Row lookup in a module-level boxCompletions helper in chat-view.ts — two callers of the list — moving it back costs nothing · group 05 · group 05
+- Description draws in font-ui at text-ui inside a mono popup — DESIGN.md keeps mono to code-like content — two CSS lines if the user wants mono · group 05 · group 05
+- The ellipsis uses inline-block with a max-width of 14 space-8 — an inline span cuts nothing — a very wide window still cuts there · group 05 · group 05
+- A draw that throws after appending leaves what it appended, and the next draw adds to it — stated in the CompletionRows comment — a plugin's bug can leave stray row content · group 05 · group 05
+- Each add is its own holder, so one function added twice is two draws · group 05 · group 05
+- AGENTS.md allows a whole self-test run only when the user asks, so the plan's npm run selftest lines run as the touched plugins' groups; tasks 04 and 05 had each run it whole before this was caught — costs nothing a filtered run proves · lead
+- fake-fuzzy-matcher.test-support.ts added to AGENTS.md's src/shared line beside the fake agent harness · group 06 · group 06
+- design.md says the description follows the name in a dim box, not a column — it does not line up across rows · group 06 · group 06
 ### Review rounds
 ### Test gate

@@ -185,6 +185,7 @@ export const chatManifest = definePlugin({
     profiles: DEFAULT_PROFILES,
     layout: 'default',
     keepIdleMinutes: 60,
+    completionDescriptions: true,
   },
   settingInfo: {
     profiles: {
@@ -201,6 +202,11 @@ export const chatManifest = definePlugin({
       label: 'Keep idle sessions (minutes)',
       description:
         "How long a session whose turn has ended keeps its Claude process while the app is closed. Past it the process ends, and the next message resumes the session. The default, 60, is the prompt cache's life.",
+    },
+    completionDescriptions: {
+      label: 'Completion descriptions',
+      description:
+        "Show each command's description beside its name in the / completion list.",
     },
   },
   themeTokens: {},

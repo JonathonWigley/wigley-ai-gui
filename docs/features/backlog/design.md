@@ -37,7 +37,7 @@ plan is written from them. A decision here stands unless the user changes it.
   |---|---|
   | `Space k b` | show Backlog; again: toggle the side bar |
   | `j` `k` `gg` `G` `l` `h` `Enter` | move, open, back, as the Docs tree |
-  | `/` | filter by title, one line or tag |
+  | `/` | filter: fuzzy on a follow-up's title and tag and on plan and feature rows, plain substring on a follow-up's one line |
   | `a` | new follow-up in the selected repo's home |
   | `i` | edit the selected follow-up |
   | `d` | delete the selected follow-up, after y/n |

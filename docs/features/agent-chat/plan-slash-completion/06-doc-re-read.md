@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -25,3 +25,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 0f106a88 · proof: diff read against the landed code; each listed check reported; docs only · concerns: DESIGN.md has no line for the description, left while a peer holds edits there; init.slash_commands holding the same 101 entries is unverified on 2.1.318; design.md still says the row's element holds the drawn name

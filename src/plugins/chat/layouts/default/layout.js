@@ -3,7 +3,7 @@
 // The built-in chat look: the entries, the activity lines (each one summary
 // line, live or finished), the activity dock, its one line and that line's place
 // just above the composer's box, the pending messages' rows, the composer, the
-// list rows, the dialogs' bodies, the image viewer, the run time under a session's
+// list rows, a / completion row's description, the dialogs' bodies, the image viewer, the run time under a session's
 // row, and the session hub's section frames and Session rows. Every collapsible
 // row's body is built on its first open and kept, so an update refills it in
 // place whether it is open or closed.
@@ -846,6 +846,15 @@ const layout = {
       trailing: kit.cursorEnd(),
     });
     return { element: row };
+  },
+  completionDescription(parent, input) {
+    const description = el(
+      'span',
+      'chat-completion-description',
+      input.description,
+    );
+    parent.append(description);
+    return { element: description };
   },
   // The link beside Copy, then the code box and the actions.
   signIn(parent, input, kit) {

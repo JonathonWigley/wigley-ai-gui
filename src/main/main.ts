@@ -55,8 +55,8 @@ import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
-import { osPlatform } from '../shared/os-platform';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
+import { osPlatform } from '../shared/os-platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
   pluginThemeTokens,

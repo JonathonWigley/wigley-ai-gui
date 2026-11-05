@@ -152,7 +152,8 @@ effort level (§ Effort).
 
 ## Initialize
 
-Measured on `2.1.309`, 2026-10-23, base flags without `--include-partial-messages` and `--session-id`.
+Measured on `2.1.318`, 2026-11-04 (the answer came in about 0.47 s; the trace times below are from `2.1.309`), base
+flags without `--include-partial-messages` and `--session-id`.
 
 **The command list at process start.** `init` waits for the first message (§ Init); an `initialize` control request
 does not. Sent as the first stdin line, before any message:
@@ -170,7 +171,7 @@ The inner `response` keys: `commands`, `agents`, `output_style`, `available_outp
 `remote_control_*` (6 keys), `ide_rc_auto_enable_gate`, `fast_mode_state`, `fast_mode_disabled_reason`,
 `session_state`, `capabilities`.
 
-- `commands` holds the same 89 entries as `init.slash_commands`, each an object, without a leading `/`:
+- `commands` holds the same entries as `init.slash_commands` (101 on `2.1.318`, 52 of them with no `aliases`), each an object, without a leading `/`:
   `{"name":"wigley:clean-up-branches","description":"(wigley) Delete the user's branches…","argumentHint":"integration branch patterns, e.g. protos/*","aliases":["clean-up-branches"]}`.
   `description` and `argumentHint` are strings (`""` when none); `aliases` is absent when a command has none; a
   built-in skill carries `"builtin":true`.
@@ -178,8 +179,8 @@ The inner `response` keys: `commands`, `agents`, `output_style`, `available_outp
   (`usage` → `cost`, `stats`; `clear` → `reset`, `new`). The `anthropic-skills` skills reverse it: `name` is the bare
   word and the alias the qualified one (`docx` → `anthropic-skills:docx`), while `init.slash_commands` lists the
   qualified one.
-- Anthropic's Agent SDK sends this request at every start; the app's Claude adapter sends it too and reads
-  `commands` from its answer.
+- Anthropic's Agent SDK sends this request at every start; the app's Claude adapter sends it too, as the first stdin
+  line of a started process, and reads `commands` from its answer.
 
 ## Stream events
 

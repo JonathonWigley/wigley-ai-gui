@@ -35,6 +35,7 @@ import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
 import { addClearCommands } from './clear-commands';
 import { clipboardWriter } from './clipboard';
+import { createCompletionRows, descriptionDraw } from './completion-rows';
 import { mountChatView } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createMainAgentPart } from './main-agent-part';
@@ -65,9 +66,11 @@ type ChatApi = PageApi<
 // the entries until main writes it to the agent; pulling it back puts it into
 // the box.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
-// in the page in place of sending it; the exports register more, fill a
-// session's box, and add parts above every composer and sections to every tab's
-// session hub, which `toggleSideParts` hides or shows in every tab; chat's own
+// in the page in place of sending it; each `/` completion row shows its
+// command's description through the `completionDescription` part while the
+// `chat.completionDescriptions` setting is on; the exports register more
+// commands and row draws, fill a session's box, and add parts above every
+// composer and sections to every tab's session hub, which `toggleSideParts` hides or shows in every tab; chat's own
 // Main agent section holds the activity dock, and its Session section the
 // session's facts. Images
 // pasted or dropped into a Chat tab attach to its next message, other files go
@@ -137,6 +140,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
     });
     addClearCommands({ commands: slashCommands, channel: api.channel });
+    const completionRows = createCompletionRows(services.log);
     const picker = createPicker({
       ...partDeps,
       overlay: api.areas.overlay,
@@ -216,7 +220,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       permissions,
       confirm,
       viewer,
-      slashCommandNames: () => slashCommands.names(),
+      slashCommands: () => slashCommands.list(),
+      completionRows,
       setScope: (scope) => api.keys.setScope(scope),
       otherSessionShown: () => {
         closeSessionDialogs();
@@ -259,8 +264,21 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       toast: services.toast,
     });
+    completionRows.add(
+      descriptionDraw({
+        isEnabled: () => api.settings().completionDescriptions,
+        // The part is a leaf whose element dies with the popup row, so its
+        // `dispose` is dropped.
+        drawPart: (row, description) => {
+          layouts.draw('completionDescription', row, (builder, at) => ({
+            element: builder(at, { description }).element,
+          }));
+        },
+      }),
+    );
     const exports = (consumer: Registrations): ChatPageExports => ({
       addSlashCommand: (command) => consumer.track(slashCommands.add(command)),
+      addCompletionRow: (draw) => consumer.track(completionRows.add(draw)),
       fillComposer: (sessionId, text) =>
         fillComposer({ tabs: view, log: services.log }, sessionId, text),
       addComposerPart: (part) => consumer.track(composerParts.add(part)),

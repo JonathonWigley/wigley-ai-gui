@@ -464,8 +464,32 @@ export interface ChatSidePart {
   ): { dispose?(): void };
 }
 
+// One command the `/` completion offers, whoever holds it: an app command, or
+// an agent command the app holds no name of. An app command has no argument
+// hint or aliases.
+export interface CompletionCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  aliases: readonly string[];
+  source: 'app' | 'agent';
+}
+
+// Draws one `/` completion row into `row`, an element inside the row after its
+// name that starts empty, and returns true when it took the row: no older draw
+// then runs. CodeMirror draws a row again each time it rebuilds the list, and
+// only the rows it shows, so a draw runs any number of times for a command, on
+// a new `row` each time.
+export type CompletionRowDraw = (
+  command: CompletionCommand,
+  row: HTMLElement,
+) => boolean;
+
 // The page part's exports. `addSlashCommand` registers an app slash command
 // until its `dispose`, and throws when the name is already registered.
+// `addCompletionRow` adds a draw for the `/` completion's rows until its
+// `dispose`; the newest draw goes first, and a draw that throws is logged and
+// counts as false.
 // `fillComposer` replaces the session's draft, leaving its attached images,
 // selects its Chat tab and focuses the box in insert mode at the end; an
 // unknown session is logged and ignored. `addComposerPart` throws on an id
@@ -497,6 +521,7 @@ export interface ChatSidePart {
 // the page does not hold; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
+  addCompletionRow(draw: CompletionRowDraw): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;

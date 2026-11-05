@@ -216,6 +216,11 @@ export interface SessionFactsInput {
   facts: readonly SessionFactInput[];
 }
 
+// A `/` completion row's description, never empty.
+export interface CompletionDescriptionInput {
+  description: string;
+}
+
 export interface EntryView<K extends EntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
@@ -536,6 +541,12 @@ export interface ChatLayout {
     input: PickerRowInput,
     kit: PickerRowKit,
   ): PartView<PickerRowInput>;
+  // A `/` completion row's description, appended to the row after its name. It draws anew with each row the popup
+  // draws, so a layout change shows at the next popup and an `update` never runs.
+  completionDescription?(
+    parent: HTMLElement,
+    input: CompletionDescriptionInput,
+  ): PartView<CompletionDescriptionInput>;
   signIn?(
     parent: HTMLElement,
     input: SignInInput,

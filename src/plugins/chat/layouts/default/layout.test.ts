@@ -1211,6 +1211,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   statusLine: true,
   attachments: true,
   pickerRow: true,
+  completionDescription: true,
   signIn: true,
   reasonBox: true,
   closeConfirm: true,
@@ -1382,6 +1383,21 @@ describe('default chat layout surfaces', () => {
         trailing: cursorEnd,
       },
     ]);
+  });
+
+  it('completionDescription_Default_DrawsDescription', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(
+      'completionDescription',
+      { description: 'Plan a change' },
+      kit,
+    );
+
+    const drawn = asFake(view.element);
+    expect(drawn.tagName).toBe('SPAN');
+    expect(drawn.className).toBe('chat-completion-description');
+    expect(drawn.textContent).toBe('Plan a change');
   });
 
   it('signIn_Default_PlacesCopyCodeBoxAndActions', () => {

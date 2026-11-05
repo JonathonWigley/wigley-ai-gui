@@ -83,7 +83,7 @@ src/contracts/   interfaces and records crossing a seam, the plugin API among th
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `active-time.ts`: the functions over an `ActiveTime`)
+                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
@@ -178,8 +178,8 @@ src/renderer/    core page; renderer.ts is its composition root
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
   visual-frames/ the visual frames service plugins open a visual through: the sandboxed frame on the `wigley-visual:`
                  scheme, the theme posted in on load and on each change, and the height and `Esc` it posts out
-  fzf/           fuzzy matcher adapter behind FuzzyMatcher, which every `/` filter and the slash completion rank
-                 with                                       → the only fzf import
+  fzf/           fuzzy matcher adapter behind FuzzyMatcher: the `/` filters match with it and keep their order, while
+                 the list pickers and the slash completion rank with it                                       → the only fzf import
   codemirror-vim/ editor (with fuzzy slash completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
                  and the code colours
                  → the only codemirror, @codemirror, @lezer and @replit import
@@ -241,7 +241,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual and `activeTime` (a session's clock)
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -675,7 +675,7 @@ round; primer: an open primer), since main, not the page, decides.
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
   `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the session hub's Main agent
   section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session rows),
-  `queuedMessage` (one pending message's row, § Pending messages), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
+  `queuedMessage` (one pending message's row, § Pending messages), `completionDescription` (a `/` completion row's description), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws
   the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
