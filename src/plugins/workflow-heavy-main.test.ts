@@ -303,8 +303,15 @@ function startWorkflowPart(
     await settled();
   };
   const openS1 = async () => {
-    await emit('sessions.connected', session('s1', 'h1'));
-    await emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
+    await emit('sessions.connected', { ...session('s1', 'h1'), owned: true });
+    await emit('chat.sessionOpened', {
+      sessionId: 's1',
+      profileDir: '~/.c',
+      hostSessionId: 'h1',
+      projectDir: '/r',
+      profile: 'personal',
+      origin: 'new',
+    });
   };
   const lastFlow = () => sent.at(-1)?.find((flow) => flow.sessionId === 's1');
   // The last flow with its Heavy state's fields beside its own.
@@ -538,8 +545,15 @@ async function reachPlanReady(
     });
     await settled();
   };
-  engine.emit('sessions.connected', session('s1', 'h1'));
-  engine.emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
+  engine.emit('sessions.connected', { ...session('s1', 'h1'), owned: true });
+  engine.emit('chat.sessionOpened', {
+    sessionId: 's1',
+    profileDir: '~/.c',
+    hostSessionId: 'h1',
+    projectDir: '/r',
+    profile: 'personal',
+    origin: 'new',
+  });
   await settled();
   await agentEvent(skill('wigley:feature', ''));
   await agentEvent({ type: 'turnStarted', at: 1 });

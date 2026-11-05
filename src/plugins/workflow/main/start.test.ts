@@ -719,10 +719,17 @@ describe('workflowMainPart', () => {
     {
       state: 'a stub flow open',
       act: async (harness: MainPartHarness<typeof workflowManifest>) => {
-        harness.emit('sessions.connected', session('s1', 'h1'));
+        harness.emit('sessions.connected', {
+          ...session('s1', 'h1'),
+          owned: true,
+        });
         harness.emit('chat.sessionOpened', {
           sessionId: 's1',
           profileDir: '~/.c',
+          hostSessionId: 'h1',
+          projectDir: '/r',
+          profile: 'personal',
+          origin: 'new',
         });
         await settled();
         harness.emit('chat.agentEvent', {
