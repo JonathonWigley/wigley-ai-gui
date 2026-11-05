@@ -165,11 +165,14 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const availableActions = (flow: SessionFlow) =>
     pageStageOf(flow).actions.filter((spec) => spec.available(flow));
 
+  const buttonActions = (flow: SessionFlow) =>
+    availableActions(flow).filter((spec) => spec.keyOnly !== true);
+
   const mainAction = (flow: SessionFlow): StageActionSpec | null =>
-    availableActions(flow)[0] ?? null;
+    buttonActions(flow)[0] ?? null;
 
   const actionInputs = (flow: SessionFlow): ActionInput[] =>
-    availableActions(flow).map((spec, index) => ({
+    buttonActions(flow).map((spec, index) => ({
       command: spec.command,
       label: spec.label,
       enabled: spec.enabled(flow),

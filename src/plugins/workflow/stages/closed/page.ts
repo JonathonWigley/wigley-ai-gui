@@ -17,6 +17,7 @@ export const closedPageStage: PageStage = {
       command: 'dismiss',
       label: 'Dismiss',
       side: 'main',
+      keyOnly: true,
       available: () => true,
       enabled: () => true,
     },

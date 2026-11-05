@@ -12,6 +12,7 @@ export const makePageStage: PageStage = {
       command: 'resumeMake',
       label: 'Resume make',
       side: 'main',
+      keyOnly: true,
       available: (flow) =>
         !isBusy(flow) &&
         flow.progress !== null &&
@@ -22,6 +23,7 @@ export const makePageStage: PageStage = {
       command: 'openPlan',
       label: 'Open plan',
       side: 'page',
+      keyOnly: true,
       available: (flow) => flow.planDir !== null,
       enabled: () => true,
     },

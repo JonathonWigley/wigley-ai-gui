@@ -32,6 +32,7 @@ export const planReadyPageStage: PageStage = {
       command: 'openPlan',
       label: 'Open plan',
       side: 'page',
+      keyOnly: true,
       available: (flow) => flow.planDir !== null,
       enabled: () => true,
     },

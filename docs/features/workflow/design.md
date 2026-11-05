@@ -33,19 +33,20 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
   entry) and the tower's **plan step** are different things.
 - **Status** — what a stage is doing now: running, paused, ready or done. A step not reached is pending.
 - **Signal** — one input the flow folds: an agent event, a clear, or a plan folder change (§ Signals).
-- **Main action** — the one action of a stage that `ww` runs, the strip's one button and the first of the side pane's buttons.
+- **Main action** — the one action of a stage that `ww` runs, the strip's one button and the first of the side pane's buttons. A stage with no button has none.
+- **Key-only action** — an action that runs from its own `Space w` key and draws no button (`keyOnly`).
 
 ## Stages
 
-| Stage | A session enters it when | Label and status | Status line | Actions (main action first) |
-|---|---|---|---|---|
-| idle | it starts; Dismiss on closed; Make in new session hands its plan away | none: nothing draws | none | none: a feature starts from its skill call |
-| primer | `wigley:feature-primer` starts | Primer, running or paused | `Primer · running` | none |
-| feature | `wigley:feature` starts | Feature, running or paused | `Feature · paused` | Open plan, once a plan is written |
-| plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | Make, ready | `Make · ready` | Clear & make (Cancel during the countdown), Make in new session, Open plan |
-| make | `wigley:make` starts | Make, running or paused | `Make · running 3/9` | Resume make, Open plan |
-| review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | Resume make, Open plan |
-| closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro, Dismiss |
+| Stage | A session enters it when | Label and status | Status line | Button actions (main action first) | Key-only actions |
+|---|---|---|---|---|---|
+| idle | it starts; Dismiss on closed; Make in new session hands its plan away | none: nothing draws | none | none: a feature starts from its skill call | none |
+| primer | `wigley:feature-primer` starts | Primer, running or paused | `Primer · running` | none | none |
+| feature | `wigley:feature` starts | Feature, running or paused | `Feature · paused` | none | Open plan, once a plan is written |
+| plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | Make, ready | `Make · ready` | Clear & make (Cancel during the countdown), Make in new session | Open plan |
+| make | `wigley:make` starts | Make, running or paused | `Make · running 3/9` | none | Resume make, Open plan |
+| review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | none | Resume make, Open plan |
+| closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro | Dismiss |
 
 Running means the flow is busy: a turn or a main-agent subagent runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's Needs you label marks a waiting round.
 
@@ -130,7 +131,7 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
 - **Side pane** — the Plan section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub), from the first read of a plan until
   Dismiss or a new plan: the status line, the detail, the stepper, a progress bar, the checklist and
-  every action of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows
+  every button of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows
   each later wave as one line. The current wave's open tasks show running or paused only in make, because the plan file
   does not say which task an agent works on.
 
@@ -151,11 +152,11 @@ read a replayed turn end causes, until a live turn starts or ends.
 
 ## Keys
 
-The `<Leader>w` group (which-key: workflow), each action's key anchored on its button:
+The `<Leader>w` group (which-key: workflow), each button action's key anchored on its button:
 
 | Keys | Command |
 |---|---|
-| `<Leader>ww` | the current stage's main action (Cancel during the countdown) |
+| `<Leader>ww` | the current stage's main action (Cancel during the countdown); with no button, log `nothing to run` |
 | `<Leader>wn` | Make in new session |
 | `<Leader>wr` | Resume make |
 | `<Leader>wo` | Open plan |
@@ -176,6 +177,8 @@ The layout preview opens on `<Leader>zlw`.
   the chat box.
 - **Agent events, not chat entries.** Detection reads `AgentEvent` so a Codex or wigley-harness adapter drives the
   flow unchanged; `toolStarted` carries only the tool's name, no input, so skills and writes get members of their own.
+- **Buttons only for the moves between runs.** Only feature to make and make to retro earn a button. Open plan, Resume
+  make and Dismiss keep their keys, so a stage with nothing to move to draws no button and `ww` runs nothing there.
 - **One checklist.** The side pane replaced a Flow tab that drew the same stepper, checklist and actions; a second copy
   added upkeep and showed nothing new. Open plan shows the whole plan.
 - **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
