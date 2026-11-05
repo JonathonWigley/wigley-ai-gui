@@ -8,9 +8,20 @@ export interface ProcessResult {
   timedOut: boolean;
 }
 
+// How one `ProcessRunner.run` runs its program.
+export interface ProcessRunOptions {
+  cwd?: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  // Names removed from the app's environment for this run; every other
+  // variable passes through.
+  unsetEnv?: readonly string[];
+}
+
 // Runs the machine's programs.
 export interface ProcessRunner {
-  // Runs `command` with `args`, no shell, in `cwd` when given. Resolves once
+  // Runs `command` with `args`, no shell, in `cwd` when given, in the app's
+  // environment without the names in `unsetEnv`. Resolves once
   // the program ends, a non-zero exit included, or once `timeoutMs` passes and
   // the program is killed; rejects with `Could not run <command>: <reason>`
   // when it cannot start. When `signal` aborts the program is killed and the
@@ -19,6 +30,6 @@ export interface ProcessRunner {
   run(
     command: string,
     args: string[],
-    options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
+    options?: ProcessRunOptions,
   ): Promise<ProcessResult>;
 }

@@ -106,7 +106,10 @@ Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the `unit
 (`python3` by default; `py` or `python` on a Windows install with no `python3`) and the script the
 `unity-pool.scriptPath` setting. Empty, `scriptPath` is `~/.local/bin/unity-pool`, and on Windows
 `~/wigley-agents/tools/unity-pool/unity-pool`, since a Windows install writes launchers, not a symlink a Python can
-run; `resolveScriptPath` picks it from the platform main reads. A run times out after 30 seconds. The button is disabled while its run is in
+run; `resolveScriptPath` picks it from the platform main reads. A run drops every session variable from the app's
+environment (`SESSION_IDENTITY_ENV`, `src/shared/session-env.ts`: `CLAUDE_CODE_SESSION_ID`, `WIGLEY_SESSION_ROW` and
+the rest), so the CLI takes it as the user's even in an app started from a Claude Code terminal. A run times out
+after 30 seconds. The button is disabled while its run is in
 flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`, or the CLI's
 error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
 with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an

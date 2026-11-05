@@ -1,5 +1,6 @@
 import type { AgentStart } from '../../contracts/agent';
 import type { Paths } from '../../contracts/paths';
+import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../shared/session-env';
 
 export interface ClaudeLaunch {
   args: string[];
@@ -7,30 +8,7 @@ export interface ClaudeLaunch {
   env: NodeJS.ProcessEnv;
 }
 
-// What a Claude Code session sets for its own children, which an app started
-// from a Claude Code terminal inherits: the names claude-stream.md § Launch
-// lists. Other `CLAUDE_CODE_*` names are the user's config and pass through, but
-// for `APP_LAUNCH_ENV`'s.
-const NESTED_SESSION_ENV: readonly string[] = [
-  'AI_AGENT',
-  'CLAUDECODE',
-  'CLAUDE_PID',
-  'CLAUDE_EFFORT',
-  'CLAUDE_AFK_TIMEOUT_MS',
-  'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE',
-  'CLAUDE_CODE_ENTRYPOINT',
-  'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS',
-  'CLAUDE_CODE_MESSAGING_SOCKET',
-  'CLAUDE_CODE_MESSAGING_TOKEN',
-  'CLAUDE_CODE_EXECPATH',
-  'CLAUDE_CODE_SESSION_ID',
-  'CLAUDE_CODE_CHILD_SESSION',
-  'CLAUDE_CODE_SESSION_ATTENDED',
-];
-
 const IDLE_COMPACT_ENV = 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS';
-// The row id `unity-pool` records as a claim's holder.
-const SESSION_ROW_ENV = 'WIGLEY_SESSION_ROW';
 // The app's own values, not a parent session's: an app setting and the row id. A
 // session launch sets them from its request, and no other value in the inherited
 // environment reaches a `claude` run, the user's own included. A profile's

@@ -2,15 +2,13 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { ProcessRunOptions } from '../../contracts/processes';
 import { createNodeProcesses } from './node-processes';
 
 const processes = createNodeProcesses();
 
 // Runs `script` in the Node that runs the tests.
-function runScript(
-  script: string,
-  options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
-) {
+function runScript(script: string, options?: ProcessRunOptions) {
   return processes.run(process.execPath, ['-e', script], options);
 }
 
@@ -90,6 +88,15 @@ describe('createNodeProcesses', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('run_UnsetEnv_DropsOnlyThoseNames', async () => {
+    const result = await runScript(
+      'process.stdout.write(JSON.stringify(["HOME" in process.env, "PATH" in process.env]))',
+      { unsetEnv: ['HOME'] },
+    );
+
+    expect(JSON.parse(result.stdout)).toEqual([false, true]);
   });
 
   it('run_LargeOutput_KeepsPastOneMegabyte', async () => {

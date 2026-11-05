@@ -131,7 +131,7 @@ describe('runPoolCommand', () => {
   });
 
   it.each(['python3', 'py'])(
-    'runPoolCommand_TildeScript_ExpandsAndRunsThePython: %s',
+    'runPoolCommand_TildeScript_ExpandsAndRunsThePythonWithoutSessionIdentity: %s',
     async (pythonCommand) => {
       const run = deps(['/h/x'], '~/x', pythonCommand);
       const args = poolCommandArgs('/h/x', 'release', 'p', 4);
@@ -145,7 +145,16 @@ describe('runPoolCommand', () => {
 
       expect(run.statted).toEqual(['/h/x']);
       expect(run.processes.runs).toEqual([
-        { command: pythonCommand, args, cwd: undefined, timeoutMs: 30_000 },
+        {
+          command: pythonCommand,
+          args,
+          cwd: undefined,
+          timeoutMs: 30_000,
+          unsetEnv: expect.arrayContaining([
+            'CLAUDE_CODE_SESSION_ID',
+            'WIGLEY_SESSION_ROW',
+          ]),
+        },
       ]);
       expect(result).toEqual({ ok: true, pool: 'p', clone: 4 });
     },

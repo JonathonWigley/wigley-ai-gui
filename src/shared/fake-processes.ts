@@ -1,4 +1,8 @@
-import type { ProcessResult, ProcessRunner } from '../contracts/processes';
+import type {
+  ProcessResult,
+  ProcessRunner,
+  ProcessRunOptions,
+} from '../contracts/processes';
 
 // One call `FakeProcesses.run` received.
 export interface FakeRun {
@@ -6,6 +10,7 @@ export interface FakeRun {
   args: string[];
   cwd: string | undefined;
   timeoutMs: number | undefined;
+  unsetEnv: readonly string[] | undefined;
 }
 
 type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
@@ -30,13 +35,14 @@ export class FakeProcesses implements ProcessRunner {
   run(
     command: string,
     args: string[],
-    options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
+    options?: ProcessRunOptions,
   ): Promise<ProcessResult> {
     this.runs.push({
       command,
       args: [...args],
       cwd: options?.cwd,
       timeoutMs: options?.timeoutMs,
+      unsetEnv: options?.unsetEnv,
     });
     const signal = options?.signal;
     if (signal?.aborted) {
