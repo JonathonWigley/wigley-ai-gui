@@ -5,10 +5,14 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
-import type { SessionsMainEvents } from '../../sessions/contract';
+import {
+  type SessionsMainEvents,
+  sessionsMainKey,
+} from '../../sessions/contract';
 import { sessionLogManifest } from '../manifest';
 import { recentlyClosed } from './recently-closed';
 import { createSessionEventLog } from './session-event-log';
+import { sessionLogSelfTestScript } from './selftest-script';
 
 type SessionLogApi = MainApi<
   typeof sessionLogManifest,
@@ -18,9 +22,9 @@ type SessionLogApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Writes one log line for each lifecycle event, and gives chat the Recently
-// closed section over the log, which reads the file and `recentlyClosedCount` at
-// each ask. A quit writes no close: this part stops before chat, and chat's stop
+// Writes one log line for each lifecycle event, gives chat the Recently closed
+// section over the log, which reads the file and `recentlyClosedCount` at each
+// ask, and hands the self-test its script. A quit writes no close: this part stops before chat, and chat's stop
 // closes nothing.
 export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
   manifest: sessionLogManifest,
@@ -98,6 +102,17 @@ export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
           isResumable,
         ),
     });
+
+    const { services } = api;
+    services.selfTest?.run(
+      sessionLogSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        chat,
+        sessions: api.dependency(sessionsMainKey),
+      }),
+    );
 
     return { commands: {}, dispose: () => eventLog.settled() };
   },

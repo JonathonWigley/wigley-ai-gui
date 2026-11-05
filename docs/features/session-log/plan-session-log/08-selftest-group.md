@@ -1,6 +1,6 @@
 # 08 — Self-test group
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 06, 07
 Plan: [plan.md](plan.md)

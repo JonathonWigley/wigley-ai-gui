@@ -1,6 +1,6 @@
 # 06 — Start prompt sections
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 05
 Plan: [plan.md](plan.md)
@@ -65,3 +65,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 53c8025f · proof: diff read; typecheck and lint pass · concerns: chat's ARCHIVE_STEPS at selftest-script.ts:641 use relative moves from the Session step's start, which a live section in a self-test folder can shift; x on a section row logs the first-message title, not closed.title; Folder step rows show only the folder base, so two folders with one base look alike; a cancelled sign-in from a section row logs no session started
