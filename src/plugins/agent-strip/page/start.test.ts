@@ -30,6 +30,7 @@ const RUNNING: Roster = {
       isBackground: false,
       contextTokens: null,
       contextWindow: null,
+      autocompactLimit: null,
       tools: [],
     },
   ],
