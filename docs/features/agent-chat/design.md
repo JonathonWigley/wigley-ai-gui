@@ -116,8 +116,11 @@ interview on 2026-10-23; this file is the record of both.
   and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The adapter reads Claude's
   values like this: each control starts at the value the start carries, so a new row starts unset (null) and a resumed
   or cleared row starts with the row's mode and the model and effort the user picked; `default` mode is the `manual`
-  choice; effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init
-  event and the last successful `/model`, a full model name shown as its alias.
+  choice; the model and effort also come from a `get_settings` control request, sent at process start and after each
+  turn, local commands included, because no event reports effort and a default depends on the model, the flags and the
+  profile: the reply's `applied` values replace the held ones, so the chips show what the process uses, or unset for a
+  model with no effort. The model also comes from the init event and the last successful `/model`, and a full model
+  name shows as its alias. A failed `get_settings` is logged and changes nothing.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
   message. A SIGINT would end the process. Ctrl+C always ends the running turn (a message queued behind it still
   runs): when neither the turn's result nor an answer that leaves nothing running arrives within 5 s, the adapter

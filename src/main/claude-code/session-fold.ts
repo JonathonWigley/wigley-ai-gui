@@ -25,6 +25,7 @@ import {
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import {
   contextUsageOf,
+  configuredAutocompactLimit,
   EMPTY_SESSION_USAGE,
   foldContextUsage,
   foldReply,
@@ -281,6 +282,22 @@ function pushAgentEvent(
     kind: 'agentEvent',
     event: { ...draft, at } as AgentEvent,
   });
+}
+
+// An `agentReplied` with the limit the profile's override gives its model's window.
+function withAutocompactLimit(
+  draft: AgentEventDraft,
+  usage: SessionUsageState,
+): AgentEventDraft {
+  return draft.type === 'agentReplied'
+    ? {
+        ...draft,
+        autocompactLimit: configuredAutocompactLimit(
+          usage.configuredPercent,
+          draft.contextWindow,
+        ),
+      }
+    : draft;
 }
 
 function pushUserMessage(
@@ -999,7 +1016,7 @@ function foldOutLine(
     );
   }
   for (const draft of decoded.agentEvents) {
-    pushAgentEvent(draft, at, effects);
+    pushAgentEvent(withAutocompactLimit(draft, state.usage), at, effects);
   }
   foldCompactionLine(state, decoded, at, effects);
   foldControlValues(state, decoded, command, effects);

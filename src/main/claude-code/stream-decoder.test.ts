@@ -232,6 +232,7 @@ const replied = (
   spendUsd: spendUsd === null ? null : expect.closeTo(spendUsd, 12),
   contextTokens,
   contextWindow,
+  autocompactLimit: null,
 });
 
 const launched = (agentId: string) => ({ type: 'agentLaunched', agentId });

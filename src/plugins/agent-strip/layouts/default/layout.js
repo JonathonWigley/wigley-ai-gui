@@ -15,7 +15,7 @@
 /** @typedef {import('../layout').TaskBoxInput} TaskBoxInput */
 /** @typedef {import('../layout').ToolLineInput} ToolLineInput */
 
-// The share of its context window at which a subagent's bar turns the warning colour.
+// The share of its context limit at which a subagent's bar turns the warning colour.
 const CONTEXT_WARNING_RATIO = 0.8;
 
 /** @type {import('../layout').CompleteLayout} */
@@ -142,29 +142,31 @@ function boxTop(element, input, tagText, tagTone, kit) {
 }
 
 /**
- * The context bar and text, then the cost, each left out while unknown; no
+ * The context bar and text against the autocompact limit, else the context
+ * window, then the cost, each left out while unknown; no
  * footer when both are.
  * @param {HTMLElement} element
  * @param {AgentBoxInput} input
  * @param {AgentStripKit} kit
  */
 function agentFooter(element, input, kit) {
-  const { contextTokens, contextWindow, spendUsd } = input;
+  const { contextTokens, contextWindow, autocompactLimit, spendUsd } = input;
+  const limit = autocompactLimit ?? contextWindow;
   if (contextTokens === null && spendUsd === null) {
     return;
   }
   const footer = kit.el(element, 'div', 'agent-strip-footer');
   if (contextTokens !== null) {
-    if (contextWindow !== null) {
-      contextBar(footer, contextTokens / contextWindow, kit);
+    if (limit !== null) {
+      contextBar(footer, contextTokens / limit, kit);
     }
     kit.el(
       footer,
       'span',
       'agent-strip-context',
-      contextWindow === null
+      limit === null
         ? tokenCount(contextTokens)
-        : `${tokenCount(contextTokens)}/${tokenCount(contextWindow)}`,
+        : `${tokenCount(contextTokens)}/${tokenCount(limit)}`,
     );
   }
   if (spendUsd !== null) {

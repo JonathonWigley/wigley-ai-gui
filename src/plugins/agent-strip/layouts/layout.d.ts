@@ -36,8 +36,9 @@ export interface ToolLineInput {
 }
 
 // One subagent: its name (the label it was given, else its type), its kind, the task it was given, its model and
-// effort, its estimated spend in dollars, its latest reply's context tokens and its model's context window, each null
-// until known, how long it has run in milliseconds, and its latest three tool calls, oldest first.
+// effort, its estimated spend in dollars, its latest reply's context tokens, its model's context window and the
+// profile's autocompact limit for that window, each null until known (the limit stays null when the profile sets
+// none), how long it has run in milliseconds, and its latest three tool calls, oldest first.
 export interface AgentBoxInput {
   name: string;
   kind: AgentKind;
@@ -47,6 +48,7 @@ export interface AgentBoxInput {
   spendUsd: number | null;
   contextTokens: number | null;
   contextWindow: number | null;
+  autocompactLimit: number | null;
   elapsedMs: number;
   recentTools: readonly ToolLineInput[];
   isSelected: boolean;

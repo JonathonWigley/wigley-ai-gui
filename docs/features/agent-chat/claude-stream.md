@@ -477,6 +477,27 @@ stdout {"type":"result","subtype":"success","is_error":false,"result":"Usage: /e
   change.
 - `/model` with no argument prints the effort in its text: `Current model: \`Haiku 5.5\` (effort: low)` (§ Model).
 - The adapter's `/effort <value>` carries a client `uuid`, as every message it writes does (§ Message lifecycle).
+- **`get_settings` reports the effort in force.** The control request
+  `{"type":"control_request","request_id":"r1","request":{"subtype":"get_settings"}}` is answered before any message,
+  with no model call, and its reply's `response.response` holds `effective`, `sources` and `applied`. Read only
+  `applied`: `effective.effortLevel` is the settings file's value and is wrong for Opus 5.5, which ignores a top-level
+  `effortLevel`. The request is not in the Agent SDK's TypeScript reference, so it is a measured reading like the rest
+  of this file. The reply was 7.4 KB on this profile. Measured on 2.1.318, profile `effortLevel` `high`, with no
+  `CLAUDE_CODE_EFFORT_LEVEL`:
+
+  | start, then command | `applied.model` | `applied.effort` |
+  |---|---|---|
+  | `--model claude-opus-5-5` | `claude-opus-5-5` | `medium` |
+  | no `--model` (profile `opus[1m]`) | `claude-opus-5-5` | `medium` |
+  | `--model claude-sonnet-5-5` | `claude-sonnet-5-5` | `medium` |
+  | `--model claude-fable-5-1` (`modelSettings` `medium`) | `claude-fable-5-1` | `medium` |
+  | `--model claude-haiku-4-5` (no effort support) | `claude-haiku-4-5` | `null` |
+  | `--model claude-opus-5-5 --effort low` | `claude-opus-5-5` | `low` |
+  | then `/model sonnet` | `claude-sonnet-5-5` | `low` |
+  | Opus, `/effort high` | `claude-opus-5-5` | `high` |
+  | then `/effort auto` | `claude-opus-5-5` | `medium` |
+  | then `/effort max` | `claude-opus-5-5` | `max` |
+  | Opus, `/effort ultracode on` | `claude-opus-5-5` | `medium`, with `applied.ultracode` `true` |
 
 ## Model
 

@@ -61,7 +61,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 |---|---|---|
 | `sessionStarted` / `sessionEnded` | — | enter the tower / results screen |
 | `agentSpawned` | agent id, parent agent id, agent type, description, name (the label the agent was given, its type when none), model and effort (each null when unknown) | a party member joins |
-| `agentReplied` | agent id, model (the reply's, or the launch receipt's resolved model), the subagent's estimated spend so far in USD (cumulative; null before its first reply or when any reply used an unpriced model), context tokens of its latest reply (null before its first reply), its model's context window (null until the harness reports it) | — |
+| `agentReplied` | agent id, model (the reply's, or the launch receipt's resolved model), the subagent's estimated spend so far in USD (cumulative; null before its first reply or when any reply used an unpriced model), context tokens of its latest reply (null before its first reply), its model's context window (null until the harness reports it), the profile's autocompact limit for that window in tokens (null when the profile sets none or the window is unknown) | — |
 | `agentLaunched` | agent id; the subagent runs in the background | — |
 | `agentFinished` | agent id, done or failed | the member steps back |
 | `taskStarted` | task id, agent id (the agent that started it), description, command (null when the harness names none) | — |

@@ -18,7 +18,8 @@ export interface RosterTool {
 // milliseconds. `model` is the model of its latest `agentReplied` (a reply or its launch receipt), else the spawn's;
 // `spendUsd` is its estimated spend so far from its latest `agentReplied` (cumulative), null before its first reply or
 // once any reply's model has no list price. `isBackground` is true once its launch receipt says it runs in the
-// background. `contextTokens` and `contextWindow` are its latest `agentReplied`'s, null until one reports them.
+// background. `contextTokens`, `contextWindow` and `autocompactLimit` are its latest `agentReplied`'s, null until one
+// reports them.
 export interface RosterAgent {
   agentId: string;
   agentType: string;
@@ -31,6 +32,7 @@ export interface RosterAgent {
   isBackground: boolean;
   contextTokens: number | null;
   contextWindow: number | null;
+  autocompactLimit: number | null;
   // Its tool calls in start order, every one kept: each tool start and end sends the whole roster, so a subagent with
   // hundreds of calls sends hundreds of small objects per change, a cost accepted so the box can list every call.
   tools: RosterTool[];

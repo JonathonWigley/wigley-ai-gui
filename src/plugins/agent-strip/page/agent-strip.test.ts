@@ -44,6 +44,7 @@ function agent(
     isBackground: false,
     contextTokens: null,
     contextWindow: null,
+    autocompactLimit: null,
     tools: Array.from({ length: toolCount }, (_, i) => ({
       toolUseId: `${agentId}-tool-${i + 1}`,
       tool: 'Read',

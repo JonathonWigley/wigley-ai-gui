@@ -106,6 +106,7 @@ const AGENT: AgentBoxInput = {
   spendUsd: 0.0421,
   contextTokens: 84_000,
   contextWindow: 200_000,
+  autocompactLimit: null,
   elapsedMs: 42_000,
   recentTools: [
     { tool: 'Read', summary: 'stream-decoder.ts', status: 'success' },
@@ -268,6 +269,30 @@ describe('default agent-strip layout', () => {
       cost: '$0.04',
       percent: '50',
       tone: 'normal',
+    },
+    {
+      case: 'an autocompact limit replaces the window',
+      input: {
+        contextTokens: 174_000,
+        contextWindow: 1_000_000,
+        autocompactLimit: 300_000,
+      },
+      context: '174k/300k',
+      cost: '$0.04',
+      percent: '58',
+      tone: 'normal',
+    },
+    {
+      case: 'the warning share is of the autocompact limit',
+      input: {
+        contextTokens: 240_000,
+        contextWindow: 1_000_000,
+        autocompactLimit: 300_000,
+      },
+      context: '240k/300k',
+      cost: '$0.04',
+      percent: '80',
+      tone: 'warning',
     },
     {
       case: 'no window: no bar',

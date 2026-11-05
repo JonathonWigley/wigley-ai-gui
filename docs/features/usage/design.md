@@ -63,6 +63,12 @@ Measured 2026-10-30 on 2.1.314: `get_context_usage` reported `autoCompactThresho
 `settings.json`. Claude applies the override only under conditions its code does not expose, so the details input
 carries both limits and flags a session whose two differ.
 
+A subagent has no `get_context_usage` reply, so its limit is the configured percent of its model's window, and its
+agent-strip box measures against that, else the window. Read 2026-11-04 from this machine's saved subagent transcripts
+with the override at 30: 12 automatic compactions, all on `claude-opus-5-5`, at 291,616–308,204 tokens, against the
+967000 the main session reports. No Sonnet or Haiku subagent there has compacted (peaks 218,620 and 141,262), so the
+limit on those models is unconfirmed.
+
 The launch strips `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from the child's environment (`claude-launch.ts`,
 `NESTED_SESSION_ENV`) because a parent Claude session sets it for its own children; Claude still reads it from the
 profile's `settings.json`, which is why the configured limit is read there.

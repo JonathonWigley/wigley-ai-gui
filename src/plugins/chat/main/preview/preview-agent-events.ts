@@ -38,6 +38,7 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       spendUsd: 0.4213,
       contextTokens: 166_000,
       contextWindow: 200_000,
+      autocompactLimit: null,
     },
     {
       type: 'skillStarted',
