@@ -1,6 +1,6 @@
 # 04 — Run log
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -111,3 +111,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 76979d31 · proof: diff read against the spec; every Produces present; typecheck and lint clean · concerns: activeMsOf copies every held session per agent event through chat.sessions(); a read in the clear window can log a negative activeMs; costUsd is 0 not null when the only spend predates the run; meter note after forget leaves one small entry

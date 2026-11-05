@@ -1,6 +1,6 @@
 # 05 — workflow-heavy
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 5 · Depends on: 02, 04
 Plan: [plan.md](plan.md)

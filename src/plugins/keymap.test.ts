@@ -16,4 +16,17 @@ describe('defaultKeymap', () => {
     expect(() => requireUnambiguousKeymap(merged)).not.toThrow();
     expect(() => requireWellFormedChords(merged.page)).not.toThrow();
   });
+
+  it.each([
+    { keys: '<Leader>wn', command: 'workflow-heavy.makeInNewSession' },
+    { keys: '<Leader>wr', command: 'workflow-heavy.resumeMake' },
+    { keys: '<Leader>wo', command: 'workflow-heavy.openPlan' },
+    { keys: '<Leader>wt', command: 'workflow-heavy.retro' },
+    { keys: '<Leader>wd', command: 'workflow-heavy.dismiss' },
+    { keys: '<Leader>ww', command: 'workflow.mainAction' },
+  ])('workflowHeavyCommands_KeepTheirChords $keys', ({ keys, command }) => {
+    expect(
+      defaultKeymap.binds.find((bind) => bind.keys === keys)?.command,
+    ).toBe(command);
+  });
 });

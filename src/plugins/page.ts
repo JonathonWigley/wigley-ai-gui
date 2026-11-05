@@ -18,6 +18,7 @@ import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
 import { workflowPagePart } from './workflow/page/start';
+import { workflowHeavyPagePart } from './workflow-heavy/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise.
@@ -30,6 +31,7 @@ export const pageParts: readonly PagePart[] = [
   agentsPagePart,
   agentLinesPagePart,
   workflowPagePart,
+  workflowHeavyPagePart,
   unityPoolPagePart,
   agentStripPagePart,
   agentSkillsPagePart,

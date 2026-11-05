@@ -216,7 +216,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [Checklist tool, scoped step tool, session note](03-workflow-tools.md) — after 01
 
 ### Wave 4
-- [ ] [Run log](04-run-log.md) — after 03
+- [x] [Run log](04-run-log.md) — after 03
 
 ### Wave 5
 - [ ] [workflow-heavy](05-workflow-heavy.md) — after 02, 04
@@ -245,8 +245,10 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 01 · a5b319c0 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: TurnWork.worked survives cleared, so a sessionEnded right after a clear on a null workflow re-marks missedLevel; private isRecord copies in heavy-contract; check-layers still allows contract to import plan-reader; step-tool enum may repeat a value until task 03; a self-test hello turn sets missedLevel until the skill claims
 - 02 · e20d8bbd · diff read against the spec; every Produces present; the spec's grep prints nothing; typecheck and lint clean · concerns: No workflow tag draws outside any layout (spec's decision) and will show on the self-test's hello session; --wg-workflow-badge has no DESIGN.md entry; AGENTS.md still names addStage until task 10; logFlow does not re-run on addWorkflow; no-page once-sets never clear; start.ts SessionCommand still names Heavy's commands
 - 03 · f205596a · diff read against the spec; every Produces present, parseChecklistItems included; typecheck and lint clean · concerns: checklist dispose line has no failing test; reportStep scoping has no start-level test that fails on a union lookup; merged table lost the ignored-step no-push assertion; StepTool_NotInTheUnion_ListsIt pins Heavy's step order, so task 05 reaches it; whitespace-only text accepted
+- 04 · 76979d31 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: activeMsOf copies every held session per agent event through chat.sessions(); a read in the clear window can log a negative activeMs; costUsd is 0 not null when the only spend predates the run; meter note after forget leaves one small entry
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
+- RunMeter: five members → six, adding claimed(sessionId), which sets the baseline as finished does · why: the baseline resets at a null-to-claim move and the interface had no member for it · consumers: none outside workflow/main/start.ts · group 04
 ### Rulings
 - A settings file of the wrong shape stops install with exit 1, as a parse failure does — merging into it would traceback — such a file blocks install until fixed · group 09 · group 09
 - A transcript line that parses but is not a pinned shape counts as no match, not a hook failure — one odd line should not disable the gate — a Claude Code shape change denies rather than fails open · group 09 · group 09
@@ -262,5 +264,9 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - page/layout/workflow-parts.ts is deleted — nothing remained, which the spec allowed — a later task must import workflow-draw.ts · group 02 · group 02
 - parseChecklistItems reuses flow-store's isChecklistItem, exported — widen rather than copy, though flow-store was not in the Files — a change to the saved-flow check moves the tool's check · group 03 · group 03
 - stepTool_ReportIsIgnored merged into StepTool_ScopedToTheFlowsWorkflow — its rows repeated the new table's — a report that pushed anyway would not be caught there · group 03 · group 03
+- runMeter.note sits inside the listener's ready.then — cleared does too, so they stay in event order — the clock samples a microtask late, which keep-the-largest absorbs · group 04 · group 04
+- claimed runs in apply on a null-to-claim move — the one place a full fold lands — a replay past the save holding the first claim also resets the baseline · group 04 · group 04
+- costUsd is 0, not null, for a later run with no new spend or a first run whose only spend predates the claim — the spec's null rule reads since the last forget — such a line reads as free, not unknown · group 04 · group 04
+- AGENTS.md's line on chat's exports to workflow names activeTime — the edit outdated it — none · group 04 · group 04
 ### Review rounds
 ### Test gate

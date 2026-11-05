@@ -7,7 +7,6 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
-import { docsPageKey } from '../../docs/contract';
 import { keysPageKey } from '../../keys/contract';
 import {
   type SessionsPageEvents,
@@ -21,10 +20,7 @@ import type {
   WorkflowPageExports,
 } from '../contract';
 import { newFlow } from '../flow';
-import defaultLayout from '../layouts/default/layout.js';
-import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowManifest } from '../manifest';
-import { heavyPageWorkflow } from '../stages/heavy-page-workflow';
 import {
   createWorkflowDraw,
   type WorkflowDrawDeps,
@@ -39,17 +35,8 @@ type WorkflowApi = PageApi<
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
-// The workflow commands a key runs on the selected session.
-type SessionCommand =
-  | 'mainAction'
-  | 'clearAndMake'
-  | 'cancelCountdown'
-  | 'makeInNewSession'
-  | 'resumeMake'
-  | 'openPlan'
-  | 'retro'
-  | 'dismiss'
-  | 'toggleFinishedWaves';
+// The engine's commands a key runs on the selected session.
+type SessionCommand = 'mainAction' | 'toggleFinishedWaves';
 
 const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 
@@ -65,7 +52,7 @@ interface HeardSession {
 // composer and a side pane beside its transcript, through the `draw` of the
 // flow's workflow, each workflow plugin's over its own layouts. Holds every flow
 // main pushes, filled in by one `flows` read, and the page half of each workflow,
-// which `addWorkflow` extends; each workflow takes one side part. Each workflow
+// which `addWorkflow` extends; each workflow takes one side part. Each engine
 // command runs on the selected session; each button on the session it draws.
 // `toggleSidePane` shows or hides the pane in every session, kept in `uiState`.
 // `openPreview` steps chat's preview session through every workflow's samples
@@ -77,7 +64,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const { log } = services;
     const sessions = api.dependency(sessionsPageKey);
     const chat = api.dependency(chatPageKey);
-    const docs = api.dependency(docsPageKey);
     const keys = api.dependency(keysPageKey);
     const heard = new Map<string, HeardSession>();
     const flows = new Map<string, SessionFlow>();
@@ -164,23 +150,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     sessions.addRowPart(view.chipPart);
     chat.addComposerPart(view.stripPart);
 
-    addWorkflow(
-      heavyPageWorkflow({
-        draw: createWorkflowDraw(drawDeps, api, {
-          manifest: workflowManifest,
-          defaultLayout,
-          defaultStylesheet,
-          userLayout: () => api.settings().layout,
-          sideTitle: 'Plan',
-        }),
-        runMainAction: (sessionId, command) =>
-          api.channel.invoke('runAction', { sessionId, command }),
-        openDoc: (path) => docs.openDoc(path),
-        join: (a, b) => services.paths.join(a, b),
-        autoStartSeconds: () => api.settings().autoStartSeconds,
-      }),
-    );
-
     api.events.on(
       'sessions.sessionAdded',
       ({ sessionId, label, projectDir, hostSessionId }) => {
@@ -264,13 +233,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     return {
       commands: {
         mainAction: runOnSelected('mainAction'),
-        clearAndMake: runOnSelected('clearAndMake'),
-        cancelCountdown: runOnSelected('cancelCountdown'),
-        makeInNewSession: runOnSelected('makeInNewSession'),
-        resumeMake: runOnSelected('resumeMake'),
-        openPlan: runOnSelected('openPlan'),
-        retro: runOnSelected('retro'),
-        dismiss: runOnSelected('dismiss'),
         toggleSidePane,
         toggleFinishedWaves: runOnSelected('toggleFinishedWaves'),
         openPreview: () => preview.press(),

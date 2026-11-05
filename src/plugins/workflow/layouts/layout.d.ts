@@ -45,8 +45,8 @@ export interface StepInput {
   progress: string;
 }
 
-// One action the stage offers: the workflow command it runs (`clearAndMake`), its button text, whether it can run
-// now (Clear & make is disabled while the session is busy), and whether it is the stage's main action, the one
+// One action the stage offers: the workflow command it runs (`ship`), its button text, whether it can run
+// now (an action may be disabled while the session is busy), and whether it is the stage's main action, the one
 // `<Leader>ww` runs.
 export interface ActionInput {
   command: string;
@@ -55,9 +55,9 @@ export interface ActionInput {
   main: boolean;
 }
 
-// `badge` is the workflow's letter (`H`), `workflowLabel` its word (`Heavy`), `stage` the stage's id (`make`), `label`
-// its word (`Make`), `status` what it is doing, `statusText` the two as one (`Make · running`), `detail` its line
-// (`3/7 · wave 2 · Claim grants`, or ''), `countdown` the seconds left (`9s`) or null, `mainAction` the stage's main
+// `badge` is the workflow's letter (`L`), `workflowLabel` its word (`Light`), `stage` the stage's id (`build`), `label`
+// its word (`Build`), `status` what it is doing, `statusText` the two as one (`Build · running`), `detail` its line
+// (`3/7 · Claim grants`, or ''), `countdown` the seconds left (`9s`) or null, `mainAction` the stage's main
 // action, null when it has none, and `onRowLabel` whether the row's own label already says the stage's state.
 export interface ChipInput {
   badge: string;
@@ -72,7 +72,7 @@ export interface ChipInput {
   onRowLabel: boolean;
 }
 
-// The stage's fields as ChipInput, with `statusLine` the status text and the stage's progress (`Make · running 3/9`),
+// The stage's fields as ChipInput, with `statusLine` the status text and the stage's progress (`Build · running 3/9`),
 // every step of the stepper, every action of the stage, the main action first, and `hasChecklist`, whether the session
 // has a checklist.
 export interface StripInput {
@@ -95,7 +95,7 @@ export interface SideItemInput {
   state: MarkState;
 }
 
-// One group of the checklist: its title (`Wave 2`, `Tasks`) and its items, in order.
+// One group of the checklist: its title (`Tasks`) and its items, in order.
 export interface SideGroupInput {
   title: string;
   items: readonly SideItemInput[];

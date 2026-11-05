@@ -18,4 +18,23 @@ describe('manifests', () => {
       disabledDependencyProblem(defaultSettings.plugins.disabled, manifests),
     ).toBeNull();
   });
+
+  it('manifests_WorkflowHeavy_ListsItsCommandsAndSettings', () => {
+    const heavy = manifests.find(({ id }) => id === 'workflow-heavy');
+
+    expect(Object.keys(heavy?.commands ?? {}).sort()).toEqual(
+      [
+        'clearAndMake',
+        'cancelCountdown',
+        'makeInNewSession',
+        'resumeMake',
+        'openPlan',
+        'retro',
+        'dismiss',
+      ].sort(),
+    );
+    expect(Object.keys(heavy?.settings ?? {}).sort()).toEqual(
+      ['layout', 'autoClearAndMake', 'autoStartSeconds'].sort(),
+    );
+  });
 });

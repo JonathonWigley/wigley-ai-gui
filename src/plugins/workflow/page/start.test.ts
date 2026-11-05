@@ -18,7 +18,6 @@ import {
   type ChatSidePart,
   chatPageKey,
 } from '../../chat/contract';
-import { type DocsPageExports, docsPageKey } from '../../docs/contract';
 import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import {
   type SessionPart,
@@ -76,10 +75,6 @@ function startWorkflow() {
             addSidePart: (part: ChatSidePart) =>
               holdsPart(consumer, sideParts, part),
           }) as unknown as ChatPageExports,
-      ),
-      fakeDependency(
-        docsPageKey,
-        () => ({ openDoc: () => undefined }) as unknown as DocsPageExports,
       ),
       fakeDependency(
         keysPageKey,
@@ -163,14 +158,6 @@ describe('workflow page part', () => {
     expect(Object.keys(harness.started().commands)).toContain('mainAction');
     await harness.stop();
     expect(harness.counts()).toEqual(NONE_LIVE);
-  });
-
-  it('start_AddsHeavysSidePart', () => {
-    const { sideParts } = startWorkflow();
-
-    expect(
-      [...sideParts].map(({ id, title, order }) => [id, title, order]),
-    ).toEqual([['workflow-heavy.sidePane', 'Plan', 20]]);
   });
 
   it('exports_AddWorkflow_DrawsAndConsumerDisposeRemovesBoth', () => {

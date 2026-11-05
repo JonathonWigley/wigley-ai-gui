@@ -249,11 +249,15 @@ export const defaultKeymap = {
 
     // ── Workflow ───────────────────────────────────────────────────────────
     { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },
-    { keys: '<Leader>wn', scope: 'any', command: 'workflow.makeInNewSession' },
-    { keys: '<Leader>wr', scope: 'any', command: 'workflow.resumeMake' },
-    { keys: '<Leader>wo', scope: 'any', command: 'workflow.openPlan' },
-    { keys: '<Leader>wt', scope: 'any', command: 'workflow.retro' },
-    { keys: '<Leader>wd', scope: 'any', command: 'workflow.dismiss' },
+    {
+      keys: '<Leader>wn',
+      scope: 'any',
+      command: 'workflow-heavy.makeInNewSession',
+    },
+    { keys: '<Leader>wr', scope: 'any', command: 'workflow-heavy.resumeMake' },
+    { keys: '<Leader>wo', scope: 'any', command: 'workflow-heavy.openPlan' },
+    { keys: '<Leader>wt', scope: 'any', command: 'workflow-heavy.retro' },
+    { keys: '<Leader>wd', scope: 'any', command: 'workflow-heavy.dismiss' },
     { keys: '<Leader>ws', scope: 'any', command: 'workflow.toggleSidePane' },
     {
       keys: '<Leader>wf',

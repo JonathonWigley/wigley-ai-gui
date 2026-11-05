@@ -28,14 +28,11 @@ import type {
 import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
-import { heavyMainWorkflow } from '../stages/heavy-workflow';
 import { signalOf } from './agent-signals';
 import { checklistToolDefinition, startChecklistTool } from './checklist-tool';
 import { createFlowStore } from './flow-store';
-import { startHeavyRuntime } from './heavy-runtime';
 import { createRunLog } from './run-log';
 import { createRunMeter } from './run-meter';
-import { workflowSelfTestScript } from './selftest-script';
 import { SESSION_NOTE } from './session-note';
 import {
   SET_WORKFLOW_STEP_TOOL,
@@ -303,19 +300,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       ready,
     };
 
-    addWorkflow(heavyMainWorkflow);
-    const heavyRuntime = startHeavyRuntime({
-      workflow: engine,
-      chat,
-      label: (sessionId) => sessions.label(sessionId),
-      files: services.files,
-      timers: services.timers,
-      clock,
-      log,
-      paths: services.paths,
-      settings: () => api.settings(),
-    });
-
     events.on('sessions.connected', ({ id, info }) => {
       const { sessionId: hostSessionId, projectDir } = info;
       void ready.then(() => {
@@ -391,27 +375,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       },
     );
 
-    api.onSettingsChanged((settings) => {
-      void ready.then(() => {
-        const onOff = settings.autoClearAndMake ? 'on' : 'off';
-        const seconds = Math.max(1, settings.autoStartSeconds);
-        log(
-          `settings: autoClearAndMake ${onOff}, autoStartSeconds ${String(seconds)}`,
-        );
-        if (!settings.autoClearAndMake) {
-          for (const flow of engine.flows()) {
-            heavyRuntime.cancelCountdown(flow.sessionId);
-          }
-        }
-      });
-    });
-
     channel.handle('flows', () => ready.then(() => store.all()));
-    channel.handle('runAction', ({ sessionId, command }) =>
-      ready.then(async () => {
-        await heavyRuntime.run(sessionId, command);
-      }),
-    );
     void ready.then(sendFlows);
 
     const selfTestHooks: WorkflowSelfTestHooks = {
@@ -436,19 +400,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         return { dispose: () => turnEndedListeners.delete(registered) };
       },
     };
-    if (services.selfTest !== null) {
-      services.selfTest.run(
-        workflowSelfTestScript({
-          homeDir: services.homeDir,
-          files: services.files,
-          chat,
-          sessions,
-          harnesses: services.agentHarnesses,
-          hooks: selfTestHooks,
-        }),
-      );
-    }
-
     return {
       commands: {},
       exports: (consumer): WorkflowMainExports => ({
@@ -458,10 +409,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         layoutTypes,
         selfTestHooks: services.selfTest === null ? null : selfTestHooks,
       }),
-      dispose: () => {
-        checklistTool.dispose();
-        heavyRuntime.dispose();
-      },
+      dispose: () => checklistTool.dispose(),
     };
   },
 };

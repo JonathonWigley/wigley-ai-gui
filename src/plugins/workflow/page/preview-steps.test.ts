@@ -2,12 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { SessionFlow } from '../contract';
 import { newFlow } from '../flow';
-import { PREVIEW_SAMPLES, previewFlow } from './preview';
 import { createPreview } from './preview-steps';
 
 const NOW = 1_000_000;
 
 const PREVIEW_ROW = 'row-preview';
+
+// The stages of a stub workflow's samples.
+const STAGES = ['idle', 'primer', 'build'];
+
+const sampleFlow = (stage: string, sessionId: string): SessionFlow => ({
+  ...newFlow(sessionId, '/p'),
+  workflow: 'stub',
+  stage,
+});
 
 // A preview whose `showFlow` and `closed` record each flow and session, and a
 // chat whose preview row is heard of on the `rowAdded` step only, as when
@@ -26,8 +34,7 @@ function setUpPreview() {
     showFlow: (flow) => shownFlows.push(flow),
     closed: (sessionId) => closed.push(sessionId),
     clock: { now: () => NOW },
-    samples: (sessionId, now) =>
-      PREVIEW_SAMPLES.map((_, index) => previewFlow(index, sessionId, now, 7)),
+    samples: (sessionId) => STAGES.map((stage) => sampleFlow(stage, sessionId)),
     log: (line) => lines.push(line),
   });
   const steps = {
@@ -54,7 +61,6 @@ function setUpPreview() {
 
 type PreviewStep = 'press' | 'rowAdded' | 'otherRowAdded' | 'rowRemoved';
 
-const STAGES = PREVIEW_SAMPLES.map((sample) => sample.stage);
 const STEP_LINES = STAGES.map(
   (stage, index) =>
     `workflow preview step ${index + 1} of ${STAGES.length}: ${stage}`,
