@@ -248,7 +248,7 @@ function startWorkflowPart(
   const openS1 = async () => {
     await emit('sessions.connected', {
       ...session('s1', 'h1'),
-      owned: false,
+      owned: true,
     });
     await emit('chat.sessionOpened', {
       sessionId: 's1',
@@ -403,7 +403,7 @@ async function reachPlanReady(
     });
     await settled();
   };
-  harness.emit('sessions.connected', { ...session('s1', 'h1'), owned: false });
+  harness.emit('sessions.connected', { ...session('s1', 'h1'), owned: true });
   harness.emit('chat.sessionOpened', {
     sessionId: 's1',
     profileDir: '~/.c',

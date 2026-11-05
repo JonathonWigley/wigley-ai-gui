@@ -251,7 +251,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // exports to other plugins a background launch, a send and clear on the
 // sessions it holds, a close of every session in a folder, a registration of
 // instructions every later session start carries, a registration of send gates,
-// and one of the idle compaction threshold a start passes.
+// one of the idle compaction threshold a start passes, and one of the resume
+// sections the start prompt lists.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {

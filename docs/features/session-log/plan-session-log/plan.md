@@ -185,5 +185,6 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - the section row carries a class from the default layout and the layout css holds the details whole up to a 60% cap, since the row primitive is shared with rows that keep today's flex rules · group 10
 - no A resume section bullet in AGENTS.md: the ResumeSection and addResumeSection comments in chat/contract.ts carry every fact · group 09
 ### Review rounds
+- Round 1 · c185a42b..1754002b · correctness x2, plan-and-design x2 · NEEDS FIXES · 3 important, 15 minor, 1 pre-existing · applied: 8 · to workers: findings 1 2 3 4 5 6 7 9 10 19 · left: 18, settled cannot-happen
 ### Test gate
 - Unit: npm test over sessions, chat, session-log, forms, docs, primer, workflow, usage, src/shared/page, src/renderer/fzf: 4502 passed; after the picker fix src/shared/page and src/plugins/chat/layouts: 621 passed. Self-test: --plugin session-log passed after both fixes; --group 'chat: resume list' --group 'chat: archive' passed. Drive: folder step, reopen, session step, clear lists, filter hides headings pass; long title fails then passes after 39a2e1fc.

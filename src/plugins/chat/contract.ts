@@ -124,6 +124,7 @@ export interface ResumeSectionRows {
 // A titled list of saved sessions at the top of the start prompt. `rows` is in
 // list order: the last row sits next to the cursor. `isResumable` is false for
 // a session chat holds, one open in the app on another row, and an archived one.
+// The start prompt waits for `rows`, so a section that never settles holds it.
 export interface ResumeSection {
   title: string;
   rows(
@@ -432,8 +433,8 @@ export interface ChatMainExports {
   // Drops every session chat holds in `projectDir` (compared as samePath
   // does), a resting one included, as a `sessions.closed` would, without
   // asking the close guards: for a self-test that starts its project over.
-  // Each fires `sessionClosed` with reason `project-closed`. Resolves once each one's owned session has ended and its row is gone, or
-  // chat stops.
+  // Each fires `sessionClosed` with reason `project-closed`. Resolves once
+  // each one's owned session has ended and its row is gone, or chat stops.
   closeSessionsIn(projectDir: string): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started

@@ -6672,7 +6672,7 @@ describe('createChatSessions lifecycle events', () => {
     { given: 'an unsent row', sends: false, failsRestart: false, sent: false },
     { given: 'a failed restart', sends: true, failsRestart: true, sent: true },
   ])(
-    'sessionCleared_SentRow_CarriesBothIds given $given',
+    'sessionCleared_EachRow_CarriesBothIds given $given',
     async ({ sends, failsRestart, sent }) => {
       const test = await started();
       if (sends) {
@@ -6781,7 +6781,7 @@ describe('createChatSessions lifecycle events', () => {
     { given: 'a write that lands', rejects: false, archived: [true] },
     { given: 'a rejected write', rejects: true, archived: [] },
   ])(
-    'sessionArchived_AfterWrite_Fires given $given',
+    'sessionArchived_EachWrite_FiresOnceWritten given $given',
     async ({ rejects, archived }) => {
       const test = setUp();
       if (rejects) {

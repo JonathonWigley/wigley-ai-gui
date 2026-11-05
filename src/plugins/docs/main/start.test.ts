@@ -260,7 +260,7 @@ describe('docs main part', () => {
       deadlineSeconds: null,
       harness: 'claude',
     };
-    docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
+    docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
 
     docs.emit('sessions.hostSessionChanged', {
       id: 'row-1',
@@ -316,7 +316,7 @@ describe('docs main part', () => {
       deadlineSeconds: null,
       harness: 'claude',
     };
-    docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
+    docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
     docs.emit('sessions.hostSessionChanged', {
       id: 'row-1',
       info: { ...info, sessionId: 'new-host' },

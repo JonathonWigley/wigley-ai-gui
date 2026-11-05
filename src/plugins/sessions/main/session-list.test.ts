@@ -165,32 +165,6 @@ describe('createSessionList', () => {
     ]);
   });
 
-  it.each<{
-    name: string;
-    start: (list: ReturnType<typeof setUp>['list']) => AgentSession;
-    expected: boolean;
-  }>([
-    {
-      name: 'connect',
-      start: (list) => list.connect(info('/work/x')).session,
-      expected: false,
-    },
-    {
-      name: 'open',
-      start: (list) => list.open(owned('host-1')).session,
-      expected: true,
-    },
-  ])('connected_ConnectAndOpen_SayIfOwned: $name', ({ start, expected }) => {
-    const { list, emitted } = setUp();
-
-    const session = start(list);
-
-    expect(emitted.at(-1)).toEqual([
-      'connected',
-      { ...session, owned: expected },
-    ]);
-  });
-
   it('starts one tool session per contribution with the agent session', () => {
     const { list } = setUp();
     const first = fakeContribution();

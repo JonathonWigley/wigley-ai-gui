@@ -30,7 +30,7 @@ const GROUPS: SelfTestGroup[] = [
         keys: [' ', 'k', 'n'],
         expect: '[chat] picker shown: Folder',
         alsoExpect: [/^\[chat\] resume section Recently closed: \d+ rows$/],
-        screenshot: 'first-step',
+        screenshot: 'folder-step',
         why: 'A whole run lists chat’s closed sessions too, so the row count is a pattern.',
       },
       {
@@ -82,7 +82,9 @@ export function sessionLogSelfTestScript(
       });
       return {
         shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,
-        alsoShown: [/^\[chat\] session-log-selftest is idle$/],
+        alsoShown: [
+          new RegExp(`^\\[chat\\] ${SELFTEST_PROJECT_NAME} is idle$`),
+        ],
         result,
       };
     },
