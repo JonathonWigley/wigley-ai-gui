@@ -1,6 +1,6 @@
 # 16 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 14 · Depends on: 15
 Plan: [plan.md](plan.md)
@@ -69,3 +69,5 @@ Done when: the filtered run passes, each drive check has a result or a stated re
 Commit: none of its own. `wigley:make` records the Proof with the run's closing change.
 
 ## Proof
+
+Commit 0be0124e · proof: Live check through the drive tooling, report 16-2 plus the two fixes it drove (bde22bdc, 0be0124e). Filtered self-test 955 PASS, 1 FAIL (old agent-lines width), 1 SKIP. Drive checks: 11 PASS; 3 PARTIAL (5: the fake keeps no saved session so the history arm is unreached; 9: which-key in a chat box unreached; 14: no-message-after-first-quit-task not directly proved). Check 7 FAIL is the old post-close log lines, present on base. Check 4: 3203 entries reload in 4.4-5.2s against 4.0s with 3, no felt delay. Check 6 flash only partly settled. · concerns: settingsFileDefaults relies on configSchema's check having run; [docs] Docs tab shown and [docs] session index read no longer fire at load after the modes fix because chat's tab is added first, called harmless; isDocsModeShown not probed directly; each load one more stateWrite

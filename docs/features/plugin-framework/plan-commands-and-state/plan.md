@@ -313,7 +313,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 - [x] [Doc re-read](15-doc-re-read.md) — after 14
 
 ### Wave 14
-- [ ] [Final verification](16-final-verification.md) — after 15
+- [x] [Final verification](16-final-verification.md) — after 15
 
 ## Run log
 
@@ -335,6 +335,7 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 12 · 05b020de · Report and chat-slots read; the six slots and SessionSlots present; delivery and isLatestDelivery intact; whole-tree typecheck and lint clean, which also proves task 13's commit; Done-when greps print nothing per the worker. · concerns: readBranch finishing after stop can log written after stop; clear writes running false then true, so a brief false can draw; applyInfo's fixed order changes log order for a two-field write; view.activeTime reads non-null between a tab's removal and main's key delete; page/chat-commands' 'returned for unknown session' branch is no longer reached by the view; a sendAllNow test's count became a boolean; bridge wiring waits for task 16.
 - 14 · a86e3e9e · Report read; the emit sites present; typecheck and lint clean. · concerns: messageSent fires right after process.send, before the entry arrives in chat.entries; a row restored mid-turn fires turnFinished with no turnStarted; restAfterFailedAttach rests with the replay on and fires nothing; a part restart clears sessions.activity until the next set, unreachable until Wave 4; each setActivity writes across the bridge even on a repeat; a setActivity after stop logs written after stop; the harness fake mode's show() now runs shown(), which all page-part tests pass under.
 - 15 · 9c93b06c · Diff read; landing-tag and plan-folder greps print nothing; master plan's nine boxes ticked; ten follow-ups removed. Stale lines fixed in passing: master plan's Lane H line and ui-design § Out of scope. · concerns: Whether the keys item's editor-bind miss policy moved was checked only by grep: the 'has no bind in' message is in editor-binds.ts.
+- 16 · 0be0124e · Live check through the drive tooling, report 16-2 plus the two fixes it drove (bde22bdc, 0be0124e). Filtered self-test 955 PASS, 1 FAIL (old agent-lines width), 1 SKIP. Drive checks: 11 PASS; 3 PARTIAL (5: the fake keeps no saved session so the history arm is unreached; 9: which-key in a chat box unreached; 14: no-message-after-first-quit-task not directly proved). Check 7 FAIL is the old post-close log lines, present on base. Check 4: 3203 entries reload in 4.4-5.2s against 4.0s with 3, no felt delay. Check 6 flash only partly settled. · concerns: settingsFileDefaults relies on configSchema's check having run; [docs] Docs tab shown and [docs] session index read no longer fire at load after the modes fix because chat's tab is added first, called harmless; isDocsModeShown not probed directly; each load one more stateWrite
 ### Contract changes
 - 07 CommandRouter gains intercept(id, wrap, owner); KeyCommands<Context> is exported from shared/command-router.ts.
 - 07 new shared/runtime-commands.ts (createRuntimeCommands, RuntimeCommands, EMPTY_RUNTIME_CATALOG); createPageApi and createMainApi take commands: RuntimeCommands, and the page's run dep is gone.
@@ -351,6 +352,7 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 13 AgentStripDeps.agents becomes roster(sessionId), and AgentStrip gains rosterUpdated; rosterChanged on SkillList becomes rosterUpdated; AgentsChannel, WorkflowChannel and UnityPoolChannel messages are Record<never, never>.
 - 12 The first read of chat's slots is on core.pageReady, not at view start: ChatViewDeps gains onPageReady, and ChatSlotReaders is exported.
 - 14 src/plugins/keys/contract.ts is created, not modified; BacklogDeps gains emit; the harness's fake mode show() runs the mode's shown().
+- 16 Modes.onChanged also hears the first mode's id at its add and '' when the last mode is disposed; its only consumer is startPageCoreSlots.
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
 - Task 03: keymap.test's commandInfos takes {} for core commands, not coreCommands: the layer rule forbids the import and the bind's plugin comes from the manifest. · group 03
@@ -378,5 +380,7 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 14: updateActivity's settlePermission and askPermission callers do not pass the replay flag, since no replay reaches them. · group 14
 - Task 15: new follow-up 'Visual reads chat's focused entry through a slot' carries what the registry item named and no task landed; design.md's 'twelve race rules' now names the six plugins. · group 15
 - Task 16 first run found the app did not start: plugin id window collides with the core window setting. Fix: the check applies only to a manifest declaring settings, core wins a shared key. The id stays since keymaps name window.summon.
+- Task 16: createModes changes despite the plan's 'unchanged', since a separate write after parts start leaves '' visible while they start and misses the last-mode dispose; '' now means no mode shows.
 ### Review rounds
 ### Test gate
+- Unit suite: 491 files, 9027 tests passed, no type errors (head 0be0124e). Filtered self-test across the touched plugins: 955 PASS, 1 FAIL, 1 SKIP. The FAIL is agent-lines 'Escape zla fits the held width', which also fails on base 7001a175 (session-row holds 156px in 149px alone on both trees). The SKIP is the placement check, which a filtered run leaves out. Whole self-test not run: only the user asks for it.
