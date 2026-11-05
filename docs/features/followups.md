@@ -197,7 +197,7 @@ Defects seen in a drive run, a transcript or the user's own use.
   sub-pixel shares.
 - **Composer spills past its cap in a short pane** — *needs a feature plan*: `.ui-floating.chat-composer` caps at
   `max-height: 50%` (`src/plugins/chat/layouts/default/layout.css`) with nothing under it able to scroll enough, so its
-  status line and Send run out of the panel's bottom edge: at 720x600 under `fake: steps`, and at 420x600 under
+  status line runs out of the panel's bottom edge: at 720x600 under `fake: steps`, and at 420x600 under
   `fake: hold`. The dock now draws in the session hub, and these measurements predate that move; recheck both sizes
   before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
   c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
@@ -255,11 +255,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   the session started, so a loaded skill was not seen doing this. The event source is not traced; start at
   `foldAgentEvent` (`src/plugins/agents/roster.ts`). Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in
   wigley-ai-gui.
-- **The message box's vim mode label contradicts `DESIGN.md`** — `DESIGN.md` § Surfaces (the composer) says the box has no
-  mode label because the cursor's shape shows the vim mode, yet `src/renderer/codemirror-vim/codemirror-vim-host.ts`
-  runs `vim({ status: true })`, and a live run shows `--INSERT--`, which stays after focus leaves the box. The doc or
-  the panel is wrong, and the user decides which: drop the panel and keep the doc, or write the label into the doc.
-  Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
 - **A clamped key on a too-tall last block stops following** — *agent-ready*: with the cursor following at the bottom on
   a last stop taller than the band, `j`, `J` or `k` takes `scrollIntoView({ block: 'nearest' })`, which pulls the list up
   a few pixels and ends following, so a streaming reply is left behind until `G`. Read from `entry-list.ts`

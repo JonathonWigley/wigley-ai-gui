@@ -9,7 +9,7 @@
 - **The activity dock** — the running turn and the finished line, in the hub, and its one line in the composer.
 - **The agent strip** — the cards and rows, their lifetime, and the keys.
 - **The context line** — context and cache, above the box.
-- **The status line** — repo, branch, controls, spend, send.
+- **The status line** — repo, branch, controls, spend, the running indicator.
 - **Subagent facts** — name, model, effort and cost, and where each comes from.
 - **Optional plugins** — `plugins.disabled`, and the views that start switched off.
 - **Decisions** — what the user settled, with the reason for each.
@@ -59,7 +59,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 │ attachments strip                               chat
 │ ┌ box ─────────────────────────────────────┐    chat (no mode label; the cursor shape shows the mode)
 │ └──────────────────────────────────────────┘
-│ repo · branch · hint · model·effort · controls · [status parts] · ● Send     chat + usage spend (status part)
+│ repo · branch · hint · model·effort · controls · [status parts] · running    chat + usage spend (status part)
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -70,6 +70,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - The status line is chat's `statusLine` layout part. Chat draws the repo, the branch and the control chips itself;
   other plugins draw into it through chat's page export `addStatusPart`, the same shape as `addComposerPart`. Usage
   draws the spend there.
+- The box hides vim's mode line through `EditorOptions.hidesModeLine`; vim's `:` and `/` prompts still open under its
+  text.
 - Each row hides while it has nothing to show.
 
 ## The session hub
@@ -170,7 +172,7 @@ pulses. A session with no usage draws its zero line, `0k`.
 - **Model · effort:** one chip for the two controls; a click opens the model picker, and `o` and `e` keep their
   pickers. The permission-mode chip follows it. Every other control the harness declares keeps its own chip.
 - **Spend:** the usage plugin's status part: the session spend alone.
-- **Running dot and Send** close the line.
+- **Running indicator:** its text closes the line while a turn runs. Enter sends, so the line draws no Send button.
 
 ## Subagent facts
 

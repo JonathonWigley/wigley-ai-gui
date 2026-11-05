@@ -6,16 +6,16 @@
 - **Vocabulary** — flow, stage, status, signal, main action.
 - **Stages** — each stage: when a session enters it, what it shows, and its actions.
 - **Stage modules** — one folder per stage, registered through `addStage`, and how to change the workflow.
-- **Signals** — the agent events and session events the flow folds.
-- **Where it draws** — the row chip, the composer strip and the side pane.
+- **Signals** — the agent events, session events and reported steps the flow folds, and the `set_workflow_step` tool.
+- **Where it draws** — the row chip, the composer strip with its trail, and the side pane.
 - **Auto-start** — the setting that starts Clear & make by itself, and its countdown.
 - **Keys** — the `<Leader>w` group.
 - **Decisions** — choices a future change would otherwise reopen.
 - **Out of scope** — what waits for a later stage module or adapter.
 
-The `workflow` plugin knows the user's wigley workflow — `wigley:feature-primer`, `wigley:feature`, a plan folder,
-`wigley:make` with its `wigley:review`, then the plan folder's close — and shows each Chat-tab session's place in it,
-with the next step one press away. A good outcome: the user never types `/clear` and a plan path again, and every
+The `workflow` plugin knows the user's wigley workflow — Explore › Interview › Plan › Cold read › Make › Review › Fix ›
+Close — and shows each Chat-tab session's place in it, with the next step one press away. Skill starts and plan folders
+mark the big moves, and the agent reports the steps between them. A good outcome: the user never types `/clear` and a plan path again, and every
 session row says where its run stands. The workflow changes often, so each stage is a module of its own, and changing
 the workflow is editing or adding one stage folder.
 
@@ -32,7 +32,8 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 - **Stage** — one step of the workflow, one stage module (§ Stage modules). Chat's **step** (a tool, thinking or raw
   entry) and the tower's **plan step** are different things.
 - **Status** — what a stage is doing now: running, paused, ready or done. A step not reached is pending.
-- **Signal** — one input the flow folds: an agent event, a clear, or a plan folder change (§ Signals).
+- **Signal** — one input the flow folds: an agent event, a clear, a reported step, or a plan folder change (§ Signals).
+- **Trail** — the stepper's row of step words, Explore to Close.
 - **Main action** — the one action of a stage that `ww` runs, the strip's one button and the first of the side pane's buttons. A stage with no button has none.
 - **Key-only action** — an action that runs from its own `Space w` key and draws no button (`keyOnly`).
 
@@ -42,11 +43,19 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 |---|---|---|---|---|---|
 | idle | it starts; Dismiss on closed; Make in new session hands its plan away | none: nothing draws | none | none: a feature starts from its skill call | none |
 | primer | `wigley:feature-primer` starts | Primer, running or paused | `Primer · running` | none | none |
-| feature | `wigley:feature` starts | Feature, running or paused | `Feature · paused` | none | Open plan, once a plan is written |
-| plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | Make, ready | `Make · ready` | Clear & make (Cancel during the countdown), Make in new session | Open plan |
+| explore | `wigley:feature` starts, which forgets any earlier plan; the agent reports `explore` in a feature run | Explore, running or paused | `Explore · paused` | none | Open plan, once a plan is written |
+| interview | the agent reports `interview` in a feature run | Interview, running or paused | `Interview · running` | none | Open plan, once a plan is written |
+| plan | the agent reports `plan` in a feature run | Plan, running or paused | `Plan · running` | none | Open plan, once a plan is written |
+| cold read | the agent reports `cold_read` in a feature run | Cold read, running or paused | `Cold read · running` | none | Open plan, once a plan is written |
+| plan ready | in explore, interview, plan or cold read, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | Make, ready | `Make · ready` | Clear & make (Cancel during the countdown), Make in new session | Open plan |
 | make | `wigley:make` starts | Make, running or paused | `Make · running 3/9` | none | Resume make, Open plan |
-| review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | none | Resume make, Open plan |
-| closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro | Dismiss |
+| review | `wigley:review` starts in make or fix, or, in make, the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | none | Resume make, Open plan |
+| fix | the agent reports `fix` in make or review | Fix, running or paused | `Fix · running · cycle 2` | none | Resume make, Open plan |
+| closed | in make, review or fix, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro | Dismiss |
+
+A **feature run** is the stages explore, interview, plan, cold read and plan ready. A report moves the flow only from
+one of them, so a session outside a run shows no feature step. `wigley:make` starting moves any stage to make, fix
+included.
 
 Running means the flow is busy: a turn or a main-agent subagent runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's Needs you label marks a waiting round.
 
@@ -62,7 +71,8 @@ Running means the flow is busy: a turn or a main-agent subagent runs. Paused mea
 
 The last `plan.md` written in a session is its plan. `wigley:make`'s argument names the plan when it is a plan
 folder. Only the main agent moves the stage, with one exception: a subagent's write of a `plan-*/plan.md` names the
-plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or write by a subagent is not a signal.
+plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or write by a subagent is not a signal. A
+reported step does not name its caller, so a subagent's report moves the stage as the main agent's does.
 
 ## Stage modules
 
@@ -73,6 +83,9 @@ plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or w
 - `page.ts` — its label, its status, what follows the status in its status line, what the strip and the side pane
   show, and its page-side actions (fill the composer, open the plan)
 
+A main half that declares `reportedAs` takes that value of `set_workflow_step`'s `step`: the tool's accepted values
+derive from the registered stages (§ Signals). Its entry rule still decides whether a report moves the flow.
+
 Each half registers through the workflow plugin's `addStage` export in its process; the built-in stages register the
 same way a user plugin would. Each action names a command; `stages/index.ts` lists the commands (`WORKFLOW_COMMANDS`)
 and the manifest joins them, so a key and a button run the same command. The plugin core names no stage: it folds every
@@ -81,7 +94,7 @@ wins, and the flow keeps its stage when none answers.
 
 To change the workflow:
 
-- a renamed skill or a new trigger — edit that stage's `main.ts`
+- a renamed skill, a new trigger or a new reported step — edit that stage's `main.ts`
 - a new stage — a new stage folder, its commands and keys, and its place in the stage order
 - a stage dropped — delete its folder and its entries
 - a renamed stage id — edit every rule that names it, in every stage's `main.ts`; `stages/main-stages.test.ts` turns red
@@ -99,6 +112,7 @@ Main folds these, for owned sessions only:
 | turn started | `chat.agentEvent` `turnStarted` (every turn, a subagent's result turn included) | — |
 | subagent started, finished | `chat.agentEvent` `agentSpawned` with the main agent as parent, `agentFinished` | the agent id |
 | cleared | `sessions.hostSessionChanged` | — (the flow is rekeyed to the new host session id) |
+| step reported | the `set_workflow_step` tool | the stage the step names |
 | plan changed | main's watch on the flow's plan folder | the plan's progress: title, ticked, total, current wave, review rounds, the task lines |
 | plan gone | the same watch, the folder deleted | — |
 | handed off, dismissed | the Make in new session and Dismiss actions | — |
@@ -109,6 +123,16 @@ no signal, and neither is its `fileWritten` unless the path is a `plan-*/plan.md
 mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps
 its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops
 the session's flow.
+
+The workflow plugin contributes `set_workflow_step` through sessions' `contributeTools`, so every session's agent can
+call it. Its one required string `step` takes `explore`, `interview`, `plan`, `cold_read` or `fix`. A wigley skill calls
+it at each step boundary; a skill that does not call it leaves the flow in its last step.
+
+- An unknown step answers with a tool error naming the accepted values.
+- A report the stage rules ignore, or one for a session with no flow, succeeds and says it was ignored, so a skill run
+  outside the app's workflow carries on.
+- A plan survives a report: only `wigley:feature` starting forgets one (`clearsPlan`), so a report back to explore keeps
+  the plan the run wrote.
 
 A re-attach replays its process's whole log, each event flagged `replayed`, over the saved flow. `flows.json` holds each
 flow's save time, stamped by a change from a live event or from Make in new session or Dismiss, not by a plan read, a
@@ -128,15 +152,14 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layout draws the label and status as one accent tag
   (`Make · running`), unless the row label says it, and the countdown. A user layout can also draw the progress and the
   main action's button, which the chip's input carries. Idle draws nothing.
-- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the countdown and the main action,
-  with the stepper until the session has a plan and the status mark and line otherwise. A stage outside the stepper
-  keeps the status mark and line, since the stepper does not show it. Once a plan is read the side pane holds the
-  stepper, the detail and the other actions, so a hidden pane leaves the status line, the main action and the
+- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the trail, the countdown and the main
+  action. A stage outside the stepper keeps the status mark and line, since the trail does not show it. Once a plan is
+  read the side pane holds the detail and the other actions, so a hidden pane leaves the trail, the main action and the
   `Space w` keys. Idle draws nothing.
 - **Side pane** — the Plan section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub), from the first read of a plan until
-  Dismiss or a new plan: the status line, the detail, the stepper, a progress bar, the checklist and
-  every button of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows
+  Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
+  trail stays on the strip alone. The checklist folds finished waves into one row, shows the current wave in full, and shows
   each later wave as one line. The current wave's open tasks show running or paused only in make, because the plan file
   does not say which task an agent works on.
 
@@ -145,8 +168,10 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
   width in a split, and on `<Leader>vs`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
   the mouse and keeps its scroll while the pane is out of view or hidden.
 
-Primer and feature share one step: the one the session is in, otherwise feature. Plan ready and make share the Make
-step. Each step reads its label, then its status or `pending`, and draws one mark per status.
+Primer and explore share the first step: the one the session is in, otherwise Explore. Plan ready and make share the
+Make step. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
+current step also carries what follows the status in its status line (`Make 3/7`, `Fix · cycle 1`). On a narrow pane the
+trail wraps.
 
 ## Auto-start
 
@@ -180,9 +205,13 @@ The layout preview opens on `<Leader>zlw`.
   waits for the user, and the auto-start counts down with a Cancel.
 - **Cancel is `ww`, not Esc.** The strip is a part inside the Chat tab and holds no key scope, and Esc already leaves
   the chat box.
+- **Agent-reported steps, not inferred ones.** The user chose exact step boundaries over inferring them. Interview,
+  plan, cold read and fix leave no event of their own: an inference from tools, writes or subagents would guess, and a
+  wrong step on the trail reads as fact. The agent knows which step it is in, so it says so through a tool. The cost is
+  a skill that must call the tool, and a step that lags when one does not.
 - **Agent events, not chat entries.** Detection reads `AgentEvent` so a Codex or wigley-harness adapter drives the
   flow unchanged; `toolStarted` carries only the tool's name, no input, so skills and writes get members of their own.
-- **Buttons only for the moves between runs.** Only feature to make and make to retro earn a button. Open plan, Resume
+- **Buttons only for the moves between runs.** Only plan ready to make and closed to retro earn a button. Open plan, Resume
   make and Dismiss keep their keys, so a stage with nothing to move to draws no button and `ww` runs nothing there.
 - **One checklist.** The side pane replaced a Flow tab that drew the same stepper, checklist and actions; a second copy
   added upkeep and showed nothing new. Open plan shows the whole plan.
@@ -198,6 +227,8 @@ The layout preview opens on `<Leader>zlw`.
 ## Out of scope
 
 - Terminal sessions: they reach the app only through the forms relay and carry no agent events.
+- Inferring a step from tools, writes or subagents: the agent reports its steps (§ Decisions).
+- Migrating a saved flow from the retired `feature` stage: it draws as idle until the session's next flow skill.
 - Codex and wigley-harness: their adapters emit the same events when they land.
 - Stages for `wigley:debug`, `wigley:explore` and the rest: each is a stage module later.
 - A running state or a timer per task: the plan file does not say which task an agent works on.

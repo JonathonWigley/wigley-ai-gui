@@ -187,7 +187,7 @@ interview on 2026-10-23; this file is the record of both.
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
 - **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the key prompts (`i`/`a`, then `J`, `K`, `V`, `y`, with no labels), the model · effort chip, every other
-  control's chip, the status parts other plugins add (usage: spend), the running dot, Send. `J`, `K`, `V` and `y` carry no labels because labelled they overflowed the line at minimum width, and hiding them when narrow hid them in the default window. The box's cursor shape shows
+  control's chip, the status parts other plugins add (usage: spend), the running indicator. `J`, `K`, `V` and `y` carry no labels because labelled they overflowed the line at minimum width, and hiding them when narrow hid them in the default window. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between blocks, `J` / `K` jump between messages, `V` starts or ends a range, `y`
   copies the range as markdown source while one is open (a range with nothing to copy, on an activity line or a permission card, toasts that and stays open), else allows a waiting permission, else copies the block, page `Esc` cancels the range, and a
@@ -459,7 +459,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP;
   one whose base64 text is over 5 MB (the API's per-image limit, which counts that text) is shrunk to fit first
   (`docs/features/file-drop/design.md` § Images over 5 MB). Any other file goes into the box as a file chip, its path. Attached images show as a strip of
-  thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
+  thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Enter sends the
   text with the images, or the images alone. A sent user entry shows its images as thumbnails under its text;
   clicking one, or Enter on the focused entry, opens the image viewer over the `chat.image` scope: the image fitted
   to the window, `h` / `l` the entry's previous and next image, Esc closes. The chat layout kit's `images(parent)` part

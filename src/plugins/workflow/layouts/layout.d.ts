@@ -55,7 +55,7 @@ export interface ActionInput {
 }
 
 // `stage` is the stage's id (`make`), `label` its word (`Make`), `status` what it is doing, `statusText` the two as one
-// (`Make · running`), `detail` its line (`3/7 · wave 2 · Claim grants`, the plan's title in it from feature on once a
+// (`Make · running`), `detail` its line (`3/7 · wave 2 · Claim grants`, the plan's title in it from explore on once a
 // plan is read, or ''), `countdown` the auto-start's seconds left (`9s`) or null, `mainAction` the stage's main
 // action, null when it has none, and `onRowLabel` whether the row's own label already says the stage's state.
 export interface ChipInput {

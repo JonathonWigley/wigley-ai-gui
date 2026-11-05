@@ -449,7 +449,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   composer parts (the workflow strip, the agent strip, the context line), `space-2` apart, the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
   type hint (then `J`, `K`, `V` and `y` with no labels), one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
-  then the running dot and Send as one group that ends the line, on whichever row it wraps to. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
+  then the running indicator, which ends the line on whichever row it wraps to. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
   `cache 59m` in `text-12` tabular numerals.
   The **agent strip** holds its subagents as an HScroller of cards, each a `card-background` Card with `radius-md`,
   heading with a running StatusDot, its name, a kind Tag and its elapsed time, then its description, `model · effort` in
@@ -475,12 +475,15 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   top.
 - **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
   The chip is one line under a session row: the stage and its status as an accent Tag, unless the row's label says it,
-  and the countdown; an idle session draws no chip. The strip sits above the Chat composer: the status mark and line, the stepper only until the
-  session has a plan (pending in `fg-tertiary`, running in `status-running`, ready in `accent`, paused in `status-warning`,
-  done in `status-success`), the countdown and the main action as a button; every stage's strip keeps the height of a line
+  and the countdown; an idle session draws no chip. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+  trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
+  `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
+  under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status
+  mark and line instead. Every stage's strip keeps the height of a line
   holding the action and starts on the composer's left edge; an idle session draws no strip. The side
-  pane sits beside the transcript from the first read of a plan: the status mark and line, the stage's detail, the
-  stepper, a progress meter, the checklist and every action as buttons. The checklist folds finished waves into one
+  pane sits beside the transcript from the first read of a plan: the status mark and line (pending in `fg-tertiary`,
+  running in `status-running`, ready in `accent`, paused in `status-warning`, done in `status-success`), the stage's
+  detail, a progress meter, the checklist and every action as buttons. The checklist folds finished waves into one
   toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
   one row each under `Up next`, all on the pane's left edge. An idle session, a session with no plan read and a hidden pane draw no pane. A
   disabled action draws disabled.

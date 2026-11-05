@@ -269,8 +269,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
                  (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
                  each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
-                 `addStage`), main/ (hears `chat.agentEvent` and the sessions events, keeps each session's flow in its
-                 plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
+                 `addStage`), main/ (hears `chat.agentEvent` and the sessions events, contributes the `set_workflow_step`
+                 MCP tool through sessions' `contributeTools` so the agent reports its step, keeps each session's flow in
+                 its plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
                  side pane, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
   unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json`, runs
