@@ -506,6 +506,18 @@ stdout {"type":"result","subtype":"success","is_error":false,"result":"Usage: /e
   `applied.model` does not follow plan mode's model switch, as `init.model` does not (§ Mode change). `init.model`
   equals `applied.model` on `--model opusplan` (both `claude-sonnet-5-5`), `opus[1m]` (both `claude-opus-5-5`) and
   `sonnet` (both `claude-sonnet-5-5`), read after a local `/effort high`.
+- **A refused `/effort` or `/model` is a `success` result.** Only the text tells a refused value from an accepted one;
+  the `get_settings` reply after the command shows what applied. Measured on 2.1.318, started
+  `--model claude-opus-5-5 --effort high`; every row's result is subtype `success`, `is_error` `false`:
+
+  | command | `result` text | applied after |
+  |---|---|---|
+  | `/effort hihg` | Invalid argument: hihg. Valid options are: low, medium, high, xhigh, max, auto, ultracode | opus, high |
+  | `/effort ultracode` | Ultracode on (this session only): dynamic workflows on every task. Effort stays high. | opus, high |
+  | `/effort auto` | Effort level set to auto (this session only) | opus, medium |
+  | `/model nosuchmodel` | Model 'nosuchmodel' not found | opus, high |
+  | `/model default` | Set model to `Opus 5.5 (default)` for this session only | opus, high |
+  | `/model best` | Set model to `Fable 5.1` for this session only | fable, high |
 
 ## Model
 

@@ -1093,7 +1093,7 @@ describe('createClaudeCodeHarness', () => {
     },
   );
 
-  it('send_EffortValueNotAChoice_LeavesEffortUnknown', async () => {
+  it('send_EffortAuto_ClearsEffort', async () => {
     const run = await startedQuiet();
     run.agent.setControl('effort', 'high');
     writeLine(run.stdout, successResult('Set effort level to high'));

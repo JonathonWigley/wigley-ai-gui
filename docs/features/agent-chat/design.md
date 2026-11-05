@@ -120,8 +120,11 @@ interview on 2026-10-23; this file is the record of both.
   choice; the model and effort also come from a `get_settings` control request, sent at process start and after each
   turn, local commands included, because no event reports effort and a default depends on the model, the flags and the
   profile: the reply's `applied` values replace the held ones, so the chips show what the process uses, or unset for a
-  model with no effort. The last successful `/effort` or `/model` also sets its control, the model also comes from the
-  init event, and a full model name shows as its alias. A failed `get_settings` is logged and changes nothing.
+  model with no effort. The last successful `/effort` or `/model` with a value among the control's choices also sets
+  its control, and `/effort auto` clears effort until the reply. Claude answers a value it refused with a `success`
+  result too, so any other value leaves the control alone, and the reply shows what Claude applied. The model also
+  comes from the init event, and a full model name shows as its alias. A failed `get_settings` is logged and changes
+  nothing.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
   message. A SIGINT would end the process. Ctrl+C always ends the running turn (a message queued behind it still
   runs): when neither the turn's result nor an answer that leaves nothing running arrives within 5 s, the adapter
@@ -356,7 +359,9 @@ interview on 2026-10-23; this file is the record of both.
   then held the picked value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer
   pick replaced is never passed. The picked value is what a start passes, and a report never changes it, so a typed
   `/effort low` after a pick of High goes back to High at the next start. A report of no value for the control drops the
-  pick: after `/effort auto`, or on a model with no effort, the next start passes none for it. A model or effort Claude
+  pick: after `/effort auto`, or on a model with no effort, the next start passes none for it. A typed value outside the
+  control's choices other than `/effort auto` reports nothing and leaves the pick alone, because Claude answers a value
+  it refused with a `success` result too: `/effort hihg` after a pick of High keeps High. A model or effort Claude
   only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned id), which the chip shows as
   its alias, is never narrowed to the alias. So a row resumed after its process exits, or cleared, keeps its mode and
   the model and effort the user picked, and its chips show them from the start. A restored row, re-attached or resting,

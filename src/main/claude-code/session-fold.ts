@@ -21,6 +21,7 @@ import {
   type ClaudeControlId,
   CONTROL_COMMAND,
   controlValue,
+  EFFORT_CLEARING_VALUE,
   isChoice,
   launchMode,
 } from './claude-controls';
@@ -900,8 +901,9 @@ function releaseAllHeldMessages(
 }
 
 // A control command's success sets the control, since the turn's init still
-// reports the value from before. A value that is not among the control's
-// choices leaves the control unknown. A known value is reported even when the
+// reports the value from before. `/effort auto` clears effort. Claude answers a
+// refused value with a success result too, so any other value outside the
+// control's choices changes nothing. A known value is reported even when the
 // control already held it, since that report confirms a pick of the held value.
 // The app's `/compact` sets no control.
 function foldControlValues(
@@ -919,9 +921,14 @@ function foldControlValues(
   }
   if (command !== null && command.id !== 'compact' && !decoded.turnFailed) {
     const value = controlValue(command.id, command.value);
-    const known = isChoice(command.id, value) ? value : null;
-    hasChanged =
-      setControlValue(state, command.id, known) || known !== null || hasChanged;
+    const clearsEffort =
+      command.id === 'effort' && value === EFFORT_CLEARING_VALUE;
+    if (isChoice(command.id, value)) {
+      setControlValue(state, command.id, value);
+      hasChanged = true;
+    } else if (clearsEffort) {
+      hasChanged = setControlValue(state, command.id, null) || hasChanged;
+    }
   }
   if (hasChanged) {
     effects.push({ kind: 'controls', controls: reportedControls(state) });

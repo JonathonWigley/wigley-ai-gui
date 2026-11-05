@@ -50,12 +50,15 @@ export const CLAUDE_CONTROLS: readonly {
   },
 ];
 
+// The `/effort` value that hands the level to Claude: it names no choice.
+export const EFFORT_CLEARING_VALUE = 'auto';
+
 // The permission mode a process launches with: the request's, else `auto`.
 export function launchMode(controls: AgentStart['controls']): string {
   return controls.mode ?? 'auto';
 }
 
-// A typed `/effort <value>` or `/model <value>` sets that control.
+// A typed `/effort <value>` or `/model <value>`.
 export const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
 
 export function controlOf(

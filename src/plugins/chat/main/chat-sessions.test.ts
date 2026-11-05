@@ -4632,6 +4632,18 @@ describe('createChatSessions restoring hosted processes', () => {
       passed: { mode: 'default', model: 'opus', effort: 'high' },
     },
     {
+      given: 'a re-attached row whose replay reports no effort',
+      fields: HELD_RECORD,
+      hosted: [hostedP1()],
+      replayed: [
+        heldControl('mode', 'default'),
+        heldControl('model', 'opus'),
+        heldControl('effort', null),
+      ],
+      shown: HELD_CONTROLS,
+      passed: { mode: 'default', model: 'opus' },
+    },
+    {
       given: 'a resting row',
       fields: HELD_RECORD,
       hosted: [],

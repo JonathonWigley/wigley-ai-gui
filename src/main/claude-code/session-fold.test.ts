@@ -506,32 +506,60 @@ describe('session-fold', () => {
     text: string;
     held: Record<string, string>;
     reportsControls: boolean;
-    effort: string | null;
+    values: Record<string, string | null>;
   }>([
     {
       case: 'a value already held confirms the pick',
       text: '/effort medium',
       held: { effort: 'medium' },
       reportsControls: true,
-      effort: 'medium',
+      values: { effort: 'medium' },
     },
     {
       case: 'a new value',
       text: '/effort high',
       held: { effort: 'medium' },
       reportsControls: true,
-      effort: 'high',
+      values: { effort: 'high' },
     },
     {
-      case: 'a value outside the choices, none held',
+      case: 'the clearing value, none held',
       text: '/effort auto',
       held: {},
       reportsControls: false,
-      effort: null,
+      values: { effort: null },
+    },
+    {
+      case: 'the clearing value clears a held effort',
+      text: '/effort auto',
+      held: { effort: 'high', model: 'sonnet' },
+      reportsControls: true,
+      values: { effort: null, model: 'sonnet' },
+    },
+    {
+      case: 'an effort outside the choices',
+      text: '/effort hihg',
+      held: { effort: 'high', model: 'sonnet' },
+      reportsControls: false,
+      values: { effort: 'high', model: 'sonnet' },
+    },
+    {
+      case: 'a model outside the choices',
+      text: '/model nosuchmodel',
+      held: { effort: 'high', model: 'sonnet' },
+      reportsControls: false,
+      values: { effort: 'high', model: 'sonnet' },
+    },
+    {
+      case: "effort's clearing value clears no model",
+      text: '/model auto',
+      held: { effort: 'high', model: 'sonnet' },
+      reportsControls: false,
+      values: { effort: 'high', model: 'sonnet' },
     },
   ])(
     'foldPipeLine_ControlCommandResult_ReportsControls ($case)',
-    ({ text, held, reportsControls, effort }) => {
+    ({ text, held, reportsControls, values }) => {
       const state = createSessionFoldState({ ...request, controls: held });
       foldPipeLine(state, inLine(send(text, 'u1')));
       foldPipeLine(state, outLine(lifecycleInit));
@@ -545,7 +573,7 @@ describe('session-fold', () => {
       expect(effects.some((effect) => effect.kind === 'controls')).toBe(
         reportsControls,
       );
-      expect(controlValues(state).effort).toBe(effort);
+      expect(controlValues(state)).toMatchObject(values);
     },
   );
 
