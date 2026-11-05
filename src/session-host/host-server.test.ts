@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HostMessage } from '../contracts/session-host-protocol';
 import { channelPath } from '../shared/local-channel/channel-path';
 import { jsonLine, readLines } from '../shared/local-channel/line-framing';
+import { osPlatform } from '../shared/os-platform';
 import {
   connectToChannel,
   listenOnChannel,
@@ -64,7 +65,7 @@ function tempFolder() {
   cleanups.push(() => rmSync(folder, { recursive: true, force: true }));
   mkdirSync(path.join(folder, 'logs'));
   const channel = channelPath(
-    process.platform,
+    osPlatform(process.platform),
     folder,
     'selftest',
     'wigley-ai-gui',
@@ -644,7 +645,7 @@ describe('host start', () => {
 
   function otherChannel(folder: string) {
     return channelPath(
-      process.platform,
+      osPlatform(process.platform),
       folder,
       'selftest',
       'wigley-ai-gui',

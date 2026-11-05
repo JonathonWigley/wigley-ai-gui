@@ -686,6 +686,7 @@ function fakeMainApi(
       homeDir: '/home',
       tempFolders: [],
       paths: posixPaths,
+      platform: 'macos',
       runMode: 'selfTest',
       selfTest: null,
       appInstance: DEV_APP,

@@ -20,24 +20,24 @@ const DEV = 'wigley-ai-gui-dev';
 
 describe('channelPath', () => {
   it('names the Windows pipe by instance, user and a hash of the home', () => {
-    expect(channelPath('win32', 'C:\\Users\\ann', 'ann', STABLE, '')).toMatch(
+    expect(channelPath('windows', 'C:\\Users\\ann', 'ann', STABLE, '')).toMatch(
       /^\\\\\.\\pipe\\wigley-ai-gui-ann-[0-9a-f]{8}$/,
     );
   });
 
   it('names a different Windows pipe for a different home', () => {
-    expect(channelPath('win32', 'C:\\Users\\u', 'u', STABLE, '')).not.toBe(
-      channelPath('win32', 'D:\\drive\\home', 'u', STABLE, ''),
+    expect(channelPath('windows', 'C:\\Users\\u', 'u', STABLE, '')).not.toBe(
+      channelPath('windows', 'D:\\drive\\home', 'u', STABLE, ''),
     );
   });
 
   it('puts the socket in the instance folder of the agents folder on macOS', () => {
-    expect(channelPath('darwin', '/Users/u', 'u', STABLE, '')).toBe(
+    expect(channelPath('macos', '/Users/u', 'u', STABLE, '')).toBe(
       '/Users/u/.agents/wigley-ai-gui/app.sock',
     );
   });
 
-  it.each(['win32', 'darwin'] as const)(
+  it.each(['windows', 'macos'] as const)(
     'never gives the stable and dev instances one channel on %s',
     (platform) => {
       expect(channelPath(platform, '/Users/u', 'u', STABLE, '')).not.toBe(
@@ -54,7 +54,7 @@ describe('channelPath', () => {
   it('falls back to a per-home socket in the temp folder when it fits in 103 bytes', () => {
     const tempDir = `/T${'t'.repeat(103 - 30 - 2)}`;
 
-    expect(channelPath('darwin', longHome, 'u', STABLE, '', tempDir)).toBe(
+    expect(channelPath('macos', longHome, 'u', STABLE, '', tempDir)).toBe(
       `${tempDir}/${socketName}`,
     );
     expect(Buffer.byteLength(`${tempDir}/${socketName}`)).toBe(103);
@@ -70,7 +70,7 @@ describe('channelPath', () => {
       const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
 
       const channel = channelPath(
-        'darwin',
+        'macos',
         longHome,
         username,
         STABLE,
@@ -94,7 +94,7 @@ describe('channelPath', () => {
       const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
 
       expect(() =>
-        channelPath('darwin', longHome, username, STABLE, '', tempDir),
+        channelPath('macos', longHome, username, STABLE, '', tempDir),
       ).toThrow(privateDir);
     },
   );
@@ -108,7 +108,7 @@ describe('channelPath', () => {
   const suffixCases = [
     {
       form: 'Windows pipe',
-      platform: 'win32' as const,
+      platform: 'windows' as const,
       home: 'C:\\Users\\ann',
       username: 'ann',
       tempDir: shortTemp,
@@ -116,7 +116,7 @@ describe('channelPath', () => {
     },
     {
       form: 'socket',
-      platform: 'darwin' as const,
+      platform: 'macos' as const,
       home: '/Users/u',
       username: 'u',
       tempDir: shortTemp,
@@ -124,7 +124,7 @@ describe('channelPath', () => {
     },
     {
       form: 'temp fallback',
-      platform: 'darwin' as const,
+      platform: 'macos' as const,
       home: longHome,
       username: 'u',
       tempDir: shortTemp,
@@ -136,7 +136,7 @@ describe('channelPath', () => {
       : [
           {
             form: 'private fallback',
-            platform: 'darwin' as const,
+            platform: 'macos' as const,
             home: longHome,
             username: suffixUser,
             tempDir: longTemp,

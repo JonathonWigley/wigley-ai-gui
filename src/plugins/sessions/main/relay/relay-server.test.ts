@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { channelPath } from '../../../../shared/local-channel/channel-path';
+import { osPlatform } from '../../../../shared/os-platform';
 import {
   type ConnectedSession,
   RELAY_PROTOCOL,
@@ -69,7 +70,7 @@ function echoServe() {
 // socket file elsewhere.
 function testChannel(dir: string): string {
   return channelPath(
-    process.platform,
+    osPlatform(process.platform),
     dir,
     'selftest',
     'wigley-ai-gui',

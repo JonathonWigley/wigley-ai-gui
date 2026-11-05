@@ -12,6 +12,7 @@ import {
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { channelPath } from '../../../shared/local-channel/channel-path';
+import { osPlatform } from '../../../shared/os-platform';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   type ConnectedSession,
@@ -241,6 +242,9 @@ function viewOf(
 // The app instance id the harness's fake services carry.
 const HARNESS_APP_ID = 'wigley-ai-gui-dev';
 
+// The OS the tests run on, so a test's relay opens the channel this OS's relays use.
+const platform = osPlatform(process.platform);
+
 const RELAY_HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
   session_id: 'host-relay',
@@ -459,7 +463,7 @@ describe('sessions main part', () => {
   it('stop_ToolSessionEndThrows_ClosesTheRelayAndThrows', async () => {
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
     const harness = startMainPart(sessionsMainPart, {
-      services: { runMode: 'live', homeDir },
+      services: { runMode: 'live', homeDir, platform },
     });
     const view = harness
       .started()
@@ -476,7 +480,7 @@ describe('sessions main part', () => {
 
       const socket = connectSocket(
         channelPath(
-          process.platform,
+          platform,
           homeDir,
           os.userInfo().username,
           HARNESS_APP_ID,
@@ -493,11 +497,11 @@ describe('sessions main part', () => {
     // macOS caps a socket path near 104 bytes, so the folder name stays short.
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
     const harness = startMainPart(sessionsMainPart, {
-      services: { runMode: 'live', homeDir },
+      services: { runMode: 'live', homeDir, platform },
     });
     const socket = connectSocket(
       channelPath(
-        process.platform,
+        platform,
         homeDir,
         os.userInfo().username,
         HARNESS_APP_ID,

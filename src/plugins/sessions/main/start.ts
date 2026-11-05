@@ -98,7 +98,7 @@ function createList(api: SessionsApi): SessionList {
 // it again, except a drive run's, which stays ended and names the run's home.
 function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
   const channel = channelPath(
-    process.platform,
+    api.services.platform,
     api.services.homeDir,
     os.userInfo().username,
     api.services.appInstance.id,
@@ -116,7 +116,7 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
     channel,
     launch:
       api.services.runMode === 'drive'
-        ? endedDriveRunLaunch(process.platform, api.services.homeDir)
+        ? endedDriveRunLaunch(api.services.platform, api.services.homeDir)
         : launchCommand(
             process.env,
             process.execPath,

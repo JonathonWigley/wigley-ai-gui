@@ -166,6 +166,15 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts'],
     packages: ['node:'],
   },
+  // Open a real channel, named for the OS the tests run on.
+  'src/shared/local-channel/local-channel.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    packages: ['node:'],
+  },
+  'src/shared/local-channel/line-framing.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    packages: ['node:'],
+  },
   'src/shared/agent-forms': {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],

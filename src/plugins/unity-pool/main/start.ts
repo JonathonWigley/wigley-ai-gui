@@ -46,7 +46,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
           homeDir: services.homeDir,
           scriptPath: resolveScriptPath(
             scriptPath,
-            process.platform === 'win32',
+            services.platform === 'windows',
           ),
           pythonCommand,
         },

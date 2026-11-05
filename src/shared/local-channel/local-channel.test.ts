@@ -11,6 +11,7 @@ import { createServer, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { osPlatform } from '../os-platform';
 import { channelPath } from './channel-path';
 import {
   type ChannelHandlers,
@@ -31,7 +32,7 @@ function tempChannel(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'lc-'));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   return channelPath(
-    process.platform,
+    osPlatform(process.platform),
     dir,
     'selftest',
     'wigley-ai-gui',

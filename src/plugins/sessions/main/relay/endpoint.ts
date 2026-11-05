@@ -1,5 +1,6 @@
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import type { Platform } from '../../../../contracts/platform';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
 
 // How a relay starts the app: `npm start` from the repo when this is the dev
@@ -23,11 +24,11 @@ export function launchCommand(
 // so the relay never starts the user's own app in the run's place. Runs in
 // the home's filesystem root, which outlives the run.
 export function endedDriveRunLaunch(
-  platform: NodeJS.Platform,
+  platform: Platform,
   homeDir: string,
 ): RelayEndpoint['launch'] {
   const ended = `The drive run whose home is ${homeDir} has ended`;
-  if (platform === 'win32') {
+  if (platform === 'windows') {
     // cmd reads everything after `rem` as a comment, `&` included.
     return {
       command: ['cmd.exe', '/d', '/c', `exit 1 & rem ${ended}`],

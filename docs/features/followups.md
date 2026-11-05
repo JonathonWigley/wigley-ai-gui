@@ -366,10 +366,9 @@ What Windows support and installers need.
 - **Platform record** — *agent-ready*: a `Platform` record chosen in the composition root (`createMacPlatform` /
   `createWindowsPlatform`), exposed read-only as `services.platform` on both sides: app lifecycle quirks, attention and
   badge (the alerts adapter splits into mac and Windows variants), default program paths, the relay endpoint.
-  Replaces the other `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`, sessions'
-  `openRelay` with its direct `os.userInfo`, `process.env`, `execPath`, `cwd`); path rules already sit behind
-  `services.paths`. Sessions' `openRelay` (`src/plugins/sessions/main/start.ts`, `relay/endpoint.ts`) can read the
-  existing `services.platform` now instead of `process.platform`.
+  Replaces the other `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`) and sessions'
+  direct `os.userInfo`, `process.env`, `execPath` and `cwd` reads in `openRelay`; path rules already sit behind
+  `services.paths`, and main's `services.platform` already names the OS as a `Platform` value, which the plugins read.
 - **Per-platform program lookup and spawning** — *agent-ready*: program lookup and spawning per platform behind
   `ProcessRunner`: `.cmd`/`.bat` shims through `cmd.exe` on Windows, a `resolveProgram('python')` (`py -3` → `python`
   → `python3`) for docs' index script (`index-sources.ts` runs `python3`), a PATH lookup for the `claude` command
