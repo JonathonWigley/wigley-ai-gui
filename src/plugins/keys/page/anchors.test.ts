@@ -161,7 +161,7 @@ describe('anchors', () => {
     expect(isHidden(node)).toBe(false);
   });
 
-  it('applyVisibility_ShowHintsOff_HidesEveryAnchor', () => {
+  it('redraw_ShowHintsOff_EmptiesEveryAnchorUntilOn', () => {
     const { anchors, state } = anchorsSetup();
     const scoped = anchorElement();
     const unscoped = anchorElement();
@@ -169,10 +169,19 @@ describe('anchors', () => {
     anchors.anchor(asHtml(unscoped), 'a.trash');
 
     state.showHints = false;
-    anchors.applyVisibility();
+    anchors.redraw();
+    const anchoredWhileOff = anchorElement();
+    anchors.anchor(asHtml(anchoredWhileOff), 'a.trash');
 
-    expect(isHidden(scoped)).toBe(true);
-    expect(isHidden(unscoped)).toBe(true);
+    expect(scoped.children.length).toBe(0);
+    expect(unscoped.children.length).toBe(0);
+    expect(anchoredWhileOff.children.length).toBe(0);
+
+    state.showHints = true;
+    anchors.redraw();
+
+    expect(scoped.textContent).toBe('d');
+    expect(anchoredWhileOff.textContent).toBe('d');
   });
 
   it('dispose_RemovesThePromptAndKeepsThePlacement', () => {

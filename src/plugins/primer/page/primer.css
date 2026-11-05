@@ -116,6 +116,11 @@
   padding-bottom: var(--wg-space-1);
 }
 
+/* With no key to show, the prompt's line goes too. */
+.primer-row-prompt:not(:has(.ui-key-prompt)) {
+  display: none;
+}
+
 /* A column's keys fire only while it has focus, so the prompt leaves with
    it, taking its line under the selected row along. */
 .is-pane-inactive .primer-row-prompt {

@@ -484,9 +484,10 @@ round; primer: an open primer), since main, not the page, decides.
   (`docs/features/key-hints/design.md`).
   - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through the `keys`
     page export `anchor`, which returns a Disposable. The keys plugin draws the KeyPrompt primitive into it, redraws
-    it on each keymap change, draws nothing when the command is unbound, and hides it, keeping its space, while its
-    scope is not the one in force (an anchor with no scope always shows) or the keys plugin's `showHints` setting
-    (`"keys": { "showHints": false }` in `settings.json`) is off. A plugin draws no key hint of its own.
+    it on each keymap change, draws nothing when the command is unbound or the keys plugin's `showHints` setting
+    (`"keys": { "showHints": false }` in `settings.json`) is off, so the anchor takes no space, and hides it, keeping
+    its space, while its scope is not the one in force (an anchor with no scope always shows). A plugin draws no key
+    hint of its own.
   - **The view places and styles each anchor** by one of four placement kinds (`DESIGN.md` § Keys and focus): an edge
     prompt, a cursor prompt, a control hint or a box hint. The parts around anchors — chevrons, edge prompts, box
     hints, stacks of one command's anchors, and recording and disposing anchors — come from

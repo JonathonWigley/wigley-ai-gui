@@ -20,9 +20,10 @@ export interface AnchorDeps {
   platform: Platform;
 }
 
-// The anchor registry. `redraw` draws every live anchor's keys again;
-// `applyVisibility` hides each live anchor whose scope is not in force, or
-// every one while hints are off. `placedIn` is every command anchored in
+// The anchor registry. `redraw` draws every live anchor's keys again, and none
+// while hints are off, so the anchors take no space; `applyVisibility` hides
+// each live anchor whose scope is not in force, keeping its space. `placedIn`
+// is every command anchored in
 // `scope` or with no scope during the page load, disposed anchors included,
 // whose element was seen on the page: when it was drawn, hidden or shown,
 // disposed, or at the `placedIn` call.
@@ -65,7 +66,9 @@ export function createAnchors(deps: AnchorDeps): Anchors {
   const draw = (held: LiveAnchor) => {
     recordIfPlaced(held);
     const { scope, where = 'page', label } = held.options;
-    const keys = deps.keysFor(held.command, scope, where);
+    const keys = deps.showHints()
+      ? deps.keysFor(held.command, scope, where)
+      : null;
     if (keys === null) {
       held.element.replaceChildren();
       return;
@@ -79,7 +82,7 @@ export function createAnchors(deps: AnchorDeps): Anchors {
     recordIfPlaced(held);
     const { scope } = held.options;
     const isOutOfScope = scope !== undefined && scope !== deps.scope();
-    held.element.classList.toggle(HIDDEN, !deps.showHints() || isOutOfScope);
+    held.element.classList.toggle(HIDDEN, isOutOfScope);
   };
 
   // Records `held` as placed the first time its element is on the page.

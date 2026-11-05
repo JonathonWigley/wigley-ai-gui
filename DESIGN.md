@@ -246,8 +246,8 @@ The keyboard is first; the mouse works everywhere.
 - **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and
   keeps its space, so moving between panes never shifts the layout; a hint for a bind in every
   scope (tabs, sessions) always shows. In a chat pane's tab bar a key with no target takes no
-  space, so unfocused panes' bars stay short. The keys plugin's `showHints` setting hides them all
-  (`"keys": { "showHints": false }` in `settings.json`).
+  space, so unfocused panes' bars stay short. The keys plugin's `showHints` setting removes them all,
+  their space included (`"keys": { "showHints": false }` in `settings.json`).
 - **Vim's own keys show in help only:** `j`/`k`, `gg`/`G`, `h`/`l` on a tree, Enter on a row, Esc,
   and the `⌃J`/`⌃K` scroll keys work the same on every list and pane, so a hint for them is
   noise. Leader sequences show in which-key.
@@ -277,7 +277,7 @@ The primitives, each a builder in `src/shared/page/ui/`:
   anchor. The parts around anchors are builders in `key-anchors.ts`: an edge prompt (`keyEdge`),
   which `is-no-target` hides keeping its space; a box hint (`boxHint`); and a stack of one
   command's anchors in several scopes in one cell (`keyStack`). The keys plugin marks each anchor
-  element `ui-key-anchor`; an anchor, box hint or stack holding no KeyPrompt (its commands unbound)
+  element `ui-key-anchor`; an anchor, box hint or stack holding no KeyPrompt (its commands unbound, or hints off)
   takes no space, and a box hint whose prompts are all hidden paints nothing.
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.

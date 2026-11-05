@@ -149,7 +149,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       anchors.redraw();
     });
     keys.onScopeChanged(() => anchors.applyVisibility());
-    api.onSettingsChanged(() => anchors.applyVisibility());
+    api.onSettingsChanged(() => anchors.redraw());
     const unplacedLog = startUnplacedLog({
       keymap: () => keys.keymap(),
       scope: () => keys.scope(),

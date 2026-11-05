@@ -18,8 +18,8 @@
   visibility: hidden;
 }
 
-/* An anchor for an unbound command is empty; a key stack of them holds no
-   prompt. */
+/* An anchor for an unbound command, or any anchor while hints are off, is
+   empty; a key stack of them holds no prompt. */
 .ui-key-chevron:has(+ :empty),
 :empty + .ui-key-chevron,
 .ui-key-chevron:has(+ .ui-key-stack):not(:has(+ .ui-key-stack .ui-key-prompt)),

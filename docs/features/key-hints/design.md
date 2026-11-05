@@ -39,6 +39,8 @@ a glance.
 - **A hint out of scope hides and keeps its space,** cursor prompts included, so rows and boxes
   never shift when focus moves. A hint whose command has no key takes no space at all, and so does a key with
   no target in a chat pane's tab bar, so unfocused panes' bars stay short.
+- **Hints switched off take no space,** unlike a hint out of scope: with `showHints` off no view has a hint to come
+  back to, so nothing is held for one.
 - **A user's own bind shows before the default,** so a rebind reaches its prompt without the user
   unbinding the default.
 - **The placement check counts an anchor only once it has been on the page,** so a hint built and

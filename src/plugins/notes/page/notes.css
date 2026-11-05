@@ -10,6 +10,17 @@
   row-gap: var(--wg-space-1);
 }
 
+/* With no key to show, as while hints are off, the two key columns and their
+   gaps go. */
+.notes-fields:not(:has(.ui-key-prompt)) {
+  grid-template-columns: calc(var(--wg-space-8) * 2) minmax(0, 1fr);
+}
+
+.notes-fields:not(:has(.ui-key-prompt))
+  :is(.notes-row-keys, .notes-cursor-prompt) {
+  display: none;
+}
+
 /* The selected row's prompt at its end. It hides, keeping its space, while a
    box holds the keys. */
 .notes-cursor-prompt {
