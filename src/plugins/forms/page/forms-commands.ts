@@ -74,7 +74,9 @@ export interface LayoutCommandChannel {
   openPreview(): Promise<unknown>;
 }
 
-type Handler = (context: PageCommandContext) => void;
+type EditorContext = Pick<PageCommandContext, 'editor'>;
+
+type Handler = (context: EditorContext) => void;
 
 type DescribeChange = (answer: ItemAnswer, item: AnswerableItem) => string;
 
@@ -95,17 +97,6 @@ export function formsCommandHandlers(
       focusBoxItem(store, boxIn(deps, context));
       store.dispatch(action);
     };
-  // Logs the number the item now holds, a question's choice or a finding's
-  // entry, or the clear when the same number was held.
-  const choose =
-    (number: number): Handler =>
-    (context) =>
-      changeAnswer(deps, context, { type: 'choose', number }, (_, item) =>
-        activePickNumber(store.get(), item) === number
-          ? `chose ${number} on ${itemName(item)}`
-          : `cleared the choice on ${itemName(item)}`,
-      );
-
   const layoutCommand =
     (invoke: () => Promise<unknown>): Handler =>
     () =>
@@ -122,31 +113,34 @@ export function formsCommandHandlers(
     askCancel: plain({ type: 'askCancel' }),
     dismissConfirm: plain({ type: 'dismissConfirm' }),
     // Main refuses a round whose question choices or finding entries outnumber
-    // these keys, so every numbered entry has one.
-    choose1: choose(1),
-    choose2: choose(2),
-    choose3: choose(3),
-    choose4: choose(4),
-    choose5: choose(5),
-    choose6: choose(6),
-    choose7: choose(7),
-    choose8: choose(8),
-    choose9: choose(9),
-    clearChoice: (context) =>
+    // the number keys, so every numbered entry has one. Logs the number the item
+    // now holds, a question's choice or a finding's entry, or the clear when the
+    // same number was held.
+    choose: (context) => {
+      const number = context.arg;
+      changeAnswer(deps, context, { type: 'choose', number }, (_, item) =>
+        activePickNumber(store.get(), item) === number
+          ? `chose ${number} on ${itemName(item)}`
+          : `cleared the choice on ${itemName(item)}`,
+      );
+    },
+    clearChoice: (context) => {
       changeAnswer(
         deps,
         context,
         { type: 'clearChoice' },
         (_answer, item) => `cleared the choice on ${itemName(item)}`,
-      ),
-    acceptRecommendation: (context) =>
+      );
+    },
+    acceptRecommendation: (context) => {
       changeAnswer(
         deps,
         context,
         { type: 'acceptRecommendation' },
         (_answer, item) => `accepted the recommendation on ${itemName(item)}`,
-      ),
-    toggleNotApplicable: (context) =>
+      );
+    },
+    toggleNotApplicable: (context) => {
       changeAnswer(
         deps,
         context,
@@ -155,7 +149,8 @@ export function formsCommandHandlers(
           answer.notApplicable
             ? `not applicable on ${itemName(item)}`
             : `applicable again on ${itemName(item)}`,
-      ),
+      );
+    },
     toggleDontAsk: (context) => {
       const answer = changeAnswer(
         deps,
@@ -206,7 +201,7 @@ export function formsCommandHandlers(
 // focus, and a chord bind fires inside one without naming the editor.
 function boxIn(
   deps: FormsCommandDeps,
-  context: PageCommandContext,
+  context: EditorContext,
 ): BoxRef | undefined {
   return context.editor === undefined
     ? (deps.boxes.active() ?? undefined)
@@ -245,7 +240,7 @@ function focusedAnswer(
 // change; returns the changed answer, or null when nothing changed.
 function changeAnswer(
   deps: FormsCommandDeps,
-  context: PageCommandContext,
+  context: EditorContext,
   action: FormsAction,
   describe: DescribeChange,
 ): ItemAnswer | null {
@@ -273,7 +268,7 @@ function focusShownBox(
 
 function stepFocus(
   deps: FormsCommandDeps,
-  context: PageCommandContext,
+  context: EditorContext,
   step: number,
 ) {
   const from = boxIn(deps, context) ?? null;
@@ -301,7 +296,7 @@ function scrollForm(
 // box takes focus. From the page, focus stays on the page.
 function moveItem(
   deps: FormsCommandDeps,
-  context: PageCommandContext,
+  context: EditorContext,
   action: FormsAction,
 ) {
   const box = boxIn(deps, context);
@@ -316,7 +311,7 @@ function moveItem(
 
 function jumpToUnanswered(
   deps: FormsCommandDeps,
-  context: PageCommandContext,
+  context: EditorContext,
   step: 1 | -1,
 ) {
   focusBoxItem(deps.store, boxIn(deps, context));

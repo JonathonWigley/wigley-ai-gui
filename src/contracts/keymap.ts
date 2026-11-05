@@ -1,4 +1,5 @@
-import type { CommandId } from './commands';
+import type { CommandArg, CommandId } from './commands';
+import type { ProcessName } from './plugin';
 
 export type EditorMode = 'normal' | 'insert';
 
@@ -19,6 +20,7 @@ export interface EditorBind {
   scope: ViewScope;
   command: CommandId;
   mode?: EditorMode;
+  arg?: CommandArg;
 }
 
 export interface EditorKeymap {
@@ -48,12 +50,14 @@ export interface PageBind {
   keys: string[];
   scope: ViewScope;
   command: CommandId;
+  arg?: CommandArg;
 }
 
 // `accelerator` is an Electron accelerator, e.g. `CommandOrControl+W`.
 export interface AcceleratorBind {
   accelerator: string;
   command: CommandId;
+  arg?: CommandArg;
 }
 
 // A chord caught before the page sees it, for chords no menu item can claim.
@@ -65,6 +69,7 @@ export interface InterceptBind {
   shift?: boolean;
   meta?: boolean;
   command: CommandId;
+  arg?: CommandArg;
 }
 
 // Which side of a text box's edge a bind fires on: `page` while no editor has
@@ -77,14 +82,25 @@ export type BindWhere = 'page' | 'box' | 'both';
 // the page and in a box, and any other bind fires on the page; a chord on the
 // page fires inside a box too. `where` overrides that (a chord takes only
 // `page`), and a bind with `mode` fires only in a box, in that vim mode. The
-// merge expands each into the `PageBind` and `EditorBind` it stands for.
+// merge expands each into the `PageBind` and `EditorBind` it stands for. `arg` is
+// what the command runs with, and no part of which bind a key holds: two binds on
+// one key that differ only by `arg` are a key bound twice.
 export interface KeyBind {
   keys: string;
   scope: ViewScope;
   command: CommandId;
   where?: BindWhere;
   mode?: EditorMode;
+  arg?: CommandArg;
 }
+
+// A bind a part adds while it runs, its scope and command qualified as in
+// `keymap.json`. Main's binds take no `global` section.
+export type RuntimeBind<P extends ProcessName = ProcessName> = P extends 'page'
+  ? KeyBind
+  :
+      | { kind: 'app'; bind: AcceleratorBind }
+      | { kind: 'intercept'; bind: InterceptBind };
 
 // The which-key name of each leader prefix, by its keys (`<Leader>k`).
 export type KeyGroups = Record<string, string>;

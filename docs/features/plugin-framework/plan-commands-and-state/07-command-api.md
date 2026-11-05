@@ -1,6 +1,6 @@
 # 07 — Runtime command API, with one argument per command and routing across processes
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 06
 Plan: [plan.md](plan.md)

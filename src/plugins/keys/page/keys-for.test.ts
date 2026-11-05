@@ -145,4 +145,15 @@ describe('promptKeysFor', () => {
 
     expect(promptKeysFor(map, 'a.next', 'a.s', 'macos', 'page')).toBeNull();
   });
+
+  it('keysFor_Arg_PicksThatArgsBind', () => {
+    const map = keymap([
+      { keys: ['1'], scope: 'a.s', command: 'a.pick', arg: 1 },
+      { keys: ['2'], scope: 'a.s', command: 'a.pick', arg: 2 },
+    ]);
+
+    expect(keysFor(map, 'a.pick', 'a.s', 'macos', 'page', 2)).toBe('2');
+    expect(keysFor(map, 'a.pick', 'a.s', 'macos', 'page', 3)).toBeNull();
+    expect(keysFor(map, 'a.pick', 'a.s', 'macos')).toBe('1');
+  });
 });

@@ -1,4 +1,10 @@
-import type { ViewScope } from './keymap';
+import type {
+  AcceleratorBind,
+  InterceptBind,
+  KeyBind,
+  ViewScope,
+} from './keymap';
+import type { CommandInfo } from './plugin';
 import type { SlotKey } from './state';
 
 // The shown mode's qualified id, written at each change of the shown mode. `''`
@@ -29,6 +35,31 @@ export const coreThemeSlot: SlotKey<string, 'page', 'core'> = {
 export const coreWindowFocusedSlot: SlotKey<boolean, 'main', 'core'> = {
   id: 'core.windowFocused',
   process: 'main',
+  kind: 'value',
+};
+
+// The commands and binds one process's parts added while they run. `started` is
+// true once that process's parts have started, and false again from the first
+// write of a new page.
+export interface RuntimeCatalog {
+  readonly commands: readonly CommandInfo[];
+  readonly binds: {
+    readonly binds: readonly KeyBind[];
+    readonly app: readonly AcceleratorBind[];
+    readonly intercept: readonly InterceptBind[];
+  };
+  readonly started: boolean;
+}
+
+export const coreRuntimeMainSlot: SlotKey<RuntimeCatalog, 'main', 'core'> = {
+  id: 'core.runtimeMain',
+  process: 'main',
+  kind: 'value',
+};
+
+export const coreRuntimePageSlot: SlotKey<RuntimeCatalog, 'page', 'core'> = {
+  id: 'core.runtimePage',
+  process: 'page',
   kind: 'value',
 };
 

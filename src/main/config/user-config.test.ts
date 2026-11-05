@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DefaultKeymap } from '../../contracts/keymap';
 import type { Settings } from '../../contracts/settings';
 import type { UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
+import { EMPTY_RUNTIME_CATALOG } from '../../shared/runtime-commands';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { resolveTheme } from '../themes/theme-loader';
 import type { ConfigCheckDeps } from './config-checks';
-import { loadConfigStore } from './config-store';
+import { type ConfigStore, loadConfigStore } from './config-store';
 import { createUserConfig } from './user-config';
 
 const HOME = '/home';
@@ -104,11 +105,9 @@ const CORE_INFO = {
   'fonts.ui': { label: 'UI font', description: 'A font.' },
 };
 
-async function create(
-  files: MemoryFiles,
-  manifests = CHECK_DEPS.manifests,
-): Promise<UserConfig> {
-  const store = await loadConfigStore({
+// A store over `files` for `createUserConfig`.
+function storeOver(files: MemoryFiles, manifests = CHECK_DEPS.manifests) {
+  return loadConfigStore({
     ...CHECK_DEPS,
     manifests,
     files,
@@ -123,12 +122,20 @@ async function create(
     runMode: 'live',
     log: () => undefined,
   });
+}
+
+async function create(
+  files: MemoryFiles,
+  manifests = CHECK_DEPS.manifests,
+  store?: ConfigStore,
+): Promise<UserConfig> {
+  const served = store ?? (await storeOver(files, manifests));
   return createUserConfig({
     ...CHECK_DEPS,
     manifests,
     files,
     folder: FOLDER,
-    store,
+    store: served,
     settingInfo: CORE_INFO,
   });
 }
@@ -380,7 +387,7 @@ describe('createUserConfig', () => {
     const files = createMemoryFiles();
     const userConfig = await create(files);
     const layer = {
-      binds: [{ keys: 'x', scope: 'p.list', command: 'p.nope' }],
+      binds: [{ keys: 'x', scope: 'p.nope', command: 'p.down' }],
     };
 
     const result = await userConfig.writeKeymap(layer, null);
@@ -732,5 +739,56 @@ describe('createUserConfig', () => {
     );
 
     await expect(changed).resolves.toBeUndefined();
+  });
+
+  describe('runtime commands', () => {
+    const page = {
+      ...EMPTY_RUNTIME_CATALOG,
+      commands: [
+        {
+          id: 'p.later',
+          plugin: 'p',
+          label: 'Later',
+          group: 'g',
+          runsIn: 'page' as const,
+          runtime: true as const,
+        },
+      ],
+      binds: {
+        binds: [{ keys: 'l', scope: 'any', command: 'p.later' }],
+        app: [],
+        intercept: [],
+      },
+    };
+
+    it('schema_RuntimeCommands_AreListed', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+
+      store.setRuntime({ main: EMPTY_RUNTIME_CATALOG, page });
+      await vi.waitFor(() => {
+        expect(store.current().commands['p.later']).toBeDefined();
+      });
+
+      const schema = userConfig.schema();
+      expect(schema.commands['p.later'].label).toBe('Later');
+      expect(schema.defaultBindLayers.flat()).toContainEqual(
+        page.binds.binds[0],
+      );
+    });
+
+    it('onChanged_SetRuntimeChangesCommands_Fires', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const changed = new Promise<void>((resolve) => {
+        userConfig.onChanged(resolve);
+      });
+
+      store.setRuntime({ main: EMPTY_RUNTIME_CATALOG, page });
+
+      await expect(changed).resolves.toBeUndefined();
+    });
   });
 });

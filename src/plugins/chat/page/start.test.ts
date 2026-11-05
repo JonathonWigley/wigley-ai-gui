@@ -174,7 +174,7 @@ describe('chat page part', () => {
       stop: { enter: () => true, leave },
     });
     harness.send('sessionStarted', SESSION);
-    harness.started().commands.nextEntry({});
+    harness.started().commands.nextEntry({ arg: undefined });
     const scope = harness.state.publish(coreScopeSlot);
 
     scope.set('other.view');

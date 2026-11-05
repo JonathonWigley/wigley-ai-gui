@@ -1,7 +1,7 @@
 import type { AppInstance } from '../../contracts/app-instance';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files, FileWatch } from '../../contracts/files';
-import type { Keymap } from '../../contracts/keymap';
+import type { UserKeymap } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
 import type { RunMode } from '../../contracts/plugin';
@@ -9,10 +9,16 @@ import type { AppConfig, ConfigProblem } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { errorText } from '../../shared/error-text';
 import { requireUnambiguousKeymap } from '../../shared/keymap-checks';
+import {
+  commandInfos,
+  type DefaultKeyLayer,
+} from '../../shared/plugin-manifests';
+import { EMPTY_RUNTIME_CATALOG } from '../../shared/runtime-commands';
 import { ThemeError, type ThemeFileText } from '../themes/theme-loader';
 import {
-  checkKeymapText,
+  type CheckedKeymap,
   checkSettingsText,
+  checkUserKeymap,
   type ConfigCheckDeps,
   type ConfigFileText,
   configSchema,
@@ -20,10 +26,12 @@ import {
   readConfigFile,
   readUserThemes,
   resolveConfigTheme,
+  type RuntimeCatalogs,
   SETTINGS_FILE,
   THEMES_FOLDER,
   usersThemeProblem,
 } from './config-checks';
+import { parseUserKeymap } from './user-keymap';
 import type { UserSettings } from './user-settings';
 
 // The served config, kept current with the user config folder.
@@ -32,9 +40,14 @@ import type { UserSettings } from './user-settings';
 // `dispose` stops watching the folder and drops every listener; `current`
 // keeps returning the last config. A rebuild already running when `dispose`
 // is called publishes nothing and runs no further rebuild.
+// `setRuntime` hands over both processes' runtime commands and binds, re-serving
+// as a file change does, once for a burst in one tick. `runtime` reads those
+// catalogs and the runtime binds in force.
 export interface ConfigStore extends Disposable {
   current(): AppConfig;
   onChanged(listener: (config: AppConfig) => void): Disposable;
+  setRuntime(runtime: RuntimeCatalogs): void;
+  runtime(): { catalogs: RuntimeCatalogs; layer: DefaultKeyLayer };
 }
 
 // `folder` is the absolute user config folder; `log` takes the store's own
@@ -51,10 +64,12 @@ export interface ConfigStoreDeps extends ConfigCheckDeps {
 
 const THEME_FILE = /^themes\/[^/]+\.json$/;
 
-// The last good value of each slice, which a broken file leaves in place.
+// The last good value of each slice, which a broken file leaves in place. The
+// keymap's is its parsed user layer, since the runtime layers under it keep changing
+// and a bind held back now can apply later.
 interface Slices {
   settings: UserSettings;
-  keymap: Keymap;
+  userKeymap: UserKeymap;
   theme: Theme;
 }
 
@@ -93,9 +108,15 @@ export async function loadConfigStore(
   );
   let slices: Slices = {
     settings: { settings: deps.defaults, pluginSettings: fixed.pluginDefaults },
-    keymap: fixed.defaultKeymap,
+    userKeymap: {},
     theme: defaultTheme,
   };
+  let runtime: RuntimeCatalogs = {
+    main: EMPTY_RUNTIME_CATALOG,
+    page: EMPTY_RUNTIME_CATALOG,
+  };
+  let runtimeLayer: DefaultKeyLayer = {};
+  let loggedDrops: ReadonlySet<string> = new Set();
   let watchProblem: ConfigProblem | null = null;
   let current: AppConfig | null = null;
   const listeners = new Set<(config: AppConfig) => void>();
@@ -117,20 +138,36 @@ export async function loadConfigStore(
     }
   };
 
-  const keymapSlice = (read: ConfigFileText, problems: ConfigProblem[]) => {
+  // A parsed file that the merge refuses is a problem, as a file that does not parse.
+  const checkedKeymap = (
+    read: ConfigFileText,
+    problems: ConfigProblem[],
+  ): { user: UserKeymap; checked: CheckedKeymap } => {
+    const lastGood = () => ({
+      user: slices.userKeymap,
+      checked: checkUserKeymap(slices.userKeymap, deps, fixed, runtime),
+    });
     if ('problem' in read) {
       problems.push(read.problem);
-      return slices.keymap;
-    }
-    if (read.text === null) {
-      return fixed.defaultKeymap;
+      return lastGood();
     }
     try {
-      return checkKeymapText(read.text, deps, fixed);
+      const user = read.text === null ? {} : parseUserKeymap(read.text, fixed);
+      return { user, checked: checkUserKeymap(user, deps, fixed, runtime) };
     } catch (error) {
       problems.push({ file: KEYMAP_FILE, message: errorText(error) });
-      return slices.keymap;
+      return lastGood();
     }
+  };
+
+  // Each drop is logged once, and again only after the bind came back.
+  const logNewDrops = (dropped: readonly string[]) => {
+    for (const line of dropped) {
+      if (!loggedDrops.has(line)) {
+        deps.log('config', line);
+      }
+    }
+    loggedDrops = new Set(dropped);
   };
 
   // A theme error in the user's files is theirs to fix; any other is the
@@ -164,7 +201,17 @@ export async function loadConfigStore(
     const readFile = (relative: string) =>
       readConfigFile(deps.files, deps.folder, relative);
     const settings = settingsSlice(await readFile(SETTINGS_FILE), problems);
-    const keymap = keymapSlice(await readFile(KEYMAP_FILE), problems);
+    const { user, checked } = checkedKeymap(
+      await readFile(KEYMAP_FILE),
+      problems,
+    );
+    runtimeLayer = checked.layer;
+    logNewDrops(checked.dropped);
+    if (runtime.main.started && runtime.page.started) {
+      problems.push(
+        ...checked.heldBack.map((message) => ({ file: KEYMAP_FILE, message })),
+      );
+    }
     const themeFiles = await readUserThemes(deps.files, deps.folder);
     problems.push(...themeFiles.problems);
     const theme = themeSlice(
@@ -173,11 +220,16 @@ export async function loadConfigStore(
       isFirstRead,
       problems,
     );
-    slices = { settings, keymap, theme };
+    slices = { settings, userKeymap: user, theme };
     return {
       settings: settings.settings,
-      keymap,
-      commands: fixed.commands,
+      keymap: checked.keymap,
+      commands: commandInfos(
+        deps.coreCommands,
+        deps.manifests,
+        [...runtime.main.commands, ...runtime.page.commands],
+        deps.log,
+      ),
       scopes: fixed.scopes,
       pluginSettings: settings.pluginSettings,
       theme,
@@ -271,8 +323,23 @@ export async function loadConfigStore(
   if (isQueued) {
     requestRebuild();
   }
+  let isRuntimeQueued = false;
   return {
     current: () => current as AppConfig,
+    setRuntime(next) {
+      runtime = next;
+      if (isRuntimeQueued) {
+        return;
+      }
+      isRuntimeQueued = true;
+      queueMicrotask(() => {
+        isRuntimeQueued = false;
+        if (!isDisposed) {
+          requestRebuild();
+        }
+      });
+    },
+    runtime: () => ({ catalogs: runtime, layer: runtimeLayer }),
     onChanged(listener) {
       const registration = (config: AppConfig) => listener(config);
       listeners.add(registration);

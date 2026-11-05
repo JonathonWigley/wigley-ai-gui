@@ -1,4 +1,4 @@
-import type { CommandId } from '../../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../../contracts/commands';
 import type { ViewScope } from '../../../../contracts/keymap';
 import { button, element } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
@@ -296,12 +296,12 @@ export function createFormsBaseKit(deps: BaseKitDeps): FormsBaseKit {
   };
 }
 
-// Names the anchor for a qualified command on `element`, drawing the
-// command's label after the keys as `label` says.
+// Names the anchor for a qualified command on `element`, firing with `arg`,
+// and drawing the command's label after the keys as `label` says.
 export type ScopedAnchor = (
   element: HTMLElement,
   command: CommandId,
-  label?: boolean | string,
+  options?: { arg?: CommandArg; label?: boolean | string },
 ) => void;
 
 // The anchor `keys` names in `scope`, the scope of the part drawing.
@@ -309,8 +309,8 @@ export function scopedAnchor(
   keys: Pick<KeysPageExports, 'anchor'>,
   scope: ViewScope,
 ): ScopedAnchor {
-  return (element, command, label) => {
-    keys.anchor(element, command, { scope, label });
+  return (element, command, options) => {
+    keys.anchor(element, command, { scope, ...options });
   };
 }
 

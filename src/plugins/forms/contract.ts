@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   AgentFormEnd,
@@ -60,6 +61,11 @@ export const FINDING_ACTIONS: readonly FindingAction[] = [
 // The most numbered entries a card may show, one per number key: a
 // question's choices, or a finding's choices and choiceless action headers.
 export const MAX_ENTRIES = NUMBER_KEY_COUNT;
+
+// Picks the numbered choice or action, 1 first.
+export const formsChooseCommand: CommandKey<number, 'forms.choose'> = {
+  id: 'forms.choose',
+};
 
 // Where a finding comes from; it sets the card the finding draws as and the
 // fields it takes.

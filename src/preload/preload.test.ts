@@ -6,15 +6,20 @@ import './preload';
 const electron = vi.hoisted(() => {
   const exposed: { wigley?: unknown } = {};
   const onCalls: [string, (...args: unknown[]) => void][] = [];
+  const sends: unknown[][] = [];
   return {
     exposed,
     onCalls,
+    sends,
     contextBridge: {
       exposeInMainWorld: (name: 'wigley', api: unknown) => {
         exposed[name] = api;
       },
     },
     ipcRenderer: {
+      send: (channel: string, ...args: unknown[]) => {
+        sends.push([channel, ...args]);
+      },
       on: (channel: string, listener: (...args: unknown[]) => void) => {
         onCalls.push([channel, listener]);
       },
@@ -110,5 +115,43 @@ describe('preload onMessage', () => {
     sendFromMain('reentrant', 'shown', 2);
 
     expect(late).toEqual([2]);
+  });
+});
+
+describe('preload onRunCommand', () => {
+  function runFromMain(request: number, id: string, arg: unknown) {
+    const added = electron.onCalls.filter(
+      ([channel]) => channel === BRIDGE_CHANNELS.commandRunInPage,
+    );
+    added.at(-1)?.[1]({}, request, id, arg);
+  }
+
+  it.each([
+    { case: 'resolves', settle: () => Promise.resolve() },
+    { case: 'rejects', settle: () => Promise.reject(new Error('boom')) },
+  ])('onRunCommand_ListenerSettles_SendsDone: $case', async ({ settle }) => {
+    electron.sends.length = 0;
+    const heard: unknown[][] = [];
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    bridge.onRunCommand(async (id, arg) => {
+      heard.push([id, arg]);
+      await held;
+      await settle();
+    });
+
+    runFromMain(7, 'p.go', 3);
+    await vi.waitFor(() => {
+      expect(heard).toEqual([['p.go', 3]]);
+    });
+    expect(electron.sends).toEqual([]);
+
+    release();
+
+    await vi.waitFor(() => {
+      expect(electron.sends).toEqual([[BRIDGE_CHANNELS.commandRunDone, 7]]);
+    });
   });
 });

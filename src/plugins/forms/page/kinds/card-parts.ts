@@ -1,4 +1,4 @@
-import type { CommandId } from '../../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import { button, element } from '../../../../shared/page/dom';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
@@ -7,7 +7,8 @@ import { boxHint } from '../../../../shared/page/ui/key-anchors';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { AnswerStatus, Round } from '../../contract';
-import { formsCommand, numberedCommand } from '../../ids';
+import { formsCommand } from '../../ids';
+import { NUMBER_KEY_COUNT } from '../../manifest';
 import type { RoundInfo } from '../../layouts/layout';
 import type { CardDeps } from './item-format';
 
@@ -18,7 +19,11 @@ export interface Field {
 
 // Names the anchor for `command` on `element`, in the scope of the part
 // drawing.
-export type PartAnchor = (element: HTMLElement, command: CommandId) => void;
+export type PartAnchor = (
+  element: HTMLElement,
+  command: CommandId,
+  options?: { arg?: CommandArg },
+) => void;
 
 const STATUS_LABELS: Record<AnswerStatus, string> = {
   answered: 'Answered',
@@ -140,17 +145,16 @@ export function buildChoiceList(
   return { entries };
 }
 
-// Appends `span.choice-keys` to `pick`, the anchor for the command picking
-// entry `number`; nothing past the ninth, which has no command.
+// Appends `span.choice-keys` to `pick`, the anchor for the bind picking entry
+// `number`; nothing past the last number key.
 export function appendPickKeys(
   pick: HTMLElement,
   number: number,
   anchor: PartAnchor,
 ) {
-  const command = numberedCommand('choose', number);
-  if (command !== null) {
+  if (number <= NUMBER_KEY_COUNT) {
     const keys = element('span', 'choice-keys');
     pick.append(keys);
-    anchor(keys, command);
+    anchor(keys, formsCommand('choose'), { arg: number });
   }
 }

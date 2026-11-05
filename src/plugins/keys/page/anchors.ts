@@ -1,7 +1,8 @@
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { OsName } from '../../../contracts/platform';
+import { commandTarget } from '../../../shared/command-args';
 import { keyPrompt } from '../../../shared/page/ui/key-prompt';
 import type { AnchorOptions, HintWhere } from '../contract';
 
@@ -13,6 +14,7 @@ export interface AnchorDeps {
     command: CommandId,
     scope: ViewScope | undefined,
     where: HintWhere,
+    arg?: CommandArg,
   ): string | null;
   label(id: CommandId): string;
   scope(): ViewScope;
@@ -23,7 +25,7 @@ export interface AnchorDeps {
 // The anchor registry. `redraw` draws every live anchor's keys again, and none
 // while hints are off, so the anchors take no space; `applyVisibility` hides
 // each live anchor whose scope is not in force, keeping its space. `placedIn`
-// is every command anchored in
+// is the `commandTarget` of every command and argument anchored in
 // `scope` or with no scope during the page load, disposed anchors included,
 // whose element was seen on the page: when it was drawn, hidden or shown,
 // disposed, or at the `placedIn` call.
@@ -35,7 +37,7 @@ export interface Anchors {
   ): Disposable;
   redraw(): void;
   applyVisibility(): void;
-  placedIn(scope: ViewScope): ReadonlySet<CommandId>;
+  placedIn(scope: ViewScope): ReadonlySet<string>;
 }
 
 interface LiveAnchor {
@@ -60,14 +62,14 @@ function labelText(
 
 export function createAnchors(deps: AnchorDeps): Anchors {
   const live = new Set<LiveAnchor>();
-  const placedByScope = new Map<ViewScope, Set<CommandId>>();
-  const placedUnscoped = new Set<CommandId>();
+  const placedByScope = new Map<ViewScope, Set<string>>();
+  const placedUnscoped = new Set<string>();
 
   const draw = (held: LiveAnchor) => {
     recordIfPlaced(held);
-    const { scope, where = 'page', label } = held.options;
+    const { scope, where = 'page', label, arg } = held.options;
     const keys = deps.showHints()
-      ? deps.keysFor(held.command, scope, where)
+      ? deps.keysFor(held.command, scope, where, arg)
       : null;
     if (keys === null) {
       held.element.replaceChildren();
@@ -91,13 +93,14 @@ export function createAnchors(deps: AnchorDeps): Anchors {
       return;
     }
     held.isPlaced = true;
-    const { scope } = held.options;
+    const { scope, arg } = held.options;
+    const target = commandTarget(held.command, arg);
     if (scope === undefined) {
-      placedUnscoped.add(held.command);
+      placedUnscoped.add(target);
       return;
     }
-    const placed = placedByScope.get(scope) ?? new Set<CommandId>();
-    placed.add(held.command);
+    const placed = placedByScope.get(scope) ?? new Set<string>();
+    placed.add(target);
     placedByScope.set(scope, placed);
   };
 

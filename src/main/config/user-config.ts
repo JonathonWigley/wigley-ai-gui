@@ -15,6 +15,7 @@ import { errorText } from '../../shared/error-text';
 import { isJsonObject } from '../../shared/json';
 import {
   defaultKeyLayers,
+  mergeKeymap,
   pluginSettingInfo,
 } from '../../shared/plugin-manifests';
 import type { ThemeFileText } from '../themes/theme-loader';
@@ -62,7 +63,7 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
     settingsProblem(text, userThemes, deps, fixed);
   const checkKeymap: TextCheck = (text) => {
     try {
-      checkKeymapText(text, deps, fixed);
+      checkKeymapText(text, deps, fixed, deps.store.runtime().catalogs);
       return null;
     } catch (error) {
       return errorText(error);
@@ -126,7 +127,7 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
   };
 
   return {
-    schema: () => schema,
+    schema: () => withRuntime(schema, deps),
     async read() {
       const userThemes = (await readUserThemes(deps.files, deps.folder)).texts;
       return {
@@ -211,6 +212,28 @@ function userConfigSchema(
       intercept: fixed.defaultKeymap.intercept,
     },
     defaultLeader: fixed.defaultLeader,
+  };
+}
+
+// `schema` with the runtime commands and binds the store serves now.
+function withRuntime(
+  schema: UserConfigSchema,
+  deps: UserConfigDeps,
+): UserConfigSchema {
+  const { layer } = deps.store.runtime();
+  const merged = mergeKeymap(deps.defaultKeymap, deps.manifests, {}, layer);
+  return {
+    ...schema,
+    commands: deps.store.current().commands,
+    defaultBindLayers:
+      layer.binds === undefined || layer.binds.length === 0
+        ? schema.defaultBindLayers
+        : [...schema.defaultBindLayers, layer.binds],
+    defaultAccelerators: {
+      app: merged.app,
+      global: merged.global,
+      intercept: merged.intercept,
+    },
   };
 }
 

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
+import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import { createChordMatcher, createSequenceMatcher } from './key-sequences';
 import {
@@ -7,6 +8,7 @@ import {
   dropPendingKeys,
   feedChordKey,
   feedPageKey,
+  installPageKeys,
 } from './page-keys';
 
 const TIMEOUT_MS = 1000;
@@ -256,5 +258,82 @@ describe('createPendingTimeout', () => {
     timeout.arm();
 
     expect(armed.size).toBe(0);
+  });
+});
+
+describe('installPageKeys', () => {
+  // Installs `bind` over stubbed page globals; `press` sends its key.
+  function installed(bind: PageBind, has: boolean) {
+    const keydowns: ((event: unknown) => void)[] = [];
+    const target = {
+      addEventListener: (type: string, listener: (event: unknown) => void) => {
+        if (type === 'keydown') {
+          keydowns.push(listener);
+        }
+      },
+      activeElement: null,
+    };
+    vi.stubGlobal('document', target);
+    vi.stubGlobal('window', target);
+    const runs: unknown[][] = [];
+    const logs: string[] = [];
+    installPageKeys(
+      [bind],
+      TIMEOUT_MS,
+      () => 'any',
+      {
+        contains: () => false,
+        takesChordKey: () => false,
+      } as unknown as EditorHost,
+      {
+        run: (...args) => {
+          runs.push(args);
+          return Promise.resolve();
+        },
+        has: () => has,
+        requireRegistered: () => {},
+      },
+      (source, message) => void logs.push(`${source}: ${message}`),
+      fakeTimers().timers,
+      () => {},
+    );
+    const press = () => {
+      for (const keydown of keydowns) {
+        keydown({
+          key: bind.keys[0],
+          target: null,
+          timeStamp: 0,
+          preventDefault: () => {},
+          stopPropagation: () => {},
+        });
+      }
+    };
+    return { press, runs, logs };
+  }
+
+  it('runBind_Arg_PassesItToTheRun', () => {
+    const { press, runs, logs } = installed(
+      { keys: ['1'], scope: 'any', command: 'forms.choose', arg: 1 },
+      true,
+    );
+
+    press();
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([['forms.choose', 1, {}]]);
+    expect(logs).toEqual(['page: 1 ran forms.choose 1']);
+  });
+
+  it('runBind_RuntimeCommandGone_LogsAndRunsNothing', () => {
+    const { press, runs, logs } = installed(
+      { keys: ['r'], scope: 'any', command: 'r.gone' },
+      false,
+    );
+
+    press();
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([]);
+    expect(logs).toEqual(['page: r names no command r.gone']);
   });
 });

@@ -2,7 +2,14 @@ import type { AgentHarness } from './agent';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { AppInstance } from './app-instance';
-import type { CommandId } from './commands';
+import type {
+  ArgOf,
+  CommandArg,
+  CommandArgShape,
+  CommandId,
+  CommandKey,
+  CommandRunContext,
+} from './commands';
 import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
@@ -17,6 +24,7 @@ import type {
   Keymap,
   PageBind,
   PendingKeys,
+  RuntimeBind,
   ViewScope,
 } from './keymap';
 import type { PluginLog } from './log';
@@ -60,18 +68,68 @@ export interface DependencyKey<
   readonly exportsType?: E; // type only; never set
 }
 
-// A command as a manifest declares it, under its short id.
+// A command as a manifest declares it, under its short id. `arg` is the one
+// argument it takes; with none, it takes no argument.
 export interface CommandDecl {
   label: string;
   group: string;
   runsIn: ProcessName;
+  arg?: CommandArgShape;
 }
 
 // A command under its qualified id, `<pluginId>.<short>`, or the core's own id
-// with plugin `core`.
+// with plugin `core`. `runtime` marks one a part added while it runs.
 export interface CommandInfo extends CommandDecl {
   id: CommandId;
   plugin: string;
+  runtime?: true;
+}
+
+// What runs a command. A command acts and returns no result; a failure is logged
+// under the plugin that owns the handler, and the run's promise resolves.
+// `any`: one registry holds handlers of different arguments.
+export type CommandHandler<
+  Context = PageCommandContext<any> | MainCommandContext<any>,
+> = (context: Context) => void | Promise<void>;
+
+// The argument of `M`'s command `K`. `any` for a manifest type that names no
+// particular command: one parts list holds parts with different arguments.
+type DeclaredArg<
+  M extends PluginManifest,
+  K,
+> = CommandDecl extends M['commands'][K & keyof M['commands']]
+  ? any
+  : M['commands'][K & keyof M['commands']] extends { arg: infer S }
+    ? ArgOf<S>
+    : undefined;
+
+// A part's commands. `run` starts a handler in this process before it returns, or
+// sends the run to the process that declares the command, and resolves once the
+// handler settles; it throws at the call for an unknown id or a bad argument, and
+// a run a page cannot take is logged and resolves. `register` adds a command while
+// the part runs, qualified by the plugin's id, and throws when `decl.runsIn` is the
+// other process or the id is taken. `intercept` wraps every run of a command in the
+// process that runs its handler: the last registered is outermost, `next` runs the
+// next wrap and then the handler, and a wrap that does not call `next` stops the
+// run; it throws for a command the catalog knows as the other process's. `onDidRun`
+// hears each run that ended with no failure, in the process that ran the handler,
+// once the handler has settled. Each handle is filed in the part's registrations.
+export interface PluginCommands {
+  run(id: CommandId): Promise<void>;
+  run<A>(key: CommandKey<A>, arg: A): Promise<void>;
+  register(
+    short: string,
+    decl: CommandDecl,
+    handler: CommandHandler,
+  ): Disposable;
+  intercept(
+    id: CommandId,
+    wrap: (
+      next: () => Promise<void>,
+      context: CommandRunContext,
+    ) => void | Promise<void>,
+  ): Disposable;
+  onDidRun(listener: (id: CommandId, arg: unknown) => void): Disposable;
 }
 
 // A scope under its qualified id, `<pluginId>.<short>`, or the core's own id
@@ -97,8 +155,8 @@ export interface PluginKeys<
     command: PageC;
   })[];
   groups?: KeyGroups;
-  app?: { accelerator: string; command: MainC }[];
-  global?: { accelerator: string; command: MainC }[];
+  app?: { accelerator: string; command: MainC; arg?: CommandArg }[];
+  global?: { accelerator: string; command: MainC; arg?: CommandArg }[];
   intercept?: (Omit<InterceptBind, 'command'> & { command: MainC })[];
 }
 
@@ -471,9 +529,10 @@ export interface LayoutShow {
   dispose(): void;
 }
 
-// `editor` is the text box a key fired in.
-export interface PageCommandContext {
+// `editor` is the text box a key fired in. `arg` is the command's argument.
+export interface PageCommandContext<A = undefined> {
   editor?: TextEditor;
+  arg: A;
 }
 
 export interface PageServices {
@@ -523,6 +582,11 @@ export interface PageTransparency {
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
 // `keys.scope` is the qualified scope keys fire in now, and a part hears each
 // change of it through `coreScopeSlot`.
+// `keys.bind` adds a bind under the user's `keymap.json` while the part runs, its
+// scope and command qualified; a later re-serve puts it in force, and the user's
+// bind on those keys wins. It throws when the command is not known yet or runs in
+// main, the argument is bad, the keys cannot expand, or the keys clash with another
+// runtime bind; the handle is filed in the part's registrations.
 // `keys.onPending` hears the keys of an unfinished sequence on the page or in
 // an editor, `null` once none are pending, until its `dispose`;
 // `keys.holdPending` keeps a pending page sequence past its
@@ -592,6 +656,7 @@ export interface PageApi<
     label(id: CommandId): string;
     command(id: CommandId): CommandInfo | undefined;
     scopes: readonly ScopeInfo[];
+    bind(bind: RuntimeBind<'page'>): Disposable;
   };
   modes: PageModes;
   shell: { setLayout(layout: ShellLayout): Disposable };
@@ -605,7 +670,7 @@ export interface PageApi<
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;
-  commands: { run(id: CommandId, context?: PageCommandContext): void };
+  commands: PluginCommands;
   services: PageServices;
   dependency<E, Id extends M['dependsOn']['page'][number]>(
     key: DependencyKey<E, 'page', Id>,
@@ -616,10 +681,11 @@ export interface PageApi<
 }
 
 export interface PageStart<M extends PluginManifest> {
-  commands: Record<
-    CommandsRunIn<M, 'page'>,
-    (context: PageCommandContext) => void
-  >;
+  commands: {
+    [K in CommandsRunIn<M, 'page'>]: CommandHandler<
+      PageCommandContext<DeclaredArg<M, K>>
+    >;
+  };
   // Called once for each dependent, with that dependent's registrations; returns
   // that dependent's view.
   exports?(consumer: Registrations): unknown;
@@ -810,7 +876,8 @@ export interface MainServices {
 // `Disposable`'s `dispose`; it throws for a second registration.
 // `layouts.names` lists the plugin's layouts, `default` first; only `default`
 // before the folder has been listed or while unregistered. `state` is as
-// `PluginState` says.
+// `PluginState` says. `commands` is as `PluginCommands` says. `keys.bind` adds an
+// app or intercept bind while the part runs, as `PageApi.keys.bind` does a page one.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -832,10 +899,23 @@ export interface MainApi<
     names(): string[];
   };
   state: PluginState<M, 'main'>;
+  commands: PluginCommands;
+  keys: { bind(bind: RuntimeBind<'main'>): Disposable };
+}
+
+// `chord` is the chord that fired the command; a run from code or the page has
+// none. `arg` is the command's argument.
+export interface MainCommandContext<A = undefined> {
+  chord?: string;
+  arg: A;
 }
 
 export interface MainStart<M extends PluginManifest> {
-  commands: Record<CommandsRunIn<M, 'main'>, (chord: string) => void>;
+  commands: {
+    [K in CommandsRunIn<M, 'main'>]: CommandHandler<
+      MainCommandContext<DeclaredArg<M, K>>
+    >;
+  };
   // Called once for each dependent, with that dependent's registrations; returns
   // that dependent's view.
   exports?(consumer: Registrations): unknown;

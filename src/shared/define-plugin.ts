@@ -26,7 +26,8 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // Returns `manifest` unchanged, keeping its literal id, command ids and scopes
 // in its type and its settings as plain types: a key naming an undeclared command
 // or scope, or a command running in the other process, fails to compile, and
-// so does a start function missing a declared command's handler, a top-level
+// so does a start function missing a declared command's handler, a handler reading
+// its `context.arg` as anything but what its command's `arg` declares, a top-level
 // setting defaulting to null whose kind `optionalSettings` leaves out, and a
 // `settingInfo` missing a leaf setting's path or naming a path that is no
 // leaf; a dependency key for a plugin missing from that process's list fails to

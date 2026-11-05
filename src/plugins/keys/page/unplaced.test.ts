@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBind, Keymap, PageBind } from '../../../contracts/keymap';
-import { unplacedBinds } from './unplaced';
+import { unplacedBinds, unplacedLine } from './unplaced';
 
 function keymap(
   page: PageBind[],
@@ -109,5 +109,25 @@ describe('unplacedBinds', () => {
     expect(unplacedBinds(map, 'a.s', NONE)).toEqual([
       { keys: '<Tab>', command: 'a.cycle' },
     ]);
+  });
+
+  it('unplacedBinds_ArgPlaced_OtherArgsStillListed', () => {
+    const map = keymap([
+      { keys: ['1'], scope: 'a.s', command: 'a.pick', arg: 1 },
+      { keys: ['2'], scope: 'a.s', command: 'a.pick', arg: 2 },
+    ]);
+
+    expect(unplacedBinds(map, 'a.s', new Set(['a.pick 1']))).toEqual([
+      { keys: '2', command: 'a.pick', arg: 2 },
+    ]);
+    expect(
+      unplacedBinds(map, 'a.s', new Set(['a.pick'])).map((bind) => bind.keys),
+    ).toEqual(['1', '2']);
+  });
+
+  it('unplacedLine_Arg_PrintsTheTarget', () => {
+    expect(unplacedLine({ keys: '2', command: 'a.pick', arg: 2 }, 'a.s')).toBe(
+      'unplaced 2 a.pick 2 in a.s',
+    );
   });
 });

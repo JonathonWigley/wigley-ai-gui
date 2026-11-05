@@ -82,7 +82,7 @@ export interface BaseKit {
   ): HTMLElement;
   // `section.context`: a section header over the text as markdown; nothing and null for blank text.
   section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
-  // The keys bound to the owner's command (its short name, as `choose1`), or to a name holding a `.` read as a
+  // The keys bound to the owner's command (its short name, as `nextItem`), or to a name holding a `.` read as a
   // qualified id (as `panes.focusLeft`), in the scope of the part drawing, as `keysFor` reads it; null when unbound or
   // for a name no command has. It reads the keymap once, when called, so text a part draws from
   // it keeps the keys of the part's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.

@@ -1,3 +1,4 @@
+import type { CommandId } from './commands';
 import type { Disposable } from './disposable';
 import type { LayoutOwner, LayoutSet } from './layouts';
 import type { Log } from './log';
@@ -5,6 +6,9 @@ import type { AppConfig } from './settings';
 import type { SlotChange, StateSnapshot } from './state';
 
 export const BRIDGE_CHANNELS = {
+  commandRun: 'bridge:command-run',
+  commandRunDone: 'bridge:command-run-done',
+  commandRunInPage: 'bridge:command-run-in-page',
   config: 'bridge:config',
   configChanged: 'bridge:config-changed',
   layoutsRead: 'bridge:layouts-read',
@@ -53,6 +57,12 @@ export interface Bridge {
   onStateChange(
     listener: (seq: number, change: SlotChange) => void,
   ): Disposable;
+  // Runs a main command and resolves once its handler settles; rejects with
+  // main's text when main knows no such command or the argument is bad.
+  runCommand(id: CommandId, arg: unknown): Promise<void>;
+  // Calls `listener` with each page command main runs, and tells main once the
+  // returned promise settles.
+  onRunCommand(listener: (id: CommandId, arg: unknown) => Promise<void>): void;
   // Calls `method` on the main part of plugin `pluginId`; rejects with main's
   // own error text when the handler throws.
   invoke(pluginId: string, method: string, args: unknown[]): Promise<unknown>;

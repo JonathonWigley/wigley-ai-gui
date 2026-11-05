@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { ViewScope } from '../../../contracts/keymap';
 import {
   asHtml,
@@ -20,10 +20,19 @@ function anchorsSetup() {
     scope: 'a.list' as ViewScope,
     showHints: true,
   };
-  const keysForCalls: [CommandId, ViewScope | undefined, HintWhere][] = [];
+  const keysForCalls: [
+    CommandId,
+    ViewScope | undefined,
+    HintWhere,
+    CommandArg?,
+  ][] = [];
   const anchors = createAnchors({
-    keysFor: (command, scope, where) => {
-      keysForCalls.push([command, scope, where]);
+    keysFor: (command, scope, where, arg) => {
+      keysForCalls.push(
+        arg === undefined
+          ? [command, scope, where]
+          : [command, scope, where, arg],
+      );
       return state.keys[command] ?? null;
     },
     label: (id) => LABELS[id] ?? id,
@@ -247,5 +256,15 @@ describe('anchors', () => {
     node.remove();
 
     expect(anchors.placedIn('a.s')).toEqual(new Set(['a.x']));
+  });
+
+  it('anchor_Arg_ReadsThatArgsKeysAndPlacesItsTarget', () => {
+    const { anchors, keysForCalls } = anchorsSetup();
+    const node = placedElement();
+
+    anchors.anchor(asHtml(node), 'a.trash', { scope: 'a.s', arg: 2 });
+
+    expect(keysForCalls.at(-1)).toEqual(['a.trash', 'a.s', 'page', 2]);
+    expect(anchors.placedIn('a.s')).toEqual(new Set(['a.trash 2']));
   });
 });

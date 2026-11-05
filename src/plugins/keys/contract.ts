@@ -1,4 +1,4 @@
-import type { CommandId } from '../../contracts/commands';
+import type { CommandArg, CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type { ViewScope } from '../../contracts/keymap';
 import type { DependencyKey } from '../../contracts/plugin';
@@ -18,13 +18,16 @@ export interface AnchorOptions {
   // Draws the command's label after the keys (cursor prompts, edge prompts with words).
   // A string draws that text in place of the command's label.
   label?: boolean | string;
+  // The argument the anchored bind carries: the keys of that argument's bind, and a
+  // placement of that argument alone. Left out, the command's first bind is drawn.
+  arg?: CommandArg;
 }
 
 // `keysFor` reads the keys that run the qualified `command`, as the user reads
 // them: the first such bind in the merged keymap firing in the qualified
 // `scope` (an `any` bind included), or in any scope when `scope` is left out,
 // on the page or, for `where` `box`, inside a text box; null when none is
-// bound. `onChanged` hears each change to the merged keymap, after which
+// bound. With `arg`, only a bind carrying that argument counts. `onChanged` hears each change to the merged keymap, after which
 // `keysFor` reads the new keys, until its `dispose`; a view that shows keys
 // beside its controls reads them again there. `anchor` draws the keys of
 // `command` into `element`, which the view places and leaves empty, and keeps
@@ -34,6 +37,7 @@ export interface KeysPageExports {
     command: CommandId,
     scope?: ViewScope,
     where?: HintWhere,
+    arg?: CommandArg,
   ): string | null;
   onChanged(listener: () => void): Disposable;
   anchor(

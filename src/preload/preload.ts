@@ -54,6 +54,25 @@ const bridge: Bridge = {
   },
   onStateChange: (listener) =>
     stateChanges.add(({ seq, change }) => listener(seq, change)),
+  runCommand: async (id, arg) => {
+    try {
+      await ipcRenderer.invoke(BRIDGE_CHANNELS.commandRun, id, arg);
+    } catch (error) {
+      throw new Error(mainErrorText(error));
+    }
+  },
+  onRunCommand: (listener) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.commandRunInPage,
+      (_event, request: number, id: string, arg: unknown) => {
+        const tellDone = () =>
+          ipcRenderer.send(BRIDGE_CHANNELS.commandRunDone, request);
+        void Promise.resolve()
+          .then(() => listener(id, arg))
+          .then(tellDone, tellDone);
+      },
+    );
+  },
   invoke: async (pluginId, method, args) => {
     try {
       return await ipcRenderer.invoke(

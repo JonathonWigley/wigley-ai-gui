@@ -3,7 +3,8 @@ import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type { PageCommandContext } from '../contracts/plugin';
-import type { CommandRegistry } from '../shared/command-registry';
+import { commandTarget } from '../shared/command-args';
+import type { KeyCommands } from '../shared/command-router';
 import {
   type ChordMatcher,
   type ChordPress,
@@ -170,7 +171,7 @@ export function installPageKeys(
   timeoutMs: number,
   currentScope: () => ViewScope,
   editors: EditorHost,
-  commands: CommandRegistry<PageCommandContext>,
+  commands: KeyCommands<PageCommandContext<any>>,
   log: Log,
   timers: Timers,
   report: (keys: string[], scope: ViewScope) => void,
@@ -184,8 +185,14 @@ export function installPageKeys(
   let matcher = createSequenceMatcher(binds, timeoutMs);
   let timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
   const runBind = (bind: PageBind) => {
-    log('page', `${bind.keys.join('')} ran ${bind.command}`);
-    commands.run(bind.command, {});
+    const keys = bind.keys.join('');
+    // A runtime command disposed since the last push has no handler until the next.
+    if (!commands.has(bind.command)) {
+      log('page', `${keys} names no command ${bind.command}`);
+      return;
+    }
+    log('page', `${keys} ran ${commandTarget(bind.command, bind.arg)}`);
+    void commands.run(bind.command, bind.arg, {});
   };
   const dropPending = () => {
     dropPendingKeys(matcher, reportKeys);

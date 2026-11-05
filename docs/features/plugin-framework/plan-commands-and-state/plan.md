@@ -285,7 +285,7 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 - [x] [Slot registry](05-slot-registry.md) — after 04
 
 ### Wave 5
-- [ ] [Core slots and events](06-core-slots.md) — after 05
+- [x] [Core slots and events](06-core-slots.md) — after 05
 
 ### Wave 6
 - [ ] [Runtime command API](07-command-api.md) — after 06
@@ -325,6 +325,7 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 03 · 0b1dc270 · Diff read; Produces present; typecheck and lint clean; the three Done-when greps as required. · concerns: keymap.test uses commandInfos({}, manifests) because src/plugins may not import src/config; live summon path left to task 16.
 - 04 · 0d2a93f4 · Diff read; installWindowKeybindings signature present; typecheck and lint clean; the id-label grep prints nothing. · concerns: main.ts's id fallback runs only in the app; task 16 carries the runtime check.
 - 05 · c0704474 · Diff read; state.ts, slot-store, slot-holder, page-state, bridge members and 22 manifests' reads present; typecheck and lint clean. · concerns: main.ts serveSlots and renderer createPageState have no test (task 16); kind-mismatch throw in applyPageWrite surfaces as main's uncaught exception; contracts/state.ts and plugin.ts import each other's types; onWrite throwing leaves the page store updated and skips local listeners; applyPageWrite steps seq on any unrefused change.
+- 06 · dd6d5088 · Diff read; core-state, startPageCoreSlots, startWindowFocusSlot, the definePlugin throw and the callers' moves present; typecheck and lint clean; the hooks grep prints nothing. · concerns: core.mode stays '' after the first mode shows until the first switch, and keeps the old id when the last mode is disposed, because createModes.add tells no change: a layout reading core.mode through task 10 sees this; renderer and main wiring reach no test (task 16); three stateWrites at each page load.
 ### Contract changes
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
@@ -333,5 +334,6 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 05: a slot id used with a second kind throws, beyond the task, with a test. · group 05
 - Task 05: a keyed change with value undefined is a delete on writers and through applyRemote. · group 05
 - Task 05: AGENTS.md's plugin-talks and npm-run-lint entries name reads; preload holds its one stateChanged listener from module load. · group 05
+- Task 06: coreModeSlot's comment says '' means no change has been told yet, not 'no mode shows yet', which is untrue once the first mode is added. · group 06
 ### Review rounds
 ### Test gate

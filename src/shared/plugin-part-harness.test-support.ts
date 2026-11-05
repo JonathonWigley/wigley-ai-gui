@@ -2,6 +2,12 @@ import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
 import type { AppInstance } from '../contracts/app-instance';
+import type { CommandId } from '../contracts/commands';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+  type RuntimeCatalog,
+} from '../contracts/core-state';
 import type { Disposable, Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
@@ -13,6 +19,7 @@ import type {
   FenceContribution,
   MarkdownRenderer,
 } from '../contracts/markdown';
+import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
 import type {
   AreaName,
@@ -39,6 +46,7 @@ import type {
   UntypedEvents,
 } from '../contracts/plugin';
 import type { SessionHost } from '../contracts/session-host';
+import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -53,7 +61,7 @@ import { posixPaths } from './paths/posix-paths';
 import { fakePlatform } from './platform.test-support';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
-import { qualify } from './plugin-manifests';
+import { commandInfos, qualify } from './plugin-manifests';
 import {
   abortableProcesses,
   trackedAlerts,
@@ -62,6 +70,10 @@ import {
   trackedMarkdown,
   trackedUserConfig,
 } from './plugin-service-views';
+import {
+  createRuntimeCommands,
+  type RuntimeCommands,
+} from './runtime-commands';
 import { scopedFiles } from './scoped-files';
 import {
   createSlotStore,
@@ -115,7 +127,13 @@ export const noCounts: Readonly<PartCounts> = {
 // writes a slot through `state.publish(key).set(value)`: that claim is held until
 // the writer's `dispose` and `counts` does not hold it, so a test publishes each
 // key once and disposes the writer of a key the part under test publishes before
-// that part starts.
+// that part starts. `commandRuns` holds each run sent to the other process, in
+// order, under its qualified id.
+export interface HarnessCommandRun {
+  id: CommandId;
+  arg: unknown;
+}
+
 export interface PartHarness<Started> {
   started(): Started;
   counts(): PartCounts;
@@ -124,6 +142,7 @@ export interface PartHarness<Started> {
   readonly logs: readonly { source: string; message: string }[];
   readonly emitted: readonly HarnessEvent[];
   readonly state: SlotStore;
+  readonly commandRuns: readonly HarnessCommandRun[];
   stop(): Promise<void>;
   restart(): Promise<void>;
 }
@@ -200,6 +219,8 @@ interface HarnessWorld {
   logs: HarnessLogLine[];
   emitted: HarnessEvent[];
   state: SlotStore;
+  commandRuns: HarnessCommandRun[];
+  commands: RuntimeCommands<any>;
 }
 
 interface Scheduler {
@@ -327,18 +348,66 @@ function countingTimers(scheduler: Scheduler, counts: PartCounts): Timers {
   };
 }
 
-function createWorld(state: SlotStore | undefined): HarnessWorld {
+// Takes the catalog slot's claim at its first write, so a test that publishes a slot
+// or shares a store with another harness meets no clash until a part writes.
+function lazyCatalogWriter(
+  store: SlotStore,
+  key: SlotKey<RuntimeCatalog>,
+): SlotWriter<RuntimeCatalog> {
+  let writer: SlotWriter<RuntimeCatalog> | null = null;
+  const reader = store.read(key, 'core');
+  return {
+    get: () => reader.get(),
+    set(value) {
+      writer ??= store.publish(key);
+      writer.set(value);
+    },
+    dispose() {
+      writer?.dispose();
+    },
+  };
+}
+
+// What every part of the harness runs commands on: a real registry and router over
+// the commands `manifests` declare and the catalog slots. A run sent to the other
+// process joins `commandRuns`.
+function createWorld(
+  state: SlotStore | undefined,
+  process: ProcessName,
+  manifests: readonly PluginManifest[],
+): HarnessWorld {
   const logs: HarnessLogLine[] = [];
+  const log: Log = (source, message) => {
+    logs.push({ source, message });
+  };
+  const store = state ?? createSlotStore(log);
+  const commandRuns: HarnessCommandRun[] = [];
+  const registry = new CommandRegistry<any>(log);
+  const declared = commandInfos({}, manifests);
+  const [ownKey, otherKey] =
+    process === 'main'
+      ? [coreRuntimeMainSlot, coreRuntimePageSlot]
+      : [coreRuntimePageSlot, coreRuntimeMainSlot];
   return {
     scheduler: createScheduler(),
     bus: createEventBus(),
     logs,
     emitted: [],
-    state:
-      state ??
-      createSlotStore((source, message) => {
-        logs.push({ source, message });
-      }),
+    state: store,
+    commandRuns,
+    commands: createRuntimeCommands<any>({
+      process,
+      registry,
+      writer: lazyCatalogWriter(store, ownKey),
+      other: store.read(otherKey, 'core'),
+      served: () => declared,
+      leader: () => ' ',
+      remote(id, arg) {
+        commandRuns.push({ id, arg });
+        return Promise.resolve();
+      },
+      log,
+    }),
   };
 }
 
@@ -468,6 +537,7 @@ function partLifecycle<Started>(
   dependencies: readonly FakeDependency<ProcessName>[],
   realParts: readonly HostedPart[],
   counts: PartCounts,
+  commands: CommandRegistry<any>,
 ): PartLifecycle<Started> {
   let underTestStore: Registrations | null = null;
   const consumerView = (consumer: Registrations) =>
@@ -499,7 +569,6 @@ function partLifecycle<Started>(
     begin: () => ({ commands: {} }),
   }));
   const hosted = [...fakes, ...stubs, ...reals, underTest];
-  const commands = new CommandRegistry<never>();
   let host: PluginHost<HostedStart> | null = null;
 
   const lifecycle: PartLifecycle<Started> = {
@@ -514,6 +583,7 @@ function partLifecycle<Started>(
           const handle = commands.register(
             qualify(part.manifest.id, short),
             handler,
+            part.manifest.id,
           );
           context.registrations.track(
             isUnderTest ? countedHandle(handle, counts) : handle,
@@ -554,6 +624,7 @@ function baseHarness<Started>(
     logs: world.logs,
     emitted: world.emitted,
     state: world.state,
+    commandRuns: world.commandRuns,
     stop: lifecycle.stop,
     restart: lifecycle.restart,
   };
@@ -613,8 +684,9 @@ function createMainWorld(
   drive: boolean,
   replaced: MainWorld['replaced'],
   state: SlotStore | undefined,
+  manifests: readonly PluginManifest[],
 ): MainWorld {
-  const world = createWorld(state);
+  const world = createWorld(state, 'main', manifests);
   let hexes = 0;
   let uuids = 0;
   return {
@@ -680,7 +752,10 @@ function fakeMainApi(
   const { replaced } = world;
   const defaultFiles = countingWatches(world.files, counts);
   const partFiles = trackedFiles(defaultFiles, context.registrations);
+  const pluginCommands = world.commands.forPlugin(manifest.id, register);
   return {
+    commands: pluginCommands.commands,
+    keys: { bind: pluginCommands.bind },
     channel: {
       handle(method, handler) {
         if (handlers.has(method)) {
@@ -776,6 +851,7 @@ export function startMainPart<M extends PluginManifest>(
     options.drive === true,
     options.services ?? {},
     options.state,
+    [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
   const record = newMainRecord();
   const beginOn = (
@@ -803,6 +879,7 @@ export function startMainPart<M extends PluginManifest>(
       beginOn(real, newMainRecord(), real.manifest.settings),
     ),
     record.counts,
+    world.commands.registry,
   );
   lifecycle.start();
   return {
@@ -861,9 +938,10 @@ function createPageWorld(
   replaced: PageWorld['replaced'],
   firstModeTaken: boolean,
   state: SlotStore | undefined,
+  manifests: readonly PluginManifest[],
 ): PageWorld {
   return {
-    ...createWorld(state),
+    ...createWorld(state, 'page', manifests),
     replaced,
     keymapListeners: createListeners(),
     keymap: {
@@ -1029,6 +1107,7 @@ function fakePageApi(
   );
   const { register, liveHandle } = common;
   const { replaced } = world;
+  const pluginCommands = world.commands.forPlugin(manifest.id, register);
   const area = {
     contribute: liveHandle,
   };
@@ -1069,6 +1148,7 @@ function fakePageApi(
       label: (id) => id,
       command: (id) => ownCommand(manifest, id),
       scopes: [],
+      bind: pluginCommands.bind,
     },
     modes: fakeModes(manifest, world, common),
     shell: { setLayout: liveHandle },
@@ -1087,7 +1167,7 @@ function fakePageApi(
     settings: common.settings,
     onSettingsChanged: common.onSettingsChanged,
     platform: fakePlatform('macos'),
-    commands: { run() {} },
+    commands: pluginCommands.commands,
     dependency: common.dependency as PageApi<
       PluginManifest,
       any,
@@ -1288,6 +1368,7 @@ export function startPagePart<M extends PluginManifest>(
     options.services ?? {},
     options.firstModeTaken === true,
     options.state,
+    [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
   const record = newPageRecord(zeroCounts(), options.invoke);
   const fireWindowListeners = stubPageGlobals(record.counts);
@@ -1316,6 +1397,7 @@ export function startPagePart<M extends PluginManifest>(
       beginOn(real, newPageRecord(), real.manifest.settings),
     ),
     record.counts,
+    world.commands.registry,
   );
   lifecycle.start();
   return {

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../contracts/files';
-import type { DefaultKeymap } from '../../contracts/keymap';
-import type { PluginManifest } from '../../contracts/plugin';
+import type { RuntimeCatalog } from '../../contracts/core-state';
+import type { DefaultKeymap, KeyBind } from '../../contracts/keymap';
+import type { CommandInfo, PluginManifest } from '../../contracts/plugin';
 import type { AppConfig, Settings } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { definePlugin } from '../../shared/define-plugin';
@@ -227,6 +228,47 @@ async function writeAndWait(
   return changed;
 }
 
+function runtimeInfo(
+  id: string,
+  runsIn: 'page' | 'main' = 'page',
+): CommandInfo {
+  return { id, plugin: 'r', label: id, group: 'g', runsIn, runtime: true };
+}
+
+function catalog(overrides: {
+  commands?: CommandInfo[];
+  binds?: KeyBind[];
+  started?: boolean;
+}): RuntimeCatalog {
+  return {
+    commands: overrides.commands ?? [],
+    binds: { binds: overrides.binds ?? [], app: [], intercept: [] },
+    started: overrides.started ?? true,
+  };
+}
+
+const NO_CATALOG = catalog({});
+
+// Hands `store` the catalogs and waits for the re-serve that lists `marker`, a
+// command only this call's catalog holds.
+async function setRuntimeAndWait(
+  store: ConfigStore,
+  page: RuntimeCatalog,
+  marker: string,
+  main: RuntimeCatalog = NO_CATALOG,
+) {
+  store.setRuntime({
+    main,
+    page: {
+      ...page,
+      commands: [...page.commands, runtimeInfo(marker)],
+    },
+  });
+  await vi.waitFor(() => {
+    expect(store.current().commands[marker]).toBeDefined();
+  });
+}
+
 function pageCommands(config: AppConfig): string[] {
   return config.keymap.page.map(
     (bind) => `${bind.keys.join(' ')} ${bind.command}`,
@@ -420,11 +462,6 @@ describe('loadConfigStore', () => {
         ],
       },
       parts: ['p.down', 'p.up'],
-    },
-    {
-      name: 'a bind naming an unknown command',
-      keymap: { binds: [{ keys: 'x', scope: 'p.list', command: 'p.nope' }] },
-      parts: ['binds[0].command', 'p.nope'],
     },
     {
       name: 'a bind naming an unknown scope',
@@ -744,5 +781,188 @@ describe('loadConfigStore', () => {
     expect(store.current().problems).toEqual([
       { file: 'themes', message: expect.stringContaining('not a folder') },
     ]);
+  });
+
+  it('configSchema_DefaultBindBadArg_Throws', async () => {
+    const badArg = definePlugin({
+      ...listPlugin,
+      commands: {
+        ...listPlugin.commands,
+        pick: { label: 'Pick', group: 'Moves', runsIn: 'page', arg: 'number' },
+      },
+      keys: {
+        binds: [{ keys: 'x', scope: 'list', command: 'pick', arg: 'a' }],
+      },
+    });
+
+    await expect(
+      load(createMemoryFiles(), { manifests: [badArg] }),
+    ).rejects.toThrow('command "p.pick" needs a number');
+  });
+
+  describe('setRuntime', () => {
+    const LATER_BIND = { keys: 'x', scope: 'p.list', command: 'r.later' };
+    const LATER_FILE = JSON.stringify({ binds: [LATER_BIND] });
+
+    it('setRuntime_BeforeBothStarted_HoldsBackInSilence', async () => {
+      const store = await loadWithKeymap(LATER_FILE);
+      expect(store.current().problems).toEqual([]);
+
+      await setRuntimeAndWait(store, catalog({ started: false }), 'r.marker');
+
+      expect(store.current().problems).toEqual([]);
+      expect(pageCommands(store.current())).toEqual(['j p.down', 'k p.up']);
+    });
+
+    it('setRuntime_BothStarted_ReportsTheHeldBackBind', async () => {
+      const store = await loadWithKeymap(
+        JSON.stringify({
+          binds: [
+            LATER_BIND,
+            { keys: 'y', scope: 'p.list', command: 'p.down' },
+          ],
+        }),
+      );
+
+      await setRuntimeAndWait(store, NO_CATALOG, 'r.marker');
+
+      expect(store.current().problems).toEqual([
+        {
+          file: 'keymap.json',
+          message: '"binds[0].command" names no command "r.later".',
+        },
+      ]);
+      expect(pageCommands(store.current())).toContain('y p.down');
+    });
+
+    it('setRuntime_CommandArrives_BindAppliesAndProblemGoes', async () => {
+      const store = await loadWithKeymap(LATER_FILE);
+      await setRuntimeAndWait(store, NO_CATALOG, 'r.marker');
+
+      await setRuntimeAndWait(
+        store,
+        catalog({ commands: [runtimeInfo('r.later')] }),
+        'r.marker2',
+      );
+
+      expect(store.current().problems).toEqual([]);
+      expect(pageCommands(store.current())).toContain('x r.later');
+    });
+
+    it('setRuntime_NoKeymapFile_ServesTheRuntimeLayer', async () => {
+      const store = await load(createMemoryFiles());
+
+      await setRuntimeAndWait(
+        store,
+        catalog({
+          commands: [runtimeInfo('r.go')],
+          binds: [{ keys: 'r', scope: 'any', command: 'r.go' }],
+        }),
+        'r.marker',
+      );
+
+      expect(pageCommands(store.current())).toContain('r r.go');
+    });
+
+    it('setRuntime_PageBind_ServedInKeymapAndCommands', async () => {
+      const store = await load(createMemoryFiles());
+      const info = runtimeInfo('r.go');
+
+      await setRuntimeAndWait(
+        store,
+        catalog({
+          commands: [info],
+          binds: [{ keys: 'r', scope: 'any', command: 'r.go' }],
+        }),
+        'r.marker',
+      );
+
+      expect(store.current().commands['r.go']).toEqual(info);
+      expect(pageCommands(store.current())).toContain('r r.go');
+    });
+
+    it('setRuntime_PageWritesEmptyFirst_OldBindsLeaveTheServedKeymap', async () => {
+      const store = await load(createMemoryFiles());
+      await setRuntimeAndWait(
+        store,
+        catalog({
+          commands: [runtimeInfo('r.go')],
+          binds: [{ keys: 'r', scope: 'any', command: 'r.go' }],
+        }),
+        'r.marker',
+      );
+
+      await setRuntimeAndWait(store, catalog({ started: false }), 'r.marker2');
+
+      expect(store.current().commands['r.go']).toBeUndefined();
+      expect(pageCommands(store.current())).toEqual(['j p.down', 'k p.up']);
+    });
+
+    it('setRuntime_CollidingRuntimeBinds_DropsTheLaterAndReports', async () => {
+      const logs: string[] = [];
+      const store = await load(createMemoryFiles(), {
+        log: (source, message) => logs.push(`${source}: ${message}`),
+      });
+      const main = catalog({
+        commands: [runtimeInfo('r.first')],
+        binds: [{ keys: 'r', scope: 'any', command: 'r.first' }],
+      });
+      const page = catalog({
+        commands: [runtimeInfo('r.second')],
+        binds: [{ keys: 'r', scope: 'any', command: 'r.second' }],
+      });
+
+      await setRuntimeAndWait(store, page, 'r.marker', main);
+
+      expect(pageCommands(store.current())).toContain('r r.first');
+      expect(pageCommands(store.current())).not.toContain('r r.second');
+      const isDropLine = (line: string) =>
+        line.startsWith('config: runtime bind r of r.second dropped: ');
+      expect(logs.filter(isDropLine)).toHaveLength(1);
+
+      await setRuntimeAndWait(store, page, 'r.marker2', main);
+
+      expect(logs.filter(isDropLine)).toHaveLength(1);
+    });
+
+    it('setRuntime_RuntimeBindPrefixOfUserBind_DropsItAndKeepsTheUserFile', async () => {
+      const store = await loadWithKeymap(
+        JSON.stringify({
+          binds: [{ keys: 'gg', scope: 'any', command: 'p.down' }],
+        }),
+      );
+
+      await setRuntimeAndWait(
+        store,
+        catalog({
+          commands: [runtimeInfo('r.go')],
+          binds: [{ keys: 'g', scope: 'any', command: 'r.go' }],
+        }),
+        'r.marker',
+      );
+
+      expect(store.current().problems).toEqual([]);
+      expect(pageCommands(store.current())).toContain('g g p.down');
+      expect(pageCommands(store.current())).not.toContain('g r.go');
+    });
+
+    it('setRuntime_RefusedFile_KeepsTheLastGoodUserLayerOverTheNewRuntime', async () => {
+      const files = createMemoryFiles();
+      const store = await load(files);
+      await setRuntimeAndWait(
+        store,
+        catalog({
+          commands: [runtimeInfo('r.go')],
+          binds: [{ keys: 'r', scope: 'any', command: 'r.go' }],
+        }),
+        'r.marker',
+      );
+      await writeAndWait(files, store, 'keymap.json', '{ not json');
+
+      await setRuntimeAndWait(store, NO_CATALOG, 'r.marker2');
+
+      expect(pageCommands(store.current())).toEqual(['j p.down', 'k p.up']);
+      expect(store.current().problems).toHaveLength(1);
+    });
   });
 });

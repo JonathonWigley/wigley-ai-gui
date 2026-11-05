@@ -6,9 +6,9 @@ export const windowMainPart: MainPart<typeof windowManifest> = {
   start({ services }) {
     return {
       commands: {
-        summon: (chord) => {
+        summon: ({ chord }) => {
           if (services.window.summon()) {
-            services.log(`${chord} summoned the window`);
+            services.log(`${chord ?? 'a command'} summoned the window`);
           }
         },
       },

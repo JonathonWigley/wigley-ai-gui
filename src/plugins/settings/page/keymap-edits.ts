@@ -1,4 +1,4 @@
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type {
   BindWhere,
   KeyBind,
@@ -7,7 +7,11 @@ import type {
 } from '../../../contracts/keymap';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
-import { isJsonObject, type JsonObject } from '../../../shared/json';
+import {
+  isJsonObject,
+  isSameJson,
+  type JsonObject,
+} from '../../../shared/json';
 import {
   defaultBindLines,
   type DefaultBindLine,
@@ -133,26 +137,31 @@ function sharesAKeptHalf(
 }
 
 // `layer` with `command`'s default binds firing again: without each user bind
-// naming `command`, each other command's user bind sharing a half the merged
-// default layers keep of one of `command`'s default binds, and each `keys`
-// unbind entry removing such a half.
+// naming `command`, each other user bind sharing a half the merged default layers
+// keep of one of `command`'s default binds, and each `keys` unbind entry removing
+// such a half. With `arg` given, only the binds holding that argument count as
+// `command`'s.
 export function withCommandReset(
   layer: UserKeymap | null,
   command: CommandId,
   schema: UserConfigSchema,
+  arg?: CommandArg,
 ): UserKeymap {
+  const isReset = (bind: KeyBind) =>
+    bind.command === command &&
+    (arg === undefined || isSameJson(bind.arg, arg));
   const leader = keymapLeader(schema, layer);
   const defaults = defaultBindLines(
     schema.defaultBindLayers,
     layer ?? {},
     leader,
-  ).filter((line) => line.bind.command === command);
+  ).filter((line) => isReset(line.bind));
   const isOnDefault = (entry: KeyBind | KeymapUnbind) =>
     defaults.some((line) => sharesAKeptHalf(entry, line, leader));
   return tidied({
     ...layer,
     binds: (layer?.binds ?? []).filter(
-      (bind) => bind.command !== command && !isOnDefault(bind),
+      (bind) => !isReset(bind) && !isOnDefault(bind),
     ),
     unbind: (layer?.unbind ?? []).filter((entry) => !isOnDefault(entry)),
   });

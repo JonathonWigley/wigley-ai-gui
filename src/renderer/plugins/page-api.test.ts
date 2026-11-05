@@ -26,16 +26,27 @@ import type {
   ModeHandle,
   Modes,
   PageChannel,
+  PageCommandContext,
   PageTransparency,
   PluginManifest,
   ShellLayout,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+  type RuntimeCatalog,
+} from '../../contracts/core-state';
 import type { SlotKey } from '../../contracts/state';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
+import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { createRegistrations } from '../../shared/registrations';
+import {
+  createRuntimeCommands,
+  EMPTY_RUNTIME_CATALOG,
+} from '../../shared/runtime-commands';
 import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
@@ -127,6 +138,25 @@ function liveConfig(initial: AppConfig = appConfig()) {
   return createLiveConfig(initial, () => {});
 }
 
+// The page's commands over `state`, served `served` and sending remote runs to
+// `remote`.
+function pageCommandsOver(
+  state: SlotStore,
+  served: AppConfig['commands'] = {},
+  remote: (id: string, arg: unknown) => Promise<void> = () => Promise.resolve(),
+) {
+  return createRuntimeCommands<PageCommandContext<any>>({
+    process: 'page',
+    registry: new CommandRegistry(() => {}),
+    writer: state.publish(coreRuntimePageSlot),
+    other: state.read(coreRuntimeMainSlot, 'core'),
+    served: () => served,
+    leader: () => '<Space>',
+    remote,
+    log: () => {},
+  });
+}
+
 function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
   return {
     areas: {} as PageApiDeps['areas'],
@@ -143,7 +173,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     config: liveConfig(),
     services: {} as PageApiServices,
     uiState: createPageUiState({}, () => {}),
-    run: () => {},
+    commands: pageCommandsOver(createSlotStore(() => {})),
     dependency: () => undefined,
     registrations: createRegistrations(),
     bus: createEventBus(),
@@ -899,5 +929,180 @@ describe('createPageApi recording', () => {
 
     channel.on('shown', () => {});
     expect(listeners.length).toBe(1);
+  });
+});
+
+describe('createPageApi commands', () => {
+  const DECL = { label: 'Go', group: 'g', runsIn: 'page' } as const;
+  const MAIN_CATALOG: RuntimeCatalog = {
+    ...EMPTY_RUNTIME_CATALOG,
+    commands: [
+      {
+        id: 'm.go',
+        plugin: 'm',
+        label: 'Main go',
+        group: 'g',
+        runsIn: 'main',
+        runtime: true,
+      },
+    ],
+    binds: {
+      binds: [{ keys: 'z', scope: 'any', command: 'm.go' }],
+      app: [],
+      intercept: [],
+    },
+  };
+
+  function commandsSetup(served: AppConfig['commands'] = {}) {
+    const state = createSlotStore(() => {});
+    const registrations = createRegistrations();
+    const remoteRuns: [string, unknown][] = [];
+    const commands = pageCommandsOver(state, served, async (id, arg) => {
+      remoteRuns.push([id, arg]);
+    });
+    const api = createPageApi(
+      manifest,
+      deps({ state, registrations, commands }),
+    );
+    const catalog = () => state.read(coreRuntimePageSlot, 'core').get();
+    return { api, commands, registrations, state, catalog, remoteRuns };
+  }
+
+  it('register_DisposedWithThePart_LeavesRegistryAndSlot', () => {
+    const { api, commands, registrations, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+    api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' });
+    expect(commands.registry.has('p.go')).toBe(true);
+    expect(catalog()?.commands.map((info) => info.id)).toEqual(['p.go']);
+
+    registrations.dispose();
+
+    expect(commands.registry.has('p.go')).toBe(false);
+    expect(catalog()?.commands).toEqual([]);
+    expect(catalog()?.binds.binds).toEqual([]);
+  });
+
+  it('register_OwnHandleDisposed_TakesItsBindsOut', () => {
+    const { api, catalog } = commandsSetup();
+    const handle = api.commands.register('go', DECL, () => {});
+    api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' });
+
+    handle.dispose();
+
+    expect(catalog()?.commands).toEqual([]);
+    expect(catalog()?.binds.binds).toEqual([]);
+  });
+
+  it('register_OtherProcessDecl_Throws', () => {
+    const { api } = commandsSetup();
+
+    expect(() =>
+      api.commands.register('go', { ...DECL, runsIn: 'main' }, () => {}),
+    ).toThrow('p.go runs in main');
+  });
+
+  it('register_IdInTheCatalog_Throws', () => {
+    const { api } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+
+    expect(() => api.commands.register('go', DECL, () => {})).toThrow(
+      'Command "p.go" is already registered',
+    );
+  });
+
+  it('bind_ClashesWithRuntimeBindOfEitherProcess_ThrowsAtTheCall', () => {
+    const { api, state } = commandsSetup();
+    state.applyRemote({
+      id: coreRuntimeMainSlot.id,
+      kind: 'value',
+      value: MAIN_CATALOG,
+    });
+    api.commands.register('go', DECL, () => {});
+    api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' });
+
+    expect(() =>
+      api.keys.bind({ keys: 'g', scope: 'any', command: 'p.go' }),
+    ).toThrow();
+    expect(() =>
+      api.keys.bind({ keys: 'z', scope: 'any', command: 'p.go' }),
+    ).toThrow();
+  });
+
+  it('bind_UnknownCommandOrBadArg_ThrowsAtTheCall', () => {
+    const { api } = commandsSetup();
+    api.commands.register('pick', { ...DECL, arg: 'number' }, () => {});
+
+    expect(() =>
+      api.keys.bind({ keys: 'x', scope: 'any', command: 'p.gone' }),
+    ).toThrow('No command is registered as "p.gone"');
+    expect(() =>
+      api.keys.bind({ keys: 'x', scope: 'any', command: 'p.pick', arg: 'a' }),
+    ).toThrow('command "p.pick" needs a number');
+  });
+
+  it('bind_OnDefaultOrUserKey_Accepted', () => {
+    const { api, catalog } = commandsSetup();
+    api.commands.register('go', DECL, () => {});
+
+    api.keys.bind({ keys: 'j', scope: 'any', command: 'p.go' });
+
+    expect(catalog()?.binds.binds).toHaveLength(1);
+  });
+
+  it('infoOf_OtherProcessRuntimeCommand_ReadsItsSlotBeforeTheServedConfig', async () => {
+    const { api, state, remoteRuns } = commandsSetup();
+    state.applyRemote({
+      id: coreRuntimeMainSlot.id,
+      kind: 'value',
+      value: MAIN_CATALOG,
+    });
+
+    await api.commands.run('m.go');
+
+    expect(remoteRuns).toEqual([['m.go', undefined]]);
+  });
+
+  it('intercept_PartStops_WrapGone', async () => {
+    const { api, commands, registrations } = commandsSetup();
+    const ran: string[] = [];
+    commands.registry.register('p.go', () => void ran.push('handler'), 'p');
+    api.commands.intercept('p.go', () => void ran.push('wrap'));
+
+    registrations.dispose();
+    await commands.registry.run('p.go', { arg: undefined });
+
+    expect(ran).toEqual(['handler']);
+  });
+
+  it('onDidRun_PartStops_ListenerGone', async () => {
+    const { api, commands, registrations } = commandsSetup();
+    const heard: string[] = [];
+    commands.registry.register('p.go', () => {}, 'p');
+    api.commands.onDidRun((id) => heard.push(id));
+
+    registrations.dispose();
+    await commands.registry.run('p.go', { arg: undefined });
+
+    expect(heard).toEqual([]);
+  });
+
+  it('bind_PartStops_LeavesTheCatalog', () => {
+    const { commands, registrations, catalog, state } = commandsSetup();
+    commands.registry.register('o.go', () => {}, 'o');
+    const other = createPageApi(
+      { ...manifest, id: 'o' },
+      deps({ state, commands }),
+    );
+    other.commands.register('kept', DECL, () => {});
+    const api = createPageApi(
+      manifest,
+      deps({ state, registrations, commands }),
+    );
+    api.keys.bind({ keys: 'b', scope: 'any', command: 'o.kept' });
+
+    registrations.dispose();
+
+    expect(catalog()?.binds.binds).toEqual([]);
+    expect(catalog()?.commands.map((info) => info.id)).toEqual(['o.kept']);
   });
 });

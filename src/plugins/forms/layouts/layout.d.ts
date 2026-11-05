@@ -32,7 +32,7 @@ export interface NoticeCard {
 export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
 // One numbered pick down a finding card: a choice with the action it sits under, or the header of an action with no
 // choices, whose `choice` is 0. `choice` is otherwise the choice's 1-based position in `choices`; `number` is the
-// entry's 1-based position down the card, which its key (`choose<number>`) picks.
+// entry's 1-based position down the card, which its key picks through `forms.choose` with that number.
 export interface FindingCardEntry {
   number: number;
   action: FindingAction;

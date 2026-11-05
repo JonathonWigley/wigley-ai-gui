@@ -1,6 +1,7 @@
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
+import { commandTarget } from '../../../shared/command-args';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
 import { kbd } from '../../../shared/page/ui/kbd';
@@ -117,6 +118,7 @@ function keysPreview(
   text: string,
   scope: ViewScope,
   command: CommandId,
+  arg: CommandArg | undefined,
 ): HTMLElement | null {
   const keys = text.trim();
   if (keys === '') {
@@ -130,6 +132,7 @@ function keysPreview(
     keys,
     scope,
     command,
+    arg,
   );
   if (replaced.length > 0) {
     node.append(
@@ -147,20 +150,21 @@ function replacedLabels(commands: readonly CommandInfo[]): string {
   return andList(commands.map((command) => command.label));
 }
 
-// Adds a bind to `row`'s command: a box takes the keys, then the scope
+// Adds a bind to `row`'s command and argument: a box takes the keys, then the scope
 // picker, preselecting the scope of the row's first default bind; Enter on an
 // empty box closes it.
 function addBind(ctx: RowContext, row: CommandRow) {
   const command = row.command.id;
+  const { arg } = row;
   const firstDefault = row.binds.find((line) => line.origin === 'default');
   const preselected: ViewScope = firstDefault?.bind.scope ?? 'any';
   ctx.openBox({
-    key: command,
+    key: commandTarget(command, arg),
     file: 'keymap',
     text: '',
     editor: {
       type: 'line',
-      preview: (text) => keysPreview(ctx, text, preselected, command),
+      preview: (text) => keysPreview(ctx, text, preselected, command, arg),
     },
     accept(box) {
       const keys = box.text().trim();
@@ -183,6 +187,7 @@ function addBind(ctx: RowContext, row: CommandRow) {
             keys,
             scope,
             command,
+            arg,
           );
           const title = scopeTitle(ctx, scope);
           return replaced.length === 0
@@ -194,7 +199,7 @@ function addBind(ctx: RowContext, row: CommandRow) {
           ctx.commitKeymap(
             withAddedBind(
               ctx.keymapLayer(),
-              { keys, scope, command },
+              { keys, scope, command, ...(arg !== undefined && { arg }) },
               ctx.schema,
             ),
             { box },
@@ -255,7 +260,7 @@ function commandActions(ctx: RowContext, row: CommandRow): RowActions {
     removeBind: () => removeBind(ctx, row),
     reset: () =>
       ctx.commitKeymap(
-        withCommandReset(ctx.keymapLayer(), command.id, ctx.schema),
+        withCommandReset(ctx.keymapLayer(), command.id, ctx.schema, row.arg),
         null,
       ),
   };
@@ -278,7 +283,7 @@ export function keyRowInput(ctx: RowContext, row: CommandRow): KeyRowInput {
 
 function commandRow(ctx: RowContext, row: CommandRow): SettingsRow {
   return {
-    key: row.command.id,
+    key: commandTarget(row.command.id, row.arg),
     file: 'keymap',
     draw: { part: 'keyRow', input: keyRowInput(ctx, row) },
     actions: commandActions(ctx, row),

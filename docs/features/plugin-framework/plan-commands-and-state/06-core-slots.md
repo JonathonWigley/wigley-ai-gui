@@ -1,6 +1,6 @@
 # 06 — Core slots and events
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -165,3 +165,5 @@ Done when: `npm run typecheck` passes; `grep -rnE 'keys\.onScopeChanged|api\.mod
 Commit: one commit for the group.
 
 ## Proof
+
+Commit dd6d5088 · proof: Diff read; core-state, startPageCoreSlots, startWindowFocusSlot, the definePlugin throw and the callers' moves present; typecheck and lint clean; the hooks grep prints nothing. · concerns: core.mode stays '' after the first mode shows until the first switch, and keeps the old id when the last mode is disposed, because createModes.add tells no change: a layout reading core.mode through task 10 sees this; renderer and main wiring reach no test (task 16); three stateWrites at each page load.

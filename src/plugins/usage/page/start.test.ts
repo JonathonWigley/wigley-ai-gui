@@ -111,7 +111,7 @@ describe('usagePagePart', () => {
 
   it('stop_RemovesTheDrawnLineAndDetails', async () => {
     const harness = startOnHarness();
-    harness.started().commands.toggleDetails({});
+    harness.started().commands.toggleDetails({ arg: undefined });
     harness.send('changed', SNAPSHOT);
     const remove = vi.spyOn(FakeElement.prototype, 'remove');
 

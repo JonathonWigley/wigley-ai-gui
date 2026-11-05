@@ -123,7 +123,7 @@ describe('docs page part lifecycle', () => {
     // reports its tree out of sight, and with it not shown no view acts at all.
     const treeDownActed = () => {
       const before = harness.logs.length;
-      harness.started().commands.treeDown({});
+      harness.started().commands.treeDown({ arg: undefined });
       return harness.logs.length > before;
     };
     expect(treeDownActed()).toBe(false);

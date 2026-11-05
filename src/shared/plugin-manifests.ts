@@ -23,11 +23,18 @@ import type {
   SettingKind,
 } from '../contracts/plugin';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
+import type { Log } from '../contracts/log';
 import { canonicalAccelerator } from './accelerator';
 import { parseChord } from './chord-notation';
+import { errorText } from './error-text';
 import { editorBindMode, vimTokens, withLeader } from './key-hints';
 import { pageKeysFor } from './key-notation';
-import { startsWith } from './keymap-checks';
+import {
+  requireUnambiguousBinds,
+  requireUnambiguousEditorBinds,
+  requireWellFormedChords,
+  startsWith,
+} from './keymap-checks';
 import { themeVariable } from './theme-variables';
 
 const THEME_TOKEN_NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
@@ -94,7 +101,8 @@ export function disabledDependencyProblem(
 // `keymap` without the binds of `side`'s process whose command belongs to a
 // plugin in `pluginIds`: on `main` its app, intercept and global binds, on
 // `page` its editor and page binds. A bind whose command is not in `commands`
-// stays, so the keymap check still reports it.
+// stays, though the served keymap holds none: the config checks hold such a bind
+// back.
 export function withoutPluginBinds(
   keymap: Keymap,
   commands: Record<CommandId, CommandInfo>,
@@ -106,6 +114,37 @@ export function withoutPluginBinds(
       Object.hasOwn(commands, bind.command) &&
       pluginIds.includes(commands[bind.command].plugin)
     );
+  if (side === 'main') {
+    return {
+      ...keymap,
+      app: keymap.app.filter(isKept),
+      intercept: keymap.intercept.filter(isKept),
+      global: keymap.global.filter(isKept),
+    };
+  }
+  return {
+    ...keymap,
+    editor: { ...keymap.editor, binds: keymap.editor.binds.filter(isKept) },
+    page: keymap.page.filter(isKept),
+  };
+}
+
+// `keymap` without the binds of `side`'s process that name a runtime command of
+// that process with no handler here: an old page's, or one disposed since the last
+// push. A manifest or core command with no handler stays, for `requireRegistered`
+// to report as the bug it is.
+export function withoutUnhandledRuntimeBinds(
+  keymap: Keymap,
+  commands: Record<CommandId, CommandInfo>,
+  has: (id: CommandId) => boolean,
+  side: 'main' | 'page',
+): Keymap {
+  const isKept = ({ command }: { command: CommandId }) => {
+    const info = Object.hasOwn(commands, command)
+      ? commands[command]
+      : undefined;
+    return !(info?.runtime === true && info.runsIn === side && !has(command));
+  };
   if (side === 'main') {
     return {
       ...keymap,
@@ -196,19 +235,20 @@ function bindWhere(bind: KeyBind): BindWhere {
 // any other fires where `bindWhere` says. The page bind's keys are the page
 // keys, `<Leader>` spelled as `leader`; the editor bind keeps `keys` as
 // written. Throws on a `where` the bind cannot take, and on page keys with a
-// `<…>` token the page has no key for.
+// `<…>` token the page has no key for. Both halves carry `arg`.
 export function expandBind(
   bind: KeyBind,
   leader: string,
 ): { page: PageBind | null; editor: EditorBind | null } {
-  const { keys, scope, command, where, mode } = bind;
+  const { keys, scope, command, where, mode, arg } = bind;
+  const carried = arg === undefined ? {} : { arg };
   if (mode !== undefined) {
     if (where !== undefined && where !== 'box') {
       throw new Error(
         `${keys} has a mode, so it fires in a box only; it takes no where "${where}".`,
       );
     }
-    return { page: null, editor: { keys, scope, command, mode } };
+    return { page: null, editor: { keys, scope, command, mode, ...carried } };
   }
   const tokens = vimTokens(keys, '<Leader>');
   const isChord = tokens.length === 1 && parseChord(tokens[0]) !== null;
@@ -221,8 +261,9 @@ export function expandBind(
   const page =
     firesWhere === 'box'
       ? null
-      : { keys: pageKeysFor(keys, leader), scope, command };
-  const editor = firesWhere === 'page' ? null : { keys, scope, command };
+      : { keys: pageKeysFor(keys, leader), scope, command, ...carried };
+  const editor =
+    firesWhere === 'page' ? null : { keys, scope, command, ...carried };
   return { page, editor };
 }
 
@@ -508,7 +549,7 @@ export function defaultBindLines(
 
 // The served keymap in layers: `defaults`, then each manifest's keys in
 // `dependencyOrder` (commands and scopes qualified as `<pluginId>.<short>`,
-// the `any` scope left unqualified), then the user's. Each layer's binds are
+// the `any` scope left unqualified), then `runtime`, then the user's. Each layer's binds are
 // expanded with `expandBind` first. A later layer's bind replaces an earlier
 // layer's bind on the same keys in the same scope (the same chord, however its
 // accelerator is spelled, for app and global binds, the same key and modifiers
@@ -522,10 +563,11 @@ export function mergeKeymap(
   defaults: DefaultKeymap,
   manifests: readonly PluginManifest[],
   user: UserKeymap,
+  runtime?: DefaultKeyLayer,
 ): Keymap {
   const leader = user.leader ?? defaults.leader;
   const same = bindIdentities(leader);
-  const layers = defaultKeyLayers(defaults, manifests);
+  const layers = defaultKeyLayers(defaults, manifests, runtime);
   let merged: Keymap = {
     editor: { leader, remaps: [], binds: [] },
     page: [],
@@ -556,20 +598,59 @@ export function mergeKeymap(
 
 // The layers `mergeKeymap` lays under the user's, in its order: `defaults`,
 // then each manifest's keys in `dependencyOrder`, commands and scopes
-// qualified as `<pluginId>.<short>` (the `any` scope left unqualified).
+// qualified as `<pluginId>.<short>` (the `any` scope left unqualified), then
+// `runtime` when given.
 export function defaultKeyLayers(
   defaults: DefaultKeymap,
   manifests: readonly PluginManifest[],
+  runtime?: DefaultKeyLayer,
 ): DefaultKeyLayer[] {
-  return [defaults, ...dependencyOrder(manifests).map(pluginKeys)];
+  return [
+    defaults,
+    ...dependencyOrder(manifests).map(pluginKeys),
+    ...(runtime === undefined ? [] : [runtime]),
+  ];
+}
+
+// The first clash inside one runtime layer, as text, or null: the keymap checks over
+// its page and editor binds, and two of its app or intercept binds on one chord.
+export function runtimeLayerClash(
+  layer: DefaultKeyLayer,
+  leader: string,
+): string | null {
+  const same = bindIdentities(leader);
+  const firstPair = <B>(binds: readonly B[], isSame: SameBind<B>) =>
+    binds.find((bind, index) =>
+      binds.slice(index + 1).some((other) => isSame(bind, other)),
+    );
+  try {
+    const expanded = keymapLayer(layer, leader);
+    requireUnambiguousBinds(expanded.page);
+    requireWellFormedChords(expanded.page);
+    requireUnambiguousEditorBinds(expanded.editor.binds, leader);
+    const app = firstPair(expanded.app, same.accelerators);
+    if (app !== undefined) {
+      return `App binds share the chord ${app.accelerator}`;
+    }
+    const intercept = firstPair(expanded.intercept, same.intercept);
+    return intercept === undefined
+      ? null
+      : `Intercept binds share the chord of ${intercept.command}`;
+  } catch (error) {
+    return errorText(error);
+  }
 }
 
 // Every command by id: the core's under their own ids with plugin `core`,
-// each plugin's qualified as `<pluginId>.<short>`. Throws when a plugin's
-// qualified id is one the core already declares.
+// each plugin's qualified as `<pluginId>.<short>`, then `runtime`'s. Throws when a
+// plugin's qualified id is one the core already declares. A runtime id already
+// listed keeps the first entry and goes to `log`: a race between processes is no bug
+// in the app.
 export function commandInfos(
   core: Record<CommandId, CommandDecl>,
   manifests: readonly PluginManifest[],
+  runtime: readonly CommandInfo[] = [],
+  log?: Log,
 ): Record<CommandId, CommandInfo> {
   const infos: Record<CommandId, CommandInfo> = {};
   for (const [id, decl] of Object.entries(core)) {
@@ -582,6 +663,13 @@ export function commandInfos(
         throw new Error(`Command "${id}" is declared twice`);
       }
       infos[id] = { ...decl, id, plugin: manifest.id };
+    }
+  }
+  for (const info of runtime) {
+    if (Object.hasOwn(infos, info.id)) {
+      log?.('config', `command ${info.id} declared twice`);
+    } else {
+      infos[info.id] = info;
     }
   }
   return infos;

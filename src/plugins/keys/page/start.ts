@@ -47,8 +47,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     const { keys, services } = api;
     const platform = api.platform.os;
     const anchors = createAnchors({
-      keysFor: (command, scope, where) =>
-        promptKeysFor(keys.keymap(), command, scope, platform, where),
+      keysFor: (command, scope, where, arg) =>
+        promptKeysFor(keys.keymap(), command, scope, platform, where, arg),
       label: keys.label,
       scope: () => keys.scope(),
       showHints: () => api.settings().showHints,
@@ -170,8 +170,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
 
     return {
       exports: (consumer): KeysPageExports => ({
-        keysFor: (command, scope, where) =>
-          keysFor(keys.keymap(), command, scope, platform, where),
+        keysFor: (command, scope, where, arg) =>
+          keysFor(keys.keymap(), command, scope, platform, where, arg),
         onChanged: (listener) =>
           consumer.track(keys.onKeymapChanged(() => listener())),
         anchor: (element, command, options) =>

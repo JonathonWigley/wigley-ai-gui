@@ -170,4 +170,25 @@ describe('helpSections', () => {
       expect.stringContaining('Everywhere'),
     ]);
   });
+
+  it('helpSections_FormsChooseDigits_OneMergedLine', () => {
+    const scope = 'forms.forms';
+    const page = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => ({
+      keys: [String(digit)],
+      scope,
+      command: 'forms.choose',
+      arg: digit,
+    }));
+
+    const sections = helpSections(
+      keymap({ page }),
+      [{ id: scope, title: 'In forms', plugin: 'forms' }],
+      () => 'pick a choice',
+      'macos',
+    );
+
+    expect(sections[0].hints).toEqual([
+      { keys: '1–9', label: 'pick a choice' },
+    ]);
+  });
 });

@@ -29,6 +29,12 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   and a chord on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a
   bind fires in place of that default, and a chord takes only `page`. A bind with `mode` fires in
   a box, in that vim mode.
+- `arg` hands the command its argument: a number, a string or a small record of numbers and
+  strings. A command that declares an argument needs one on each of its binds, and a command that
+  declares none takes no `arg`; `binds`, `app`, `intercept` and `global` entries take it, `unbind`
+  entries do not. `{ "keys": "1", "scope": "forms.forms", "command": "forms.choose", "arg": 1 }`
+  picks the first choice. `arg` does not tell binds apart: two binds on one key in one scope are a
+  key bound twice, whatever their arguments.
 - `groups` names each leader prefix for which-key (`<Leader>k` windows); a later layer's name for
   a prefix replaces an earlier one's.
 

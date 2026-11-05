@@ -258,7 +258,7 @@ function primerTabSetup(
     tab,
     tabs,
     // Fires `command` with no editor in its context, as a page key does.
-    run: (command: PrimerCommand) => handlers[command]({}),
+    run: (command: PrimerCommand) => handlers[command]({ arg: undefined }),
   };
 }
 

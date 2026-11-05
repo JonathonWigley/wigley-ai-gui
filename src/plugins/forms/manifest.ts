@@ -1,20 +1,11 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 export const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
-type Digit = (typeof DIGITS)[number];
 
 // The number keys that pick a card's numbered choices and actions.
 export const NUMBER_KEY_COUNT = DIGITS.length;
-type ChoiceCommand = `choose${Digit}`;
 
 const CHOICE_LABEL = 'pick the numbered choice or action (again clears)';
-
-const choiceCommands = Object.fromEntries(
-  DIGITS.map((digit) => [
-    `choose${digit}`,
-    { label: CHOICE_LABEL, group: 'choices', runsIn: 'page' },
-  ]),
-) as Record<ChoiceCommand, { label: string; group: 'choices'; runsIn: 'page' }>;
 
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
@@ -34,7 +25,12 @@ export const formsManifest = definePlugin({
       group: 'items',
       runsIn: 'page',
     },
-    ...choiceCommands,
+    choose: {
+      label: CHOICE_LABEL,
+      group: 'choices',
+      runsIn: 'page',
+      arg: 'number',
+    },
     clearChoice: {
       label: 'clear the choice',
       group: 'choices',

@@ -37,6 +37,10 @@ import type {
   Timers,
 } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+} from '../contracts/core-state';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
@@ -45,6 +49,8 @@ import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import type { UserConfig } from '../contracts/user-config';
 import type {
+  CommandHandler,
+  MainCommandContext,
   MainServices,
   MainStart,
   PluginManifest,
@@ -68,6 +74,11 @@ import {
 } from '../shared/plugin-manifests';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
+import {
+  createRuntimeCommands,
+  EMPTY_RUNTIME_CATALOG,
+  type RuntimeCommands,
+} from '../shared/runtime-commands';
 import { scopedFiles } from '../shared/scoped-files';
 import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
@@ -96,7 +107,6 @@ import { createNodeFiles } from './files/node-files';
 import { createProcessGit } from './git/process-git';
 import {
   installWindowKeybindings,
-  type MainCommands,
   registerGlobalShortcuts,
 } from './keybindings';
 import {
@@ -108,11 +118,13 @@ import {
   type LayoutService,
 } from './layouts/layout-service';
 import { resolveCloneDir } from './resolve-clone-dir';
-import { createSlotHolder } from './state/slot-holder';
+import { wireRuntime } from './runtime-wiring';
+import { createSlotHolder, type SlotHolder } from './state/slot-holder';
 import { startWindowFocusSlot } from './state/window-focus-slot';
 import { createSessionHostClient } from './session-host/session-host-client';
 import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
+import { createPageCommands } from './page-commands';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
 import { createPluginChannels } from './plugins/plugin-channel';
@@ -674,7 +686,7 @@ function serveUiState(filePath: string, log: Log) {
 
 // The slots of the app run, held in main and served to the window's page. With no
 // page to send to, `seq` still moves and the next snapshot holds the change.
-function serveSlots(window: BrowserWindow, log: Log): SlotStore {
+function serveSlots(window: BrowserWindow, log: Log): SlotHolder {
   const holder = createSlotHolder(log, (seq, change) => {
     const page = hasQuitStarted ? null : livePage(window);
     page?.send(BRIDGE_CHANNELS.stateChanged, seq, change);
@@ -683,7 +695,7 @@ function serveSlots(window: BrowserWindow, log: Log): SlotStore {
   ipcMain.on(BRIDGE_CHANNELS.stateWrite, (_event, change: SlotChange) =>
     holder.applyPageWrite(change),
   );
-  return holder.store;
+  return holder;
 }
 
 // The core layouts service over the layouts folder in `homeDir` and each
@@ -727,7 +739,7 @@ function serveLayouts(
 // own host from `driveRun` (null outside a drive run), its data folder under
 // `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
 // as it starts, tracked in its registrations, so stopping the part unregisters
-// them. Outside the user's app, the host's lines also go to stderr, which the
+// them, and each part's API reaches `commands` under its id. Outside the user's app, the host's lines also go to stderr, which the
 // drive CLI keeps in the run's `app.log`, as the page has gone by the time a
 // quit stops the parts.
 function startMainParts(
@@ -739,7 +751,7 @@ function startMainParts(
   selfTest: SelfTestDriver | null,
   driveRun: DriveRun | null,
   disabled: readonly string[],
-  commands: MainCommands,
+  commands: RuntimeCommands<MainCommandContext<any>>,
   state: SlotStore,
 ): PluginHost<MainStart<PluginManifest>> {
   // The stops a quit runs end the rows the next start restores, and a page told
@@ -767,13 +779,18 @@ function startMainParts(
           dataRoot,
           layouts,
           state,
+          commands,
         }),
       );
-      for (const [short, handler] of Object.entries<(chord: string) => void>(
-        started.commands,
-      )) {
+      for (const [short, handler] of Object.entries<
+        CommandHandler<MainCommandContext<any>>
+      >(started.commands)) {
         context.registrations.track(
-          commands.register(qualify(part.manifest.id, short), handler),
+          commands.registry.register(
+            qualify(part.manifest.id, short),
+            handler,
+            part.manifest.id,
+          ),
         );
       }
       return started;
@@ -881,7 +898,8 @@ function createWindow(
     driveRun.listening.catch(failStart);
   }
   const layouts = serveLayouts(window, inputs.homeDir, inputs.repoDir, log);
-  const slots = serveSlots(window, log);
+  const holder = serveSlots(window, log);
+  const slots = holder.store;
   startWindowFocusSlot(slots, {
     isFocused: () => window.isFocused(),
     onFocusChange(listener) {
@@ -900,7 +918,29 @@ function createWindow(
     runMode === 'selfTest',
     store.current().settings.plugins.disabled,
   );
-  const commands: MainCommands = new CommandRegistry<string>();
+  const pageCatalog = slots.read(coreRuntimePageSlot, 'core');
+  const pageCommands = createPageCommands({
+    page: () => (hasQuitStarted ? null : livePage(window)),
+    isStarted: () => pageCatalog.get()?.started === true,
+    ipc: ipcMain,
+    log,
+  });
+  const mainCatalog = slots.publish(coreRuntimeMainSlot);
+  mainCatalog.set(EMPTY_RUNTIME_CATALOG);
+  const commands = createRuntimeCommands<MainCommandContext<any>>({
+    process: 'main',
+    registry: new CommandRegistry(log),
+    writer: mainCatalog,
+    other: pageCatalog,
+    served: () => store.current().commands,
+    leader: () => store.current().keymap.editor.leader,
+    remote: pageCommands.run,
+    log,
+  });
+  ipcMain.handle(
+    BRIDGE_CHANNELS.commandRun,
+    (_event, id: string, arg: unknown) => commands.router.run(id, arg),
+  );
   mainHost = startMainParts(
     window,
     store,
@@ -938,6 +978,10 @@ function createWindow(
     commands,
     slots,
   );
+  mainCatalog.set({
+    ...(mainCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
+    started: true,
+  });
   // The layouts service closes after every part's registrations, even when a
   // part's stop rejects.
   onQuit(async () => {
@@ -979,34 +1023,36 @@ function createWindow(
     (_event, bytes: Uint8Array, mediaType: string) =>
       pasted.save(bytes, mediaType),
   );
+  // The push to the page runs ahead of the keymap step `wireRuntime` adds.
+  store.onChanged(() => {
+    livePage(window)?.send(BRIDGE_CHANNELS.configChanged, served());
+  });
+  let hasPageLoaded = false;
+  const runtime = wireRuntime({
+    slots,
+    applyPageWrite: holder.applyPageWrite,
+    config: store,
+    served,
+    pageCommands,
+    has: (id) => commands.registry.has(id),
+    applyKeys(keymap) {
+      keybindings.setKeymap(keymap);
+      if (runMode === 'live' && !appInstance.isDev && hasPageLoaded) {
+        registerGlobalShortcuts(keymap.global, commands.keyCommands, log);
+      }
+    },
+    log,
+  });
+  window.webContents.on('render-process-gone', () => runtime.pageProcessGone());
   const keybindings = installWindowKeybindings(
     window,
-    startServed.keymap,
-    commands,
+    runtime.handledKeymap(startServed.keymap),
+    commands.keyCommands,
     (id) => served().commands[id]?.label ?? id,
+    log,
   );
   window.on('closed', () => {
     globalShortcut.unregisterAll();
-  });
-
-  let hasPageLoaded = false;
-  let appliedKeymap = JSON.stringify(startServed.keymap);
-  store.onChanged(() => {
-    const config = served();
-    livePage(window)?.send(BRIDGE_CHANNELS.configChanged, config);
-    const keymap = JSON.stringify(config.keymap);
-    if (keymap === appliedKeymap) {
-      return;
-    }
-    try {
-      keybindings.setKeymap(config.keymap);
-      if (runMode === 'live' && !appInstance.isDev && hasPageLoaded) {
-        registerGlobalShortcuts(config.keymap.global, commands, log);
-      }
-      appliedKeymap = keymap;
-    } catch (error) {
-      log('config', `keys not applied: ${errorText(error)}`);
-    }
   });
 
   if (runMode !== 'live') {
@@ -1017,7 +1063,11 @@ function createWindow(
   window.webContents.once('did-finish-load', () => {
     hasPageLoaded = true;
     if (!appInstance.isDev) {
-      registerGlobalShortcuts(served().keymap.global, commands, log);
+      registerGlobalShortcuts(
+        runtime.handledKeymap(served().keymap).global,
+        commands.keyCommands,
+        log,
+      );
     }
   });
   // The window holds every open round, so on macOS closing it hides it

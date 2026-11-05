@@ -7,13 +7,16 @@ import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
-import type { CommandId } from '../contracts/commands';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+} from '../contracts/core-state';
 import {
   PANE_DIRECTIONS,
   PANE_FOCUS_COMMANDS,
   PANE_RESIZE_COMMANDS,
 } from '../contracts/panes';
-import type { PageCommandContext } from '../contracts/plugin';
+import type { CommandHandler, PageCommandContext } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
@@ -31,6 +34,10 @@ import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { qualify } from '../shared/plugin-manifests';
 import { createRegistrations } from '../shared/registrations';
+import {
+  createRuntimeCommands,
+  EMPTY_RUNTIME_CATALOG,
+} from '../shared/runtime-commands';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
@@ -106,13 +113,41 @@ async function start() {
   // load.
   const served = await bridge.config();
   const pageLoadList = served.settings.plugins.disabled;
-  const config = startedPluginsConfig(served, pageLoadList);
+  const registry = new CommandRegistry<PageCommandContext<any>>(log);
+  const hasHandler = (id: string) => registry.has(id);
+  const config = startedPluginsConfig(served, pageLoadList, hasHandler);
   // Read before the plugins start, so each reads its state as it starts.
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
   );
   const state = await createPageState(bridge, log);
   const live = createLiveConfig(config, log);
+  // Written before any plugin starts: it tells main the old page's commands are gone.
+  const runtimeCatalog = state.publish(coreRuntimePageSlot);
+  runtimeCatalog.set(EMPTY_RUNTIME_CATALOG);
+  const commands = createRuntimeCommands<PageCommandContext<any>>({
+    process: 'page',
+    registry,
+    writer: runtimeCatalog,
+    other: state.read(coreRuntimeMainSlot, 'core'),
+    served: () => live.current().commands,
+    leader: () => live.current().keymap.editor.leader,
+    async remote(id, arg) {
+      try {
+        await bridge.runCommand(id, arg);
+      } catch (error) {
+        log('commands', `command ${id} failed: ${errorText(error)}`);
+      }
+    },
+    log,
+  });
+  bridge.onRunCommand(async (id, arg) => {
+    try {
+      await commands.router.run(id, arg);
+    } catch (error) {
+      log('commands', `command ${id} failed: ${errorText(error)}`);
+    }
+  });
   const { settings, keymap } = config;
   const visualFrames = createVisualFrames({
     serveVisual: (source) => bridge.serveVisual(source),
@@ -137,7 +172,6 @@ async function start() {
     timers,
   );
   const { areas } = shell;
-  const commands = new CommandRegistry<PageCommandContext>();
   const markdown = createMarkdownItRenderer(createCodeMirrorHighlighter());
   const chrome = mountShellChrome({
     areas,
@@ -146,8 +180,8 @@ async function start() {
       markdown,
       platform: config.platform.os,
       commands: {
-        exists: (id) => commands.has(id),
-        run: (id) => commands.run(id, {}),
+        exists: hasHandler,
+        run: (id) => commands.router.run(id, undefined),
       },
     },
     instance: config.appInstance,
@@ -200,11 +234,15 @@ async function start() {
     isShown: (element) => element.checkVisibility(),
   });
   for (const direction of PANE_DIRECTIONS) {
-    commands.register(PANE_RESIZE_COMMANDS[direction], () =>
-      paneTargets.resize(direction),
+    registry.register(
+      PANE_RESIZE_COMMANDS[direction],
+      () => paneTargets.resize(direction),
+      'core',
     );
-    commands.register(PANE_FOCUS_COMMANDS[direction], () =>
-      paneTargets.focus(direction),
+    registry.register(
+      PANE_FOCUS_COMMANDS[direction],
+      () => paneTargets.focus(direction),
+      'core',
     );
   }
   // Rejects editor binds vim could not tell apart, before any is mapped.
@@ -218,7 +256,13 @@ async function start() {
     (binds, fired) => {
       const choice = editorBindInForce(binds, scopeStack.current());
       if (choice.kind === 'run') {
-        commands.run(choice.bind.command, { editor: fired });
+        const { command, arg } = choice.bind;
+        // A runtime command disposed since the last push has no handler until the next.
+        if (hasHandler(command)) {
+          void commands.router.run(command, arg, { editor: fired });
+        } else {
+          log('page', `${choice.bind.keys} names no command ${command}`);
+        }
         return true;
       }
       if (editorBindMode(binds[0]) === 'normal') {
@@ -253,8 +297,6 @@ async function start() {
     editor,
     scope: () => scopeStack.current(),
   });
-  const run = (id: CommandId, context: PageCommandContext = {}) =>
-    commands.run(id, context);
   const bus = createEventBus();
   const layouts = createPageLayouts({
     bridge,
@@ -292,7 +334,7 @@ async function start() {
           config: live,
           services,
           uiState,
-          run,
+          commands,
           dependency: context.dependency,
           registrations: context.registrations,
           bus,
@@ -302,11 +344,13 @@ async function start() {
           state,
         }),
       );
-      const handlers: Record<string, (context: PageCommandContext) => void> =
-        started.commands;
+      const handlers: Record<
+        string,
+        CommandHandler<PageCommandContext<any>>
+      > = started.commands;
       for (const [short, handler] of Object.entries(handlers)) {
         context.registrations.track(
-          commands.register(qualify(id, short), handler),
+          registry.register(qualify(id, short), handler, id),
         );
       }
       return started;
@@ -324,16 +368,20 @@ async function start() {
     chrome.setKeys(keysExports as BaseKitDeps['keys']);
     shell.setKeys(keysExports as BaseKitDeps['keys']);
   }
-  commands.requireRegistered(
+  registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
+  runtimeCatalog.set({
+    ...(runtimeCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
+    started: true,
+  });
   // Building the matcher rejects a page key bound twice in one scope.
   const installed = installPageKeys(
     keymap.page,
     settings.keySequenceTimeoutMs,
     () => scopeStack.current(),
     editor,
-    commands,
+    commands.keyCommands,
     log,
     timers,
     (keys, scope) => pendingKeys.reportPage(keys, scope),
@@ -359,7 +407,7 @@ async function start() {
         },
       },
       editor,
-      commands,
+      commands: registry,
       pageKeys: installed,
       problems: { show: (next) => chrome.showProblems(next) },
       toasts,
@@ -367,7 +415,7 @@ async function start() {
     },
   );
   applyPush = (next) =>
-    applyStartedPush(startedPluginsConfig(next, pageLoadList));
+    applyStartedPush(startedPluginsConfig(next, pageLoadList, hasHandler));
   if (heldPush !== null) {
     applyPush(heldPush);
     heldPush = null;

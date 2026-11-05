@@ -1,5 +1,4 @@
 import type { Bridge } from '../../contracts/bridge';
-import type { CommandId } from '../../contracts/commands';
 import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
 import type { Log } from '../../contracts/log';
@@ -41,6 +40,7 @@ import {
   pluginState,
   type SlotStore,
 } from '../../shared/state/slot-store';
+import type { RuntimeCommands } from '../../shared/runtime-commands';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { ScopeStack } from '../key-scope';
 import type { LiveConfig } from '../live-config';
@@ -66,7 +66,8 @@ export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
 // layouts. `paneTargets` takes the resize and focus targets and the outer panes
 // a plugin hands the pane commands, and releases them. `drops` is the page's one
 // drop registry. `registrations` is the part's own store, which the host
-// disposes when the part stops. `state` is the page load's slot store.
+// disposes when the part stops. `state` is the page load's slot store, and
+// `commands` the page's commands, which each plugin reaches under its id.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -78,7 +79,7 @@ export interface PageApiDeps {
   config: LiveConfig;
   services: PageApiServices;
   uiState: { scoped(prefix: string): UiState };
-  run(id: CommandId, context?: PageCommandContext): void;
+  commands: RuntimeCommands<PageCommandContext<any>>;
   dependency(pluginId: string): unknown;
   registrations: Registrations;
   bus: EventBus;
@@ -113,6 +114,7 @@ export function createPageApi(
   const events = pluginEvents(deps.bus, manifest.id, deps.services.log);
   const track = <T extends Disposable>(handle: T) =>
     registrations.track(handle);
+  const pluginCommands = deps.commands.forPlugin(manifest.id, track);
   return {
     areas: pluginAreas(deps.areas, registrations),
     channel: {
@@ -147,6 +149,7 @@ export function createPageApi(
       get scopes() {
         return config.current().scopes;
       },
+      bind: pluginCommands.bind,
     },
     modes: {
       add: (mode) =>
@@ -168,7 +171,7 @@ export function createPageApi(
     onSettingsChanged: (listener) =>
       registrations.track(onChangedPart(config, settingsOf, listener)),
     platform: config.current().platform,
-    commands: { run: deps.run },
+    commands: pluginCommands.commands,
     services: {
       ...deps.services,
       log: pluginLog(deps.services.log, manifest.id),

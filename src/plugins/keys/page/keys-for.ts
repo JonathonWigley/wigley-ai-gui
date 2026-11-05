@@ -1,43 +1,48 @@
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { Keymap, ViewScope } from '../../../contracts/keymap';
 import type { OsName } from '../../../contracts/platform';
+import { isSameJson } from '../../../shared/json';
 import { formatKeys, formatVimKeys } from '../../../shared/key-hints';
 import type { HintWhere } from '../contract';
 import { isVimKeys, pageVimKeys } from './vim-keys';
 
 // Whether a bind runs `command` in `scope`, `any` binds included, or in any
-// scope when `scope` is undefined.
+// scope when `scope` is undefined; with `arg` given, a bind carrying that `arg`.
 function firesIn(
-  bind: { command: CommandId; scope: ViewScope },
+  bind: { command: CommandId; scope: ViewScope; arg?: CommandArg },
   command: CommandId,
   scope: ViewScope | undefined,
+  arg: CommandArg | undefined,
 ): boolean {
   return (
     bind.command === command &&
-    (scope === undefined || bind.scope === scope || bind.scope === 'any')
+    (scope === undefined || bind.scope === scope || bind.scope === 'any') &&
+    (arg === undefined || isSameJson(bind.arg, arg))
   );
 }
 
 // The first bind in `keymap` that runs `command` in `scope`, `any` binds
 // included, or in any scope when `scope` is undefined, formatted as help and
 // the anchors show it on `platform`; null when none is bound. `where` picks
-// the page's binds or the binds inside a text box.
+// the page's binds or the binds inside a text box; `arg` narrows to the binds
+// carrying it.
 export function keysFor(
   keymap: Keymap,
   command: CommandId,
   scope: ViewScope | undefined,
   platform: OsName,
   where: HintWhere = 'page',
+  arg?: CommandArg,
 ): string | null {
   if (where === 'box') {
     const bind = keymap.editor.binds.find((each) =>
-      firesIn(each, command, scope),
+      firesIn(each, command, scope, arg),
     );
     return bind === undefined
       ? null
       : formatVimKeys(bind.keys, keymap.editor.leader, platform);
   }
-  const bind = keymap.page.find((each) => firesIn(each, command, scope));
+  const bind = keymap.page.find((each) => firesIn(each, command, scope, arg));
   return bind === undefined ? null : formatKeys(bind.keys, platform);
 }
 
@@ -50,17 +55,20 @@ export function promptKeysFor(
   scope: ViewScope | undefined,
   platform: OsName,
   where: HintWhere,
+  arg?: CommandArg,
 ): string | null {
   if (where === 'box') {
     const binds = keymap.editor.binds.filter((each) =>
-      firesIn(each, command, scope),
+      firesIn(each, command, scope, arg),
     );
     const bind = binds.find((each) => !isVimKeys(each.keys)) ?? binds[0];
     return bind === undefined
       ? null
       : formatVimKeys(bind.keys, keymap.editor.leader, platform);
   }
-  const binds = keymap.page.filter((each) => firesIn(each, command, scope));
+  const binds = keymap.page.filter((each) =>
+    firesIn(each, command, scope, arg),
+  );
   const bind =
     binds.find((each) => !isVimKeys(pageVimKeys(each.keys))) ?? binds[0];
   return bind === undefined ? null : formatKeys(bind.keys, platform);

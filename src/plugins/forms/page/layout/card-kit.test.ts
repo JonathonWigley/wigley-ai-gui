@@ -24,6 +24,7 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import type { AnchorOptions } from '../../../keys/contract';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
@@ -148,7 +149,7 @@ function fakeCardDeps(contributions: FormsContributions) {
     command === 'demo.run' ? 'g d' : null,
   );
   const anchor = vi.fn(
-    (_element: HTMLElement, _command: string, _options?: unknown) => ({
+    (_element: HTMLElement, _command: string, _options?: AnchorOptions) => ({
       dispose: () => undefined,
     }),
   );
@@ -176,10 +177,6 @@ function fakeCardDeps(contributions: FormsContributions) {
 }
 
 // The commands `anchor` was called with, in call order.
-function anchoredCommands(anchor: ReturnType<typeof fakeCardDeps>['anchor']) {
-  return anchor.mock.calls.map(([, command]) => command);
-}
-
 function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   const round = findingRound(overrides);
   const input = findingFormat.cardInput(round.round, 1);
@@ -429,11 +426,10 @@ describe('card kit', () => {
 
     kit.choiceList(asHtml(new FakeElement('div')), 'none');
 
-    expect(
-      anchoredCommands(anchor).filter((command) =>
-        command.startsWith('forms.choose'),
-      ),
-    ).toEqual(['forms.choose1', 'forms.choose2']);
+    const chooseArgs = anchor.mock.calls
+      .filter(([, command]) => command === 'forms.choose')
+      .map(([, , options]) => options?.arg);
+    expect(chooseArgs).toEqual([1, 2]);
   });
 
   it('clearButton_Click_FocusesTheItemThenClears', () => {

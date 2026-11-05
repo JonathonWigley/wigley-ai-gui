@@ -302,7 +302,7 @@ function drawReview(
   deps.recordMount(mount);
   // The cursor row's prompt, which each draw of the rows moves to that row.
   const jumpPrompt = element('span', 'review-jump-prompt');
-  anchor(jumpPrompt, formsCommand('reviewJump'), true);
+  anchor(jumpPrompt, formsCommand('reviewJump'), { label: true });
   let drawn: RoundState | null = null;
   // The rows the latest update redraws; null when they were unchanged.
   let changedRows: ReviewRow[] | null = null;

@@ -20,7 +20,7 @@ describe('window main part', () => {
   it('summon_WindowComesForward_LogsTheChord', () => {
     const { harness, summon } = startPart(true);
 
-    harness.started().commands.summon('Alt+Space');
+    harness.started().commands.summon({ chord: 'Alt+Space', arg: undefined });
 
     expect(summon).toHaveBeenCalledOnce();
     expect(harness.logs).toEqual([
@@ -31,7 +31,7 @@ describe('window main part', () => {
   it('summon_WindowDestroyed_LogsNothing', () => {
     const { harness } = startPart(false);
 
-    harness.started().commands.summon('Alt+Space');
+    harness.started().commands.summon({ chord: 'Alt+Space', arg: undefined });
 
     expect(harness.logs).toEqual([]);
   });

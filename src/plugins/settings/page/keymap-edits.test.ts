@@ -221,3 +221,25 @@ describe('withAdvanced', () => {
     });
   });
 });
+
+describe('withCommandReset with an argument', () => {
+  it('withCommandReset_ArgGiven_ResetsOnlyThatArg', () => {
+    const one = { keys: '1', scope: 'p.s', command: 'p.pick', arg: 1 };
+    const two = { keys: '2', scope: 'p.s', command: 'p.pick', arg: 2 };
+    const layer = {
+      binds: [
+        { keys: 'a', scope: 'p.s', command: 'p.pick', arg: 1 },
+        { keys: 'b', scope: 'p.s', command: 'p.pick', arg: 2 },
+      ],
+      unbind: [
+        { keys: '1', scope: 'p.s' },
+        { keys: '2', scope: 'p.s' },
+      ],
+    };
+
+    expect(withCommandReset(layer, 'p.pick', schema([one, two]), 1)).toEqual({
+      binds: [layer.binds[1]],
+      unbind: [layer.unbind[1]],
+    });
+  });
+});

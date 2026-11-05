@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { DefaultKeymap, KeyBind, Keymap } from '../contracts/keymap';
 import type { CommandInfo, PluginManifest } from '../contracts/plugin';
+import { requireUnambiguousKeymap } from './keymap-checks';
 import {
   commandInfos,
   defaultBindLines,
   defaultBindStanding,
   dependencyOrder,
   disabledDependencyProblem,
+  type DefaultKeyLayer,
   expandBind,
   mergeKeymap,
   overrideSettings,
@@ -15,8 +17,10 @@ import {
   pluginSettings,
   pluginThemeTokens,
   requireListed,
+  runtimeLayerClash,
   scopeInfos,
   withoutPluginBinds,
+  withoutUnhandledRuntimeBinds,
 } from './plugin-manifests';
 
 function manifest(
@@ -357,6 +361,20 @@ describe('mergeKeymap', () => {
 });
 
 describe('expandBind', () => {
+  it.each([
+    { where: undefined, page: true, editor: true },
+    { where: 'box' as const, page: false, editor: true },
+    { where: 'page' as const, page: true, editor: false },
+  ])('expandBind_Arg_ReachesBothHalves: $where', ({ where, page, editor }) => {
+    const halves = expandBind(
+      { keys: '<Leader>x', scope: 'any', command: 'r.go', arg: 3, where },
+      '<Space>',
+    );
+
+    expect(halves.page?.arg).toBe(page ? 3 : undefined);
+    expect(halves.editor?.arg).toBe(editor ? 3 : undefined);
+  });
+
   it('expandBind_ChordInBox_Throws', () => {
     expect(() =>
       expandBind(
@@ -1027,4 +1045,219 @@ describe('requireListed', () => {
       ),
     ).toThrow(/\bq\b/);
   });
+});
+
+describe('the runtime layer', () => {
+  const noBinds = defaultKeymap({
+    binds: [],
+    app: [],
+    intercept: [],
+    global: [],
+  });
+  const runtime = {
+    binds: [{ keys: 'x', scope: 'any', command: 'r.go' }],
+  };
+
+  it('mergeKeymap_RuntimeLayer_UserBindOnSameKeyWins', () => {
+    const merged = mergeKeymap(
+      noBinds,
+      [],
+      { binds: [{ keys: 'x', scope: 'any', command: 'u.go' }] },
+      runtime,
+    );
+
+    expect(merged.page.map((bind) => bind.command)).toEqual(['u.go']);
+  });
+
+  it('mergeKeymap_RuntimeLayer_Served', () => {
+    const merged = mergeKeymap(noBinds, [], {}, runtime);
+
+    expect(merged.page.map((bind) => bind.command)).toEqual(['r.go']);
+  });
+
+  it('mergeKeymap_UserUnbind_RemovesARuntimeBind', () => {
+    const merged = mergeKeymap(
+      noBinds,
+      [],
+      { unbind: [{ keys: 'x', scope: 'any' }] },
+      runtime,
+    );
+
+    expect(merged.page).toEqual([]);
+  });
+
+  it('mergeKeymap_TwoArgsOnOneKeyInOneLayer_RefusedAsBoundTwice', () => {
+    const user = {
+      binds: [
+        { keys: '1', scope: 'any', command: 'r.pick', arg: 1 },
+        { keys: '1', scope: 'any', command: 'r.pick', arg: 2 },
+      ],
+    };
+
+    expect(() =>
+      requireUnambiguousKeymap(mergeKeymap(noBinds, [], user)),
+    ).toThrow(/1/);
+  });
+
+  it('commandInfos_RuntimeDuplicate_KeepsFirstAndLogs', () => {
+    const logs: string[] = [];
+    const first: CommandInfo = {
+      id: 'r.go',
+      plugin: 'r',
+      label: 'first',
+      group: 'g',
+      runsIn: 'main',
+      runtime: true,
+    };
+
+    const infos = commandInfos(
+      {},
+      [],
+      [first, { ...first, label: 'second' }],
+      (source, message) => logs.push(`${source}: ${message}`),
+    );
+
+    expect(infos['r.go'].label).toBe('first');
+    expect(logs).toEqual(['config: command r.go declared twice']);
+  });
+
+  it('withoutUnhandledRuntimeBinds_ManifestCommandStays_RuntimeWithoutHandlerGoes', () => {
+    const info = (id: string, runtime: boolean): CommandInfo => ({
+      id,
+      plugin: 'r',
+      label: id,
+      group: 'g',
+      runsIn: 'page',
+      ...(runtime && { runtime: true as const }),
+    });
+    const keymap = mergeKeymap(
+      noBinds,
+      [],
+      {},
+      {
+        binds: [
+          { keys: 'a', scope: 'any', command: 'r.manifest' },
+          { keys: 'b', scope: 'any', command: 'r.handled' },
+          { keys: 'c', scope: 'any', command: 'r.gone' },
+        ],
+      },
+    );
+
+    const kept = withoutUnhandledRuntimeBinds(
+      keymap,
+      {
+        'r.manifest': info('r.manifest', false),
+        'r.handled': info('r.handled', true),
+        'r.gone': info('r.gone', true),
+      },
+      (id) => id === 'r.handled',
+      'page',
+    );
+
+    expect(kept.page.map((bind) => bind.command)).toEqual([
+      'r.manifest',
+      'r.handled',
+    ]);
+  });
+
+  it('withoutUnhandledRuntimeBinds_OtherSidesBind_Stays', () => {
+    const keymap = mergeKeymap(
+      noBinds,
+      [],
+      {},
+      {
+        app: [{ accelerator: 'Alt+K', command: 'r.main' }],
+      },
+    );
+
+    const kept = withoutUnhandledRuntimeBinds(
+      keymap,
+      {
+        'r.main': {
+          id: 'r.main',
+          plugin: 'r',
+          label: 'main',
+          group: 'g',
+          runsIn: 'main',
+          runtime: true,
+        },
+      },
+      () => false,
+      'page',
+    );
+
+    expect(kept.app).toEqual(keymap.app);
+  });
+
+  it.each<{ case: string; layer: DefaultKeyLayer; clash: boolean }>([
+    {
+      case: 'distinct binds',
+      layer: {
+        binds: [
+          { keys: 'a', scope: 'any', command: 'r.a' },
+          { keys: 'b', scope: 'any', command: 'r.b' },
+        ],
+        app: [{ accelerator: 'Alt+K', command: 'r.a' }],
+        intercept: [{ key: 'Tab', control: true, command: 'r.a' }],
+      },
+      clash: false,
+    },
+    {
+      case: 'one page key twice',
+      layer: {
+        binds: [
+          { keys: 'a', scope: 'any', command: 'r.a' },
+          { keys: 'a', scope: 'any', command: 'r.b' },
+        ],
+      },
+      clash: true,
+    },
+    {
+      case: 'a page prefix',
+      layer: {
+        binds: [
+          { keys: 'g', scope: 'any', command: 'r.a' },
+          { keys: 'gg', scope: 'any', command: 'r.b' },
+        ],
+      },
+      clash: true,
+    },
+    {
+      case: 'one editor key twice',
+      layer: {
+        binds: [
+          { keys: '<Leader>a', scope: 'any', command: 'r.a', where: 'box' },
+          { keys: '<Leader>a', scope: 'any', command: 'r.b', where: 'box' },
+        ],
+      },
+      clash: true,
+    },
+    {
+      case: 'one app chord twice',
+      layer: {
+        app: [
+          { accelerator: 'Alt+K', command: 'r.a' },
+          { accelerator: 'Alt+K', command: 'r.b' },
+        ],
+      },
+      clash: true,
+    },
+    {
+      case: 'one intercept chord twice',
+      layer: {
+        intercept: [
+          { key: 'Tab', control: true, command: 'r.a' },
+          { key: 'Tab', control: true, command: 'r.b' },
+        ],
+      },
+      clash: true,
+    },
+  ])(
+    'runtimeLayerClash_PageEditorAppIntercept_GivesTextOrNull: $case',
+    ({ layer, clash }) => {
+      const text = runtimeLayerClash(layer, '<Space>');
+
+      expect(text === null ? false : text.length > 0).toBe(clash);
+    },
+  );
 });
