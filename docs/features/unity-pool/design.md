@@ -102,8 +102,11 @@ The panel redraws on each state change, each change of the shown session, and on
 - **Hold** shows on a clone with no claim, handoff or stranded mark. It runs `unity-pool hold <pool> <n> --json`.
 - **Release** shows on a clone the user holds. It runs `unity-pool release <pool> <n> --json`.
 
-Main runs the CLI as `python3 -X utf8 <script> …`, the script being the `unity-pool.scriptPath` setting
-(`~/.local/bin/unity-pool` by default). A run times out after 30 seconds. The button is disabled while its run is in
+Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the `unity-pool.pythonCommand` setting
+(`python3` by default; `py` or `python` on a Windows install with no `python3`) and the script the
+`unity-pool.scriptPath` setting. Empty, `scriptPath` is `~/.local/bin/unity-pool`, and on Windows
+`~/wigley-agents/tools/unity-pool/unity-pool`, since a Windows install writes launchers, not a symlink a Python can
+run; main's start picks it from the platform. A run times out after 30 seconds. The button is disabled while its run is in
 flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`, or the CLI's
 error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
 with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an

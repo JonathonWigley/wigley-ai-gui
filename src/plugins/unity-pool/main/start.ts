@@ -5,7 +5,7 @@ import type { UnityPoolChannel } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { unityPoolManifest } from '../manifest';
 import { createOriginNames } from './origin-names';
-import { runPoolCommand } from './pool-cli';
+import { defaultScriptPath, runPoolCommand } from './pool-cli';
 import { createPoolWatch } from './pool-watch';
 import { unityPoolSelfTestScript } from './selftest-script';
 
@@ -37,13 +37,18 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
     api.channel.handle('snapshot', () => watch.snapshot());
     api.channel.handle('originName', (folder) => originName(folder));
     api.channel.handle('run', async (action, pool, clone) => {
+      const { scriptPath, pythonCommand } = api.settings();
       const result = await runPoolCommand(
         {
           processes: services.processes,
           files: services.files,
           paths: services.paths,
           homeDir: services.homeDir,
-          scriptPath: api.settings().scriptPath,
+          scriptPath:
+            scriptPath === ''
+              ? defaultScriptPath(process.platform === 'win32')
+              : scriptPath,
+          pythonCommand,
         },
         action,
         pool,

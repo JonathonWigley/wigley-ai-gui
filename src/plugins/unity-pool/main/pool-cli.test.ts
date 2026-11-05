@@ -3,7 +3,12 @@ import type { ProcessResult } from '../../../contracts/processes';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { PoolAction, PoolActionResult } from '../contract';
-import { poolCommandArgs, readActionResult, runPoolCommand } from './pool-cli';
+import {
+  defaultScriptPath,
+  poolCommandArgs,
+  readActionResult,
+  runPoolCommand,
+} from './pool-cli';
 
 function exited(
   code: number,
@@ -88,7 +93,11 @@ describe('readActionResult', () => {
 
 describe('runPoolCommand', () => {
   // `stat` answers a file at each path in `present`, recording every path asked.
-  function deps(present: string[], scriptPath: string) {
+  function deps(
+    present: string[],
+    scriptPath: string,
+    pythonCommand = 'python3',
+  ) {
     const statted: string[] = [];
     const processes = new FakeProcesses();
     return {
@@ -107,6 +116,7 @@ describe('runPoolCommand', () => {
         paths: posixPaths,
         homeDir: '/h',
         scriptPath,
+        pythonCommand,
       },
     };
   }
@@ -141,6 +151,21 @@ describe('runPoolCommand', () => {
     expect(result).toEqual({ ok: true, pool: 'p', clone: 4 });
   });
 
+  it('runPoolCommand_ConfiguredPython_RunsThatCommand', async () => {
+    const run = deps(['/s/unity-pool'], '/s/unity-pool', 'py');
+    const args = poolCommandArgs('/s/unity-pool', 'hold', 'p', 3);
+    run.processes.script(
+      'py',
+      args,
+      exited(0, '{"ok": true, "pool": "p", "clone": 3}'),
+    );
+
+    const result = await runPoolCommand(run.deps, 'hold', 'p', 3);
+
+    expect(run.processes.runs.map((r) => r.command)).toEqual(['py']);
+    expect(result).toEqual({ ok: true, pool: 'p', clone: 3 });
+  });
+
   it('runPoolCommand_RunRejects_CliFailed', async () => {
     const run = deps(['/s/unity-pool'], '/s/unity-pool');
     run.processes.script(
@@ -154,5 +179,14 @@ describe('runPoolCommand', () => {
       error: 'cli-failed',
       message: 'spawn failed',
     });
+  });
+});
+
+describe('defaultScriptPath', () => {
+  it.each([
+    { windows: false, expected: '~/.local/bin/unity-pool' },
+    { windows: true, expected: '~/wigley-agents/tools/unity-pool/unity-pool' },
+  ])('defaultScriptPath: windows $windows', ({ windows, expected }) => {
+    expect(defaultScriptPath(windows)).toBe(expected);
   });
 });
