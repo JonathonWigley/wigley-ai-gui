@@ -209,6 +209,7 @@ describe('startRelayServer', () => {
     ['project_dir', { project_dir: 42 }],
     ['deadline_seconds', { deadline_seconds: '300' }],
     ['harness', { harness: 3 }],
+    ['config_dir', { config_dir: 3 }],
   ])(
     'refuses a hello whose %s has the wrong type and starts no session',
     async (field, override) => {
@@ -275,6 +276,16 @@ describe('startRelayServer', () => {
         projectDir: null,
         deadlineSeconds: null,
         harness: null,
+      },
+    },
+    {
+      hello: { ...HELLO, config_dir: '/home/me/.claude-work' },
+      expected: {
+        sessionId: 'session-1',
+        projectDir: '/work/project',
+        deadlineSeconds: 300,
+        harness: 'claude',
+        profileDir: '/home/me/.claude-work',
       },
     },
     {

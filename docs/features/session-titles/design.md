@@ -28,7 +28,7 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 |---|---|---|
 | `user` | the rename dialog (`<Leader>rr`) | the user submits a name; an empty submit clears it |
 | `agent` | the `set_session_title` MCP tool | the agent calls it |
-| `firstMessage` | chat main | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), or the resumed session's title on resume |
+| `firstMessage` | chat main; sessions main for a connected session | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), or the resumed session's title on resume; a connected session's name in its harness (`AgentHarness.sessionName`), read each time a form opens or its row is activated |
 
 The row shows `user`, else `agent`, else `firstMessage` cut to the limit with `…`, else no title.
 A user title therefore locks out the agent's renames until the user clears it, and the agent's
@@ -66,8 +66,9 @@ conversation's row then shows one of two titles until its agent calls the tool o
 - **Restored from an `open-sessions.json` written before this feature**: `New Chat`. The row loads
   with no titles and as already sent, so no message gives it a first-message title.
 
-Terminal sessions get no instruction and read `New Chat` unless their agent calls the tool on
-its own.
+Terminal sessions get no instruction. Their rows show the name Claude Code shows for the session,
+its `/rename` title else its AI title, read from the transcript under the config folder the relay's
+hello names, unless their agent calls the tool on its own. A session with neither reads `New Chat`.
 
 ## Renaming by hand
 
@@ -107,8 +108,9 @@ Activities live in the page and start blank on a page load.
 
 - **Agent-set titles over Claude's auto title.** Claude Code writes an `ai-title` only in
   interactive sessions: in a sample of 150 transcripts, 67 of 82 terminal (`cli`) sessions held
-  one and 0 of 68 app-launched (`sdk-cli`) sessions did. The app's own sessions never get one, and
-  reading a terminal session's would need its Claude config folder, which the relay does not send.
+  one and 0 of 68 app-launched (`sdk-cli`) sessions did. The app's own sessions never get one, so
+  only terminal sessions read it, the name reaching their rows at the `firstMessage` source's rank
+  and cut to the limit, since neither the user nor the app chose it for the row.
 - **Refuse, don't cut, a chosen title.** The agent picks shorter words, rather than losing the end
   of its title to an ellipsis.
 - **Status from the app, not the agent.** Every state is something the app already observes, so

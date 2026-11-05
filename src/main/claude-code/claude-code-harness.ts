@@ -43,6 +43,7 @@ import {
   readHistory,
   readLastUsage,
   readSavedReplies,
+  readSessionName,
 } from './past-sessions';
 import { readPlanUsage } from './plan-usage';
 import {
@@ -1096,6 +1097,13 @@ export function createClaudeCodeHarness(
       ),
     lastUsage: (sessionId, projectDir, profileDir) =>
       readLastUsage(
+        deps.files,
+        deps.paths,
+        projectsFolder(deps, projectDir, profileDir),
+        sessionId,
+      ),
+    sessionName: (sessionId, projectDir, profileDir) =>
+      readSessionName(
         deps.files,
         deps.paths,
         projectsFolder(deps, projectDir, profileDir),

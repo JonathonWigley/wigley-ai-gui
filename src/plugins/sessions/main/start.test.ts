@@ -199,12 +199,14 @@ function startSessionsPart(
     log = () => undefined,
     send = () => undefined,
     originRepoName = () => Promise.resolve(null),
+    agentHarnesses = [],
   }: {
     runMode?: 'selfTest' | 'live';
     homeDir?: string;
     log?: (message: string) => void;
     send?: (message: string, payload: unknown) => void;
     originRepoName?: (projectDir: string) => Promise<string | null>;
+    agentHarnesses?: { id: string; sessionName: unknown }[];
   } = {},
 ) {
   let hex = 0;
@@ -221,6 +223,7 @@ function startSessionsPart(
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
       git: { originRepoName },
+      agentHarnesses,
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -259,6 +262,59 @@ function sessionEvents(harness: Parameters<typeof dataEmitted>[0]) {
 }
 
 describe('sessions main part', () => {
+  it.each([
+    {
+      case: 'its own harness reads the saved session from its config folder',
+      harness: 'claude',
+      sessionId: 'host-1',
+      projectDir: '/work/folder',
+      asked: [['host-1', '/work/folder', '/home/.claude-work']],
+    },
+    {
+      case: 'a harness the app does not run asks nothing',
+      harness: 'codex',
+      sessionId: 'host-1',
+      projectDir: '/work/folder',
+      asked: [],
+    },
+    {
+      case: 'a session with no id asks nothing',
+      harness: 'claude',
+      sessionId: null,
+      projectDir: '/work/folder',
+      asked: [],
+    },
+    {
+      case: 'a session with no folder asks nothing',
+      harness: 'claude',
+      sessionId: 'host-1',
+      projectDir: null,
+      asked: [],
+    },
+  ] as const)(
+    'a marked connected session: $case',
+    async ({ harness, sessionId, projectDir, asked }) => {
+      const sessionName = vi.fn(async () => null);
+      const exports = viewOf(
+        startSessionsPart(30, {
+          agentHarnesses: [{ id: 'claude', sessionName }],
+        }),
+      );
+      const { session } = exports.connect({
+        sessionId,
+        projectDir,
+        deadlineSeconds: null,
+        harness,
+        profileDir: '/home/.claude-work',
+      });
+
+      exports.mark(session.id);
+      await new Promise((settle) => setImmediate(settle));
+
+      expect(sessionName.mock.calls).toEqual(asked);
+    },
+  );
+
   it.each([
     { case: 'running', disposed: false, messages: ['stateChanged'] },
     { case: 'disposed', disposed: true, messages: [] },

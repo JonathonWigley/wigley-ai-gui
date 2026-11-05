@@ -460,6 +460,13 @@ export interface AgentHarness {
     projectDir: string,
     profileDir: string | null,
   ): Promise<UsageAgentEvent | null>;
+  // The name the harness itself shows for the saved session, such as one the user gave it in a terminal; null when it
+  // has none yet. Rejects naming the path when the transcript is missing.
+  sessionName(
+    sessionId: string,
+    projectDir: string,
+    profileDir: string | null,
+  ): Promise<string | null>;
   // Whether `profileDir` (as `AgentStart` holds it) is signed in, and as whom.
   accountStatus(profileDir: string | null): Promise<AccountStatus>;
   // Starts a sign-in to `profileDir`.

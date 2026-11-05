@@ -33,6 +33,8 @@ export interface SessionListDeps {
   activated(sessionId: string): void;
   // The project of a session in `projectDir`; null when the folder has none.
   projectName(projectDir: string): Promise<string | null>;
+  // The name the session's harness shows for it; null when it has none.
+  hostSessionName(info: SessionInfo): Promise<string | null>;
 }
 
 // The session list and its rows. `tools` lists every contributed tool in
@@ -241,7 +243,8 @@ function routeCall(
 // titles live on its entry, copied onto its row while it has one, and last
 // while the session does; so does its project, which starts as the group and
 // sends the state when its lookup changes the project of a session with a row,
-// until `stop`.
+// until `stop`. Each `mark` and `activate` of a connected session reads its
+// harness's name for it into its `firstMessage` title, until `stop`.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   // Each registration its own object, so one function added twice is two.
@@ -471,6 +474,25 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('titleChanged', { sessionId, titles: { ...entry.titles } });
   };
 
+  // Titles a connected session with the name its harness shows for it; a null,
+  // a rejection, or a landing after the session's end or `stop` changes nothing.
+  // An owned session's titles are its owner's.
+  const lookUpHostName = (entry: SessionEntry) => {
+    if (entry.owned) {
+      return;
+    }
+    const appId = entry.session.id;
+    deps.hostSessionName(entry.session.info).then(
+      (name) => {
+        if (name !== null && !isStopped && entries.has(appId)) {
+          setTitle(appId, 'firstMessage', name);
+        }
+      },
+      (error: unknown) =>
+        deps.log(`name of session ${appId} not read: ${errorText(error)}`),
+    );
+  };
+
   // The relay's handle on an owned session, taking the join from any older
   // relay still holding it: a harness restarting its MCP connection can say
   // hello on the new socket before the old one closes. The handle's `end`
@@ -621,6 +643,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log(`mark for unknown session ${sessionId} ignored`);
         return;
       }
+      lookUpHostName(entry);
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected or marked like any other.
       const row = rows[rowIndexAdding(entry)];
@@ -653,6 +676,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log(`activate for unknown session ${sessionId} ignored`);
         return false;
       }
+      lookUpHostName(entry);
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected like any other.
       return activateRow(sessionId, rowIndexAdding(entry));

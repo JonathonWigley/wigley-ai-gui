@@ -1932,6 +1932,7 @@ export function createFakeAgentHarness(
     failNextHistory(message) {
       nextHistoryFailure = message;
     },
+    sessionName: async () => null,
     lastUsageCalls,
     async lastUsage(sessionId) {
       lastUsageCalls.push(sessionId);

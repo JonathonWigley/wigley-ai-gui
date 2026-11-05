@@ -44,6 +44,9 @@ export interface SessionInfo {
   deadlineSeconds: number | null;
   // Null when the relay did not say, or named a harness the app does not know.
   harness: Harness | null;
+  // A connected session's harness config folder, as `AgentStart` holds one, which
+  // a form source has no use for; absent for the harness default.
+  profileDir?: string;
 }
 
 // A tool a form source exposes, as MCP `tools/list` describes it.
@@ -63,6 +66,8 @@ export interface RelayHello {
   deadline_seconds: number | null;
   // Absent reads as null, as does a harness the app does not know.
   harness?: string | null;
+  // Absent reads as null.
+  config_dir?: string | null;
 }
 
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.

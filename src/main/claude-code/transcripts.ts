@@ -130,6 +130,29 @@ export function sessionTitle(message: string | null): string {
     : collapsed;
 }
 
+// The name Claude shows for a session: its last `custom-title` (a `/rename`),
+// else its last `ai-title`; null for a transcript with neither.
+export function transcriptName(text: string): string | null {
+  let customTitle: string | null = null;
+  let aiTitle: string | null = null;
+  for (const piece of text.split('\n')) {
+    if (!piece.includes('-title"')) {
+      continue;
+    }
+    const json = parsed(piece);
+    if (!json.ok) {
+      continue;
+    }
+    const line = asJson(json.value);
+    if (line.type === 'custom-title') {
+      customTitle = asString(line.customTitle) ?? customTitle;
+    } else if (line.type === 'ai-title') {
+      aiTitle = asString(line.aiTitle) ?? aiTitle;
+    }
+  }
+  return customTitle ?? aiTitle;
+}
+
 // A transcript as chat entries, oldest first, every id starting `history:`.
 // A line this reader does not know, and a `user` line the CLI wrote, becomes a
 // raw entry; a sidechain line (a subagent's) and the CLI's bookkeeping lines

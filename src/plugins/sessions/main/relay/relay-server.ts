@@ -71,6 +71,9 @@ function mistypedHelloField(hello: RelayHello): string | null {
   if (!isOptional(hello.harness, 'string')) {
     return 'harness';
   }
+  if (!isOptional(hello.config_dir, 'string')) {
+    return 'config_dir';
+  }
   return null;
 }
 
@@ -85,6 +88,7 @@ function sessionInfo(hello: RelayHello): SessionInfo {
     projectDir: hello.project_dir ?? null,
     deadlineSeconds: hello.deadline_seconds ?? null,
     harness: harnessOf(hello.harness),
+    profileDir: hello.config_dir ?? undefined,
   };
 }
 

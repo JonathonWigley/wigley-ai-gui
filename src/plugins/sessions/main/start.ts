@@ -51,6 +51,22 @@ type SessionsApi = MainApi<
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
+// The name the session's harness shows for it; null when the app runs no such
+// harness or the session does not say which saved session it is.
+async function hostSessionName(
+  api: SessionsApi,
+  info: SessionInfo,
+): Promise<string | null> {
+  const { sessionId, projectDir } = info;
+  const harness = api.services.agentHarnesses.find(
+    (candidate) => candidate.id === info.harness,
+  );
+  if (harness === undefined || sessionId === null || projectDir === null) {
+    return null;
+  }
+  return harness.sessionName(sessionId, projectDir, info.profileDir ?? null);
+}
+
 function createList(api: SessionsApi): SessionList {
   const list = createSessionList({
     randomHex: api.services.randomHex,
@@ -60,6 +76,7 @@ function createList(api: SessionsApi): SessionList {
     stateChanged: (state) => api.channel.send('stateChanged', state),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
     projectName: createProjectNames(api.services.git),
+    hostSessionName: (info) => hostSessionName(api, info),
   });
   api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));

@@ -24,6 +24,7 @@ import {
   TRANSCRIPT_HEAD_MAX_BYTES,
   type TranscriptHead,
   transcriptEntries,
+  transcriptName,
 } from './transcripts';
 
 export interface PastSessionsDeps {
@@ -98,6 +99,20 @@ export async function readHistory(
   return transcriptEntries(
     await readTranscript(files, paths, projectsFolder, sessionId),
     before,
+  );
+}
+
+// The name Claude shows for the saved session; null when it has none yet.
+// Rejects before any read for an id that is not a session id, as `readHistory`
+// does.
+export async function readSessionName(
+  files: Files,
+  paths: Paths,
+  projectsFolder: string,
+  sessionId: string,
+): Promise<string | null> {
+  return transcriptName(
+    await readTranscript(files, paths, projectsFolder, sessionId),
   );
 }
 
