@@ -539,7 +539,6 @@ function createClaudeSession(
         request_id: nextRequestId(),
         request: { subtype: 'interrupt' },
       });
-    },
       // Claude's interrupt leaves a main agent's background Bash running.
       for (const taskId of runningTaskIds) {
         writeMessage({
@@ -548,6 +547,7 @@ function createClaudeSession(
           request: { subtype: 'stop_task', task_id: taskId },
         });
       }
+    },
     setControl(id, value) {
       requireRunning();
       const control = controlOf(id);
