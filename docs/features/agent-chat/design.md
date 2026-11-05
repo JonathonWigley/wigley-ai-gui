@@ -383,7 +383,8 @@ interview on 2026-10-23; this file is the record of both.
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
 - **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
-  starts nothing. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
+  starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
+  profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
   one line per folder, its newest use and the profile of that use kept. A path that is no longer a folder, one that
   sits in an OS temp folder (`MainServices.tempFolders`), and one whose check fails (logged) are left out, and the list

@@ -61,7 +61,11 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
-  take the key from vim's insert-mode completion.
+  take the key from vim's insert-mode completion. In every other main view (Sessions with nothing
+  shown, the Chat tab and its agent strip, the docs tree and doc, the Backlog list and detail, the
+  Settings sections and rows, the gallery) **Ctrl+n** opens the new-session prompt with only its
+  folder and profile steps, bound per scope since a key cannot sit in `any` beside a scope's bind.
+  A new main view adds its scope to that list in `src/plugins/keymap.ts`.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (the docs tree and the doc, while the tree shows; the Backlog list and detail, the Settings
   sections and rows, and the Primer tab's tasks, items and card columns), then, at the view's edge,

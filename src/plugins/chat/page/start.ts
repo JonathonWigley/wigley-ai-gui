@@ -286,6 +286,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           log: services.log,
         }),
         newSession: () => startPrompt.open(),
+        startNewSession: () => startPrompt.openForNewSession(),
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
         toggleSideParts: () => sideSections.toggleHidden(),

@@ -593,6 +593,7 @@ describe('sessions parts', () => {
       live[anchor.command] = (live[anchor.command] ?? 0) + 1;
     }
     expect(live).toEqual({
+      'chat.startNewSession': 1,
       'sessions.nextSession': 2,
       'sessions.prevSession': 1,
       'sessions.prevTab': 1,
