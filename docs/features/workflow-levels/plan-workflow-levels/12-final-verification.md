@@ -1,6 +1,6 @@
 # 12 — Final verification and landing
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 10 · Depends on: 11
 Plan: [plan.md](plan.md)

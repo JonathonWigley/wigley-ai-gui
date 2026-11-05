@@ -231,7 +231,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [Project docs and follow-ups](10-project-docs.md) — after 08, 09
 
 ### Wave 9
-- [ ] [Doc re-read](11-doc-re-read.md) — after 10
+- [x] [Doc re-read](11-doc-re-read.md) — after 10
 
 ### Wave 10
 - [ ] [Final verification and landing](12-final-verification.md) — after 11
@@ -250,6 +250,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 07 · b2d36d46 · Diff read; typecheck 0, lint 0; every Produces present by search of the named files; worker's touched tests pass · concerns: Self-test never run (task 12); callChecklistTool and Light's main part have no unit test; toggleFinishedWaves on an all-done flat list logs and changes nothing; empty checklist draws 0/0 pane; Heavy layout.css bare selectors land on Light's parts; logFlow logs no page stage ahead of shows and Heavy's Explore/Primer slot logs a second trail line; DESIGN.md left to task 10; drive-actions.test fakes copy start.test's
 - 08 · 4c82e48d · Diff read; typecheck 0, lint 0; every Produces present by search of the named files; registered in manifests, main, page; worker's touched tests pass (6 files, 60) · concerns: checklistCount duplicated in Light and Medium, workflow/contract.ts the natural home; layout and self-test near-verbatim copies of Light's; main part and callChecklistTool path have no unit test; cleared keeps the cycle count; second /wigley:medium keeps the old checklist while the count resets; self-test first runs in task 12
 - 10 · 4d1a706d · Diff read; six pinned greps print 0,1,0,0,0,5; lint clean; ~/.agents/AGENTS.local.md edited, uncommitted by rule; ~/.claude-personal/settings.json is a symlink · concerns: docs/features/chat-bar/design.md:108 describes the Plan section as the workflow plugin's side pane (handed to task 11); AGENTS.local.md workflow-gate lines are ahead of the machine until task 12
+- 11 · f8ebad9e, marketplace c489a32 · Diffs read; three pinned greps hold; check_pointers passes. Verdicts: workflows.md no change; wigley-agents AGENTS.md no change; light/SKILL.md Reporting and answer-only line fixed; medium/SKILL.md Reporting fixed; feature/SKILL.md description no change; workflow-levels/design.md Decisions and How the app learns fixed; chat-bar/design.md hub lines fixed, beyond Files by the lead · concerns: workflows.md's Heavy row leaves out wigley:feature-primer, which Heavy also claims; the gate's subagent pass and README not checked beyond LEVEL_SKILLS
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 - RunMeter: five members → six, adding claimed(sessionId), which sets the baseline as finished does · why: the baseline resets at a null-to-claim move and the interface had no member for it · consumers: none outside workflow/main/start.ts · group 04
@@ -286,5 +287,9 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 08: foldFlow_MediumRules holds only the twelve pinned rows, so a turnEnded that moves a Medium stage would not turn red · group 08
 - 10: the $name_ follow-up had no such titles in workflow-view.test.ts or the workflow layout.test.ts, so it drops those sites and reads Four sites · group 10
 - 10: set_workflow_step doc says step takes the union of every workflow's reportedAs and the current workflow's rules answer, as step-tool.ts builds it, not the spec's 'the current workflow's reportedAs' · group 10
+- 11: chat-bar/design.md fixed beyond the task's Files, since task 10 found it stale and the user's rule keeps docs true · group 11
+- Task 12's two parts split around steps 4 and 5: its live checks run now, the test gate and review follow, and its Landing order runs after the review verdict — landing first would push unreviewed code to main, and the live checks' fixes then fall inside the review — the box stays open until landing · lead
+- Live checks: S1, S2, D1 to D10 and R1 pass; S2's pinned command, the bare .ui-tag--error selector, D3 and D8's width, D9's Escape and R1's log prefix are spec slips, actual results recorded in task 12's Proof; L1 sets chat.profiles to the real config path as R1 did · group 12
+- A long stage word ellipsizes on the row (Interview · pa…) rather than clipping the cache icon — other fixes move other plugins' alignment and the strip still shows the whole word — the user may prefer whole words · group 12
 ### Review rounds
 ### Test gate

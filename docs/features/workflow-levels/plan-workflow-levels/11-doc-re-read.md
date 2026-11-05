@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 9 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit per repo that changed, on its `workflow-levels` branch, by
 
 ## Proof
 
+Commit f8ebad9e, marketplace c489a32 · proof: Diffs read; three pinned greps hold; check_pointers passes. Verdicts: workflows.md no change; wigley-agents AGENTS.md no change; light/SKILL.md Reporting and answer-only line fixed; medium/SKILL.md Reporting fixed; feature/SKILL.md description no change; workflow-levels/design.md Decisions and How the app learns fixed; chat-bar/design.md hub lines fixed, beyond Files by the lead · concerns: workflows.md's Heavy row leaves out wigley:feature-primer, which Heavy also claims; the gate's subagent pass and README not checked beyond LEVEL_SKILLS

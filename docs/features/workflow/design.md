@@ -235,7 +235,8 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`.
   take the label.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, L, M or H,
   in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the label and status as
-  one accent tag (`Make · running`), unless the row label says it, and Heavy's countdown. A user layout can also draw the
+  one accent tag (`Make · running`), unless the row label says it, and Heavy's countdown. On a row too narrow for it, usage's
+  bar shrinks away first, then the tag ellipsizes. A user layout can also draw the
   progress and the main action's button, which the chip's input carries. Idle draws no stage. A session in no workflow
   draws the **`No workflow`** tag, an error Tag in `--wg-status-error`, once a live turn with agent work has ended with no
   level skill started, and nothing before.
