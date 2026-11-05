@@ -272,6 +272,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
                  side pane, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
+  unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json`, runs
+                 `unity-pool hold|release` for the panel, hands its self-test script), page/ (the clone badge under
+                 each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
+                 Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
@@ -591,8 +595,9 @@ round; primer: an open primer), since main, not the page, decides.
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
-  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
-  already scoped to the plugin's id: a plugin calls `log(message)`, and the line shows as `[<id>] message`. The page's home folder
+  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` takes
+  a source and a message: a plugin calls `log('<id>', message)` with its own id, and the line shows as
+  `[<id>] message`. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
@@ -792,7 +797,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
-  workflow); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  workflow, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
