@@ -133,7 +133,8 @@ export interface TranscriptScroll extends ContentScroll {
 export interface EntryList {
   element: HTMLOListElement;
   // Builds an entry new to the list that shows, or redraws the one holding
-  // its id; `entries` is the session's list after the change.
+  // its id; a user put also redraws other user entries whose input changed.
+  // `entries` is the session's list after the change.
   put(entry: ChatEntry, entries: readonly ChatEntry[]): void;
   // Reads whether the shown layouts put activity in the transcript, and builds
   // every entry that shows and every pending row again with the shown layouts,
@@ -360,13 +361,12 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     blockCounts.set(slot.entry.id, slot.blocks.length);
   };
 
-  // Redraws each `received` user entry of `next` whose slot shows another
-  // delivery than its input now holds.
-  const redrawReceivedEntries = (next: readonly ChatEntry[]) => {
+  // Redraws each user entry of `next` whose slot's input holds another delivery
+  // or latest flag than its input now would.
+  const redrawChangedUserEntries = (next: readonly ChatEntry[]) => {
     for (const entry of next) {
       const slot = slots.get(entry.id);
-      const isReceived = entry.kind === 'user' && entry.delivery === 'received';
-      if (slot === undefined || !isReceived) {
+      if (slot === undefined || entry.kind !== 'user') {
         continue;
       }
       const input = entryInput(entry, next);
@@ -686,7 +686,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         holdBlocks(slot);
       }
       if (entry.kind === 'user') {
-        redrawReceivedEntries(next);
+        redrawChangedUserEntries(next);
       }
       changed();
     },
@@ -888,7 +888,7 @@ function transcriptEntries(
 
 // What a layout draws `entry` from: the entry; a result with its turn's step
 // count from the session's `entries`, steps out of the transcript included; a
-// `received` user entry with no delivery unless it is the latest delivery entry.
+// user entry with whether it is the latest delivery entry.
 function entryInput(
   entry: ChatEntry,
   entries: readonly ChatEntry[],
@@ -896,10 +896,13 @@ function entryInput(
   if (entry.kind === 'result') {
     return { ...entry, stepCount: resultStepCount(entries, entry.id) };
   }
-  const isReceived = entry.kind === 'user' && entry.delivery === 'received';
-  return isReceived && !isLatestDeliveryEntry(entry, entries)
-    ? { ...entry, delivery: null }
-    : entry;
+  if (entry.kind === 'user') {
+    return {
+      ...entry,
+      isLatestDelivery: isLatestDeliveryEntry(entry, entries),
+    };
+  }
+  return entry;
 }
 
 // Whether `entry` is the last user entry of `entries` holding a delivery.
@@ -920,7 +923,8 @@ function isDeliveryChanged(
   return (
     last.kind === 'user' &&
     next.kind === 'user' &&
-    last.delivery !== next.delivery
+    (last.delivery !== next.delivery ||
+      last.isLatestDelivery !== next.isLatestDelivery)
   );
 }
 

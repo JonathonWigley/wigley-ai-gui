@@ -209,6 +209,7 @@ describe('default chat layout', () => {
       text: 'hello',
       images: [] as { mediaType: string; data: string }[],
       delivery: null,
+      isLatestDelivery: false,
       raw: [] as unknown[],
     };
 
@@ -231,8 +232,40 @@ describe('default chat layout', () => {
     text: 'look',
     images: [{ mediaType: 'image/png', data: 'cG5n' }],
     delivery: null,
+    isLatestDelivery: false,
     raw: [] as unknown[],
   };
+
+  it.each([
+    { case: 'an image removed', images: [], refills: true },
+    {
+      case: 'an image with other data',
+      images: [{ mediaType: 'image/png', data: 'b3RoZXI=' }],
+      refills: true,
+    },
+    {
+      case: 'an image with another type',
+      images: [{ mediaType: 'image/webp', data: 'cG5n' }],
+      refills: true,
+    },
+    {
+      case: 'equal images in a new array',
+      images: [{ mediaType: 'image/png', data: 'cG5n' }],
+      refills: false,
+    },
+  ])(
+    'user_updateRefillsTheCardOnlyWhenItsImagesDiffer ($case)',
+    ({ images, refills }) => {
+      const { kit } = fakeKit();
+      const view = draw(userWithImage, kit);
+      const turn = asFake(view.element).children[0];
+      const firstFill = turn.children[0];
+
+      view.update?.({ ...userWithImage, images });
+
+      expect(turn.children[0] !== firstFill).toBe(refills);
+    },
+  );
 
   it.each([
     {
@@ -255,30 +288,42 @@ describe('default chat layout', () => {
   it.each([
     {
       delivery: 'sent',
+      isLatestDelivery: false,
       label: 'div.chat-user-delivery:Sent',
     },
     {
       delivery: 'received',
+      isLatestDelivery: true,
       label: 'div.chat-user-delivery:Received',
     },
+    { delivery: 'received', isLatestDelivery: false, label: null },
     {
       delivery: 'notReceived',
+      isLatestDelivery: false,
       label: 'div.chat-user-delivery is-not-received:Not received',
     },
-    { delivery: null, label: null },
+    { delivery: null, isLatestDelivery: false, label: null },
   ] as const)(
-    'userDelivery_LabelFollowsCardAndUpdateReplacesIt ($delivery)',
-    ({ delivery, label }) => {
+    'userDelivery_LabelFollowsCardAndUpdateReplacesIt ($delivery, latest $isLatestDelivery)',
+    ({ delivery, isLatestDelivery, label }) => {
       const { kit } = fakeKit();
       const labelled = label === null ? [] : [label];
-      const entry = { ...userWithImage, images: [], delivery };
+      const entry = {
+        ...userWithImage,
+        images: [],
+        delivery,
+        isLatestDelivery,
+      };
 
       const view = draw(entry, kit);
       const drawnChildren = describeChildren(asFake(view.element));
+      const turn = asFake(view.element).children[0];
+      const fill = turn.children[0];
       view.update?.({ ...entry, delivery: 'sent' });
       const sentChildren = describeChildren(asFake(view.element));
       view.update?.(entry);
 
+      expect(turn.children[0]).toBe(fill);
       expect(drawnChildren).toEqual(['card:none', ...labelled]);
       expect(sentChildren).toEqual([
         'card:none',

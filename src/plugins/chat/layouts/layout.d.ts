@@ -22,14 +22,16 @@ export type CompactionTrigger = 'app' | 'manual' | 'harness';
 export type UserDelivery = 'sent' | 'received' | 'notReceived';
 
 // `images` are the message's attached images, base64 with no `data:` prefix.
-// `delivery` is null when nothing tracks the message, and on a `received` message that is not the session's latest
-// message with a delivery, so a layout draws what it holds.
+// `delivery` is null when nothing tracks the message. `isLatestDelivery` holds on the session's last user message whose
+// `delivery` is not null, and the app sends the input again when it changes; the default layout draws `Received` only
+// on that message, and `Sent` and `Not received` on every message.
 export interface UserInput {
   kind: 'user';
   id: string;
   text: string;
   images: { mediaType: string; data: string }[];
   delivery: UserDelivery | null;
+  isLatestDelivery: boolean;
   raw: unknown[];
 }
 export interface AssistantInput {

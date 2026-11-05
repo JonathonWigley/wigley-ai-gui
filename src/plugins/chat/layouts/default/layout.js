@@ -130,6 +130,35 @@ function fillUserTurn(turn, input, kit) {
   }
 }
 
+// Whether `next` holds other text or images than `last`, compared by value since
+// each input arrives over IPC.
+/**
+ * @param {import('../layout').UserInput} last
+ * @param {import('../layout').UserInput} next
+ */
+function isUserTurnChanged(last, next) {
+  return (
+    last.text !== next.text ||
+    last.images.length !== next.images.length ||
+    next.images.some(
+      (image, index) =>
+        image.data !== last.images[index].data ||
+        image.mediaType !== last.images[index].mediaType,
+    )
+  );
+}
+
+// The delivery the label shows: `received` only on the latest delivery message.
+/**
+ * @param {import('../layout').UserInput} input
+ * @returns {import('../layout').UserDelivery | null}
+ */
+function shownUserDelivery(input) {
+  const isPastReceived =
+    input.delivery === 'received' && !input.isLatestDelivery;
+  return isPastReceived ? null : input.delivery;
+}
+
 // The delivery label as the last child of `entry`, in place of `drawn`; null
 // when `delivery` draws none.
 /**
@@ -543,16 +572,26 @@ function showImage(picture, counter, input) {
 const layout = {
   activityInTranscript: false,
   entries: {
+    // An update refills the card only when its content changed, so a delivery
+    // change keeps a selection in the bubble and the decoded images.
     user(parent, input, kit) {
       const entry = root(parent, 'chat-entry chat-user');
       const turn = kit.card(entry);
       fillUserTurn(turn, input, kit);
-      let delivery = replaceUserDelivery(entry, null, input.delivery);
+      let drawn = input;
+      let delivery = replaceUserDelivery(entry, null, shownUserDelivery(input));
       return {
         element: entry,
         update(next) {
-          fillUserTurn(turn, next, kit);
-          delivery = replaceUserDelivery(entry, delivery, next.delivery);
+          if (isUserTurnChanged(drawn, next)) {
+            fillUserTurn(turn, next, kit);
+          }
+          drawn = next;
+          delivery = replaceUserDelivery(
+            entry,
+            delivery,
+            shownUserDelivery(next),
+          );
         },
       };
     },

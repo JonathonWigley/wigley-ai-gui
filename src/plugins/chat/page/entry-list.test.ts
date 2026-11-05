@@ -407,16 +407,17 @@ const delivered = (id: string, delivery: UserDelivery | null): ChatEntry => ({
 });
 
 // A user layout whose user part draws one marked block, drawn anew on update,
-// and records each draw's and update's delivery by entry id.
+// and records each draw's delivery and latest flag by entry id, and each
+// update's with its id.
 function recordingDelivery() {
-  const draws = new Map<string, UserDelivery | null>();
-  const updates: [string, UserDelivery | null][] = [];
+  const draws = new Map<string, [UserDelivery | null, boolean]>();
+  const updates: [string, UserDelivery | null, boolean][] = [];
   const shown = withUser<ChatLayout>(
     defaultLayout,
     {
       entries: {
         user(parent, input, kit) {
-          draws.set(input.id, input.delivery);
+          draws.set(input.id, [input.delivery, input.isLatestDelivery]);
           const root = kit.el(parent, 'div', 'recorded');
           const drawBlock = () => {
             root.replaceChildren();
@@ -426,7 +427,7 @@ function recordingDelivery() {
           return {
             element: root,
             update(next) {
-              updates.push([next.id, next.delivery]);
+              updates.push([next.id, next.delivery, next.isLatestDelivery]);
               drawBlock();
             },
           };
@@ -1249,30 +1250,55 @@ describe('slots and focus', () => {
   it.each<{
     case: string;
     deliveries: (UserDelivery | null)[];
-    inputs: (UserDelivery | null)[];
+    inputs: [UserDelivery | null, boolean][];
+    labels: (string | null)[];
   }>([
     {
-      case: 'an earlier received clears, sent stays',
+      case: 'an earlier received loses its label, sent keeps its own',
       deliveries: ['received', 'sent', 'received'],
-      inputs: [null, 'sent', 'received'],
+      inputs: [
+        ['received', false],
+        ['sent', false],
+        ['received', true],
+      ],
+      labels: [null, 'Sent', 'Received'],
     },
     {
       case: 'a later entry with no delivery leaves received the latest',
       deliveries: ['received', null],
-      inputs: ['received', null],
+      inputs: [
+        ['received', true],
+        [null, false],
+      ],
+      labels: ['Received', null],
     },
     {
       case: 'not received stays on an earlier entry',
       deliveries: ['notReceived', 'received'],
-      inputs: ['notReceived', 'received'],
+      inputs: [
+        ['notReceived', false],
+        ['received', true],
+      ],
+      labels: ['Not received', 'Received'],
     },
-  ])('delivery_ListDraws_ReceivedOnLatestOnly ($case)', (row) => {
+  ])('delivery_ListDraws_DefaultLabelsReceivedOnLatestOnly ($case)', (row) => {
     const { draws, shown } = recordingDelivery();
-    const { list } = setUpList(shown);
+    const { list: recorded } = setUpList(shown);
+    const { list: drawn, put } = setUpList(defaultShown());
+    const held = row.deliveries.map((delivery, at) =>
+      delivered(`u${at}`, delivery),
+    );
 
-    list.rebuild(row.deliveries.map((held, at) => delivered(`u${at}`, held)));
+    recorded.rebuild(held);
+    held.forEach(put);
 
     expect([...draws.values()]).toEqual(row.inputs);
+    expect(
+      drawnSlots(drawn.element).map(
+        (slot) =>
+          slot.querySelector('.chat-user-delivery')?.textContent ?? null,
+      ),
+    ).toEqual(row.labels);
   });
 
   it.each([
@@ -1299,7 +1325,7 @@ describe('slots and focus', () => {
       scroller.scrollHeight = 500;
       put(delivered('u1', 'received'));
 
-      expect(updates).toEqual([['u1', 'received']]);
+      expect(updates).toEqual([['u1', 'received', true]]);
       expect(scroller.scrollTop).toBe(scrollTop);
     },
   );
@@ -1469,23 +1495,29 @@ describe('block stops', () => {
     vi.restoreAllMocks();
   });
 
-  it('delivery_LaterEntriesChangeTheLatest_EarlierReceivedRedrawsOnlyWhenItsInputChanges', () => {
+  it('delivery_LaterEntriesChangeTheLatest_RedrawsUserEntriesWhoseInputChangedAndKeepsTheCursor', () => {
     const { updates, shown } = recordingDelivery();
     const { list, put } = setUpList(shown);
     put(delivered('u1', 'received'));
-
-    put(delivered('u2', 'sent'));
-    put(delivered('u3', 'sent'));
-    const afterLaterEntries = [...updates];
-    put(delivered('u2', null));
-    put(delivered('u3', null));
+    put(assistantText('a', 'reply'));
     list.first();
 
-    expect(afterLaterEntries).toEqual([['u1', null]]);
-    expect(asFake(list.focusedBlock()!).parentNode).not.toBeNull();
-    expect(updates.filter(([id]) => id === 'u1')).toEqual([
-      ['u1', null],
-      ['u1', 'received'],
+    put(delivered('u2', 'sent'));
+    const focusedAfterRedraw = asFake(list.focusedBlock()!);
+    const isFocusedConnected = focusedAfterRedraw.parentNode !== null;
+    const isFocusedMarked = focusedAfterRedraw.classList.contains('is-cursor');
+    put(delivered('u3', 'sent'));
+    put(delivered('u2', null));
+    put(delivered('u3', null));
+
+    expect(isFocusedConnected).toBe(true);
+    expect(isFocusedMarked).toBe(true);
+    expect(updates).toEqual([
+      ['u1', 'received', false],
+      ['u2', 'sent', false],
+      ['u2', null, false],
+      ['u3', null, false],
+      ['u1', 'received', true],
     ]);
   });
 
