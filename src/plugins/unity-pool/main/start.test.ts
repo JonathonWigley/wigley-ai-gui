@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { MainServices } from '../../../contracts/plugin';
 import {
   fakeDependency,
   noCounts,
@@ -9,10 +10,13 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
+import { unityPoolManifest } from '../manifest';
 import { unityPoolMainPart } from './start';
 
-function startOnHarness() {
+function startOnHarness(platform: MainServices['platform'] = 'macos') {
   return startMainPart(unityPoolMainPart, {
+    settings: { ...unityPoolManifest.settings, scriptPath: '' },
+    services: { platform },
     dependencies: [
       fakeDependency(chatMainKey, () => ({}) as unknown as ChatMainExports),
       fakeDependency(
@@ -42,4 +46,20 @@ describe('unityPoolMainPart', () => {
     await harness.restart();
     await vi.waitFor(() => expect(harness.counts()).toEqual(before));
   });
+
+  // The harness's home is `/home`.
+  it.each([
+    ['windows', '/home/wigley-agents/tools/unity-pool/unity-pool'],
+    ['macos', '/home/.local/bin/unity-pool'],
+  ] as const)(
+    'run_EmptyScriptPath_LooksUpPlatformDefault: %s',
+    async (platform, script) => {
+      const harness = startOnHarness(platform);
+      const stat = vi.spyOn(harness.files, 'stat');
+
+      await harness.invoke('run', 'hold', 'pool', 1);
+
+      expect(stat).toHaveBeenCalledWith(script);
+    },
+  );
 });

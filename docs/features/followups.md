@@ -367,12 +367,18 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 What Windows support and installers need.
 
 - **Platform record** — *agent-ready*: a `Platform` record chosen in the composition root (`createMacPlatform` /
-  `createWindowsPlatform`), exposed read-only as `services.platform` on both sides: app lifecycle quirks, attention and
-  badge (the alerts adapter splits into mac and Windows variants), default program paths, the relay endpoint.
+  `createWindowsPlatform`), exposed read-only on both sides as `services.platform`, replacing today's
+  `'macos' | 'windows' | 'linux'` string under the same name: an `os` field holding that string, app lifecycle quirks,
+  attention and badge (the alerts adapter splits into mac and Windows variants), default program paths, the relay
+  endpoint. Every plugin that reads `services.platform` today moves to `services.platform.os` when the record lands.
   Replaces the other `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`, the forms plugin's
   `main/selftest-script.ts`, and the session host's own composition root `src/session-host/session-host.ts`) and sessions'
   direct `os.userInfo`, `process.env`, `execPath` and `cwd` reads in `openRelay`; path rules already sit behind
-  `services.paths`, and main's `services.platform` already names the OS as a `Platform` value, which the plugins read.
+  `services.paths`.
+- **Forms self-test platform from services** — *agent-ready*: `src/plugins/forms/main/selftest-script.ts:63` sets
+  `IS_WINDOWS` from `process.platform` at module level, so the chip paths ignore the platform the app chose. The forms
+  main start passes `services.platform` into `formsSelfTestScript`, which picks the paths from it. Waits on that
+  file's staged changes being committed.
 - **Per-platform program lookup and spawning** — *agent-ready*: program lookup and spawning per platform behind
   `ProcessRunner`: `.cmd`/`.bat` shims through `cmd.exe` on Windows, a `resolveProgram('python')` (`py -3` → `python`
   → `python3`) for docs' index script (`index-sources.ts` runs `python3`), a PATH lookup for the `claude` command
