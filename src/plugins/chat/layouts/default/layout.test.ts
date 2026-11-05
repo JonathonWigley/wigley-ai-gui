@@ -1184,6 +1184,8 @@ function fakeSurfaceKit() {
       rows.push(options);
       return part(parent, 'li', `row:${options.label}`);
     },
+    sectionHeader: (parent: HTMLElement, text: string) =>
+      part(parent, 'h3', `section:${text}`),
     cursorEnd: () => asHtml(cursorEnd),
     copyButton: (parent: HTMLElement) => part(parent, 'button', 'copy'),
     codeBox: (parent: HTMLElement) => part(parent, 'div', 'codeBox'),
@@ -1211,6 +1213,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   statusLine: true,
   attachments: true,
   pickerRow: true,
+  pickerHeading: true,
   completionDescription: true,
   signIn: true,
   reasonBox: true,
@@ -1382,6 +1385,43 @@ describe('default chat layout surfaces', () => {
         trailing: cursorEnd,
       },
     ]);
+  });
+
+  it('pickerRow_SectionRow_DrawsTitleAndDetail', () => {
+    const { kit, rows, cursorEnd } = fakeSurfaceKit();
+
+    drawSurface(
+      'pickerRow',
+      {
+        item: {
+          list: 'session',
+          kind: 'section',
+          title: 'Fix the picker',
+          detail: 'Today · 3 messages',
+          at: 1700000000000,
+        },
+        label: 'Fix the picker Today · 3 messages',
+      },
+      kit,
+    );
+
+    expect(rows).toEqual([
+      {
+        density: 'list',
+        tag: 'li',
+        label: 'Fix the picker',
+        detail: 'Today · 3 messages',
+        trailing: cursorEnd,
+      },
+    ]);
+  });
+
+  it('pickerHeading_Default_DrawsTitle', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface('pickerHeading', { title: 'Today' }, kit);
+
+    expect(describeElement(asFake(view.element))).toBe('section:Today');
   });
 
   it('completionDescription_Default_DrawsDescription', () => {

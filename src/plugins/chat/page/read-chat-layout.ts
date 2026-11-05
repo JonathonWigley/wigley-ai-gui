@@ -56,6 +56,7 @@ const PART_SET: Record<ChatPartName, true> = {
   statusLine: true,
   attachments: true,
   pickerRow: true,
+  pickerHeading: true,
   completionDescription: true,
   signIn: true,
   reasonBox: true,

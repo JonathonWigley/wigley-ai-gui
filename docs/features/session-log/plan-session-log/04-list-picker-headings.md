@@ -1,6 +1,6 @@
 # 04 — List picker headings
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -31,3 +31,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit e6b8a22f · proof: diff read; typecheck and lint pass · concerns: scrollToCursor scrolls to the row only, so moving up to a section's first row in a scrolled list can leave its heading just out of view; check in the drive run

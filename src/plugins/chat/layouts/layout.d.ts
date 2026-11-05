@@ -387,7 +387,8 @@ export interface AttachmentsKit extends BaseKit {
 
 // One row of a list chat opens, by list: the start prompt's Folder, Profile and Session steps, the Controls list and a
 // control's choices. A recent folder's `path` is spelled as the row shows it, the home folder as `~`; a control's
-// `value` as its chip shows it.
+// `value` as its chip shows it. A `section` row sits under a heading: `title` is its name, `detail` the rest of its
+// line, and `at` the time `detail` spells.
 export type PickerItemInput =
   | {
       list: 'folder';
@@ -406,9 +407,16 @@ export type PickerItemInput =
       modified: number;
       archived: boolean;
     }
+  | {
+      list: 'folder' | 'session';
+      kind: 'section';
+      title: string;
+      detail: string;
+      at: number;
+    }
   | { list: 'controls'; label: string; value: string }
   | { list: 'choices'; label: string; isCurrent: boolean };
-// `label` is the line the list filters on.
+// `label` is the line the list filters on and the row's tooltip shows; a `section` row's joins its title and detail.
 export interface PickerRowInput {
   item: PickerItemInput;
   label: string;
@@ -418,6 +426,10 @@ export interface PickerRowKit extends BaseKit {
   // through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor` on it.
   cursorEnd(): HTMLElement | null;
 }
+export interface PickerHeadingInput {
+  title: string;
+}
+export type PickerHeadingKit = BaseKit;
 
 // `link` is null until the sign-in reports it.
 export interface SignInInput {
@@ -541,6 +553,13 @@ export interface ChatLayout {
     input: PickerRowInput,
     kit: PickerRowKit,
   ): PartView<PickerRowInput>;
+  // One section's heading in such a list, appended to the heading's `li`, so its root is no `li`. Headings take no
+  // cursor and no click, and hide while a filter is typed.
+  pickerHeading?(
+    parent: HTMLElement,
+    input: PickerHeadingInput,
+    kit: PickerHeadingKit,
+  ): PartView<PickerHeadingInput>;
   // A `/` completion row's description, appended to the row after its name. It draws anew with each row the popup
   // draws, so a layout change shows at the next popup and an `update` never runs.
   completionDescription?(

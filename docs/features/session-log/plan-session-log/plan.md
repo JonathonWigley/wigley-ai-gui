@@ -127,8 +127,8 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Sessions: the owned flag and the title rule](01-sessions-owned-and-title.md)
-- [ ] [List picker headings](04-list-picker-headings.md)
+- [x] [Sessions: the owned flag and the title rule](01-sessions-owned-and-title.md)
+- [x] [List picker headings](04-list-picker-headings.md)
 
 ### Wave 2
 - [ ] [Chat lifecycle events](02-chat-lifecycle-events.md) — after 01
@@ -152,10 +152,15 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 
 ### Groups
+- 01 · 2ca6ca8b · diff read; typecheck and lint pass · concerns: Files line named primer, forms and sessions start.test.ts as connected emitters, but they emit none and stayed unedited; connected payload is now a shallow copy, its listeners read only id and info; connected_ConnectAndOpen_SayIfOwned overlaps three existing connected assertions
+- 04 · e6b8a22f · diff read; typecheck and lint pass · concerns: scrollToCursor scrolls to the row only, so moving up to a section's first row in a scrolled list can leave its heading just out of view; check in the drive run
 ### Contract changes
 ### Rulings
+- Fixtures where the compiler does not force owned set it false — they stand for relay connects — no listener reads it yet · group 01 · group 01
+- drawHeading appends its own root to the li and the picker uses only dispose, as drawRow does — the task names DrawnPickerRow — task 05 must append, or its heading draws nothing · group 04 · group 04
+- Heading height is --wg-row-tree with section header type and .ui-row inline padding — the plan named no size — a one-line CSS change if wrong · group 04 · group 04
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 05 — Chat heading part and section row input
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)

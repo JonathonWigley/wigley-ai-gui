@@ -3,7 +3,7 @@
 // The built-in chat look: the entries, the activity lines (each one summary
 // line, live or finished), the activity dock, its one line and that line's place
 // just above the composer's box, the pending messages' rows, the composer, the
-// list rows, a / completion row's description, the dialogs' bodies, the image viewer, the run time under a session's
+// list rows and headings, a / completion row's description, the dialogs' bodies, the image viewer, the run time under a session's
 // row, and the session hub's section frames and Session rows. Every collapsible
 // row's body is built on its first open and kept, so an update refills it in
 // place whether it is open or closed.
@@ -838,13 +838,19 @@ const layout = {
     return { element: strip };
   },
   pickerRow(parent, input, kit) {
+    const { item } = input;
+    const section = 'kind' in item && item.kind === 'section' ? item : null;
     const row = kit.row(parent, {
       density: 'list',
       tag: 'li',
-      label: input.label,
+      label: section?.title ?? input.label,
+      detail: section?.detail,
       trailing: kit.cursorEnd(),
     });
     return { element: row };
+  },
+  pickerHeading(parent, input, kit) {
+    return { element: kit.sectionHeader(parent, input.title) };
   },
   completionDescription(parent, input) {
     const description = el(

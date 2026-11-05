@@ -1,6 +1,6 @@
 # 01 — Sessions: the owned flag and the title rule
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -23,3 +23,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2ca6ca8b · proof: diff read; typecheck and lint pass · concerns: Files line named primer, forms and sessions start.test.ts as connected emitters, but they emit none and stayed unedited; connected payload is now a shallow copy, its listeners read only id and info; connected_ConnectAndOpen_SayIfOwned overlaps three existing connected assertions

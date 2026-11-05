@@ -43,6 +43,9 @@ export interface PickerRequest<T> {
   archiveState?(item: T): ArchiveState | null;
   // The item as the chat layout's `pickerRow` part reads it.
   rowInput(item: T): PickerItemInput;
+  // The section the item sits under, its heading drawn through the
+  // `pickerHeading` part; null for none. Items of a section stay together.
+  section?(item: T): string | null;
   // Runs once the picker has closed.
   picked(item: T): void;
 }
@@ -65,8 +68,9 @@ export interface PickerHandle {
 // the filter kept. The header ends in the open scope's keys (`/ filter`, and
 // `. archived` in `resume`), and in `resume` the cursor row ends in
 // `x archive` or `x restore` by its item's archive state. Each row draws
-// through the chat layout's `pickerRow` part, its keys in the open scope, and
-// the open list draws again on each layout change.
+// through the chat layout's `pickerRow` part and each section heading through
+// `pickerHeading`, their keys in the open scope, and the open list draws again
+// on each layout change.
 export interface Picker {
   open<T>(request: PickerRequest<T>): PickerHandle;
   isOpen(): boolean;
@@ -175,6 +179,9 @@ export function createPicker(deps: PickerDeps): Picker {
         },
         drawRow: (parent, item, row) =>
           drawPickerRow(deps, nextScope, parent, next.rowInput(item), row),
+        section: next.section,
+        drawHeading: (parent, title) =>
+          drawPickerHeading(deps, nextScope, parent, title),
       });
       return handle;
     },
@@ -213,6 +220,26 @@ function drawPickerRow(
         cursorEnd: () => row.trailing,
       };
       const view = builder(at, { item, label: row.label }, kit);
+      return { element: view.element };
+    },
+  );
+  return { element: drawn.built.element, dispose: drawn.dispose };
+}
+
+// One section heading drawn through the `pickerHeading` part into its `li`,
+// its kit's anchors in `scope`; the list picker disposes the draw.
+function drawPickerHeading(
+  deps: PickerDeps,
+  scope: PickerScope,
+  parent: HTMLElement,
+  title: string,
+): DrawnPickerRow {
+  const drawn = deps.layouts.draw(
+    'pickerHeading',
+    parent,
+    (builder, at, rollback) => {
+      const kit = surfaceBaseKit(deps, scope, rollback);
+      const view = builder(at, { title }, kit);
       return { element: view.element };
     },
   );
