@@ -1,6 +1,6 @@
 # 02 — Engine: workflows on the page
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -228,3 +228,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit e20d8bbd · proof: diff read against the spec; every Produces present; the spec's grep prints nothing; typecheck and lint clean · concerns: No workflow tag draws outside any layout (spec's decision) and will show on the self-test's hello session; --wg-workflow-badge has no DESIGN.md entry; AGENTS.md still names addStage until task 10; logFlow does not re-run on addWorkflow; no-page once-sets never clear; start.ts SessionCommand still names Heavy's commands

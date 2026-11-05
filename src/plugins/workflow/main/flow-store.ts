@@ -3,7 +3,7 @@ import { type Files, readIfPresent } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
-import type { SessionFlow } from '../contract';
+import type { ChecklistItem, SessionFlow } from '../contract';
 import { newFlow } from '../flow';
 
 export const FLOWS_FILE = 'flows.json';
@@ -251,7 +251,7 @@ function isChecklist(value: unknown): boolean {
   return Array.isArray(value) && (value as unknown[]).every(isChecklistItem);
 }
 
-function isChecklistItem(value: unknown): boolean {
+export function isChecklistItem(value: unknown): value is ChecklistItem {
   return (
     isRecord(value) &&
     typeof value.text === 'string' &&

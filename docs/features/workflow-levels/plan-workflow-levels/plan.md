@@ -210,7 +210,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [Edit gate hook](09-edit-gate.md)
 
 ### Wave 2
-- [ ] [Engine: workflows on the page](02-engine-page.md) — after 01
+- [x] [Engine: workflows on the page](02-engine-page.md) — after 01
 
 ### Wave 3
 - [ ] [Checklist tool, scoped step tool, session note](03-workflow-tools.md) — after 01
@@ -243,6 +243,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 ### Groups
 - 09 · wigley-agents 70a4e4e · diff read against the spec; Produces all present (hook, install, level_skill_started, LEVEL_SKILLS, README); 14 unittest tests pass · concerns: argparse exits 2 on a hand-mistyped wired command; write_settings near-copies unity-pool's; /resume unchecked; Windows stop untested; tests go past the spec's tables
 - 01 · a5b319c0 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: TurnWork.worked survives cleared, so a sessionEnded right after a clear on a null workflow re-marks missedLevel; private isRecord copies in heavy-contract; check-layers still allows contract to import plan-reader; step-tool enum may repeat a value until task 03; a self-test hello turn sets missedLevel until the skill claims
+- 02 · e20d8bbd · diff read against the spec; every Produces present; the spec's grep prints nothing; typecheck and lint clean · concerns: No workflow tag draws outside any layout (spec's decision) and will show on the self-test's hello session; --wg-workflow-badge has no DESIGN.md entry; AGENTS.md still names addStage until task 10; logFlow does not re-run on addWorkflow; no-page once-sets never clear; start.ts SessionCommand still names Heavy's commands
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 ### Rulings
@@ -254,5 +255,9 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - The runtime's opened is guarded to Heavy flows, plan watch included — heavyStateOf ignores flow.workflow — nothing visible · group 01 · group 01
 - closed fires before store.drop on sessions.ended and after the store forgot on forgetFlows — the store returns ids only then — an observer reading the flow in closed sees null on the self-test path · group 01 · group 01
 - turnWork.note runs only for a session the store holds — turns never gains an orphan entry — work before chat.sessionOpened does not count toward missedLevel · group 01 · group 01
+- check-layers lets the stages sublayer import page, beyond the spec — heavy-page-workflow.ts needs page/countdown and page/preview — task 05 must remove the entry or stage code imports page code unchecked · group 02 · group 02
+- Heavy's api.layouts.show runs at addWorkflow time, ahead of the channel wiring — the draw must exist before the add — a layout delivered during show redraws with no flows held, harmless · group 02 · group 02
+- A preview press with no samples closes at once, logging workflow preview closed — the spec names only the fifth-press close — Space z l w with no samples shows nothing · group 02 · group 02
+- page/layout/workflow-parts.ts is deleted — nothing remained, which the spec allowed — a later task must import workflow-draw.ts · group 02 · group 02
 ### Review rounds
 ### Test gate

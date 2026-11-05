@@ -13,11 +13,11 @@ import {
   sessionsMainKey,
 } from '../../sessions/contract';
 import type {
+  ChecklistItem,
   FoldEvent,
   MainWorkflow,
   SessionFlow,
   SignalOrigin,
-  StageId,
   WorkflowChannel,
   WorkflowMainExports,
   WorkflowObserver,
@@ -29,9 +29,11 @@ import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
 import { heavyMainWorkflow } from '../stages/heavy-workflow';
 import { signalOf } from './agent-signals';
+import { checklistToolDefinition, startChecklistTool } from './checklist-tool';
 import { createFlowStore } from './flow-store';
 import { startHeavyRuntime } from './heavy-runtime';
 import { workflowSelfTestScript } from './selftest-script';
+import { SESSION_NOTE } from './session-note';
 import {
   SET_WORKFLOW_STEP_TOOL,
   startStepTool,
@@ -52,8 +54,10 @@ type WorkflowApi = MainApi<
 // host session id, folds a re-attach's replay only past the flow's last save,
 // marks a live turn with agent work and no workflow as a missed level, tells each
 // observer every fold, open, close and replay, contributes `set_workflow_step`,
-// whose steps are the workflows' stages' `reportedAs`, and sends every flow to the
-// page on each change. Exports `addWorkflow`, `signal`, `setState` and `observe`.
+// which lists every workflow's stages' `reportedAs` and moves a flow only by its own
+// workflow's, and `set_workflow_checklist`, hands chat the session note naming both,
+// and sends every flow to the page on each change. Exports `addWorkflow`, `signal`,
+// `setState` and `observe`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -156,19 +160,50 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       }
     };
 
+    // The registered workflow holding the session's flow; undefined with no flow,
+    // a null workflow, or a workflow no plugin holds.
+    const heldWorkflowOf = (sessionId: string) => {
+      const flow = store.get(sessionId);
+      return workflows.all().find((held) => held.id === flow?.workflow);
+    };
+
     // Folds a reported step as a live event; resolves whether the flow is now in
-    // that stage. No flow, or a stage rule that ignores it, resolves false.
-    const reportStep = (sessionId: string, stage: StageId) =>
+    // the stage its own workflow reports as `step`. No such stage, or a stage rule
+    // that ignores it, resolves false.
+    const reportStep = (sessionId: string, step: string) =>
       ready.then(() => {
-        apply(sessionId, { type: 'stepReported', step: stage }, 'live');
-        return store.get(sessionId)?.stage === stage;
+        const stage = heldWorkflowOf(sessionId)?.stages.find(
+          (held) => held.reportedAs === step,
+        );
+        if (stage === undefined) {
+          return false;
+        }
+        apply(sessionId, { type: 'stepReported', step: stage.id }, 'live');
+        return store.get(sessionId)?.stage === stage.id;
       });
-    const reportableStages = () =>
-      workflows.all().flatMap((workflow) => workflow.stages);
     const startStepToolSession = startStepTool({
-      stages: reportableStages,
+      workflows: () => workflows.all(),
       reportStep,
     });
+
+    // Folds a reported checklist as a live event; resolves whether a registered
+    // workflow holds the flow.
+    const reportChecklist = (
+      sessionId: string,
+      items: readonly ChecklistItem[],
+    ) =>
+      ready.then(() => {
+        if (heldWorkflowOf(sessionId) === undefined) {
+          return false;
+        }
+        apply(sessionId, { type: 'checklistReported', items }, 'live');
+        return true;
+      });
+    const checklistTool = sessions.contributeTools(
+      [checklistToolDefinition()],
+      startChecklistTool({ reportChecklist }),
+    );
+    chat.addInstructions(SESSION_NOTE);
 
     // Contributes the tool again when the reportable stages change, so its
     // schema lists a stage a workflow added.
@@ -176,7 +211,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const contributeStepTool = () => {
       stepTool?.dispose();
       stepTool = sessions.contributeTools(
-        [stepToolDefinition(reportableStages())],
+        [stepToolDefinition(workflows.all())],
         startStepToolSession,
       );
     };
@@ -378,7 +413,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         layoutTypes,
         selfTestHooks: services.selfTest === null ? null : selfTestHooks,
       }),
-      dispose: () => heavyRuntime.dispose(),
+      dispose: () => {
+        checklistTool.dispose();
+        heavyRuntime.dispose();
+      },
     };
   },
 };
