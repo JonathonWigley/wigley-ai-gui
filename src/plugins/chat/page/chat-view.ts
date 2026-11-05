@@ -4,7 +4,11 @@ import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
-import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import type {
+  EditorCompletions,
+  EditorHost,
+  TextEditor,
+} from '../../../contracts/editor';
 import type { ChatEntryKind } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
@@ -21,6 +25,7 @@ import type {
   SessionTabHandle,
 } from '../../sessions/contract';
 import type {
+  AppSlashCommand,
   ChatChannel,
   ChatComposerPart,
   ChatSessionState,
@@ -50,6 +55,7 @@ import {
   unseenAfterTurnEnd,
   valueLabel,
 } from './chat-state';
+import type { CompletionRows } from './completion-rows';
 import { composerInputOf } from './composer-input';
 import { type ComposerSurface, createComposerSurface } from './composer-kit';
 import {
@@ -60,7 +66,7 @@ import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
 import { sessionFactsOf, type SessionFactsSource } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
-import { completionWords } from './slash-commands';
+import { completionCommands } from './slash-commands';
 import { compactionLabel } from './working-turn';
 
 export interface ChatView {
@@ -160,8 +166,9 @@ export type ChatTabScope = 'chat';
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder, and with
 // `homeDir` shows that folder in the hub's Session section.
-// `slashCommandNames` reads the app slash commands registered now, which the
-// `/` completion offers ahead of the agent's. `viewer` opens a sent message's
+// `slashCommands` reads the app slash commands registered now, which the `/`
+// completion offers ahead of the agent's, and `completionRows` draws that
+// completion's rows. `viewer` opens a sent message's
 // images full size. `timers` and `clock` tick a live activity line's time and
 // the activity dock's. `composerParts` holds the parts other plugins draw
 // above every composer, `statusParts` those they draw in every status line;
@@ -196,7 +203,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   permissions: PermissionActions;
   confirm: CloseConfirm;
   viewer: Pick<ImageViewer, 'open'>;
-  slashCommandNames(): string[];
+  slashCommands(): AppSlashCommand[];
+  completionRows: CompletionRows;
   setScope(scope: ChatTabScope): void;
   otherSessionShown(): void;
   visibleSessionRested(): void;
@@ -831,21 +839,7 @@ function createTab(
       modeChanged: () => undefined,
     },
     {
-      completions: {
-        prefix: '/',
-        // Read each call: commands can arrive or register after the box
-        // exists.
-        items: () =>
-          completionWords(
-            deps.slashCommandNames(),
-            tab.state.commands.map((command) => command.name),
-          ).map((word) => ({ word, aliases: [] })),
-        offered: (words) =>
-          deps.log(
-            `completions offered: ${words.map((word) => `/${word}`).join(', ')}`,
-          ),
-        accepted: (word) => deps.log(`completion accepted: /${word}`),
-      },
+      completions: boxCompletions(tab, deps),
     },
   );
   const dropDeps = chatDropDepsOf(tab, tab.box, () => view.isHeld(tab), deps);
@@ -856,6 +850,33 @@ function createTab(
   drawActivity(tab, deps);
   tab.handle.select();
   return tab;
+}
+
+// The `/` completion of the tab's box. The commands are read on each call:
+// they can arrive or register after the box exists, so a row's word may no
+// longer be in the list, and that row shows its name alone.
+function boxCompletions(
+  tab: HeldTab,
+  deps: Pick<ChatViewDeps, 'slashCommands' | 'completionRows' | 'log'>,
+): EditorCompletions {
+  const commands = () =>
+    completionCommands(deps.slashCommands(), tab.state.commands);
+  return {
+    prefix: '/',
+    items: () =>
+      commands().map(({ name, aliases }) => ({ word: name, aliases })),
+    drawRow: (word, row) => {
+      const command = commands().find(({ name }) => name === word);
+      if (command !== undefined) {
+        deps.completionRows.draw(command, row);
+      }
+    },
+    offered: (words) =>
+      deps.log(
+        `completions offered: ${words.map((word) => `/${word}`).join(', ')}`,
+      ),
+    accepted: (word) => deps.log(`completion accepted: /${word}`),
+  };
 }
 
 // What a take on the tab writes into: its box and attachments, until

@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentCommand } from '../../../contracts/agent';
 import type { AppSlashCommand } from '../contract';
 import { addAccountCommands } from './account-commands';
-import { completionWords, createSlashCommands } from './slash-commands';
+import { completionCommands, createSlashCommands } from './slash-commands';
 
 function command(name: string): AppSlashCommand {
   return { name, description: `the ${name} command`, run: () => undefined };
+}
+
+function agentCommand(name: string, aliases: string[] = []): AgentCommand {
+  return {
+    name,
+    description: `the agent's ${name}`,
+    argumentHint: `<${name} args>`,
+    aliases,
+  };
 }
 
 describe('slash commands', () => {
@@ -40,19 +50,49 @@ describe('slash commands', () => {
     const commands = createSlashCommands();
     const added = commands.add(command('login'));
     commands.add(command('status'));
+    commands.add(command('clear'));
 
     added.dispose();
 
     expect(commands.match('/login')).toBeNull();
-    expect(commands.names()).toEqual(['status']);
+    expect(commands.list().map(({ name }) => name)).toEqual([
+      'status',
+      'clear',
+    ]);
   });
 
-  it('completionWords_AppFirstNoRepeats', () => {
-    expect(completionWords(['login', 'status'], ['status', 'model'])).toEqual([
-      'login',
-      'status',
-      'model',
+  it('completionCommands_AppFirstNoRepeats', () => {
+    expect(
+      completionCommands(
+        [command('status')],
+        [agentCommand('status', ['s']), agentCommand('wigley:feature', ['f'])],
+      ),
+    ).toEqual([
+      {
+        name: 'status',
+        description: 'the status command',
+        argumentHint: '',
+        aliases: [],
+        source: 'app',
+      },
+      {
+        name: 'wigley:feature',
+        description: "the agent's wigley:feature",
+        argumentHint: '<wigley:feature args>',
+        aliases: ['f'],
+        source: 'agent',
+      },
     ]);
+  });
+
+  it('completionCommands_AliasEqualToAppName_Dropped', () => {
+    const [, kept] = completionCommands(
+      [command('status')],
+      [agentCommand('x', ['status', 'y'])],
+    );
+
+    expect(kept.name).toBe('x');
+    expect(kept.aliases).toEqual(['y']);
   });
 });
 

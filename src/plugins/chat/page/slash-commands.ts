@@ -1,15 +1,16 @@
+import type { AgentCommand } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
-import type { AppSlashCommand } from '../contract';
+import type { AppSlashCommand, CompletionCommand } from '../contract';
 
 // The app slash commands registered now. `add` throws for a name already
 // registered, and its `dispose` removes the command. `match` reads a box's
 // text: once trimmed, `/` then a registered name, then nothing or whitespace
-// and the args; null for any other text. `names` lists the registered names
+// and the args; null for any other text. `list` holds the registered commands
 // in registration order.
 export interface SlashCommands {
   add(command: AppSlashCommand): Disposable;
   match(text: string): { command: AppSlashCommand; args: string } | null;
-  names(): string[];
+  list(): AppSlashCommand[];
 }
 
 // `/name`, then optionally whitespace and the args, over trimmed text.
@@ -41,16 +42,32 @@ export function createSlashCommands(): SlashCommands {
       }
       return { command, args: parsed[2] ?? '' };
     },
-    names: () => [...commands.keys()],
+    list: () => [...commands.values()],
   };
 }
 
-// The `/` completion's words: the app's names first, then each agent name the
-// app does not hold, since an app name wins over the agent's.
-export function completionWords(
-  appNames: readonly string[],
-  agentNames: readonly string[],
-): string[] {
-  const app = new Set(appNames);
-  return [...appNames, ...agentNames.filter((name) => !app.has(name))];
+// The `/` completion's commands: the app's first, then each agent command the
+// app holds no name of, without the aliases that equal an app name, since an
+// app name wins over the agent's.
+export function completionCommands(
+  app: readonly AppSlashCommand[],
+  agent: readonly AgentCommand[],
+): CompletionCommand[] {
+  const appNames = new Set(app.map((command) => command.name));
+  return [
+    ...app.map(({ name, description }): CompletionCommand => ({
+      name,
+      description,
+      argumentHint: '',
+      aliases: [],
+      source: 'app',
+    })),
+    ...agent
+      .filter((command) => !appNames.has(command.name))
+      .map((command): CompletionCommand => ({
+        ...command,
+        aliases: command.aliases.filter((alias) => !appNames.has(alias)),
+        source: 'agent',
+      })),
+  ];
 }

@@ -657,7 +657,7 @@ const ARCHIVE_STEPS: SelfTestStep[] = [
 
 const SLASH_COMPLETION_STEPS: SelfTestStep[] = [
   {
-    keys: ['/', 'f', 'a'],
+    keys: ['/', 'a', 'l', 'i'],
     expect: '[chat] completions offered: /fake-command',
   },
   { keys: ['Tab'], expect: '[chat] completion accepted: /fake-command' },
@@ -830,7 +830,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'slash completion',
-    why: "/ and fa offer the fake's command, Tab accepts it and Esc Enter sends it.",
+    why: "/ and ali offer the fake's command by its alias alone, Tab accepts it and Esc Enter sends it.",
     steps: SLASH_COMPLETION_STEPS,
   },
   {
