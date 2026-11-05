@@ -136,7 +136,7 @@ wigley-ai-gui, git:
 - [x] [Section links and history](10-links-history.md) — after 03, 09
 
 ### Wave 7
-- [ ] [Main page and list pages](11-main-list-pages.md) — after 03 to 10
+- [x] [Main page and list pages](11-main-list-pages.md) — after 03 to 10
 
 ### Wave 8
 - [ ] [Self-test groups](12-selftest.md) — after 11
@@ -162,7 +162,9 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 08 · d7270be4 · diff read, every Produces present by search, tsc and lint clean, Done-when greps hold (one <Leader>vw line, no setEntries in docs-view.ts) · concerns: Space v w with the filter box focused leaves focus on a hidden input; an unstar elsewhere can also move the wiki cursor; with no entries a wiki filter shows No pages in Main.md; dangling and label row colours unseen on screen; wikiRowActions anchors are built in session views too; Docs mode opens on the wiki, so self-test groups expecting All pages fail until task 12
 - 09 · ce659133 · diff read, every Produces present, tsc clean; worker ran the task tests (123 pass), lint and the live run: all 6 steps pass after scrollToSectionNotice; the 950px breakpoint held the body at 670px down to where the column goes; the switch click focuses the tree · concerns: self-test anchor check has not seen the three new binds; short section has about 36px spare below its text, the height using prose metrics; On this page clicks use old lines after a :w until the editor closes; scrollToSectionNotice has no unit test; section editor logs editing <name>, the same as whole-file
 - 10 · 33b55c73 · diff read, every Produces present, tsc clean; worker ran the task tests (162 pass), lint and the live run, steps 1-5 pass with synthetic keys over the real schema-5 index · concerns: a link to a heading that cannot reach the top leaves one doc holding two places, so Ctrl+o can stop twice on it; focus falls to body after a link opens another doc, as every md-link already does; closest('a.md-link') is live-only under the fake DOM; a match could in theory enclose an a between its runs
+- 11 · fbf589cb · Diff read; Produces found by grep (newestLoadedFirst, findSkillEntry, parseWikiTarget, createListPane, MAIN_STARTER_TEXT, createRecentReader, showPage, updateList, shownPage, isBlank, setRecentChanges, listOpen); tsc clean; worker: 7 test files 273 pass, lint, both greps, live steps 1-10 PASS on runs w11, w11b, w11c. · concerns: At first show focus stays on the tree, so i on the empty Main page does nothing and its hint hides until Alt+l. Ctrl+o/i are docs.doc scope only. A list's scroll is not remembered per place (cursor is). Main.md deleted while shown: gh logs already shows and the empty state does not draw. Header title reads Main.md with a provisional entry until rebuild. Focus after a recent link click falls to body. No layout.css rule for .docs-main-hint or .docs-recent-page. Live run's stand-in index had links: [], so section links on Main were not exercised live. Root AGENTS.md docs paragraph possibly stale.
 ### Contract changes
+- 11: the main hint in docPane sits between back and forward inside div.docs-history (order back, main, forward), not first, because layout.css hides those by :first-child and :last-child.
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
 - Nested roots both holding the target: the lower root wins — order-independent — only which clone row shows · group 02 · group 02
@@ -206,5 +208,8 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - relink adds doc.text !== text to reread's guards · group 10
 - moveWithinDoc finds through headingAt, since it must find before it scrolls · group 10
 - same-file file links with no line and # links go through moveWithinDoc and no longer reopen; task 12 owns the self-test steps · group 10
+- .docs-list-rows .ui-row-label gets flex: none and max-width: 60% in docs.css, a look fix for truncated titles. · group 11
+- doc-view.test.ts assigns ownerDocument on the pane since the fake has none. · group 11
+- Task 11's live run used a stand-in fixture index. · group 11
 ### Review rounds
 ### Test gate

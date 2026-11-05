@@ -1,6 +1,6 @@
 # 12 — Self-test groups for the wiki
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 8 · Depends on: 11
 Plan: [plan.md](plan.md)

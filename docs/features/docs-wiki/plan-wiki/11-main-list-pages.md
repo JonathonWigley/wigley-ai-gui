@@ -1,6 +1,6 @@
 # 11 — Main page and list pages
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -430,3 +430,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit fbf589cb · proof: Diff read; Produces found by grep (newestLoadedFirst, findSkillEntry, parseWikiTarget, createListPane, MAIN_STARTER_TEXT, createRecentReader, showPage, updateList, shownPage, isBlank, setRecentChanges, listOpen); tsc clean; worker: 7 test files 273 pass, lint, both greps, live steps 1-10 PASS on runs w11, w11b, w11c. · concerns: At first show focus stays on the tree, so i on the empty Main page does nothing and its hint hides until Alt+l. Ctrl+o/i are docs.doc scope only. A list's scroll is not remembered per place (cursor is). Main.md deleted while shown: gh logs already shows and the empty state does not draw. Header title reads Main.md with a provisional entry until rebuild. Focus after a recent link click falls to body. No layout.css rule for .docs-main-hint or .docs-recent-page. Live run's stand-in index had links: [], so section links on Main were not exercised live. Root AGENTS.md docs paragraph possibly stale.
