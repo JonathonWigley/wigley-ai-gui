@@ -1,6 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
+import { coreModeSlot } from '../../../contracts/core-state';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -339,7 +340,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       });
     };
     window.addEventListener('resize', onWindowResize);
-    api.modes.onChanged((modeId) => {
+    api.state.read(coreModeSlot).on((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
     });
 

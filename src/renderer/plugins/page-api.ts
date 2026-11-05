@@ -133,8 +133,6 @@ export function createPageApi(
           registrations,
         ),
       scope: () => deps.scopeStack.current(),
-      onScopeChanged: (listener) =>
-        registrations.track(deps.scopeStack.onChange(listener)),
       onPending: (listener) =>
         registrations.track(deps.pendingKeys.onPending(listener)),
       holdPending: () => deps.pendingKeys.hold(),
@@ -156,8 +154,6 @@ export function createPageApi(
           deps.modes.add({ ...mode, id: qualify(manifest.id, mode.id) }),
         ),
       shown: () => deps.modes.shown(),
-      onChanged: (listener) =>
-        registrations.track(deps.modes.onChanged(listener)),
     },
     shell: {
       setLayout: (layout) => registrations.track(deps.setLayout(layout)),

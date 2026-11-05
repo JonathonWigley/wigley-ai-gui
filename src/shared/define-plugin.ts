@@ -31,7 +31,8 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // `settingInfo` missing a leaf setting's path or naming a path that is no
 // leaf; a dependency key for a plugin missing from that process's list fails to
 // compile, and so does a slot key read from a plugin in neither its `dependsOn`
-// nor its `reads` there. Throws when the id holds anything but lowercase letters, digits and `-`.
+// nor its `reads` there. Throws when the id holds anything but lowercase letters,
+// digits and `-`, and for the id `core`, whose slots and events are the core's.
 export function definePlugin<
   const Id extends string,
   const Cmds extends Record<string, CommandDecl>,
@@ -63,6 +64,9 @@ export function definePlugin<
     throw new Error(
       `Plugin id "${manifest.id}" must be lowercase letters, digits and -`,
     );
+  }
+  if (manifest.id === 'core') {
+    throw new Error('Plugin id "core" is reserved for the core');
   }
   return manifest;
 }

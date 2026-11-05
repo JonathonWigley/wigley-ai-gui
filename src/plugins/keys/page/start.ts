@@ -1,4 +1,5 @@
 import './keys.css';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
@@ -149,13 +150,19 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       help.setSections(currentHelpSections());
       anchors.redraw();
     });
-    keys.onScopeChanged(() => anchors.applyVisibility());
+    const scopeSlot = api.state.read(coreScopeSlot);
+    scopeSlot.on(() => anchors.applyVisibility());
     api.onSettingsChanged(() => anchors.redraw());
     const unplacedLog = startUnplacedLog({
       keymap: () => keys.keymap(),
       scope: () => keys.scope(),
       placedIn: anchors.placedIn,
-      onScopeChanged: (listener) => keys.onScopeChanged(listener),
+      onScopeChanged: (listener) =>
+        scopeSlot.on((scope) => {
+          if (scope !== undefined) {
+            listener(scope);
+          }
+        }),
       log: services.log,
     });
     const checkPlacement = () => unplacedLog.checkSeen();

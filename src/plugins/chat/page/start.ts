@@ -1,5 +1,6 @@
 import '../../../shared/page/markdown.css';
 import './chat.css';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import type {
   PageApi,
@@ -200,7 +201,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         api.events.on('sessions.sessionHostChanged', ({ sessionId }) =>
           listener(sessionId),
         ),
-      onScopeChanged: (listener) => api.keys.onScopeChanged(() => listener()),
+      onScopeChanged: (listener) =>
+        api.state.read(coreScopeSlot).on(() => listener()),
       activeTimeListeners: [
         (sessionId, activeTime) =>
           api.events.emit('activeTimeChanged', { sessionId, activeTime }),

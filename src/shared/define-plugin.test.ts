@@ -29,4 +29,10 @@ describe('definePlugin', () => {
       '"my.plugin"',
     );
   });
+
+  it("the core's id throws saying it is reserved", () => {
+    expect(() => definePlugin({ ...manifest, id: 'core' })).toThrow(
+      'Plugin id "core" is reserved for the core',
+    );
+  });
 });

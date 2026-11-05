@@ -410,6 +410,10 @@ export interface Modes {
   onChanged(listener: (modeId: string) => void): Disposable;
 }
 
+// What a plugin holds of the registry: a part hears the shown mode through
+// `coreModeSlot`.
+export type PageModes = Omit<Modes, 'onChanged'>;
+
 // An area the layout splits by alignment: `element` is the area's own element,
 // and each contribution goes into the `tracks` container of its `align`.
 export interface AlignedArea {
@@ -517,8 +521,8 @@ export interface PageTransparency {
 
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
-// `keys.scope` is the qualified scope keys fire in now, and
-// `keys.onScopeChanged` hears it each time it changes, until its `dispose`.
+// `keys.scope` is the qualified scope keys fire in now, and a part hears each
+// change of it through `coreScopeSlot`.
 // `keys.onPending` hears the keys of an unfinished sequence on the page or in
 // an editor, `null` once none are pending, until its `dispose`;
 // `keys.holdPending` keeps a pending page sequence past its
@@ -533,7 +537,7 @@ export interface PageTransparency {
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
 // `platform` is the OS the app runs on, fixed for the page load.
 // `modes.add` qualifies the mode's id by the plugin (`browse` in plugin `p`
-// is `p.browse`), and `modes.shown` and `modes.onChanged` read qualified ids.
+// is `p.browse`), and `modes.shown` and `coreModeSlot` read qualified ids.
 // `shell.setLayout` places the shell's areas by `layout` in place of the one
 // in use, moving every contribution into it, and returns the `Disposable` that
 // restores the default layout; that `dispose` does nothing once another
@@ -580,7 +584,6 @@ export interface PageApi<
     setScope(scope: keyof M['scopes'] & string): void;
     pushScope(scope: keyof M['scopes'] & string): PushedScope;
     scope(): ViewScope;
-    onScopeChanged(listener: (scope: ViewScope) => void): Disposable;
     onPending(listener: (pending: PendingKeys | null) => void): Disposable;
     holdPending(): void;
     cancelPending(): void;
@@ -590,7 +593,7 @@ export interface PageApi<
     command(id: CommandId): CommandInfo | undefined;
     scopes: readonly ScopeInfo[];
   };
-  modes: Modes;
+  modes: PageModes;
   shell: { setLayout(layout: ShellLayout): Disposable };
   transparency: PageTransparency;
   panes: {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { coreModeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
   noCounts,
@@ -52,7 +53,7 @@ function fakeSessions(tabs: string[], throwsNext: ThrowsNext) {
 }
 
 function startDocsPage() {
-  installFakeDom(vi.stubGlobal);
+  installFocusFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
   const throwsNext: ThrowsNext = { anchor: false, tab: false };
   const keys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
@@ -114,6 +115,26 @@ describe('docs page part lifecycle', () => {
       expect(harness.counts()).toEqual(noCounts);
     },
   );
+
+  it('start_ModeSlotChanges_TracksDocsModeShown', async () => {
+    const { harness } = startDocsPage();
+    const shownMode = harness.state.publish(coreModeSlot);
+    // The fake mode's side bar is hidden, so with Docs mode shown a tree command
+    // reports its tree out of sight, and with it not shown no view acts at all.
+    const treeDownActed = () => {
+      const before = harness.logs.length;
+      harness.started().commands.treeDown({});
+      return harness.logs.length > before;
+    };
+    expect(treeDownActed()).toBe(false);
+
+    shownMode.set('docs.docs');
+    expect(treeDownActed()).toBe(true);
+
+    shownMode.set('other.mode');
+    expect(treeDownActed()).toBe(false);
+    await harness.stop();
+  });
 
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startDocsPage();

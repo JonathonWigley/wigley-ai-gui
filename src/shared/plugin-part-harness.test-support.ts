@@ -26,8 +26,8 @@ import type {
   MainServices,
   MainStart,
   ModeHandle,
-  Modes,
   PageApi,
+  PageModes,
   PagePart,
   PageServices,
   PageStart,
@@ -905,7 +905,7 @@ function fakeModes(
   manifest: PluginManifest,
   { liveModes }: PageWorld,
   common: CommonApi,
-): Modes {
+): PageModes {
   return {
     add(mode) {
       const id = qualify(manifest.id, mode.id);
@@ -940,7 +940,6 @@ function fakeModes(
       }
       return liveModes[0];
     },
-    onChanged: common.liveHandle,
   };
 }
 
@@ -1061,7 +1060,6 @@ function fakePageApi(
       pushScope: (scope) =>
         fakePushedScope(qualify(manifest.id, scope), common),
       scope: () => world.scope,
-      onScopeChanged: liveHandle,
       onPending: liveHandle,
       holdPending() {},
       cancelPending() {},

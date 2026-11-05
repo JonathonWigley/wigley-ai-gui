@@ -549,13 +549,6 @@ const RECORDED_ROWS: RecordedRow[] = [
     register: (api) => api.modes.add({ id: 'browse' } as Mode),
   },
   {
-    member: 'modes.onChanged',
-    dep: (handle) => ({
-      modes: { onChanged: () => handle } as unknown as Modes,
-    }),
-    register: (api) => api.modes.onChanged(() => {}),
-  },
-  {
     member: 'state.publish',
     dep: (handle) => ({
       state: { publish: () => handle } as unknown as SlotStore,
@@ -599,7 +592,6 @@ type HearingWorld = {
   api: ReturnType<typeof createPageApi>;
   send: ReturnType<typeof fakeBridge>['send'];
   bus: EventBus;
-  scopeStack: ScopeStack;
   config: ReturnType<typeof liveConfig>;
   state: SlotStore;
 };
@@ -618,11 +610,6 @@ const HEARING_ROWS: {
     member: 'events.on',
     listen: ({ api }, heard) => api.events.on('q.done', heard),
     speak: ({ bus }) => bus.emit('q.done', 1),
-  },
-  {
-    member: 'keys.onScopeChanged',
-    listen: ({ api }, heard) => api.keys.onScopeChanged(heard),
-    speak: ({ scopeStack }) => scopeStack.setBase('q.view'),
   },
   {
     member: 'state.read().on',
@@ -712,15 +699,14 @@ describe('createPageApi recording', () => {
     ({ listen, speak }) => {
       const { bridge, send } = fakeBridge();
       const bus = createEventBus();
-      const scopeStack = createScopeStack('any');
       const config = liveConfig();
       const registrations = createRegistrations();
       const state = createSlotStore(() => {});
       const api = createPageApi(
         manifest,
-        deps({ bridge, bus, scopeStack, config, registrations, state }),
+        deps({ bridge, bus, config, registrations, state }),
       );
-      const world = { api, send, bus, scopeStack, config, state };
+      const world = { api, send, bus, config, state };
       const heard: unknown[] = [];
       listen(world, (data) => heard.push(data));
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { EditorHost } from '../../../contracts/editor';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
@@ -41,6 +42,7 @@ const SESSION: ChatSessionState = {
 function startChatPage(
   invoke: (method: string) => Promise<unknown>,
   destroyEditor: () => void = () => undefined,
+  isTabVisible: () => boolean = () => false,
 ) {
   return startPagePart(chatPagePart, {
     invoke,
@@ -64,7 +66,7 @@ function startChatPage(
               consumer.track({
                 dispose() {},
                 select() {},
-                isVisible: () => false,
+                isVisible: isTabVisible,
               }),
             addRowPart: () => consumer.track({ dispose() {} }),
             activate() {},
@@ -152,6 +154,35 @@ describe('chat page part', () => {
     harness.emit('sessions.sessionRemoved', { sessionId: SESSION.sessionId });
 
     expect(destroyEditor).toHaveBeenCalledOnce();
+    await harness.stop();
+  });
+
+  it('start_ScopeSlotChanges_TellsTabStops', async () => {
+    let isTabVisible = true;
+    const harness = startChatPage(
+      noSessions,
+      () => undefined,
+      () => isTabVisible,
+    );
+    const leave = vi.fn<() => void>();
+    const view = harness
+      .started()
+      .exports?.(createRegistrations()) as ChatPageExports;
+    view.addComposerPart({
+      id: 'part',
+      build: () => ({}),
+      stop: { enter: () => true, leave },
+    });
+    harness.send('sessionStarted', SESSION);
+    harness.started().commands.nextEntry({});
+    const scope = harness.state.publish(coreScopeSlot);
+
+    scope.set('other.view');
+    expect(leave).not.toHaveBeenCalled();
+
+    isTabVisible = false;
+    scope.set('another.view');
+    expect(leave).toHaveBeenCalledOnce();
     await harness.stop();
   });
 

@@ -1,6 +1,6 @@
 # 05 — Slot registry
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -306,3 +306,5 @@ Done when: `npm run typecheck` passes; `npm run lint` passes on all 21 manifests
 Commit: one commit for the group.
 
 ## Proof
+
+Commit c0704474 · proof: Diff read; state.ts, slot-store, slot-holder, page-state, bridge members and 22 manifests' reads present; typecheck and lint clean. · concerns: main.ts serveSlots and renderer createPageState have no test (task 16); kind-mismatch throw in applyPageWrite surfaces as main's uncaught exception; contracts/state.ts and plugin.ts import each other's types; onWrite throwing leaves the page store updated and skips local listeners; applyPageWrite steps seq on any unrefused change.

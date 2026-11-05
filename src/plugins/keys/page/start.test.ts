@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { Keymap } from '../../../contracts/keymap';
 import {
   asHtml,
@@ -62,6 +63,45 @@ describe('keys page part', () => {
 
     expect(listener).toBeDefined();
     expect(removed).toHaveBeenCalledWith(PLACEMENT_CHECK_EVENT, listener);
+  });
+
+  it('start_ScopeSlotChanges_AppliesAnchorVisibility', async () => {
+    const harness = startPagePart(keysPagePart);
+    const view = harness
+      .started()
+      .exports?.(createRegistrations()) as KeysPageExports;
+    const span = new FakeElement('span');
+    view.anchor(asHtml(span), 'keys.toggleHelp', { scope: 'keys.help' });
+    // The harness's `keys.scope` stays put, so only a new look at it brings this back.
+    span.classList.remove('is-hint-hidden');
+
+    harness.state.publish(coreScopeSlot).set('other.view');
+
+    expect(span.classList.contains('is-hint-hidden')).toBe(true);
+    await harness.stop();
+  });
+
+  it('start_ScopeSlotChanges_RecordsTheScopeForThePlacementCheck', async () => {
+    const harness = startPagePart(keysPagePart);
+    // The harness stubs its own `document` as it starts, so the spy goes on that
+    // one and the restart is the start it watches.
+    const added = vi.spyOn(document, 'addEventListener');
+    await harness.restart();
+    const checkPlacement = added.mock.calls.find(
+      ([type]) => type === PLACEMENT_CHECK_EVENT,
+    )?.[1] as () => void;
+    harness.pushKeymap({
+      ...KEYMAP,
+      page: [{ keys: ['x'], scope: 'other.view', command: 'keys.toggleHelp' }],
+    });
+
+    harness.state.publish(coreScopeSlot).set('other.view');
+    checkPlacement();
+
+    expect(harness.logs.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([expect.stringContaining('other.view')]),
+    );
+    await harness.stop();
   });
 
   it.each<{

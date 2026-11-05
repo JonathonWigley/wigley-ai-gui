@@ -59,6 +59,7 @@ import { startedPluginsConfig } from './started-config';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
+import { startPageCoreSlots } from './state/core-slots';
 import { createPageState } from './state/page-state';
 import { createPageUiState } from './ui-state';
 import { createVisualFrames } from './visual-frames/visual-frames';
@@ -179,6 +180,11 @@ async function start() {
   chrome.showProblems(config.problems);
 
   const scopeStack = createScopeStack(INITIAL_SCOPE);
+  const coreSlots = startPageCoreSlots(state, {
+    scope: scopeStack,
+    modes,
+    theme: config.theme.name,
+  });
   const paneTargets = createPaneTargets(
     shell.sideBarDivider,
     () => scopeStack.anyPushed(),
@@ -349,6 +355,7 @@ async function start() {
         apply(theme, applied) {
           themeApplier.apply(theme, applied);
           shell.reloadBarOpenWidths();
+          coreSlots.themeApplied(theme.name);
         },
       },
       editor,
@@ -365,6 +372,7 @@ async function start() {
     applyPush(heldPush);
     heldPush = null;
   }
+  bus.emit(qualify('core', 'pageReady'), null);
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
   document.body.dataset.ready = 'true';

@@ -109,6 +109,7 @@ import {
 } from './layouts/layout-service';
 import { resolveCloneDir } from './resolve-clone-dir';
 import { createSlotHolder } from './state/slot-holder';
+import { startWindowFocusSlot } from './state/window-focus-slot';
 import { createSessionHostClient } from './session-host/session-host-client';
 import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
@@ -880,6 +881,14 @@ function createWindow(
     driveRun.listening.catch(failStart);
   }
   const layouts = serveLayouts(window, inputs.homeDir, inputs.repoDir, log);
+  const slots = serveSlots(window, log);
+  startWindowFocusSlot(slots, {
+    isFocused: () => window.isFocused(),
+    onFocusChange(listener) {
+      window.on('focus', () => listener(true));
+      window.on('blur', () => listener(false));
+    },
+  });
   // The service's dispose on quit ends the registration.
   layouts.register(
     'shell',
@@ -927,7 +936,7 @@ function createWindow(
     driveRun,
     startList,
     commands,
-    serveSlots(window, log),
+    slots,
   );
   // The layouts service closes after every part's registrations, even when a
   // part's stop rejects.

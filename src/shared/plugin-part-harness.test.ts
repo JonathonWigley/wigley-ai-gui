@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { coreScopeSlot } from '../contracts/core-state';
 import type { Disposable } from '../contracts/disposable';
 import type { EditorEvents } from '../contracts/editor';
 import type { Keymap } from '../contracts/keymap';
@@ -115,7 +116,7 @@ function pageSample(kind: 'tidy' | 'leaky'): PagePart<typeof pageManifest> {
       observer.observe(element);
       const frame = requestAnimationFrame(() => {});
       api.areas.statusBar.contribute(element);
-      api.keys.onScopeChanged(() => {});
+      api.state.read(coreScopeSlot).on(() => {});
       api.channel.on('changed', () => {});
       return {
         commands: { run() {} },

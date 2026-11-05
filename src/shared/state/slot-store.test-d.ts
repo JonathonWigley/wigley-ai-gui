@@ -1,7 +1,17 @@
 // Type tests, checked under `vitest --typecheck`: the line after each
 // `@ts-expect-error` must fail to compile.
-import { describe, it } from 'vitest';
-import type { ChannelShape, MainApi, PageApi } from '../../contracts/plugin';
+import { describe, expectTypeOf, it } from 'vitest';
+import {
+  type CoreEvents,
+  coreModeSlot,
+  coreWindowFocusedSlot,
+} from '../../contracts/core-state';
+import type {
+  ChannelShape,
+  MainApi,
+  PageApi,
+  QualifiedEvents,
+} from '../../contracts/plugin';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import { definePlugin } from '../define-plugin';
 
@@ -18,6 +28,12 @@ const manifest = definePlugin({
 
 declare const api: MainApi<typeof manifest, ChannelShape>;
 declare const pageApi: PageApi<typeof manifest, ChannelShape>;
+declare const hearingPageApi: PageApi<
+  typeof manifest,
+  ChannelShape,
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
+>;
 
 declare function ownKey<V>(): SlotKey<V, 'main', 'p'>;
 declare const own: SlotKey<number, 'main', 'p'>;
@@ -73,6 +89,20 @@ describe('PluginState', () => {
       api.state.read(ofOther);
       // @ts-expect-error -- `soft` is in reads.main only
       pageApi.state.read(softOnPage);
+
+      expectTypeOf(pageApi.state.read(coreModeSlot).get()).toEqualTypeOf<
+        string | undefined
+      >();
+      expectTypeOf(api.state.read(coreWindowFocusedSlot).get()).toEqualTypeOf<
+        boolean | undefined
+      >();
+      // @ts-expect-error -- a core key is the core's to publish
+      pageApi.state.publish(coreModeSlot);
+      // @ts-expect-error -- a core key is the core's to publish
+      api.state.publish(coreWindowFocusedSlot);
+      hearingPageApi.events.on('core.pageReady', (data) =>
+        expectTypeOf(data).toEqualTypeOf<null>(),
+      );
     };
     return typeChecksOnly;
   });
