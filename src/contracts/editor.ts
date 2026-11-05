@@ -1,4 +1,5 @@
 import type { Disposable } from './disposable';
+import type { FuzzyMatcher } from './fuzzy';
 import type { EditorBind, EditorKeymap } from './keymap';
 import type { Log } from './log';
 import type { Paths } from './paths';
@@ -132,14 +133,24 @@ export interface SightTop {
   cut: boolean;
 }
 
+// One completion: `word` is what the row shows and inserts after the prefix;
+// `aliases` also match the typed text, and are never shown or inserted.
+export interface CompletionItem {
+  word: string;
+  aliases: readonly string[];
+}
+
 // While the editor is in insert mode and the text from the document's start to the cursor is `prefix`
-// followed by no whitespace, offers the `words()` that start with the text typed after `prefix`, ignoring
-// case, in the order `words()` gives them. Accepting one replaces that text with `prefix`, the word and
-// one space. `offered` hears the offered words each time the list changes while it is open; `accepted`
-// hears the word accepted.
+// followed by no whitespace, offers the `items()` whose word or an alias fuzzily matches the text typed
+// after `prefix`, best first, each word once; with nothing typed, every item in the order `items()` gives
+// them. Accepting one replaces that text with `prefix`, the word and one space. `drawRow` hears each row's
+// word as the popup draws it, with a new element inside the row, after the `prefix` and word text, to
+// append to or replace the children of. `offered` hears the offered words each time the list changes
+// while it is open; `accepted` hears the word accepted.
 export interface EditorCompletions {
   prefix: string;
-  words(): readonly string[];
+  items(): readonly CompletionItem[];
+  drawRow?(word: string, row: HTMLElement): void;
   offered(words: readonly string[]): void;
   accepted(word: string): void;
 }
@@ -197,11 +208,13 @@ export interface EditorHost {
 // does what the key does unbound, so Enter still breaks the line. `log`
 // takes the host's own lines, such as a mapping the editor engine had lost.
 // `chips` draws the file chips every box shows; a document editor draws none.
+// `matcher` ranks a box's completions.
 export type CreateEditorHost = (
   keymap: EditorKeymap,
   run: (binds: EditorBind[], editor: TextEditor) => boolean,
   log: Log,
   chips: FileChipDrawing,
+  matcher: FuzzyMatcher,
 ) => EditorHost;
 
 // What the host needs to draw file chips: the OS's path rules, which find a

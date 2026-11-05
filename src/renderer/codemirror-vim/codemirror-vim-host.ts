@@ -32,6 +32,7 @@ import type {
   EditorMode,
 } from '../../contracts/keymap';
 import type { Disposable } from '../../contracts/disposable';
+import type { FuzzyMatcher } from '../../contracts/fuzzy';
 import type { Paths } from '../../contracts/paths';
 import {
   DOCUMENT_EX_COMMANDS,
@@ -763,9 +764,10 @@ function boxExtensions(
   options: EditorOptions | undefined,
   leaving: (view: EditorView) => void,
   chips: FileChipDrawing,
+  matcher: FuzzyMatcher,
 ) {
   const completion = options?.completions
-    ? prefixCompletion(options.completions)
+    ? prefixCompletion(options.completions, matcher)
     : [];
   return [
     escapeCancelsUnfinishedInput(),
@@ -862,6 +864,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   run,
   log,
   chips,
+  matcher,
 ) => {
   const hosted: HostedEditor[] = [];
   let keymap = initialKeymap;
@@ -946,7 +949,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     create(parent, doc, events, options) {
       const view = new EditorView({
         doc,
-        extensions: boxExtensions(events, options, leaving, chips),
+        extensions: boxExtensions(events, options, leaving, chips, matcher),
         parent,
       });
       const editor = hostView(view, events.modeChanged, (shared) => shared);

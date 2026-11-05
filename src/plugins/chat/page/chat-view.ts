@@ -835,11 +835,11 @@ function createTab(
         prefix: '/',
         // Read each call: commands can arrive or register after the box
         // exists.
-        words: () =>
+        items: () =>
           completionWords(
             deps.slashCommandNames(),
             tab.state.commands.map((command) => command.name),
-          ),
+          ).map((word) => ({ word, aliases: [] })),
         offered: (words) =>
           deps.log(
             `completions offered: ${words.map((word) => `/${word}`).join(', ')}`,

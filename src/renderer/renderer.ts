@@ -220,6 +220,7 @@ async function start() {
     },
     log,
     { paths, fileIcon: () => icon('file') },
+    fuzzy,
   );
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
