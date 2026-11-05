@@ -386,7 +386,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
             opened.projectDir,
             opened.profile.name,
             item.row.hostSessionId,
-            item.kind === 'section' ? item.closed.title : item.row.title,
+            shownTitle(item),
           );
         }
       },
@@ -424,7 +424,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       log('archive ignored: an archive write is in flight');
       return;
     }
-    const { hostSessionId, title } = item.row;
+    const { hostSessionId } = item.row;
+    const title = shownTitle(item);
     const archived = !item.row.archived;
     shown.isWriting = true;
     void channel.invoke('setArchived', hostSessionId, archived).then(
@@ -464,6 +465,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     toggleArchive,
     showArchived: toggleShowArchived,
   };
+}
+
+// The title a saved session's line shows and resumes under.
+function shownTitle(item: Exclude<SessionItem, { kind: 'new' }>): string {
+  return item.kind === 'section' ? item.closed.title : item.row.title;
 }
 
 function resumeSession(

@@ -1,0 +1,110 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EditorHost } from '../../../contracts/editor';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  findAll,
+  installFakeDom,
+} from '../../../shared/page/test-dom';
+import type { ChatLayouts } from './chat-layouts';
+import { createPicker } from './picker';
+
+const NOOP = () => undefined;
+
+// Appends a part root holding `text` to `parent`, as a layout's builder does.
+function drawnPart(parent: HTMLElement, text: string) {
+  const root = new FakeElement('div');
+  root.textContent = text;
+  parent.append(asHtml(root));
+  return { element: asHtml(root) };
+}
+
+// Draws each row and heading with a text only the fake's builders write.
+const layouts = {
+  onChange: () => ({ dispose: NOOP }),
+  draw(
+    part: 'pickerRow' | 'pickerHeading',
+    parent: HTMLElement,
+    build: (
+      builder: unknown,
+      at: HTMLElement,
+      rollback: unknown,
+    ) => { element: HTMLElement },
+  ) {
+    const builders = {
+      pickerRow: (at: HTMLElement, input: { label: string }) =>
+        drawnPart(at, `row ${input.label}`),
+      pickerHeading: (at: HTMLElement, input: { title: string }) =>
+        drawnPart(at, `heading ${input.title}`),
+    };
+    const built = build(builders[part], parent, { recordAnchor: NOOP });
+    return { built, dispose: NOOP };
+  },
+} as unknown as ChatLayouts;
+
+const filterEditor = {
+  create: () => ({ setText: NOOP }),
+} as unknown as EditorHost;
+
+function pickerSetup() {
+  let layer: FakeElement | null = null;
+  const picker = createPicker({
+    overlay: {
+      contribute(element) {
+        layer = asFake(element);
+        return { dispose: NOOP };
+      },
+    },
+    editor: filterEditor,
+    pushScope: () => ({
+      pop: NOOP,
+      dispose: NOOP,
+      onBaseChanged: () => ({ dispose: NOOP }),
+    }),
+    layouts,
+    log: NOOP,
+    matcher: fakeFuzzyMatcher,
+    keys: recordingAnchors().keys,
+    markdown: {} as never,
+    commands: { exists: () => true, run: NOOP },
+    platform: 'macos',
+  });
+  return { picker, layer: layer as unknown as FakeElement };
+}
+
+describe('chat picker', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('draws a section heading above its rows through the heading part', () => {
+    const { picker, layer } = pickerSetup();
+    const sections = new Map([
+      ['Fix login', 'Recently closed'],
+      ['Add cache', 'Recently closed'],
+      ['~/dev/app', 'Folders'],
+    ]);
+
+    picker.open<string>({
+      title: 'Folder',
+      items: [...sections.keys()],
+      label: (item) => item,
+      rowInput: (item) => ({ list: 'choices', label: item, isCurrent: false }),
+      section: (item) => sections.get(item) ?? null,
+      picked: NOOP,
+    });
+
+    const [list] = findAll(layer, 'ui-picker-list');
+    expect(list.children.map((child) => child.textContent)).toEqual([
+      'heading Recently closed',
+      'row Fix login',
+      'row Add cache',
+      'heading Folders',
+      'row ~/dev/app',
+    ]);
+  });
+});

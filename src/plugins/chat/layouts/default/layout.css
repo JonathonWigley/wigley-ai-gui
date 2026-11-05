@@ -414,8 +414,14 @@
   white-space: nowrap;
 }
 
-/* A picker section row's title gives way first: its details stay whole up to
-   their cap, then both end in an ellipsis. */
+/* A picker section row's title fills the row, its details at the row's end, and
+   gives way first: its details stay whole up to their cap, then both end in an
+   ellipsis. */
+[data-layout-owner='chat'][data-layout='default'].chat-picker-section-row
+  .ui-row-label {
+  flex-grow: 1;
+}
+
 [data-layout-owner='chat'][data-layout='default'].chat-picker-section-row
   .ui-row-detail {
   flex-shrink: 0;

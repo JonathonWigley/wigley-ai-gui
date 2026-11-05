@@ -33,7 +33,8 @@ export function folderSectionDetail(
 }
 
 // The folder step's lines: the section rows, then the recent folders in the
-// order given, then the choose-folder line.
+// order given, then the choose-folder line. A section row's label spells its
+// folder's full path, where its detail shows only the base.
 export function folderItems(
   recent: readonly RecentFolder[],
   sections: readonly ResumeSectionRows[],
@@ -45,7 +46,7 @@ export function folderItems(
       kind: 'section',
       section,
       row,
-      label: `${row.title} · ${folderSectionDetail(row, paths)}`,
+      label: `${row.title} · ${displayPath(row.projectDir, homeDir, paths)} · ${row.profile} · ${sessionTime(row.at)}`,
     }),
   );
   const recentItems: FolderItem[] = recent.map((folder) => ({
