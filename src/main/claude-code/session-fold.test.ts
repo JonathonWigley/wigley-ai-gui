@@ -884,6 +884,23 @@ describe('session-fold', () => {
       deliveries: { 'user-1': 'sent' },
     },
     {
+      case: 'a requested message answered by an assistant line alone',
+      lines: [
+        ...STARTED_U1,
+        outLine(requesting(['u1'])),
+        outLine({
+          type: 'assistant',
+          parent_tool_use_id: null,
+          message: {
+            id: 'm1',
+            model: 'claude-opus-5-5',
+            content: [{ type: 'text', text: 'ok' }],
+          },
+        }),
+      ],
+      deliveries: { 'user-1': 'received' },
+    },
+    {
       case: 'a subagent response',
       lines: [
         ...STARTED_U1,
@@ -951,6 +968,17 @@ describe('session-fold', () => {
       deliveries: { 'user-1': null },
     },
     {
+      case: 'a requested slash command ending with no response',
+      lines: [
+        inLine(send('/skill arg', 'u1')),
+        outLine(lifecycleInit),
+        outLine(lifecycle('u1', 'started')),
+        outLine(requesting(['u1'])),
+        outLine(lifecycle('u1', 'cancelled')),
+      ],
+      deliveries: { 'user-1': 'notReceived' },
+    },
+    {
       case: 'another message ending',
       lines: [
         ...STARTED_U1,
@@ -995,6 +1023,17 @@ describe('session-fold', () => {
         outLine(requesting(['u1'])),
         outLine(messageStart('m1')),
         outLine(lifecycle('u1', 'completed')),
+      ],
+      closesProcess: true,
+      deliveries: { 'user-1': null },
+    },
+    {
+      case: 'held across a plain init',
+      lines: [
+        inLine(send('hi', 'u1')),
+        outLine(plainInit),
+        outLine(requesting(['u1'])),
+        outLine(messageStart('m1')),
       ],
       closesProcess: true,
       deliveries: { 'user-1': null },

@@ -66,10 +66,10 @@ import {
 // replay of its pipe log share it. The state is mutable and one process owns it.
 //
 // A user entry's `delivery` reads the lines by message uuid: `sent` on its
-// `started` line, `received` on the first main `message_start` after a main
-// `requesting` line named it, and on its terminal state or the process's close
-// with neither, `notReceived`, or null for text that starts with `/`. A fallback
-// mode entry stays null.
+// `started` line, `received` on the first main `message_start` or non-synthetic
+// `assistant` line after a main `requesting` line named it, and on its terminal
+// state or the process's close with neither, `notReceived`, or null for text that
+// starts with `/` and no `requesting` line named. A fallback mode entry stays null.
 //
 // Replay matches live except for:
 // - the "Interrupted again" notice: a call makes it, not a line, and the process
@@ -950,13 +950,12 @@ function releaseAllHeldMessages(
 function endAwaitingResponse(
   state: SessionFoldState,
   uuid: string,
-  { draft }: AwaitingResponse,
+  { draft, isRequested }: AwaitingResponse,
   at: number,
   effects: FoldEffect[],
 ): void {
-  const delivery: UserDelivery | null = draft.text.startsWith('/')
-    ? null
-    : 'notReceived';
+  const isLocalCommand = draft.text.startsWith('/') && !isRequested;
+  const delivery: UserDelivery | null = isLocalCommand ? null : 'notReceived';
   pushEntry(state, { ...draft, delivery }, at, effects);
   state.awaitingResponses.delete(uuid);
 }

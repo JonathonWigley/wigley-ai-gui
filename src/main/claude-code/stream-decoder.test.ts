@@ -383,6 +383,35 @@ describe('createStreamDecoder', () => {
       requestedMessages: [],
       responseStarted: false,
     },
+    {
+      case: 'main model assistant',
+      event: assistantEvent('m1', [{ type: 'text', text: 'ok' }]),
+      requestedMessages: [],
+      responseStarted: true,
+    },
+    {
+      case: 'main synthetic assistant',
+      event: {
+        type: 'assistant',
+        message: {
+          model: '<synthetic>',
+          id: 'm1',
+          content: [{ type: 'text', text: 'ok' }],
+        },
+        parent_tool_use_id: null,
+      },
+      requestedMessages: [],
+      responseStarted: false,
+    },
+    {
+      case: 'subagent model assistant',
+      event: {
+        ...assistantEvent('m1', [{ type: 'text', text: 'ok' }]),
+        parent_tool_use_id: 'call-1',
+      },
+      requestedMessages: [],
+      responseStarted: false,
+    },
   ])(
     'decode_DeliveryFields ($case)',
     ({ event, requestedMessages, responseStarted }) => {

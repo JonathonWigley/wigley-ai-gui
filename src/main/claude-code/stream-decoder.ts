@@ -42,7 +42,7 @@ import { SYNTHETIC_MODEL } from './transcripts';
 // `result`'s `user_message_uuid` and `turnMessages` its `user_message_uuids`.
 // `requestedMessages` is a main `system/status` `requesting` line's
 // `user_message_uuids`, `[]` on every other line; `responseStarted` is true on a
-// main `message_start`.
+// main `message_start` and a main non-synthetic `assistant` line.
 // `compaction` is what a main-conversation line says about a compaction, null on
 // every other line; the session fold owns the compaction's state and events.
 // `agentEvents` are the line's agent events other than
@@ -233,6 +233,13 @@ function agentOf(event: Json): string {
 }
 
 // The text of a message's text content, a string or text blocks.
+function isMainModelReply(event: Json, message: Json): boolean {
+  return (
+    typeof event.parent_tool_use_id !== 'string' &&
+    message.model !== SYNTHETIC_MODEL
+  );
+}
+
 function messageText(content: unknown): string {
   if (typeof content === 'string') {
     return content;
@@ -978,10 +985,7 @@ export function createStreamDecoder(
   // A subagent's reply is out of scope, and a synthetic reply's zero usage
   // would reset the context, so only a main model reply reports usage.
   function readReplyUsage(event: Json, message: Json, out: DecodedLine) {
-    const isMainReply =
-      typeof event.parent_tool_use_id !== 'string' &&
-      message.model !== SYNTHETIC_MODEL;
-    if (!isMainReply || !isJsonObject(message.usage)) {
+    if (!isMainModelReply(event, message) || !isJsonObject(message.usage)) {
       return;
     }
     out.replyUsage = replyUsageOf(message.usage);
@@ -990,6 +994,7 @@ export function createStreamDecoder(
 
   function decodeAssistant(event: Json, out: DecodedLine) {
     const message = asJson(event.message);
+    out.responseStarted = isMainModelReply(event, message);
     pairRevive(event, out);
     readReplyUsage(event, message, out);
     reportSubagentReply(event, message, out);

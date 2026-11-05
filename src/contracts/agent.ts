@@ -67,7 +67,7 @@ export type ChatEntry =
       text: string;
       images: ChatImage[];
       // Null when nothing tracks it: saved history, a harness with no message lifecycle, a slash command that ended
-      // with no response.
+      // with no request naming it.
       delivery: UserDelivery | null;
       raw: unknown[];
     }
