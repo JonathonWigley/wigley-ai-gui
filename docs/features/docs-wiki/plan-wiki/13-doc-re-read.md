@@ -1,6 +1,6 @@
 # 13 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 9 · Depends on: 12
 Plan: [plan.md](plan.md)
@@ -55,3 +55,4 @@ Commit: one commit per repo that changed.
 
 ## Proof
 
+Commit 38d42a0e · proof: Diff read. Changed: AGENTS.md, docs-wiki/design.md, docs-browser/design.md. No change needed: docs/keymap.md, DESIGN.md (950), layouts/design.md, marketplace docs-index README (schema 5), wiki/Main.md. Main.md check on the user's own index, read-only (schema 4 until the plugin lands): no format fault, no dangling link across 10 path and 12 wigley: links. check_pointers.py and lint pass. · concerns: e above the first heading and gh from a session tab are written from the user's decisions, not traced to the end of the code path. The top-row placement of the history arrows comes from CSS selectors, not a screenshot.
