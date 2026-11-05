@@ -443,6 +443,14 @@ async function dataWithSavedRow(): Promise<Files> {
 }
 
 describe('chat main part', () => {
+  const RESUME_ROW = {
+    hostSessionId: 'host-a',
+    projectDir: '/p',
+    profile: 'work',
+    title: 'a session',
+    at: 1000,
+  };
+
   it('loaded_SignInRunning_CancelsIt', () => {
     const chat = startChatPart();
     chat.invoke('logIn', 1, 'work');
@@ -910,42 +918,71 @@ describe('chat main part', () => {
     expect(chat.timerRuns.size).toBe(0);
   });
 
-  it('exports_ConsumerDisposed_DropsItsInstructions', () => {
+  it.each([
+    {
+      contribution: 'instructions',
+      contribute: (view: ChatMainExports) => view.addInstructions('note'),
+      observe: (chat: ReturnType<typeof startChatPart>) => {
+        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        return chat.startInstructions.at(-1);
+      },
+      expected: [expect.stringContaining('set_session_title')],
+    },
+    {
+      contribution: 'a send gate',
+      contribute: (view: ChatMainExports) =>
+        view.addSendGate(() => ({ action: 'compact', reason: 'r' })),
+      observe: async (chat: ReturnType<typeof startChatPart>) => {
+        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        await chat.exports.send('row-1', { text: 'hi', images: [] });
+        return chat.processSends.mock.calls;
+      },
+      expected: [[{ text: 'hi', images: [] }]],
+    },
+    {
+      contribution: 'an idle compact threshold',
+      contribute: (view: ChatMainExports) =>
+        view.addIdleCompactThreshold(() => 150_000),
+      observe: (chat: ReturnType<typeof startChatPart>) => {
+        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        return chat.startIdleCompactMinTokens.at(-1);
+      },
+      expected: null,
+    },
+    {
+      contribution: 'a resume section',
+      contribute: (view: ChatMainExports) =>
+        view.addResumeSection({
+          title: 'a section',
+          rows: () => Promise.resolve([RESUME_ROW]),
+        }),
+      observe: (chat: ReturnType<typeof startChatPart>) =>
+        chat.invoke('resumeSections'),
+      expected: [],
+    },
+  ])(
+    'exports_ConsumerDisposed_DropsContribution given $contribution',
+    async ({ contribute, observe, expected }) => {
+      const chat = startChatPart();
+      const consumer = createRegistrations();
+      contribute(chat.part.exports?.(consumer) as ChatMainExports);
+
+      consumer.dispose();
+
+      expect(await observe(chat)).toEqual(expected);
+    },
+  );
+
+  it('exports_AddResumeSection_ReachesResumeSections', async () => {
     const chat = startChatPart();
-    const consumer = createRegistrations();
-    const view = chat.part.exports?.(consumer) as ChatMainExports;
-    view.addInstructions('note');
-
-    consumer.dispose();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-
-    expect(chat.startInstructions.at(-1)).toEqual([
-      expect.stringContaining('set_session_title'),
-    ]);
-  });
-
-  it('exports_AddResumeSection_ConsumerDisposed_DropsSection', async () => {
-    const chat = startChatPart();
-    const consumer = createRegistrations();
-    const view = chat.part.exports?.(consumer) as ChatMainExports;
-    const row = {
-      hostSessionId: 'host-a',
-      projectDir: '/p',
-      profile: 'work',
-      title: 'a session',
-      at: 1000,
-    };
-    view.addResumeSection({
+    chat.exports.addResumeSection({
       title: 'a section',
-      rows: () => Promise.resolve([row]),
+      rows: () => Promise.resolve([RESUME_ROW]),
     });
+
     expect(await chat.invoke('resumeSections')).toEqual([
-      { title: 'a section', rows: [row] },
+      { title: 'a section', rows: [RESUME_ROW] },
     ]);
-
-    consumer.dispose();
-
-    expect(await chat.invoke('resumeSections')).toEqual([]);
   });
 });
 

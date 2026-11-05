@@ -6741,6 +6741,32 @@ describe('createChatSessions lifecycle events', () => {
     },
   );
 
+  it.each([
+    {
+      given: 'a closed row',
+      act: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID, 'user'),
+    },
+    {
+      given: 'a cleared row',
+      act: (test: ReturnType<typeof setUp>) => test.chat.clear(ROW_ID),
+    },
+    {
+      given: 'detachAll',
+      act: (test: ReturnType<typeof setUp>) => void test.chat.detachAll(),
+    },
+  ])(
+    'processEnded_ProcessNoLongerLive_FiresNothing given $given',
+    async ({ act }) => {
+      const test = await started();
+      test.harness.holdEnd();
+      act(test);
+
+      test.process.events.ended({ code: 0, error: null });
+
+      expect(emittedOf(test, 'processEnded')).toEqual([]);
+    },
+  );
+
   it('processEnded_DuringReplay_FiresNothing', async () => {
     const test = setUp();
     test.harness.scriptAttach('p1', {
@@ -6862,13 +6888,24 @@ describe('createChatSessions resume sections', () => {
       ids: ['uuid-1', 'uuid-2'],
       resumable: ['uuid-1'],
     },
+    {
+      given: 'an unreadable archived file',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        test.data.write(ARCHIVED_SESSIONS_FILE, '["host-archived"'),
+      ids: ['host-archived', 'host-free'],
+      resumable: ['host-archived', 'host-free'],
+      logsUnreadable: true,
+    },
   ])(
     'resumeSections_IsResumable_FollowsHeldArchivedAndOpen given $given',
-    async ({ arrange, ids, resumable }) => {
+    async ({ arrange, ids, resumable, logsUnreadable = false }) => {
       const test = setUp();
       await arrange(test);
 
       expect(await resumableAmong(test, ids)).toEqual(resumable);
+      expect(
+        test.logged.some((line) => line.includes(ARCHIVED_SESSIONS_FILE)),
+      ).toBe(logsUnreadable);
     },
   );
 
@@ -6901,19 +6938,39 @@ describe('createChatSessions resume sections', () => {
     },
   );
 
-  it('isResumable_JustClosedRowEnding_IsFalseUntilEnded', async () => {
-    const test = setUp();
-    test.chat.start(START);
-    await flush();
-    test.chat.sessionConnected(connected(ROW_ID, 'uuid-1'));
-    test.harness.holdEnd();
+  it.each([
+    {
+      given: 'a row closed',
+      clears: false,
+      ids: ['uuid-1'],
+      whileEnding: [],
+    },
+    {
+      given: 'a row /clear moved to a new host id, then closed',
+      clears: true,
+      ids: ['uuid-1', 'uuid-2'],
+      whileEnding: ['uuid-1'],
+    },
+  ])(
+    'isResumable_JustClosedRowEnding_IsFalseUntilEnded given $given',
+    async ({ clears, ids, whileEnding }) => {
+      const test = setUp();
+      test.chat.start(START);
+      await flush();
+      test.chat.sessionConnected(connected(ROW_ID, 'uuid-1'));
+      if (clears) {
+        test.chat.clear(ROW_ID);
+        await flush();
+      }
+      test.harness.holdEnd();
 
-    test.chat.closed(ROW_ID, 'user');
-    expect(await resumableAmong(test, ['uuid-1'])).toEqual([]);
+      test.chat.closed(ROW_ID, 'user');
+      expect(await resumableAmong(test, ids)).toEqual(whileEnding);
 
-    test.chat.sessionEnded(ROW_ID);
-    expect(await resumableAmong(test, ['uuid-1'])).toEqual(['uuid-1']);
-  });
+      test.chat.sessionEnded(ROW_ID);
+      expect(await resumableAmong(test, ids)).toEqual(ids);
+    },
+  );
 
   it('resumeSections_NoRows_LeavesSectionOut', async () => {
     const test = setUp();

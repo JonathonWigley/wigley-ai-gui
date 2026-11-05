@@ -2839,6 +2839,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const wasSent = session.sent;
     const newHostId = deps.randomUuid();
     session.owned.setHostSessionId(newHostId);
+    openHostIds.set(sessionId, newHostId);
     session.hostId = newHostId;
     session.sent = false;
     session.historyPending = false;
