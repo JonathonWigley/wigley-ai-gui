@@ -39,7 +39,7 @@ import type {
   StatusLineKit,
   WorkingInput,
 } from '../layouts/layout';
-import { createActivityDock } from './activity-dock';
+import { createActivityDock, isLive } from './activity-dock';
 import { imageUrl } from './attachments';
 import {
   type ChatLayouts,
@@ -78,22 +78,25 @@ export interface ComposerPieces {
 // parts' slot and the status line's key-holding parts are built once and placed
 // again by each draw; other plugins' composer parts and status parts are built
 // again by each composer draw, not by a status line draw. The tab's activity
-// dock draws two parts with one input: `working` in `dockSlot`, which the
-// surface makes and the session hub's Main agent section places, and
-// `workingLine` in the composer's working slot. Each slot hides while the dock
-// shows nothing or while its part's default draw has failed since the last
-// composer draw.
+// dock draws three parts with one input: `working` in `dockSlot`, which the
+// surface makes and the session hub's Main agent section places, `workingLine`
+// in the composer's working slot, and `workingLine` again in `turnLineSlot`,
+// which the entry list places, there only while the turn is live. Each slot hides
+// while it has nothing to show or while its part's default draw has failed since
+// the last composer draw.
 export interface ComposerSurface {
   // `div.chat-dock-slot`, the same element for the surface's life.
   dockSlot: HTMLElement;
+  // `li.chat-turn-line-slot`, the same element for the surface's life.
+  turnLineSlot: HTMLElement;
   // What the activity dock shows now; null while it shows nothing.
   dockInput(): WorkingInput | null;
-  // Hears what the activity dock shows, after both of its parts have drawn it. A
+  // Hears what the activity dock shows, after each of its parts has drawn it. A
   // listener that throws stops no other, and the first throw reaches the caller.
   onDockChanged(listener: (input: WorkingInput | null) => void): Disposable;
   // Draws the composer into `parent` in place of its last draw, then the
-  // status line with `input`, the last attached images and both of the activity
-  // dock's parts afresh, retrying a failed default draw of either; returns the
+  // status line with `input`, the last attached images and each of the activity
+  // dock's parts afresh, retrying a failed default draw of any; returns the
   // composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
@@ -175,19 +178,32 @@ export function createComposerSurface(
 
   const dockPart = createDockPart(deps, 'working', 'chat-dock-slot');
   const linePart = createDockPart(deps, 'workingLine', 'chat-working-slot');
+  const turnLinePart = createDockPart(
+    deps,
+    'workingLine',
+    'chat-entry-slot chat-turn-line-slot',
+    'li',
+  );
   const workingSlot = linePart.slot;
   const dockListeners = new Set<(input: WorkingInput | null) => void>();
   const dock = createActivityDock({
     clock: deps.clock,
     timers: deps.timers,
     changed: (input) =>
-      callEach([dockPart.show, linePart.show, ...dockListeners], (show) =>
-        show(input),
+      callEach(
+        [
+          dockPart.show,
+          linePart.show,
+          (shown) => turnLinePart.show(liveOnly(shown)),
+          ...dockListeners,
+        ],
+        (show) => show(input),
       ),
   });
 
   const surface: ComposerSurface = {
     dockSlot: dockPart.slot,
+    turnLineSlot: turnLinePart.slot,
     dockInput: () => dock.input(),
     onDockChanged(listener) {
       // A wrapper per subscription, so each handle removes only its own.
@@ -257,6 +273,7 @@ export function createComposerSurface(
       surface.drawAttachments(images);
       dockPart.redraw(dock.input());
       linePart.redraw(dock.input());
+      turnLinePart.redraw(liveOnly(dock.input()));
       return composer.built.element;
     },
     drawStatusLine(input) {
@@ -315,6 +332,7 @@ export function createComposerSurface(
       attachments?.dispose();
       dockPart.dispose();
       linePart.dispose();
+      turnLinePart.dispose();
       dockListeners.clear();
       disposeAnchors(parts.anchors);
     },
@@ -359,15 +377,20 @@ function showBoxFocus(
   parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
 }
 
-// `key`'s part in a new hidden `div.<slotClass>`, which shows while the part has
+function liveOnly(input: WorkingInput | null): WorkingInput | null {
+  return isLive(input) ? input : null;
+}
+
+// `key`'s part in a new hidden `slotTag` of class `slotClass`, which shows while the part has
 // an input to draw; a default that fails is logged once and leaves the slot hidden
 // until the next `redraw`.
 function createDockPart(
   deps: ComposerSurfaceDeps,
   key: 'working' | 'workingLine',
   slotClass: string,
+  slotTag: 'div' | 'li' = 'div',
 ): DockPart {
-  const slot = element('div', slotClass);
+  const slot = element(slotTag, slotClass);
   slot.hidden = true;
   const draws = chatPartDraws(deps.layouts, key, deps.log);
   let part: DrawnPart<BuiltPart<WorkingInput>> | null = null;

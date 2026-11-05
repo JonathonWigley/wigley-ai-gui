@@ -698,24 +698,6 @@ function createTab(
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
   const ref: SessionRef = { sessionId: state.sessionId, name };
-  const entries = createEntryList({
-    layouts: deps.layouts,
-    toastedKinds,
-    kit: {
-      markdown: deps.markdown,
-      keys: deps.keys,
-      commands: deps.commands,
-      platform: deps.platform,
-      allow: (entry) => deps.permissions.allow(ref, entry),
-      deny: (entry) => deps.permissions.deny(ref, entry),
-      openImages: (images, index) => deps.viewer.open(images, index),
-    },
-    log: deps.log,
-    toast: deps.toast,
-    timers: deps.timers,
-    clock: deps.clock,
-    pullBack: (queuedId) => pullBackQueued(deps, ref, queuedId),
-  });
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
   const attachments = createAttachments();
@@ -739,6 +721,25 @@ function createTab(
       removeImage: (index) => attachments.removeAt(index),
     },
   );
+  const entries = createEntryList({
+    layouts: deps.layouts,
+    toastedKinds,
+    kit: {
+      markdown: deps.markdown,
+      keys: deps.keys,
+      commands: deps.commands,
+      platform: deps.platform,
+      allow: (entry) => deps.permissions.allow(ref, entry),
+      deny: (entry) => deps.permissions.deny(ref, entry),
+      openImages: (images, index) => deps.viewer.open(images, index),
+    },
+    log: deps.log,
+    toast: deps.toast,
+    timers: deps.timers,
+    clock: deps.clock,
+    pullBack: (queuedId) => pullBackQueued(deps, ref, queuedId),
+    turnLine: composer.turnLineSlot,
+  });
   attachments.onChange((images) => composer.drawAttachments(images));
   const root = element('div', 'chat-tab');
   const main = element('div', 'chat-main');

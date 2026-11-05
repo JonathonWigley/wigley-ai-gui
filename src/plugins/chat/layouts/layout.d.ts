@@ -140,8 +140,8 @@ export type WorkingState =
   | 'waiting'
   | 'compacting';
 
-// The running turn or compaction, drawn in the session hub's activity dock and the composer's activity line. Times are
-// epoch ms.
+// The running turn or compaction, drawn in the session hub's activity dock, the composer's activity line and the
+// transcript's turn line. Times are epoch ms.
 export interface LiveWorkingInput {
   // What the turn is doing now.
   state: WorkingState;
@@ -497,8 +497,8 @@ export interface ChatLayout {
     kit: BaseKit,
   ): PartView<WorkingInput>;
   // The dock's one line, drawn into the composer's working slot (`ComposerKit.working`) with the same input at the same
-  // times as `working`, for when the hub is not visible. The slot hides while there is nothing to show; it is not a
-  // cursor stop.
+  // times as `working`, for when the hub is not visible, and into the transcript's turn line, the row after the last
+  // entry, with a live input only. Each slot hides while it has nothing to show; neither is a cursor stop.
   workingLine?(
     parent: HTMLElement,
     input: WorkingInput,

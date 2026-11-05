@@ -694,7 +694,8 @@ const layout = {
       },
     };
   },
-  // The dock's one line in the composer; every update draws it afresh.
+  // The dock's one line, in the composer and under the last entry; every update
+  // draws it afresh.
   workingLine(parent, input, kit) {
     const line = root(parent, 'chat-working-line');
     fillWorkingLine(line, input, kit);

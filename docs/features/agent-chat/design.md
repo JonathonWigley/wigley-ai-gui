@@ -217,7 +217,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Activity dock**: the Main agent section of the session hub (`docs/features/chat-bar/design.md` § The session hub),
   drawn by the layout's `working` part. While the hub is not visible, the layout's `workingLine` part draws its time and
   state, or its finished line, into the composer's `working` slot, under the composer parts and above the attached images
-  and the box; both read one dock. It shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
+  and the box; while the hub is visible and the turn runs, the same part draws the time and state as the turn line, the
+  transcript's row after the last entry, which is no cursor stop; all read one dock. It shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
   or `waiting`), then the finished turn's one line until the user sends the next message. While the session is idle with
   no finished turn to show, the slot is hidden and takes no space. It is display only: not a cursor stop, and it adds no
   key. It counts only the main agent's tool calls (a `tool` entry's `agentId` is `main`); a subagent's calls show in its

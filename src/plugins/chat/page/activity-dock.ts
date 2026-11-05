@@ -13,12 +13,12 @@ export interface ActivityDockDeps {
   clock: Clock;
   timers: Timers;
   // Runs each time what the dock shows changes, and once a second with a new `now` while the dock is live; null
-  // hides its session hub section and its composer line.
+  // hides its session hub section, its composer line and its transcript line.
   changed(input: WorkingInput | null): void;
 }
 
-// The activity dock's data: what the session hub's Main agent section and the composer's activity line show for one
-// session. While the session's turn is under
+// The activity dock's data: what the session hub's Main agent section, the composer's activity line and the
+// transcript's turn line show for one session. While the session's turn is under
 // way (working, or waiting on a permission answer), the dock is live (`workingInput`), sent again only when its steps
 // (by identity), state, start or compaction change, and once a second with a new `now`; a live dock is held as shown
 // while the turn holds no entries and no compaction starts or ends, so a turn's last result leaves it running until the
@@ -113,7 +113,7 @@ export function createActivityDock(deps: ActivityDockDeps): ActivityDock {
   };
 }
 
-function isLive(input: WorkingInput | null): input is LiveWorkingInput {
+export function isLive(input: WorkingInput | null): input is LiveWorkingInput {
   return input !== null && input.state !== 'done';
 }
 

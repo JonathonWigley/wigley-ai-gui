@@ -103,7 +103,8 @@
    latest tool calls (the newest in fg), then its tool counts, dim; while a
    compaction runs, its time, state and trigger over a sliding bar; once the
    turn ends, one dim line. The activity line is the composer's one line of it:
-   the time and state, or the finished line. */
+   the time and state, or the finished line. The turn line is the same part
+   under the last entry, live only and dim. */
 .chat-working,
 .chat-working-line {
   font-family: var(--wg-font-ui);
@@ -132,6 +133,10 @@
 
 .chat-working-time {
   font-variant-numeric: tabular-nums;
+}
+
+.chat-turn-line-slot .chat-working-head {
+  color: var(--wg-fg-tertiary);
 }
 
 .chat-working-trigger {
@@ -408,17 +413,20 @@
   white-space: nowrap;
 }
 
-/* A tab too narrow for its entries beside its hub shows the entries, and the
-   composer's activity line shows only while the hub is not visible. The two
-   queries must keep one threshold. */
+/* A tab too narrow for its entries beside its hub shows the entries. The
+   composer's activity line shows only while the hub is not visible, and the
+   turn line only while it is, so one line never shows twice. The two queries
+   must keep one threshold. */
 @container chat-tab (width < 640px) {
-  .chat-side-parts {
+  .chat-side-parts,
+  .chat-turn-line-slot {
     display: none;
   }
 }
 
 @container chat-tab (width >= 640px) {
-  .chat-tab:not(.is-side-hidden) .chat-working-slot {
+  .chat-tab:not(.is-side-hidden) .chat-working-slot,
+  .chat-tab.is-side-hidden .chat-turn-line-slot {
     display: none;
   }
 }

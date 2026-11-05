@@ -740,10 +740,11 @@ describe('composer surface activity dock', () => {
 
   const LIVE_TURN = [userEntry('u1', 1000), readEntry('t1', 2000, true)];
 
-  // Each row is one of the dock's two parts; `other` is the part beside it.
+  // Each row is one of the dock's two parts; `other` is the part beside it, `slots`
+  // the slots the part draws in.
   const DOCK_PARTS = [
-    { part: 'working', other: 'workingLine' },
-    { part: 'workingLine', other: 'working' },
+    { part: 'working', other: 'workingLine', slots: 1 },
+    { part: 'workingLine', other: 'working', slots: 2 },
   ] as const;
 
   it('working_SetTurn_LiveThenDoneThenHidden', () => {
@@ -801,7 +802,30 @@ describe('composer surface activity dock', () => {
     ]);
   });
 
-  it('dock_Tick_UpdatesBothPartsWithOneInputThenTheListeners', () => {
+  it('turnLine_SetTurn_ShowsTheLiveTurnAndHidesOnceDone', () => {
+    const { surface } = setUpSurface(null);
+    const line = asFake(surface.turnLineSlot);
+    const read = () => ({
+      hidden: line.hidden,
+      state: line.querySelector('.chat-working-state')?.textContent ?? null,
+      done: line.querySelector('.chat-working-done')?.textContent ?? null,
+    });
+
+    surface.setTurn(LIVE_TURN, true, null);
+    const live = read();
+    surface.setTurn(
+      [userEntry('u1', 1000), readEntry('t1', 2000), resultEntry('r1', 66000)],
+      false,
+      null,
+    );
+
+    expect([live, read()]).toEqual([
+      { hidden: false, state: 'Working…', done: null },
+      { hidden: true, state: null, done: null },
+    ]);
+  });
+
+  it('dock_Tick_UpdatesEveryPartWithOneInputThenTheListeners', () => {
     const calls: [string, WorkingInput | null][] = [];
     const recordingPart =
       (name: string): ChatLayout['working'] =>
@@ -822,9 +846,11 @@ describe('composer surface activity dock', () => {
     expect(calls.map(([name]) => name)).toEqual([
       'working',
       'workingLine',
+      'workingLine',
       'listener',
     ]);
     expect(calls.map(([, input]) => input)).toEqual([
+      surface.dockInput(),
       surface.dockInput(),
       surface.dockInput(),
       surface.dockInput(),
@@ -911,7 +937,7 @@ describe('composer surface activity dock', () => {
 
   it.each(DOCK_PARTS)(
     'dockPart_DefaultDrawThrows_HidesItsSlotAndLogs ($part)',
-    ({ part, other }) => {
+    ({ part, other, slots }) => {
       vi.spyOn(defaultLayout, part).mockImplementation(() => {
         throw new Error('broken default');
       });
@@ -930,7 +956,10 @@ describe('composer surface activity dock', () => {
       expect(slotOf[part].children).toEqual([]);
       expect(slotOf[other].hidden).toBe(false);
       expect(slotOf[other].children).toHaveLength(1);
-      expect([failuresBeforeComposerDraw, failures()]).toEqual([1, 2]);
+      expect([failuresBeforeComposerDraw, failures()]).toEqual([
+        slots,
+        slots * 2,
+      ]);
     },
   );
 
