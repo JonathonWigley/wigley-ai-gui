@@ -126,7 +126,7 @@ wigley-ai-gui, git:
 - [x] [Layout parts](05-layout-parts.md) — after 02, 04, 06
 
 ### Wave 4
-- [ ] [Article page and right column](07-article-page.md) — after 03, 05
+- [x] [Article page and right column](07-article-page.md) — after 03, 05
 - [ ] [Wiki sidebar and All pages](08-wiki-sidebar.md) — after 03, 04, 05, 06
 
 ### Wave 5
@@ -158,6 +158,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 04 · ed07573b · diff read; every Produces present by search (GitCommit, Git.log, RecentChange, recentChanges, readRecentChanges, RecentChangesDeps, recentChangesLimit); compile checked with task 06's partial edits in the tree · concerns: a negative recentChangesLimit gives all commits minus the last row (configurer's, per plan); docs-browser design.md not checked for a settings list
 - 06 · 47c67279 · diff read, every Produces present, buildTree unchanged, tsc clean · concerns: preferredEntry compares ids inline as byTitleThenId does; a skill's SKILL.md leaf can show its lead heading as a heading row; visibleRows re-tests every heading per draw under a filter, unmeasured; docs-view openHeading has no unit test, left to task 14
 - 05 · f2d0ccb5 · diff read; ten parts in layout.d.ts, PART_SCOPES, LAYOUT_PARTS, default builders, token, container and DESIGN.md entries present; tsc clean; oxfmt on docs/keymap.md committed as 883116bf (lead tooling) for the lint gate · concerns: eight of ten default builders run in no test until tasks 07, 08 and 11; container docs-doc / size is live in every docs view and needs its live check at 07, stacked session tab included; sectionEditControl passes kit.openSection unbound, so task 09's kit must not use this
+- 07 · 061c3e1b · diff read, every Produces present, tests pass per worker, no compile error in its files with task 08 in the tree; the live run follows task 08's landing (Rulings) · concerns: aside scroll resets across the whole-file editor; empty-state centring and editor height rest on CSS only; 100cqh needs the docs-doc container; retarget does not redraw the column, so it goes stale after a move or an extension change; linkedFrom runs on every drawAside
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -179,5 +180,8 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - layout.d.ts top comment: an app part left out is appended at the end unless its comment places it elsewhere · group 05
 - draw_NewPart_FiresInItsScope uses a stub user layout, since fakeDocsParts keeps baseKit private · group 05
 - Task 07's live run waits until task 08 lands, as both build in one tree and 08's partial edits can break the drive's build; a driving worker runs it then, with 09's Linked from check still at 09 · lead
+- placeAtEnds places a left-out article first and a left-out aside last, per layout.d.ts, rather than drawPane's plain append · group 07
+- setEntries guards on isDisposed, as retarget, clear and redraw do · group 07
+- two tests beyond the list: the tilde tooltip and an openSections assertion; the diskChanged test uses ShrinkingScrollerFakeElement so it can fail · group 07
 ### Review rounds
 ### Test gate

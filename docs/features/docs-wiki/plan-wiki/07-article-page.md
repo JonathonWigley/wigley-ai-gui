@@ -1,6 +1,6 @@
 # 07 — Article page and right column
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 05 (and 02, which 05 waits on)
 Plan: [plan.md](plan.md)
@@ -105,3 +105,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 061c3e1b · proof: diff read, every Produces present, tests pass per worker, no compile error in its files with task 08 in the tree; the live run follows task 08's landing (Rulings) · concerns: aside scroll resets across the whole-file editor; empty-state centring and editor height rest on CSS only; 100cqh needs the docs-doc container; retarget does not redraw the column, so it goes stale after a move or an extension change; linkedFrom runs on every drawAside
