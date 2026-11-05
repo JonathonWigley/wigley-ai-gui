@@ -87,7 +87,7 @@ profile's `settings.json`, which is why the configured limit is read there.
    get_context_usage reply ──▶ AgentProcessEvents.agentEvent(usage) │
         │                                                           │
         ▼                                                           │
- chat main ──▶ bus: chat.sessionOpened {sessionId, profileDir}     │
+ chat main ──▶ bus: chat.sessionOpened {sessionId, profileDir, …}  │
            ──▶ bus: chat.agentEvent {sessionId, profileDir, event}  │
            ──▶ bus: chat.planUsage {profileDir, update}             │
         │                                                           │

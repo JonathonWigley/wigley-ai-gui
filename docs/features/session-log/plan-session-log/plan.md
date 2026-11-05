@@ -145,7 +145,7 @@ Boundary rules:
 - [x] [Self-test group](08-selftest-group.md) — after 06, 07
 
 ### Wave 6
-- [ ] [Final verification](10-final-verification.md) — after 08
+- [x] [Final verification](10-final-verification.md) — after 08
 
 ### Wave 7
 - [ ] [Doc re-read](09-doc-re-read.md) — after 10
@@ -163,6 +163,7 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - 07 · 94e631e5 · diff read; typecheck and lint pass · concerns: a crash's partial tail has no newline, so the next start's first append joins it and that line is lost; isSessionLogEntry checks only event, so a known event with a missing field makes recentlyClosed throw; contracts/plugin.ts:786 says the app may exit before dispose settles, so the last appends before a quit may be lost; the terminal row map lives only as long as the part
 - 06 · 53c8025f · diff read; typecheck and lint pass · concerns: chat's ARCHIVE_STEPS at selftest-script.ts:641 use relative moves from the Session step's start, which a live section in a self-test folder can shift; x on a section row logs the first-message title, not closed.title; Folder step rows show only the folder base, so two folders with one base look alike; a cancelled sign-in from a section row logs no session started
 - 08 · cdc253fd · diff read; typecheck and lint pass; the group's own run is in task 10 · concerns: step 1 waits on a line the launch reply logs, which may log before the step begins waiting; task 10's run settles it
+- 10 · 39a2e1fc · diff read; typecheck and lint pass; both self-test runs pass; each drive check seen in a capture; commits 14519e11 (self-test step wait) and 39a2e1fc (picker width and heading scroll) fixed the defects found · concerns: the detail follows the title by 8px rather than sitting at the row's edge, which is the row primitive's layout; a title under the 60% cap leaves the details beside it
 ### Contract changes
 - pickerHeading input: inline { title: string } → named PickerHeadingInput, with PickerHeadingKit = BaseKit · why: the file names each part's input · consumers: none need a change · group 05
 ### Rulings
@@ -180,5 +181,7 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - folderRowInput takes paths and folderSectionDetail builds the label and the detail — the pinned FolderItem member has no detail field — one call site if wrong · group 06 · group 06
 - selectedAfterChange with a null or out-of-range cursor returns the New line — today's 0 was the New line — unchanged with no section rows · group 06 · group 06
 - First-section-wins runs in sectionRowsOnce before the Session step filters — one helper for both steps — one session in two sections with different folders follows the first row only; the one planned section has one row per session · group 06 · group 06
+- the section row carries a class from the default layout and the layout css holds the details whole up to a 60% cap, since the row primitive is shared with rows that keep today's flex rules · group 10
 ### Review rounds
 ### Test gate
+- Unit: npm test over sessions, chat, session-log, forms, docs, primer, workflow, usage, src/shared/page, src/renderer/fzf: 4502 passed; after the picker fix src/shared/page and src/plugins/chat/layouts: 621 passed. Self-test: --plugin session-log passed after both fixes; --group 'chat: resume list' --group 'chat: archive' passed. Drive: folder step, reopen, session step, clear lists, filter hides headings pass; long title fails then passes after 39a2e1fc.

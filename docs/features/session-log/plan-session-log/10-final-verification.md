@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -38,3 +38,4 @@ Commit:    none, unless a check finds a defect
 
 ## Proof
 
+Commit 39a2e1fc · proof: diff read; typecheck and lint pass; both self-test runs pass; each drive check seen in a capture; commits 14519e11 (self-test step wait) and 39a2e1fc (picker width and heading scroll) fixed the defects found · concerns: the detail follows the title by 8px rather than sitting at the row's edge, which is the row primitive's layout; a title under the 60% cap leaves the details beside it

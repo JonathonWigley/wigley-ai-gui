@@ -24,7 +24,7 @@ can hear the same events.
 | `opened` | `chat.sessionOpened` | a session started, was resumed, was launched by a plugin, or was restored at app start (`origin`) |
 | `closed` | `chat.sessionClosed` | a row ended, with `reason`: the user, a failed start, or `closeSessionsIn` |
 | `cleared` | `chat.sessionCleared` | `/clear` moved a row to a new host id |
-| `processEnded` | `chat.processEnded` | a process exited: stopped, clean or crash |
+| `processEnded` | `chat.processEnded` | a live process exited: stopped, clean or crash (a closed or cleared row's process logs none) |
 | `archived` | `chat.sessionArchived` | a saved session was archived or restored from the archive |
 | `terminalConnected`, `terminalEnded` | `sessions.connected`, `sessions.ended` | a session the app did not start connected or ended |
 
@@ -32,13 +32,14 @@ Chat fires `sessionClosed` before it drops the row, because `sessions.closed` re
 resting row ends it inside the same call, so its titles are already gone, and `closeSessionsIn` never fires it.
 
 A quit or relaunch is never a close. `session-log` stops before chat, and chat's stop does not run a close. The next
-start logs each row as `opened` with origin `restored`.
+start logs each row as `opened` with origin `restored`, except a row whose profile is no longer in chat's `profiles`
+setting.
 
 ## Recently closed
 
 The start prompt asks chat for its resume sections, and `session-log` registers one, Recently closed, through chat's
 `addResumeSection`. It shows at the top of the Folder step across every folder and profile, where a pick resumes at
-once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it. The newest row sits last, next to the cursor, so `k` then Enter reopens the session
+once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it, and 0 hides it. The newest row sits last, next to the cursor, so `k` then Enter reopens the session
 closed last.
 
 A session lists when the user closed it or cleared it, it was sent a message, and it is neither open nor archived. Each
