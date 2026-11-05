@@ -817,6 +817,9 @@ function createWindow(
   // `restart`.
   let mainHost: PluginHost<MainStart<PluginManifest>> | null = null;
   let stopsSessionsOnQuit = runMode === 'drive';
+  // Added ahead of the parts: as on a quit, the page has gone before they stop,
+  // so no stop reaches a page that would invoke a part already stopped.
+  onSelfTestExit('the page', () => window.destroy());
   onSelfTestExit('the plugin parts', () => mainHost?.stopAll());
   onSelfTestExit('the session host', () => sessionHost.stopAll());
   const driveRun =
@@ -1078,9 +1081,12 @@ function startApp() {
     .catch(failStart);
   app.on('will-quit', runQuitTasks);
   onQuit(() => globalShortcut.unregisterAll());
-  // Quit when the window closes, except on macOS, where closing hides it.
+  // Quit when the window closes, except on macOS, where closing hides it, and in
+  // the self-test, whose exit closes the window and finishes its own teardown.
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
+    const quitsWithTheWindow =
+      process.platform !== 'darwin' && runMode !== 'selfTest';
+    if (quitsWithTheWindow) {
       app.quit();
     }
   });

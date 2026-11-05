@@ -37,6 +37,24 @@ describe('createSelfTestTeardown', () => {
     expect(errors).toEqual([]);
   });
 
+  it('starts each teardown in the order added, none waiting on another', async () => {
+    const events: string[] = [];
+    const teardown = createSelfTestTeardown(async () => {}, CAP_MS);
+    teardown.add('the page', async () => {
+      events.push('page');
+      await Promise.resolve();
+      events.push('page settled');
+    });
+    teardown.add('the parts', () => {
+      events.push('parts');
+    });
+
+    const running = teardown.run();
+
+    expect(events).toEqual(['page', 'parts']);
+    await running;
+  });
+
   it('waits for a teardown added while it runs', async () => {
     const events: string[] = [];
     let finishFirst = () => {};

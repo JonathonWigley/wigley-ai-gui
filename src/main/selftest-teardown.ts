@@ -8,10 +8,10 @@ export const SELF_TEST_TEARDOWN_CAP_MS = 5000;
 // holds a handle in the home `add`s its teardown as soon as it exists, so an
 // exit at any point closes whatever has started, except plugin parts when a
 // part's start threw, which leaves no host to stop them. `run` starts every
-// teardown at once, waits at most the cap for them all to settle, then removes
-// the home; a teardown added while `run` runs starts at once. `run` never rejects:
-// on stderr it reports a teardown that failed or did not settle within the
-// cap, and a home the removal left.
+// teardown at once, in the order added, waits at most the cap for them all to
+// settle, then removes the home; a teardown added while `run` runs starts at
+// once. `run` never rejects: on stderr it reports a teardown that failed or did
+// not settle within the cap, and a home the removal left.
 export interface SelfTestTeardown {
   add(name: string, teardown: () => unknown): void;
   run(): Promise<void>;
