@@ -73,8 +73,8 @@ export interface Roster {
 export const EMPTY_ROSTER: Roster = { agents: [], tasks: [], skills: [] };
 
 // Every session's whole roster that lists any item, keyed by the app's sessionId (the session row's id). Each change
-// writes the whole roster, its agents and tasks empty once each has ended; the key goes once it lists nothing and when
-// the row ends.
+// writes the whole roster, its agents and tasks empty once each has ended; the key goes once it lists nothing, when the
+// row ends and when agents' main part starts.
 export const agentsRostersSlot: KeyedSlotKey<Roster, 'main', 'agents'> = {
   id: 'agents.rosters',
   process: 'main',

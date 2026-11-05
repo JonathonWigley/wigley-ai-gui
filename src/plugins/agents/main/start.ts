@@ -50,14 +50,18 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
 // the row, each list in fold order. A host id's roster is dropped once it lists no
 // agent, task or skill, and a row's rosters and its key when it closes or ends.
 // Holds agents' sample session, whose roster sits in the slot beside the live
-// ones; a stop deletes an open preview's key. Registers no layout and hands the
-// self-test no script:
+// ones; a stop deletes an open preview's key. A start deletes every key an earlier
+// stop left, since the rosters that key was folded from are gone. Registers no
+// layout and hands the self-test no script:
 // agent-lines, agent-strip and agent-skills draw the rosters.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
     const sessions = api.dependency(sessionsMainKey);
     const rowRosters = api.state.publish(agentsRostersSlot);
+    for (const sessionId of rowRosters.all().keys()) {
+      rowRosters.delete(sessionId);
+    }
     const preview = createAgentsPreview({
       sessions,
       clock: api.services.clock,

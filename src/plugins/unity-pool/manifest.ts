@@ -2,8 +2,8 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // The unity-pool view: which pool clone each session holds or waits for, as a badge on its sidebar row, and every
 // clone of the shown session's pool in a right-bar panel with Hold and Release buttons, read from unity-pool's state
-// files and changed only through its CLI. It names `sessions` for the rows it badges and the sessions it matches,
-// `keys` for its layout's anchors, and `chat` for its self-test's launch.
+// files and changed only through its CLI. It names `sessions` for the rows it badges and the sessions it matches, and
+// `chat` for its self-test's launch.
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },

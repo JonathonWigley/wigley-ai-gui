@@ -6,6 +6,7 @@ import type {
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
 import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
@@ -64,9 +65,9 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
     followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });
     api.events.on('core.pageReady', () => {
       rosters.on((sessionId) => strip.rosterUpdated(sessionId));
-      for (const sessionId of rosters.all().keys()) {
-        strip.rosterUpdated(sessionId);
-      }
+      callEach([...rosters.all().keys()], (sessionId) =>
+        strip.rosterUpdated(sessionId),
+      );
     });
 
     api.layouts.show<Layout>({

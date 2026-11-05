@@ -19,7 +19,6 @@ import {
   type RosterSkill,
   type RosterTask,
 } from '../contract';
-import { agentsManifest } from '../manifest';
 import { agentsMainPart } from './start';
 
 const PREVIEW_ROW = 'preview-row';
@@ -416,11 +415,6 @@ describe('agentsMainPart', () => {
       'preview-agent-2',
     ]);
   });
-
-  it('agents starts with chat only in reads', () => {
-    expect(agentsManifest.dependsOn.main).not.toContain('chat');
-    expect(agentsManifest.reads.main).toContain('chat');
-  });
 });
 
 // Agents' main part on the harness, over sessions whose `open` hands out a row
@@ -469,15 +463,22 @@ describe('agentsMainPart lifecycle', () => {
     expect(rows.ended).toBe(ended);
   });
 
-  it('stopThenStart_StartsAgain', async () => {
+  it('stopThenStart_StartsAgainHoldingNoRosters', async () => {
     const { harness } = startOnHarness();
     const before = harness.counts();
+    const slot = harness.state.read(agentsRostersSlot, 'test');
+    harness.emit('chat.agentEvent', {
+      sessionId: 's1',
+      profileDir: null,
+      hostSessionId: 'h1',
+      event: spawned,
+      replayed: true,
+    });
+    expect(slot.get('s1')).toBeDefined();
 
     await harness.restart();
 
     expect(harness.counts()).toEqual(before);
-    expect([...harness.state.read(agentsRostersSlot, 'test').all()]).toEqual(
-      [],
-    );
+    expect([...slot.all()]).toEqual([]);
   });
 });

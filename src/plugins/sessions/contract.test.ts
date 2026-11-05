@@ -76,6 +76,29 @@ describe('followRows', () => {
     expect(heard).toEqual(calls);
   });
 
+  it('a throw from a catch-up added skips no row and leaves the follow live', () => {
+    const store = createSlotStore(() => undefined);
+    const rows = store.publish(sessionsRowsSlot);
+    for (const sessionId of ['a', 'b', 'c']) {
+      rows.set(sessionId, row(sessionId, `h-${sessionId}`));
+    }
+    const heard: string[] = [];
+
+    expect(() =>
+      followRows(store.read(sessionsRowsSlot, 'test'), {
+        added({ sessionId }) {
+          heard.push(sessionId);
+          if (sessionId === 'b') {
+            throw new Error('b failed');
+          }
+        },
+      }),
+    ).toThrow('b failed');
+    rows.set('d', row('d', 'h-d'));
+
+    expect(heard).toEqual(['a', 'b', 'c', 'd']);
+  });
+
   it('after dispose hears nothing', () => {
     const store = createSlotStore(() => undefined);
     const rows = store.publish(sessionsRowsSlot);

@@ -57,8 +57,8 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // Draws each session's flow as a chip under its row, a strip above its Chat
 // composer and a side pane beside its transcript, through the
 // `workflow.layout` layout. Reads `workflow.flows`, drawing the one flow each
-// notice names and leaving a deleted flow drawn until its row leaves, and holds
-// the page halves of the stages, which `addStage` extends.
+// notice names, leaving a deleted flow drawn until its row leaves and drawing no
+// flow whose row has left, and holds the page halves of the stages, which `addStage` extends.
 // Each workflow command runs on the selected session; each button on the
 // session it draws. `toggleSidePane` shows or hides the pane in every session,
 // kept in `uiState`. `openPreview` steps chat's preview session through a
@@ -143,7 +143,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
 
     // A flow whose draw throws is logged, so the rest of the catch-up still draws.
     const drawFlow = (flow: SessionFlow) => {
-      if (isPreview(flow.sessionId)) {
+      const rowHasLeft = rows.get(flow.sessionId) === undefined;
+      if (isPreview(flow.sessionId) || rowHasLeft) {
         return;
       }
       try {

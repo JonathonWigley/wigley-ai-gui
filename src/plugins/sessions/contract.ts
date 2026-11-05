@@ -9,6 +9,7 @@ import type {
   KeyedSlotReader,
   SlotKey,
 } from '../../contracts/state';
+import { callEach } from '../../shared/call-each';
 
 // Every agent harness a session can run in; the relay hello's parse reads a
 // harness missing from this list as none.
@@ -424,9 +425,10 @@ export const sessionsActivitySlot: KeyedSlotKey<
   'sessions'
 > = { id: 'sessions.activity', process: 'page', kind: 'keyed' };
 
-// Main's rows, keyed by each row's `sessionId`, in side-bar order. In one list
-// operation main writes every row, then the selection, then emits its events, all
-// in one synchronous block. A row's `label` (`gamma 2`) is fixed for its life.
+// Main's rows, keyed by each row's `sessionId`, in the order main added them. In
+// one list operation main writes every row, then the selection, then emits its
+// events, all in one synchronous block. A row's `label` (`gamma 2`) is fixed for
+// its life.
 export const sessionsRowsSlot: KeyedSlotKey<SessionRow, 'main', 'sessions'> = {
   id: 'sessions.rows',
   process: 'main',
@@ -443,7 +445,8 @@ export const sessionsSelectionSlot: SlotKey<string | null, 'main', 'sessions'> =
   };
 
 // The focused chat pane's session, null for an empty pane; not main's selection.
-// Null from each page load until the first panes are placed.
+// Null from each page load until the first panes are placed. A notice of the rows
+// or the selection reaches readers before the `sessions.active` write it causes.
 export const sessionsActiveSlot: SlotKey<string | null, 'page', 'sessions'> = {
   id: 'sessions.active',
   process: 'page',
@@ -454,7 +457,9 @@ export const sessionsActiveSlot: SlotKey<string | null, 'page', 'sessions'> = {
 // holds, in order, inside the call, then once per later new row; `removed` once
 // when a row leaves; `hostChanged` when a kept row's host id changes. A change to
 // any other field of a row calls nothing. A row deleted and set again calls
-// `removed`, then `added`.
+// `removed`, then `added`. A throw from a catch-up `added` skips no other row and
+// reaches the caller once every row had its call, with the follow still live until
+// the part stops.
 export function followRows(
   rows: KeyedSlotReader<SessionRow>,
   handlers: {
@@ -466,9 +471,8 @@ export function followRows(
   const hostIds = new Map<string, string | null>();
   for (const [sessionId, row] of rows.all()) {
     hostIds.set(sessionId, row.hostSessionId);
-    handlers.added?.(row);
   }
-  return rows.on((sessionId, row) => {
+  const following = rows.on((sessionId, row) => {
     if (row === undefined) {
       hostIds.delete(sessionId);
       handlers.removed?.(sessionId);
@@ -483,4 +487,6 @@ export function followRows(
       handlers.hostChanged?.(row);
     }
   });
+  callEach([...rows.all().values()], (row) => handlers.added?.(row));
+  return following;
 }

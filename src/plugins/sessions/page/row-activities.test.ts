@@ -13,10 +13,16 @@ const LOOKED: RowActivity = { word: 'looked', tone: 'warning', rank: 10 };
 
 type Step = { set: [string, string, RowActivity | null] } | { forget: string };
 
-// Row activities over a real slot store's writer.
+// Row activities over a real slot store's writer; `notices` holds the key of each
+// change the slot's readers hear.
 function activitiesOnSlot() {
-  const slot = createSlotStore(() => undefined).publish(sessionsActivitySlot);
-  return { slot, activities: createRowActivities(slot) };
+  const store = createSlotStore(() => undefined);
+  const slot = store.publish(sessionsActivitySlot);
+  const notices: string[] = [];
+  store
+    .read(sessionsActivitySlot, 'test')
+    .on((sessionId) => notices.push(sessionId));
+  return { slot, notices, activities: createRowActivities(slot) };
 }
 
 describe('createRowActivities', () => {
@@ -142,6 +148,67 @@ describe('createRowActivities', () => {
     expect((slot.get('s1') ?? []).map((source) => source.sourceId)).toEqual(
       row.sources,
     );
+  });
+
+  it.each<{
+    case: string;
+    sets: [string, RowActivity | null][];
+    writes: number;
+  }>([
+    {
+      case: 'the same activity again',
+      sets: [
+        ['chat', WORKING],
+        ['chat', WORKING],
+      ],
+      writes: 1,
+    },
+    {
+      case: 'another rank with the same look',
+      sets: [
+        ['chat', DONE],
+        ['chat', { ...DONE, rank: 11 }],
+      ],
+      writes: 2,
+    },
+    {
+      case: 'another emphasis',
+      sets: [
+        ['chat', DONE],
+        ['chat', { ...DONE, emphasis: 'urgent' }],
+      ],
+      writes: 2,
+    },
+    {
+      case: 'an earlier source setting the same activity moves it last',
+      sets: [
+        ['chat', DONE],
+        ['notes', LOOKED],
+        ['chat', DONE],
+      ],
+      writes: 3,
+    },
+    {
+      case: 'null for a source holding none beside another',
+      sets: [
+        ['chat', WORKING],
+        ['forms', null],
+      ],
+      writes: 1,
+    },
+    {
+      case: 'null on a session holding none',
+      sets: [['chat', null]],
+      writes: 0,
+    },
+  ])('set_SourcesUnchanged_WritesNothing ($case)', ({ sets, writes }) => {
+    const { notices, activities } = activitiesOnSlot();
+
+    for (const [sourceId, activity] of sets) {
+      activities.set('s1', sourceId, activity);
+    }
+
+    expect(notices).toHaveLength(writes);
   });
 
   it('rowActivities_NoSourcesLeft_HoldsNoKey', () => {

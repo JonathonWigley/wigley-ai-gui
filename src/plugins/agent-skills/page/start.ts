@@ -5,6 +5,7 @@ import type {
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
 import { followRows, sessionsRowsSlot } from '../../sessions/contract';
@@ -53,9 +54,9 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
     followRows(rows, { removed: (sessionId) => list.forget(sessionId) });
     api.events.on('core.pageReady', () => {
       rosters.on((sessionId) => list.rosterUpdated(sessionId));
-      for (const sessionId of rosters.all().keys()) {
-        list.rosterUpdated(sessionId);
-      }
+      callEach([...rosters.all().keys()], (sessionId) =>
+        list.rosterUpdated(sessionId),
+      );
     });
 
     api.layouts.show<Layout>({

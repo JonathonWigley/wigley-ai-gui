@@ -11,8 +11,10 @@ import { installFakeDom } from '../../../shared/page/test-dom';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
 import { type DocsPageExports, docsPageKey } from '../../docs/contract';
 import {
+  type SessionRow,
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
   type PageStage,
@@ -128,15 +130,32 @@ describe('workflow page part', () => {
     ).not.toThrow();
   });
 
-  // A harness past `core.pageReady` whose slot held flows of s1, s2 and s3 before it.
+  function row(sessionId: string): SessionRow {
+    return {
+      sessionId,
+      label: sessionId,
+      project: 'project',
+      harness: 'claude',
+      marked: false,
+      projectDir: '/r',
+      hostSessionId: `h-${sessionId}`,
+      titles: { user: null, agent: null, firstMessage: null },
+    };
+  }
+
+  // A harness past `core.pageReady` whose slots held rows and flows of s1, s2 and
+  // s3 before it, and the flow of `gone`, which has no row.
   function startWithThreeFlows() {
     const harness = startWorkflow();
+    const rows = harness.state.publish(sessionsRowsSlot);
     const flows = harness.state.publish(workflowFlowsSlot);
     for (const sessionId of ['s1', 's2', 's3']) {
+      rows.set(sessionId, row(sessionId));
       flows.set(sessionId, newFlow(sessionId, '/r'));
     }
+    flows.set('gone', newFlow('gone', '/r'));
     harness.emit('core.pageReady', null);
-    return { harness, flows };
+    return { harness, rows, flows };
   }
 
   it('pageReady_DrawsEachFlowTheSlotHolds', () => {
@@ -152,6 +171,16 @@ describe('workflow page part', () => {
     flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
 
     expect(drawn.setFlow).toEqual(['s2']);
+  });
+
+  it('flowNotice_RowHasLeft_DrawsNothing', () => {
+    const { rows, flows } = startWithThreeFlows();
+    drawn.setFlow = [];
+
+    rows.delete('s2');
+    flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
+
+    expect(drawn.setFlow).toEqual([]);
   });
 
   it('undefinedNotice_KeepsTheDrawnFlow', () => {

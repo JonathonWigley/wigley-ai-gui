@@ -6,6 +6,7 @@ import type {
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import {
   followRows,
@@ -61,9 +62,9 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
       rosters.on((sessionId, roster) =>
         lines.setRoster(sessionId, roster ?? EMPTY_ROSTER),
       );
-      for (const [sessionId, roster] of rosters.all()) {
-        lines.setRoster(sessionId, roster);
-      }
+      callEach([...rosters.all()], ([sessionId, roster]) =>
+        lines.setRoster(sessionId, roster),
+      );
     });
 
     api.layouts.show<Layout>({

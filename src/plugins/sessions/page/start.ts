@@ -418,13 +418,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       // The keys follow a release into its pane, as `pressedFocusAction` says.
       panePressed(pane) {
-        const selection = window.getSelection();
+        const textSelection = window.getSelection();
         const focused = document.activeElement;
         const sessionId = view.panes.focusedSessionId();
         const action = pressedFocusAction({
           hasSelectionInPane:
-            selection?.isCollapsed === false &&
-            pane.contains(selection.anchorNode),
+            textSelection?.isCollapsed === false &&
+            pane.contains(textSelection.anchorNode),
           isFocusInPane: pane.contains(focused),
           doesFocusTakeText: holdsTextEntry(focused),
           isChatTabShown:
@@ -512,9 +512,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
-    // Ends the waits `rows` settle and loads the panes `fillPlan` fills.
-    const fillWaiting = (rows: readonly SessionRow[]) => {
-      const { ended, loads } = fillPlan(waiting, rows, view.panes.sessions());
+    // Ends the waits `nextRows` settle and loads the panes `fillPlan` fills.
+    const fillWaiting = (nextRows: readonly SessionRow[]) => {
+      const { ended, loads } = fillPlan(
+        waiting,
+        nextRows,
+        view.panes.sessions(),
+      );
       for (const paneId of ended) {
         waiting.delete(paneId);
       }
