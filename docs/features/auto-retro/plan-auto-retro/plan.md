@@ -30,7 +30,7 @@ Each was checked at plan time; `wigley:make` runs each again before the first di
 
 | Claim | Command | Result at plan time |
 |---|---|---|
-| GUI worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-gui-auto-retro log --oneline 9ea97ead..auto-retro` | the docs-ahead and plan commits only, ending `b218590b` |
+| GUI worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-gui-auto-retro log --oneline 1a938e2f..auto-retro` | the docs-ahead and plan commits only, ending `8fc28fc1` |
 | Marketplace worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-auto-retro log --oneline dd60953..auto-retro` | `e7fdbfd` and `1dbe437`, docs ahead only |
 | GUI worktree has `node_modules` linked | `test -L /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-gui-auto-retro/node_modules` | link to the clone's |
 | `LaunchRequest` has only `projectDir`, `profile`, `message` | `grep -n "interface LaunchRequest" -A5 src/plugins/chat/contract.ts` | lines 45–49 |
@@ -44,13 +44,13 @@ Each was checked at plan time; `wigley:make` runs each again before the first di
 
 ## Docs written ahead
 
-- GUI commits `6a8180ca`, `d2303908` and `3946121e` on `auto-retro`:
+- GUI commits `a9729edc`, `0f26aa34` and `eb9db1e8` on `auto-retro`:
   - `docs/features/auto-retro/design.md` (new)
   - `AGENTS.md`: the `sessions` page entry (`addSection`), the new `auto-retro/` entry, chat's `launch`/`close` exports
   - `docs/features/session-log/design.md`: the `closed` row names the `finished` reason
   - `docs/features/layouts/design.md` Adopters and `DESIGN.md` § Side bar: plugin sections
   - `docs/features/agent-chat/design.md` § Chat plugin: **Saved sessions** (`unattended`, which closes remove a
-    record) and **Permissions** (an unattended row denies at once), in `d2303908`
+    record) and **Permissions** (an unattended row denies at once), in `0f26aa34`
 - Marketplace commits `e7fdbfd` and `1dbe437` on `auto-retro`:
   - `plugins/wigley/skills/retro/SKILL.md`: § Modes, the lock, steps 1–11
   - `plugins/wigley/skills/retro/criteria.md` § Candidate file: `## Draft`, `draft_target`, `draft_hash`, and the new step numbers
