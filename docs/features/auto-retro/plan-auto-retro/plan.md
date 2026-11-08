@@ -241,5 +241,7 @@ Review base: 946a8cda
 - nextQueue throws on launched while nothing runs — impossible state — a stray launched event would log a failed step · group 04 · group 04
 - retro <r> finished is logged when close is called, not when it resolves — none · group 04 · group 04
 - main dispose awaits the event chain before stopping — none · group 04 · group 04
+- GUI auto-retro rebased onto origin/main e9570be7 (session popups, keymap reflow) before wave 3; task commits now 02 a9ed659b, 03 dea1e6cb, 04 a4ea61a2; the lead resolved the union conflicts in sessions (layout.css and consumer-view comments, consumer-view test counts, sessions-view-fakes options, start.ts helper and comment) — the markers in fakes and start.ts slipped into dea1e6cb and are removed in 6d0e8ed5; typecheck 0, 86 test files / 2216 tests across sessions, chat, auto-retro, session-log, session-stash, shared/layouts pass, npm run lint passes (docs/keymap.md fixed upstream) · lead
+- Marketplace auto-retro rebased again onto origin/main 7b3e8c4 (version now 1.21.2); the lead resolved the SKILL.md conflict in the docs-ahead commit (now 9599887) by keeping the plan's steps 6-10 and carrying main's question wording into step 10 (summary carries the candidate's summary, context the home, occurrences and draft); task 01's commit is now 0211e71; marketplace review range 7b3e8c4..auto-retro · lead
 ### Review rounds
 ### Test gate
