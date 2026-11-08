@@ -37,7 +37,7 @@ and after it ends, whatever started it: the user's `/compact`, the harness's own
 - **Hold** — chat keeps the message as a pending row, compacts the session, and writes the row when the compaction
   ends. The row carries the gate's reason.
 - **Agent wait** — an idle stretch of a session at a workflow level (`SessionFlow.workflow` not null) whose main
-  turn has ended (`turnRunning` false) while a subagent the main agent spawned still runs (`runningSubagents` not
+  turn has ended (`turnRunning` false) while a subagent at any depth still runs (`runningSubagents` not
   empty). Background shell tasks do not count. Auto-compact compacts at most once per agent wait, through chat main's
   `compact`, when the context is above its `agentWaitMinTokens` setting.
 - **Compaction entry** — the `compaction` chat entry kind: the transcript's `Compacted 182k → 24k · auto · 9s` divider.
@@ -184,7 +184,7 @@ auto-compact, at each workflow.flows change and each chat.turnFinished (idle):
   they return lands on its context; compacting then costs the user no wait. It fires at once when the turn ends, with
   no delay.
 - **Only sessions at a workflow level** (2026-11-08) — Light, Medium and Heavy alike; the trigger reads the
-  workflow engine's flow, which tracks the main agent's subagents. Background shell tasks do not count.
+  workflow engine's flow, which tracks every running subagent, nested ones included. Background shell tasks do not count.
 - **Its own threshold** (2026-11-08) — `agentWaitMinTokens`, default 200000, 0 off, independent of `minTokens`, so
   either rule can be off while the other is on.
 - **In the auto-compact plugin, through a chat export** (2026-11-08) — the rule sits beside the send gate, reading

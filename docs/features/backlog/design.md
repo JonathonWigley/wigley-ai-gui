@@ -108,7 +108,7 @@ plan is written from them. A decision here stands unless the user changes it.
   slug and progress.
 - A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
   plan's newest copy across the clone and its git worktrees (`src/shared/plan-copies.ts`), as Heavy's checklist reads
-  them, so a run in a worktree shows in Backlog too. The count is the boxes under `## Tasks`, not the docs index's
+  them, so a run in a worktree shows in Backlog too, at its next load. The count is the boxes under `## Tasks`, not the docs index's
   count of every checkbox in the file. Opening one renders `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a
   key to open the file in Docs mode for hand edits.
 
