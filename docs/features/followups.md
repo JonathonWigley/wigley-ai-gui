@@ -53,9 +53,6 @@ Core seams that most items below assume.
   cursor and the filter, but a row's open edit box closes and the text typed in it goes.
 - **Page state survives an app restart** — *needs a feature plan*: the page `*.place` slots live in main's memory, so
   an app restart loses chat's draft, forms' place and the rest.
-- **Primer's card focus is lost on a page reload** — *agent-ready*: `PrimerPlace` (`src/plugins/primer/contract.ts`)
-  holds the pane, but the card pane's column (`cardColumn` in `page/primer-state.ts`) is not in it, so a primer left
-  with the card focused returns showing the task card. Add the column to the place and restore it.
 - **A second page reload loses a session's selected tab** — *needs a feature plan*: a tab added late, as forms' is
   when its round opens, takes its selection back from the saved place only if nothing selected since the load
   (`tabsAfterRestoredAdd`). A second reload before that tab is added saves the place with the tab the first reload

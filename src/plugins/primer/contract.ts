@@ -134,17 +134,21 @@ export const primerPageKey: DependencyKey<PrimerPageExports, 'page', 'primer'> =
 // The pane the keys act on; a column is a pane that lists rows.
 export type PrimerPane = 'tasks' | 'items' | 'card';
 
+export type PrimerColumn = Exclude<PrimerPane, 'card'>;
+
 // A row of the tasks column.
 export type TaskRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
 
 // Where an open primer's page left it: the selected task row and item, the
-// focused pane, and the view with the view its Cancel prompt returns to, both
-// kept from the primer the page last showed as active. `confirm` is the
-// review's Cancel prompt, which leaves the session open.
+// focused pane, the column whose selection the card shows, and the view with
+// the view its Cancel prompt returns to, both kept from the primer the page
+// last showed as active. `confirm` is the review's Cancel prompt, which leaves
+// the session open.
 export interface PrimerPlace {
   selectedTask: TaskRow;
   selectedItem: number | null;
   pane: PrimerPane;
+  cardColumn: PrimerColumn;
   view: 'primer' | 'review' | 'confirm';
   confirmReturnView: 'primer' | 'review';
 }

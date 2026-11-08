@@ -62,6 +62,7 @@ const CANCEL_PROMPT_ON_TASK_ONE: PrimerPlace = {
   selectedTask: { kind: 'task', entryId: '1' },
   selectedItem: 1,
   pane: 'tasks',
+  cardColumn: 'tasks',
   view: 'confirm',
   confirmReturnView: 'review',
 };

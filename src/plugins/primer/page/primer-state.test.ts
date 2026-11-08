@@ -792,45 +792,82 @@ describe('primer state', () => {
 });
 
 describe('placeRestored', () => {
-  it.each<{
-    case: string;
-    place: Pick<PrimerPlace, 'selectedTask' | 'selectedItem'>;
-    expected: { selectedTask: TaskRow; selectedItem: number | null };
-  }>([
+  type Place = Pick<
+    PrimerPlace,
+    'selectedTask' | 'selectedItem' | 'pane' | 'cardColumn'
+  >;
+  it.each<{ case: string; place: Place; expected: Place }>([
     {
       case: 'a held task and item',
-      place: { selectedTask: TASK_1, selectedItem: 2 },
-      expected: { selectedTask: TASK_1, selectedItem: 2 },
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
     },
     {
       case: 'a gone task',
       place: {
         selectedTask: { kind: 'task', entryId: 'gone' },
         selectedItem: 1,
+        pane: 'tasks',
+        cardColumn: 'tasks',
       },
-      expected: { selectedTask: { kind: 'feature' }, selectedItem: null },
+      expected: {
+        selectedTask: { kind: 'feature' },
+        selectedItem: null,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
     },
     {
       case: "an item past the task's items",
-      place: { selectedTask: TASK_1, selectedItem: 3 },
-      expected: { selectedTask: TASK_1, selectedItem: null },
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: 3,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+    },
+    {
+      case: "the card showing the items column's item",
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'card',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'card',
+        cardColumn: 'items',
+      },
     },
   ])(
-    'restores the selection, falling back for $case',
+    'restores the selection and focus, falling back for $case',
     ({ place, expected }) => {
       const restored = apply(stateWith(), {
         type: 'placeRestored',
         formId: 'p1',
-        place: {
-          ...place,
-          pane: 'items',
-          view: 'review',
-          confirmReturnView: 'review',
-        },
+        place: { ...place, view: 'review', confirmReturnView: 'review' },
       });
 
-      expect(selectionOf(restored)).toEqual(expected);
-      expect(primerOf(restored).pane).toBe('items');
+      const { pane, cardColumn } = primerOf(restored);
+      expect({ ...selectionOf(restored), pane, cardColumn }).toEqual(expected);
       expect(restored.view).toBe('review');
     },
   );

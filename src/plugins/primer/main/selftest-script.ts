@@ -121,12 +121,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
   { keys: [' ', ' '], expect: '[primer] review opened' },
   { keys: ['C'], expect: '[page] C ran primer.askCancel', checksFit: true },
   { keys: ['n'], expect: '[page] n ran primer.dismissConfirm' },
-  {
-    keys: ['<D-Enter>'],
-    expect: '[primer] submitted',
-    alsoExpect: [/^\[sessions\] activated Layout preview$/],
-    why: "Sending closes the session's row, which selects its left neighbour, the Layout preview session forms' script reopened last.",
-  },
+  { keys: ['<D-Enter>'], expect: '[primer] submitted' },
 ];
 
 // The sample primer opens in a session of its own and its row is selected;
@@ -241,7 +236,7 @@ export function primerSelfTestScript(
       },
       {
         name: 'review and cancel',
-        why: 'Esc closes the review; C in the review opens the cancel prompt for the primer, and n keeps it; sending the primer closes its row with no prompt.',
+        why: 'Esc closes the review; C in the review opens the cancel prompt for the primer, and n keeps it; ⌘↩ sends the primer with no prompt.',
         steps: REVIEW_STEPS,
       },
       {

@@ -18,6 +18,7 @@ import {
   type PrimerGroup,
   type PrimerItem,
   type PrimerNeed,
+  type PrimerColumn,
   type PrimerPane,
   type PrimerPlace,
   PRIMER_SLUG_PATTERN,
@@ -25,7 +26,7 @@ import {
 } from '../contract';
 import type { PrimerScopeName } from '../ids';
 
-export type PrimerColumn = 'tasks' | 'items';
+export type { PrimerColumn } from '../contract';
 
 export type FeatureField = 'name' | 'slug' | 'spec' | 'summary' | 'notes';
 
@@ -220,12 +221,13 @@ export function primerPlace(
   primer: OpenPrimer,
   kept: PrimerPlace | undefined,
 ): PrimerPlace {
-  const { selectedTask, selectedItem: item, pane } = primer;
+  const { selectedTask, selectedItem: item, pane, cardColumn } = primer;
   if (primer.formId === state.activeFormId && state.view !== 'idle') {
     return {
       selectedTask,
       selectedItem: item,
       pane,
+      cardColumn,
       view: state.view,
       confirmReturnView: state.confirmReturnView,
     };
@@ -234,13 +236,14 @@ export function primerPlace(
     selectedTask,
     selectedItem: item,
     pane,
+    cardColumn,
     view: kept?.view ?? 'primer',
     confirmReturnView: kept?.confirmReturnView ?? 'review',
   };
 }
 
 // A saved task row the primer no longer holds falls back to the Feature row,
-// and a saved item past the task's items to none.
+// and a saved item outside the task's items to the nearest it holds.
 function restorePlace(
   state: PrimerState,
   formId: string,
@@ -250,17 +253,14 @@ function restorePlace(
     const row = place.selectedTask;
     const entry = row.kind === 'feature' ? null : entryOf(primer, row.entryId);
     const isRowHeld = row.kind === 'feature' || entry !== null;
-    const item = place.selectedItem;
-    const isItemHeld =
-      item !== null &&
-      entry !== null &&
-      item >= 1 &&
-      item <= entry.items.length;
+    const count = entry?.items.length ?? 0;
+    const item = Math.min(Math.max(place.selectedItem ?? 1, 1), count);
     const restored = withFocus(
       {
         ...primer,
         selectedTask: isRowHeld ? row : FEATURE_ROW,
-        selectedItem: isItemHeld ? item : null,
+        selectedItem: count === 0 ? null : item,
+        cardColumn: place.cardColumn,
       },
       place.pane,
     );
