@@ -15,13 +15,8 @@ export interface SessionFormPlacesDeps<
   // The plugin's place slot, published by the caller.
   writer: KeyedSlotWriter<Place>;
   store: Pick<ReducerStore<State, never>, 'get' | 'subscribe'>;
-  // The form's place now; `kept` is the place last written for it, which holds
-  // what the state keeps only for the active form.
-  placeOf(
-    state: State,
-    form: State['forms'][number],
-    kept: Place | undefined,
-  ): Place;
+  // The form's place now.
+  placeOf(state: State, form: State['forms'][number]): Place;
   // Dispatches the plugin's own action that puts form `formId` back at `place`.
   restore(formId: string, place: Place): void;
 }
@@ -71,9 +66,7 @@ export function followSessionFormPlaces<
       }
     }
     for (const form of state.forms) {
-      writesOf(writes, writer, form.formId).write(
-        deps.placeOf(state, form, writer.get(form.formId)),
-      );
+      writesOf(writes, writer, form.formId).write(deps.placeOf(state, form));
     }
     restoreNowActive(state);
   });

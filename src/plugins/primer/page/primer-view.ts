@@ -69,6 +69,7 @@ import {
   type SessionsPageExports,
 } from '../../sessions/contract';
 import type {
+  PrimerColumn,
   PrimerEntry,
   PrimerPane,
   PrimerPlace,
@@ -118,7 +119,6 @@ import {
   includedCount,
   type OpenPrimer,
   type PrimerAction,
-  type PrimerColumn,
   type PrimerState,
   rowName,
   type RowPrompt,

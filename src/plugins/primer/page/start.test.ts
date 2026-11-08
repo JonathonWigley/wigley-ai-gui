@@ -27,10 +27,12 @@ import { presentedPrimer } from './test-primers';
 // Lets a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-// The primer part over sessions, main holding `open` primers, p1's session's
-// row selected and the page ready, so p1 is the active primer. `reload` starts a
-// new page over the same slots and readies it; `beforeRead` runs once the new
-// page has started, before its open primers read lands. `place` reads p1's place.
+// The primer part over sessions, main holding `open` primers, a row for each
+// primer's session, the first one's selected and the page ready, so it is the
+// active primer. `reload` starts a new page over the same slots and readies it;
+// `beforeRead` runs once the new page has started, before its open primers read
+// lands. `place` reads p1's place; `select` selects a primer's session and lets
+// the selection settle.
 async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
   const harness = startPagePart(primerPagePart, {
     parts: [sessionsPagePart],
@@ -42,9 +44,16 @@ async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
       picker: fakeListPickerService(),
     },
   });
-  const { sessionId } = presentedPrimer('p1');
-  harness.state.publish(sessionsRowsSlot).set(sessionId, sessionRow(sessionId));
-  harness.state.publish(sessionsSelectionSlot).set(sessionId);
+  const rows = harness.state.publish(sessionsRowsSlot);
+  for (const { sessionId } of open.forms) {
+    rows.set(sessionId, sessionRow(sessionId));
+  }
+  const selection = harness.state.publish(sessionsSelectionSlot);
+  const select = async (primerId: string) => {
+    selection.set(presentedPrimer(primerId).sessionId);
+    await settle();
+  };
+  selection.set(open.forms[0].sessionId);
   harness.emit('core.pageReady', null);
   await settle();
   const reload = async (beforeRead: () => void = () => undefined) => {
@@ -54,7 +63,7 @@ async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
     await settle();
   };
   const place = () => harness.state.read(primerPlaceSlot, 'test').get('p1');
-  return { harness, open, reload, place };
+  return { harness, open, reload, place, select };
 }
 
 // Task 1's first item selected, under the review's Cancel prompt.
@@ -92,6 +101,11 @@ describe('primer page part', () => {
       expected: CANCEL_PROMPT_ON_TASK_ONE,
     },
     {
+      case: 'background_primer_place_carries_the_primer_view',
+      act: ({ select }) => select('p2'),
+      expected: { ...CANCEL_PROMPT_ON_TASK_ONE, view: 'primer' },
+    },
+    {
       case: 'form_closed_deletes_its_place',
       act: async ({ harness }) =>
         harness.send('formClosed', { formId: 'p1', byFinish: false }),
@@ -107,7 +121,7 @@ describe('primer page part', () => {
     },
   ])('primer place: $case', async ({ act, expected }) => {
     const setup = await startOverOpenPrimers({
-      forms: [presentedPrimer('p1')],
+      forms: [presentedPrimer('p1'), presentedPrimer('p2')],
     });
     const { commands } = setup.harness.started();
     commands.nextRow({} as PageCommandContext);

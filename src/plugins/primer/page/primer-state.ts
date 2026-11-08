@@ -17,16 +17,14 @@ import {
   type PrimerFeature,
   type PrimerGroup,
   type PrimerItem,
-  type PrimerNeed,
   type PrimerColumn,
+  type PrimerNeed,
   type PrimerPane,
   type PrimerPlace,
   PRIMER_SLUG_PATTERN,
   type TaskRow,
 } from '../contract';
 import type { PrimerScopeName } from '../ids';
-
-export type { PrimerColumn } from '../contract';
 
 export type FeatureField = 'name' | 'slug' | 'spec' | 'summary' | 'notes';
 
@@ -215,11 +213,11 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
 }
 
 // The primer's place: its view and the view its Cancel prompt returns to are
-// the state's while it is active, else `kept`'s, the place last written for it.
+// the state's while it is active, else 'primer', the view activating its
+// session opens.
 export function primerPlace(
   state: PrimerState,
   primer: OpenPrimer,
-  kept: PrimerPlace | undefined,
 ): PrimerPlace {
   const { selectedTask, selectedItem: item, pane, cardColumn } = primer;
   if (primer.formId === state.activeFormId && state.view !== 'idle') {
@@ -237,8 +235,8 @@ export function primerPlace(
     selectedItem: item,
     pane,
     cardColumn,
-    view: kept?.view ?? 'primer',
-    confirmReturnView: kept?.confirmReturnView ?? 'review',
+    view: 'primer',
+    confirmReturnView: 'review',
   };
 }
 

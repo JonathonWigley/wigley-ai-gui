@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
 import type {
+  PrimerColumn,
   PrimerEntry,
   PrimerPane,
   PrimerPlace,
@@ -12,7 +13,6 @@ import {
   initialState,
   type OpenPrimer,
   type PrimerAction,
-  type PrimerColumn,
   type PrimerRow,
   type PrimerState,
   type RowPrompt,

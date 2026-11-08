@@ -32,7 +32,7 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
-import type { PrimerEntry } from '../contract';
+import type { PrimerColumn, PrimerEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { PrimerLayout } from '../layouts/layout';
 import { primerManifest } from '../manifest';
@@ -43,11 +43,7 @@ import {
   type PrimerBox,
 } from './boxes';
 import { primerCommandHandlers } from './primer-commands';
-import {
-  initialState,
-  type PrimerAction,
-  type PrimerColumn,
-} from './primer-state';
+import { initialState, type PrimerAction } from './primer-state';
 import { createPrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
