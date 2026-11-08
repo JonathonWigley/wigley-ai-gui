@@ -1,6 +1,6 @@
 # 06 — Workflow stage actions as commands
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -254,3 +254,5 @@ Filtered self-tests: `workflow`, `workflow-heavy`, `workflow-light`, `workflow-m
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 027ee094 · proof: Diff read: every Produces present (StageActionArg, workflowStageActionCommand in contract.ts; workflow.stageAction in manifest; createWorkflowKit/testWorkflowKit take sessionId; WorkflowDraw takes sessionId; WorkflowPageExports drops runCommand); Done-when greps hold. Typecheck clean for 06's files except two row helpers missing task 07's in-flight SessionRow.markToast (07 adds them); lint clean; 710 vitest tests and the workflow-heavy/light/medium self-tests pass per worker. · concerns: countingEngineTimers spreads the harness api (breaks if the harness gains getters); probePart written twice (workflow start.test.ts, workflow-heavy-page.test.ts) beside visual's runListenerPart; keyRunner's comment in base-kit.ts says 'from a click' but now serves keys (task 10); stageAction's onDidRun fires even when the level rejects the action (runFor swallows it); Heavy page test now uses provider parts for sessions/chat because the harness only accepts fakes listed in dependsOn.
