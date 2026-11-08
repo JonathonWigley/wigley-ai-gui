@@ -97,8 +97,9 @@ auto-compact, at each workflow.flows change and each chat.turnFinished (idle):
 - Auto-compact's settings `minTokens` (the send gate, default 150000) and `agentWaitMinTokens` (the agent wait,
   default 200000); 0 turns either off.
 - Auto-compact's `AgentWaits`, by chat row id: `compacting` from a `compact` that returned true to the next
-  `compactionEnded` or `sessionEnded`, then `spent`; absent is armed. A flow's `sessionId` is the chat row id, and
-  the part maps it to the usage's host session id through the `hostSessionId` each `chat.agentEvent` carries.
+  `compactionEnded`, then `spent`; a `sessionEnded` re-arms either; absent is armed. A flow's `sessionId` is the chat row id, and
+  the part maps it to the usage's host session id through the `hostSessionId` each `chat.agentEvent` but a `sessionEnded` carries, since a let-go process's end
+  still arrives under its old host id.
 - The usage snapshot's `SessionUsage.compaction: { trigger, startedAt } | null`, and the session line input's
   `compacting: string | null`.
 

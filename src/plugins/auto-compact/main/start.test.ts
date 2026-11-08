@@ -187,6 +187,24 @@ describe('autoCompactMainPart', () => {
     expect(part.compacts).toHaveLength(2);
   });
 
+  it('agentWait_OldHostsEndAfterAClear_ReadsTheNewHostsUsage', () => {
+    const part = startPart();
+    part.harness.emit('chat.agentEvent', usageOf(214_000));
+    part.harness.emit('chat.agentEvent', {
+      ...COLD_USAGE,
+      hostSessionId: 'h2',
+      event: { type: 'turnEnded', at: 950_000 },
+    });
+    part.harness.emit('chat.agentEvent', {
+      ...COLD_USAGE,
+      event: { type: 'sessionEnded', at: 960_000 },
+    });
+
+    part.flows.set('s1', WAITING_FLOW);
+
+    expect(part.compacts).toEqual([]);
+  });
+
   it('agentWait_SettingZero_CompactsNothing', () => {
     const part = startPart();
     part.setting.agentWaitMinTokens = 0;

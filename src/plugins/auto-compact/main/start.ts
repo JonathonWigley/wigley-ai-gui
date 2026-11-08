@@ -55,7 +55,10 @@ export const autoCompactMainPart: MainPart<typeof autoCompactManifest> = {
 
     api.events.on('chat.agentEvent', ({ sessionId, hostSessionId, event }) => {
       latest = withAgentEvent(latest, hostSessionId, event);
-      hostIds.set(sessionId, hostSessionId);
+      // A let-go process's end still arrives under its old host id.
+      if (event.type !== 'sessionEnded') {
+        hostIds.set(sessionId, hostSessionId);
+      }
       waits = withWaitEvent(waits, sessionId, event);
     });
     api.events.on('chat.turnFinished', ({ sessionId, how }) => {
