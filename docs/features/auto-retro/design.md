@@ -42,11 +42,11 @@ user closes a row ──► chat.sessionClosed (reason user, sent true)
 - **What queues.** A `chat.sessionClosed` with reason `user` and `sent` true, for a row that is not a retro row: one
   this plugin did not launch, and whose first message does not open with `/wigley:retro auto`. The first-message check
   covers a retro row the queue lost — `queue.json` unread at start, or a row dropped by the restore wait or a gone
-  profile — so its close queues no retro of a retro session.
-  Every other reason — a failed start, `closeSessionsIn`, `finished` — and a quit queue nothing. A terminal session
-  never closes in the app; the next manual retro's backfill finds it. A row whose last conversation sent nothing
-  queues nothing, even when a conversation before its `/clear` sent: the backfill finds that one too. The self-test
-  queues nothing, so its scripts' closes launch no retro; a drive run queues as the app does.
+  profile — so its close queues no retro of a retro session. Every other reason — a failed start, `closeSessionsIn`,
+  `finished` — and a quit queue nothing. A terminal session never closes in the app; the next manual retro's backfill
+  finds it. A row whose last conversation sent nothing queues nothing, even when a conversation before its `/clear`
+  sent: the backfill finds that one too. The self-test queues nothing, so its scripts' closes launch no retro; a drive
+  run queues as the app does.
 - **What a run gets.** The closed row's host session id and every id it had before a `/clear` (`chat.sessionCleared`),
   oldest first, and the row's profile. The plugin keeps each open row's earlier ids for this, since the close payload
   carries only the current one.
@@ -86,9 +86,9 @@ the analysts still run. A process that ended (clean or crash) is done too. A sho
 closing the row under a new turn. A retro row raises no Turn finished alert. A running retro whose row does not come
 back within 30 s of a start is dropped, and the next close launches.
 
-The user can still cancel a running retro: closing its row before it is done ends the run, logs
-`retro <row id> closed before done; <host ids> not analyzed`, and launches the next queued close. The closed session
-goes unanalyzed until the next manual `/wigley:retro`'s backfill catches it up.
+The user can still cancel a running retro: closing its row before it is done ends the run, logs `retro <row id>
+closed before done; <host ids> not analyzed`, and launches the next queued close. The closed session goes unanalyzed
+until the next manual `/wigley:retro`'s backfill catches it up.
 
 On done the plugin calls chat's `close(rowId, 'finished')`. A `finished` close stays out of Recently closed and the
 stash, which take `user` closes only, and queues no retro. A run that failed still closes: it never marked its

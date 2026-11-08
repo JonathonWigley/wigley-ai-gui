@@ -551,9 +551,8 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // an id another registered section holds. On each side bar draw every
 // section's `claims` is asked of every row: a claimed row leaves its project
 // group and draws in the section, newest first; a row two sections claim goes
-// to the lower `order`, a tie to
-// the section registered first, and a `claims` that throws counts as false
-// and is logged. The sections that claim a row draw after Recent, by `order`,
+// to the lower `order`, a tie to the section registered first, and a `claims`
+// that throws counts as false and is logged. The sections that claim a row draw after Recent, by `order`,
 // a tie in registration order; one that claims none draws nothing. Adding a
 // section and disposing its `Disposable` each redraw the side bar. `header`
 // builds on each side bar draw, so a header whose content changes between
