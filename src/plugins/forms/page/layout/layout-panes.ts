@@ -279,7 +279,9 @@ function drawNotices(
   for (const notice of input.notices) {
     if (!lines.has(notice.index)) {
       const head = drawNoticeLine(paneElement, notice.index, lines, draw);
-      head.append(element('span', 'notice-line-title', notice.title));
+      const title = element('span', 'notice-line-title', notice.title);
+      title.title = notice.title;
+      head.append(title);
     }
   }
   let shownLine = round.noticeLine;

@@ -248,7 +248,7 @@ Boundary rules:
 - [x] [Forms self-test](07-forms-selftest.md) — after 01, 02, 04, 05, 06
 
 ### Wave 6
-- [ ] [Doc re-read](09-doc-re-read.md) — after 07, 08
+- [x] [Doc re-read](09-doc-re-read.md) — after 07, 08
 
 ### Wave 7
 - [ ] [Final verification](10-final-verification.md) — after 09; its § Landing runs at close
@@ -266,6 +266,7 @@ Review base: 21b036cb
 - 04 · 29df4efc · diff read: RoundItem, RailItem union, railItems, openNotices/noticeLine, the three actions, railEntryLabel/Title, noticeToggledLine, lineCursorLine, RoundPicks.noticeCards, RailEntryInput.kind, the three commands and binds all present; worker full npm test (10156), typecheck, lint pass · concerns: forms selftest-script expects j ran forms.nextItem in many rows — task 07 owns it; za is not a vim key, so the placement check wants an anchor for forms.toggleNotice — task 05's notices pane must draw it; interim notice cards use the stop's rail position
 - 05 · 2871e979 · diff read: buildNoticesPane, NoticeLineInput, NoticesInput, NoticesKit.line, Layout.notices, PANES/read-layout notices, buildLayoutCard rollback, default notices pane and headless notice card, interim removed, za anchor on cursor line all present; typecheck passes; worker full npm test (10176) and lint pass · concerns: Enter on the notices stop also toggles the cursor line (from 04; vim key, no anchor); live look unchecked (head inside collapsible button, hidden empty summary, prompt position, editors in hidden bodies) — task 10
 - 07 · a0475c08 · diff read: summary renames incl. SELFTEST_LAYOUT input.summary, j/k expects now nextLine/prevLine (only PAGE_BINDS keeps nextItem), preview walk with preview-question, finding picks and round layouts re-walks, NOTICE_COMMENT_STEPS group, reconsider payload check all present; typecheck passes; worker lint passes · concerns: finding picks step 1 (Space k k) logs k ran forms.prevLine twice in one step — the race the task doc warns of; watch in task 10's self-test run; round layouts last step's why now names the notice comments group
+- 09 · a93dd7e3 · diff read: plugin-framework design.md za line fixed; every other named doc (AG/forms.md, AG/AGENTS.md, feature SKILL.md, triage.md, forms README, G/AGENTS.md, layouts design.md, keymap.md) checked and true, no edit in agents or marketplace; pointer check passed · concerns: none
 ### Contract changes
 ### Rulings
 - Rebased the gui and agents branches onto main at preflight (9 and 1 commits behind); the docs-written-ahead commits are now gui 3c06d4c3 (was 4d679c5c) and agents 67c4697 (was 64ba2e3); review bases: gui 21b036cb, marketplace 3689c72, agents 67c4697 — work builds on origin's latest — a stale sha in a later brief would mislead a re-read · lead
@@ -279,5 +280,7 @@ Review base: 21b036cb
 - za prompt is one span.notice-line-prompt per pane draw, made through recordingDeps and moved to the cursor line's head on every update, so a user layout cannot drop it — mirrors the review's jump prompt — placement check fails if missed · group 05
 - Prompt label is 'toggle' rather than the command label — keeps the line short — copy only · group 05
 - Head click compares the line's open state before and after its dispatches and logs only on change — no double log — a click logs nothing if wrong · group 05
+- The question card's head kind tag (itemHead 'Question') counts as the head, not a section label, so 'no section labels' wording stays — matches 02's pinned card — docs would need a clause if the tag counts · group 09
+- Mid-run rebase at task 10: marketplace onto main dd60953 (a peer took 1.20.2; 08's bump dropped as already upstream, re-bumped to 1.20.3 in d4c4874), agents onto main 63018f1 (AGENTS.md conflict kept the forms.md pointer; the peer's visuals-in-context rule moved into forms.md § Questions, a59ec37); review bases now marketplace dd60953, agents 63018f1; gui rebases after the live checks — work builds on origin's latest — the review range would sweep in peer commits if stale · lead
 ### Review rounds
 ### Test gate

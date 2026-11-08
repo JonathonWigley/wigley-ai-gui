@@ -925,8 +925,14 @@ const SAMPLE_ROUND_AGAIN_STEPS: SelfTestStep[] = [
 ];
 
 // Code and tables scroll in their own box; a Docs tab's paths and status line
-// end in an ellipsis, their full text in the tooltip.
-const SCROLLS_ITSELF = ['.md pre', '.md table', '.docs-path', '.docs-status'];
+// and a notice line's title end in an ellipsis, their full text in the tooltip.
+const SCROLLS_ITSELF = [
+  '.md pre',
+  '.md table',
+  '.docs-path',
+  '.docs-status',
+  '.notice-line-title',
+];
 
 // Each run's fixture differs in one context line, so a later run never opens
 // pre-filled from an earlier run's saved draft.

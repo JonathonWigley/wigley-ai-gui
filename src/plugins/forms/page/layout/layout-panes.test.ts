@@ -484,10 +484,11 @@ describe('notices pane', () => {
         lines.map((line) => [
           findAll(line, 'ui-tag')[0]?.textContent,
           findAll(line, 'notice-line-title')[0]?.textContent,
+          findAll(line, 'notice-line-title')[0]?.title,
         ]),
       ).toEqual([
-        ['Decided', 'Heads up'],
-        ['Applied', 'Also'],
+        ['Decided', 'Heads up', 'Heads up'],
+        ['Applied', 'Also', 'Also'],
       ]);
       expect(
         findAll(asFake(pane.element), 'ui-collapsible-body').map(
@@ -564,7 +565,8 @@ describe('notices pane', () => {
     const lines = noticeLines(pane);
     expect(lines).toHaveLength(2);
     expect(asFake(pane.element).children.at(-1)).toBe(lines[1]);
-    expect(findAll(lines[1], 'notice-line-title')[0]?.textContent).toBe('Also');
+    const title = findAll(lines[1], 'notice-line-title')[0];
+    expect([title?.textContent, title?.title]).toEqual(['Also', 'Also']);
     expect(deps.mountBox).toHaveBeenCalledWith(
       expect.anything(),
       { field: 'comment', notice: 2 },

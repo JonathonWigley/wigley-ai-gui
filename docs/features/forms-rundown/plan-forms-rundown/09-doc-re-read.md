@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 07, 08
 Plan: [plan.md](plan.md)
@@ -73,3 +73,4 @@ Commit:    one commit per repo that changed, in that repo's worktree, by pathspe
 
 ## Proof
 
+Commit a93dd7e3 · proof: diff read: plugin-framework design.md za line fixed; every other named doc (AG/forms.md, AG/AGENTS.md, feature SKILL.md, triage.md, forms README, G/AGENTS.md, layouts design.md, keymap.md) checked and true, no edit in agents or marketplace; pointer check passed · concerns: none

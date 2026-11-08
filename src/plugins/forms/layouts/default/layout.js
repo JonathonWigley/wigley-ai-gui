@@ -75,7 +75,8 @@ const layout = {
     for (const notice of input.notices) {
       const head = kit.line(list, notice.index);
       kit.tag(head, notice.badge, NOTICE_TONES[notice.badge] ?? 'neutral');
-      kit.el(head, 'span', 'notice-line-title', notice.title);
+      const title = kit.el(head, 'span', 'notice-line-title', notice.title);
+      title.title = notice.title;
     }
     return { element: pane };
   },
