@@ -1365,6 +1365,47 @@ U(Reply with the single word two.) with uuid `…2142`.
 - This boundary's `compact_metadata` has only the five fields above: `preserved_segment` and `preserved_messages` are
   optional.
 
+### Compaction with a background subagent
+
+Measured on 2.1.318, 2026-11-08, on haiku with `--allowedTools "Agent" "Bash(python3 -c *)"`, one run per variant.
+Turn 1 asks the main agent to launch one background subagent that runs `python3 -c "import time; time.sleep(N)"` and
+replies `PINEAPPLE`, to end its turn at once, and to reply `GOT <word>` when the result arrives. The driver then writes
+`U(/compact)` while the subagent still runs: at turn 1's `result` with N 40, and at the subagent's `Bash` tool_use with
+N 4, so the sleep ends inside the compaction.
+
+```
+N 4
+ 3.62 result success "…ending this turn now…"
+ 4.26 assistant (subagent) tool_use Bash {"command":"python3 -c \"import time; time.sleep(4)\""}
+ 4.26 IN  U(/compact)
+ 4.33 {"type":"system","subtype":"status","status":"compacting"}
+ 9.51 system/task_started  (the subagent's Bash task)
+10.55 system/task_notification  (the Bash task, completed)
+11.61 assistant (subagent) tool_use SubagentHandback {"message":"PINEAPPLE"}
+12.23 system/task_updated  (the subagent, completed)
+12.23 system/task_notification  (the subagent, completed, handback_report PINEAPPLE)
+12.23 {"type":"system","subtype":"background_tasks_changed","tasks":[]}
+13.02 {"type":"system","subtype":"status","status":null,"compact_result":"success"}
+13.02 system/compact_boundary
+13.02 {"type":"result","subtype":"success","result":"","num_turns":0,"local_command":"compact",…}
+14.63 assistant "GOT PINEAPPLE"
+14.65 {"type":"result","subtype":"success","result":"GOT PINEAPPLE","num_turns":1,…}
+14.66 {"type":"result","subtype":"success","result":"","num_turns":0,…}
+```
+
+- **`/compact` runs while a background subagent runs.** The CLI neither refuses it nor waits for the subagent, and the
+  subagent keeps running through it and after it (N 40: the compaction ended at 14.37, the subagent at 49.01).
+- **A subagent's end lines arrive live, mid-compaction.** `task_updated`, `task_notification` and
+  `background_tasks_changed` `[]` print before `compact_boundary`, so the adapter can report `agentFinished` while the
+  compaction still runs.
+- **The notification turn waits for the compaction.** Its model call starts after the `/compact`'s `result`.
+- **The main agent still knows about the pending subagent.** In both variants, the turn after the notification replied
+  `GOT PINEAPPLE`, so the summary kept the instruction given before the compaction.
+- **A notification turn ends on two `result` lines:** one carrying the reply (`num_turns` 1), then an empty one
+  (`num_turns` 0).
+- The subagent's `Bash` call printed its tool_use at 4.26 but started its task only at 9.51, so a subagent's progress
+  may stall for the first seconds of a compaction.
+
 ### /compact with nothing to compact
 
 Stdin: `U(/compact)` with uuid `…aa45`, as a new process's first message. Logged for 20 s.
