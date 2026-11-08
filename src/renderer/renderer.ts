@@ -64,6 +64,7 @@ import { createPageRestores } from './page-restores';
 import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
 import { registerPickerCommands } from './picker-commands';
+import { answerPluginParts } from './plugin-parts-answer';
 import {
   createPageApi,
   liveKeysFor,
@@ -443,14 +444,48 @@ async function start() {
       log,
     },
   );
-  applyPush = (next) =>
-    applyStartedPush(startedPluginsConfig(next, [], hasHandler));
+  // The page binds rule: main has stripped the plugins that are off, and the page strips the page parts its
+  // host has not started yet, so `requireRegistered` meets no bind of a part still to start.
+  const notStarted = () =>
+    pageParts
+      .map((part) => part.manifest.id)
+      .filter((id) => !pageHost.started.has(id));
+  let lastPush = served;
+  const applyLivePush = (next: AppConfig) => {
+    lastPush = next;
+    applyStartedPush(startedPluginsConfig(next, notStarted(), hasHandler));
+  };
+  applyPush = applyLivePush;
   if (heldPush !== null) {
     applyPush(heldPush);
     heldPush = null;
   }
   pageHost.ready();
   restores.partsReady();
+  const answerDeps = { reapplyPush: () => applyLivePush(lastPush), log };
+  bridge.onPluginParts((request) =>
+    answerPluginParts(pageHost, request, answerDeps),
+  );
+  // A reload that raced a switch still ends running what the last push's list says.
+  const loadDisabled = lastPush.settings.plugins.disabled;
+  await answerPluginParts(
+    pageHost,
+    {
+      kind: 'stop',
+      ids: [...pageHost.started.keys()].filter((id) =>
+        loadDisabled.includes(id),
+      ),
+    },
+    answerDeps,
+  );
+  const toStart = notStarted().filter((id) => !loadDisabled.includes(id));
+  if (toStart.length > 0) {
+    await answerPluginParts(
+      pageHost,
+      { kind: 'start', ids: toStart },
+      answerDeps,
+    );
+  }
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
   document.body.dataset.ready = 'true';

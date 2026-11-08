@@ -914,6 +914,7 @@ export interface DriveHost {
 // the stable or the dev one. `images` re-encodes an image smaller, as PNG or
 // JPEG only, for `shrinkToFit`. `sessionHost` owns every agent process, so a
 // process outlives the app (`docs/features/session-host/design.md`).
+// `pluginSwitch` tells whether a plugin may switch off now.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -943,6 +944,12 @@ export interface MainServices {
   runMode: RunMode;
   appInstance: AppInstance;
   selfTest: SelfTestHost | null;
+  pluginSwitch: PluginSwitchService;
+}
+
+// The part of main's plugin switch a main part reaches: the reason turning `pluginId` off would be refused now, or null.
+export interface PluginSwitchService {
+  mayDisable(pluginId: string): Promise<string | null>;
 }
 
 // `dependency` takes the main key from a provider's contract, for a plugin the

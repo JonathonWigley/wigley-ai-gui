@@ -38,6 +38,7 @@ import type {
 } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import {
+  corePluginsSlot,
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
 } from '../contracts/core-state';
@@ -127,6 +128,7 @@ import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
 import { createPageCommands } from './page-commands';
 import { createPageLog } from './page-log';
+import { createPageParts } from './page-parts';
 import { createPastedFiles } from './pasted-files';
 import {
   type AppliedPlugins,
@@ -134,6 +136,8 @@ import {
   withAppliedList,
 } from './plugins/applied-plugins';
 import { createPluginChannels } from './plugins/plugin-channel';
+import { createPluginSwitch, type PluginSwitch } from './plugins/plugin-switch';
+import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
@@ -605,6 +609,16 @@ function layoutsFolder(homeDir: string): string {
   return path.join(configFolder(homeDir), 'layouts');
 }
 
+// The core settings' defaults. Under the self-test, which starts every plugin,
+// the default `plugins.disabled` is empty, so the store's list and the applied
+// list agree and the plugin switch stops nothing at the first config change.
+function defaultSettings() {
+  const defaults = defaultSettingsFor(platform.programs);
+  return runMode === 'selfTest'
+    ? { ...defaults, plugins: { disabled: [] } }
+    : defaults;
+}
+
 // What the ConfigStore over the user config folder in `homeDir` reads,
 // logging to the page and serving the real path of `homeDir`, since index
 // entries and session folders are real paths.
@@ -612,7 +626,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   return {
     files,
     folder: configFolder(homeDir),
-    defaults: defaultSettingsFor(platform.programs),
+    defaults: defaultSettings(),
     optionalSettings,
     settingChoices,
     defaultKeymap,
@@ -636,7 +650,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
 
 // The ConfigStore over the user config folder in `homeDir`, the `userConfig`
 // service writing that folder through the store's checks, and the applied list
-// the store's `plugins.disabled` starts it on.
+// the store's `plugins.disabled` starts it on, without the ids no manifest has.
 async function loadConfig(homeDir: string): Promise<{
   store: ConfigStore;
   userConfig: UserConfig;
@@ -647,7 +661,11 @@ async function loadConfig(homeDir: string): Promise<{
   const applied = createAppliedPlugins(
     mainStartList(
       runMode === 'selfTest',
-      store.current().settings.plugins.disabled,
+      store
+        .current()
+        .settings.plugins.disabled.filter((id) =>
+          manifests.some((manifest) => manifest.id === id),
+        ),
     ),
   );
   return {
@@ -750,8 +768,9 @@ function serveLayouts(
 // Starts every plugin's main part `disabled` does not name, each with its own
 // API over one plugin channel router to the window's page, the settings
 // `store` serves with no self-test layer, one event bus, the shared
-// `services`, its own host from `selfTest` (null outside the self-test), its
-// own host from `driveRun` (null outside a drive run), its data folder under
+// `services`, its own host from `selfTest` (null outside the self-test, and for
+// a part started once `isLaunchStartDone` is true, since the handover has
+// closed), its own host from `driveRun` (null outside a drive run), its data folder under
 // `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
 // as it starts, tracked in its registrations, so stopping the part unregisters
 // them, and each part's API reaches `commands` under its id. Outside the user's
@@ -764,6 +783,7 @@ function startMainParts(
   layouts: LayoutService,
   services: MainApiServices,
   selfTest: SelfTestDriver | null,
+  isLaunchStartDone: () => boolean,
   driveRun: DriveRun | null,
   disabled: readonly string[],
   commands: RuntimeCommands<MainCommandContext<any>>,
@@ -786,7 +806,8 @@ function startMainParts(
           onPluginSettingsChanged: (listener) =>
             store.onChanged((config) => listener(config.pluginSettings)),
           services,
-          selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
+          selfTestFor: (pluginId) =>
+            isLaunchStartDone() ? null : (selfTest?.hostFor(pluginId) ?? null),
           driveFor: (pluginId) => driveRun?.driveFor(pluginId) ?? null,
           dependency: context.dependency,
           registrations: context.registrations,
@@ -958,7 +979,10 @@ function createWindow(
     log,
     sessionHost,
   });
-  mainHost = startMainParts(
+  // Main parts reach the switch through this forwarder, made before they start.
+  let pluginSwitch: PluginSwitch | null = null;
+  let isLaunchStartDone = false;
+  const host = startMainParts(
     window,
     store,
     inputs.dataRoot,
@@ -981,19 +1005,28 @@ function createWindow(
       runMode,
       appInstance,
       sessionHost,
+      pluginSwitch: {
+        mayDisable: (id) =>
+          pluginSwitch === null
+            ? Promise.reject(new Error('The plugin switch is not ready'))
+            : pluginSwitch.mayDisable(id),
+      },
       ...windowServices,
     },
     selfTest,
+    () => isLaunchStartDone,
     driveRun,
     applied.disabled(),
     commands,
     slots,
   );
+  isLaunchStartDone = true;
+  mainHost = host;
   mainCatalog.set({
     ...(mainCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
     started: true,
   });
-  mainHost.ready();
+  host.ready();
   // The layouts service closes after every part's registrations, even when a
   // part's stop rejects.
   onQuit(async () => {
@@ -1062,6 +1095,44 @@ function createWindow(
     log,
   });
   window.webContents.on('render-process-gone', () => runtime.pageProcessGone());
+  const pageParts = createPageParts({
+    page: () => (hasQuitStarted ? null : livePage(window)),
+    catalog: pageCatalog,
+    ipc: ipcMain,
+    log,
+  });
+  const liveSwitch = createPluginSwitch({
+    main: host,
+    page: pageParts.request,
+    applied,
+    slots: holder,
+    status: slots.publish(corePluginsSlot),
+    manifests,
+    problem: (message) => store.setPluginsProblem(message),
+    servedChanged() {
+      livePage(window)?.send(BRIDGE_CHANNELS.configChanged, served());
+      runtime.servedChanged();
+    },
+    timers,
+    log,
+  });
+  pluginSwitch = liveSwitch;
+  store.onChanged((config) => {
+    liveSwitch
+      .apply(config.settings.plugins.disabled)
+      .catch((error: unknown) =>
+        log('plugin-switch', `failed: ${errorText(error)}`),
+      );
+  });
+  if (driveRun !== null) {
+    // The actions live as long as the drive run.
+    addPluginSwitchActions(driveRun.driveFor('core'), {
+      pluginSwitch: liveSwitch,
+      userConfig,
+      manifests,
+      disabled: () => store.current().settings.plugins.disabled,
+    });
+  }
   const keybindings = installWindowKeybindings(
     window,
     runtime.handledKeymap(startServed.keymap),

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
+import {
+  type Bridge,
+  BRIDGE_CHANNELS,
+  type PluginPartsRequest,
+} from '../contracts/bridge';
 import type { SlotChange } from '../contracts/state';
 import { gateExternalLinks } from '../shared/external-links';
 import './preload';
@@ -200,5 +204,49 @@ describe('preload onRunCommand', () => {
     await vi.waitFor(() => {
       expect(electron.sends).toEqual([[BRIDGE_CHANNELS.commandRunDone, 7]]);
     });
+  });
+});
+
+describe('preload onPluginParts', () => {
+  function requestFromMain(request: number, parts: PluginPartsRequest) {
+    const added = electron.onCalls.filter(
+      ([channel]) => channel === BRIDGE_CHANNELS.pluginParts,
+    );
+    added.at(-1)?.[1]({}, request, parts);
+  }
+
+  it.each([
+    {
+      case: 'a reply is sent with its number',
+      answer: () => Promise.resolve({ stopped: ['a'] }),
+      sends: [[BRIDGE_CHANNELS.pluginPartsDone, 4, { stopped: ['a'] }]],
+    },
+    {
+      case: 'a rejecting answer sends nothing',
+      answer: () => Promise.reject(new Error('boom')),
+      sends: [],
+    },
+  ])('onPluginParts_AnswerSettles_SendsDone: $case', async (row) => {
+    electron.sends.length = 0;
+    const heard: PluginPartsRequest[] = [];
+    let settled = false;
+    bridge.onPluginParts(async (request) => {
+      heard.push(request);
+      try {
+        return await row.answer();
+      } finally {
+        settled = true;
+      }
+    });
+
+    requestFromMain(4, { kind: 'stop', ids: ['a'] });
+
+    await vi.waitFor(() => {
+      expect(settled).toBe(true);
+    });
+    // A macrotask runs once every queued reply has been sent.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toEqual([{ kind: 'stop', ids: ['a'] }]);
+    expect(electron.sends).toEqual(row.sends);
   });
 });

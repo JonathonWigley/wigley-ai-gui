@@ -95,24 +95,35 @@ export function dependencyOrder(
   return ordered;
 }
 
-// The problem with a `plugins.disabled` list: the first plugin it names that
-// a plugin it leaves started depends on in either `dependsOn` list, walking
-// `manifests` in list order and each one's lists in order, `main` then `page`.
-// Null when no started plugin depends on a disabled one; an id no manifest has
-// disables nothing.
+// The ids of the plugins in `manifests`, in list order, that `disabled` does not
+// name and whose `dependsOn.main` or `dependsOn.page` names `pluginId`; a
+// plugin naming it only in `reads` needs nothing.
+export function neededBy(
+  pluginId: string,
+  disabled: readonly string[],
+  manifests: readonly PluginManifest[],
+): string[] {
+  return manifests
+    .filter(
+      (manifest) =>
+        !disabled.includes(manifest.id) &&
+        dependencyIds(manifest).includes(pluginId),
+    )
+    .map((manifest) => manifest.id);
+}
+
+// The problem with a `plugins.disabled` list: the first id it names, walking
+// `disabled` in list order, that a plugin it leaves started depends on
+// (`neededBy`), naming the first such plugin. Null when no started plugin
+// depends on a disabled one; an id no manifest has disables nothing.
 export function disabledDependencyProblem(
   disabled: readonly string[],
   manifests: readonly PluginManifest[],
 ): string | null {
-  for (const manifest of manifests) {
-    if (disabled.includes(manifest.id)) {
-      continue;
-    }
-    const dependency = dependencyIds(manifest).find((id) =>
-      disabled.includes(id),
-    );
-    if (dependency !== undefined) {
-      return `"plugins.disabled" names "${dependency}", which "${manifest.id}" depends on.`;
+  for (const id of disabled) {
+    const [dependent] = neededBy(id, disabled, manifests);
+    if (dependent !== undefined) {
+      return `"plugins.disabled" names "${id}", which "${dependent}" depends on.`;
     }
   }
   return null;

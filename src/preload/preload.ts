@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
+import {
+  type Bridge,
+  BRIDGE_CHANNELS,
+  type PluginPartsRequest,
+} from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
@@ -78,6 +82,21 @@ const bridge: Bridge = {
         void Promise.resolve()
           .then(() => listener(id, arg))
           .then(tellDone, tellDone);
+      },
+    );
+  },
+  // A rejecting answer sends no reply: the page's answer logs its own failure.
+  onPluginParts: (answer) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.pluginParts,
+      (_event, request: number, parts: PluginPartsRequest) => {
+        void Promise.resolve()
+          .then(() => answer(parts))
+          .then(
+            (reply) =>
+              ipcRenderer.send(BRIDGE_CHANNELS.pluginPartsDone, request, reply),
+            () => undefined,
+          );
       },
     );
   },

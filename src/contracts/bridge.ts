@@ -18,6 +18,8 @@ export const BRIDGE_CHANNELS = {
   openExternal: 'bridge:open-external',
   pluginInvoke: 'plugin:invoke',
   pluginMessage: 'plugin:message',
+  pluginParts: 'bridge:plugin-parts',
+  pluginPartsDone: 'bridge:plugin-parts-done',
   savePasted: 'bridge:save-pasted',
   serveVisual: 'bridge:serve-visual',
   stateChanged: 'bridge:state-changed',
@@ -26,6 +28,15 @@ export const BRIDGE_CHANNELS = {
   uiStateRead: 'bridge:ui-state-read',
   uiStateWrite: 'bridge:ui-state-write',
 } as const;
+
+export type PluginPartsRequest =
+  | { kind: 'mayStop'; ids: readonly string[] } // reply: { reason: string | null }
+  | { kind: 'stop'; ids: readonly string[] } // reply: { stopped: readonly string[] }
+  | { kind: 'start'; ids: readonly string[] }; // reply: { started: readonly string[] }
+export type PluginPartsReply =
+  | { reason: string | null }
+  | { stopped: readonly string[] }
+  | { started: readonly string[] };
 
 // What the core claims once at start through `window.wigley.claim()`.
 export interface Bridge {
@@ -88,4 +99,8 @@ export interface Bridge {
   // Opens an http or https URL in the user's default app; rejects with main's
   // own error text for any other URL.
   openExternal(url: string): Promise<void>;
+  // The page answers main's requests through its host.
+  onPluginParts(
+    answer: (request: PluginPartsRequest) => Promise<PluginPartsReply>,
+  ): void;
 }

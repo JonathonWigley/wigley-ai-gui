@@ -35,6 +35,9 @@ export interface RuntimeWiring {
   handledKeymap(keymap: Keymap): Keymap;
   // Called on `render-process-gone`. Writes the empty page catalog.
   pageProcessGone(): void;
+  // Called when the served config changed with no store change (the applied list): applies the
+  // served keymap main can run, as a store change does.
+  servedChanged(): void;
 }
 
 // Feeds both catalogs to the config store now and at each change, ends the waiting
@@ -68,7 +71,7 @@ export function wireRuntime(deps: RuntimeWiringDeps): RuntimeWiring {
       'main',
     );
   let appliedKeymap = JSON.stringify(handledKeymap(deps.served().keymap));
-  deps.config.onChanged(() => {
+  const applyServedKeys = () => {
     const keymap = handledKeymap(deps.served().keymap);
     const text = JSON.stringify(keymap);
     if (text === appliedKeymap) {
@@ -80,9 +83,11 @@ export function wireRuntime(deps: RuntimeWiringDeps): RuntimeWiring {
     } catch (error) {
       deps.log('config', `keys not applied: ${errorText(error)}`);
     }
-  });
+  };
+  deps.config.onChanged(applyServedKeys);
   return {
     handledKeymap,
+    servedChanged: applyServedKeys,
     pageProcessGone() {
       deps.applyPageWrite({
         id: coreRuntimePageSlot.id,

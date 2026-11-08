@@ -1,6 +1,6 @@
 # 08 — The plugin switch
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 03, 04, 06, 07
 Plan: [plan.md](plan.md)

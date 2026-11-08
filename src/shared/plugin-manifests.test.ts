@@ -11,6 +11,7 @@ import {
   type DefaultKeyLayer,
   expandBind,
   mergeKeymap,
+  neededBy,
   overrideSettings,
   pluginOptionalSettings,
   pluginSettingInfo,
@@ -713,6 +714,29 @@ describe('disabledDependencyProblem', () => {
 
     expect(disabledDependencyProblem(['b'], readers)).toBe(null);
   });
+});
+
+describe('neededBy', () => {
+  const plugins = [
+    manifest('a'),
+    manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+    manifest('c', { dependsOn: { main: [], page: ['b'] } }),
+    manifest('d', { dependsOn: { main: ['a'], page: ['a'] } }),
+    manifest('e', { reads: { main: [], page: ['a'] } }),
+  ];
+
+  it.each([
+    { pluginId: 'a', disabled: [], expected: ['b', 'd'] },
+    { pluginId: 'a', disabled: ['b'], expected: ['d'] },
+    { pluginId: 'b', disabled: [], expected: ['c'] },
+    { pluginId: 'c', disabled: [], expected: [] },
+    { pluginId: 'zzz', disabled: [], expected: [] },
+  ])(
+    'neededBy $pluginId with $disabled → $expected',
+    ({ pluginId, disabled, expected }) => {
+      expect(neededBy(pluginId, disabled, plugins)).toEqual(expected);
+    },
+  );
 });
 
 describe('withoutPluginBinds', () => {

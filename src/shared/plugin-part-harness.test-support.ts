@@ -927,6 +927,8 @@ function fakeMainApi(
       git: notFaked<Git>('git'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
+      // Refuses no switch-off.
+      pluginSwitch: { mayDisable: async () => null },
       ...replaced,
       files:
         replaced.files === undefined

@@ -9,12 +9,18 @@ function command(id: string, plugin: string): CommandInfo {
 
 const pBind = { keys: ['g'], scope: 'any', command: 'p.go' };
 const qBind = { keys: ['h'], scope: 'any', command: 'q.go' };
+const pEditorBind = { keys: '<leader>g', scope: 'any', command: 'p.go' };
+const qEditorBind = { keys: '<leader>h', scope: 'any', command: 'q.go' };
 
-// A config whose keymap holds one page bind of plugin `p` and one of `q`;
-// nothing here reads the rest.
+// A config whose keymap holds one page bind and one editor bind of plugin `p`
+// and of `q`; nothing here reads the rest.
 const config = {
   keymap: {
-    editor: { leader: '<Space>', remaps: [], binds: [] },
+    editor: {
+      leader: '<Space>',
+      remaps: [],
+      binds: [pEditorBind, qEditorBind],
+    },
     page: [pBind, qBind],
     app: [],
     intercept: [],
@@ -28,9 +34,16 @@ const config = {
 describe('startedPluginsConfig', () => {
   it.each([
     {
-      case: 'UnstartedPlugin_DropsItsBinds',
+      case: 'UnstartedPlugin_DropsItsPageAndEditorBinds',
       notStarted: ['p'],
-      expected: { ...config, keymap: { ...config.keymap, page: [qBind] } },
+      expected: {
+        ...config,
+        keymap: {
+          ...config.keymap,
+          editor: { ...config.keymap.editor, binds: [qEditorBind] },
+          page: [qBind],
+        },
+      },
     },
     { case: 'NoneUnstarted_KeepsTheKeymap', notStarted: [], expected: config },
   ])('startedPluginsConfig_$case', ({ notStarted, expected }) => {
