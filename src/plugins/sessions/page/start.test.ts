@@ -9,7 +9,12 @@ import type {
 import type { UiState } from '../../../contracts/ui-state';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  type FakeElement,
+  findAll,
+  installFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   dataEmitted,
   noCounts,
@@ -38,6 +43,14 @@ const hostRow = (sessionId: string) => ({
   ...sessionRow(sessionId),
   hostSessionId: `host-${sessionId}`,
 });
+
+function outermostAncestor(node: FakeElement): FakeElement {
+  let top = node;
+  while (top.parentNode !== null) {
+    top = top.parentNode;
+  }
+  return top;
+}
 
 // Saved panes `a` and `b` side by side, showing `s1` and `s2`.
 function savedSplit(focusedId: 'a' | 'b'): UiState {
@@ -110,15 +123,16 @@ async function startApplied(
   // A popup `Popup` in the session; `beforeClose` answers its close guard.
   const addPopup = (sessionId: string, beforeClose = () => true) => {
     const shown = vi.fn();
+    const element = document.createElement('div');
     const handle = exports.addPopup(sessionId, {
       id: 'popup',
       title: 'Popup',
       icon: 'bell',
-      element: document.createElement('div'),
+      element,
       beforeClose,
       shown,
     });
-    return { shown, handle };
+    return { shown, handle, element };
   };
   const togglePopup = () =>
     harness.started().commands.togglePopup({ arg: undefined });
@@ -426,42 +440,62 @@ describe('sessions page part', () => {
     case: string;
     rowIds: string[];
     popup: 'open' | 'hidden' | 'none';
+    by: 'togglePopup' | 'bar click';
     logged: string;
   }>([
     {
       case: 'an open popup hides',
       rowIds: ['s1'],
       popup: 'open',
+      by: 'togglePopup',
       logged: 'hid Popup popup in label s1',
     },
     {
       case: 'a hidden popup opens',
       rowIds: ['s1'],
       popup: 'hidden',
+      by: 'togglePopup',
+      logged: 'opened Popup popup in label s1',
+    },
+    {
+      case: "a hidden popup's bar entry opens it",
+      rowIds: ['s1'],
+      popup: 'hidden',
+      by: 'bar click',
       logged: 'opened Popup popup in label s1',
     },
     {
       case: 'a session with no popup',
       rowIds: ['s1'],
       popup: 'none',
+      by: 'togglePopup',
       logged: 'no popup in label s1',
     },
     {
       case: 'no session shown',
       rowIds: [],
       popup: 'none',
+      by: 'togglePopup',
       logged: 'no popup: no session shown',
     },
-  ])('togglePopup_FocusedSession_LogsWhatItDid ($case)', async (test) => {
+  ])('popupToggle_FocusedSession_LogsWhatItDid ($case)', async (test) => {
     const setup = await startApplied(test.rowIds, test.rowIds[0] ?? null);
-    const popup =
-      test.popup === 'none' ? null : setup.addPopup(test.rowIds[0]).handle;
+    const added = test.popup === 'none' ? null : setup.addPopup(test.rowIds[0]);
+    const popup = added?.handle ?? null;
     if (test.popup === 'hidden') {
       popup?.hide();
     }
     const logged = setup.harness.logs.length;
 
-    setup.togglePopup();
+    if (test.by === 'bar click') {
+      const [entry] = findAll(
+        outermostAncestor(asFake(added!.element)),
+        'session-popup-bar-entry',
+      );
+      entry.click();
+    } else {
+      setup.togglePopup();
+    }
 
     expect(setup.logsSince(logged)).toContain(test.logged);
     expect(popup?.isVisible() ?? false).toBe(test.popup === 'hidden');

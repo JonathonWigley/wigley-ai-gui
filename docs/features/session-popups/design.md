@@ -75,8 +75,9 @@ one key away while the form waits.
 - It slides up from the bottom on open and down on hide over `duration-slow` (sheets and panels), `ease-out` entering
   and `ease-in` leaving; under reduced motion it appears and goes at once, as `duration-instant` makes it.
 - **The hidden bar** is a slim row at the bottom of the session's frame, one entry per hidden popup: its icon, its
-  status (the round's title), and the toggle key. A click on an entry opens that popup. The bar is gone while no
-  popup is hidden.
+  status (the round's title), and the toggle key. A click on an entry opens that popup and logs the line the toggle
+  key logs when it opens one, `opened <popup title> popup in <session label>`. The bar is gone while no popup is
+  hidden.
 - Both draw through the sessions layout: the `popup` part (the frame around the plugin's element) and the
   `popupBar` part (the hidden bar), in the built-in `default` layout.
 

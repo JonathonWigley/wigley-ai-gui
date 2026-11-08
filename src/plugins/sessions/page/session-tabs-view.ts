@@ -106,13 +106,15 @@ interface DrawnPane {
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
 // change to a session's tabs, their selection or their statuses, or to its
-// popups, which is open or their statuses; `keys` draws the key beside the
-// text asking for a session to be picked; `parts` draws the panes, the tab
-// bars with the bar parts other plugins added, the tabs, that text, the
-// popups and their bars.
+// popups, which is open or their statuses; `popupOpenedFromBar` runs after a
+// click on a hidden popup's bar entry opened it, after `changed`; `keys` draws
+// the key beside the text asking for a session to be picked; `parts` draws the
+// panes, the tab bars with the bar parts other plugins added, the tabs, that
+// text, the popups and their bars.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
+  popupOpenedFromBar(sessionId: string, popup: SessionPopupView): void;
   keys: Pick<KeyHints, 'anchor'>;
   parts: SessionsParts;
 }
@@ -331,7 +333,11 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     frame.popupBar.built.entries.forEach((entry, index) => {
       const popup = hidden[index];
       entry.setAttribute('aria-label', popup.view.title);
-      rowAction(entry, () => openPopup(frame.sessionId, popup));
+      rowAction(entry, () => {
+        if (openPopup(frame.sessionId, popup)) {
+          deps.popupOpenedFromBar(frame.sessionId, popup.view);
+        }
+      });
     });
   };
 
@@ -553,12 +559,15 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     changed();
   };
 
-  // Makes the live popup its session's top open popup; nothing when it is.
-  const openPopup = (sessionId: string, popup: Popup) => {
+  // Makes the live popup its session's top open popup and returns true;
+  // nothing, returning false, when it is or is no longer live.
+  const openPopup = (sessionId: string, popup: Popup): boolean => {
     const frame = livePopup(sessionId, popup);
-    if (frame !== undefined && topOpenPopup(frame.popups) !== popup) {
-      setPopupOpen(frame, popup, true);
+    if (frame === undefined || topOpenPopup(frame.popups) === popup) {
+      return false;
     }
+    setPopupOpen(frame, popup, true);
+    return true;
   };
 
   const removePopup = (frame: Frame, popup: Popup) => {
@@ -717,7 +726,9 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
             changed();
           }
         },
-        open: () => openPopup(sessionId, popup),
+        open() {
+          openPopup(sessionId, popup);
+        },
         hide() {
           const live = livePopup(sessionId, popup);
           if (live !== undefined && popup.isOpen) {

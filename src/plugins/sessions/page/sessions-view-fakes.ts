@@ -105,6 +105,7 @@ export function sessionsViewSetup(
     activate: (sessionId) => activated.push(sessionId),
     isModeShown: () => true,
     tabsChanged,
+    popupOpenedFromBar: () => undefined,
     timers,
     panesChanged: () => undefined,
     paneFocused: () => undefined,

@@ -20,6 +20,7 @@ import {
   type RowActivity,
   type RowActivitySource,
   type SessionPart,
+  type SessionPopupView,
   type SessionRow,
   type SessionsState,
 } from '../contract';
@@ -45,7 +46,8 @@ import { rowChanges, rowStatus, stepSession } from './tabs';
 
 // `activate` runs on a row click; `isModeShown` reads whether Sessions mode
 // shows; `tabsChanged` runs after any change to a session's tabs, their
-// selection or their statuses, or to its popups; `keys` draws the session, tab and pane
+// selection or their statuses, or to its popups; `popupOpenedFromBar` runs
+// after a click on a hidden popup's bar entry opened it; `keys` draws the session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a press's release or outer pane key included,
@@ -63,6 +65,7 @@ export interface SessionsViewDeps extends Omit<
   activate(sessionId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
+  popupOpenedFromBar(sessionId: string, popup: SessionPopupView): void;
   keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   timers: Timers;
   panesChanged(): void;
@@ -272,6 +275,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       drawSidebar();
       deps.tabsChanged();
     },
+    popupOpenedFromBar: deps.popupOpenedFromBar,
   });
   const treeView = createPaneTreeView({
     initialId: 'pane-1',

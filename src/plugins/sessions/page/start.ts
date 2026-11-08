@@ -126,6 +126,15 @@ const NO_MID_OPERATION: MidOperation = {
   hasClosedPane: false,
 };
 
+// The line a popup opened or hidden logs, by `togglePopup` or its bar entry.
+function popupToggledLine(
+  title: string,
+  isOpen: boolean,
+  sessionLabel: string,
+): string {
+  return `${isOpen ? 'opened' : 'hid'} ${title} popup in ${sessionLabel}`;
+}
+
 // A choice in the split picker: a session no pane shows, or a new session.
 type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 
@@ -414,6 +423,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         if (!isApplying) {
           checkVisible();
         }
+      },
+      popupOpenedFromBar(sessionId, popup) {
+        log(popupToggledLine(popup.title, true, labelOf(sessionId)));
       },
       keys: api.keys,
       timers: api.services.timers,
@@ -728,8 +740,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         log(`no popup in ${labelOf(sessionId)}`);
         return;
       }
-      const verb = toggled.isOpen ? 'opened' : 'hid';
-      log(`${verb} ${toggled.popup.title} popup in ${labelOf(sessionId)}`);
+      log(
+        popupToggledLine(
+          toggled.popup.title,
+          toggled.isOpen,
+          labelOf(sessionId),
+        ),
+      );
     };
 
     const renameDialog = createRenameDialog({
