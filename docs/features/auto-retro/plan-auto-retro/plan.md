@@ -247,3 +247,4 @@ Review base: 946a8cda
 - GUI review range after the rebase: 94b63304..HEAD (94b63304 is the rewritten 946a8cda, the plan's last commit before task 02); the Review base line keeps the pre-rebase sha, which plan.py will not replace · lead
 ### Review rounds
 ### Test gate
+- Picked the suites owning every changed file in both ranges: GUI npm test over src/plugins/{chat,sessions,auto-retro,session-log,session-stash} — 84 files / 2172 pass; typecheck 0; lint pass; filtered selftest chat+sessions+session-log+session-stash all passed (teardown 'Stopped python3' from context-sources after the result); marketplace retro unittest 180 OK, check_manifests --against origin/main, check_pointers, claude plugin validate pass · lead
