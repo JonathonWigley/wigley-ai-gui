@@ -159,10 +159,10 @@ src/main/        core main process; main.ts is its composition root
   alerts/        native notification behind Alerts, with a Mac variant (Dock bounce, badge), a Windows variant (taskbar
                  flash, overlay dot) and a plain one for Linux; the badge sums the open counts each source sets
   images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
-  claude-code/   Claude Code CLI adapter behind AgentHarness, which also resolves a profile's config folder, lists and reads Claude's saved sessions and
-                 project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
-                 poll), and asks each session for `get_context_usage` and `get_settings` → the only place the app
-                 spawns `claude`
+  claude-code/   Claude Code CLI adapter behind AgentHarness, which also resolves a profile's config folder, lists
+                 and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and status
+                 and `claude -p /usage` (the plan usage poll), and asks each session for `get_context_usage` and
+                 `get_settings` → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind

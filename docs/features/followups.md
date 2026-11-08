@@ -832,3 +832,9 @@ because the earlier items rewrite many of these tests anyway.
 - **A user layout logs `layout st shown` then `layout default shown`** — *needs a decision*: `layout-loader.ts` loads
   `default` on every load and `show-layouts.ts` logs each one, though the user's layout draws. To decide: log only the
   layout in use, or log the default as loaded.
+- **A terminal session's saved name is read from the app's `CLAUDE_CONFIG_DIR`** — *agent-ready*: a relay sends no
+  config folder when its terminal sets no `CLAUDE_CONFIG_DIR`, and `hostSessionName` (`src/plugins/sessions/main/start.ts`)
+  passes that null to `sessionName`, whose `projectsRoot` falls back to the app's own `CLAUDE_CONFIG_DIR` through
+  `claudeConfigFolder` (`src/main/claude-code/claude-launch.ts`) rather than `~/.claude`. An app started from a
+  personal-profile shell reads a default-profile terminal session's name from the wrong folder. The row's profile tag
+  already resolves null through `AgentHarness.configFolder`, which ignores the app's environment.

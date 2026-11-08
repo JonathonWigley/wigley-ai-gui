@@ -12,6 +12,7 @@ import {
   type SurfaceKitDeps,
 } from './chat-layouts';
 
+// `heldProfile` reads the profile of a session chat holds, null for any other;
 // `profileDirOf` reads a session row's resolved config folder, null for a row
 // with none.
 export interface RowProfileDeps {
@@ -21,22 +22,28 @@ export interface RowProfileDeps {
   homeDir: string;
   log: PluginLog;
   profiles(): readonly ChatProfile[];
+  heldProfile(sessionId: string): string | null;
   profileDirOf(sessionId: string): string | null;
 }
 
 // `part` is the row part sessions draws under each session row. `profilesChanged`
-// draws every kept row again, after chat's profiles setting changed.
+// draws every kept row again, after chat's profiles setting changed. `changed`
+// draws the session's row again when its name changed, after chat's state for
+// it changed; a session with no row drawn is ignored.
 export interface RowProfile {
   part: SessionPart;
   profilesChanged(): void;
+  changed(sessionId: string): void;
 }
 
-// A row sessions has drawn the part in: the wrapper it handed the part, and the
-// layout part drawn into it, null while the row shows nothing.
+// A row sessions has drawn the part in: the wrapper it handed the part, the
+// layout part drawn into it, null while the row shows nothing, and the name it
+// drew.
 interface KeptRow {
   sessionId: string;
   wrapper: HTMLElement;
   drawn: DrawnPart<{ element: HTMLElement }> | null;
+  name: string | null;
 }
 
 // The name of the profile whose config folder is `folder`, else the folder's
@@ -55,24 +62,22 @@ export function profileNameOf(
 }
 
 // Each session's profile under its row, through chat's `rowProfile` layout
-// part. A row with no config folder shows nothing. A layout change or a
+// part: a session chat holds by the profile chat opened it under, any other by
+// its config folder. A row with neither shows nothing. A layout change or a
 // profiles change draws every kept row again.
 export function createRowProfile(deps: RowProfileDeps): RowProfile {
   const rows = new Map<string, KeptRow>();
   const draws = chatPartDraws(deps.layouts, 'rowProfile', deps.log);
 
-  const inputOf = (sessionId: string): RowProfileInput | null => {
+  const nameOf = (sessionId: string): string | null => {
+    const held = deps.heldProfile(sessionId);
+    if (held !== null) {
+      return held;
+    }
     const folder = deps.profileDirOf(sessionId);
     return folder === null
       ? null
-      : {
-          name: profileNameOf(
-            folder,
-            deps.profiles(),
-            deps.paths,
-            deps.homeDir,
-          ),
-        };
+      : profileNameOf(folder, deps.profiles(), deps.paths, deps.homeDir);
   };
 
   const clear = (row: KeptRow) => {
@@ -83,7 +88,8 @@ export function createRowProfile(deps: RowProfileDeps): RowProfile {
   };
 
   const draw = (row: KeptRow) => {
-    const input = inputOf(row.sessionId);
+    const name = nameOf(row.sessionId);
+    const input: RowProfileInput | null = name === null ? null : { name };
     const next =
       input === null
         ? null
@@ -93,6 +99,7 @@ export function createRowProfile(deps: RowProfileDeps): RowProfile {
           });
     clear(row);
     row.drawn = next;
+    row.name = name;
   };
 
   const drawEveryRow = () => callEach([...rows.values()], draw);
@@ -103,7 +110,7 @@ export function createRowProfile(deps: RowProfileDeps): RowProfile {
       id: 'chat.rowProfile',
       build(wrapper, sessionId) {
         const earlier = rows.get(sessionId);
-        const row: KeptRow = { sessionId, wrapper, drawn: null };
+        const row: KeptRow = { sessionId, wrapper, drawn: null, name: null };
         rows.set(sessionId, row);
         if (earlier !== undefined) {
           clear(earlier);
@@ -120,5 +127,11 @@ export function createRowProfile(deps: RowProfileDeps): RowProfile {
       },
     },
     profilesChanged: drawEveryRow,
+    changed(sessionId) {
+      const row = rows.get(sessionId);
+      if (row !== undefined && nameOf(sessionId) !== row.name) {
+        draw(row);
+      }
+    },
   };
 }

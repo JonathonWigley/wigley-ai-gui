@@ -103,6 +103,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       );
     const sessions = api.dependency(sessionsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
+    const chatSessions = api.state.read(chatSessionSlot);
     const active = api.state.read(sessionsActiveSlot);
     const run = (command: string) => api.commands.run(command);
     const layouts = createChatLayouts(services.log);
@@ -194,7 +195,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const view = mountChatView({
       channel: api.channel,
       slots: {
-        session: api.state.read(chatSessionSlot),
+        session: chatSessions,
         entries: api.state.read(chatEntriesSlot),
         controls: api.state.read(chatControlsSlot),
         commands: api.state.read(chatCommandsSlot),
@@ -254,10 +255,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       homeDir: services.homeDir,
       log: services.log,
       profiles: () => api.settings().profiles,
+      heldProfile: (sessionId) => chatSessions.get(sessionId)?.profile ?? null,
       profileDirOf: (sessionId) => rows.get(sessionId)?.profileDir ?? null,
     });
     sessions.addRowPart(rowProfile.part);
     api.onSettingsChanged(() => rowProfile.profilesChanged());
+    chatSessions.on((sessionId) => rowProfile.changed(sessionId));
     sideParts.add(
       createMainAgentPart({
         surfaceOf: (sessionId) => view.composerOf(sessionId),

@@ -44,7 +44,7 @@ export function claudeEnv(
   return launchEnv;
 }
 
-function defaultConfigFolder(homeDir: string, paths: Paths): string {
+export function defaultConfigFolder(homeDir: string, paths: Paths): string {
   return paths.join(homeDir, '.claude');
 }
 

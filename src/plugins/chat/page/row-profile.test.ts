@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
+import {
+  recordingAnchors,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
@@ -9,6 +12,8 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import type { ChatProfile } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { ChatLayout } from '../layouts/layout';
 import { DEFAULT_PROFILES } from '../manifest';
 import { createChatLayouts } from './chat-layouts';
 import { createRowProfile, profileNameOf } from './row-profile';
@@ -18,10 +23,12 @@ const HOME = '/Users/u';
 // A row profile over rows' folders and profiles the test sets.
 function setUp() {
   const folders = new Map<string, string>();
+  const held = new Map<string, string>();
   let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
   const log = () => undefined;
+  const layouts = createChatLayouts(log);
   const rowProfile = createRowProfile({
-    layouts: createChatLayouts(log),
+    layouts,
     kit: {
       markdown: {
         block: (text: string) => text,
@@ -43,6 +50,7 @@ function setUp() {
     homeDir: HOME,
     log,
     profiles: () => profiles,
+    heldProfile: (sessionId) => held.get(sessionId) ?? null,
     profileDirOf: (sessionId) => folders.get(sessionId) ?? null,
   });
   const drawRow = (sessionId: string) => {
@@ -53,7 +61,7 @@ function setUp() {
   const setProfiles = (next: readonly ChatProfile[]) => {
     profiles = next;
   };
-  return { rowProfile, folders, drawRow, setProfiles };
+  return { rowProfile, layouts, folders, held, drawRow, setProfiles };
 }
 
 describe('profileNameOf', () => {
@@ -101,6 +109,56 @@ describe('createRowProfile', () => {
     rowProfile.profilesChanged();
 
     expect(wrapper.textContent).toBe('job');
+    expect(wrapper.childNodes.length).toBe(1);
+  });
+
+  it('build_HeldSessionWhoseProfileLeftTheSetting_DrawsTheHeldName', () => {
+    const { folders, held, drawRow } = setUp();
+    folders.set('s1', `${HOME}/.claude`);
+    held.set('s1', 'gone');
+
+    const { wrapper } = drawRow('s1');
+
+    expect(wrapper.textContent).toBe('gone');
+  });
+
+  it('changed_SessionNowHeld_DrawsTheHeldName', () => {
+    const { rowProfile, folders, held, drawRow } = setUp();
+    folders.set('s1', `${HOME}/.claude`);
+    const { wrapper } = drawRow('s1');
+
+    held.set('s1', 'personal');
+    rowProfile.changed('s1');
+
+    expect(wrapper.textContent).toBe('personal');
+    expect(wrapper.childNodes.length).toBe(1);
+  });
+
+  it('changed_SameName_KeepsTheDrawnTag', () => {
+    const { rowProfile, held, drawRow } = setUp();
+    held.set('s1', 'work');
+    const { wrapper } = drawRow('s1');
+    const drawn = wrapper.childNodes[0];
+
+    rowProfile.changed('s1');
+
+    expect(wrapper.childNodes).toEqual([drawn]);
+  });
+
+  it('layoutsChange_KeptRow_DrawsWithTheNewLayout', () => {
+    const { layouts, folders, drawRow } = setUp();
+    folders.set('s1', `${HOME}/.claude`);
+    const { wrapper } = drawRow('s1');
+    const rowProfile: ChatLayout['rowProfile'] = (parent, input) => {
+      const element = document.createElement('b');
+      element.textContent = `mine ${input.name}`;
+      parent.append(element);
+      return { element };
+    };
+
+    layouts.set(withUser<ChatLayout>(defaultLayout, { rowProfile }));
+
+    expect(wrapper.textContent).toBe('mine work');
     expect(wrapper.childNodes.length).toBe(1);
   });
 

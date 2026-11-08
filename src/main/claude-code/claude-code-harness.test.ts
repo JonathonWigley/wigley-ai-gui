@@ -2651,6 +2651,31 @@ describe('createClaudeCodeHarness past sessions', () => {
       await listedFrom('/Users/u/.claude', { CLAUDE_CONFIG_DIR: '' }, null),
     ).toEqual([sessionId]);
   });
+
+  it.each([
+    { profileDir: null, folder: '/Users/u/.claude' },
+    { profileDir: '~/.claude-personal', folder: '/Users/u/.claude-personal' },
+    { profileDir: '/p', folder: '/p' },
+  ])(
+    'configFolder_$profileDir_IgnoresTheAppsConfigDir',
+    ({ profileDir, folder }) => {
+      const harness = createClaudeCodeHarness({
+        command: () => '/bin/claude',
+        permissionTool: 'tool',
+        env: { CLAUDE_CONFIG_DIR: '/c' },
+        log: () => {},
+        host: createFakeSessionHost(clock),
+        spawn: () => fakeChild().child,
+        files: createMemoryFiles(),
+        homeDir: '/Users/u',
+        paths: posixPaths,
+        clock,
+        randomUuid: () => 'uuid-1',
+      });
+
+      expect(harness.configFolder(profileDir)).toBe(folder);
+    },
+  );
 });
 
 describe('createClaudeCodeHarness accounts', () => {
