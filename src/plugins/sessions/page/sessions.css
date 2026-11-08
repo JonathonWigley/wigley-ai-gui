@@ -156,10 +156,10 @@
   grid-area: 1 / 1;
 }
 
-/* The popup layer fills the sheet over the tabs, above the pane edges, and
-   takes no pointer but on the popup that shows and on the strip above it,
-   which the frame-local scrim dims while a popup shows and which absorbs a
-   click. */
+/* The popup layer fills the sheet over the tab body, above the pane edges,
+   and takes no pointer but on the popup that shows and on the strip above
+   it, which the frame-local scrim dims while a popup shows and which absorbs
+   a click. */
 .session-bodies > .session-popups {
   position: absolute;
   z-index: 3;
@@ -184,7 +184,10 @@
   pointer-events: auto;
 }
 
+/* The tab body is a stacking context, so no z-index a tab draws reaches
+   past it over the popup layer or the pane edges. */
 .session-body {
+  isolation: isolate;
   min-height: 0;
 }
 
