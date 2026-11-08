@@ -5,7 +5,7 @@
 - **Scope** — what this feature covers and what stays a follow-up.
 - **The mode** — the plugin, its keys, the side bar sections.
 - **Setting rows** — declarations, controls by kind, commit and reset.
-- **Keys and Leader menu sections** — the action list with its keys, the leader tree, recording a key, the advanced box.
+- **Keybindings and Leader menu sections** — the action list with its keys, the leader tree, recording a key, the advanced box.
 - **The userConfig service** — the seam that reads and writes the user's layers through the ConfigStore's checks.
 - **Disk changes and broken files** — hot reload, stale writes, a file that fails its check.
 
@@ -31,7 +31,7 @@ plan is written from them. A decision here stands unless the user changes it.
   `<Leader>ks` and `<Leader>kd` do. `Cmd+,` on macOS and `Ctrl+,` on Windows is an app menu accelerator
   (`CommandOrControl+,`) on main command `settings.show`, which asks the page part over the plugin's channel to show
   the mode. A page chord cannot hold `,`, so the accelerator is the route.
-- The side bar lists sections: Core, then one per plugin that declares settings, in manifest order, then Keys, then
+- The side bar lists sections: Core, then one per plugin that declares settings, in manifest order, then Keybindings, then
   Leader menu.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. In a window too narrow for the side bar it
   opens over the content, and opening a section by click or Enter closes it. `Alt+l` / `Alt+h` (the core's
@@ -61,12 +61,12 @@ plan is written from them. A decision here stands unless the user changes it.
 - A setting read only when something is created (window size, the claude command) says so in its description; the row
   shows the new value at once and the app applies it to the next one.
 
-## Keys and Leader menu sections
+## Keybindings and Leader menu sections
 
 Both sections edit `keymap.json`'s user layer through the `userConfig` service, as the setting rows do, and show the
 merged keymap: defaults, each manifest's `keys`, then the user's layer.
 
-### Keys
+### Keybindings
 
 - The Leader row comes first ("The key every <Leader> bind starts with"): a one-line box, where an empty box or the
   default leader leaves the leader unset.
@@ -125,7 +125,7 @@ The leader tree as which-key shows it, edited in place, in two panes moved betwe
   - **Change action** opens the same command picker and keeps the key and scope; **change key** records a new key in
     the same group; **move to group** picks a group, then records the key there. Each is one user-layer edit: a user
     bind's entry is rewritten, a default's becomes an `unbind` entry beside the new `binds` entry.
-  - **Clear** and **reset** work as on the Keys section, for the one bind.
+  - **Clear** and **reset** work as on the Keybindings section, for the one bind.
 
 ## The userConfig service
 
