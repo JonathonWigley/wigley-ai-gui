@@ -337,6 +337,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 09: picking the shown value logs unchanged through commit's same-layer check; the plugin list leaf is looked up at pick, not at draw · group 09
 - 13: row ids persist in open-sessions.json, so a relaunch also restores rows under their old ids (one rule for restart and relaunch, no restore window) · group 13
 ### Review rounds
+- Round 1 at ba07909d (db7bff7d..ba07909d), 9 lanes: NEEDS FIXES — 12 Important, 28 Minor, 1 pre-existing; every pick per AGENTS.md § Review (no form): fixes dispatched one worker per file; findings 5, 6, 12, 39, 41 to follow-ups. Report /tmp/claude-hot-reload/review-ba07909d.md
 ### Test gate
 - vitest whole suite after task 11 (HEAD 44e39dda): 539 files, 10378 tests passed, no type errors; filtered self-tests and drive checks are task 13's
 - filtered self-tests at 8916ae71, one run each: settings, forms, primer, docs, backlog, agent-lines, agent-skills, agent-strip, chat, notes, sessions, unity-pool, usage, workflow-heavy, workflow-light, workflow-medium — all passed first run (logs /tmp/claude-hot-reload/selftest/<id>.log)
