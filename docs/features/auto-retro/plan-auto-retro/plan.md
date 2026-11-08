@@ -30,15 +30,15 @@ Each was checked at plan time; `wigley:make` runs each again before the first di
 
 | Claim | Command | Result at plan time |
 |---|---|---|
-| GUI worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-gui-auto-retro log --oneline -2` | `6a8180ca` docs ahead on `9ea97ead` |
-| Marketplace worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-auto-retro log --oneline -2` | `e7fdbfd` docs ahead on `dd60953` |
+| GUI worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-gui-auto-retro log --oneline 9ea97ead..auto-retro` | the docs-ahead and plan commits only, ending `b218590b` |
+| Marketplace worktree on branch `auto-retro`, based on `main` | `git -C /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-auto-retro log --oneline dd60953..auto-retro` | `e7fdbfd` and `1dbe437`, docs ahead only |
 | GUI worktree has `node_modules` linked | `test -L /Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-gui-auto-retro/node_modules` | link to the clone's |
 | `LaunchRequest` has only `projectDir`, `profile`, `message` | `grep -n "interface LaunchRequest" -A5 src/plugins/chat/contract.ts` | lines 45–49 |
 | `SessionCloseReason` has three members | `grep -n "type SessionCloseReason" src/plugins/chat/contract.ts` | line 367: `user`, `start-failed`, `project-closed` |
 | A permission prompt waits on the user | `grep -n "askPermission" src/plugins/chat/main/chat-sessions.ts` | around line 2793 |
 | Sessions main exports `setTitle(sessionId, source, title)` | `grep -n "setTitle" src/plugins/sessions/contract.ts` | line 209 |
 | `SessionPart` is `{ id; build(parent, sessionId) }` | `grep -n "interface SessionPart" -A3 src/plugins/sessions/contract.ts` | line 336 |
-| Sidebar sections are a closed pair | `grep -n "kind" src/plugins/sessions/layouts/layout.d.ts` | `SectionInput.kind` `'favorites' \| 'recent'`, line 71 |
+| Sidebar sections are a closed pair | `grep -n "kind" src/plugins/sessions/layouts/layout.d.ts` | `SectionInput.kind` `'favorites' \| 'recent'`, line 72 |
 | `digest.py` reads `~/.claude/projects` by default | `grep -n "^PROJECTS" plugins/wigley/scripts/retro/digest.py` (marketplace) | line 57 |
 | Marketplace plugin version | `grep -n '"version"' plugins/wigley/.claude-plugin/plugin.json plugins/wigley/.codex-plugin/plugin.json` (marketplace) | measured at plan time, re-verify against `origin/main` |
 
