@@ -53,6 +53,9 @@ function item(title: string): FollowupItem {
   };
 }
 
+// The plan's newest copy, in a linked worktree.
+const PLAN_COPY = '/wt/docs/features/feature/plan-p/plan.md';
+
 // One repo with one home holding two follow-ups and one plan.
 const READ: BacklogRead = {
   homes: [
@@ -71,6 +74,7 @@ const READ: BacklogRead = {
       plans: [
         {
           path: `${ROOT}/feature/plan-p/plan.md`,
+          copyPath: PLAN_COPY,
           feature: 'feature',
           title: 'Plan',
           checked: 0,
@@ -135,9 +139,11 @@ type ScopeCall =
 // open and its first follow-up selected. `calls` logs every `setScope`,
 // `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
 // the core's focus key toward `direction` on the last focus target set.
-// `targets` holds every drop target the view registered.
+// `targets` holds every drop target the view registered; `readDocs` each
+// path the view read through the channel.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
+  const readDocs: string[] = [];
   const targets: DropTarget[] = [];
   let focusTarget: FocusTarget | null = null;
   const { host, created } = fakeEditorHost();
@@ -146,7 +152,12 @@ async function backlogSetup() {
   const anchors = recorded.anchors;
   const { keys } = recorded;
   const channel = {
-    invoke: async (method: string) => (method === 'load' ? READ : ''),
+    invoke: async (method: string, ...args: unknown[]) => {
+      if (method === 'readDoc') {
+        readDocs.push(String(args[0]));
+      }
+      return method === 'load' ? READ : '';
+    },
   } as unknown as PageChannel<BacklogChannel>;
   const view = createBacklogView({
     channel,
@@ -216,7 +227,17 @@ async function backlogSetup() {
   await settle();
   const move = (direction: PaneDirection) =>
     focusTarget?.move(direction) ?? false;
-  return { view, created, anchors, overlays, sheet, calls, move, targets };
+  return {
+    view,
+    created,
+    anchors,
+    overlays,
+    sheet,
+    calls,
+    move,
+    targets,
+    readDocs,
+  };
 }
 
 function withUser(layout: BacklogLayout) {
@@ -342,6 +363,15 @@ describe('backlog view layouts', () => {
       expect(detail.scrollTop).toBe(120);
     },
   );
+
+  it("a plan's detail reads its newest copy", async () => {
+    const { view, readDocs } = await backlogSetup();
+
+    view.commands.listBottom();
+    await settle();
+
+    expect(readDocs).toEqual([PLAN_COPY]);
+  });
 
   it('a reload keeps the open filter text and focus', async () => {
     const { view, sheet } = await backlogSetup();

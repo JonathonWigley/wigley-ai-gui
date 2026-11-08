@@ -110,12 +110,23 @@ describe('groupHomes', () => {
     expect(home.plans).toEqual([
       {
         path: planPath,
+        copyPath: planPath,
         feature: 'f',
         checked: 1,
         total: 3,
         tasks: [
-          { path: `${HOME}/f/plan-p/01-a.md`, title: 'A', status: 'done' },
-          { path: `${HOME}/f/plan-p/02-b.md`, title: 'B', status: null },
+          {
+            path: `${HOME}/f/plan-p/01-a.md`,
+            copyPath: `${HOME}/f/plan-p/01-a.md`,
+            title: 'A',
+            status: 'done',
+          },
+          {
+            path: `${HOME}/f/plan-p/02-b.md`,
+            copyPath: `${HOME}/f/plan-p/02-b.md`,
+            title: 'B',
+            status: null,
+          },
         ],
       },
     ]);
@@ -125,7 +136,14 @@ describe('groupHomes', () => {
         slug: 'f',
         checked: 2,
         total: 5,
-        tasks: [{ path: `${HOME}/f/01-c.md`, title: 'C', status: 'open' }],
+        tasks: [
+          {
+            path: `${HOME}/f/01-c.md`,
+            copyPath: `${HOME}/f/01-c.md`,
+            title: 'C',
+            status: 'open',
+          },
+        ],
       },
     ]);
   });

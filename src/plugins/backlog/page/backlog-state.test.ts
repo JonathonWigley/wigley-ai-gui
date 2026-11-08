@@ -42,6 +42,7 @@ function plan(title: string, taskTitles: string[]): BacklogPlan {
   const folder = `${ROOT}/feature/plan-${title}`;
   return {
     path: `${folder}/plan.md`,
+    copyPath: `${folder}/plan.md`,
     feature: 'feature',
     title,
     checked: 0,
@@ -50,6 +51,7 @@ function plan(title: string, taskTitles: string[]): BacklogPlan {
     written: null,
     tasks: taskTitles.map((task) => ({
       path: `${folder}/${task}.md`,
+      copyPath: `${folder}/${task}.md`,
       title: task,
       status: null,
     })),

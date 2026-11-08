@@ -84,7 +84,8 @@ plan is written from them. A decision here stands unless the user changes it.
   edit, unless the item changed on disk again in between. When the item is gone from the
   new text, the editor says so and keeps the user's draft. A second change on disk during that one retry refuses the
   write.
-- Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
+- Backlog watches the follow-up files it lists, so an agent's append mid-session shows live, and each linked
+  worktree's `docs/features` and the worktree list of an in-git home's clone, so a plan run in a worktree shows live.
 - An item's images live in the home's `followups-images/<folder>/`, linked from its body
   as `![<n>](<path>)` (`docs/features/notes/design.md`). Only a link that resolves to a direct subfolder of
   `<home>/followups-images/` counts. Delete trashes each image folder the deleted item's body links and no other
@@ -108,9 +109,14 @@ plan is written from them. A decision here stands unless the user changes it.
   slug and progress.
 - A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
   plan's newest copy across the clone and its git worktrees (`src/shared/plan-copies.ts`), as Heavy's checklist reads
-  them, so a run in a worktree shows in Backlog too, at its next load. The count is the boxes under `## Tasks`, not the docs index's
-  count of every checkbox in the file. Opening one renders `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a
-  key to open the file in Docs mode for hand edits.
+  them, so a run in a worktree shows in Backlog too. Each load lists a clone's worktrees once, for all its plans. The
+  count is the boxes under `## Tasks`, not the docs index's count of every checkbox in the file. Opening one renders
+  `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a key to open the file in Docs mode for hand
+  edits.
+- A row and its detail read one copy: a plan, and each task its newest copy's `plan.md` links, open that copy's file;
+  a task it does not link keeps the index's file and status. A worktree copy's `Status:` value outside the three task
+  statuses shows no status, never another copy's. The title, target and written date stay the index copy's, and the
+  selection and expansion stay keyed on the index's path, so they hold when the newest copy moves.
 
 ## Git
 

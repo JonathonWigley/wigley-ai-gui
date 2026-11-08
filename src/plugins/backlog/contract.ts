@@ -14,18 +14,27 @@ import type {
   FollowupItem,
 } from '../../shared/followups/followup-file';
 
-// A numbered task document; `status` is its `Status:` line, null when absent.
+// A numbered task document; `path` is the index's copy of it. `copyPath` is
+// the copy `status` was read from and the detail shows: in a plan's newer
+// worktree copy when that copy's `plan.md` links the task, else `path`.
+// `status` is its `Status:` line, null when absent; a worktree copy's line
+// whose value is not a task status reads as null.
 export interface BacklogTask {
   path: string;
+  copyPath: string;
   title: string;
   status: string | null;
 }
 
-// `path` is the plan's `plan.md`; `title` its first `# ` heading less a
-// trailing ` — plan`, else the plan folder's name; `target` and `written`
-// from its `Target: … · Written: …` line, each null when absent.
+// `path` is the index's copy of the plan's `plan.md`, `copyPath` the copy
+// `checked` and `total` were read from and the detail shows: the newest copy
+// across the clone's checkouts. `title` is the index copy's first `# `
+// heading less a trailing ` — plan`, else the plan folder's name; `target`
+// and `written` from its `Target: … · Written: …` line, each null when
+// absent.
 export interface BacklogPlan {
   path: string;
+  copyPath: string;
   feature: string;
   title: string;
   checked: number;
@@ -151,8 +160,9 @@ export interface BacklogChannel extends ChannelShape {
     commit(homeRoot: string): Promise<string>;
   };
   messages: {
-    // A listed follow-up file changed (`homeRoot` its home), or the machine
-    // index reloaded (`homeRoot` null).
+    // A listed follow-up file changed, or a linked worktree's `docs/features`
+    // or the worktree list of an in-git home's clone changed (`homeRoot` its
+    // home), or the machine index reloaded (`homeRoot` null).
     changed: { homeRoot: string | null };
   };
 }

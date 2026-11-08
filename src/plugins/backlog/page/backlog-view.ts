@@ -802,11 +802,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       case 'followup':
         return shown.path;
       case 'plan':
-        return shown.plan.path;
+        return shown.plan.copyPath;
       case 'feature':
         return shown.feature.path;
       case 'task':
-        return shown.task.path;
+        return shown.task.copyPath;
     }
   };
 

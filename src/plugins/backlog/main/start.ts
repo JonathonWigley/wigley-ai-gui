@@ -1,7 +1,7 @@
 import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
-import type { Git } from '../../../contracts/git';
+import type { Git, GitWorktree } from '../../../contracts/git';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -19,7 +19,12 @@ import {
   followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
-import { newestPlanCopy, readPlanCopy } from '../../../shared/plan-copies';
+import {
+  newestPlanCopy,
+  type PlanCopy,
+  type PlanCopyDeps,
+  readPlanCopy,
+} from '../../../shared/plan-copies';
 import type { PlanProgress } from '../../../shared/plan-progress';
 import {
   type DocsMainEvents,
@@ -79,17 +84,26 @@ const IMAGES_PATHSPEC = `${FEATURES_FOLDER}/${IMAGES_FOLDER}`;
 const IMAGE_FILE = /^(\d+)\.png$/;
 const PLAN_TITLE_SUFFIX = ' — plan';
 const PLAN_DATES_LINE = /^(Target|Written): /;
+// The entry of git's shared folder that holds one folder per linked worktree.
+const WORKTREES = 'worktrees';
 
 interface BacklogDeps {
   docs: DocsMainExports;
   git: Git;
-  files: Pick<Files, 'read' | 'modified' | 'list' | 'realPath' | 'stat'>;
+  files: Pick<
+    Files,
+    'read' | 'modified' | 'list' | 'realPath' | 'stat' | 'watch'
+  >;
   paths: Paths;
   clock: Clock;
   log: PluginLog;
   channel: Pick<MainChannel<BacklogChannel>, 'send'>;
   emit: PluginEvents<BacklogMainEvents>['emit'];
 }
+
+// The git calls a plan copy read makes; a load's lists each clone's worktrees
+// once (`worktreesListedOnce`).
+type LoadGit = PlanCopyDeps['git'];
 
 type MarkedHome = HomeShape & {
   gitRoot: string | null;
@@ -107,6 +121,36 @@ function relativePath(
 
 function logSkipped(log: PluginLog, path: string, error: unknown): void {
   log(`${path}: ${errorText(error)}`);
+}
+
+// The folders in git's shared `worktrees` folder `folder`, one per linked
+// worktree, sorted and joined by newlines; '' when it is missing.
+async function worktreeNames(
+  files: Pick<Files, 'list'>,
+  folder: string,
+): Promise<string> {
+  return (await files.list(folder))
+    .filter((entry) => entry.kind === 'folder')
+    .map((entry) => entry.path)
+    .sort()
+    .join('\n');
+}
+
+// `git` for one load: the first `worktrees` call for a clone answers every
+// later call for it, so the load's plans in one clone share one listing.
+function worktreesListedOnce(git: Git): LoadGit {
+  const listed = new Map<string, Promise<GitWorktree[]>>();
+  return {
+    topLevel: (folder) => git.topLevel(folder),
+    worktrees: (root) => {
+      let trees = listed.get(root);
+      if (trees === undefined) {
+        trees = git.worktrees(root);
+        listed.set(root, trees);
+      }
+      return trees;
+    },
+  };
 }
 
 // `path` below an in-git home at `homeRoot`, relative to its clone: an in-git
@@ -251,42 +295,66 @@ function planHeader(
   };
 }
 
-// The plan's counts and task statuses from `progress`. A task no line names,
-// or whose line has no status, keeps its index status.
+// The plan's counts, task statuses and copy paths from `progress`, read from
+// `copy`. A task no line names keeps its index status and path. In the
+// index's own copy a line with no status keeps the index status, which reads
+// the same file; in a worktree copy the task's status and path are that
+// copy's, a line with no status reading as null.
 function withProgress(
   plan: PlanShape,
+  copy: PlanCopy,
+  isIndexCopy: boolean,
   progress: PlanProgress,
   paths: Paths,
 ): PlanShape {
   return {
     ...plan,
+    copyPath: isIndexCopy ? plan.path : paths.join(copy.planDir, 'plan.md'),
     checked: progress.checked,
     total: progress.total,
     tasks: plan.tasks.map((task) => {
       const file = paths.base(task.path);
       const line = progress.tasks.find((candidate) => candidate.file === file);
-      return { ...task, status: line?.status ?? task.status };
+      const readsIndexFile = line === undefined || isIndexCopy;
+      if (readsIndexFile) {
+        return { ...task, status: line?.status ?? task.status };
+      }
+      return {
+        ...task,
+        copyPath: paths.join(copy.planDir, file),
+        status: line.status,
+      };
     }),
   };
 }
 
-// The plan with its header from the index's copy, and its counts and task
-// statuses from the newest copy across its clone's checkouts; the index's
-// counts and statuses when no copy holds a `plan.md`. Null, logged, when a
-// read fails.
+// The plan with its header from the index's copy, and its counts, task
+// statuses and copy paths from the newest copy across its clone's checkouts;
+// the index's when no copy holds a `plan.md`. Null, logged, when a read
+// fails.
 async function readPlan(
   deps: BacklogDeps,
+  copyDeps: PlanCopyDeps,
   plan: PlanShape,
 ): Promise<BacklogPlan | null> {
+  const { docs, files, paths } = deps;
   try {
-    const text = await deps.docs.readDoc(plan.path);
-    const planDir = deps.paths.parent(plan.path);
-    const header = planHeader(text, deps.paths.base(planDir));
-    const copy = await newestPlanCopy(planDir, deps);
-    const progress = copy === null ? null : await readPlanCopy(copy, deps);
-    const counted =
-      progress === null ? plan : withProgress(plan, progress, deps.paths);
-    return { ...counted, ...header };
+    const text = await docs.readDoc(plan.path);
+    const planDir = paths.parent(plan.path);
+    const header = planHeader(text, paths.base(planDir));
+    const copy = await newestPlanCopy(planDir, copyDeps);
+    const progress = copy === null ? null : await readPlanCopy(copy, copyDeps);
+    if (copy === null || progress === null) {
+      return { ...plan, ...header };
+    }
+    const isIndexCopy = paths.samePath(
+      await files.realPath(copy.planDir),
+      await files.realPath(planDir),
+    );
+    return {
+      ...withProgress(plan, copy, isIndexCopy, progress, paths),
+      ...header,
+    };
   } catch (error) {
     logSkipped(deps.log, plan.path, error);
     return null;
@@ -321,11 +389,12 @@ async function isUncommitted(
 
 async function readHome(
   deps: BacklogDeps,
+  copyDeps: PlanCopyDeps,
   home: MarkedHome,
 ): Promise<BacklogHome> {
   const followupFiles = await readFollowupFiles(deps, home);
   const plans = await Promise.all(
-    home.plans.map((plan) => readPlan(deps, plan)),
+    home.plans.map((plan) => readPlan(deps, copyDeps, plan)),
   );
   const uncommitted = await isUncommitted(
     deps,
@@ -346,6 +415,7 @@ async function readHome(
 
 async function readHomes(
   deps: BacklogDeps,
+  copyDeps: PlanCopyDeps,
   read: SourceRead,
 ): Promise<BacklogRead> {
   if (read.document === null) {
@@ -358,7 +428,7 @@ async function readHomes(
   );
   const homes = await Promise.all(
     markCreateTargets(located.filter((home) => home !== null)).map((home) =>
-      readHome(deps, home),
+      readHome(deps, copyDeps, home),
     ),
   );
   return { homes, message: read.message };
@@ -447,8 +517,8 @@ function emitFollowupEvent(
 }
 
 // Serves the channel and the exports: the last load's homes answer
-// `applyEdit`, `fileNote` and `commit`, and its follow-up files are the ones
-// watched.
+// `applyEdit`, `fileNote` and `commit`, and its follow-up files and its in-git
+// homes' linked worktrees are the ones watched.
 function createBacklogMain(deps: BacklogDeps) {
   const { docs, git, files, paths, clock, log, channel, emit } = deps;
   let last: BacklogRead | null = null;
@@ -480,13 +550,97 @@ function createBacklogMain(deps: BacklogDeps) {
     }
   }
 
-  async function watchHomes(read: BacklogRead, load: number): Promise<void> {
-    const started = await Promise.all(
-      read.homes.flatMap((home) =>
-        home.followupFiles.map((file) => watchFile(file.path, home.root)),
+  // Watches where the in-git home's plans have copies outside it: each linked
+  // worktree's `docs/features`, and the clone's worktree list, as the folders
+  // in git's shared `worktrees` folder, which a watch of git's folder may not
+  // hear change. Each change sends `changed` for the home. None outside git; a
+  // failure is logged, and the watches it opened are disposed.
+  async function watchWorktrees(
+    home: BacklogHome,
+    loadGit: LoadGit,
+  ): Promise<Disposable[]> {
+    const { gitRoot } = home;
+    if (gitRoot === null) {
+      return [];
+    }
+    const send = () => channel.send('changed', { homeRoot: home.root });
+    const logError = (folder: string) => (error: unknown) =>
+      logSkipped(log, folder, error);
+    const opened: Disposable[] = [];
+    try {
+      const commonDir = await git.commonDir(gitRoot);
+      const worktreesFolder = paths.join(commonDir, WORKTREES);
+      const watchedNames = await worktreeNames(files, worktreesFolder);
+      const onListChange = () => {
+        worktreeNames(files, worktreesFolder)
+          .then((names) => {
+            if (names !== watchedNames) {
+              send();
+            }
+          })
+          .catch(logError(worktreesFolder));
+      };
+      const featureFolders = (await loadGit.worktrees(gitRoot))
+        .filter((tree) => !tree.isMain)
+        .map((tree) => paths.join(tree.path, FEATURES_FOLDER));
+      const [featureStats, commonStat, worktreesStat] = await Promise.all([
+        Promise.all(featureFolders.map((folder) => files.stat(folder))),
+        files.stat(commonDir),
+        files.stat(worktreesFolder),
+      ]);
+      for (const [index, folder] of featureFolders.entries()) {
+        if (featureStats[index]?.isFolder === true) {
+          opened.push(files.watch(folder, send, { onError: logError(folder) }));
+        }
+      }
+      if (commonStat?.isFolder === true) {
+        opened.push(
+          files.watch(
+            commonDir,
+            (changed) => {
+              if (changed === WORKTREES) {
+                onListChange();
+              }
+            },
+            { recursive: false, onError: logError(commonDir) },
+          ),
+        );
+      }
+      if (worktreesStat?.isFolder === true) {
+        opened.push(
+          files.watch(worktreesFolder, onListChange, {
+            recursive: false,
+            onError: logError(worktreesFolder),
+          }),
+        );
+      }
+      return opened;
+    } catch (error) {
+      for (const watch of opened) {
+        watch.dispose();
+      }
+      logSkipped(log, gitRoot, error);
+      return [];
+    }
+  }
+
+  async function watchHomes(
+    read: BacklogRead,
+    load: number,
+    loadGit: LoadGit,
+  ): Promise<void> {
+    const [fileWatches, worktreeWatches] = await Promise.all([
+      Promise.all(
+        read.homes.flatMap((home) =>
+          home.followupFiles.map((file) => watchFile(file.path, home.root)),
+        ),
       ),
-    );
-    const next = started.filter((watch) => watch !== null);
+      Promise.all(read.homes.map((home) => watchWorktrees(home, loadGit))),
+    ]);
+    const next = [
+      ...fileWatches.filter((watch) => watch !== null),
+      ...worktreeWatches.flat(),
+    ];
     const superseded = load !== loads ? next : watches;
     for (const watch of superseded) {
       watch.dispose();
@@ -499,11 +653,16 @@ function createBacklogMain(deps: BacklogDeps) {
   async function serve(index: () => Promise<SourceRead>): Promise<BacklogRead> {
     loads += 1;
     const load = loads;
-    const read = await readHomes(deps, await index());
+    const loadGit = worktreesListedOnce(git);
+    const read = await readHomes(
+      deps,
+      { git: loadGit, files, paths },
+      await index(),
+    );
     if (load === loads) {
       last = read;
     }
-    await watchHomes(read, load);
+    await watchHomes(read, load, loadGit);
     return read;
   }
 
@@ -916,8 +1075,9 @@ async function startFixture(
 // Registers backlog's layouts, and serves the page every features home on the
 // machine, from the docs machine index, Docs' guarded follow-up writes and the
 // home's follow-up commit, and exports the load, the tag list and note filing
-// to dependent plugins; watches each listed follow-up file and hears the
-// machine index reload, each sending `changed`. Outside a live run it writes
+// to dependent plugins; watches each listed follow-up file and each in-git
+// home's linked worktrees, and hears the machine index reload, each sending
+// `changed`. Outside a live run it writes
 // the self-test's fixture repo at start, before Docs' self-test counts the
 // files the index lists.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {

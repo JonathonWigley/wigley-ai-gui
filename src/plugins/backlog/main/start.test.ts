@@ -266,6 +266,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
         modified: (path: string) => listed.modified(path),
         stat: (path: string) => listed.stat(path),
         list: (...args: Parameters<Files['list']>) => listed.list(...args),
+        watch: (...args: Parameters<Files['watch']>) => listed.watch(...args),
       },
       paths: posixPaths,
       clock: { now: () => NOW },
@@ -463,6 +464,7 @@ describe('backlog main part', () => {
     expect(read.homes[0].plans).toEqual([
       {
         path: planPath,
+        copyPath: planPath,
         feature: 'backlog',
         title,
         checked: 0,
@@ -480,7 +482,12 @@ describe('backlog main part', () => {
     tasks: [file: string, status: string][];
     files: [path: string, text: string, time: number][];
     trees: GitWorktree[];
-    plan: { checked: number; total: number; tasks: [string, string][] };
+    plan: {
+      copyPath: string;
+      checked: number;
+      total: number;
+      tasks: [copyPath: string, status: string | null][];
+    };
   }>([
     {
       name: 'boxes under Tasks only',
@@ -507,7 +514,7 @@ describe('backlog main part', () => {
         ],
       ],
       trees: [MAIN_TREE],
-      plan: { checked: 1, total: 3, tasks: [] },
+      plan: { copyPath: PLAN, checked: 1, total: 3, tasks: [] },
     },
     {
       name: 'a newer worktree copy',
@@ -529,11 +536,12 @@ describe('backlog main part', () => {
       ],
       trees: [MAIN_TREE, WORKTREE],
       plan: {
+        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
         checked: 1,
         total: 2,
         tasks: [
-          ['01-a.md', 'in progress'],
-          ['02-b.md', 'done'],
+          [`${WORKTREE_PLAN_DIR}/01-a.md`, 'in progress'],
+          [`${WORKTREE_PLAN_DIR}/02-b.md`, 'done'],
         ],
       },
     },
@@ -552,7 +560,12 @@ describe('backlog main part', () => {
         [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: in progress\n', 10],
       ],
       trees: [MAIN_TREE, WORKTREE],
-      plan: { checked: 0, total: 2, tasks: [['01-a.md', 'not started']] },
+      plan: {
+        copyPath: PLAN,
+        checked: 0,
+        total: 2,
+        tasks: [[`${PLAN_DIR}/01-a.md`, 'not started']],
+      },
     },
     {
       name: 'a task no line names keeps its index status',
@@ -568,11 +581,12 @@ describe('backlog main part', () => {
       ],
       trees: [MAIN_TREE],
       plan: {
+        copyPath: PLAN,
         checked: 1,
         total: 1,
         tasks: [
-          ['01-a.md', 'done'],
-          ['09-extra.md', 'done'],
+          [`${PLAN_DIR}/01-a.md`, 'done'],
+          [`${PLAN_DIR}/09-extra.md`, 'done'],
         ],
       },
     },
@@ -585,7 +599,37 @@ describe('backlog main part', () => {
         [`${PLAN_DIR}/01-a.md`, 'Status: blocked\n', 0],
       ],
       trees: [MAIN_TREE],
-      plan: { checked: 0, total: 1, tasks: [['01-a.md', 'blocked']] },
+      plan: {
+        copyPath: PLAN,
+        checked: 0,
+        total: 1,
+        tasks: [[`${PLAN_DIR}/01-a.md`, 'blocked']],
+      },
+    },
+    {
+      name: 'a worktree copy reads its own status, a task it does not link the index',
+      meta: { checked: 0, total: 9 },
+      tasks: [
+        ['01-a.md', 'not started'],
+        ['09-extra.md', 'done'],
+      ],
+      files: [
+        [PLAN, planText('- [ ] [A](01-a.md)'), 0],
+        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 0],
+        [`${PLAN_DIR}/09-extra.md`, 'Status: done\n', 0],
+        [`${WORKTREE_PLAN_DIR}/plan.md`, planText('- [ ] [A](01-a.md)'), 10],
+        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: blocked\n', 10],
+      ],
+      trees: [MAIN_TREE, WORKTREE],
+      plan: {
+        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
+        checked: 0,
+        total: 1,
+        tasks: [
+          [`${WORKTREE_PLAN_DIR}/01-a.md`, null],
+          [`${PLAN_DIR}/09-extra.md`, 'done'],
+        ],
+      },
     },
   ])(
     'load_PlanProgress_FromTheNewestCopy ($name)',
@@ -608,14 +652,34 @@ describe('backlog main part', () => {
       const read = await backlog.invoke<BacklogRead>('load');
 
       expect(
-        read.homes[0].plans.map(({ checked, total, tasks: rows }) => ({
-          checked,
-          total,
-          tasks: rows.map((task) => [posixPaths.base(task.path), task.status]),
-        })),
+        read.homes[0].plans.map(
+          ({ copyPath, checked, total, tasks: rows }) => ({
+            copyPath,
+            checked,
+            total,
+            tasks: rows.map((task) => [task.copyPath, task.status]),
+          }),
+        ),
       ).toEqual([plan]);
     },
   );
+
+  it('load_PlansInOneClone_ListWorktreesOnce', async () => {
+    const otherPlan = `${HOME}/g/plan-q/plan.md`;
+    const backlog = startBacklog(
+      [
+        entry('plan', PLAN, { feature: 'f' }),
+        entry('plan', otherPlan, { feature: 'g' }),
+      ],
+      { [PLAN]: planText('- [ ] one'), [otherPlan]: planText('- [ ] two') },
+    );
+    backlog.git.worktrees.mockResolvedValue([MAIN_TREE, WORKTREE]);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0].plans.map((plan) => plan.total)).toEqual([1, 1]);
+    expect(backlog.git.worktrees).toHaveBeenCalledTimes(1);
+  });
 
   it('load_PlanCopyFails_LoggedAndSkipped', async () => {
     const backlog = startBacklog(
@@ -913,6 +977,56 @@ describe('backlog main part', () => {
     backlog.watched.find((watch) => watch.path === FOLLOWUPS)?.changed();
 
     expect(backlog.sent).toEqual([['changed', { homeRoot: HOME }]]);
+  });
+
+  it.each<{ name: string; seed: string[]; write: string; sends: boolean }>([
+    {
+      name: 'a linked worktree copy edited',
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${WORKTREE_PLAN_DIR}/01-a.md`,
+      sends: true,
+    },
+    {
+      name: 'a worktree added',
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${CLONE}/.git/worktrees/x/HEAD`,
+      sends: true,
+    },
+    {
+      name: 'the first worktree added',
+      seed: [`${CLONE}/.git/HEAD`],
+      write: `${CLONE}/.git/worktrees/x/HEAD`,
+      sends: true,
+    },
+    {
+      name: "a worktree's git state changed",
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${CLONE}/.git/worktrees/w/index`,
+      sends: false,
+    },
+    {
+      name: 'the main checkout edited',
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${PLAN_DIR}/01-a.md`,
+      sends: false,
+    },
+  ])('watch_$name_SendsChanged $sends', async ({ seed, write, sends }) => {
+    const backlog = startBacklog([entry('plan', PLAN, { feature: 'f' })], {
+      [PLAN]: planText('- [ ] [A](01-a.md)'),
+    });
+    backlog.git.worktrees.mockResolvedValue([MAIN_TREE, WORKTREE]);
+    for (const path of [`${WORKTREE_PLAN_DIR}/plan.md`, ...seed]) {
+      await backlog.listed.write(path, 'x');
+    }
+    await backlog.invoke('load');
+
+    await backlog.listed.write(write, 'y');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(backlog.sent.length > 0).toBe(sends);
+    expect(backlog.sent).toEqual(
+      backlog.sent.map(() => ['changed', { homeRoot: HOME }]),
+    );
   });
 
   it('watch_Reload_DisposesTheLastLoadsWatches', async () => {
