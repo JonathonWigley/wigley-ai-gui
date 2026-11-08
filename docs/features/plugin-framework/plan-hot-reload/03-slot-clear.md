@@ -1,6 +1,6 @@
 # 03 — Slot store clears an owner
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -56,3 +56,5 @@ Done when: `npm run typecheck` passes; the test gate runs `slot-store.test.ts`, 
 Commit: one commit for the group
 
 ## Proof
+
+Commit d1d1fd0a · proof: diff read; worker typecheck 0, slot-store, slot-holder, page-state, chat-sessions, session-list tests pass · concerns: SlotHolder.clearOwner cannot see page writers, so task 08 must stop page parts before clearing; two tests outside the file list narrowed SlotChange and now skip cleared

@@ -266,7 +266,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 ### Wave 1
 - [x] [Close the raw bridge](01-bridge-claim.md)
 - [ ] [Host starts, stops and restarts live](02-host-lifecycle.md)
-- [ ] [Slot store clears an owner](03-slot-clear.md)
+- [x] [Slot store clears an owner](03-slot-clear.md)
 
 ### Wave 2
 - [ ] [Manifests declare a label and a description](04-manifest-identity.md) — after 02
@@ -300,9 +300,11 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 
 ### Groups
 - 01 · 2c61751d · diff read; worker typecheck 0, lint 0, bridge-claim + preload tests 10 pass; window.wigley grep prints the claim line and the bridge.ts comment alone · concerns: none
+- 03 · d1d1fd0a · diff read; worker typecheck 0, slot-store, slot-holder, page-state, chat-sessions, session-list tests pass · concerns: SlotHolder.clearOwner cannot see page writers, so task 08 must stop page parts before clearing; two tests outside the file list narrowed SlotChange and now skip cleared
 ### Contract changes
 ### Rulings
 - Branch hot-reload is cut from command-consumers e784f07e (Wave 3, in final review), with the plan commits cherry-picked from main — the user's word to start before Wave 3 lands — once Wave 3 lands, rebase onto main and re-check any review fix that touched a Consumes · lead
 - bridgeClaim's test is named in the repo's sentence style (describe bridgeClaim / it returns the bridge to the first claim and throws on the second) rather than bridgeClaim_SecondClaim_Throws — the repo's Vitest files read that way — a rename only · group 01 · group 01
+- clearOwner tells onWrite for every cleared slot before any listener runs, not slot by slot — so a listener's write to a sibling slot cannot reach the wire ahead of that sibling's cleared — a listener sees later slots' onWrite already sent · group 03 · group 03
 ### Review rounds
 ### Test gate

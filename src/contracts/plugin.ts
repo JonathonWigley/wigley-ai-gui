@@ -765,6 +765,12 @@ export interface PageStart<M extends PluginManifest> {
   exports?(consumer: Registrations): unknown;
   // Runs when the host stops the part.
   dispose?(): void | Promise<void>;
+  // Called by the host once every part of this process has started at launch (main) or page load (page),
+  // and after a live start, once every part that start brought up has started.
+  ready?(): void;
+  // A reason the part must not stop now, in words the user reads (a round is open in <session>), or null.
+  // The switch asks it before a switch-off; a restart and quit do not ask.
+  mayStop?(): string | null;
 }
 
 // Starts on every page load.
@@ -998,6 +1004,12 @@ export interface MainStart<M extends PluginManifest> {
   // registrations, and undoes only what the plugin API cannot see. Quit stops
   // every main part, and the live app may exit before a returned promise settles.
   dispose?(): void | Promise<void>;
+  // Called by the host once every part of this process has started at launch (main) or page load (page),
+  // and after a live start, once every part that start brought up has started.
+  ready?(): void;
+  // A reason the part must not stop now, in words the user reads (a round is open in <session>), or null.
+  // The switch asks it before a switch-off; a restart and quit do not ask.
+  mayStop?(): string | null;
 }
 
 // Starts once, at launch.
