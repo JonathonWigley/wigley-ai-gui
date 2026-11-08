@@ -181,7 +181,7 @@ export function tabsAfterRelease(
 }
 
 // A sidebar row's second line: the last non-empty status among its session's
-// tabs, in strip order, or null.
+// statuses, its tabs' in strip order then its popups', or null.
 export function rowStatus(statuses: readonly string[]): string | null {
   return statuses.findLast((status) => status !== '') ?? null;
 }
@@ -258,7 +258,7 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
 
 // Asks each of the session's views whether it may close, stopping at the
 // first that says no. `viewsNow` is read again after each answer, so a view
-// added while one was asking (a Form tab a round adds under chat's confirm)
+// added while one was asking (a form popup a round adds under chat's confirm)
 // is asked too; each view is asked once.
 export async function mayClose(
   viewsNow: () => readonly Pick<SessionTabView, 'beforeClose'>[],
@@ -277,20 +277,31 @@ export async function mayClose(
   return true;
 }
 
-// What Sessions mode shows: the selected tab of the selected session; `'none'`
-// while the mode shows no tab; null while the mode is hidden.
-export type VisibleTab = { sessionId: string; tabId: string } | 'none' | null;
+// What Sessions mode shows: the top open popup of the focused pane's session,
+// else that session's selected tab; `'none'` while the mode shows neither;
+// null while the mode is hidden.
+export type VisibleTab =
+  | { kind: 'tab'; sessionId: string; tabId: string }
+  | { kind: 'popup'; sessionId: string; popupId: string }
+  | 'none'
+  | null;
 
+// `popupId` is the session's top open popup, null for none; it wins over the
+// selected tab.
 export function visibleTab(
   isModeShown: boolean,
-  selectedSessionId: string | null,
-  selectedTabId: string | null,
+  sessionId: string | null,
+  tabId: string | null,
+  popupId: string | null,
 ): VisibleTab {
   if (!isModeShown) {
     return null;
   }
-  return selectedSessionId !== null && selectedTabId !== null
-    ? { sessionId: selectedSessionId, tabId: selectedTabId }
+  if (sessionId !== null && popupId !== null) {
+    return { kind: 'popup', sessionId, popupId };
+  }
+  return sessionId !== null && tabId !== null
+    ? { kind: 'tab', sessionId, tabId }
     : 'none';
 }
 
@@ -301,7 +312,14 @@ export function isSameVisibleTab(a: VisibleTab, b: VisibleTab): boolean {
     typeof b === 'object' &&
     b !== null
   ) {
-    return a.sessionId === b.sessionId && a.tabId === b.tabId;
+    return a.sessionId === b.sessionId && surfaceId(a) === surfaceId(b);
   }
   return a === b;
+}
+
+// The visible surface's kind and id, so a tab and a popup sharing an id differ.
+function surfaceId(visible: Exclude<VisibleTab, 'none' | null>): string {
+  return visible.kind === 'tab'
+    ? `tab:${visible.tabId}`
+    : `popup:${visible.popupId}`;
 }

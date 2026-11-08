@@ -93,11 +93,12 @@
 }
 
 /* A session's frame: the bar holding its tab strip over the sheet of its
-   tabs. */
+   tabs, then the bar of its hidden popups, in flow so it never covers a
+   popup. */
 .session-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
 }
@@ -146,12 +147,41 @@
 /* A session's tab body and the text saying why no tab shows share one
    cell; an empty pane's sheet holds the text alone. */
 .session-bodies {
+  position: relative;
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
 }
 
 .session-bodies > * {
   grid-area: 1 / 1;
+}
+
+/* The popup layer fills the sheet over the tabs, above the pane edges, and
+   takes no pointer but on the popup that shows and on the strip above it,
+   which the frame-local scrim dims while a popup shows and which absorbs a
+   click. */
+.session-bodies > .session-popups {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.session-popup-scrim {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: var(--wg-scrim);
+  pointer-events: auto;
+}
+
+.session-popups.has-open > .session-popup-scrim {
+  display: block;
+}
+
+.session-popups > .is-open {
+  pointer-events: auto;
 }
 
 .session-body {

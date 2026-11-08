@@ -20,6 +20,7 @@ import {
   tabsAfterRemove,
   tabsAfterSelect,
   tabsAfterTakeOver,
+  type VisibleTab,
   visibleTab,
 } from './tabs';
 
@@ -542,31 +543,100 @@ describe('tabs', () => {
     expect(asked).toEqual(['chat', 'form']);
   });
 
-  it('visibleTab is null while the mode is hidden, none with no tab, else the selected tab', () => {
-    expect(visibleTab(false, 'a', 'form')).toBeNull();
-    expect(visibleTab(true, null, null)).toBe('none');
-    expect(visibleTab(true, 'a', null)).toBe('none');
-    expect(visibleTab(true, 'a', 'form')).toEqual({
+  it.each<{
+    case: string;
+    isModeShown: boolean;
+    sessionId: string | null;
+    tabId: string | null;
+    popupId: string | null;
+    expected: VisibleTab;
+  }>([
+    {
+      case: 'the mode hidden, a popup open',
+      isModeShown: false,
       sessionId: 'a',
-      tabId: 'form',
-    });
-  });
+      tabId: 'chat',
+      popupId: 'forms',
+      expected: null,
+    },
+    {
+      case: 'no session',
+      isModeShown: true,
+      sessionId: null,
+      tabId: null,
+      popupId: null,
+      expected: 'none',
+    },
+    {
+      case: 'a session with no tab or open popup',
+      isModeShown: true,
+      sessionId: 'a',
+      tabId: null,
+      popupId: null,
+      expected: 'none',
+    },
+    {
+      case: 'a selected tab, its popups hidden',
+      isModeShown: true,
+      sessionId: 'a',
+      tabId: 'chat',
+      popupId: null,
+      expected: { kind: 'tab', sessionId: 'a', tabId: 'chat' },
+    },
+    {
+      case: 'an open popup over a selected tab wins',
+      isModeShown: true,
+      sessionId: 'a',
+      tabId: 'chat',
+      popupId: 'forms',
+      expected: { kind: 'popup', sessionId: 'a', popupId: 'forms' },
+    },
+    {
+      case: 'an open popup in a session with no tab',
+      isModeShown: true,
+      sessionId: 'a',
+      tabId: null,
+      popupId: 'forms',
+      expected: { kind: 'popup', sessionId: 'a', popupId: 'forms' },
+    },
+  ])(
+    'visibleTab_ModeSessionTabAndPopup_PicksTheSurface ($case)',
+    ({ isModeShown, sessionId, tabId, popupId, expected }) => {
+      expect(visibleTab(isModeShown, sessionId, tabId, popupId)).toEqual(
+        expected,
+      );
+    },
+  );
 
-  it('isSameVisibleTab compares by value', () => {
-    expect(isSameVisibleTab(null, null)).toBe(true);
-    expect(isSameVisibleTab('none', 'none')).toBe(true);
-    expect(
-      isSameVisibleTab(
-        { sessionId: 'a', tabId: 'form' },
-        { sessionId: 'a', tabId: 'form' },
-      ),
-    ).toBe(true);
-    expect(
-      isSameVisibleTab(
-        { sessionId: 'a', tabId: 'form' },
-        { sessionId: 'b', tabId: 'form' },
-      ),
-    ).toBe(false);
-    expect(isSameVisibleTab('none', null)).toBe(false);
+  it.each<{ case: string; a: VisibleTab; b: VisibleTab; isSame: boolean }>([
+    { case: 'both null', a: null, b: null, isSame: true },
+    { case: 'both none', a: 'none', b: 'none', isSame: true },
+    { case: 'none and null', a: 'none', b: null, isSame: false },
+    {
+      case: 'one tab',
+      a: { kind: 'tab', sessionId: 'a', tabId: 'form' },
+      b: { kind: 'tab', sessionId: 'a', tabId: 'form' },
+      isSame: true,
+    },
+    {
+      case: 'one tab id in two sessions',
+      a: { kind: 'tab', sessionId: 'a', tabId: 'form' },
+      b: { kind: 'tab', sessionId: 'b', tabId: 'form' },
+      isSame: false,
+    },
+    {
+      case: 'one popup',
+      a: { kind: 'popup', sessionId: 'a', popupId: 'forms' },
+      b: { kind: 'popup', sessionId: 'a', popupId: 'forms' },
+      isSame: true,
+    },
+    {
+      case: 'a tab and a popup sharing an id',
+      a: { kind: 'tab', sessionId: 'a', tabId: 'forms' },
+      b: { kind: 'popup', sessionId: 'a', popupId: 'forms' },
+      isSame: false,
+    },
+  ])('isSameVisibleTab compares by value ($case)', ({ a, b, isSame }) => {
+    expect(isSameVisibleTab(a, b)).toBe(isSame);
   });
 });

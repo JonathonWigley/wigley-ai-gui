@@ -296,7 +296,8 @@ export interface SessionsChannel extends ChannelShape {
 // the tab has asked the user (chat's end-session confirm, forms' and primer's
 // cancel prompt). `shown` runs each time
 // this tab becomes the visible tab: the selected tab of the focused chat pane's
-// session while Sessions mode shows. Its plugin sets its base key scope there.
+// session while Sessions mode shows and that session has no open popup. Its
+// plugin sets its base key scope there.
 // `shown` may run inside `addTab`, before its handle returns, so it must not
 // read that handle. `order` places the tab in the strip, as `addTab` says.
 export interface SessionTabView {
@@ -322,6 +323,37 @@ export interface SessionTabHandle extends Disposable {
   setStatus(status: string): void;
   select(): void;
   takeOver(): { release(): void };
+  isVisible(): boolean;
+}
+
+// A popup a plugin opens over a session's tabs while it has something for the
+// user. The layout's `popup` part frames `element`; `title` and `icon`, a
+// Codicon name, name it in the session's hidden bar. `beforeClose` answers
+// whether the session may close now, false keeping it, asked after the tabs'.
+// `shown` runs each time this popup becomes the visible surface: the top open
+// popup of the focused chat pane's session while Sessions mode shows. Its
+// plugin sets its base key scope and moves focus there; sessions focuses
+// nothing. `shown` may run inside `addPopup`, before its handle returns, so it
+// must not read that handle.
+export interface SessionPopupView {
+  id: string;
+  title: string;
+  icon: string;
+  element: HTMLElement;
+  beforeClose(): boolean;
+  shown(): void;
+}
+
+// `setStatus` sets the popup's line in its session's sidebar row, after the
+// tabs' lines, and its entry's text in the hidden bar. `open` makes it the
+// session's top open popup, and does nothing while it already is; `hide` hides
+// it, the bar listing it. `isVisible` reads, at the moment of the call,
+// whether this popup is the visible surface. `dispose` removes it. Each call
+// on a popup already dropped does nothing.
+export interface SessionPopupHandle extends Disposable {
+  setStatus(status: string): void;
+  open(): void;
+  hide(): void;
   isVisible(): boolean;
 }
 
@@ -377,6 +409,11 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // with none; a tie keeps add order. A tab added before its session's row waits
 // for the row. A session's tabs drop when its row leaves, and
 // `sessionsRowsSlot`'s notice says so.
+// `addPopup` attaches the popup's element before returning and opens it: it
+// becomes the session's top open popup, over whichever popups were open or
+// hidden. It throws on a popup id the session already holds. A popup added
+// before its session's row waits for the row, and a session's popups drop with
+// its row, as its tabs do.
 // `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
@@ -392,16 +429,18 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // activities, and every page load starts with none.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
+  addPopup(sessionId: string, popup: SessionPopupView): SessionPopupHandle;
   // The text cut to `sessions.titleMaxLength` with an ellipsis when longer, for
   // another plugin's short title.
   cutToTitleLimit(text: string): string;
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
   activate(sessionId: string): void;
-  // Asks each of the session's tabs `beforeClose` in turn, waiting on a
-  // promise's answer and asking too a tab added meanwhile, then asks main to
-  // close it. Resolves to true once the row closed; false when a tab or main
-  // kept it, or the ask to main failed (logged).
+  // Asks each of the session's tabs `beforeClose` in turn, then its popups,
+  // waiting on a promise's answer and asking too a tab or popup added
+  // meanwhile, then asks main to close it. Resolves to true once the row
+  // closed; false when a tab, a popup or main kept it, or the ask to main
+  // failed (logged).
   closeSession(sessionId: string): Promise<boolean>;
   // The focused pane's session while Sessions mode shows, the session the
   // close and rename keys act on; null while the mode is hidden or the pane is

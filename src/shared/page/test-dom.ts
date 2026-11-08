@@ -13,6 +13,7 @@ export class FakeElement {
   attributes = new Map<string, string>();
   style = new FakeStyle();
   hidden = false;
+  inert = false;
   title = '';
   type = '';
   tabIndex = 0;

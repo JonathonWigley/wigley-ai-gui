@@ -37,6 +37,11 @@ import type {
   Layout,
   PaneInput,
   PaneKit,
+  PopupBarInput,
+  PopupBarKit,
+  PopupBarPart,
+  PopupInput,
+  PopupPart,
   RenameDialogInput,
   RenameDialogKit,
   RowKit,
@@ -110,6 +115,8 @@ export interface SessionsParts {
   // `sessionId` is the session whose frame the bar tops.
   tabBar(parent: HTMLElement, sessionId: string): DrawnPart<DrawnTabBar>;
   tab(parent: HTMLElement, input: SessionTabInput): DrawnPart<SessionsPart>;
+  popup(parent: HTMLElement, input: PopupInput): DrawnPart<PopupPart>;
+  popupBar(parent: HTMLElement, input: PopupBarInput): DrawnPart<PopupBarPart>;
   // `pickHint` is the view's own element, which `kit.pickHint` moves in.
   emptyText(
     parent: HTMLElement,
@@ -388,6 +395,32 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
       parts.draw('tab', parent, (builder, into, rollback) =>
         builder(into, input, sessionsKit(rollback)),
       ),
+    popup: (parent, input) =>
+      parts.draw('popup', parent, (builder, into, rollback) => {
+        const popup = builder(into, input, sessionsKit(rollback));
+        requireElementIn(popup.element, popup.body, 'popup body');
+        return { element: popup.element, body: popup.body };
+      }),
+    popupBar: (parent, input) =>
+      parts.draw('popupBar', parent, (builder, into, rollback) => {
+        const base = sessionsKit(rollback);
+        const kit: PopupBarKit = {
+          ...base,
+          toggleHint(hintParent) {
+            base.keyHint(hintParent, 'togglePopup');
+          },
+        };
+        const bar = builder(into, input, kit);
+        if (bar.entries.length !== input.entries.length) {
+          throw new Error(
+            `popupBar drew ${bar.entries.length} entries for ${input.entries.length} popups`,
+          );
+        }
+        for (const entry of bar.entries) {
+          requireElementIn(bar.element, entry, 'popupBar entry');
+        }
+        return { element: bar.element, entries: [...bar.entries] };
+      }),
     emptyText: (parent, input, pickHint) =>
       parts.draw('emptyText', parent, (builder, into, rollback) => {
         const slot = appSlot(pickHint, 'pickHint', rollback);

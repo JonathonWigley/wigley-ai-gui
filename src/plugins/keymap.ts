@@ -234,6 +234,7 @@ export const defaultKeymap = {
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
     { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
+    { keys: '<Leader>vf', scope: 'any', command: 'sessions.togglePopup' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },

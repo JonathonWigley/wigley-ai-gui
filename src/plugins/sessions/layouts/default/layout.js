@@ -13,9 +13,11 @@
 // (`contributedParts`); its status shows only in the row's tooltip,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
-// close prompt and pane controls, each tab's icon with no label, and the
-// rename dialog's title box over why a title was refused and the hint, in the
-// class names its `layout.css` styles.
+// close prompt and pane controls, each tab's icon with no label, each session
+// popup's sheet around its body, the hidden popups' bar (each entry's icon and
+// status, or its title with no status, then the toggle key), and the rename
+// dialog's title box over why a title was refused and the hint, in the class
+// names its `layout.css` styles.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
 
@@ -165,6 +167,31 @@ const layout = {
       kit.pickHint(text);
     }
     return { element };
+  },
+
+  popup(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-popup');
+    element.setAttribute('aria-label', input.title);
+    const body = kit.el(element, 'div', 'session-popup-body');
+    return { element, body };
+  },
+
+  popupBar(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-popup-bar');
+    const entries = input.entries.map((entry) => {
+      const drawn = kit.el(element, 'div', 'session-popup-bar-entry');
+      drawn.title = entry.title;
+      kit.icon(drawn, entry.icon, 'session-popup-bar-icon');
+      kit.el(
+        drawn,
+        'span',
+        'session-popup-bar-text',
+        entry.status === '' ? entry.title : entry.status,
+      );
+      return drawn;
+    });
+    kit.toggleHint(element);
+    return { element, entries };
   },
 
   renameDialog(parent, input, kit) {

@@ -45,7 +45,7 @@ import { rowChanges, rowStatus, stepSession } from './tabs';
 
 // `activate` runs on a row click; `isModeShown` reads whether Sessions mode
 // shows; `tabsChanged` runs after any change to a session's tabs, their
-// selection or their statuses; `keys` draws the session, tab and pane
+// selection or their statuses, or to its popups; `keys` draws the session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a press's release or outer pane key included,
@@ -148,7 +148,7 @@ export interface SessionsView {
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
 // draws in its side bar, and the root holding the chat panes. Each row's
-// second line follows its tabs' statuses. Both draw with `default` until the
+// second line follows its tabs' and popups' statuses. Both draw with `default` until the
 // first `setLayouts`.
 export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');

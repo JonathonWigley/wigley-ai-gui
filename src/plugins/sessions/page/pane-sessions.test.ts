@@ -384,6 +384,7 @@ describe('pane-sessions', () => {
     isFocusInPane: false,
     doesFocusTakeText: false,
     isChatTabShown: false,
+    isPopupOpen: false,
   };
 
   it.each([
@@ -443,6 +444,11 @@ describe('pane-sessions', () => {
     {
       name: 'a selection in the transcript stays with nothing focused',
       facts: { hasSelectionInPane: true, isChatTabShown: true },
+      action: 'keep',
+    },
+    {
+      name: 'a press over an open popup keeps the focus, the Chat tab under it',
+      facts: { isChatTabShown: true, isPopupOpen: true },
       action: 'keep',
     },
   ])('pressedFocusAction: $name', ({ facts, action }) => {

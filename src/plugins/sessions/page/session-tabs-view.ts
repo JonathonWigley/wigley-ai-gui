@@ -1,12 +1,18 @@
 import type { PaneDirection } from '../../../contracts/panes';
 import { callEach } from '../../../shared/call-each';
-import { element, moveConnected } from '../../../shared/page/dom';
+import {
+  blurFocusedElement,
+  element,
+  moveConnected,
+} from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeyHints } from '../../../contracts/plugin';
 import type {
+  SessionPopupHandle,
+  SessionPopupView,
   SessionsState,
   SessionTabHandle,
   SessionTabView,
@@ -14,6 +20,8 @@ import type {
 import type {
   EmptyTextInput,
   PaneInput,
+  PopupBarPart,
+  PopupPart,
   SessionsPart,
 } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
@@ -42,9 +50,22 @@ interface Tab {
   status: string;
 }
 
+// A popup with the status it last set, whether it is open, whether the
+// animation frame after its add ran (until then it draws closed, so its slide
+// up runs), and its drawn `popup` part, whose body holds its element.
+interface Popup {
+  view: SessionPopupView;
+  status: string;
+  isOpen: boolean;
+  hasEntered: boolean;
+  part: DrawnPart<PopupPart>;
+}
+
 // A session's frame: its session, its tab bar over the sheet holding its
-// tabs' body and the text saying why no tab shows; its tab ids and selection,
-// and its tabs by id, both in strip order.
+// tabs' body, the text saying why no tab shows and the popup layer over them,
+// then the host of its hidden popups' bar; its tab ids and selection, and its
+// tabs by id, both in strip order; its popups, the one opened or hidden last
+// at the end.
 interface Frame {
   sessionId: string;
   element: HTMLElement;
@@ -58,6 +79,10 @@ interface Frame {
   // The selected tab the strip last scrolled into view.
   scrolledTabId: string | null;
   text: DrawnPart<SessionsPart> | null;
+  popupLayer: HTMLElement;
+  popupBarHost: HTMLElement;
+  popups: Popup[];
+  popupBar: DrawnPart<PopupBarPart> | null;
 }
 
 // One chat pane as the owner places it: its pane tree slot and the session it
@@ -80,10 +105,11 @@ interface DrawnPane {
 }
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
-// change to a session's tabs, their selection or their statuses; `keys`
-// draws the key beside the text asking for a session to be picked; `parts`
-// draws the panes, the tab bars with the bar parts other plugins added, the
-// tabs and that text.
+// change to a session's tabs, their selection or their statuses, or to its
+// popups, which is open or their statuses; `keys` draws the key beside the
+// text asking for a session to be picked; `parts` draws the panes, the tab
+// bars with the bar parts other plugins added, the tabs, that text, the
+// popups and their bars.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
@@ -118,17 +144,30 @@ export interface SessionTabsView {
   // had no width when the selection changed: the mode was hidden.
   rescroll(): void;
   add(sessionId: string, view: SessionTabView): SessionTabHandle;
-  // Drops the session's frame, its tabs and their elements; their handles
-  // then do nothing. Runs no `changed`.
+  // Adds and opens the popup, as `SessionsPageExports.addPopup` says.
+  addPopup(sessionId: string, view: SessionPopupView): SessionPopupHandle;
+  // Drops the session's frame, its tabs, its popups and their elements; their
+  // handles then do nothing. Runs no `changed`.
   drop(sessionId: string): void;
   // Drops every frame as `drop` does, then every pane with its part and text,
   // a throw not skipping the rest.
   dropAll(): void;
   // The session's tabs, in strip order.
   tabsOf(sessionId: string): SessionTabView[];
+  // The session's popups, the one opened or hidden last at the end.
+  popupsOf(sessionId: string): SessionPopupView[];
+  // Its tabs' statuses in strip order, then its popups' in `popupsOf` order.
   statusesOf(sessionId: string): string[];
   selectedTabOf(sessionId: string): SessionTabView | null;
+  // The session's top open popup, the open one opened last; null for none.
+  openPopupOf(sessionId: string): SessionPopupView | null;
   select(sessionId: string, tabId: string): void;
+  // Hides the session's top open popup; with none open, opens the popup
+  // hidden last. Returns that popup and whether it is now open; null when the
+  // session holds no popup.
+  togglePopup(
+    sessionId: string,
+  ): { popup: SessionPopupView; isOpen: boolean } | null;
 }
 
 // Sessions mode's chat panes, drawn through the sessions layout. Each pane is
@@ -145,7 +184,14 @@ export interface SessionTabsView {
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
 // (`vacate`) before its slot leaves the document. The strip follows each tab's
 // `order` (`tabsAfterAdd`). A frame no pane shows, a session's with no row yet
-// included, waits in the hidden holder.
+// included, waits in the hidden holder. Over the sheet lies the frame's popup
+// layer: each popup's `popup` part, drawn once on add and again on a layout
+// redraw, holds the plugin's element; only the session's top open popup shows
+// (`is-open`), sliding up on the animation frame after its add, the rest
+// hidden and `inert`, and the strip above it is dimmed. Under the sheet the
+// `popupBar` lists the hidden popups, newest hidden first, a click on an entry
+// opening it; it is absent while none is hidden. A popup that opens takes
+// focus from a text box in the frame's tabs; sessions focuses nothing in it.
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, its tooltip and the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
@@ -190,8 +236,12 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const bodies = sheet();
     bodies.classList.add('session-bodies');
     const body = element('div', 'session-body');
-    bodies.append(body);
-    frameElement.append(barHost, bodies);
+    const popupLayer = element('div', 'session-popups');
+    popupLayer.append(element('div', 'session-popup-scrim'));
+    bodies.append(body, popupLayer);
+    const popupBarHost = element('div', 'session-popup-bar-host');
+    popupBarHost.style.display = 'contents';
+    frameElement.append(barHost, bodies, popupBarHost);
     holder.append(frameElement);
     const created: Frame = {
       sessionId,
@@ -205,6 +255,10 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       drawnTabs: [],
       scrolledTabId: null,
       text: null,
+      popupLayer,
+      popupBarHost,
+      popups: [],
+      popupBar: null,
     };
     frames.set(sessionId, created);
     return created;
@@ -221,6 +275,64 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     drawn.text?.dispose();
     drawn.text?.built.element.remove();
     drawn.text = null;
+  };
+
+  // Draws the popup's `popup` part into the frame's layer, its element moved
+  // into the part's body by a connected move.
+  const drawPopup = (
+    frame: Frame,
+    view: SessionPopupView,
+  ): DrawnPart<PopupPart> => {
+    const part = parts.popup(frame.popupLayer, {
+      title: view.title,
+      icon: view.icon,
+    });
+    moveConnected(part.built.body, view.element);
+    return part;
+  };
+
+  const redrawPopups = (frame: Frame) => {
+    for (const popup of frame.popups) {
+      const old = popup.part;
+      popup.part = drawPopup(frame, popup.view);
+      disposePart(old);
+    }
+  };
+
+  // Shows the top open popup once it entered, every other popup hidden and
+  // inert, and dims the strip above it.
+  const showTopPopup = (frame: Frame) => {
+    const top = topOpenPopup(frame.popups);
+    const shown = top?.hasEntered === true ? top : undefined;
+    for (const popup of frame.popups) {
+      const root = popup.part.built.element;
+      root.classList.toggle('is-open', popup === shown);
+      root.inert = popup !== shown;
+    }
+    frame.popupLayer.classList.toggle('has-open', shown !== undefined);
+  };
+
+  const drawPopupBar = (frame: Frame) => {
+    if (frame.popupBar !== null) {
+      disposePart(frame.popupBar);
+      frame.popupBar = null;
+    }
+    const hidden = hiddenNewestFirst(frame.popups);
+    if (hidden.length === 0) {
+      return;
+    }
+    frame.popupBar = parts.popupBar(frame.popupBarHost, {
+      entries: hidden.map((popup) => ({
+        title: popup.view.title,
+        icon: popup.view.icon,
+        status: popup.status,
+      })),
+    });
+    frame.popupBar.built.entries.forEach((entry, index) => {
+      const popup = hidden[index];
+      entry.setAttribute('aria-label', popup.view.title);
+      rowAction(entry, () => openPopup(frame.sessionId, popup));
+    });
   };
 
   const dropPane = (paneId: string, pane: DrawnPane) => {
@@ -279,6 +391,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const text = textFor(state, sessionId, tabs.length, false);
     frame.text =
       text === null ? null : parts.emptyText(frame.bodies, text, pickHint);
+    showTopPopup(frame);
+    drawPopupBar(frame);
   };
 
   // Draws every frame and empty pane; every text is dropped before any draws,
@@ -422,6 +536,38 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     }
   };
 
+  // The live popup's frame, or undefined once the popup was dropped or removed.
+  const livePopup = (sessionId: string, popup: Popup): Frame | undefined => {
+    const frame = frames.get(sessionId);
+    return frame?.popups.includes(popup) === true ? frame : undefined;
+  };
+
+  // Moves the popup to the end of its session's popups, open or hidden; an
+  // opening popup takes focus from a text box in the frame's tabs first.
+  const setPopupOpen = (frame: Frame, popup: Popup, isOpen: boolean) => {
+    frame.popups = [...frame.popups.filter((held) => held !== popup), popup];
+    popup.isOpen = isOpen;
+    if (isOpen) {
+      blurFocusInTabs(frame);
+    }
+    changed();
+  };
+
+  // Makes the live popup its session's top open popup; nothing when it is.
+  const openPopup = (sessionId: string, popup: Popup) => {
+    const frame = livePopup(sessionId, popup);
+    if (frame !== undefined && topOpenPopup(frame.popups) !== popup) {
+      setPopupOpen(frame, popup, true);
+    }
+  };
+
+  const removePopup = (frame: Frame, popup: Popup) => {
+    disposePart(popup.part);
+    popup.view.element.remove();
+    frame.popups = frame.popups.filter((held) => held !== popup);
+    changed();
+  };
+
   // The live tab's frame, or undefined once the tab was dropped or removed.
   const liveTab = (sessionId: string, tab: Tab): Frame | undefined => {
     const frame = frames.get(sessionId);
@@ -443,6 +589,10 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     disposeTabs(frame);
     disposeText(frame);
     frame.bar.dispose();
+    for (const popup of frame.popups) {
+      popup.part.dispose();
+    }
+    frame.popupBar?.dispose();
     frame.element.remove();
     frames.delete(sessionId);
     draw();
@@ -459,6 +609,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     redrawPane() {
       for (const frame of frames.values()) {
         redrawBar(frame);
+        redrawPopups(frame);
       }
       const placed = [...panes].map(([id, pane]) => {
         pane.input = null;
@@ -544,10 +695,71 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
             remove(live, tab);
           }
         },
-        isVisible: () =>
-          deps.isModeShown() &&
-          focusedSessionId() === sessionId &&
-          liveTab(sessionId, tab)?.tabs.selectedTabId === view.id,
+        isVisible() {
+          const live = liveTab(sessionId, tab);
+          const isSelectedInFocusedPane =
+            deps.isModeShown() &&
+            focusedSessionId() === sessionId &&
+            live?.tabs.selectedTabId === view.id;
+          return (
+            isSelectedInFocusedPane && topOpenPopup(live.popups) === undefined
+          );
+        },
+      };
+    },
+    addPopup(sessionId, view) {
+      const frame = frameOf(sessionId);
+      if (frame.popups.some((held) => held.view.id === view.id)) {
+        throw new Error(
+          `Session ${sessionId} already has a popup "${view.id}"`,
+        );
+      }
+      const popup: Popup = {
+        view,
+        status: '',
+        isOpen: true,
+        hasEntered: false,
+        part: drawPopup(frame, view),
+      };
+      frame.popups = [...frame.popups, popup];
+      blurFocusInTabs(frame);
+      changed();
+      requestAnimationFrame(() => {
+        const live = livePopup(sessionId, popup);
+        if (live !== undefined) {
+          popup.hasEntered = true;
+          showTopPopup(live);
+        }
+      });
+      return {
+        setStatus(status) {
+          if (livePopup(sessionId, popup) !== undefined) {
+            popup.status = status;
+            changed();
+          }
+        },
+        open: () => openPopup(sessionId, popup),
+        hide() {
+          const live = livePopup(sessionId, popup);
+          if (live !== undefined && popup.isOpen) {
+            setPopupOpen(live, popup, false);
+          }
+        },
+        isVisible() {
+          const live = livePopup(sessionId, popup);
+          return (
+            deps.isModeShown() &&
+            focusedSessionId() === sessionId &&
+            live !== undefined &&
+            topOpenPopup(live.popups) === popup
+          );
+        },
+        dispose() {
+          const live = livePopup(sessionId, popup);
+          if (live !== undefined) {
+            removePopup(live, popup);
+          }
+        },
       };
     },
     drop,
@@ -564,10 +776,14 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       [...(frames.get(sessionId)?.entries.values() ?? [])].map(
         (tab) => tab.view,
       ),
-    statusesOf: (sessionId) =>
-      [...(frames.get(sessionId)?.entries.values() ?? [])].map(
-        (tab) => tab.status,
-      ),
+    popupsOf: (sessionId) =>
+      (frames.get(sessionId)?.popups ?? []).map((popup) => popup.view),
+    statusesOf(sessionId) {
+      const frame = frames.get(sessionId);
+      return [...(frame?.entries.values() ?? []), ...(frame?.popups ?? [])].map(
+        (shown) => shown.status,
+      );
+    },
     selectedTabOf(sessionId) {
       const frame = frames.get(sessionId);
       const selectedTabId = frame?.tabs.selectedTabId ?? null;
@@ -575,8 +791,47 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         ? null
         : (frame?.entries.get(selectedTabId)?.view ?? null);
     },
+    openPopupOf(sessionId) {
+      const popups = frames.get(sessionId)?.popups ?? [];
+      return topOpenPopup(popups)?.view ?? null;
+    },
     select,
+    togglePopup(sessionId) {
+      const frame = frames.get(sessionId);
+      if (frame === undefined) {
+        return null;
+      }
+      const top = topOpenPopup(frame.popups);
+      const toggled = top ?? hiddenNewestFirst(frame.popups)[0];
+      if (toggled === undefined) {
+        return null;
+      }
+      setPopupOpen(frame, toggled, top === undefined);
+      return { popup: toggled.view, isOpen: toggled.isOpen };
+    },
   };
+}
+
+function disposePart(part: DrawnPart<SessionsPart>): void {
+  part.dispose();
+  part.built.element.remove();
+}
+
+// The open popup opened last, the one that shows; undefined with none open.
+function topOpenPopup(popups: readonly Popup[]): Popup | undefined {
+  return popups.findLast((popup) => popup.isOpen);
+}
+
+function hiddenNewestFirst(popups: readonly Popup[]): Popup[] {
+  return popups.filter((popup) => !popup.isOpen).reverse();
+}
+
+// Takes focus from an element in the frame's tabs, so typing never lands in a
+// box a popup covers.
+function blurFocusInTabs(frame: Frame): void {
+  if (frame.body.contains(document.activeElement)) {
+    blurFocusedElement();
+  }
 }
 
 function removeChildrenExcept(parent: HTMLElement, kept: HTMLElement): void {
@@ -606,7 +861,7 @@ const NO_SELECTION_TEXT: EmptyTextInput = {
 };
 
 const NOTHING_OPEN_TEXT: EmptyTextInput = {
-  text: "Nothing open yet: this session's first round opens a Form tab here",
+  text: "Nothing open yet: this session's first round opens here",
   hasHint: false,
 };
 

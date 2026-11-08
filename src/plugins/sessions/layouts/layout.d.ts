@@ -1,7 +1,7 @@
 import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
-// its chat panes and each session's tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
+// its chat panes, each session's tab bar and each session's popups with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
 // returns no element appended to `parent`, or appends any other node to `parent`, is drawn by `default` instead. The
 // app sets `data-layout-owner="sessions"` and `data-layout="<name>"` on the element each part returns, `<name>` being
 // the layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only
@@ -34,10 +34,21 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - the `title` tooltip (`project`) on each group's `header` and the drag on it, the whole header being the drag source;
 // - `is-empty` on the element of a `section` with no groups;
 // - `has-favorites` on the side bar's `rows` while Favorites holds a group, and `is-reordering` there while a group is
-//   dragged.
-// The tab bodies, the sheet that holds them and the tab elements other plugins add stay the app's.
+//   dragged;
+// - `is-open` on the root of the popup that shows, the top open popup of its session, and `inert` on every other
+//   popup's root; the click on each `popupBar` entry, which opens its popup, set as on a tab, and the entry's
+//   `aria-label` (its popup's `title`).
+// The tab bodies, the sheet that holds them, the popup layer over them and the elements other plugins add stay the
+// app's.
 // Every key prompt here has no scope, so it shows in every scope; a layout that leaves a kit prompt out leaves that
 // key unprompted.
+//
+// Popups. A session's popup slides up over its tabs while a plugin has something for the user. `popup` draws each
+// popup's frame once when the popup is added and again on each layout set; the app fills its `body` with the plugin's
+// element. `popupBar` draws the bar at the bottom of a session's frame while the session holds a hidden popup, again on
+// each change to its popups, with one entry per hidden popup, newest hidden first. A `popup` whose `body`, or a
+// `popupBar` whose entries, are not children of its `element` are drawn by `default` instead, and so is a `popupBar`
+// returning another count of entries than its input holds.
 //
 // Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
 // `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
@@ -106,6 +117,18 @@ export interface EmptyTextInput {
   hasHint: boolean;
 }
 
+// One session popup. `title` is what the popup is (a form's round, the primer); `icon` is a Codicon name.
+export interface PopupInput {
+  title: string;
+  icon: string;
+}
+
+// The bar listing a session's hidden popups, newest hidden first. Each entry's `status` is the popup's status, '' for
+// none, which `default` draws as its `title` instead.
+export interface PopupBarInput {
+  entries: { title: string; icon: string; status: string }[];
+}
+
 // The rename dialog's body, scope `sessions.rename`. `problem` is why the typed title was refused, null for none;
 // `hint` says what an empty box does.
 export interface RenameDialogInput {
@@ -149,6 +172,16 @@ export interface TabBarPane extends SessionsPart {
 export interface PanePart extends SessionsPart {
   body: HTMLElement;
   update?(input: PaneInput): void;
+}
+
+// `body` is the box the app fills with the plugin's element, which takes `height: 100%`; a child of `element`.
+export interface PopupPart extends SessionsPart {
+  body: HTMLElement;
+}
+
+// `entries` holds one element per input entry, in order, each a child of `element`; the app sets each one's click.
+export interface PopupBarPart extends SessionsPart {
+  entries: HTMLElement[];
 }
 
 export interface SessionsKit extends BaseKit {}
@@ -204,6 +237,11 @@ export interface TabBarKit extends SessionsKit {
   closePaneHint(parent: HTMLElement): HTMLElement;
 }
 
+export interface PopupBarKit extends SessionsKit {
+  // The keys of `sessions.togglePopup`, which hides and shows the session's popup. A layout may call it more than once.
+  toggleHint(parent: HTMLElement): void;
+}
+
 export interface EmptyTextKit extends SessionsKit {
   // The key that picks the next session, `span.sessions-pick-hint`; the app makes it once, so each draw moves it. A
   // second call throws `pickHint placed twice`, so the part draws with `default`.
@@ -244,6 +282,14 @@ export interface Layout {
     input: EmptyTextInput,
     kit: EmptyTextKit,
   ): SessionsPart;
+  // One session popup's frame around its body.
+  popup?(parent: HTMLElement, input: PopupInput, kit: SessionsKit): PopupPart;
+  // The bar at a session frame's bottom naming its hidden popups.
+  popupBar?(
+    parent: HTMLElement,
+    input: PopupBarInput,
+    kit: PopupBarKit,
+  ): PopupBarPart;
   // The rename dialog's body: the title box, why a title was refused, then the hint.
   renameDialog?(
     parent: HTMLElement,

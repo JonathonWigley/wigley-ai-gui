@@ -12,6 +12,8 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   tabBar: true,
   tab: true,
   emptyText: true,
+  popup: true,
+  popupBar: true,
   renameDialog: true,
 };
 
