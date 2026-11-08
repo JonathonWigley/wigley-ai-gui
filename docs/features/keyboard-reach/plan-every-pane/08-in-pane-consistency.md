@@ -1,6 +1,6 @@
 # 08 — In-pane key consistency
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 8 · Depends on: 04, 05
 Plan: [plan.md](plan.md)

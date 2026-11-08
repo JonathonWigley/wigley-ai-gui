@@ -1,6 +1,6 @@
 # 07 — Chat's mouse-only items
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 7 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -348,3 +348,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit cb0c7f2d · proof: diff read (Produces present), typecheck pass; worker ran 7 test files (477 pass), lint pass, selftest --plugin chat,agent-strip pass · concerns: test-dom.ts and chat default layout.test.ts edited outside Files; x hint placement unchecked until Task 10's whole run; images fixture polls chat.sessions every 20ms up to 10s

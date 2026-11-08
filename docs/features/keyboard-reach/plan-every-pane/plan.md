@@ -222,7 +222,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Chat tab panes](06-chat-tab-panes.md) — after 01
 
 ### Wave 7
-- [ ] [Chat mouse-only items](07-chat-items.md) — after 06
+- [x] [Chat mouse-only items](07-chat-items.md) — after 06
 
 ### Wave 8
 - [ ] [In-pane key consistency](08-in-pane-consistency.md) — after 04, 05
@@ -244,6 +244,7 @@ Review base: 1a938e2f
 - 04 · d74620f7 · diff read (Produces present; focusDoc landed as focusMain), typecheck pass; worker ran 5 test files (398 pass), lint pass, selftest --plugin docs pass · concerns: dialog-from-column step not added (no dialog key reachable from docs.aside); no unit row for DocsView.focusMain's column branch (no docs-view.test.ts); isTreeOwnPane false for machine view by addedViewOf; asideSightLost moves DOM focus only when view active and focus not outside the doc pane
 - 05 · bb601a25 · diff read (Produces present), typecheck pass; worker ran settings/backlog/keymap tests (291 pass), lint pass, selftest --plugin settings and --plugin backlog pass · concerns: Backlog focusMain ends with syncFocus(always) not render(true): an unchanged state sets no scope again (no path found where that matters); pick-comment prose edits beyond Produces
 - 06 · 42915d04 · diff read (Produces present, one deps.setScope in takeKeys), typecheck pass; worker ran chat-view/side-sections tests (108 pass), lint pass, selftest --plugin chat,sessions pass (301) · concerns: unity-pool selftest not run after the hub joined the chain; focusedEntry/focusedBlock return the transcript cursor during a hub turn; isAtHub stays set when another plugin sets the base scope until chat next takes keys; a hub key finding no section hands keys to the transcript
+- 07 · cb0c7f2d · diff read (Produces present), typecheck pass; worker ran 7 test files (477 pass), lint pass, selftest --plugin chat,agent-strip pass · concerns: test-dom.ts and chat default layout.test.ts edited outside Files; x hint placement unchecked until Task 10's whole run; images fixture polls chat.sessions every 20ms up to 10s
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 - SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
@@ -267,5 +268,7 @@ Review base: 1a938e2f
 - 05: Backlog shared homes/list binds written as one flatMap over [backlog.homes, backlog.list]; h / a i d t T o stay list-only · group 05
 - 06: resize target is the hub divider only while the hub holds the keys (null otherwise) · group 06
 - 06: pane keys group runs at width 1400 (hub hidden under the 900px start width) and returns to start · group 06
+- 07: fixture start order chat-second, chat-images, chat-selftest (list is newest-started first); attachments step 1 is <A-S-o>, step 7 <A-S-i> · group 07
+- 07: the viewer's counter and x hint share a new div.chat-image-viewer-line flex row · group 07
 ### Review rounds
 ### Test gate
