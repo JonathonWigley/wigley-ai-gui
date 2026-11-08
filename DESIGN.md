@@ -432,7 +432,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
   (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
   a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
-  under `640px` and by `Space v s`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
+  under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
   `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
   skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its

@@ -283,7 +283,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
 
   `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides with
   the hub: while the Chat tab is narrower than 640 px, set in the chat layout's CSS, so the transcript keeps a readable
-  width in a split, and on `<Leader>vs`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
+  width in a split, and on `<Leader>bh`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
   the mouse and keeps its scroll while the pane is out of view or hidden.
 
 Primer and explore share the first step: the one the session is in, otherwise Explore. Plan ready and make share the

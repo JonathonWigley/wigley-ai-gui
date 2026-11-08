@@ -298,7 +298,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
                  contract and the built-in `default` layout)
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
-                 a form over every setting and every command's binds, `docs/features/settings/design.md`), layouts/
+                 a form over every setting, every command's binds and the leader tree, `docs/features/settings/design.md`), layouts/
                  (the settings Layout contract and the built-in `default` layout)
   notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
@@ -460,7 +460,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session popup** is a surface that slides up over a session's tabs while a plugin has something for the user,
   added through the `sessions` page export `addPopup` (`SessionPopupView` in, `SessionPopupHandle` out; one per id per
   session). Forms adds one for a session's rounds and primer for its primer, through the shared
-  `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>vf`
+  `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>bp`
   (`sessions.togglePopup`, scope `any`) hides and shows it; hidden, it leaves a bar at the bottom of the session's frame.
   An open popup is the visible surface and holds the key scope, and its `beforeClose` joins the tabs' close guards.
   The sessions layout draws it through the `popup` and `popupBar` parts (`docs/features/session-popups/design.md`).
@@ -569,7 +569,7 @@ round; primer: an open primer), since main, not the page, decides.
   none (a screenshot) is saved through `savePasted` first. What each surface makes of a file is
   `docs/features/file-drop/design.md`.
 - **Key hints** read the merged keymap. The core draws every hint in place. The `keys` plugin keeps which-key after a
-  pending prefix, help on `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), the `showHints` setting and
+  pending prefix, the leader search on `Space /`, help on `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), the `showHints` setting and
   the placement check. The app has no bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
   (`docs/features/key-hints/design.md`).
   - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through

@@ -66,7 +66,7 @@ interview on 2026-10-23; this file is the record of both.
 ## Flow
 
 ```
- Space k n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
+ Space b n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
                  │                     newest first, or the folder dialog), then profile (skipped with one profile),
                  │                     then sign-in when that profile is signed out, then a new session or one of the
                  │                     folder's saved sessions to resume; a registered resume section sits at the top of
@@ -410,7 +410,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
-- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
+- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
   starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
   profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`

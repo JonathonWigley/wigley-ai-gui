@@ -101,7 +101,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
   it has none. A section whose part draws nothing hides.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
-  it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
+  it. `Space b h` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.
 - **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
   session, kept in `uiState` as `hub-width` across a relaunch. While the hub has the keys `Alt+Shift+h`/`l` move it 24 px; from the

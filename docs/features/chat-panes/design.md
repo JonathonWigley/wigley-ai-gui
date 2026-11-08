@@ -42,8 +42,8 @@ so the same hands work in both tools.
 - `Alt+Shift+o` / `Alt+Shift+i` step the focused pane through the sessions that no other pane
   shows. A session on screen in another pane is skipped, so stepping never rearranges the other
   panes.
-- Tab keys (`Alt+o` / `Alt+i`), `Cmd+w` and `Space k n` act on the focused pane's session. A new
-  session from `Space k n` loads into the focused pane.
+- Tab keys (`Alt+o` / `Alt+i`), `Cmd+w` and `Space b n` act on the focused pane's session. A new
+  session from `Space b n` loads into the focused pane.
 - A click inside a pane focuses it when the press ends, so nothing moves under a press: the focused pane's edge insets
   change its layout. A press and release in different panes focuses the pane the press began in; a cancelled press
   focuses none. At the release the keys stay on a text box the press focused in that pane, or a selection it began
