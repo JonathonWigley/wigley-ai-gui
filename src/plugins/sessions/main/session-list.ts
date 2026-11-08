@@ -253,9 +253,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   // Each registration its own object, so one function added twice is two.
   const closeGuards = new Set<{ mayClose(sessionId: string): boolean }>();
-  const toolNames = new Set<string>();
-  // Each contributed tool name's main-agent-only mark.
-  const toolFlags = new Map<string, boolean>();
+  // Each contributed tool name, mapped to its main-agent-only mark.
+  const mainAgentOnlyByTool = new Map<string, boolean>();
   // Each registration its own object, so one function added twice is two.
   const toolCallGuards = new Set<{ guard: ToolCallGuard }>();
   const toolsChanged = createListeners<void>();
@@ -422,8 +421,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const withdrawContribution = (contribution: Contribution) => {
     contributions.splice(contributions.indexOf(contribution), 1);
     for (const tool of contribution.tools) {
-      toolNames.delete(tool.name);
-      toolFlags.delete(tool.name);
+      mainAgentOnlyByTool.delete(tool.name);
     }
     callEach([...entries.values()], (entry) => {
       const toolSession = entry.toolSessions.get(contribution);
@@ -437,14 +435,21 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // Asks each guard registered when the call came, in order, then calls the
   // tool's handler; `SessionsMainExports.addToolCallGuard` states the rules.
-  // The ended and abort checks follow only a guard wait: with no guard the
-  // handler is called in the same tick.
+  // `callerRefusal` returns the error refusing the caller, or null; it is asked
+  // before the guards and again after a guard wait. The ended, refusal and
+  // abort checks follow only a guard wait: with no guard the handler is called
+  // in the same tick.
   const routeCall = async (
     entry: SessionEntry,
     name: string,
     args: unknown,
     context: ToolCallContext,
+    callerRefusal: () => Error | null = () => null,
   ): Promise<ToolResult> => {
+    const refusalBeforeGuards = callerRefusal();
+    if (refusalBeforeGuards !== null) {
+      throw refusalBeforeGuards;
+    }
     if (!entry.toolRoutes.has(name)) {
       throw unknownToolError(entry, name);
     }
@@ -452,7 +457,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       sessionId: entry.session.id,
       tool: name,
       toolUseId: context.toolUseId,
-      mainAgentOnly: toolFlags.get(name) ?? false,
+      mainAgentOnly: mainAgentOnlyByTool.get(name) ?? false,
     };
     const registrations = [...toolCallGuards];
     for (const registration of registrations) {
@@ -467,6 +472,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (registrations.length > 0) {
       if (!entries.has(entry.session.id)) {
         throw new Error('Session ended');
+      }
+      const refusalAfterGuards = callerRefusal();
+      if (refusalAfterGuards !== null) {
+        throw refusalAfterGuards;
       }
       context.signal.throwIfAborted();
     }
@@ -552,7 +561,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // relay still holding it: a harness restarting its MCP connection can say
   // hello on the new socket before the old one closes. The handle's `end`
   // only clears the join, and only while this handle still holds it; its
-  // calls are refused once the session moves off the host id it joined under.
+  // calls are refused once the session moves off the host id it joined under,
+  // a move during a call's guard wait included.
   const join = (entry: SessionEntry): ConnectedSession => {
     const appId = entry.session.id;
     const joinedHostId = entry.session.info.sessionId;
@@ -566,20 +576,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
     return {
       session: entry.session,
-      call: (name, args, context) => {
-        const hostId = entry.session.info.sessionId;
-        if (hostId !== joinedHostId) {
+      call: (name, args, context) =>
+        routeCall(entry, name, args, context, () => {
+          const hostId = entry.session.info.sessionId;
+          if (hostId === joinedHostId) {
+            return null;
+          }
           deps.log(
             `call ${name} from relay of retired host ${String(joinedHostId)} on session ${appId} refused`,
           );
-          return Promise.reject(
-            new Error(
-              `Session ${appId} moved from host ${String(joinedHostId)} to ${String(hostId)}`,
-            ),
+          return new Error(
+            `Session ${appId} moved from host ${String(joinedHostId)} to ${String(hostId)}`,
           );
-        }
-        return routeCall(entry, name, args, context);
-      },
+        }),
       end: () => {
         if (entry.joinedBy !== handle || !entries.has(appId)) {
           return;
@@ -594,7 +603,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     contributeTools(tools, start, options) {
       const namesInThisContribution = new Set<string>();
       for (const tool of tools) {
-        if (toolNames.has(tool.name)) {
+        if (mainAgentOnlyByTool.has(tool.name)) {
           throw new Error(
             `Two tool contributions both name the tool "${tool.name}"`,
           );
@@ -613,8 +622,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log,
       );
       for (const tool of tools) {
-        toolNames.add(tool.name);
-        toolFlags.set(tool.name, options?.mainAgentOnly === true);
+        mainAgentOnlyByTool.set(tool.name, options?.mainAgentOnly === true);
       }
       contributions.push(contribution);
       for (const [entry, toolSession] of started) {

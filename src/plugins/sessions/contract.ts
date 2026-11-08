@@ -233,8 +233,9 @@ export interface SessionsMainExports {
   // asked; a guard that rejects makes the call reject with its error, the same
   // way. When every guard answers `run`, the handler runs, unless while the
   // guards answered the tool's contribution was disposed (rejects `Unknown
-  // tool:`), the session ended (rejects `Session ended`) or the call's signal
-  // aborted (rejects with its reason). A guard disposed while a call awaits it
+  // tool:`), the session ended (rejects `Session ended`), the session moved off
+  // the host id a joined relay's call came under (rejects `moved from host`) or
+  // the call's signal aborted (rejects with its reason). A guard disposed while a call awaits it
   // still decides that call; a guard disposed before its turn in a call is not
   // asked, and no later call asks it. Each call is its own
   // registration, so one function added twice is asked twice until both

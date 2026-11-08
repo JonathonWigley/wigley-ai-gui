@@ -255,16 +255,19 @@ describe('createSessionList', () => {
 
   // `guards` lists each registration by its guard's label, a label listed
   // twice registering one function twice. `held` is the first guard, which
-  // waits until `whileHeld` has run.
+  // waits until `whileHeld` has run. `relay` makes the caller a relay joined
+  // to an owned session under host `host-a`, in place of a connected session.
   it.each<{
     case: string;
     guards: string[];
     answers: Record<string, ToolCallVerdict | Error>;
     disposedBefore?: number[];
+    relay?: true;
     held?: string;
     whileHeld?(held: {
       contribution: Disposable;
       connected: ConnectedSession;
+      ownedSession: OwnedSession | null;
       abort: AbortController;
       registrations: Disposable[];
     }): void;
@@ -377,6 +380,18 @@ describe('createSessionList', () => {
       asked: ['g1'],
     },
     {
+      case: "the host moved during a relay call's guard",
+      guards: ['g1'],
+      answers: { g1: { kind: 'run' } },
+      relay: true,
+      held: 'g1',
+      whileHeld: ({ ownedSession }) =>
+        (ownedSession as OwnedSession).setHostSessionId('host-b'),
+      result: { rejects: 'moved from host host-a to host-b' },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
       case: 'one guard added twice',
       guards: ['g1', 'g1'],
       answers: { g1: { kind: 'run' } },
@@ -390,6 +405,7 @@ describe('createSessionList', () => {
       guards,
       answers,
       disposedBefore = [],
+      relay,
       held,
       whileHeld,
       result,
@@ -399,7 +415,8 @@ describe('createSessionList', () => {
       const { list } = setUp();
       const handler = fakeContribution();
       const contribution = list.contributeTools([tool('a')], handler.start);
-      const connected = list.connect(info('/work/x'));
+      const ownedSession = relay ? list.open(owned('host-a')) : null;
+      const connected = list.connect(relay ? owned('host-a') : info('/work/x'));
       const askedLabels: string[] = [];
       const release = deferred<void>();
       const guardOf = new Map<string, ToolCallGuard>(
@@ -431,7 +448,13 @@ describe('createSessionList', () => {
         {},
         { toolUseId: null, signal: abort.signal },
       );
-      whileHeld?.({ contribution, connected, abort, registrations });
+      whileHeld?.({
+        contribution,
+        connected,
+        ownedSession,
+        abort,
+        registrations,
+      });
       release.resolve();
 
       if ('rejects' in result) {
