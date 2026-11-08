@@ -45,9 +45,16 @@ import {
   itemAnswer,
   pickNumber,
   railPosition,
+  type RoundState,
   unansweredItem,
 } from './form-state';
-import { itemName, jumpedToLine, jumpMoved } from './view-model';
+import {
+  itemName,
+  jumpedToLine,
+  jumpMoved,
+  lineCursorLine,
+  noticeToggledLine,
+} from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -132,7 +139,14 @@ export function formsCommandHandlers(
         (_answer, item) => `cleared the choice on ${itemName(item)}`,
       );
     },
+    // On the notices stop, opens or closes the line under the cursor.
     acceptRecommendation: (context) => {
+      focusBoxItem(store, boxIn(deps, context));
+      const stop = noticesStop(store.get());
+      if (stop !== null) {
+        toggleNoticeLine(deps, stop.noticeLine);
+        return;
+      }
       changeAnswer(
         deps,
         context,
@@ -165,8 +179,19 @@ export function formsCommandHandlers(
         focusShownBox(deps, ['dontAskReason']);
       }
     },
-    // As vim's `A`: `a` and `o` start typing after the box's text.
-    editNotes: () => focusShownBox(deps, ANSWER_FIELDS, APPEND),
+    // As vim's `A`: `a` and `o` start typing after the box's text. On the
+    // notices stop, opens the line under the cursor first.
+    editNotes: () => {
+      const stop = noticesStop(store.get());
+      if (stop === null) {
+        focusShownBox(deps, ANSWER_FIELDS, APPEND);
+        return;
+      }
+      if (!stop.openNotices[stop.noticeLine - 1]) {
+        toggleNoticeLine(deps, stop.noticeLine);
+      }
+      focusCursorLineBox(deps, APPEND);
+    },
     editNote: () => focusShownBox(deps, ['note'], APPEND),
     nextBox: (context) => stepFocus(deps, context, 1),
     prevBox: (context) => stepFocus(deps, context, -1),
@@ -180,6 +205,15 @@ export function formsCommandHandlers(
     halfPageUp: () => scrollForm(deps, 'halfPage', -1),
     nextItem: (context) => moveItem(deps, context, { type: 'nextItem' }),
     prevItem: (context) => moveItem(deps, context, { type: 'prevItem' }),
+    nextLine: (context) => moveLine(deps, context, 1),
+    prevLine: (context) => moveLine(deps, context, -1),
+    toggleNotice: (context) => {
+      focusBoxItem(store, boxIn(deps, context));
+      const stop = noticesStop(store.get());
+      if (stop !== null) {
+        toggleNoticeLine(deps, stop.noticeLine);
+      }
+    },
     nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
     prevUnanswered: (context) => jumpToUnanswered(deps, context, -1),
     openReview: (context) => {
@@ -229,7 +263,7 @@ function focusedAnswer(
 ): { item: AnswerableItem; answer: ItemAnswer } | null {
   const round = activeForm(state);
   const focused = round === null ? null : focusedItem(round);
-  if (round === null || focused === null || focused.kind === 'notice') {
+  if (round === null || focused === null || focused.kind === 'notices') {
     return null;
   }
   const item = { kind: focused.kind, index: focused.index };
@@ -292,8 +326,9 @@ function scrollForm(
   );
 }
 
-// From inside a box the user stays typing: the new item's notes or comment
-// box takes focus. From the page, focus stays on the page.
+// From inside a box the user stays typing: the new item's notes box takes
+// focus, or on the notices stop the cursor line's comment box, focus leaving
+// the box when that line is closed. From the page, focus stays on the page.
 function moveItem(
   deps: FormsCommandDeps,
   context: EditorContext,
@@ -304,9 +339,77 @@ function moveItem(
   const before = activeForm(deps.store.get())?.focus;
   deps.store.dispatch(action);
   const after = activeForm(deps.store.get())?.focus;
-  if (box !== undefined && after !== before) {
-    focusShownBox(deps, ANSWER_FIELDS);
+  if (box === undefined || after === before) {
+    return;
   }
+  if (noticesStop(deps.store.get()) === null) {
+    focusShownBox(deps, ANSWER_FIELDS);
+  } else if (!focusCursorLineBox(deps)) {
+    deps.boxes.leave();
+  }
+}
+
+// On the notices stop, moves the line cursor and logs it; past either end of
+// the lines, and on any other stop, moves by item as nextItem and prevItem do.
+function moveLine(
+  deps: FormsCommandDeps,
+  context: EditorContext,
+  delta: 1 | -1,
+) {
+  focusBoxItem(deps.store, boxIn(deps, context));
+  const stop = noticesStop(deps.store.get());
+  if (stop !== null) {
+    deps.store.dispatch({ type: 'moveNoticeLine', delta });
+    const line = activeForm(deps.store.get())?.noticeLine;
+    if (line !== undefined && line !== stop.noticeLine) {
+      deps.log(lineCursorLine(line));
+      return;
+    }
+  }
+  moveItem(deps, context, { type: delta === 1 ? 'nextItem' : 'prevItem' });
+}
+
+// The active round while the forms view shows its notices stop, else null.
+function noticesStop(state: FormsState): RoundState | null {
+  const round = activeForm(state);
+  const isOnNoticesStop =
+    state.view === 'forms' &&
+    round !== null &&
+    focusedItem(round)?.kind === 'notices';
+  return isOnNoticesStop ? round : null;
+}
+
+// Opens or closes notice line `notice` and logs it when it changed.
+function toggleNoticeLine(deps: FormsCommandDeps, notice: number) {
+  const before = activeForm(deps.store.get());
+  deps.store.dispatch({ type: 'toggleNotice', notice });
+  const after = activeForm(deps.store.get());
+  if (before === null || after === null) {
+    return;
+  }
+  if (after.openNotices !== before.openNotices) {
+    deps.log(noticeToggledLine(notice, after.openNotices[notice - 1]));
+  }
+}
+
+// Focuses the comment box of the notices stop's cursor line while that line is
+// open; false when it is closed or the notices stop is not shown.
+function focusCursorLineBox(
+  deps: FormsCommandDeps,
+  options?: FocusOptions,
+): boolean {
+  const stop = noticesStop(deps.store.get());
+  if (stop === null || !stop.openNotices[stop.noticeLine - 1]) {
+    return false;
+  }
+  deps.boxes.focus(
+    {
+      roundId: stop.formId,
+      target: { field: 'comment', notice: stop.noticeLine },
+    },
+    options,
+  );
+  return true;
 }
 
 function jumpToUnanswered(
@@ -325,9 +428,7 @@ function jumpToUnanswered(
     deps.log('no unanswered item');
     return;
   }
-  const focused = focusedItem(round);
-  const isFocusedItem =
-    focused?.kind === item.kind && focused.index === item.index;
+  const isFocusedItem = railPosition(round.round, item) === round.focus;
   if (isFocusedItem) {
     deps.log('no other unanswered item');
     return;

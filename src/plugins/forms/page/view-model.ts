@@ -10,6 +10,7 @@ import type {
   AnswerStatus,
   FindingAction,
   FormsView,
+  Round,
 } from '../contract';
 import { activeForm } from '../../../shared/page/session-forms';
 import { findingSolution } from '../finding-pick';
@@ -127,9 +128,10 @@ function pickedChoice(round: RoundState, item: AnswerableItem): number {
 }
 
 // The dot a rail entry shows for its item's status: answered is success, an
-// untouched item the review flags is warning, and every other item is idle.
+// untouched item the review flags is warning, and every other item, the
+// notices stop included, is idle.
 export function railDotStatus(
-  status: AnswerStatus | 'notice',
+  status: AnswerStatus | 'notices',
   isFlagged: boolean,
 ): DotStatus {
   if (status === 'answered') {
@@ -174,13 +176,26 @@ export function hasOtherUnanswered(round: RoundState): boolean {
   return item !== null && railPosition(round.round, item) !== round.focus;
 }
 
-// The item pager's text: the focused item's label of the rail's item count;
-// '' with no item focused.
+// The item pager's text: the focused stop's rail label of the rail's stop
+// count; '' with no stop focused.
 export function pagerText(round: RoundState): string {
   const focused = focusedItem(round);
   return focused === null
     ? ''
-    : `${itemLabel(focused)} of ${railItems(round.round).length}`;
+    : `${railEntryLabel(focused)} of ${railItems(round.round).length}`;
+}
+
+// The rail entry's label: an item's number, `N` for the notices stop.
+export function railEntryLabel(item: RailItem): string {
+  return item.kind === 'notices' ? FORMATS.notice.railPrefix : itemLabel(item);
+}
+
+// The rail entry's title: an item's title, `Notices · <count>` for the
+// notices stop.
+export function railEntryTitle(round: Round, item: RailItem): string {
+  return item.kind === 'notices'
+    ? `Notices · ${round.notices.length}`
+    : FORMATS[item.kind].title(round, item.index);
 }
 
 // The rail header's save text: `Sending…` while the round's finish is with
@@ -215,14 +230,24 @@ export function reviewRowsChanged(
   );
 }
 
-// How a log line names an item, e.g. `finding 2`.
+// How a log line names a rail stop, e.g. `finding 2`, or `notices`.
 export function itemName(item: RailItem): string {
-  return `${item.kind} ${item.index}`;
+  return item.kind === 'notices' ? 'notices' : `${item.kind} ${item.index}`;
 }
 
 // The log line a jump to `item` writes, by key or by rail click.
 export function jumpedToLine(item: RailItem): string {
   return `jumped to ${itemName(item)}`;
+}
+
+// The log line a notice line's open or close writes; `notice` is 1-based.
+export function noticeToggledLine(notice: number, isOpen: boolean): string {
+  return `${isOpen ? 'opened' : 'closed'} notice ${notice}`;
+}
+
+// The log line a move of the notices stop's line cursor writes.
+export function lineCursorLine(notice: number): string {
+  return `line cursor on notice ${notice}`;
 }
 
 // Whether going from `before` to `after` moved the view or the active round's
@@ -260,7 +285,7 @@ export function pickRailItem(
 }
 
 // What clicking a rail item does: focus it in the forms view; in the review,
-// jump to its row's item, as Enter on the row does, or show a notice's card,
+// jump to its row's item, as Enter on the row does, or show the notices page,
 // which has no row; null under the confirm, whose scrim takes the pointer, and
 // with no round.
 export function railPickAction(

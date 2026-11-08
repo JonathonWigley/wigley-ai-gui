@@ -165,11 +165,11 @@ export interface LayoutCards {
   notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
 }
 
-// One item as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
-// its rail number, as `F1` or `2`.
+// One stop as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
+// its rail number, as `F1`, `2`, or `N` for the notices stop, the last entry when the round has notices.
 export interface RailEntryInput {
   position: number;
-  kind: 'question' | 'finding' | 'notice';
+  kind: 'question' | 'finding' | 'notices';
   label: string;
   title: string;
 }

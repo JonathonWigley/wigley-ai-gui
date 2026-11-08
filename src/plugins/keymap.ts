@@ -321,9 +321,9 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'keys.help', command: 'keys.closeHelp' },
 
     // ── Forms ──────────────────────────────────────────────────────────────
-    { keys: 'j', scope: 'forms.forms', command: 'forms.nextItem' },
+    { keys: 'j', scope: 'forms.forms', command: 'forms.nextLine' },
     { keys: '<C-l>', scope: 'forms.forms', command: 'forms.nextItem' },
-    { keys: 'k', scope: 'forms.forms', command: 'forms.prevItem' },
+    { keys: 'k', scope: 'forms.forms', command: 'forms.prevLine' },
     { keys: '<C-h>', scope: 'forms.forms', command: 'forms.prevItem' },
     { keys: '<C-j>', scope: 'forms.forms', command: 'forms.lineDown' },
     { keys: '<C-k>', scope: 'forms.forms', command: 'forms.lineUp' },
@@ -335,6 +335,8 @@ export const defaultKeymap = {
     { keys: 'x', scope: 'forms.forms', command: 'forms.toggleNotApplicable' },
     { keys: 'd', scope: 'forms.forms', command: 'forms.toggleDontAsk' },
     { keys: 'a', scope: 'forms.forms', command: 'forms.editNotes' },
+    { keys: 'o', scope: 'forms.forms', command: 'forms.editNotes' },
+    { keys: 'za', scope: 'forms.forms', command: 'forms.toggleNotice' },
     {
       keys: '<CR>',
       scope: 'forms.forms',

@@ -1,6 +1,6 @@
 # 02 — Label-free question card
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -143,3 +143,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 5766ea22 · proof: diff read: QuestionCard.summary, buildChoiceReason(label|null), appendAnswerArea/appendChoiceReason with null label, .item-summary and .answer-head CSS as pinned, finding card keeps labels; typecheck passes; worker lint and named tests pass · concerns: forms selftest-script SELFTEST_LAYOUT string still reads input.question (typecheck cannot see it) — task 07 owns it; choiceReason test asserts labels-per-reason rather than exactly one reason on the question row

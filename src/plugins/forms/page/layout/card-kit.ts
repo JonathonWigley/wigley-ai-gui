@@ -36,7 +36,7 @@ import {
   type FormsAction,
   itemAnswer,
   pickNumber,
-  type RailItem,
+  type RoundItem,
   type RoundState,
   type TextTarget,
 } from '../form-state';
@@ -68,7 +68,7 @@ interface ItemTextBox {
 // placed, null before.
 interface CardContext {
   roundId: string;
-  item: RailItem;
+  item: RoundItem;
   position: number;
   deps: CardDeps;
   kitDeps: BaseKitDeps;
@@ -255,7 +255,7 @@ function layoutActions(
 }
 
 // The item as an answerable one; null for a notice, which takes no answer.
-export function answerableOf(item: RailItem): AnswerableItem | null {
+export function answerableOf(item: RoundItem): AnswerableItem | null {
   return item.kind === 'notice' ? null : { kind: item.kind, index: item.index };
 }
 
@@ -428,7 +428,7 @@ function updateContributedPart(part: PlacedPart, deps: CardDeps) {
 // The item's text boxes in their default order, each with its current text.
 function itemTextBoxes(
   round: RoundState,
-  item: RailItem,
+  item: RoundItem,
 ): Map<TextBoxField, ItemTextBox> {
   const answerable = answerableOf(item);
   if (answerable === null) {

@@ -385,7 +385,7 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
   `FormBody` / `AnswersPayload` hold `Record<kind, …>` inside and convert at the store and payload edge. On the page
   each kind is a `PageKind` module (items, restore/entry codec, reduce, boxes, kit, card input, review facts, rail
-  order), replacing `RAIL_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `TextTarget`,
+  order), replacing `ANSWERABLE_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `TextTarget`,
   `boxes.ts`, `card-kit.ts` tables, `read-layout.ts`'s `CARD_KINDS`, and the kind branches in `view-model.ts` and
   `round-view.ts`. The AGENTS.md "item kind" checklist shrinks to the module. The tool schema then needs disposable
   tool contributions (landed, plan-foundation-sweeps), and retro reads unknown result keys.

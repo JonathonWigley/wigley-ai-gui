@@ -15,6 +15,21 @@ export const formsManifest = definePlugin({
   commands: {
     nextItem: { label: 'next item', group: 'items', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },
+    nextLine: {
+      label: 'next notice line or item',
+      group: 'items',
+      runsIn: 'page',
+    },
+    prevLine: {
+      label: 'previous notice line or item',
+      group: 'items',
+      runsIn: 'page',
+    },
+    toggleNotice: {
+      label: 'open or close the notice line',
+      group: 'items',
+      runsIn: 'page',
+    },
     nextUnanswered: {
       label: 'next unanswered item',
       group: 'items',

@@ -9,13 +9,22 @@ import {
   type RoundState,
   type TextTarget,
 } from './form-state';
-import { decision, finding, presentedRound, question } from './test-rounds';
+import {
+  decision,
+  finding,
+  notice,
+  presentedRound,
+  question,
+} from './test-rounds';
 import {
   hasOtherUnanswered,
+  pagerText,
   pickRailItem,
   progressText,
   railHeadText,
   railDotStatus,
+  railEntryLabel,
+  railEntryTitle,
   railPickAction,
   reviewRows,
   reviewRowsChanged,
@@ -358,6 +367,63 @@ describe('railDotStatus', () => {
     expect(railDotStatus('untouched', true)).toBe('warning');
     expect(railDotStatus('untouched', false)).toBe('idle');
   });
+
+  it('shows the notices stop as idle', () => {
+    expect(railDotStatus('notices', true)).toBe('idle');
+  });
+});
+
+describe('rail entries', () => {
+  const round = presentedRound('r1', {
+    findings: [finding('Leak')],
+    questions: [question('Alpha'), question('Beta')],
+    notices: [notice('Heads up'), notice('Also')],
+  }).round;
+
+  it.each([
+    {
+      case: 'finding 1',
+      item: { kind: 'finding', index: 1 } as const,
+      label: 'F1',
+      title: 'Leak',
+    },
+    {
+      case: 'question 2',
+      item: { kind: 'question', index: 2 } as const,
+      label: '2',
+      title: 'Beta',
+    },
+    {
+      case: 'the notices stop',
+      item: { kind: 'notices' } as const,
+      label: 'N',
+      title: 'Notices · 2',
+    },
+  ])('railEntryLabel and railEntryTitle: $case', ({ item, label, title }) => {
+    expect(railEntryLabel(item)).toBe(label);
+    expect(railEntryTitle(round, item)).toBe(title);
+  });
+});
+
+describe('pagerText', () => {
+  // Rail positions: 0 = question Alpha, 1 = the notices stop.
+  const state = initialState(
+    [
+      presentedRound('r1', {
+        questions: [question('Alpha')],
+        notices: [notice('Heads up')],
+      }),
+    ],
+    'r1-session',
+  );
+
+  it.each([
+    { case: 'question 1', focus: 0, text: '1 of 2' },
+    { case: 'the notices stop', focus: 1, text: 'N of 2' },
+  ])('pagerText reads $text on $case', ({ focus, text }) => {
+    const focused = apply(state, { type: 'focusItem', item: focus });
+    expect(pagerText(activeOf(focused))).toBe(text);
+  });
 });
 
 describe('progressText, railHeadText and reviewSummaryText', () => {
@@ -629,6 +695,24 @@ describe('pickRailItem', () => {
     pickRailItem(deps, 'forms', { kind: 'question', index: 2 }, 1, 1);
 
     expect(logs).toEqual([]);
+  });
+
+  it('logs a click on the notices stop as a jump to notices', () => {
+    const { deps, logs } = picker(
+      initialState(
+        [
+          presentedRound('r1', {
+            questions: [question('Alpha')],
+            notices: [notice('Heads up')],
+          }),
+        ],
+        'r1-session',
+      ),
+    );
+
+    pickRailItem(deps, 'forms', { kind: 'notices' }, 1, undefined);
+
+    expect(logs).toEqual(['jumped to notices']);
   });
 
   it('logs nothing and dispatches nothing under the cancel prompt', () => {

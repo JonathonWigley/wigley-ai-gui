@@ -15,7 +15,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { createReducerStore } from '../../../shared/page/reducer-store';
-import type { Finding, Question, RoundEnd } from '../contract';
+import type { Finding, Notice, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import { apply, buildBody, focusedItem, initialState } from './form-state';
 import {
@@ -48,17 +48,18 @@ function editorOf(box: BoxRef): TextEditor {
   return editor;
 }
 
-// Rail: notice 1 (position 0), then `findings`, then `questions`, by default
-// Alpha and Beta (1 and 2 with no findings).
+// Rail: `findings`, then `questions`, by default Alpha and Beta (0 and 1
+// with no findings), then the notices stop (2 by default).
 function setup(
   findings: Finding[] = [],
   questions: Question[] = [question('Alpha'), question('Beta')],
+  notices: Notice[] = [notice('Heads up')],
 ) {
   const store = createReducerStore(
     initialState(
       [
         presentedRound('r1', {
-          notices: [notice('Heads up')],
+          notices,
           findings,
           questions,
         }),
@@ -221,6 +222,21 @@ const reason1: BoxRef = {
   roundId: 'r1',
   target: { field: 'dontAskReason', item: { kind: 'question', index: 1 } },
 };
+const commentOn = (notice: number): BoxRef => ({
+  roundId: 'r1',
+  target: { field: 'comment', notice },
+});
+
+const twoNotices = [notice('Heads up'), notice('Also')];
+
+// Runs a table row's command, with its argument when it takes one.
+function runRow(run: ReturnType<typeof setup>['run'], row: TableRun) {
+  if (typeof row === 'string') {
+    run(row);
+  } else {
+    run(row.command, { arg: row.arg });
+  }
+}
 
 describe('formsCommandHandlers', () => {
   // Entries: 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.
@@ -280,8 +296,8 @@ describe('formsCommandHandlers', () => {
       logs: [],
     },
     {
-      name: 'a pick on a notice, which changes nothing',
-      before: ['prevItem'],
+      name: 'a pick on the notices stop, which changes nothing',
+      before: ['nextItem', 'nextItem'],
       command: { command: 'choose', arg: 1 },
       logs: [],
     },
@@ -295,14 +311,12 @@ describe('formsCommandHandlers', () => {
     'logs an answer command only when it changes state: $name',
     ({ findings, questions, before, command, logs: expected }) => {
       const { run, logs } = setup(findings, questions);
-      const runRow = (row: TableRun) =>
-        typeof row === 'string' ? run(row) : run(row.command, { arg: row.arg });
       for (const each of before) {
-        runRow(each);
+        runRow(run, each);
       }
       logs.length = 0;
 
-      runRow(command);
+      runRow(run, command);
 
       expect(logs).toEqual(expected);
     },
@@ -313,7 +327,7 @@ describe('formsCommandHandlers', () => {
 
     run('choose', { arg: 1, editor: editorOf(notes2) });
 
-    expect(round().focus).toBe(2);
+    expect(round().focus).toBe(1);
     expect(round().answers[1].choice).toBe(1);
   });
 
@@ -332,17 +346,6 @@ describe('formsCommandHandlers', () => {
     run('toggleDontAsk');
 
     expect(focused).toHaveLength(1);
-  });
-
-  it("focuses a notice's comment box for the notes key", () => {
-    const { run, focused } = setup();
-    run('prevItem');
-
-    run('editNotes');
-
-    expect(focused).toEqual([
-      { roundId: 'r1', target: { field: 'comment', notice: 1 } },
-    ]);
   });
 
   it('starts the notes and note boxes typing at the end, as vim A', () => {
@@ -377,16 +380,244 @@ describe('formsCommandHandlers', () => {
   it("focuses the next item's notes box when moving items from a box", () => {
     const { run, round, focused } = setup();
 
-    run('nextItem', {
-      editor: editorOf({
-        roundId: 'r1',
-        target: { field: 'comment', notice: 1 },
-      }),
-    });
+    run('nextItem', { editor: editorOf(notes1) });
 
     expect(round().focus).toBe(1);
-    expect(focused).toEqual([notes1]);
+    expect(focused).toEqual([notes2]);
   });
+
+  it.each([
+    {
+      case: 'leaves the box with the cursor line closed',
+      open: [1],
+      focused: [],
+      leaves: 1,
+    },
+    {
+      case: "focuses the cursor line's comment box with it open",
+      open: [1, 2],
+      focused: [commentOn(2)],
+      leaves: 0,
+    },
+  ])(
+    'moving by item from a box onto the notices stop $case',
+    ({ open, focused: expectedFocused, leaves: expectedLeaves }) => {
+      const { run, store, round, focused, leaves } = setup(
+        [],
+        undefined,
+        twoNotices,
+      );
+      // The cursor on line 2, then back on Beta.
+      store.dispatch({ type: 'focusNotice', notice: 2 });
+      store.dispatch({ type: 'focusItem', item: 1 });
+      for (const notice of open) {
+        store.dispatch({ type: 'toggleNotice', notice });
+      }
+
+      run('nextItem', { editor: editorOf(notes2) });
+
+      expect(round().focus).toBe(2);
+      expect(focused).toEqual(expectedFocused);
+      expect(leaves()).toBe(expectedLeaves);
+    },
+  );
+
+  it.each<{
+    name: string;
+    before: TableRun[];
+    command: TableRun;
+    noticeLine: number;
+    openNotices: boolean[];
+    focus: number;
+    focused?: BoxRef[];
+    logs: string[];
+  }>([
+    {
+      name: 'nextLine on line 1 moves the cursor to line 2',
+      before: [],
+      command: 'nextLine',
+      noticeLine: 2,
+      openNotices: [false, false],
+      focus: 2,
+      logs: ['line cursor on notice 2'],
+    },
+    {
+      name: 'nextLine on line 2 changes nothing',
+      before: ['nextLine'],
+      command: 'nextLine',
+      noticeLine: 2,
+      openNotices: [false, false],
+      focus: 2,
+      logs: [],
+    },
+    {
+      name: 'prevLine on line 2 moves the cursor to line 1',
+      before: ['nextLine'],
+      command: 'prevLine',
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 2,
+      logs: ['line cursor on notice 1'],
+    },
+    {
+      name: 'prevLine on line 1 moves to Beta',
+      before: [],
+      command: 'prevLine',
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 1,
+      logs: [],
+    },
+    {
+      name: 'toggleNotice opens the cursor line',
+      before: [],
+      command: 'toggleNotice',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      logs: ['opened notice 1'],
+    },
+    {
+      name: 'toggleNotice again closes it',
+      before: ['toggleNotice'],
+      command: 'toggleNotice',
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 2,
+      logs: ['closed notice 1'],
+    },
+    {
+      name: 'toggleNotice on line 2 opens line 2',
+      before: ['nextLine'],
+      command: 'toggleNotice',
+      noticeLine: 2,
+      openNotices: [false, true],
+      focus: 2,
+      logs: ['opened notice 2'],
+    },
+    {
+      name: 'acceptRecommendation opens the cursor line',
+      before: [],
+      command: 'acceptRecommendation',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      logs: ['opened notice 1'],
+    },
+    {
+      name: 'acceptRecommendation on line 2 opens line 2',
+      before: ['nextLine'],
+      command: 'acceptRecommendation',
+      noticeLine: 2,
+      openNotices: [false, true],
+      focus: 2,
+      logs: ['opened notice 2'],
+    },
+    {
+      name: 'editNotes with line 1 closed opens it and focuses its box',
+      before: [],
+      command: 'editNotes',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      focused: [commentOn(1)],
+      logs: ['opened notice 1'],
+    },
+    {
+      name: 'editNotes with line 1 open focuses its box',
+      before: ['toggleNotice'],
+      command: 'editNotes',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      focused: [commentOn(1)],
+      logs: [],
+    },
+    {
+      name: 'editNotes with lines 1 and 2 open and the cursor on 2 focuses box 2',
+      before: ['toggleNotice', 'nextLine', 'toggleNotice'],
+      command: 'editNotes',
+      noticeLine: 2,
+      openNotices: [true, true],
+      focus: 2,
+      focused: [commentOn(2)],
+      logs: [],
+    },
+    {
+      name: 'choose 1 changes nothing',
+      before: [],
+      command: { command: 'choose', arg: 1 },
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 2,
+      logs: [],
+    },
+  ])(
+    'on the notices stop: $name',
+    ({
+      before,
+      command,
+      noticeLine,
+      openNotices,
+      focus,
+      focused: expectedFocused = [],
+      logs: expectedLogs,
+    }) => {
+      const { run, store, round, focused, focusOptions, logs } = setup(
+        [],
+        undefined,
+        twoNotices,
+      );
+      store.dispatch({ type: 'focusItem', item: 2 });
+      for (const each of before) {
+        runRow(run, each);
+      }
+      logs.length = 0;
+
+      runRow(run, command);
+
+      expect(round()).toMatchObject({ noticeLine, openNotices, focus });
+      expect(focused).toEqual(expectedFocused);
+      expect(focusOptions).toEqual(
+        expectedFocused.map(() => ({ insertAtEnd: true })),
+      );
+      expect(logs).toEqual(expectedLogs);
+    },
+  );
+
+  it.each<{ name: string; from: number; command: FormsCommand; focus: number }>(
+    [
+      {
+        name: 'nextLine on Alpha moves to Beta',
+        from: 0,
+        command: 'nextLine',
+        focus: 1,
+      },
+      {
+        name: 'prevLine on Beta moves to Alpha',
+        from: 1,
+        command: 'prevLine',
+        focus: 0,
+      },
+      {
+        name: 'toggleNotice on Alpha changes nothing',
+        from: 0,
+        command: 'toggleNotice',
+        focus: 0,
+      },
+    ],
+  )(
+    'nextLine and prevLine off the notices stop act as nextItem and prevItem: $name',
+    ({ from, command, focus }) => {
+      const { run, store, round, logs } = setup();
+      store.dispatch({ type: 'focusItem', item: from });
+
+      run(command);
+
+      expect(round()).toMatchObject({ focus, openNotices: [false] });
+      expect(logs).toEqual([]);
+    },
+  );
 
   it('moves items without focusing a box from the page', () => {
     const { run, focused } = setup();
@@ -415,9 +646,9 @@ describe('formsCommandHandlers', () => {
 
   it('stays on the focused item when it is the only unanswered one', () => {
     const { run, store, round, logs } = setup();
-    store.dispatch({ type: 'focusItem', item: 1 });
+    store.dispatch({ type: 'focusItem', item: 0 });
     run('choose', { arg: 1 });
-    store.dispatch({ type: 'focusItem', item: 2 });
+    store.dispatch({ type: 'focusItem', item: 1 });
     logs.length = 0;
 
     run('nextUnanswered');
@@ -433,7 +664,7 @@ describe('formsCommandHandlers', () => {
 
   it('jumps to the previous unanswered question', () => {
     const { run, store, round } = setup();
-    store.dispatch({ type: 'focusItem', item: 2 });
+    store.dispatch({ type: 'focusItem', item: 1 });
 
     run('prevUnanswered');
 

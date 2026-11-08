@@ -2,7 +2,7 @@ import type { PartPick } from '../../../../shared/page/layout-host/draw-part';
 import { pickLayout as pickHostLayout } from '../../../../shared/page/layout-host/pick';
 import type { Round } from '../../contract';
 import type { Layout } from '../../layouts/layout';
-import { type RailItem, railItems, ROUND_ITEMS } from '../form-state';
+import { answerableItems, type RoundItem, ROUND_ITEMS } from '../form-state';
 
 // A card kind or a pane of the forms view: what one layout in a chain draws.
 export type LayoutPart =
@@ -18,9 +18,12 @@ export type LayoutPick = PartPick<Layout>;
 
 type LayoutPane = 'head' | 'rail' | 'review';
 
-// The pick for each of a round's cards, in rail order, and for each pane.
+// The pick for each finding's and question's card, in rail order (rail
+// positions 0 to n - 1), for each notice's card, by notice index - 1, and for
+// each pane.
 export interface RoundPicks {
   cards: LayoutPick[];
+  noticeCards: LayoutPick[];
   panes: Record<LayoutPane, LayoutPick>;
 }
 
@@ -65,18 +68,28 @@ export function pickLayout(
 }
 
 // The layout the item itself names; null for none.
-export function itemLayout(round: Round, item: RailItem): string | null {
+export function itemLayout(round: Round, item: RoundItem): string | null {
   return ROUND_ITEMS[item.kind](round)[item.index - 1].layout;
 }
 
-// Every layout the round names, its own first, then its items' in rail order,
-// without nulls or repeats.
+// Every layout the round names, its own first, then its findings' and
+// questions' in rail order, then its notices' in order, without nulls or
+// repeats.
 export function roundLayoutNames(round: Round): string[] {
   const names = [
     round.layout,
-    ...railItems(round).map((item) => itemLayout(round, item)),
+    ...roundItems(round).map((item) => itemLayout(round, item)),
   ];
   return [...new Set(names.filter((name) => name !== null))];
+}
+
+// The findings and questions in rail order, then the notices in order.
+function roundItems(round: Round): RoundItem[] {
+  return [...answerableItems(round), ...noticeItems(round)];
+}
+
+function noticeItems(round: Round): RoundItem[] {
+  return round.notices.map((_, i) => ({ kind: 'notice', index: i + 1 }));
 }
 
 // Picks each card's layout through its item's chain, and each pane's through
@@ -86,16 +99,16 @@ export function pickRoundLayouts(
   userLayout: string,
   loaded: ReadonlyMap<string, Layout>,
 ): RoundPicks {
-  const cards = railItems(round).map((item) =>
+  const pickCard = (item: RoundItem) =>
     pickLayout(
       item.kind,
       layoutChain(itemLayout(round, item), round.layout, userLayout),
       loaded,
-    ),
-  );
+    );
   const paneChain = layoutChain(null, round.layout, userLayout);
   return {
-    cards,
+    cards: answerableItems(round).map(pickCard),
+    noticeCards: noticeItems(round).map(pickCard),
     panes: {
       head: pickLayout('head', paneChain, loaded),
       rail: pickLayout('rail', paneChain, loaded),
@@ -104,15 +117,20 @@ export function pickRoundLayouts(
   };
 }
 
-// True when every card and pane has the same name and the same layout object
-// in both.
+// True when every card, notice card and pane has the same name and the same
+// layout object in both.
 export function picksEqual(a: RoundPicks, b: RoundPicks): boolean {
-  const isSameCards =
-    a.cards.length === b.cards.length &&
-    a.cards.every((pick, position) => isSamePick(pick, b.cards[position]));
   return (
-    isSameCards &&
+    isSamePickList(a.cards, b.cards) &&
+    isSamePickList(a.noticeCards, b.noticeCards) &&
     PANES.every((pane) => isSamePick(a.panes[pane], b.panes[pane]))
+  );
+}
+
+function isSamePickList(a: LayoutPick[], b: LayoutPick[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((pick, position) => isSamePick(pick, b[position]))
   );
 }
 

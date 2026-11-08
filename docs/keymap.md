@@ -45,7 +45,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
   the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, on a
   doc it focuses the docs tree, and in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
-  `y`/`n` confirm (in chat `y` copies with a range open, else allows the waiting permission under the cursor, else the oldest waiting one, else copies; `n` denies the same one), `i`/`a` enter the box, `e` edits the doc's section at the top of sight. `gh` opens Docs mode's Main page, from any docs view. On a docs list page `j`/`k` move the row and `l`/`Enter` open it. Letters are mnemonic verbs.
+  `y`/`n` confirm (in chat `y` copies with a range open, else allows the waiting permission under the cursor, else the oldest waiting one, else copies; `n` denies the same one), `i`/`a`/`o` enter the box, `za` opens or closes a forms notice line, as vim's fold toggle, `e` edits the doc's section at the top of sight. `gh` opens Docs mode's Main page, from any docs view. On a docs list page `j`/`k` move the row and `l`/`Enter` open it. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `J`/`K` by message beside `j`/`k` by block, `R` rescan. Chat's `V` is vim's line select
   instead, since `v` opens visuals.
@@ -162,5 +162,6 @@ files).
 1. Pick the layer from what the action does.
 2. When Rider, Neovim or tmux already has a key for the same concept, use that key.
 3. Check it against every bind in its scope and in every scope that overlaps it.
-4. Give an action reachable from a text box a leader route.
+4. Give an action reachable from a text box a leader route. Forms' `za` takes none: a notice line closed from
+   inside its own comment box would drop the box's focus, so from a box the route is `Esc`, then `za`.
 5. Name a new leader group in the keymap file's `groups`, and add its row to the table above.

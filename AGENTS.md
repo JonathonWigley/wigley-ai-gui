@@ -632,8 +632,8 @@ round; primer: an open primer), since main, not the page, decides.
   `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`), the page's
   layout tables (`KIT_BUILDERS` in `page/layout/card-kit.ts`, `CARD_KINDS` in `read-layout.ts`, `LayoutPart` in
   `layout-resolver.ts`) and its card in the `default` layout. The order lists are plain arrays the compiler cannot
-  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in
-  `form-state.ts` is added to by hand.
+  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `ANSWERABLE_ORDER` in
+  `form-state.ts` is added to by hand for an answerable kind.
 - **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
   `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
   forbids, its choice bounds, and the actions it offers with the card's word for each. Main's parser (which rejects a

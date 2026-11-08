@@ -362,14 +362,16 @@ function buildRoundParts(
     recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>
-    buildLayoutCard(
-      picks.cards[position],
-      itemsPane,
-      round,
-      item,
-      position,
-      cardDeps,
-    ),
+    item.kind === 'notices'
+      ? buildNoticesInterim(itemsPane, round, picks, position, cardDeps)
+      : buildLayoutCard(
+          picks.cards[position],
+          itemsPane,
+          round,
+          item,
+          position,
+          cardDeps,
+        ),
   );
   const review = buildReviewPane(picks.panes.review, main, round, paneDeps);
   return {
@@ -390,6 +392,41 @@ function buildRoundParts(
     dispose() {
       disposeAnchors(anchors);
       disposeAnchors(headAnchors);
+    },
+  };
+}
+
+// Appends `div.notices-interim` to `parent` for the notices stop at rail
+// `position`: every notice's card, each hidden while its line is closed.
+function buildNoticesInterim(
+  parent: HTMLElement,
+  round: RoundState,
+  picks: RoundPicks,
+  position: number,
+  cardDeps: CardDeps,
+): ItemCard {
+  const holder = element('div', 'notices-interim');
+  parent.append(holder);
+  const cards = picks.noticeCards.map((pick, i) =>
+    buildLayoutCard(
+      pick,
+      holder,
+      round,
+      { kind: 'notice', index: i + 1 },
+      position,
+      cardDeps,
+    ),
+  );
+  return {
+    element: holder,
+    update(current) {
+      cards.forEach((card, i) => {
+        const isOpen = current.openNotices[i];
+        card.element.hidden = !isOpen;
+        if (isOpen) {
+          card.update(current);
+        }
+      });
     },
   };
 }

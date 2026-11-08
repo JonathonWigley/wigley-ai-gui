@@ -29,10 +29,15 @@ import {
 } from '../finding-pick';
 import { isResponded } from '../item-response';
 
-// `index` is 1-based within its kind, as the forms contract numbers items.
-export type RailItem = { kind: ItemKind; index: number };
+// Any one item of a round, by kind. `index` is 1-based within its kind, as
+// the forms contract numbers items.
+export type RoundItem = { kind: ItemKind; index: number };
 
 export type AnswerableItem = { kind: AnswerableKind; index: number };
+
+// A stop on the rail: one finding or question, or the notices stop, which
+// holds every notice of the round.
+export type RailItem = AnswerableItem | { kind: 'notices' };
 
 // A question's or a finding's answer.
 export interface ItemAnswer {
@@ -60,6 +65,11 @@ export interface RoundState extends SessionForm {
   findingAnswers: FindingAnswer[];
   // One per notice, in order.
   noticeComments: string[];
+  // One per notice, in order: whether its line is open on the notices stop.
+  openNotices: boolean[];
+  // The 1-based notice under the notices stop's line cursor; 0 when the round
+  // has no notices.
+  noticeLine: number;
   note: string;
   // A position in railItems(round).
   focus: number;
@@ -102,7 +112,13 @@ export type ItemAction =
   // when recommend is null.
   | { type: 'acceptRecommendation' }
   | { type: 'toggleNotApplicable' }
-  | { type: 'toggleDontAsk' };
+  | { type: 'toggleDontAsk' }
+  // `notice` is 1-based in each notice action. Opens or closes that line.
+  | { type: 'toggleNotice'; notice: number }
+  // Moves the line cursor while the notices stop is focused.
+  | { type: 'moveNoticeLine'; delta: 1 | -1 }
+  // Focuses the notices stop with the line cursor on `notice`.
+  | { type: 'focusNotice'; notice: number };
 
 // The forms page's own actions beside the session form lifecycle's.
 type FormsOwnAction =
@@ -112,8 +128,8 @@ type FormsOwnAction =
   | { type: 'reviewPrev' }
   // Without `row`, jumps to the review cursor's row.
   | { type: 'reviewJump'; row?: number }
-  // `item` is a rail position; the review's rail sends it for a notice, which
-  // has no review row.
+  // `item` is a rail position; the review's rail sends it for the notices
+  // stop, which has no review row.
   | { type: 'reviewJumpItem'; item: number }
   | { type: 'setText'; formId: string; target: TextTarget; value: string };
 
@@ -134,7 +150,7 @@ const NO_PICK: FindingPick = { choice: 0, action: '' };
 
 const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED, ...NO_PICK };
 
-const RAIL_ORDER: ItemKind[] = ['notice', 'finding', 'question'];
+const ANSWERABLE_ORDER: AnswerableKind[] = ['finding', 'question'];
 
 // Each kind's items in a round, in order.
 export const ROUND_ITEMS = {
@@ -230,25 +246,34 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
   }
 }
 
+// The answerable items, then the notices stop when the round has notices.
 export function railItems(round: Round): RailItem[] {
-  return RAIL_ORDER.flatMap((kind) =>
-    ROUND_ITEMS[kind](round).map((_, i): RailItem => ({ kind, index: i + 1 })),
-  );
+  const items: RailItem[] = answerableItems(round);
+  return round.notices.length > 0 ? [...items, { kind: 'notices' }] : items;
 }
 
 // The findings, then the questions, in rail order.
 export function answerableItems(round: Round): AnswerableItem[] {
-  return railItems(round).filter(
-    (item): item is AnswerableItem => item.kind !== 'notice',
+  return ANSWERABLE_ORDER.flatMap((kind) =>
+    ROUND_ITEMS[kind](round).map((_, i): AnswerableItem => ({
+      kind,
+      index: i + 1,
+    })),
   );
 }
 
 // The item's position in railItems(round), or -1 when the round lacks it.
 export function railPosition(round: Round, item: RailItem): number {
-  return railItems(round).findIndex(
-    (candidate) =>
-      candidate.kind === item.kind && candidate.index === item.index,
+  return railItems(round).findIndex((candidate) =>
+    sameRailItem(candidate, item),
   );
+}
+
+function sameRailItem(a: RailItem, b: RailItem): boolean {
+  if (a.kind === 'notices' || b.kind === 'notices') {
+    return a.kind === b.kind;
+  }
+  return a.kind === b.kind && a.index === b.index;
 }
 
 export function focusedItem(round: RoundState): RailItem | null {
@@ -348,11 +373,12 @@ export function unansweredItem(
   const items = answerableItems(round.round);
   const count = items.length;
   const focused = focusedItem(round);
-  const position = items.findIndex(
-    (item) => item.kind === focused?.kind && item.index === focused.index,
-  );
-  // With a notice focused the search starts just outside the items, so
-  // forward runs from the first and backward from the last.
+  const position =
+    focused === null
+      ? -1
+      : items.findIndex((item) => sameRailItem(item, focused));
+  // With the notices stop focused the search starts just outside the items,
+  // so forward runs from the first and backward from the last.
   const outside = step === 1 ? -1 : count;
   const start = position < 0 ? outside : position;
   for (let offset = 1; offset <= count; offset++) {
@@ -411,15 +437,13 @@ function findingAnswerEntry(
   return { ...answerEntry(answer, i), action: answer.action };
 }
 
-// Where a round opens: its first finding or question, past the notices; the
-// first notice when it has nothing to answer.
-function firstAnswerablePosition(round: Round): number {
-  const first = answerableItems(round)[0];
-  return first === undefined ? 0 : railPosition(round, first);
-}
-
 function restoreRound(presented: PresentedRound): RoundState {
   const { roundId, sessionId, label, round, draft } = presented;
+  const noticeComments = round.notices.map(
+    (_, i) =>
+      draft?.notice_comments.find((comment) => comment.index === i + 1)
+        ?.comment ?? '',
+  );
   return {
     formId: roundId,
     sessionId,
@@ -435,13 +459,11 @@ function restoreRound(presented: PresentedRound): RoundState {
       draft?.finding_answers ?? [],
       restoreFindingAnswer,
     ),
-    noticeComments: round.notices.map(
-      (_, i) =>
-        draft?.notice_comments.find((comment) => comment.index === i + 1)
-          ?.comment ?? '',
-    ),
+    noticeComments,
+    openNotices: noticeComments.map((comment) => comment !== ''),
+    noticeLine: round.notices.length > 0 ? 1 : 0,
     note: draft?.note ?? '',
-    focus: firstAnswerablePosition(round),
+    focus: 0,
     reviewRow: 0,
     revision: 0,
     savingRevision: null,
@@ -543,7 +565,8 @@ function jumpToReviewRow(
   return { ...jumped, view: 'forms' };
 }
 
-// Shows the item's card and leaves the review cursor where it was.
+// Shows the item's card, or the notices page for the notices stop, and leaves
+// the review cursor where it was.
 function jumpToRailItem(state: FormsState, item: number): FormsState {
   const round = activeForm(state);
   if (state.view !== 'review' || round === null) {
@@ -597,7 +620,50 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
         ...answer,
         dontAsk: !answer.dontAsk,
       }));
+    case 'toggleNotice':
+      return toggleNotice(round, action.notice);
+    case 'moveNoticeLine':
+      return moveNoticeLine(round, action.delta);
+    case 'focusNotice':
+      return focusNotice(round, action.notice);
   }
+}
+
+function isNoticeInRange(round: RoundState, notice: number): boolean {
+  return notice >= 1 && notice <= round.openNotices.length;
+}
+
+// Not an edit: leaves `revision` as it is.
+function toggleNotice(round: RoundState, notice: number): RoundState {
+  if (!isNoticeInRange(round, notice)) {
+    return round;
+  }
+  return {
+    ...round,
+    openNotices: round.openNotices.map((isOpen, i) =>
+      i === notice - 1 ? !isOpen : isOpen,
+    ),
+  };
+}
+
+// A no-op at either end of the lines, or off the notices stop.
+function moveNoticeLine(round: RoundState, delta: 1 | -1): RoundState {
+  const line = round.noticeLine + delta;
+  const isOnNoticesStop = focusedItem(round)?.kind === 'notices';
+  if (!isOnNoticesStop || !isNoticeInRange(round, line)) {
+    return round;
+  }
+  return { ...round, noticeLine: line };
+}
+
+function focusNotice(round: RoundState, notice: number): RoundState {
+  if (!isNoticeInRange(round, notice)) {
+    return round;
+  }
+  const focus = railPosition(round.round, { kind: 'notices' });
+  return focus === round.focus && notice === round.noticeLine
+    ? round
+    : { ...round, focus, noticeLine: notice };
 }
 
 function moveFocus(round: RoundState, step: number): RoundState {
@@ -704,11 +770,11 @@ const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
   },
 };
 
-// A no-op on a notice, while not applicable, or when the focused answer
-// already holds the recommended pick.
+// A no-op on the notices stop, while not applicable, or when the focused
+// answer already holds the recommended pick.
 function acceptRecommendation(round: RoundState): RoundState {
   const focused = focusedItem(round);
-  if (focused === null || focused.kind === 'notice') {
+  if (focused === null || focused.kind === 'notices') {
     return round;
   }
   return acceptRecommendationOn(round, {
@@ -727,13 +793,14 @@ function acceptRecommendationOn<K extends AnswerableKind>(
   );
 }
 
-// A no-op when a notice is focused or `change` returns the answer it was given.
+// A no-op when the notices stop is focused or `change` returns the answer it
+// was given.
 function updateFocusedAnswer(
   round: RoundState,
   change: AnswerChange,
 ): RoundState {
   const focused = focusedItem(round);
-  if (focused === null || focused.kind === 'notice') {
+  if (focused === null || focused.kind === 'notices') {
     return round;
   }
   return updateItemAnswer(

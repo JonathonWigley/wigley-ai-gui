@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FormsReviewColumn } from '../../contract';
-import type { Layout, ReviewKit } from '../../layouts/layout';
+import type { Layout, RailInput, ReviewKit } from '../../layouts/layout';
 import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
 import { apply, type FormsState, initialState } from '../form-state';
-import { presentedRound } from '../test-rounds';
+import { notice, presentedRound, question } from '../test-rounds';
 import { buildRailPane, buildReviewPane, type PaneDeps } from './layout-panes';
 import {
   asFake,
@@ -234,12 +234,13 @@ describe('review pane', () => {
   });
 });
 
-// A layout's pane drawn into a fresh parent, with its deps.
+// A layout's pane drawn into a fresh parent over `state`'s first round, with
+// its deps.
 function drawPane(
   build: typeof buildRailPane | typeof buildReviewPane,
   layout: Layout,
+  state: FormsState = openRound(),
 ) {
-  const state = openRound();
   const { deps, log } = fakePaneDeps(createFormsContributions(), state);
   const parent = new FakeElement('div');
   const pane = build(
@@ -285,6 +286,33 @@ describe('panes', () => {
     expect(log).not.toHaveBeenCalled();
     expect(pane.element.dataset.layout).toBe('test');
     expect(pane.element.dataset.layoutOwner).toBe('forms');
+  });
+
+  it('railPane_NoticesStop_EntryIsLastWithItsLabelAndTitle', () => {
+    const inputs: RailInput[] = [];
+    const presented = presentedRound('r1', {
+      questions: [question('Alpha')],
+      notices: [notice('Heads up'), notice('Also')],
+    });
+    const state = initialState([presented], presented.sessionId);
+
+    drawPane(
+      buildRailPane,
+      {
+        rail: (parent, input, kit) => {
+          inputs.push(input);
+          return { element: kit.el(parent, 'nav', 'rail') };
+        },
+      },
+      state,
+    );
+
+    expect(inputs[0].items.at(-1)).toEqual({
+      position: 1,
+      kind: 'notices',
+      label: 'N',
+      title: 'Notices · 2',
+    });
   });
 
   it('reviewPane_NoteLeftOut_AppendsItToThePane', () => {

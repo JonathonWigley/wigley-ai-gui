@@ -74,31 +74,36 @@ describe('roundLayoutNames', () => {
       layout: 'r',
       findings: [finding('F1', { layout: 'r' })],
       questions: [question('Q1', { layout: 'q' }), question('Q2')],
+      notices: [{ ...notice('N1'), layout: 'n' }],
     });
 
-    expect(roundLayoutNames(named)).toEqual(['r', 'q']);
+    expect(roundLayoutNames(named)).toEqual(['r', 'q', 'n']);
   });
 });
 
 describe('pickRoundLayouts', () => {
-  it('pickRoundLayouts_CardsInRailOrder_PanesWithoutItem', () => {
+  it('pickRoundLayouts_CardsPerStop_NoticeCardsByNotice_PanesWithoutItem', () => {
     const f = allCards();
+    const n: Layout = { cards: { notice: card } };
     const u: Layout = { ...allCards(), head: () => undefined };
     const loaded = new Map([
       ['f', f],
+      ['n', n],
       ['u', u],
       ['default', allCards()],
     ]);
     const named = round({
-      notices: [notice('N1')],
+      notices: [notice('N1'), { ...notice('N2'), layout: 'n' }],
       findings: [finding('F1', { layout: 'f' })],
       questions: [question('Q1')],
     });
 
     const picks = pickRoundLayouts(named, 'u', loaded);
 
-    expect(picks.cards.map((pick) => pick.name)).toEqual(['u', 'f', 'u']);
-    expect(picks.cards[1].layout).toBe(f);
+    expect(picks.cards.map((pick) => pick.name)).toEqual(['f', 'u']);
+    expect(picks.cards[0].layout).toBe(f);
+    expect(picks.noticeCards.map((pick) => pick.name)).toEqual(['u', 'n']);
+    expect(picks.noticeCards[1].layout).toBe(n);
     expect(picks.panes.head).toEqual({ name: 'u', layout: u });
   });
 
@@ -121,14 +126,24 @@ describe('picksEqual', () => {
     const named = round({
       findings: [finding('F1', { layout: 'f' })],
       questions: [question('Q1')],
+      notices: [{ ...notice('N1'), layout: 'n' }],
     });
     const fallback = allCards();
+    const f = allCards();
+    const n = allCards();
     const loaded = new Map([
-      ['f', allCards()],
+      ['f', f],
+      ['n', n],
       ['default', fallback],
     ]);
-    const reloaded = new Map([
+    const reloadedCard = new Map([
       ['f', allCards()],
+      ['n', n],
+      ['default', fallback],
+    ]);
+    const reloadedNoticeCard = new Map([
+      ['f', f],
+      ['n', allCards()],
       ['default', fallback],
     ]);
 
@@ -138,7 +153,10 @@ describe('picksEqual', () => {
       true,
     );
     expect(
-      picksEqual(first, pickRoundLayouts(named, 'default', reloaded)),
+      picksEqual(first, pickRoundLayouts(named, 'default', reloadedCard)),
+    ).toBe(false);
+    expect(
+      picksEqual(first, pickRoundLayouts(named, 'default', reloadedNoticeCard)),
     ).toBe(false);
   });
 });

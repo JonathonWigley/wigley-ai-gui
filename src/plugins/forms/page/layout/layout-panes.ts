@@ -57,6 +57,8 @@ import {
   pickRailItem,
   progressText,
   railDotStatus,
+  railEntryLabel,
+  railEntryTitle,
   type ReviewRow,
   reviewRows,
   reviewRowsChanged,
@@ -210,8 +212,8 @@ function drawRail(
     items: items.map((item, position) => ({
       position,
       kind: item.kind,
-      label: itemLabel(item),
-      title: FORMATS[item.kind].title(round.round, item.index),
+      label: railEntryLabel(item),
+      title: railEntryTitle(round.round, item),
     })),
   };
   const paneElement = requireElementIn(
@@ -233,7 +235,8 @@ function drawRail(
   };
 }
 
-// Each rail position's review row; undefined at a notice, which has none.
+// Each rail position's review row; undefined at the notices stop, which has
+// none.
 function reviewRowsByRailPosition(round: RoundState): (number | undefined)[] {
   const rows: (number | undefined)[] = [];
   answerableItems(round.round).forEach((item, row) => {
@@ -248,18 +251,18 @@ interface RailEntry {
   dot: HTMLElement;
 }
 
-// The item's number and title as a list row, its title also the tooltip for
-// the ellipsis.
+// The stop's rail label and title as a list row, its title also the tooltip
+// for the ellipsis.
 function buildRailEntry(
   parent: HTMLElement,
   round: RoundState,
   item: RailItem,
   onClick: () => void,
 ): RailEntry {
-  const title = FORMATS[item.kind].title(round.round, item.index);
+  const title = railEntryTitle(round.round, item);
   const dot = statusDot('idle');
   const leading = element('span', 'rail-lead');
-  leading.append(dot, element('span', 'rail-number', itemLabel(item)));
+  leading.append(dot, element('span', 'rail-number', railEntryLabel(item)));
   const entry = rowPart({
     density: 'list',
     tag: 'li',
@@ -283,8 +286,8 @@ function updateRailEntry(
   view: FormsView,
 ) {
   const status =
-    item.kind === 'notice'
-      ? 'notice'
+    item.kind === 'notices'
+      ? 'notices'
       : answerStatus(round, { kind: item.kind, index: item.index });
   const isReview = view === 'review';
   const isFlagged = isReview && status === 'untouched';

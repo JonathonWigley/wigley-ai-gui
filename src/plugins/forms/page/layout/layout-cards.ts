@@ -15,7 +15,7 @@ import {
   answerStatus,
   findingActionOf,
   itemAnswer,
-  type RailItem,
+  type RoundItem,
   type RoundState,
   type TextTarget,
 } from '../form-state';
@@ -73,7 +73,7 @@ export function buildLayoutCard(
   pick: LayoutPick,
   parent: HTMLElement,
   round: RoundState,
-  item: RailItem,
+  item: RoundItem,
   position: number,
   deps: CardDeps,
 ): ItemCard {
@@ -180,7 +180,7 @@ function buildCard<K extends ItemKind>(
 function hostCard(
   built: BuiltCard,
   layoutName: string,
-  item: RailItem,
+  item: RoundItem,
   deps: CardDeps,
 ): ItemCard {
   const { card, kit } = built;
