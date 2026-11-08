@@ -114,8 +114,8 @@ Boundary rules: the popup knows nothing of forms or chat; forms and primer reach
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Session popup surface](01-session-popup-surface.md)
-- [ ] [Docs tab plugin](02-docs-session-tab-plugin.md)
+- [x] [Session popup surface](01-session-popup-surface.md)
+- [x] [Docs tab plugin](02-docs-session-tab-plugin.md)
 
 ### Wave 2
 - [ ] [Forms and primer in popups](03-forms-primer-popups.md) — after 01
@@ -134,7 +134,19 @@ Boundary rules: the popup knows nothing of forms or chat; forms and primer reach
 Review base: aed38a35
 
 ### Groups
+- 02 · e79f0073 · diff read; tsc --noEmit and npm run lint clean after wave 1; worker's targeted tests green · concerns: none beyond rulings; docs' own test no longer covers addView teardown when an anchor dispose throws (moved to docs-session-tab)
+- 01 · 23a30128 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10099) · concerns: command label capitalised as pinned while sibling sessions labels are lower-case; look (slide, scrim, bar spacing) unchecked on screen until 04/06; DESIGN.md and docs/keymap.md oxfmt padding fixed (pre-existing lint failure from the docs-ahead commit)
 ### Contract changes
 ### Rulings
+- defaults row in settings.test.ts rather than manifests.test.ts — settings test owns defaultSettingsFor — the row moves if wrong · group 02
+- docs' internal addView returns the DocsViewHandle directly — sourceReplaced on the handle left {handle, view} with no reader — none · group 02
+- docs-session-tab test fakes not filed with consumer.track — so a skipped dispose is caught — fakes less like the real exports · group 02
+- tabs view gains popupsOf, openPopupOf and togglePopup(sessionId) returning {popup,isOpen}|null; start.ts only shows the mode and logs — the toggle needs open/hidden state — one method moves if wrong · group 01
+- a session's popups are one list ordered by last open/hide; statusesOf follows it, so the row shows the most recently acted popup's status — plan named no order among popups — row shows another popup's status when two have one · group 01
+- hide() on a covered open popup hides it into the bar; open() on a covered popup lifts it to the top; only open() on the top popup is a no-op — plan pinned only the top case — none seen · group 01
+- blur on any popup becoming top open, in any pane, before changed — so the popup's shown can take focus after — none seen · group 01
+- enter frame uses global requestAnimationFrame; tests stub it — as docs/start.ts does — future tests must stub it · group 01
+- dim strip is an app-owned div.session-popup-scrim under the popup; layer/scrim CSS in sessions.css, popup look and slide in default layout.css — a user layout without the transition still gets inert and clipping · group 01
+- default popup part draws a frame only (aria-label title, body); title/icon only in bar entries — not asked for · group 01
 ### Review rounds
 ### Test gate

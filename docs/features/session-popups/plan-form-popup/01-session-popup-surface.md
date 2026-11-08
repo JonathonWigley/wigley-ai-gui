@@ -1,6 +1,6 @@
 # 01 — Session popup surface in sessions
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -119,3 +119,5 @@ Done when: `npm test` and `npm run lint` pass; the test gate runs the tests abov
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 23a30128 · proof: diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10099) · concerns: command label capitalised as pinned while sibling sessions labels are lower-case; look (slide, scrim, bar spacing) unchecked on screen until 04/06; DESIGN.md and docs/keymap.md oxfmt padding fixed (pre-existing lint failure from the docs-ahead commit)

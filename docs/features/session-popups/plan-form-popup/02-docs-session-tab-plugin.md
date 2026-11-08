@@ -1,6 +1,6 @@
 # 02 — Move the session Docs tab into `docs-session-tab`
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -46,3 +46,5 @@ Done when: `npm test` and `npm run lint` pass (`check-layers.mts` finds the new 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e79f0073 · proof: diff read; tsc --noEmit and npm run lint clean after wave 1; worker's targeted tests green · concerns: none beyond rulings; docs' own test no longer covers addView teardown when an anchor dispose throws (moved to docs-session-tab)
