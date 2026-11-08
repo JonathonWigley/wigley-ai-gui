@@ -1,6 +1,6 @@
 # 02 — Sweep: forms and primer
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -181,3 +181,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 39302cc7 · proof: diff read (eight forms *At/focus/rail/review commands with args, three primer commands, Kit.run and LayoutAction gone, Kit.position present); worker: typecheck clean in forms/primer, 883 forms+primer tests pass, selftest forms and forms,primer pass; whole-tree typecheck at the Wave 2 end · concerns: primer self-test alone fails one step that needs forms' Layout preview session (pre-existing ordering); Don't ask click now acts on the clicked item (intended); primer card mark goes through handler's boxIn wrapping; one blocked npx --no-install tsc (local, nothing downloaded); followups.md:47 stale (names kit.run, runLayoutAction) — for task 10

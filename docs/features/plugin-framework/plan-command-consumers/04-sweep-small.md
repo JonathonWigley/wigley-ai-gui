@@ -1,6 +1,6 @@
 # 04 — Sweep: agent-strip, visual, keys, shell
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -161,3 +161,4 @@ One commit for the group.
 
 ## Proof
 
+Commit eeeb3d9d · proof: diff read (six commands with args present: agent-strip.toggleBoxAt, visual.expand, sessions.selectRow/selectTab/favoriteProjectAt, core modes.show); worker: vitest 862 pass in touched areas, selftest agent-strip+sessions pass, lint clean in its files; whole-tree typecheck deferred to the Wave 2 end (peer workers in flight) · concerns: SessionsViewDeps gains selectTab beyond the plan; plugin-part-harness gains PagePartHarness.picked; one blocked npx call (local vitest, nothing downloaded); visual and keys have no self-test script
