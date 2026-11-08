@@ -1,6 +1,6 @@
 # 04 — Self-test scripts for the popup
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -46,3 +46,5 @@ Done when: `npm run selftest -- --plugin forms`, `--plugin chat`, `--plugin prim
 Commit:    one commit for the group
 
 ## Proof
+
+Commit b91a040e · proof: diff read; worker ran selftest --plugin forms, chat, docs, sessions PASS and forms,primer PASS; typecheck and lint clean; screenshots read · concerns: chat's floating composer draws over the open popup (z-order; fix dispatched); primer alone fails on a pre-existing cross-script wait; screenshot corners/scrim not measurable (06 queries them)

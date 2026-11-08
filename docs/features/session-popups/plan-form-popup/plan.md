@@ -121,7 +121,7 @@ Boundary rules: the popup knows nothing of forms or chat; forms and primer reach
 - [x] [Forms and primer in popups](03-forms-primer-popups.md) — after 01
 
 ### Wave 3
-- [ ] [Self-test scripts](04-selftest-scripts.md) — after 01, 02, 03
+- [x] [Self-test scripts](04-selftest-scripts.md) — after 01, 02, 03
 
 ### Wave 4
 - [ ] [Final verification](06-final-verification.md) — after 04
@@ -137,6 +137,7 @@ Review base: aed38a35
 - 02 · e79f0073 · diff read; tsc --noEmit and npm run lint clean after wave 1; worker's targeted tests green · concerns: none beyond rulings; docs' own test no longer covers addView teardown when an anchor dispose throws (moved to docs-session-tab)
 - 01 · 23a30128 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10099) · concerns: command label capitalised as pinned while sibling sessions labels are lower-case; look (slide, scrim, bar spacing) unchecked on screen until 04/06; DESIGN.md and docs/keymap.md oxfmt padding fixed (pre-existing lint failure from the docs-ahead commit)
 - 03 · 616576b6 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10093); takeOver grep only chat's takeOverSkipped · concerns: plan's 'scope after registration' premise did not hold (render's trailing confirm.setBaseScope covers it); enterFrame cancel has no direct sessions test; usage-tab-line manifest still names '(Chat, Form, Primer)' session kinds
+- 04 · b91a040e · diff read; worker ran selftest --plugin forms, chat, docs, sessions PASS and forms,primer PASS; typecheck and lint clean; screenshots read · concerns: chat's floating composer draws over the open popup (z-order; fix dispatched); primer alone fails on a pre-existing cross-script wait; screenshot corners/scrim not measurable (06 queries them)
 ### Contract changes
 - SessionPopupView.beforeClose: boolean → boolean | Promise<boolean> · why: forms' guardSessionClose answers through a promise while its cancel prompt asks · consumers: 03 · group 03
 - FormPopupHandle: setStatus, open, isVisible, dispose (no hide) · why: the helper calls only these · consumers: none outside 03 · group 03
@@ -156,5 +157,7 @@ Review base: aed38a35
 - 01's addPopup now stores and cancels its enter animation frame on remove/drop — a disposed popup's frame stayed live and failed forms/primer stop tests — revert re-reds those cases · group 03
 - forms-view formClosed row expecting idle scope replaced by 'forms sets no further scope or target' — no idle surface remains; the tab under sets its own scope — forms would need an idle scope otherwise · group 03
 - PrimerTab/mountPrimerTab renamed PrimerPopups/mountPrimerPopups — no name calls the surface a tab; PrimerView taken — none · group 03
+- chat-scope key while hidden is G (following the latest entry) — the next group sets following itself — none · group 04
+- primer proved by --plugin forms,primer rather than primer alone — its 'review and cancel' alsoExpect on 'activated Layout preview' (eb6f544b8, before this plan) needs forms' Layout preview session — goes to follow-ups · group 04
 ### Review rounds
 ### Test gate
