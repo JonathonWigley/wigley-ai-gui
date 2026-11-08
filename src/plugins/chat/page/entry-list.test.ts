@@ -564,8 +564,8 @@ describe('entry list', () => {
   const withRun = [user('u1'), tool('t1'), tool('t2'), assistant('done')];
 
   // `thenActivity`: the restore lands on the default layout, and a layout with
-  // activity in the transcript shows after it; `movesFirst`: the user moves the
-  // cursor up before that layout shows.
+  // activity in the transcript shows after it; `movesFirst`: what the user does
+  // before that layout shows.
   it.each<{
     name: string;
     held: ChatEntry[];
@@ -573,7 +573,7 @@ describe('entry list', () => {
     openRuns?: string[];
     isRestoredFirst?: boolean;
     thenActivity?: boolean;
-    movesFirst?: boolean;
+    movesFirst?: (list: EntryList, scroller: FakeElement) => void;
     focused: EntryListStop;
   }>([
     {
@@ -619,8 +619,19 @@ describe('entry list', () => {
       held: withRun,
       stopId: 'activity:t1',
       thenActivity: true,
-      movesFirst: true,
+      movesFirst: (list) => list.move(-1),
       focused: { kind: 'entry', entry: user('u1') },
+    },
+    {
+      name: 'a run stop the first layout does not draw, a scroll leaving the cursor in view',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (_list, scroller) => {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      },
+      focused: { kind: 'entry', entry: assistant('done') },
     },
   ])(
     'restored_stop_that_no_entry_holds_falls_back ($name)',
@@ -630,10 +641,17 @@ describe('entry list', () => {
       openRuns = [],
       isRestoredFirst = false,
       thenActivity = false,
-      movesFirst = false,
+      movesFirst,
       focused,
     }) => {
+      vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
       const { list, layouts } = setUpList(defaultShown());
+      const scroller = asFake(list.element) as FakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.scrollHeight = 400;
+      scroller.clientHeight = 100;
       const place = {
         focus: { stopId, following: false, anchorId: null },
         openRuns,
@@ -646,9 +664,7 @@ describe('entry list', () => {
         list.rebuild(held);
         list.restorePlace(place);
       }
-      if (movesFirst) {
-        list.move(-1);
-      }
+      movesFirst?.(list, scroller);
       if (thenActivity) {
         layouts.set(activityShown());
         list.rebuild(held);
@@ -1422,6 +1438,26 @@ describe('slots and focus', () => {
       expect(placeChanges.count).toBeGreaterThan(0);
     },
   );
+
+  // As a streamed entry's redraw does: the cursor, runs and expanders stay.
+  it('placeChanged_PutLeavingThePlace_TellsNothingAndBuildsNoPlace', () => {
+    const { list, put, placeChanges } = setUpList(defaultShown());
+    [notice('n1'), notice('n2'), notice('n3')].forEach(put);
+    const place = list.place();
+    placeChanges.count = 0;
+
+    put({
+      kind: 'notice',
+      id: 'n2',
+      at: 1000,
+      text: 'streamed on',
+      tone: 'info',
+      raw: [],
+    });
+
+    expect(placeChanges.count).toBe(0);
+    expect(list.place()).toBe(place);
+  });
 
   it.each<{
     case: string;

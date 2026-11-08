@@ -4,6 +4,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { isSameJson } from '../../../shared/json';
 import { element } from '../../../shared/page/dom';
 import {
   type DrawnPart,
@@ -80,7 +81,8 @@ import { resultStepCount } from './working-turn';
 // `stopClicked` with the stop it lands on, unless it is one the cursor leaves
 // (see `EntryList`). `turnLine` is the element the list keeps as its row after
 // the last entry; its owner draws and hides it. `placeChanged` hears each change
-// that may move `place()`: the cursor, a run or an expander.
+// of `place()` once: the cursor, a run, or an expander as the list reads it at
+// its entry's draw or toggle.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -230,14 +232,15 @@ export interface EntryList {
   dispose(): void;
   // The cursor, the open runs and each entry's open expanders, by entry id
   // (entries with none open left out); a held `restorePlace` value until it
-  // applies.
+  // applies. Built once per change of it, so reads between changes cost nothing.
   place(): EntryListPlace;
   // Puts the last page's place back once the list holds entries: now, or at
   // the rebuild that brings them. A saved stop the list does not hold leaves
   // the cursor at its start, on the latest stop, and the place stays held: each
   // rebuild tries it again, as one whose layouts draw runs and steps, until a
-  // stop holds it or the user moves the cursor (by a scroll too), opens or
-  // closes a range, toggles a run or an expander, or calls `scrollBy`.
+  // stop holds it or the user changes the place: moves the cursor, opens or
+  // closes a range, stops or starts following (by a scroll too), or toggles a
+  // run or an expander.
   restorePlace(place: EntryListPlace): void;
 }
 
@@ -277,6 +280,10 @@ interface BuiltEntry {
 }
 
 type AnyBuilder = EntryBuilder<EntryKind>;
+
+// Who changed the list's place: the user, or the list itself (following the
+// latest stop, drawing an entry, putting the last page's place back).
+type PlaceChange = 'user' | 'list';
 
 type RunRow = Extract<ListRow, { kind: 'run' }>;
 
@@ -363,8 +370,15 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let order: string[] = [];
   let focus: EntryFocus = START_FOCUS;
   // The last page's place, held until a stop of the list holds its cursor or the
-  // user moves the cursor.
+  // user changes the place.
   let savedPlace: EntryListPlace | null = null;
+  // Each entry's expander states as last read, by entry id; entries with none
+  // open left out.
+  const openExpanders = new Map<string, boolean[]>();
+  // `place()`'s value since the last change of it; null until the next read.
+  let livePlace: EntryListPlace | null = null;
+  // Whether the place changed since the owner last heard.
+  let isPlaceUntold = false;
   let tick: number | null = null;
   // The elements carrying `is-cursor` or `is-range`.
   const markedElements: HTMLElement[] = [];
@@ -393,10 +407,56 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const stopElement = (stopId: string) =>
     blockOfStop(stopId) ?? slotOfStop(stopId);
 
-  // Reads a built or redrawn slot's blocks.
-  const holdBlocks = (slot: Slot) => {
+  // Every change of the cursor, the open runs or an expander comes here:
+  // `place()` builds its value again at its next read, the owner hears at the
+  // next `tellPlace`, and a change by the user wins over a saved place still
+  // waiting for its stop.
+  const placeMoved = (by: PlaceChange) => {
+    livePlace = null;
+    isPlaceUntold = true;
+    if (by === 'user') {
+      savedPlace = null;
+    }
+  };
+
+  // Tells the owner of a change of the place since it last heard.
+  const tellPlace = () => {
+    if (isPlaceUntold) {
+      isPlaceUntold = false;
+      deps.placeChanged();
+    }
+  };
+
+  // The one writer of the focus: a stop, range or following that differs is a
+  // change of the place.
+  const setFocus = (next: EntryFocus, by: PlaceChange) => {
+    if (!isSameJson(next, focus)) {
+      focus = next;
+      placeMoved(by);
+    }
+  };
+
+  // Reads `slot`'s expander states into the place.
+  const readExpanders = (slot: Slot, by: PlaceChange) => {
+    const states = slot.kit.expanders.openStates();
+    const next = states.includes(true) ? states : undefined;
+    const { id } = slot.entry;
+    if (isSameJson(next, openExpanders.get(id))) {
+      return;
+    }
+    if (next === undefined) {
+      openExpanders.delete(id);
+    } else {
+      openExpanders.set(id, next);
+    }
+    placeMoved(by);
+  };
+
+  // Reads a built or redrawn slot's blocks and expanders.
+  const readSlot = (slot: Slot) => {
     slot.blocks = readBlocks(slot.element, slot.entry);
     blockCounts.set(slot.entry.id, slot.blocks.length);
+    readExpanders(slot, 'list');
   };
 
   // Redraws each user entry of `next` whose slot's input holds another delivery
@@ -410,7 +470,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const input = entryInput(entry, next);
       if (isDeliveryChanged(slot.input, input)) {
         redrawSlot(slot, entry, input, deps);
-        holdBlocks(slot);
+        readSlot(slot);
       }
     }
   };
@@ -459,9 +519,12 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     } else if (scroll === 'slot' && stop !== undefined && scrollsToStop(stop)) {
       stop.scrollIntoView({ block: 'nearest' });
       // `nearest` leaves a stop filling the view where it is, and fires no scroll.
-      focus = focusAfterScrollEvent(
-        focus,
-        focus.following && isScrolledToEnd(list, 1),
+      setFocus(
+        focusAfterScrollEvent(
+          focus,
+          focus.following && isScrolledToEnd(list, 1),
+        ),
+        'list',
       );
     } else if (scroll === 'bottom' || focus.following) {
       scrollToBottom();
@@ -469,7 +532,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   };
 
   // Draws the marks, scrolls by `scroll` (`marks` leaves the scroll), and tells
-  // the owner the place changed.
+  // the owner of a change of the place.
   const drawFocus = (
     scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
   ) => {
@@ -477,7 +540,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     if (scroll !== 'marks') {
       scrollFocus(scroll);
     }
-    deps.placeChanged();
+    tellPlace();
   };
 
   // Runs the live run's part update with the time now, and arms the next tick.
@@ -512,7 +575,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       ...cursorStops(rows, openRuns, blockCounts),
       ...queuedSlots.keys(),
     ];
-    focus = focusAfterChange(focus, order, lastStopId());
+    setFocus(focusAfterChange(focus, order, lastStopId()), 'list');
     drawFocus('follow');
     followWorking();
   };
@@ -530,25 +593,28 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       openRuns.add(runId);
     }
     for (const [entryId, states] of Object.entries(saved.openExpanders)) {
-      slots.get(entryId)?.kit.expanders.restore(states);
+      const slot = slots.get(entryId);
+      slot?.kit.expanders.restore(states);
+      if (slot !== undefined) {
+        readExpanders(slot, 'list');
+      }
     }
+    placeMoved('list');
     changed();
     const { stopId } = saved.focus;
     const isStopHeld = stopId === null || order.includes(stopId);
     if (isStopHeld) {
       savedPlace = null;
     }
-    focus = focusAfterChange(
-      isStopHeld ? saved.focus : START_FOCUS,
-      order,
-      lastStopId(),
+    setFocus(
+      focusAfterChange(
+        isStopHeld ? saved.focus : START_FOCUS,
+        order,
+        lastStopId(),
+      ),
+      'list',
     );
     drawFocus(focus.following ? 'bottom' : 'slot');
-  };
-
-  // A move of the user's wins over a saved place still waiting for its stop.
-  const dropSavedPlace = () => {
-    savedPlace = null;
   };
 
   // Draws `messages` as the pending rows, in order, after the entries.
@@ -622,8 +688,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       openRuns.delete(runId);
       const run = runSlots.get(runId);
       const stepIds = run?.row.steps.map((step) => step.id) ?? [];
-      focus = focusAfterClose(focus, runId, stepIds);
+      setFocus(focusAfterClose(focus, runId, stepIds), 'user');
     }
+    placeMoved('user');
     changed();
     return opens ? 'expanded' : 'collapsed';
   };
@@ -681,10 +748,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const settleInBand = (direction: 1 | -1, isAtBottom: boolean) => {
     const nearest = nearestStopInBand(direction);
     if (nearest !== null) {
-      dropSavedPlace();
-      focus = focusStop(focus, order, nearest);
+      setFocus(focusStop(focus, order, nearest), 'user');
     }
-    focus = focusAfterScrollEvent(focus, isAtBottom);
+    setFocus(focusAfterScrollEvent(focus, isAtBottom), 'user');
     drawFocus('marks');
   };
 
@@ -754,13 +820,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         slot === undefined && isInTranscript(entry, activityInTranscript);
       if (isNewSlot) {
         const created = buildSlot(entry, entryInput(entry, next), deps);
-        holdBlocks(created);
+        readSlot(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.insertBefore(created.element, deps.turnLine);
       } else if (slot !== undefined) {
         redrawSlot(slot, entry, entryInput(entry, next), deps);
-        holdBlocks(slot);
+        readSlot(slot);
       }
       if (entry.kind === 'user') {
         redrawChangedUserEntries(next);
@@ -777,6 +843,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       disposeSlots(slots);
       slots.clear();
       blockCounts.clear();
+      openExpanders.clear();
+      placeMoved('list');
       disposePartSlots(runSlots);
       runSlots.clear();
       disposePartSlots(queuedSlots);
@@ -786,7 +854,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       for (const entry of entries) {
         const created = buildSlot(entry, entryInput(entry, next), deps);
         created.kit.expanders.restore(openStates.get(entry.id) ?? []);
-        holdBlocks(created);
+        readSlot(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.append(created.element);
@@ -806,43 +874,37 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       changed();
     },
     move(step) {
-      dropSavedPlace();
-      focus = moveFocus(focus, order, step);
+      setFocus(moveFocus(focus, order, step), 'user');
       drawFocus('slot');
       return focusedStop();
     },
     moveToMessage(step) {
-      dropSavedPlace();
-      focus = moveToMessage(focus, order, messageIds(rows), step);
+      setFocus(moveToMessage(focus, order, messageIds(rows), step), 'user');
       drawFocus('slot');
       return focusedStop();
     },
     isAtLastStop: () => isAtLastStop(focus, order),
     latest() {
-      dropSavedPlace();
-      focus = focusLatest(lastStopId(), focus.anchorId);
+      setFocus(focusLatest(lastStopId(), focus.anchorId), 'user');
       drawFocus('bottom');
       if (!isListHidden()) {
         settleInBand(1, true);
       }
     },
     first() {
-      dropSavedPlace();
-      focus = focusFirst(order, focus.anchorId);
+      setFocus(focusFirst(order, focus.anchorId), 'user');
       drawFocus('top');
       return focusedStop();
     },
     toggleRange() {
-      dropSavedPlace();
-      focus = toggleAnchor(focus);
+      setFocus(toggleAnchor(focus), 'user');
       drawFocus('marks');
       return focus.stopId !== null;
     },
     isRangeOpen: () => focus.anchorId !== null,
     cancelRange() {
-      dropSavedPlace();
       const wasOpen = focus.anchorId !== null;
-      focus = clearAnchor(focus);
+      setFocus(clearAnchor(focus), 'user');
       drawFocus('marks');
       return wasOpen;
     },
@@ -877,14 +939,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus(focus.following ? 'bottom' : 'slot');
     },
     scrollBy(step, direction) {
-      dropSavedPlace();
       const scroll = scrollContent(
         list,
         step,
         direction,
         textLineHeightPx(list),
       );
-      focus = focusAfterScroll(focus, direction, isScrolledToEnd(list, 1));
+      setFocus(
+        focusAfterScroll(focus, direction, isScrolledToEnd(list, 1)),
+        'user',
+      );
       drawFocus('follow');
       return { ...scroll, following: focus.following };
     },
@@ -899,41 +963,39 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         return null;
       }
       if (stop.kind === 'activity') {
-        dropSavedPlace();
         return { stop, result: toggleRun(stop.runId) };
       }
-      const { expanders } = slots.get(stop.entry.id)!.kit;
+      const slot = slots.get(stop.entry.id)!;
+      const { expanders } = slot.kit;
       if (expanders.count() === 0) {
         return { stop, result: 'nothing' };
       }
-      dropSavedPlace();
       const opens = expanders.isAnyClosed();
       expanders.setAllOpen(opens);
-      deps.placeChanged();
+      readExpanders(slot, 'user');
+      tellPlace();
       return { stop, result: opens ? 'expanded' : 'collapsed' };
     },
     toggleRun(runId) {
       if (!runSlots.has(runId)) {
         return 'nothing';
       }
-      dropSavedPlace();
       return toggleRun(runId);
     },
     toggleExpander(entryId, place) {
-      const result = slots.get(entryId)?.kit.expanders.toggle(place);
-      if (result === undefined) {
-        return 'nothing';
+      const slot = slots.get(entryId);
+      const result = slot?.kit.expanders.toggle(place) ?? 'nothing';
+      if (slot !== undefined) {
+        readExpanders(slot, 'user');
+        tellPlace();
       }
-      dropSavedPlace();
-      deps.placeChanged();
       return result;
     },
     moveFocusTo(stopId) {
       if (!order.includes(stopId)) {
         return false;
       }
-      dropSavedPlace();
-      focus = focusStop(focus, order, stopId);
+      setFocus(focusStop(focus, order, stopId), 'user');
       drawFocus('marks');
       return true;
     },
@@ -955,17 +1017,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       if (savedPlace !== null) {
         return savedPlace;
       }
-      const openExpanders: Record<string, boolean[]> = {};
-      for (const [entryId, slot] of slots) {
-        const states = slot.kit.expanders.openStates();
-        if (states.includes(true)) {
-          openExpanders[entryId] = states;
-        }
-      }
-      return { focus, openRuns: [...openRuns], openExpanders };
+      livePlace ??= {
+        focus,
+        openRuns: [...openRuns],
+        openExpanders: Object.fromEntries(openExpanders),
+      };
+      return livePlace;
     },
-    restorePlace({ focus: savedFocus, openRuns: runs, openExpanders }) {
-      savedPlace = { focus: savedFocus, openRuns: runs, openExpanders };
+    restorePlace({ focus: savedFocus, openRuns: runs, openExpanders: states }) {
+      savedPlace = { focus: savedFocus, openRuns: runs, openExpanders: states };
+      placeMoved('list');
       applySavedPlace();
     },
   };
