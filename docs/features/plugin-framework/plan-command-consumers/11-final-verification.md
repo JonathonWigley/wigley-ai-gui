@@ -1,6 +1,6 @@
 # 11 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -69,3 +69,5 @@ Done when: each check above reports passed, or failed with a named fix or concer
 Commit: none, unless a fix lands through the fix path.
 
 ## Proof
+
+Commit 17bfc173 · proof: Report /tmp/claude-command-consumers/reports/11-1.md: one drive run, load 3 to 33. Checks 1, 3, 4, 5, 7, 8, 10, 11 passed (check 1's pagehide flush reached main for forms, primer and notes; 10 judged against code, no CSS in the diff). Check 2 partial (draft, image, open run held; cursor on a run or step lost under a user layout with activityInTranscript). Check 6 partial (settings, backlog, notes alone held; notes popup closes when docs restores an editor). Check 9: every reachable click passed. Self-tests: combined run hit the 60-minute limit with 3 fails; forms,primer and unity-pool pass alone; agent-lines narrow fit fails alone. · concerns: C1 notes popup closed by docs' restored editor via onBaseChanged (fix dispatched); C2 chat saved cursor applied once against the default layout's first draw, lost under activityInTranscript (fix dispatched); agent-lines narrow-fit self-test step fails alone, cause under investigation; C3 chip main action, strip secondary action and runs are not drawn by any default layout, so those clicks were unreachable; C4 drive commands slow late in the run (tooling).
