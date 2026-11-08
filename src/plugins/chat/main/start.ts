@@ -321,6 +321,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       alerts: services.alerts,
       window: services.window,
       git: services.git,
+      files: services.files,
       toolCallers,
       log: services.log,
       clock: services.clock,

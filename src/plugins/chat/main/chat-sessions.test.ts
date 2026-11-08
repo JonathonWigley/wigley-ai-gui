@@ -386,6 +386,7 @@ function setUp(
     harnesses?: FakeAgentHarness[];
     clockNow?: number;
     git?: ChatSessionsDeps['git'];
+    files?: ChatSessionsDeps['files'];
     sessionHost?: ChatSessionsDeps['sessionHost'];
   } = {},
 ) {
@@ -514,6 +515,7 @@ function setUp(
       isFocused: () => isFocused,
     },
     git: options.git ?? NO_CLONE,
+    files: options.files ?? { realPath: (file) => Promise.resolve(file) },
     toolCallers: {
       noteToolStarted: (sessionId, toolUseId, agentId) =>
         notesAndEmits.push({ noted: [sessionId, toolUseId, agentId] }),
@@ -1728,6 +1730,22 @@ describe('createChatSessions', () => {
     );
 
     expect(test.chat.sessions()[0].worktrees).toEqual(['fix']);
+  });
+
+  it('bashEntry_NamesARootThroughTheFolderSymlink_ListsIt', async () => {
+    const test = await started({
+      git: worktreesGit(['/private/work/app-wt']),
+      files: {
+        realPath: (file) =>
+          Promise.resolve(file === PROJECT_DIR ? `/private${file}` : file),
+      },
+    });
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command: 'ls /work/app-wt' }),
+    );
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['app-wt']);
   });
 
   it.each([

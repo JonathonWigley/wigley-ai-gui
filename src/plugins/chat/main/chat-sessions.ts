@@ -14,6 +14,7 @@ import type {
 import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
+import type { Files } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
 import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
@@ -84,7 +85,11 @@ import {
 } from './permission-tool';
 import type { RecentFolders } from './recent-folders';
 import type { ToolCallers } from './tool-callers';
-import { worktreeNameOf, worktreesInCommand } from './worktree-name';
+import {
+  rootSpellings,
+  worktreeNameOf,
+  worktreesInCommand,
+} from './worktree-name';
 
 export const TURN_FINISHED_TITLE = 'Turn finished';
 
@@ -109,6 +114,9 @@ export interface ChatSessionsDeps {
   // Reads each row's repo, branch and linked worktrees at its open and after
   // each turn, and the worktrees again after a Bash call naming `worktree`.
   git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
+  // Resolves the row's folder at each worktree read, so a root git lists
+  // resolved also matches under the folder's own spelling.
+  files: Pick<Files, 'realPath'>;
   // Told the agent of each `toolStarted`, before chat emits it.
   toolCallers: Pick<ToolCallers, 'noteToolStarted'>;
   log: PluginLog;
@@ -392,7 +400,8 @@ interface HeldSession {
   exit: { code: number | null; error: string | null } | null;
   // Branch reads started in this row, numbering them; only the latest applies.
   branchReads: number;
-  // The clone's linked worktree roots, from the latest worktree read.
+  // The clone's linked worktree roots, from the latest worktree read, each
+  // under git's spelling and under the row folder's.
   worktreeRoots: readonly string[];
   // Worktree reads started in this row, numbering them; only the latest applies.
   worktreeReads: number;
@@ -1612,17 +1621,22 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  // The top folder of each linked worktree of the clone holding `projectDir`;
-  // [] outside a clone.
+  // The top folder of each linked worktree of the clone holding `projectDir`,
+  // under git's spelling and `projectDir`'s (`rootSpellings`); [] outside a
+  // clone.
   async function linkedWorktreeRootsOf(projectDir: string): Promise<string[]> {
     const top = await deps.git.topLevel(projectDir);
     if (top === null) {
       return [];
     }
-    const worktrees = await deps.git.worktrees(top);
-    return worktrees
+    const [worktrees, realProjectDir] = await Promise.all([
+      deps.git.worktrees(top),
+      deps.files.realPath(projectDir),
+    ]);
+    const roots = worktrees
       .filter((worktree) => !worktree.isMain)
       .map((worktree) => worktree.path);
+    return rootSpellings(roots, projectDir, realProjectDir);
   }
 
   // Reads the row's repo and branch, and writes them when either changed.

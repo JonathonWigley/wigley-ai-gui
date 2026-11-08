@@ -140,7 +140,9 @@ Decisions:
   `cd /r/.worktrees/a && ls`, `"/r/.worktrees/a/src"` and `git -C /r/.worktrees/a log;`, and does not count in
   `/r/.worktrees/ab` or `/r/.worktrees/a.bak`. The character before the root is not checked. The name is the root's
   last segment (`path.basename`), which equals what `worktreeNameOf` gives for a root at `.worktrees/<name>`.
-- The match is on the text as given: case-sensitive, with the separators `git worktree list` prints. A relative path
+- The match is case-insensitive, as `worktreeNameOf` matches, with the separators `git worktree list` prints. Each root
+  is matched under git's spelling and under the row folder's own (`rootSpellings`, from `Files.realPath` of the
+  folder), so `/tmp/repo-wt` counts for a root git lists as `/private/tmp/repo-wt` (fix 08-2). A relative path
   (`cd .worktrees/a`) or a `~` path does not count.
 - A read-only command counts (design review).
 - A Bash touch lists any linked worktree root by its last segment, wherever the root sits; `fileWritten` lists only a

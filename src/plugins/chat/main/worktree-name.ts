@@ -19,9 +19,10 @@ export function worktreeNameOf(filePath: string): string | null {
   return null;
 }
 
-// The name (last segment) of each root whose full path `command` holds, in the
-// order of `roots`, each once. A root counts where the text after it ends or
-// goes on with a character no file name segment continues with.
+// The name (last segment) of each root whose full path `command` holds,
+// matched case-insensitively as `worktreeNameOf` matches, in the order of
+// `roots`, each once. A root counts where the text after it ends or goes on
+// with a character no file name segment continues with.
 export function worktreesInCommand(
   command: string,
   roots: readonly string[],
@@ -36,13 +37,52 @@ export function worktreesInCommand(
   return names;
 }
 
-function holdsRoot(command: string, root: string): boolean {
-  for (
-    let index = command.indexOf(root);
-    index !== -1;
-    index = command.indexOf(root, index + 1)
+// Each of `roots`, then that root under `folder`'s own spelling when it
+// differs: `realFolder` is `folder` with its symlinks resolved, and git lists
+// roots resolved, so `/tmp/repo-wt` follows `/private/tmp/repo-wt` for a
+// `folder` of `/tmp/repo`. A root outside the resolved part keeps one spelling.
+export function rootSpellings(
+  roots: readonly string[],
+  folder: string,
+  realFolder: string,
+): string[] {
+  let spelledTop = folder;
+  let realTop = realFolder;
+  // Strips the trailing segments both spellings share, leaving the folders the
+  // symlink maps one onto the other.
+  while (
+    path.basename(spelledTop) !== '' &&
+    path.basename(spelledTop).toLowerCase() ===
+      path.basename(realTop).toLowerCase()
   ) {
-    const next = command.charAt(index + root.length);
+    spelledTop = path.dirname(spelledTop);
+    realTop = path.dirname(realTop);
+  }
+  const spellings: string[] = [];
+  for (const root of roots) {
+    spellings.push(root);
+    const below = path.relative(realTop, root);
+    const isUnderRealTop =
+      below !== '..' &&
+      !below.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(below);
+    const spelled = path.join(spelledTop, below);
+    if (isUnderRealTop && spelled !== root) {
+      spellings.push(spelled);
+    }
+  }
+  return spellings;
+}
+
+function holdsRoot(command: string, root: string): boolean {
+  const text = command.toLowerCase();
+  const sought = root.toLowerCase();
+  for (
+    let index = text.indexOf(sought);
+    index !== -1;
+    index = text.indexOf(sought, index + 1)
+  ) {
+    const next = text.charAt(index + sought.length);
     if (!/[A-Za-z0-9._-]/.test(next)) {
       return true;
     }

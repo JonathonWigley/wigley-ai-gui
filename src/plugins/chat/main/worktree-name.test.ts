@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { worktreeNameOf, worktreesInCommand } from './worktree-name';
+import {
+  rootSpellings,
+  worktreeNameOf,
+  worktreesInCommand,
+} from './worktree-name';
 
 describe('worktreeNameOf', () => {
   it.each<{ case: string; filePath: string; name: string | null }>([
@@ -108,9 +112,61 @@ describe('worktreesInCommand', () => {
       roots: [A],
       expected: ['a'],
     },
+    {
+      case: 'CaseDiffers_Matched',
+      command: 'ls /R/.Worktrees/A/src',
+      roots: [A],
+      expected: ['a'],
+    },
     { case: 'NoRootNamed', command: 'ls /r/src', roots: [A, B], expected: [] },
     { case: 'NoRoots', command: `ls ${A}`, roots: [], expected: [] },
   ])('worktreesInCommand_$case', ({ command, roots, expected }) => {
     expect(worktreesInCommand(command, roots)).toEqual(expected);
+  });
+});
+
+describe('rootSpellings', () => {
+  it.each<{
+    case: string;
+    roots: string[];
+    folder: string;
+    realFolder: string;
+    expected: string[];
+  }>([
+    {
+      case: 'SymlinkedTop_AddsFolderSpelling',
+      roots: ['/private/tmp/c/repo-wt', '/private/tmp/c/repo/.worktrees/b'],
+      folder: '/tmp/c/repo',
+      realFolder: '/private/tmp/c/repo',
+      expected: [
+        '/private/tmp/c/repo-wt',
+        '/tmp/c/repo-wt',
+        '/private/tmp/c/repo/.worktrees/b',
+        '/tmp/c/repo/.worktrees/b',
+      ],
+    },
+    {
+      case: 'SymlinkedInnerFolder_MapsOntoLink',
+      roots: ['/Volumes/d/real/app-wt'],
+      folder: '/Users/u/link/app',
+      realFolder: '/Volumes/d/real/app',
+      expected: ['/Volumes/d/real/app-wt', '/Users/u/link/app-wt'],
+    },
+    {
+      case: 'RootOutsideTheResolvedPart_OneSpelling',
+      roots: ['/srv/wt/app-fix'],
+      folder: '/Users/u/link/app',
+      realFolder: '/Volumes/d/real/app',
+      expected: ['/srv/wt/app-fix'],
+    },
+    {
+      case: 'NoSymlink_OneSpelling',
+      roots: ['/u/dev/.worktrees/a', '/u/dev/b'],
+      folder: '/u/dev/app',
+      realFolder: '/u/dev/app',
+      expected: ['/u/dev/.worktrees/a', '/u/dev/b'],
+    },
+  ])('rootSpellings_$case', ({ roots, folder, realFolder, expected }) => {
+    expect(rootSpellings(roots, folder, realFolder)).toEqual(expected);
   });
 });
