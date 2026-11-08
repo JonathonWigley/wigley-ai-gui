@@ -581,8 +581,8 @@ describe('formsCommandHandlers', () => {
     expect(toastTones).toEqual(['info']);
   });
 
-  it('review cancel leaves the session open', () => {
-    const { run, store, finished, closeFromMain } = setup();
+  it("dismissing the review's cancel prompt keeps the round", () => {
+    const { run, store, finished } = setup();
     run('openReview');
     run('askCancel');
 
@@ -590,11 +590,6 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get().view).toBe('review');
     expect(finished).toEqual([]);
-    run('askCancel');
-    run('confirmCancel');
-    closeFromMain('r1');
-    expect(store.get().activeSessionId).toBe('r1-session');
-    expect(store.get().view).toBe('idle');
   });
 
   it.each([

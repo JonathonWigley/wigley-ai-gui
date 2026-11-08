@@ -91,7 +91,7 @@ describe('session form tabs', () => {
     expect(added[0].view.closesAtOnce()).toBe(false);
     expect(added[1].view.closesAtOnce()).toBe(true);
     expect(added[0].view.beforeClose(true)).toBe(true);
-    expect(added[1].view.beforeClose(false)).toBe(false);
+    expect(added[1].view.beforeClose(true)).toBe(false);
     added[1].view.shown();
     expect(beforeClose.mock.calls).toEqual([['closable'], ['kept']]);
     expect(shown).toHaveBeenCalledOnce();

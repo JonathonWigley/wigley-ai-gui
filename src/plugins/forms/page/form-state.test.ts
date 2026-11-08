@@ -1556,17 +1556,17 @@ describe('placeRestored', () => {
     },
   );
 
-  it("keeps a background round's last written view in its place", () => {
-    const state = initialState(
-      [presented('r1'), presented('r2')],
-      'r1-session',
+  it("writes the forms view in a background round's place", () => {
+    const state = apply(
+      initialState([presented('r1'), presented('r2')], 'r1-session'),
+      { type: 'openReview' },
     );
     const background = state.forms[1];
 
-    expect(roundPlace(state, background, REVIEW_ROW_TWO)).toEqual({
+    expect(roundPlace(state, background)).toEqual({
       focus: background.focus,
       reviewRow: background.reviewRow,
-      view: 'review',
+      view: 'forms',
       confirmReturnView: 'review',
     });
   });

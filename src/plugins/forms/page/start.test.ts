@@ -42,42 +42,67 @@ function openForm() {
 
 const PROBE_ID = 'probe';
 
-// Round r1 as main presents it, with three questions.
-function threeQuestionForm() {
-  const round = presentedRound('r1', {
+// Round `roundId` as main presents it, with three questions.
+function threeQuestionForm(roundId = 'r1') {
+  const round = presentedRound(roundId, {
     questions: [question('One'), question('Two'), question('Three')],
   });
-  return { ...openForm(), form: round.round };
+  return {
+    formId: round.roundId,
+    sessionId: round.sessionId,
+    label: round.label,
+    form: round.round,
+    draft: round.draft,
+  };
 }
 
-// The forms part over sessions, main holding `open` rounds, r1's session's row
-// selected and the page ready, so r1 is the active round. `reload` starts a new
-// page over the same slots and readies it; `beforeRead` runs once the new page
-// has started, before its open rounds read lands. `place` reads r1's place.
-async function startOverOpenRounds(open: { forms: unknown[] }) {
+type OpenForm = ReturnType<typeof openForm>;
+
+// The forms part over sessions, main holding `open` rounds, a row for each
+// round's session, the first round's selected and the page ready, so it is the
+// active round. `reload` starts a new page over the same slots and readies it;
+// `whileRead` runs once the new page has asked for its open rounds, before the
+// read lands. `place` reads a round's place, r1's by default; `select` selects a
+// round's session and lets the selection settle.
+async function startOverOpenRounds(open: { forms: OpenForm[] }) {
+  let whileRead = () => undefined as void;
   const harness = startPagePart(formsPagePart, {
     parts: [sessionsPagePart],
-    invoke: async (method) =>
-      method === 'openForms' ? open.forms : new Promise(() => undefined),
+    invoke: async (method) => {
+      if (method !== 'openForms') {
+        return new Promise(() => undefined);
+      }
+      whileRead();
+      return open.forms;
+    },
     services: {
       editor: countingEditors().host,
       markdown: PLAIN_MARKDOWN,
       picker: fakeListPickerService(),
     },
   });
-  const { sessionId } = openForm();
-  harness.state.publish(sessionsRowsSlot).set(sessionId, sessionRow(sessionId));
-  harness.state.publish(sessionsSelectionSlot).set(sessionId);
+  const rows = harness.state.publish(sessionsRowsSlot);
+  for (const { sessionId } of open.forms) {
+    rows.set(sessionId, sessionRow(sessionId));
+  }
+  const selection = harness.state.publish(sessionsSelectionSlot);
+  const select = async (formId: string) => {
+    selection.set(`${formId}-session`);
+    await settle();
+  };
+  selection.set(open.forms[0].sessionId);
   harness.emit('core.pageReady', null);
   await settle();
-  const reload = async (beforeRead: () => void = () => undefined) => {
+  const reload = async (duringRead: () => void = () => undefined) => {
+    whileRead = duringRead;
     await harness.restart();
-    beforeRead();
+    whileRead = () => undefined;
     harness.emit('core.pageReady', null);
     await settle();
   };
-  const place = () => harness.state.read(formsPlaceSlot, 'test').get('r1');
-  return { harness, reload, place };
+  const place = (formId = 'r1') =>
+    harness.state.read(formsPlaceSlot, 'test').get(formId);
+  return { harness, reload, place, select };
 }
 
 const NO_CONTEXT = {} as PageCommandContext;
@@ -279,17 +304,58 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
-  it('closed_while_no_page_ran_is_pruned', async () => {
-    const open = { forms: [threeQuestionForm()] };
-    const { harness, reload, place } = await startOverOpenRounds(open);
-    expect(place()).toBeDefined();
+  it('a background round shows its saved place on its first activation after a reload', async () => {
+    const { harness, reload, place, select } = await startOverOpenRounds({
+      forms: [threeQuestionForm('r1'), threeQuestionForm('r2')],
+    });
+    await select('r2');
+    moveToReviewRowThree(harness);
+    await select('r1');
+    const background: RoundPlace = { ...REVIEW_ROW_THREE, view: 'forms' };
+    expect(place('r2')).toEqual(background);
 
-    open.forms = [];
     await reload();
+    await select('r2');
 
-    expect(place()).toBeUndefined();
+    expect(place('r2')).toEqual(background);
+    expect(dataEmitted(harness, 'forms.viewChanged').at(-1)).toEqual({
+      view: 'forms',
+      roundId: 'r2',
+    });
     await harness.stop();
   });
+
+  it.each([
+    {
+      case: 'a round closed while no page ran',
+      shownDuringRead: [] as string[],
+      kept: false,
+    },
+    {
+      case: 'a round shown during the read',
+      shownDuringRead: ['r2'],
+      kept: true,
+    },
+  ])(
+    'the open rounds read keeps a place only for a round it or the store holds: $case',
+    async ({ shownDuringRead, kept }) => {
+      const open = {
+        forms: [threeQuestionForm('r1'), threeQuestionForm('r2')],
+      };
+      const { harness, reload, place } = await startOverOpenRounds(open);
+      expect(place('r2')).toBeDefined();
+
+      open.forms = [threeQuestionForm('r1')];
+      await reload(() => {
+        for (const formId of shownDuringRead) {
+          harness.send('formShown', threeQuestionForm(formId));
+        }
+      });
+
+      expect(place('r2') !== undefined).toBe(kept);
+      await harness.stop();
+    },
+  );
 
   it.each<{
     member: string;

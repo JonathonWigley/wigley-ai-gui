@@ -237,12 +237,8 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
 }
 
 // The round's place: its view and the view its Cancel prompt returns to are the
-// state's while it is active, else `kept`'s, the place last written for it.
-export function roundPlace(
-  state: FormsState,
-  round: RoundState,
-  kept: RoundPlace | undefined,
-): RoundPlace {
+// state's while it is active, else 'forms', the view activating its session opens.
+export function roundPlace(state: FormsState, round: RoundState): RoundPlace {
   const { focus, reviewRow } = round;
   if (round.formId === state.activeFormId && state.view !== 'idle') {
     return {
@@ -252,12 +248,7 @@ export function roundPlace(
       confirmReturnView: state.confirmReturnView,
     };
   }
-  return {
-    focus,
-    reviewRow,
-    view: kept?.view ?? 'forms',
-    confirmReturnView: kept?.confirmReturnView ?? 'review',
-  };
+  return { focus, reviewRow, view: 'forms', confirmReturnView: 'review' };
 }
 
 export function railItems(round: Round): RailItem[] {
