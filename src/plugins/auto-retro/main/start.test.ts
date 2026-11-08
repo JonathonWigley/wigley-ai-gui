@@ -251,7 +251,8 @@ describe('autoRetroMainPart', () => {
     ]);
   });
 
-  // `inSettle` closes the row after it reads done, inside the settle wait.
+  // `inSettle` closes the row after it reads done, inside the settle wait; else it closes while working. Each
+  // close deletes the row's `chat.session` entry right after the emit, as chat does.
   it.each([
     { reason: 'user', inSettle: false, logsLostRetro: true },
     { reason: 'project-closed', inSettle: false, logsLostRetro: true },
@@ -271,12 +272,15 @@ describe('autoRetroMainPart', () => {
       if (inSettle) {
         await part.startedThenIdle('retro-1');
         part.harness.advance(SETTLE_MS - 1);
+      } else {
+        part.sessions.set('retro-1', sessionInfo('retro-1', 'working'));
       }
 
       part.harness.emit('chat.sessionClosed', {
         ...closedEvent('retro-host-1', reason),
         sessionId: 'retro-1',
       });
+      part.sessions.delete('retro-1');
       await settled();
 
       const lostRetroLogs = part

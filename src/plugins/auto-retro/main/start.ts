@@ -245,12 +245,14 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     };
 
     // A close of the running row logs the lost retro unless the row already read done: closed `finished`, or in
-    // its settle wait.
-    const closed = (event: ChatMainEvents['sessionClosed']) => {
+    // its settle wait when the close was emitted (`isSettling`).
+    const closed = (
+      event: ChatMainEvents['sessionClosed'],
+      isSettling: boolean,
+    ) => {
       const { running } = queue;
       const isRunningRow = running?.hostSessionId === event.hostSessionId;
-      const isDone =
-        event.reason === 'finished' || settle?.rowId === event.sessionId;
+      const isDone = event.reason === 'finished' || isSettling;
       if (running !== null && isRunningRow && !isDone) {
         log(
           `retro ${event.sessionId} closed before done; ${hostIdsText(running.item)} not analyzed`,
@@ -321,7 +323,12 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
     };
 
-    api.events.on('chat.sessionClosed', (event) => serial(() => closed(event)));
+    // Chat deletes the row's `chat.session` entry right after the emit, which clears the settle wait before the
+    // step runs.
+    api.events.on('chat.sessionClosed', (event) => {
+      const isSettling = settle?.rowId === event.sessionId;
+      serial(() => closed(event, isSettling));
+    });
     api.events.on('chat.sessionCleared', (event) =>
       serial(() =>
         apply({
