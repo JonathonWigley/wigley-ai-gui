@@ -153,6 +153,8 @@ export interface DocViewDeps {
   // The right column left sight after being in sight, or was cleared while
   // shown.
   asideSightLost(): void;
+  // A right column section row moved the doc to its section.
+  asideSectionOpened(): void;
 }
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
@@ -193,7 +195,7 @@ export interface DocViewDeps {
 export interface DocView {
   element: HTMLElement;
   // The right column; a section row's action moves the doc to its line and
-  // focuses the pane.
+  // tells `asideSectionOpened`.
   aside: DocAside;
   // `isHistoryMove` records no place, for an open the history itself asked for.
   open(
@@ -498,7 +500,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     log: deps.log,
     moveToLine: (line) => {
       moveWithinDoc(line, null);
-      view.focus();
+      deps.asideSectionOpened();
     },
     followLink: (path, line) => deps.followFile(path, line, null),
     sightLost: () => deps.asideSightLost(),

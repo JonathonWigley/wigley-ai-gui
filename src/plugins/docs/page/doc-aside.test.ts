@@ -212,22 +212,38 @@ describe('createDocAside', () => {
       return { ...shown, reportWidth };
     }
 
-    it.each([
+    // A step is a reported width, or `clear` then `show` of the column.
+    type SightStep = number | 'clear' | 'show';
+    it.each<{ name: string; steps: SightStep[]; logged: string[] }>([
       {
         name: 'a change each way logs once each',
-        widths: [240, 240, 0, 0, 240],
+        steps: [240, 240, 0, 0, 240],
         logged: [
           'right column in sight',
           'right column out of sight',
           'right column in sight',
         ],
       },
-      { name: 'never in sight logs nothing', widths: [0, 0], logged: [] },
-    ])('resize_ShownColumn $name', ({ widths, logged }) => {
+      { name: 'never in sight logs nothing', steps: [0, 0], logged: [] },
+      {
+        name: 'cleared in sight, shown again, logs in sight again',
+        steps: [240, 'clear', 'show', 240],
+        logged: ['right column in sight', 'right column in sight'],
+      },
+    ])('resize_ShownColumn $name', ({ steps, logged }) => {
       const { aside, reportWidth, log } = observed();
-      aside.show([section('A', 2)], []);
+      const show = () => aside.show([section('A', 2)], []);
+      show();
 
-      widths.forEach(reportWidth);
+      for (const step of steps) {
+        if (step === 'clear') {
+          aside.clear();
+        } else if (step === 'show') {
+          show();
+        } else {
+          reportWidth(step);
+        }
+      }
 
       expect(log.mock.calls.map(([line]) => line)).toEqual(logged);
     });
@@ -401,31 +417,47 @@ describe('createDocAside', () => {
       }).toEqual({ kind: null, calls: [] });
     });
 
-    it('cursorClasses_FocusLeavesColumn_RemovesRing', () => {
-      const { root, rows } = focusedColumn();
-      const ringed = () =>
-        rows()
-          .filter(
-            (row) =>
-              row.classList.contains('is-selected') ||
+    // Each row breaks a different way: the ring kept after focus leaves, or
+    // not drawn again when focus lands on the column by a click (`focusin`)
+    // rather than through `focus`.
+    it.each([
+      { name: 'focus leaves', landsAgain: false, afterRing: [] },
+      {
+        name: 'focus leaves, then a click lands it in the column',
+        landsAgain: true,
+        afterRing: [['A', true, true]],
+      },
+    ])(
+      'cursorClasses_FocusMoves_RingFollowsIt $name',
+      ({ landsAgain, afterRing }) => {
+        const { root, rows } = focusedColumn();
+        const ringed = () =>
+          rows()
+            .filter(
+              (row) =>
+                row.classList.contains('is-selected') ||
+                row.classList.contains('is-cursor'),
+            )
+            .map((row) => [
+              row.textContent,
+              row.classList.contains('is-selected'),
               row.classList.contains('is-cursor'),
-          )
-          .map((row) => [
-            row.textContent,
-            row.classList.contains('is-selected'),
-            row.classList.contains('is-cursor'),
-          ]);
-      const focusedRing = ringed();
-      const outside = document.createElement('div');
+            ]);
+        const focusedRing = ringed();
+        const outside = document.createElement('div');
 
-      outside.focus();
-      root.fire('focusout', { relatedTarget: outside });
+        outside.focus();
+        root.fire('focusout', { relatedTarget: outside });
+        if (landsAgain) {
+          root.fire('focusin');
+        }
 
-      expect({ focusedRing, afterRing: ringed() }).toEqual({
-        focusedRing: [['A', true, true]],
-        afterRing: [],
-      });
-    });
+        expect({ focusedRing, afterRing: ringed() }).toEqual({
+          focusedRing: [['A', true, true]],
+          afterRing,
+        });
+      },
+    );
 
     it('show_FewerRows_ClampsCursor', () => {
       const { aside, cursorRows } = focusedColumn();

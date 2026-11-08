@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { coreModeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
-import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  type FakeElement,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   dataEmitted,
   fakeDependency,
@@ -368,5 +373,254 @@ describe('docs page part lifecycle', () => {
     consumer.dispose();
 
     expect(harness.counts().observers).toBe(observersBefore);
+  });
+});
+
+// A whole doc of the user's at `path`, titled `title`, linking to each of
+// `linksTo`.
+function ownDoc(path: string, title: string, linksTo: string[] = []) {
+  return {
+    id: path,
+    kind: 'instructions',
+    source: 'global',
+    owner: 'mine',
+    repo: null,
+    root: null,
+    plugin: null,
+    path,
+    line: null,
+    title,
+    meta: {},
+    walked: [],
+    lastLoaded: null,
+    headings: [],
+    links: linksTo.map((target) => ({
+      form: 'markdown' as const,
+      raw: `[${target}](${target})`,
+      target,
+      line: 1,
+      targetLine: null,
+    })),
+  };
+}
+
+const SECTIONED = '/p/sectioned.md';
+const PLAIN = '/p/plain.md';
+const GUIDE = '/p/guide.md';
+const TARGET = '/p/target.md';
+
+const TEXTS: Record<string, string> = {
+  [SECTIONED]: '# Sectioned\n\n## Alpha\n\nOne.\n\n## Beta\n\nTwo.\n',
+  [PLAIN]: 'No headings.\n',
+  [GUIDE]: 'Links [target](target.md).\n',
+  [TARGET]: 'No headings either.\n',
+};
+
+// Docs mode's machine view over an index of the docs in `TEXTS`, guide.md
+// linking target.md, its right column laid out wide enough to be in sight.
+function startMachineView() {
+  const page = startDocsPage(async (method, ...args) => {
+    if (method === 'loadIndex') {
+      return {
+        document: {
+          schemaVersion: 5,
+          generatedAt: '2026-11-05T00:00:00Z',
+          entries: [
+            ownDoc(SECTIONED, 'Sectioned'),
+            ownDoc(PLAIN, 'Plain'),
+            ownDoc(GUIDE, 'Guide', [TARGET]),
+            ownDoc(TARGET, 'Target'),
+          ],
+          contexts: [],
+        },
+        message: null,
+        title: 'index',
+        canRebuild: false,
+      };
+    }
+    if (method === 'wikiMainPath') {
+      return '/p/wiki/Main.md';
+    }
+    if (method === 'readDocIfPresent') {
+      return null;
+    }
+    if (method === 'readDoc') {
+      return TEXTS[args[0] as string];
+    }
+    return { clones: [] };
+  });
+  const { harness } = page;
+  const mode = harness.mode('docs.docs');
+  const sheet = asFake(mode.element);
+  const [aside] = findAll(sheet, 'docs-aside');
+  Object.assign(aside, { offsetWidth: 200 });
+  // Opens `path` by message and resolves once it shows.
+  const open = async (path: string) => {
+    const before = dataEmitted(harness, 'docs.docOpened').length;
+    harness.send('openDoc', { path, line: null });
+    await vi.waitFor(() =>
+      expect(dataEmitted(harness, 'docs.docOpened').length).toBe(before + 1),
+    );
+  };
+  const active = () =>
+    (document as unknown as { activeElement: FakeElement | null })
+      .activeElement;
+  const isDocFocused = () => {
+    const held = active();
+    return held !== null && sheet.contains(held) && !aside.contains(held);
+  };
+  const docFocusedLogs = () =>
+    harness.logs.filter(({ message }) => message.endsWith('doc focused'))
+      .length;
+  const ringedRows = () =>
+    findAll(aside, 'is-cursor').map((row) => row.textContent);
+  return {
+    ...page,
+    mode,
+    aside,
+    open,
+    active,
+    isDocFocused,
+    docFocusedLogs,
+    ringedRows,
+  };
+}
+
+// Focuses `target` as a click or a key does, its `focusin` reaching it and
+// each element over it.
+function focusIn(target: FakeElement) {
+  (target as unknown as { focus(): void }).focus();
+  for (let node: FakeElement | null = target; node; node = node.parentNode) {
+    node.fire('focusin', { target });
+  }
+}
+
+describe('docs view focus', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: `focusin` in the column not taking the column's scope, or not
+  // drawing the ring on its cursor row.
+  it('focusin_InsideTheColumn_TakesItsScopeAndRing', async () => {
+    const view = startMachineView();
+    await view.open(SECTIONED);
+
+    focusIn(view.aside);
+
+    expect({
+      scope: view.harness.scope(),
+      ringed: view.ringedRows(),
+    }).toEqual({ scope: 'docs.aside', ringed: ['Sectioned'] });
+    await view.harness.stop();
+  });
+
+  // Breaks: a shown view whose scope comes back as the column's leaving the
+  // DOM focus nowhere, so the keys move a cursor that draws no ring.
+  it('shown_ScopeComesBackAsTheColumns_FocusesTheColumn', async () => {
+    const view = startMachineView();
+    await view.open(SECTIONED);
+    focusIn(view.aside);
+    (view.aside as unknown as { blur(): void }).blur();
+    view.aside.fire('focusout', { relatedTarget: null });
+
+    view.mode.shown();
+
+    expect({
+      isColumnFocused: view.active() === view.aside,
+      ringed: view.ringedRows(),
+    }).toEqual({ isColumnFocused: true, ringed: ['Sectioned'] });
+    await view.harness.stop();
+  });
+
+  // The column leaves sight (a doc with no column opens) while it holds the
+  // keys. Breaks: the doc taking DOM focus from the right bar, or while the
+  // view is not active; or not taking it otherwise.
+  it.each([
+    { name: 'focus in the column', where: 'column', isDocFocused: true },
+    { name: 'focus in the right bar', where: 'outside', isDocFocused: false },
+    { name: 'the view not active', where: 'inactive', isDocFocused: false },
+  ])(
+    'asideSightLost_ColumnLeavesSight $name',
+    async ({ where, isDocFocused }) => {
+      const view = startMachineView();
+      await view.open(SECTIONED);
+      focusIn(view.aside);
+      const rightBar = document.createElement('div') as unknown as FakeElement;
+      if (where === 'outside') {
+        (rightBar as unknown as { focus(): void }).focus();
+      }
+      if (where === 'inactive') {
+        view.harness.state.publish(coreModeSlot).set('other.mode');
+      }
+      const logsBefore = view.docFocusedLogs();
+
+      await view.open(PLAIN);
+
+      expect({
+        isDocFocused: view.isDocFocused(),
+        docFocusedLogs: view.docFocusedLogs() - logsBefore,
+        isRightBarKept: where !== 'outside' || view.active() === rightBar,
+      }).toEqual({
+        isDocFocused,
+        docFocusedLogs: isDocFocused ? 1 : 0,
+        isRightBarKept: true,
+      });
+      await view.harness.stop();
+    },
+  );
+
+  // Main takes the keys back from the right bar. Breaks: the column's branch
+  // landing on the doc, or the side bar's overlay left open over main.
+  it.each([
+    { name: 'from the column', fromColumn: true, isColumnFocused: true },
+    { name: 'from the doc', fromColumn: false, isColumnFocused: false },
+  ])(
+    'focusMain_ReturnsToMainsLastPane $name',
+    async ({ fromColumn, isColumnFocused }) => {
+      const view = startMachineView();
+      await view.open(SECTIONED);
+      if (fromColumn) {
+        focusIn(view.aside);
+      }
+      (document.createElement('div') as unknown as { focus(): void }).focus();
+
+      view.mode.focusMain();
+
+      expect({
+        isColumnFocused: view.active() === view.aside,
+        isDocFocused: view.isDocFocused(),
+        picks: view.harness.picks,
+      }).toEqual({
+        isColumnFocused,
+        isDocFocused: !isColumnFocused,
+        picks: ['docs.docs'],
+      });
+      await view.harness.stop();
+    },
+  );
+
+  // Enter on the column's cursor row. Breaks: a section row leaving focus in
+  // the column, or the doc focused twice as a linking doc with no column lands.
+  it.each([
+    { name: 'a section row', opened: SECTIONED },
+    { name: 'a Linked from row', opened: TARGET },
+  ])('asideOpen_FocusesTheDocOnce $name', async ({ opened }) => {
+    const view = startMachineView();
+    await view.open(opened);
+    focusIn(view.aside);
+    const logsBefore = view.docFocusedLogs();
+
+    view.harness.started().commands.asideOpen({ arg: undefined });
+    await vi.waitFor(() =>
+      expect(view.docFocusedLogs() - logsBefore).toBeGreaterThan(0),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect({
+      isDocFocused: view.isDocFocused(),
+      docFocusedLogs: view.docFocusedLogs() - logsBefore,
+    }).toEqual({ isDocFocused: true, docFocusedLogs: 1 });
+    await view.harness.stop();
   });
 });

@@ -53,7 +53,8 @@ interface CursorRow {
 // narrow rule, which is CSS alone, takes it out of sight or brings it back.
 // Its cursor walks the rows of both lists in drawn order, stopping at either
 // end, and logs the row each press reaches; the cursor row carries
-// `is-selected` and `is-cursor` only while the column holds focus.
+// `is-selected` and `is-cursor` only while the column holds the DOM focus,
+// however that focus landed.
 export interface DocAside {
   element: HTMLElement;
   // Draws `sections` and `links` at the scroll it had, the cursor at its index
@@ -129,6 +130,11 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
     deps.log(`right column cursor: ${row.input.title}`);
   };
 
+  root.addEventListener('focusin', () => {
+    hasRing = true;
+    markCursor();
+  });
+
   root.addEventListener('focusout', (event) => {
     const next = (event as FocusEvent).relatedTarget;
     const isLeavingColumn = !(
@@ -177,6 +183,7 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
     const wasShown = !root.hidden;
     disposeDrawn();
     root.hidden = true;
+    isInSight = false;
     cursor = 0;
     if (wasShown) {
       deps.sightLost();

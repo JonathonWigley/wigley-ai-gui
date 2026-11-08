@@ -318,8 +318,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // Sessions mode starts before Docs mode. Focus leaves the tree for the
     // doc as the side bar hides, and moves to the tree as it opens over the
     // doc, by `treeHiddenIn` and `treeOpenedOverIn`. The core's Alt+h past the
-    // doc enters the tree as the side bar, and its way back returns to main's
-    // last pane.
+    // doc enters the tree as the side bar, and its way back closes a narrow
+    // window's side bar overlay, as a pick does, and returns to main's last
+    // pane. A shown view's scope coming back as the right column's focuses the
+    // column (`focusHeldAside`).
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
@@ -332,6 +334,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         api.keys.setScope(machineView.focusScope());
         api.panes.setResizeTarget(null);
         api.panes.setFocusTarget(machineView.focusTarget);
+        machineView.focusHeldAside();
         machineView.showFirstTime();
         showTreeEdge(machineView);
       },
@@ -345,7 +348,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         showTreeEdge(machineView);
       },
       focusSideBar: () => machineView.focusTree(),
-      focusMain: () => machineView.focusMain(),
+      focusMain: () => {
+        mode.picked();
+        machineView.focusMain();
+      },
     });
     // A narrowing hides the side bar without telling the mode, so the machine
     // view's edge prompt follows the window too, once the core has laid out.
@@ -422,6 +428,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           api.keys.setScope(added.view.focusScope());
           api.panes.setResizeTarget(split);
           api.panes.setFocusTarget(added.view.focusTarget);
+          added.view.focusHeldAside();
           log('Docs tab shown');
           added.view.showFirstTime();
         },

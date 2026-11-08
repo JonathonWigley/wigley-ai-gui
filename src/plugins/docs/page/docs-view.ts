@@ -213,6 +213,10 @@ export interface DocsView {
   // Main's last pane takes focus and its scope back: the right column when it
   // held the keys last and is still in sight, else the doc pane.
   focusMain(): void;
+  // The view's pane scope was set again from `focusScope`: while it is the
+  // right column's and the column is in sight, the column takes the DOM focus,
+  // drawing its ring; else nothing.
+  focusHeldAside(): void;
   // Moves focus between the tree, the doc pane and the right column by
   // `paneFocusedBy`, with the pane's scope; its caller hands it over with each
   // pane scope it sets.
@@ -636,7 +640,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return lastLoaded === null ? null : loadedLine(lastLoaded, deps.now());
     },
     followFile: (path, line, fragment) => {
-      void openListed(path, line, fragment).then(focusDocOnLanding);
+      void openThenFocusDoc(() => openListed(path, line, fragment));
     },
     followPlace: (path, line) => {
       const listTarget = listTargetOfPlace(path);
@@ -650,6 +654,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     createMain: () => void createMain(),
     followWikiLink: (href, title) => followWikiLink(href, title),
     asideSightLost: () => asideSightLost(),
+    asideSectionOpened: () => focusDocAndLog(),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
@@ -712,10 +717,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return opened;
   };
 
-  // A link's open replaced the element holding focus, which fell to the body.
-  const focusDocOnLanding = (opened: boolean) => {
-    if (opened) {
-      focusDocAndLog();
+  // Opens that run `openThenFocusDoc` and have not settled.
+  let landingOpens = 0;
+
+  // Runs `open`, then focuses the doc once it opened: a link's open replaced
+  // the element holding focus, which fell to the body.
+  const openThenFocusDoc = async (
+    open: () => Promise<boolean> | boolean,
+  ): Promise<void> => {
+    landingOpens++;
+    try {
+      if (await open()) {
+        focusDocAndLog();
+      }
+    } finally {
+      landingOpens--;
     }
   };
 
@@ -778,8 +794,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // The column left sight while it held the keys: the doc takes them, its DOM
-  // focus moving only while this view is active and no pane outside the doc
-  // holds the focus (the right bar may hold it).
+  // focus moving only while this view is active, no pane outside the doc
+  // holds the focus (the right bar may hold it), and no open that focuses the
+  // doc as it lands is running.
   const asideSightLost = () => {
     if (focused !== 'aside') {
       return;
@@ -790,7 +807,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       active !== null &&
       active !== globalThis.document.body &&
       !doc.element.contains(active);
-    if (deps.isActive() && !isFocusOutside) {
+    const isOpenLanding = landingOpens > 0;
+    if (deps.isActive() && !isFocusOutside && !isOpenLanding) {
       focusDocAndLog();
     }
   };
@@ -968,13 +986,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         if (entry === null) {
           refuseMissingPage(title);
         } else {
-          void openListEntry(entry.id).then(focusDocOnLanding);
+          void openThenFocusDoc(() => openListEntry(entry.id));
         }
         return true;
       }
       case 'kind':
       case 'owner':
-        focusDocOnLanding(openList(target, title));
+        void openThenFocusDoc(() => openList(target, title));
         return true;
       case 'all':
         deps.revealTree();
@@ -1490,11 +1508,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     asideUp: () => doc.aside.move(-1),
     asideTop: () => doc.aside.top(),
     asideBottom: () => doc.aside.bottom(),
-    // A linking doc's open focuses the doc pane as it lands.
+    // A section row focuses the doc through `asideSectionOpened`, a linking
+    // doc's open as it lands.
     asideOpen: () => {
-      if (doc.aside.openCursor() === 'section') {
-        focusDocAndLog();
-      }
+      doc.aside.openCursor();
     },
     backToDoc: focusDocAndLog,
   };
@@ -1609,6 +1626,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         focusAsideAndLog();
       } else {
         focusDocAndLog();
+      }
+    },
+    focusHeldAside() {
+      if (focused === 'aside' && doc.aside.isInSight()) {
+        doc.aside.focus();
       }
     },
     focusTarget,
