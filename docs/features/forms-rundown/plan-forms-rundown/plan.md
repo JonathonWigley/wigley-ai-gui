@@ -245,7 +245,7 @@ Boundary rules:
 - [x] [Notices pane](05-notices-pane.md) — after 02, 03, 04
 
 ### Wave 5
-- [ ] [Forms self-test](07-forms-selftest.md) — after 01, 02, 04, 05, 06
+- [x] [Forms self-test](07-forms-selftest.md) — after 01, 02, 04, 05, 06
 
 ### Wave 6
 - [ ] [Doc re-read](09-doc-re-read.md) — after 07, 08
@@ -265,6 +265,7 @@ Review base: 21b036cb
 - 02 · 5766ea22 · diff read: QuestionCard.summary, buildChoiceReason(label|null), appendAnswerArea/appendChoiceReason with null label, .item-summary and .answer-head CSS as pinned, finding card keeps labels; typecheck passes; worker lint and named tests pass · concerns: forms selftest-script SELFTEST_LAYOUT string still reads input.question (typecheck cannot see it) — task 07 owns it; choiceReason test asserts labels-per-reason rather than exactly one reason on the question row
 - 04 · 29df4efc · diff read: RoundItem, RailItem union, railItems, openNotices/noticeLine, the three actions, railEntryLabel/Title, noticeToggledLine, lineCursorLine, RoundPicks.noticeCards, RailEntryInput.kind, the three commands and binds all present; worker full npm test (10156), typecheck, lint pass · concerns: forms selftest-script expects j ran forms.nextItem in many rows — task 07 owns it; za is not a vim key, so the placement check wants an anchor for forms.toggleNotice — task 05's notices pane must draw it; interim notice cards use the stop's rail position
 - 05 · 2871e979 · diff read: buildNoticesPane, NoticeLineInput, NoticesInput, NoticesKit.line, Layout.notices, PANES/read-layout notices, buildLayoutCard rollback, default notices pane and headless notice card, interim removed, za anchor on cursor line all present; typecheck passes; worker full npm test (10176) and lint pass · concerns: Enter on the notices stop also toggles the cursor line (from 04; vim key, no anchor); live look unchecked (head inside collapsible button, hidden empty summary, prompt position, editors in hidden bodies) — task 10
+- 07 · a0475c08 · diff read: summary renames incl. SELFTEST_LAYOUT input.summary, j/k expects now nextLine/prevLine (only PAGE_BINDS keeps nextItem), preview walk with preview-question, finding picks and round layouts re-walks, NOTICE_COMMENT_STEPS group, reconsider payload check all present; typecheck passes; worker lint passes · concerns: finding picks step 1 (Space k k) logs k ran forms.prevLine twice in one step — the race the task doc warns of; watch in task 10's self-test run; round layouts last step's why now names the notice comments group
 ### Contract changes
 ### Rulings
 - Rebased the gui and agents branches onto main at preflight (9 and 1 commits behind); the docs-written-ahead commits are now gui 3c06d4c3 (was 4d679c5c) and agents 67c4697 (was 64ba2e3); review bases: gui 21b036cb, marketplace 3689c72, agents 67c4697 — work builds on origin's latest — a stale sha in a later brief would mislead a re-read · lead

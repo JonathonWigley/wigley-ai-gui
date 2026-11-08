@@ -1,6 +1,6 @@
 # 07 — Forms self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -165,3 +165,4 @@ Commit:    one commit for the group, in the gui worktree.
 
 ## Proof
 
+Commit a0475c08 · proof: diff read: summary renames incl. SELFTEST_LAYOUT input.summary, j/k expects now nextLine/prevLine (only PAGE_BINDS keeps nextItem), preview walk with preview-question, finding picks and round layouts re-walks, NOTICE_COMMENT_STEPS group, reconsider payload check all present; typecheck passes; worker lint passes · concerns: finding picks step 1 (Space k k) logs k ran forms.prevLine twice in one step — the race the task doc warns of; watch in task 10's self-test run; round layouts last step's why now names the notice comments group
