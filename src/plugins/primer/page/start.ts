@@ -89,7 +89,8 @@ function createBoxes(
 // both, and showing an open primer again changes nothing. The active primer
 // follows the session the sessions plugin focuses, and a primer leaves only
 // when main closes it, and the read's primers go back to the places the last
-// page saved. The `Disposable` stops an `openForms` read still in flight from
+// page saved, the read tracked as a page restore (`api.restores`). The
+// `Disposable` stops an `openForms` read still in flight from
 // showing its primers.
 function listenForPrimers(
   api: PrimerApi,
@@ -117,7 +118,8 @@ function listenForPrimers(
     }),
   );
   let isStopped = false;
-  void api.channel
+  // A restored form's tab and take over can move the key base.
+  const openFormsRead = api.channel
     .invoke('openForms')
     .then((primers) => {
       if (isStopped) {
@@ -129,6 +131,7 @@ function listenForPrimers(
       places.formsRead(primers.map((primer) => primer.formId));
     })
     .catch((error) => log(`open primers not read: ${errorText(error)}`));
+  api.restores.track(openFormsRead);
   return {
     dispose() {
       isStopped = true;

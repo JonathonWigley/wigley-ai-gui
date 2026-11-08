@@ -136,8 +136,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
-                 reader skeleton) and `test-layouts.ts` (the test helpers owners share) and
-                 `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot)), the reducer store, autosave,
+                 reader skeleton), `test-layouts.ts` (the test helpers owners share),
+                 `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot) and
+                 `fake-kit-commands.test-support.ts` (`fakeKitCommandsOf`, the commands of a kit under test, each run going to a fake)), the reducer store, autosave,
                  editor boxes, the confirm prompt, the session form tab helper, the session form status line, the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue), and the page place slots' helpers (`place-slot.ts`: `placeWrites`, which drops a write
@@ -201,6 +202,7 @@ src/renderer/    core page; renderer.ts is its composition root
   plugins/       the page-side plugin API
   state/         the page mirror (`page-state.ts`: main's snapshot, then each push, and the page's own writes sent back)
                  and `core-slots.ts`, which writes `core.mode`, `core.scope` and `core.theme`
+  page-restores.ts the page load's restores behind `api.restores`: the tracked ones, and when they settle (§ A slot)
   key-anchors.ts the anchors: draws a command's keys into an element a view names (§ Key hints); `anchor-wiring.ts`
                  redraws and shows or hides them on a keymap or scope change, and `box-focus.ts` tells whether focus is in
                  a text box
@@ -402,7 +404,12 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
   included, so the value outlives an owner's stop and a page reload, not an app restart. A page plugin keeps what a reload
   restores — a draft, a selected row, a view — in a `<id>.place` slot it writes as the state changes and reads at
-  start (`chat.place` with `chat.draftImages`, `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). `sessions.activity` clears
+  start (`chat.place` with `chat.draftImages`, `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). A
+  restore that settles after the part's start returns and can move the key base goes to `api.restores.track` (docs'
+  reopened doc once its view shows, forms' and primer's open forms read, sessions' first placing of the panes), and
+  `api.restores.onSettled` hears the page load's restores settle: `core.pageReady` emitted and no tracked restore
+  pending (`PageRestores` in `src/contracts/plugin.ts`). A key base change before then is a restore's, so notes'
+  restored popup stays open through it. `sessions.activity` clears
   itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
   the first panes are placed. A new start publishes the
   same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
@@ -804,7 +811,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
   `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or
   `manifests.ts` misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a
-  `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin's test follows its
+  `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin contract's
+  `contract.test-support.ts`, the fixtures of its records (sessions' `sessionRow`), belongs to that contract's layer,
+  so any file that may import the contract may import it. A plugin's test follows its
   folder's rules, faking a provider with `fakeDependency`; a test that must start a real provider part has a whole-file
   `sublayers` entry under its plugin in `PLUGIN_EXTRAS`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an

@@ -113,8 +113,8 @@ export interface NotePopupDeps {
   encoder: ImageEncoder;
   // Hears the page tearing down, when autosave saves an unsaved edit at once.
   onPageHide(listener: () => void): Disposable;
-  // Hears each key press and pointer press on the page, before it acts.
-  onUserInput(listener: () => void): Disposable;
+  // Whether the page load's restores have settled (`PageRestores`).
+  restoresSettled(): boolean;
   // Hears the place after each change to the popup's open state or cursors.
   placeChanged(place: NotesPlace): void;
 }
@@ -126,12 +126,13 @@ export interface NotePopup {
   setLayouts(shown: ShownLayouts<Layout>): void;
   // Puts back a reloaded page's place: an open popup opens through `open`,
   // its cursors applied once the draft loads, on its fields with no box
-  // focused. It stays open through the key base changes other views' restores
-  // make, until the user's first key or pointer press.
+  // focused. It stays open through the key base changes made before the page
+  // load's restores settle.
   restorePlace(place: NotesPlace): void;
   // Closes an open markup session, starting its save, and ends autosave: an
   // edit it has not saved yet is dropped. A send still in flight then closes
-  // nothing, since its scopes end with the plugin.
+  // nothing, since its scopes end with the plugin, and no later change redraws
+  // the popup or writes its place.
   dispose(): void;
 }
 
@@ -173,9 +174,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   let homes: NoteHome[] = [];
   // The one operation changing the draft through main, named for log lines.
   let inFlight: DraftOperation | null = null;
-  // A restored popup's wait for the user's first input; a base change during
-  // it came from another view's restore and leaves the popup open.
-  let awaitingUserInput: Disposable | null = null;
   // An open() whose body focus waits for the operation in flight.
   let focusBodyWhenFree = false;
   // Counts the drafts put into the boxes, so a take can tell its draft left.
@@ -435,14 +433,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     removeHint.classList.toggle('is-no-target', !holdsImage && !holdsSession);
     rows.get(field)?.append(cursorPrompt);
   };
-  store.subscribe(render);
+  const rendering = store.subscribe(render);
 
   // The popup counts as open from the start of its load.
   const writePlace = () => {
     const { field, imageIndex } = store.get();
     deps.placeChanged({ isOpen: phase !== 'closed', field, imageIndex });
   };
-  store.subscribe(writePlace);
+  const writingPlace = store.subscribe(writePlace);
 
   parts.actions(dialog.actions);
 
@@ -746,8 +744,8 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // ── Opening and closing ───────────────────────────────────────────────────
   // `restored` is a reloaded page's place: its cursors replace the body's, no
-  // box takes focus, and a base change closes the popup only after the user's
-  // first input.
+  // box takes focus, and a base change closes the popup only once the page
+  // load's restores have settled.
   const open = async (restored?: NotesPlace) => {
     phase = 'loading';
     writePlace();
@@ -774,12 +772,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       return;
     }
     const scope = deps.pushScope('popup');
-    if (restored !== undefined) {
-      awaitingUserInput = deps.onUserInput(stopAwaitingUserInput);
-    }
     scope.onBaseChanged(() => {
-      const isUsersBaseChange = awaitingUserInput === null;
-      if (popupScope === scope && isUsersBaseChange) {
+      const isRestoresBaseChange =
+        restored !== undefined && !deps.restoresSettled();
+      if (popupScope === scope && !isRestoresBaseChange) {
         close();
       }
     });
@@ -823,16 +819,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     phase = 'closed';
     writePlace();
     focusBodyWhenFree = false;
-    stopAwaitingUserInput();
     popupScope?.pop();
     popupScope = null;
     dialog.hide();
     log('popup closed');
-  };
-
-  const stopAwaitingUserInput = () => {
-    awaitingUserInput?.dispose();
-    awaitingUserInput = null;
   };
 
   // ── Capture ───────────────────────────────────────────────────────────────
@@ -1371,7 +1361,8 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       markupView.close();
       blurBoxes();
       phase = 'closed';
-      stopAwaitingUserInput();
+      rendering.dispose();
+      writingPlace.dispose();
       autosave.dispose();
     },
   };

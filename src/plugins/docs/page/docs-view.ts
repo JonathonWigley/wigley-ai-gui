@@ -189,7 +189,9 @@ export interface DocsView {
   // its editor once it opens. Until that open settles no place is written, so
   // a place not restored yet stays in the slot, and its edits count as unsaved
   // (`unsavedPath`); a doc the index no longer lists toasts as `openDoc` does,
-  // and an open that fails toasts that its edits were not restored.
+  // and an open that fails toasts that its edits were not restored. The open
+  // goes to `trackRestore` once the view has shown: an open waits on the
+  // view's first index read, which its first show starts.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
@@ -279,6 +281,8 @@ export interface DocsViewDeps {
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
+  // Hands the page load a restore that settles later (`PageRestores.track`).
+  trackRestore(restore: Promise<unknown>): void;
   // This view made `change`: every other view hears it.
   changed(change: DocChangeRecord): void;
   // Every docs view's `unsavedPath`, this one's included.
@@ -423,8 +427,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let isCreatingMain = false;
   // Whether the doc pane's last emptying was `Main.md` trashed from under it.
   let wasMainTrashedFromPane = false;
-  // A reloaded page's place, while its open has not settled.
+  // A reloaded page's place, and its open, while that open has not settled.
   let restoring: DocsPlace | null = null;
+  let restoringOpen: Promise<void> | null = null;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -1550,6 +1555,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       hasRun = true;
+      if (restoringOpen !== null) {
+        deps.trackRestore(restoringOpen);
+      }
       void wikiMain?.start();
       const runs = runIndex('loadIndex').then((result) => {
         readStatuses(true);
@@ -1598,7 +1606,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           toast(`Unsaved edits not restored: ${edits.path}`, 'error');
         }
       };
-      openOnceRead(openPath, null, number)
+      restoringOpen = openOnceRead(openPath, null, number)
         .then((opened) => {
           if (!opened) {
             toastEditsDropped();
@@ -1612,7 +1620,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         })
         .finally(() => {
           restoring = null;
+          restoringOpen = null;
         });
+      if (hasRun) {
+        deps.trackRestore(restoringOpen);
+      }
     },
     editSectionAt: (anchor) => doc.editSectionAt(anchor),
     openNode: (nodeId) => tree.openNode(nodeId),

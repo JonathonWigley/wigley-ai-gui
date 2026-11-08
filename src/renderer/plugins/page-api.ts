@@ -21,6 +21,7 @@ import type {
   Modes,
   PageApi,
   PageCommandContext,
+  PageRestores,
   PageServices,
   PluginAreas,
   PageTransparency,
@@ -83,7 +84,7 @@ export type PageApiServices = Omit<
 // gives each plugin its own scope of the ui state. `layouts` shows each owner's
 // layouts. `paneTargets` takes the resize and focus targets and the outer panes
 // a plugin hands the pane commands, and releases them. `drops` is the page's one
-// drop registry. `registrations` is the part's own store, which the host
+// drop registry, and `restores` the page load's restores. `registrations` is the part's own store, which the host
 // disposes when the part stops. `state` is the page load's slot store, and
 // `commands` the page's commands, which each plugin reaches under its id.
 // `anchors` holds every key hint of the page load, and `boxFocus` tells whether
@@ -110,6 +111,7 @@ export interface PageApiDeps {
     'setResizeTarget' | 'setFocusTarget' | 'setOuterPanes' | 'release'
   >;
   drops: PageDrops;
+  restores: PageRestores;
   state: SlotStore;
   anchors: Anchors;
   boxFocus: BoxFocus;
@@ -212,6 +214,10 @@ export function createPageApi(
     drops: {
       addTarget: (target) => registrations.track(deps.drops.addTarget(target)),
       savePasted: (file) => deps.drops.savePasted(file),
+    },
+    restores: {
+      track: (restore) => deps.restores.track(restore),
+      onSettled: (listener) => track(deps.restores.onSettled(listener)),
     },
     settings: () => settingsOf(config.current()),
     onSettingsChanged: (listener) =>

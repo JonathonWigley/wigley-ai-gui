@@ -60,6 +60,7 @@ import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
+import { createPageRestores } from './page-restores';
 import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
 import { registerPickerCommands } from './picker-commands';
@@ -337,6 +338,8 @@ async function start() {
     scope: () => scopeStack.current(),
   });
   const bus = createEventBus();
+  const restores = createPageRestores();
+  restores.onSettled(() => log('page', 'restores settled'));
   const layouts = createPageLayouts({
     bridge,
     importModule: (url) => import(/* @vite-ignore */ url),
@@ -380,6 +383,7 @@ async function start() {
           layouts,
           paneTargets,
           drops,
+          restores,
           state,
           anchors,
           boxFocus,
@@ -445,6 +449,7 @@ async function start() {
     heldPush = null;
   }
   bus.emit(qualify('core', 'pageReady'), null);
+  restores.pageReady();
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
   document.body.dataset.ready = 'true';

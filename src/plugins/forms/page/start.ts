@@ -91,7 +91,8 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
 // both, and showing an open round again changes nothing. The active round
 // follows the session the sessions plugin focuses, and a round leaves only when
 // main closes it. Main's forms map to the page's rounds here, and the read's
-// rounds go back to the places the last page saved. The `Disposable` stops an
+// rounds go back to the places the last page saved, the read tracked as a page
+// restore (`api.restores`). The `Disposable` stops an
 // `openForms` read still in flight from showing its rounds.
 function listenForRounds(
   api: FormsApi,
@@ -119,7 +120,8 @@ function listenForRounds(
     }),
   );
   let isStopped = false;
-  void api.channel
+  // A restored form's tab and take over can move the key base.
+  const openFormsRead = api.channel
     .invoke('openForms')
     .then((forms) => {
       if (isStopped) {
@@ -131,6 +133,7 @@ function listenForRounds(
       places.formsRead(forms.map((form) => form.formId));
     })
     .catch((error) => log(`open rounds not read: ${errorText(error)}`));
+  api.restores.track(openFormsRead);
   return {
     dispose() {
       isStopped = true;

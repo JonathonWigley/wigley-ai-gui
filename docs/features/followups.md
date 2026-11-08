@@ -65,9 +65,9 @@ Core seams that most items below assume.
 - **Preview sessions lose their title-bar detail**: the Layout and Primer previews carry `projectDir: null`, so
   `publishFocused` in `sessions/page/start.ts` sets the title bar's detail line to null. The line repeated the name
   when the previews had a path, and no replacement detail was chosen.
-- **A session row's mark text is frozen at the first mark**: a row not yet selected keeps the first mark's `options` as
-  its `markToast` until an activate (`markToast` in `sessions/main/session-list.ts`), so a later mark on the same row,
-  or later state, does not change the toast text.
+- **A marked row's toast text is frozen at its first mark**: while a row stays marked, `mark` in
+  `sessions/main/session-list.ts` keeps the first mark's `options` as its `markToast`, so a second mark before the row
+  is selected or unmarked does not change the toast text; a mark on an unmarked row replaces it.
 - **`workflow.stageAction`'s `onDidRun` listeners hear a rejected action too**: `runFor` in
   `workflow/page/workflow-view.ts` catches a failed `runAction`, logs and toasts it, and resolves, so the command ends
   with no failure and `onDidRun` fires for it, as for "nothing to run" and a preview's skipped run. A listener cannot

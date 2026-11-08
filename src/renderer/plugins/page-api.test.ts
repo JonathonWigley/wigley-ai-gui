@@ -60,6 +60,7 @@ import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import { createAnchors } from '../key-anchors';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
+import { createPageRestores } from '../page-restores';
 import { registerPickerCommands } from '../picker-commands';
 import { createPageUiState } from '../ui-state';
 import {
@@ -198,6 +199,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       addTarget: () => ({ dispose: () => {} }),
       savePasted: async () => '',
     },
+    restores: createPageRestores(),
     state: createSlotStore(() => {}),
     anchors: createAnchors({
       keysFor: () => null,

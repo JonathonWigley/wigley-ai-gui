@@ -8,7 +8,6 @@ import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { onPageHide } from '../../../shared/page/page-hide';
 import { placeWrites } from '../../../shared/page/place-slot';
 import type { CoreEvents } from '../../../contracts/core-state';
-import type { Disposable } from '../../../contracts/disposable';
 import type { KeyedSlotReader, SlotReader } from '../../../contracts/state';
 import {
   followRows,
@@ -63,24 +62,12 @@ export function noteSessions(
   };
 }
 
-// Hears `window`'s key presses and pointer presses in the capture phase, before
-// any handler on the page acts on them.
-function onUserInput(listener: () => void): Disposable {
-  window.addEventListener('keydown', listener, true);
-  window.addEventListener('pointerdown', listener, true);
-  return {
-    dispose() {
-      window.removeEventListener('keydown', listener, true);
-      window.removeEventListener('pointerdown', listener, true);
-    },
-  };
-}
-
 // The note popup over any mode, on `Space n n`, drawn with the layout the
 // `layout` setting names. It offers the popup the open session rows that carry
 // a host session id, so the popup can attach one. The popup's open state and
 // cursors go to `notes.place` on each change, and a page load opens the popup
-// again where the last page left it, open through other views' restores.
+// again where the last page left it, open through the base changes made
+// before the page load's restores settle.
 export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
@@ -89,6 +76,10 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
     const active = api.state.read(sessionsActiveSlot);
     const placeWriter = api.state.publish(notesPlaceSlot);
     const place = placeWrites<NotesPlace>((value) => placeWriter.set(value));
+    let restoresSettled = false;
+    api.restores.onSettled(() => {
+      restoresSettled = true;
+    });
 
     api.events.on('core.pageReady', () => {
       followRows(rows, {
@@ -113,7 +104,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       drops: api.drops,
       encoder: canvasEncoder,
       onPageHide,
-      onUserInput,
+      restoresSettled: () => restoresSettled,
       placeChanged: (value) => place.write(value),
     });
     const savedPlace = placeWriter.get();

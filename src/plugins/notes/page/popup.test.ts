@@ -140,8 +140,8 @@ interface Harness {
   // Moves the key base under every pushed scope, as a view setting its scope
   // does.
   changeBase(): void;
-  // A key or pointer press on the page.
-  userInput(): void;
+  // Settles the page load's restores.
+  settleRestores(): void;
 }
 
 interface Fakes {
@@ -334,7 +334,7 @@ async function openPopup(
   let pushes = 0;
   let pops = 0;
   const baseListeners: (() => void)[] = [];
-  const userInputListeners = new Set<() => void>();
+  let restoresSettled = false;
   const pushed = (): PushedScope => {
     pushes += 1;
     return {
@@ -412,10 +412,7 @@ async function openPopup(
     },
     encoder: { encode: (...args) => fakes.encode(...args) },
     onPageHide: () => ({ dispose: () => undefined }),
-    onUserInput(listener) {
-      userInputListeners.add(listener);
-      return { dispose: () => userInputListeners.delete(listener) };
-    },
+    restoresSettled: () => restoresSettled,
     placeChanged: (place) => places.push(place),
   });
   if (restored === undefined) {
@@ -460,10 +457,8 @@ async function openPopup(
         listener();
       }
     },
-    userInput() {
-      for (const listener of userInputListeners) {
-        listener();
-      }
+    settleRestores() {
+      restoresSettled = true;
     },
   };
 }
@@ -864,7 +859,7 @@ describe('note popup', () => {
     expect(harness.saved).toHaveLength(savedBefore);
   });
 
-  it('dispose_SendInFlight_LateSentPopsNoScope', async () => {
+  it('dispose_SendInFlight_LateSentPopsNoScopeAndWritesNoPlace', async () => {
     const harness = await openPopup({
       ...DRAFT,
       target: '/home/me/a',
@@ -880,10 +875,12 @@ describe('note popup', () => {
 
     harness.popup.dispose();
     const popsAtDispose = harness.pops();
+    const placesAtDispose = harness.places.length;
     answerSend({ type: 'sent', draft: DRAFT, toast: 'Follow-up added' });
     await settle();
 
     expect(harness.pops()).toBe(popsAtDispose);
+    expect(harness.places).toHaveLength(placesAtDispose);
     expect(harness.toasts).toEqual([['Follow-up added', 'success']]);
   });
 
@@ -1039,32 +1036,45 @@ describe('note popup', () => {
 
   it.each([
     {
-      name: 'opened by its command',
+      name: 'opened by its command, before restores settle',
       restored: false,
-      input: false,
+      key: false,
+      settled: false,
       closes: true,
     },
     {
-      name: 'restored, before any input',
+      name: 'restored, before restores settle',
       restored: true,
-      input: false,
+      key: false,
+      settled: false,
       closes: false,
     },
     {
-      name: 'restored, after an input',
+      name: 'restored, a key pressed before restores settle',
       restored: true,
-      input: true,
+      key: true,
+      settled: false,
+      closes: false,
+    },
+    {
+      name: 'restored, after restores settle with no key pressed',
+      restored: true,
+      key: false,
+      settled: true,
       closes: true,
     },
   ] as const)(
-    'baseChanged_ClosesThePopupUnlessARestoreMadeIt: $name',
-    async ({ restored, input, closes }) => {
+    'baseChanged_ClosesThePopupUnlessBeforeRestoresSettleOnARestoredOne: $name',
+    async ({ restored, key, settled, closes }) => {
       const harness = await openPopup(
         DRAFT,
         restored ? { isOpen: true, field: 'title', imageIndex: 0 } : undefined,
       );
-      if (input) {
-        harness.userInput();
+      if (key) {
+        harness.popup.commands.nextField(NO_ARG);
+      }
+      if (settled) {
+        harness.settleRestores();
       }
 
       harness.changeBase();

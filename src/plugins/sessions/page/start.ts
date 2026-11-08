@@ -637,6 +637,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const apply = (next: SessionsState) => {
       const before = state;
+      const isRestore = !hasRestored;
       state = next;
       isApplying = true;
       const changes = rowChanges(before.rows, next.rows);
@@ -677,10 +678,20 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       midOperation = NO_MID_OPERATION;
+      // The restored panes' visible tab shows in the microtask, setting the
+      // key base, so the restore is tracked until it has run.
+      const followed = isRestore ? Promise.withResolvers<void>() : null;
       queueMicrotask(() => {
-        publishFocused();
-        checkVisible(seen.hasClosedPane);
+        try {
+          publishFocused();
+          checkVisible(seen.hasClosedPane);
+        } finally {
+          followed?.resolve();
+        }
       });
+      if (followed !== null) {
+        api.restores.track(followed.promise);
+      }
     };
 
     // Main sends `activated` before the writes it causes, so the mode shows

@@ -616,6 +616,21 @@ export interface KeyHints {
   onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
 }
 
+// A page load's restores: what the parts put back from their place slots. A
+// part hands `track` each restore that settles after its `start` returns (a doc
+// reopened through main), and a restore started inside a tracked one is tracked
+// before that one settles. The restores have settled once `core.pageReady` has
+// been emitted and no tracked restore is pending: a restore nobody tracked is
+// not waited on, nor one tracked after they settled. A tracked restore can wait
+// on main: docs' restored open waits on its view's index read, and on a rebuild
+// when that index does not list the doc, so the restores can settle seconds
+// after `core.pageReady`. `onSettled` calls its listener then, or at once when
+// they already have, until its `dispose`.
+export interface PageRestores {
+  track(restore: Promise<unknown>): void;
+  onSettled(listener: () => void): Disposable;
+}
+
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
 // `keys.scope` is the qualified scope keys fire in now, and a part hears each
@@ -671,6 +686,8 @@ export interface KeyHints {
 // `drops.addTarget` registers an element and what takes the files dropped or
 // pasted on it, returning the `Disposable` that removes it; `drops.savePasted`
 // saves a file with no path and returns its path.
+// `restores` is the page load's restores, as `PageRestores` says; its
+// `onSettled` handles are filed in the part's registrations.
 // `dependency` takes the page key from a provider's contract, for a plugin the
 // manifest lists in `dependsOn.page`, and returns this part's view of that
 // plugin's exports. `Ev` is the
@@ -718,6 +735,7 @@ export interface PageApi<
     setOuterPanes(panes: OuterPanes | null): void;
   };
   drops: PageDrops;
+  restores: PageRestores;
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;

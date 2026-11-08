@@ -661,6 +661,49 @@ describe('docs page part lifecycle', () => {
     await harness.stop();
   });
 
+  it.each([
+    { case: 'tab shown', isShown: true, tracked: 1 },
+    { case: 'tab never shown', isShown: false, tracked: 0 },
+  ])(
+    'restoredOpen_TrackedUntilItsDocReadSettles ($case)',
+    async ({ isShown, tracked }) => {
+      const serve = servingIndexOf(['/p/kept.md'], []);
+      const read = Promise.withResolvers<string>();
+      const page = startDocsPage((method, ...args) =>
+        method === 'readDoc' ? read.promise : serve(method, ...args),
+      );
+      const { harness, liveTabs } = page;
+      const trackedBefore = harness.restores.length;
+
+      await reloadWith(
+        page,
+        { [sessionSourceId('s1')]: placeAt('/p/kept.md') },
+        ['s1'],
+      );
+      if (isShown) {
+        liveTabs.get('s1')?.shown?.();
+      }
+      const restores = harness.restores.slice(trackedBefore);
+      let settled = 0;
+      for (const restore of restores) {
+        void restore.then(() => {
+          settled += 1;
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const settledBeforeRead = settled;
+      read.resolve('# Doc');
+      await Promise.all(restores);
+
+      expect([restores.length, settledBeforeRead, settled]).toEqual([
+        tracked,
+        0,
+        tracked,
+      ]);
+      await harness.stop();
+    },
+  );
+
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startDocsPage();
 

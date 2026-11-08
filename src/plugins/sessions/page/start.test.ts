@@ -341,6 +341,25 @@ describe('sessions page part', () => {
     await harness.stop();
   });
 
+  it('pageReady_TracksOnlyTheRestoreUntilItsFocusFollows', async () => {
+    const harness = startPagePart(sessionsPagePart, {
+      services: { picker: fakeListPickerService(), uiState: fakeUiState() },
+    });
+    const rows = harness.state.publish(sessionsRowsSlot);
+    rows.set('s1', hostRow('s1'));
+    harness.state.publish(sessionsSelectionSlot).set('s1');
+
+    harness.emit('core.pageReady', null);
+    const [restore] = harness.restores;
+    await restore;
+    const activeAtSettle = harness.state.read(sessionsActiveSlot, 'test').get();
+    rows.set('s2', hostRow('s2'));
+    await settle();
+
+    expect([harness.restores.length, activeAtSettle]).toEqual([1, 's1']);
+    await harness.stop();
+  });
+
   it('pageReady_SessionsAppliesBeforeAReaderAdded', async () => {
     // A row part's builds, then what they held as each `added` arrived.
     const drawn: string[] = [];

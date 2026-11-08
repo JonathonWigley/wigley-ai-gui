@@ -183,7 +183,8 @@ export interface HarnessAnchor {
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
-// order.
+// order. `restores` holds each restore handed to `restores.track`; the harness
+// runs no page load, so `restores.onSettled` calls its listener at once.
 // `pushSettings` replaces what `settings()` reads for the part under test and tells
 // its `onSettingsChanged` listeners. The fake `modes` writes `coreModeSlot` on each
 // change of the shown mode, unless a test holds that slot's claim.
@@ -198,6 +199,7 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   readonly fences: readonly FenceContribution[];
   readonly anchors: readonly HarnessAnchor[];
   readonly picked: readonly string[];
+  readonly restores: readonly Promise<unknown>[];
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
 }
@@ -1027,6 +1029,7 @@ interface PageWorld extends HarnessWorld {
   liveModes: FakeLiveMode[];
   shownMode: FakeLiveMode | null;
   picked: string[];
+  restores: Promise<unknown>[];
   fences: FenceContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
@@ -1065,6 +1068,7 @@ function createPageWorld(
     liveModes: firstMode === null ? [] : [firstMode],
     shownMode: firstMode,
     picked: [],
+    restores: [],
     fences: [],
     anchors: [],
     where: 'page',
@@ -1342,6 +1346,15 @@ function fakePageApi(
       setOuterPanes() {},
     },
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
+    restores: {
+      track(restore) {
+        world.restores.push(restore);
+      },
+      onSettled(listener) {
+        listener();
+        return liveHandle();
+      },
+    },
     settings: () => record.settings,
     onSettingsChanged: (listener) =>
       register(record.settingsListeners.add(listener)),
@@ -1588,6 +1601,7 @@ export function startPagePart<M extends PluginManifest>(
     fences: world.fences,
     anchors: world.anchors,
     picked: world.picked,
+    restores: world.restores,
     setWhere(where) {
       world.where = where;
       world.whereListeners.tell(where);

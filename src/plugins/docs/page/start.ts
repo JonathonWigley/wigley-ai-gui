@@ -245,6 +245,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         },
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
+        trackRestore: (restore) => api.restores.track(restore),
         openChanged,
         docOpened: (path) => api.events.emit('docOpened', { path }),
         revealTree,
