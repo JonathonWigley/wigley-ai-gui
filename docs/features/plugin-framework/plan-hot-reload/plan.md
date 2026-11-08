@@ -275,7 +275,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [`ready()` replaces `core.pageReady`](05-ready-hook.md) — after 01, 02, 04 (both edit `plugin-part-harness.test-support.ts` and `slot-store.test-d.ts`)
 
 ### Wave 4
-- [ ] [The served config follows the applied list](06-applied-list.md) — after 05
+- [x] [The served config follows the applied list](06-applied-list.md) — after 05
 - [ ] [Open work answers `mayStop`](07-may-stop.md) — after 02, 05
 
 ### Wave 5
@@ -304,7 +304,9 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 02 · 4e2cfd84 · diff read; typecheck 0, lint 0 on the wave 1 tree; plugin-host + page tests and the wave 1 files 663 pass · concerns: stale prose outside scope: PagePart/MainPart comments in contracts/plugin.ts say start once / every page load; AGENTS.md disabled-plugin and stop(id) bullets (task 11); design.md says a restart starts in start order, code follows plan.md parts order (task 12)
 - 04 · 8df51989 · diff read (only label/description lines in 25 manifests); typecheck 0, lint 0; 04-1's 12 test files 425 pass · concerns: apostrophe descriptions double-quoted per oxfmt
 - 05 · 3a42a35f · diff read; typecheck 0, lint 0; pageReady|CoreEvents grep empty in src; worker ran the task's 30 test files 486 pass plus slot-store, harness, plugin-host · concerns: a throwing ready now logs under plugin-host, not the plugin's id; the part harness host has no log so a throwing ready is silent in tests; workflow-heavy-page test's variable is heavy, not engine
+- 06 · a2c4b96b · diff read; worker typecheck 0, layer and style checks clean, 4 test files 89 pass; full compile at the wave end · concerns: until task 08 the page follows main's start-time list, no longer the user's list at each page load (the plan's intent); the Settings page reads the applied list as plugins.disabled
 ### Contract changes
+- check-layers src/main/config layers: as planned unchanged → gains src/main/plugins · why: user-config.ts imports appliedCommands and AppliedPlugins · consumers: 08 (plugin-switch.ts in src/main/plugins must not import src/main/config, or the layers cycle) · group 06
 ### Rulings
 - Branch hot-reload is cut from command-consumers e784f07e (Wave 3, in final review), with the plan commits cherry-picked from main — the user's word to start before Wave 3 lands — once Wave 3 lands, rebase onto main and re-check any review fix that touched a Consumes · lead
 - bridgeClaim's test is named in the repo's sentence style (describe bridgeClaim / it returns the bridge to the first claim and throws on the second) rather than bridgeClaim_SecondClaim_Throws — the repo's Vitest files read that way — a rename only · group 01 · group 01
@@ -316,5 +318,6 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - hand-built test manifests take label = id and description 'A test plugin.' · group 04 · group 04
 - Task 05 runs as one opus-medium worker though typed Parallel — removing CoreEvents compiles only once every part moves — one longer dispatch · lead
 - chat-view's test helper calls view.ready() only on the first open, as the old helper's one-shot listener did · group 05 · group 05
+- AGENTS.md disabled-plugin bullet and chat-bar § Optional plugins reworded to the start-time list; task 08 rewrites both for the live switch · group 06 · group 06
 ### Review rounds
 ### Test gate

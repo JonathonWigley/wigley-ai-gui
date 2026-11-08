@@ -27,7 +27,8 @@ const TITLE = 'Backlog';
 // home's follow-ups, plans and features beside a detail pane in the sheet,
 // drawn with the layout the `layout` setting names. `showMode` shows the mode,
 // or toggles its side bar while it shows. Each `changed` message reads the
-// homes again, keeping the selection and any open editor's draft. The place
+// homes again, keeping the selection and any open editor's draft, and a
+// changed draft refuses a switch-off. The place
 // (focus, cursors, open home, selection, expansion, filter) goes to
 // `backlog.place` on each change, and a page load puts the last page's back.
 export const backlogPagePart: PagePart<typeof backlogManifest> = {
@@ -131,6 +132,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
         openHomeRow: ({ arg }) => view.openHomeRow(arg),
         selectRow: ({ arg }) => view.selectRow(arg),
       },
+      mayStop: () => view.mayStop(),
       dispose: () => view.dispose(),
     };
   },

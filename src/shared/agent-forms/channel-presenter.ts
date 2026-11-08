@@ -23,6 +23,9 @@ export interface AgentFormChannelPresenter<
   Body,
 > extends AgentFormPresenter<Form, Body> {
   quiet: AgentFormPresenter<Form, Body>;
+  // The refusal for the first open form that is not quiet, in the order the
+  // forms were shown, or null. It only reads.
+  mayStop(): string | null;
 }
 
 // Shows forms on the page over the type's channel, each marked on its
@@ -31,7 +34,8 @@ export interface AgentFormChannelPresenter<
 // closes the session at once, and releases the row when the form closes.
 // Registers its channel handlers and close guard once, which the plugin's stop
 // removes. `source` names only the alert open count; `announceTitle` titles
-// each form's notification; `noun` names one form in the refusal.
+// each form's notification; `noun` names one form in the refusal, which a
+// close and a switch-off read alike.
 export function createAgentFormChannelPresenter<Form, Body>(deps: {
   channel: Pick<MainChannel<AgentFormChannel<Form, Body>>, 'handle' | 'send'>;
   alerts: Alerts;
@@ -66,12 +70,11 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
   // The form whose `finish` the page invoked, while that handler runs.
   let finishingFormId: string | null = null;
 
-  const refusal = (sessionId: string) => {
-    const [held] = openFormsOf(sessionId);
-    return held === undefined
+  const refusalFor = (held: OpenForm<Form, Body> | undefined) =>
+    held === undefined
       ? null
       : `Finish or cancel ${held.form.label}'s ${noun} first`;
-  };
+  const refusal = (sessionId: string) => refusalFor(openFormsOf(sessionId)[0]);
   // Not a finish, so the page drops each form quietly.
   const cancelHold = (sessionId: string) => {
     for (const entry of openFormsOf(sessionId)) {
@@ -157,5 +160,6 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
       show: (form, listener) => show(form, listener, true),
       close,
     },
+    mayStop: () => refusalFor([...open.values()].find((entry) => !entry.quiet)),
   };
 }

@@ -714,6 +714,46 @@ describe('mountChatView active time', () => {
   });
 });
 
+describe('mountChatView mayStop', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const REASON = "Send or clear the draft in gamma 2's chat first";
+
+  it.each([
+    { case: 'nothing typed', text: '', hasImage: false, expected: null },
+    { case: 'whitespace only', text: ' \n\t', hasImage: false, expected: null },
+    {
+      case: 'typed and not sent',
+      text: 'hi',
+      hasImage: false,
+      expected: REASON,
+    },
+    {
+      case: 'an image with no text',
+      text: '',
+      hasImage: true,
+      expected: REASON,
+    },
+  ])('mayStop_$case', ({ text, hasImage, expected }) => {
+    const view = mounted();
+    view.pageLoad([stateOf([], { sessionId: 's1' })]);
+
+    view.box.text = text;
+    if (hasImage) {
+      view.view
+        .session('s1')
+        ?.attachments.add({ mediaType: 'image/png', data: 'AAAA' });
+    }
+
+    expect(view.view.mayStop([{ sessionId: 's1', label: 'gamma 2' }])).toBe(
+      expected,
+    );
+  });
+});
+
 describe('mountChatView compaction', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {

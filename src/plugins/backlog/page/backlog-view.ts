@@ -211,6 +211,9 @@ export interface BacklogView {
   // again with `shown`, keeping an open editor's draft and focused box, an
   // open filter, the scroll, the selection and the focus.
   setLayouts(shown: ShownLayouts<BacklogLayout>): void;
+  // A refusal while an open editor's draft differs from what it opened with,
+  // else null.
+  mayStop(): string | null;
   // Ends the list split's observer and `window` listeners.
   dispose(): void;
   commands: Record<BacklogCommand, () => void>;
@@ -1343,6 +1346,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   return {
     sideBar: homesPane,
     sheet: contentSheet,
+    mayStop() {
+      const { editor } = store.get();
+      return editor !== null && isDraftChanged(editor)
+        ? 'Save or close the follow-up you are editing first'
+        : null;
+    },
     load: () => readQuietly('load'),
     reload: () => readQuietly('load'),
     shown() {

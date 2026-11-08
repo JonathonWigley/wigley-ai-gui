@@ -129,6 +129,9 @@ export interface NotePopup {
   // focused. It stays open through the key base changes made before the page
   // load's restores settle.
   restorePlace(place: NotesPlace): void;
+  // A refusal while the draft is not saved: unsaved, saving, held back while
+  // the popup is locked, or after a failed save; null once it is saved.
+  mayStop(): string | null;
   // Closes an open markup session, starting its save, and ends autosave: an
   // edit it has not saved yet is dropped. A send still in flight then closes
   // nothing, since its scopes end with the plugin, and no later change redraws
@@ -1357,6 +1360,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         void open(place);
       }
     },
+    mayStop: () =>
+      saveState(store.get()) === 'saved'
+        ? null
+        : 'Wait for the note to finish saving',
     dispose() {
       markupView.close();
       blurBoxes();

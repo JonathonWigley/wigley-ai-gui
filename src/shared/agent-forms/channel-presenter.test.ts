@@ -240,6 +240,73 @@ describe('createAgentFormChannelPresenter', () => {
     expect(refusal('app-2')).toBeNull();
   });
 
+  const formLabelled = (label: string, sessionId: string) => ({
+    ...FORM,
+    formId: `form-${sessionId}`,
+    sessionId,
+    label,
+  });
+  type Presenter = ReturnType<typeof setUp>['presenter'];
+
+  it.each([
+    { case: 'nothing open', act: () => undefined, expected: null },
+    {
+      case: 'only a quiet form',
+      act: (presenter: Presenter) =>
+        presenter.quiet.show(
+          formLabelled('proj · Q', 'app-q'),
+          fakeListener().listener,
+        ),
+      expected: null,
+    },
+    {
+      case: 'two forms',
+      act: (presenter: Presenter) => {
+        presenter.show(
+          formLabelled('proj · A', 'app-a'),
+          fakeListener().listener,
+        );
+        presenter.show(
+          formLabelled('proj · B', 'app-b'),
+          fakeListener().listener,
+        );
+      },
+      expected: "Finish or cancel proj · A's round first",
+    },
+    {
+      case: 'the first one closed',
+      act: (presenter: Presenter) => {
+        presenter.show(
+          formLabelled('proj · A', 'app-a'),
+          fakeListener().listener,
+        );
+        presenter.show(
+          formLabelled('proj · B', 'app-b'),
+          fakeListener().listener,
+        );
+        presenter.close('form-app-a');
+      },
+      expected: "Finish or cancel proj · B's round first",
+    },
+  ])(
+    'mayStop names the first open form that is not quiet: $case',
+    ({ act, expected }) => {
+      const { presenter } = setUp();
+
+      act(presenter);
+
+      expect(presenter.mayStop()).toBe(expected);
+    },
+  );
+
+  it('mayStop and the close guard give one wording', () => {
+    const { refusal, presenter } = setUp();
+    presenter.show(formLabelled('proj · A', 'app-a'), fakeListener().listener);
+
+    expect(presenter.mayStop()).not.toBeNull();
+    expect(refusal('app-a')).toBe(presenter.mayStop());
+  });
+
   it('cancel hold cancels the sessions form and says not by finish', () => {
     const { page, logged, refusal, cancelHolds, presenter } = setUp();
     const held = fakeListener();

@@ -99,7 +99,8 @@ type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 // slot offer its clock to other plugins. Each tab's draft, cursor, open runs and
 // expanders go to `chat.place`, and its attached images to `chat.draftImages`,
 // on each change; a page load puts the last page's back as the tab is made, and
-// a session's keys leave with its row.
+// a session's keys leave with its row. A draft or an attached image not yet
+// sent refuses a switch-off.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -401,6 +402,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         pruneEndedPlaces();
         view.ready();
       },
+      mayStop: () => view.mayStop(rows.all().values()),
       dispose: () => view.dispose(),
     };
   },

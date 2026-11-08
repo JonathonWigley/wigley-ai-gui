@@ -29,6 +29,7 @@ import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type {
   RowActivity,
+  SessionRow,
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
@@ -175,6 +176,11 @@ export interface ChatTabs extends ChatView {
   dispose(): void;
   composerOf(sessionId: string): ComposerSurface | null;
   sessionFactsSource(sessionId: string): SessionFactsSource | null;
+  // A refusal naming the first of `rows` whose live box holds more than
+  // whitespace or whose tab holds an attached image; null when none does.
+  mayStop(
+    rows: Iterable<Pick<SessionRow, 'sessionId' | 'label'>>,
+  ): string | null;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -616,8 +622,25 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       const tab = tabs.get(sessionId);
       return tab === undefined ? null : sessionFactsSourceOf(tab, deps);
     },
+    mayStop(rows) {
+      for (const { sessionId, label } of rows) {
+        const tab = tabs.get(sessionId);
+        if (tab !== undefined && holdsDraft(tab)) {
+          return `Send or clear the draft in ${label}'s chat first`;
+        }
+      }
+      return null;
+    },
   };
   return view;
+}
+
+// Whether the tab's live box holds text beyond whitespace or the tab holds an
+// attached image.
+function holdsDraft(tab: HeldTab): boolean {
+  const hasText = (tab.box?.text().trim() ?? '') !== '';
+  const hasImage = tab.attachments.images().length > 0;
+  return hasText || hasImage;
 }
 
 // Ends what the tab holds that outlives its element.

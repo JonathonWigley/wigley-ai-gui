@@ -173,12 +173,13 @@ function startDocsPage(
 type DocsPage = ReturnType<typeof startDocsPage>;
 
 // Stops the page, leaves `places` in the docs place slot as the last page's,
-// and holds the rows of `sessionIds` before the page starts again; resolves to
-// the rows' writer.
+// and holds the rows of `sessionIds`, each `rowOf` its id, before the page
+// starts again; resolves to the rows' writer.
 async function reloadWith(
   { harness }: DocsPage,
   places: Record<string, DocsPlace>,
   sessionIds: readonly string[],
+  rowOf = projectRow,
 ) {
   await harness.stop();
   const seed = harness.state.publish(docsPlaceSlot);
@@ -188,7 +189,7 @@ async function reloadWith(
   seed.dispose();
   const rows = harness.state.publish(sessionsRowsSlot);
   for (const sessionId of sessionIds) {
-    rows.set(sessionId, projectRow(sessionId));
+    rows.set(sessionId, rowOf(sessionId));
   }
   await harness.restart();
   harness.ready();
@@ -505,6 +506,48 @@ describe('docs page part lifecycle', () => {
     }
 
     expect(view.hasUnsavedEdits()).toBe(true);
+    await harness.stop();
+  });
+
+  const planEdits = { path: '/w/plan.md', text: 'new', baseText: 'old' };
+
+  it.each([
+    { case: 'NoEdits_Null', sourceId: null, expected: null },
+    {
+      case: 'DocsModeEdits_NamesDocsMode',
+      sourceId: MACHINE_SOURCE_ID,
+      expected: 'Save or discard the edits to plan.md in Docs mode first',
+    },
+    {
+      case: 'SessionTabEdits_NamesTheSession',
+      sourceId: sessionSourceId('s1'),
+      expected:
+        "Save or discard the edits to plan.md in gamma 2's Docs tab first",
+    },
+  ])('mayStop_$case', async ({ sourceId, expected }) => {
+    const page = startDocsPage(servingIndexOf(['/w/plan.md'], []));
+    const { harness } = page;
+
+    await reloadWith(
+      page,
+      sourceId === null ? {} : { [sourceId]: placeAt('/w/plan.md', planEdits) },
+      ['s1'],
+      (sessionId) =>
+        sessionRow(sessionId, { label: 'gamma 2', projectDir: '/p' }),
+    );
+    harness.started().commands.showMode({ arg: undefined });
+    sessionView(page, 's1').shown();
+    if (sourceId !== null) {
+      await vi.waitFor(() =>
+        expect(
+          harness.logs.some(({ message }) =>
+            message.startsWith('restored edits on'),
+          ),
+        ).toBe(true),
+      );
+    }
+
+    expect(harness.started().mayStop?.()).toBe(expected);
     await harness.stop();
   });
 

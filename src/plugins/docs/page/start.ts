@@ -59,6 +59,8 @@ type DocsApi = PageApi<typeof docsManifest, DocsChannel, DocsPageEvents>;
 // A view `addView` handed out.
 interface AddedView {
   view: DocsView;
+  // The source the view shows, as `addView` was handed it.
+  sourceId: string;
   split: Split;
   // Per view and never stored: each view starts with the tree shown.
   isTreeHidden: boolean;
@@ -114,6 +116,7 @@ const machineViewId = 'machine';
 // Each view's place goes to `docs.place` under its source id on each change,
 // and a page load puts the last page's back as the view is made; a session
 // source's place leaves with its session's row.
+// A view's unsaved edits refuse a switch-off, naming the file and the view.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -406,6 +409,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           () => undefined,
           split,
         ),
+        sourceId,
         split,
         isTreeHidden: false,
         isVisible: () => options.isVisible(),
@@ -438,6 +442,32 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
 
     const addedViewOf = (view: DocsView): AddedView | undefined =>
       [...addedViews.values()].find((added) => added.view === view);
+
+    // Where the user finds `view`, as a refusal names it: Docs mode, a
+    // session's Docs tab by the row's label, or any other added view.
+    const placeNameOf = (view: DocsView): string => {
+      if (view === machineView) {
+        return 'Docs mode';
+      }
+      const sourceId = addedViewOf(view)?.sourceId;
+      const sessionId =
+        sourceId === undefined ? null : sessionIdOfSource(sourceId);
+      return sessionId === null
+        ? 'a Docs view'
+        : `${rows.get(sessionId)?.label ?? sessionId}'s Docs tab`;
+    };
+
+    // The refusal for the first view, in `allViews` order, holding unsaved
+    // edits, or null when none does.
+    const mayStop = (): string | null => {
+      for (const view of allViews()) {
+        const path = view.unsavedPath();
+        if (path !== null) {
+          return `Save or discard the edits to ${services.paths.base(path)} in ${placeNameOf(view)} first`;
+        }
+      }
+      return null;
+    };
 
     const isTreeHiddenIn = (view: DocsView): boolean =>
       view === machineView
@@ -630,6 +660,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           consumer.track(addView(sourceId, options)),
         openDoc: (path, line) => openDoc(path, line ?? null),
       }),
+      mayStop,
       ready() {
         // A session source's place leaves with its row, and one whose row ended
         // while no page ran is pruned; the prune waits for the page mirror to

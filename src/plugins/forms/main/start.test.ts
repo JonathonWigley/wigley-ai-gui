@@ -212,6 +212,33 @@ describe('forms main part', () => {
     rmSync(homeDir, { recursive: true, force: true });
   });
 
+  it('mayStop names the open round until it resolves', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-may-stop-'));
+    const harness = startMainPart(formsMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { announce() {}, setOpenCount() {} },
+        git: { originRepoName: () => Promise.resolve(null) } as never,
+      },
+    });
+    await harness.drive?.run('openRound', { sessionId: 'a' });
+    const [shown] = harness.sent
+      .filter((sent) => sent.message === 'formShown')
+      .map((sent) => sent.data as { formId: string; label: string });
+
+    expect(harness.started().mayStop?.()).toBe(
+      `Finish or cancel ${shown.label}'s round first`,
+    );
+    harness.invoke('finish', shown.formId, { kind: 'cancelled', body: {} });
+    expect(harness.started().mayStop?.()).toBeNull();
+
+    await harness.stop();
+    rmSync(homeDir, { recursive: true, force: true });
+  });
+
   it('stop before the fixture write lands registers no layout', async () => {
     let land: () => void = () => undefined;
     const written = new Promise<void>((resolve) => {

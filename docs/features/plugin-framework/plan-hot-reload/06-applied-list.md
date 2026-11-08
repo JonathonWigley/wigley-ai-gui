@@ -1,6 +1,6 @@
 # 06 — The served config follows the applied list
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -101,3 +101,5 @@ Done when: `grep -rn 'withMainStartList\|pageLoadList\|startList' src` prints no
 Commit: one commit for the group.
 
 ## Proof
+
+Commit a2c4b96b · proof: diff read; worker typecheck 0, layer and style checks clean, 4 test files 89 pass; full compile at the wave end · concerns: until task 08 the page follows main's start-time list, no longer the user's list at each page load (the plan's intent); the Settings page reads the applied list as plugins.disabled

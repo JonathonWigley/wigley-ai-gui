@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
+  countingEditors,
   fakeDependency,
   noCounts,
   startPagePart,
@@ -49,16 +50,18 @@ const READ: BacklogRead = {
 };
 
 // A Backlog page over main's side `invoke`, by default one whose `load` reads
-// `READ` at once.
+// `READ` at once, its editor boxes made by `editor` when given.
 function startBacklogPage(
   invoke = async (method: string): Promise<unknown> =>
     method === 'load' ? READ : undefined,
+  editor?: ReturnType<typeof countingEditors>['host'],
 ) {
   installFakeDom(vi.stubGlobal);
   return startPagePart(backlogPagePart, {
     dependencies: [fakeDocs],
     firstModeTaken: true,
     services: {
+      ...(editor === undefined ? {} : { editor }),
       picker: fakeListPickerService(),
       markdown: {
         block: (text) => text,
@@ -137,5 +140,37 @@ describe('backlog page part lifecycle', () => {
     await settle();
 
     expect(placeSlot.get()).toEqual(saved);
+  });
+  it.each([
+    { case: 'nothing typed', opensEditor: false, text: null, expected: null },
+    {
+      case: 'editor open, unchanged',
+      opensEditor: true,
+      text: null,
+      expected: null,
+    },
+    {
+      case: 'typed and not kept',
+      opensEditor: true,
+      text: 'typed',
+      expected: 'Save or close the follow-up you are editing first',
+    },
+  ])('mayStop_$case', async ({ opensEditor, text, expected }) => {
+    const editors = countingEditors();
+    const harness = startBacklogPage(undefined, editors.host);
+    await settle();
+    const commands = harness.started().commands;
+    commands.openHomeRow({ arg: ROOT });
+
+    if (opensEditor) {
+      commands.edit({ arg: undefined });
+      expect(editors.live()).toBeGreaterThan(0);
+    }
+    if (text !== null) {
+      editors.type(text);
+    }
+
+    expect(harness.started().mayStop?.()).toBe(expected);
+    await harness.stop();
   });
 });

@@ -23,8 +23,8 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 // Notes' page part over a keys fake that files each anchor under the part, with
 // a main that answers the popup's first reads. `changeBody` types in the body
 // box. `holdsRestores` holds each page load's restores until the harness's
-// `settleRestores`.
-function startNotes({ holdsRestores = false } = {}) {
+// `settleRestores`; `saveFails` rejects each `saveDraft`.
+function startNotes({ holdsRestores = false, saveFails = false } = {}) {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
   let bodyEvents: EditorEvents | null = null;
   const editor = {
@@ -43,6 +43,9 @@ function startNotes({ holdsRestores = false } = {}) {
     services: { editor, picker: fakeListPickerService({ editor }) },
     holdsRestores,
     invoke(method) {
+      if (method === 'saveDraft' && saveFails) {
+        return Promise.reject(new Error('disk full'));
+      }
       return Promise.resolve(
         method === 'loadDraft'
           ? { ...emptyDraft(1), fresh: false }
@@ -106,6 +109,52 @@ describe('notes page part', () => {
       await harness.stop();
     },
   );
+
+  it.each([
+    {
+      case: 'nothing typed',
+      text: null,
+      saveFails: false,
+      waitsForSave: false,
+      expected: null,
+    },
+    {
+      case: 'typed and not kept',
+      text: 'an edit',
+      saveFails: false,
+      waitsForSave: false,
+      expected: 'Wait for the note to finish saving',
+    },
+    {
+      case: 'saved',
+      text: 'an edit',
+      saveFails: false,
+      waitsForSave: true,
+      expected: null,
+    },
+    {
+      case: 'failed save',
+      text: 'an edit',
+      saveFails: true,
+      waitsForSave: true,
+      expected: 'Wait for the note to finish saving',
+    },
+  ])('mayStop_$case', async ({ text, saveFails, waitsForSave, expected }) => {
+    const { harness, changeBody } = startNotes({ saveFails });
+    harness.started().commands.open({} as PageCommandContext);
+    await settle();
+
+    if (text !== null) {
+      changeBody(text);
+    }
+    if (waitsForSave) {
+      harness.advance(60_000);
+      await settle();
+    }
+
+    expect(harness.started().mayStop?.()).toBe(expected);
+    await harness.stop();
+  });
 
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startNotes();
