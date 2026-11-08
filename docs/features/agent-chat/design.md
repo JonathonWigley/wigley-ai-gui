@@ -364,7 +364,7 @@ interview on 2026-10-23; this file is the record of both.
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
-  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>:`) ends the process of every owned session chat holds
+  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>bX`) ends the process of every owned session chat holds
   and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on

@@ -29,8 +29,8 @@ Files:     create `src/plugins/settings/page/leader-tree.ts` · create `src/plug
            test `src/main/config/user-config.test.ts` · test `src/plugins/settings/page/layout/read-layout.test.ts` ·
            test every fixture that builds a `UserConfigSchema` (`defaultLeader:` in `keymap-edits.test.ts`,
            `keymap-rows.test.ts`, `keymap-view.test.ts`, `settings-view.test.ts`, `start.test.ts` under
-           `src/plugins/settings/page/`, and `src/main/config/user-keymap.test.ts`; measured at plan time, re-verify
-           with `grep -rln "defaultLeader:" src`)
+           `src/plugins/settings/page/`; measured at plan time, re-verify with `grep -rln "defaultLeader:" src`.
+           `src/main/config/user-keymap.test.ts` is not one: its `defaultLeader` is `user-keymap.ts`'s own names type)
 
 Consumes:
 - `captureKey` on the page plugin API's `keys` ← 01, reached only through Task 04's recorder.
@@ -43,8 +43,8 @@ Consumes:
   (`src/shared/plugin-manifests.ts`).
 
 Produces:
-- `withGroupName(layer: UserKeymap | null, prefix: string, name: string | null): UserKeymap` in `keymap-edits.ts`
-  (plan.md's `KeymapLayer` is the tree's `UserKeymap`): sets `groups[prefix] = name`, or deletes the entry for null;
+- `withGroupName(layer: UserKeymap | null, prefix: string, name: string | null): UserKeymap` in `keymap-edits.ts`:
+  sets `groups[prefix] = name`, or deletes the entry for null;
   `tidied`, so an emptied `groups` drops.
 - `LEADER_SECTION = { id: 'leader', title: 'Leader menu' }` in `settings-view.ts`; `sectionList()` ends
   `KEYS_SECTION, LEADER_SECTION`; `sectionFile()` returns `'keymap'` for both.
@@ -52,8 +52,8 @@ Produces:
   `src/main/config/user-config.ts` from the `defaultKeyLayers` it already builds: each layer's `groups` in layer
   order, a later layer's name replacing an earlier one's on the same prefix.
 - `unnamedGroupName(commandGroups: Iterable<string | undefined>): string` in `src/shared/key-hints.ts`: the distinct
-  defined groups in first-seen order joined by `, `. `which-key.ts`'s `entry` calls it for an unnamed prefix and keeps
-  its `+` (`+${unnamedGroupName(…)}`), so which-key and the Leader menu share one fallback.
+  defined groups in first-seen order joined by `, `. `which-key.ts`'s `entry` returns the bare `unnamedGroupName(…)` for an unnamed prefix (03 dropped the `+`; the layout
+  draws the `›`), so which-key and the Leader menu share one fallback.
 - `src/plugins/settings/page/leader-tree.ts`:
   - `LeaderItem { key: string; keys: string; line: BindLine; command: CommandInfo; arg?: CommandArg }` — `key` the
     one token after the group's prefix as the bind writes it (`d`, `<Leader>`, `;`), `keys` the bind's whole keys.
@@ -117,13 +117,17 @@ Produces:
   `rowList` to `leaderMenu.draw` in place of the entry loop (settings-view's own `rows` list is empty); its rows-focus
   path (`focusRows`, which `SettingsView.focusMain` runs) still sets `focus = 'rows'` and logs `rows focused`, but
   calls `leaderMenu.focus()` in place of `setScope('rows')` and its own focus target; `focusSections` calls
-  `leaderMenu.blur()`; `openSection` of the Leader menu calls `leaderMenu.reset()`. `showBox`, the box move in `draw`
-  and its row-gone check find the row's drawn box slot through `leaderMenu.drawnRow(key)` there, `drawnRows` elsewhere.
+  `leaderMenu.blur()`; `openSection` of the Leader menu calls `leaderMenu.reset()`. `showBox`, the box move in `draw`,
+  its row-gone check and the recording's leaves-the-rows cancel find the row through `leaderMenu.drawnRow(key)` there,
+  `drawnRows` elsewhere: the Leader menu's row keys (`group top`, `item …`, `add …`) live only in the view, so a literal
+  `rows.some(key)` check would cancel every recording on its first redraw.
   `markCursor` leaves the leader panes to the view.
 - **Routing**: with the Leader menu open and `focus === 'rows'`, `settings-view`'s `down`, `up`, `top`, `bottom`,
   `open`, `addBind`, `removeBind` and `reset` commands run `leaderMenu.commands` of the same name (behind the same
   open-box / picker / recording guard); `renameGroup`, `changeKey` and `moveToGroup` run only there. `edit`, `filter`
-  and `clearFilter` do nothing in the Leader menu, and the rows pane's filter hint is hidden while it is open
+  and `clearFilter` do nothing in the Leader menu, and `/` does nothing while it is open, whichever pane holds the keys
+  (`settings.filter` from the side bar opens no box: `openFilter` is a no-op whenever `openSectionId` is `leader`, since a
+  filter box that filters nothing is a dead state). The rows pane's filter hint is hidden while it is open
   (`buildRowsPane` sets `hidden` on the hint when `input.sectionId === 'leader'`).
 - **Focus**: the view holds `pane: 'groups' | 'items'` (`groups` after `reset`). `focus()` sets the scope of `pane`,
   hands its target, focuses the pane's list element, logs `leader groups focused` / `leader items focused` when the
@@ -133,7 +137,8 @@ Produces:
 - **Cursors**: one per pane, by row key, kept across redraws; a row that leaves the list hands its cursor to the row
   now in its place, as `drawRows` does. The items pane always shows the groups cursor's group. Each move logs
   `cursor <row key>`. After an edit that moves or adds a bind, the cursor follows it: the groups cursor to its group,
-  the items cursor to its new row key.
+  the items cursor to its new row key. The follow target is set only on the `written` result of `commitKeymap`; a
+  `refused` or `changedOnDisk` result or a failed write sets none, so no unrelated redraw applies a stale one.
 - **Row keys** (cursor and log lines, box keys, recording keys): Top level `group top`; any other group
   `group <prefix>`; an item `item <scope> <keys>`, with ` set` appended for a user bind (a default's surviving half and
   a user bind can share keys and scope); a nested group row `opens <prefix>`; the add row `add <prefix>`.
@@ -169,16 +174,21 @@ Produces:
   group's prefix plus the recorded key.
 - **Change action** (Enter on an item): the `Action` picker, preselecting the item's row; the pick commits
   `withMovedBind(layer, line, { ...line.bind, command: row.command.id, arg: row.arg })` (no `arg` member when the row
-  has none), keeping the key and scope; the item's own row picked writes nothing.
+  has none), keeping the key and scope; the item's own row picked writes nothing. A picked row with another line in
+  force under the leader (`moving` in Add's terms, not this item's line) rebinds this item to the picked command and
+  removes that command's other leader bind, as Add does: one leader path per command. The `status-warning` key in the
+  picker names the bind that will go. The edit is the item's `withMovedBind`, then `withRemovedBind` of the other line
+  on the result.
 - **Change key** (`c`): records a key in the item's group with `scope` the item's scope and `moving` its line; commits
-  `withMovedBind(layer, line, { ...line.bind, keys: prefix + key })`.
+  `withMovedBind(layer, line, { ...line.bind, keys: prefix + key })`. A key equal to the line's own keys writes nothing
+  and closes the recording, as Keybindings' reassign does.
 - **Move to group** (`m`): the `Group` picker, then records the key in the chosen group with the item's scope and
   line; commits `withMovedBind` to the chosen prefix plus the key.
 - **Recording an item or group key**: a `RecordRequest` with `confirm: 'press'`, no `type`, `replacing: null`, `key`
   the row it draws on (the add row for add, the item row for change key and move, the cursor group row for add
   group). Prompts: add `Press the new item's key — Esc cancels`; change key `Press its new key — Esc cancels`; move
-  `Press its key in <groupTitle> — Esc cancels`; add group `Press the new group's key — Esc cancels`. A press equal to
-  the leader in force (`normalVimKeys`) is the key `<Leader>`. `judge`, in order:
+  `Press its key in <groupTitle> — Esc cancels`; add group `Press the new group's key — Esc cancels`. A press with `normalVimKeys(keys) === normalVimKeys(leader)` (`leader` the leader in force, raw) is the key
+  `<Leader>`. `judge`, in order:
   - a chord (`parseChord` of the token not null) → refused, reason `chord`, note `A leader item is one key with no
     Ctrl, Alt or Cmd`
   - `keyTaken(…)` a group → refused, reason `group`, note `<full keys printed> opens the <name> group`
@@ -254,6 +264,9 @@ the empty group is listed under Top level.
 GIVEN an item WHEN `m`, a group, then a key THEN the bind moves there and the cursor follows it.
 GIVEN the add row WHEN a key, then a command already bound under the leader THEN that bind moves instead of a second
 being added.
+GIVEN an item `<Leader>bd` WHEN Enter, then a command whose bind is `<Leader>bn` THEN `<Leader>bd` runs the picked
+command, `<Leader>bn` is gone, and the picker showed `Space b n` in `status-warning` beside that command.
+GIVEN the Leader menu open WHEN `/` is pressed, from either pane or the side bar, THEN no filter box opens.
 GIVEN the groups pane WHEN `Alt+l` THEN the items pane holds the keys; WHEN `Alt+h` twice THEN the groups, then the side
 bar.
 
@@ -276,9 +289,19 @@ bar.
   context:
   - `leaderMenu_FocusTarget_MovesBetweenPanes: $pane $direction` — groups right → items, true; items left → groups,
     true; groups left, items right, up, down → false; scopes set `leaderItems` / `leaderGroups`.
-  - `leaderMenu_ItemEdit_Commits: $case` — change action, change key, move to group, clear, reset, each the layer
-    handed to `commitKeymap` (the `withMovedBind` / `withRemovedBind` / `withCommandReset` result).
+  - `leaderMenu_ItemEdit_Commits: $case` — change action, change key, move to group, clear, reset, each asserting the
+    literal layer handed to `commitKeymap`, not the pure functions' result, since the view's job is choosing their
+    arguments. Literal rows: `c` on default `<Leader>bd` (`sessions.closeSession`, scope `any`) then `q` →
+    `{ unbind: [{ keys: '<Leader>bd', scope: 'any' }], binds: [{ keys: '<Leader>bq', scope: 'any', command:
+    'sessions.closeSession' }] }`; move `<Leader>bd` to Top level with `q` → the same with keys `<Leader>q`; change
+    action on a user bind carrying `arg` to a row with no `arg` → the entry without an `arg` member; change key onto the
+    line's own keys → no `commitKeymap` call.
+  - `leaderMenu_ChangeAction_MovesAnAlreadyBoundCommand` — item `<Leader>bd`, picked command bound at `<Leader>bn` →
+    the literal layer holds the unbind of `<Leader>bn`, the unbind of `<Leader>bd` and a bind of `<Leader>bd` to the
+    picked command; the picker's `keysOf` printed `Space b n`.
   - `leaderMenu_Add_MovesAnAlreadyBoundCommand` and `leaderMenu_Add_AddsAnUnboundCommand`.
+  - `leaderMenu_Commit_FollowsTheCursorOnlyWhenWritten: $result` — `written` sets the follow target; `refused`,
+    `changedOnDisk` and a rejected write leave the cursor where it was after the next redraw.
   - `leaderMenu_RecordJudgement: $case` — chord, group, taken in `any`, taken in a scope with the scope's title, free;
     each note text pinned above.
   - `leaderMenu_GroupEdit: $case` — rename to a name; rename to empty and to the default name (entry removed); add
@@ -287,9 +310,12 @@ bar.
 - `keymap-edits.test.ts` new `withGroupName_$case` table: set on no layer, replace, remove one of two, remove the last
   (no `groups` member left).
 - `settings-view.test.ts`: new `sectionList_EndsKeysThenLeaderMenu`; new `leaderMenu_Routing_CommandsReachTheView`
-  (with the Leader menu open, `down` and `renameGroup` reach the leader view's commands; `filter` opens nothing).
+  (with the Leader menu open, `down` and `renameGroup` reach the leader view's commands; `filter` opens nothing, also
+  from the side bar). A second test, `leaderMenu_Recording_SurvivesRedraw`, starts a recording on an item row and redraws:
+  the recording is still running (the leaves-the-rows cancel asks `drawnRow`).
 - `user-config.test.ts` new `schema_DefaultGroups_LaterLayerNameWins`.
-- `which-key.test.ts` (keys plugin) runs unchanged over the extracted `unnamedGroupName`.
+- `which-key.test.ts` (keys plugin) runs unchanged over the extracted `unnamedGroupName`; its five bare-label rows are
+  03's.
 - `layout/read-layout.test.ts`: its table gains the four parts if it lists them.
 
 Self-test, `src/plugins/settings/main/selftest-script.ts`. With the Leader menu last in the side bar, every step that

@@ -42,8 +42,8 @@ Three pieces, each its own surface:
   key engine has no step back.
 - **Search:** `Space /` (`keys.searchLeader`, scope `any`, page and box) opens the shared list picker over every leader
   action firing in the scope in force, each row its label with its keys as the trailing detail; picking one runs its
-  command with its bind's `arg`. It opens with its filter focused, since a search is typed; Esc returns to the list,
-  and a second Esc closes it. A box-only bind is left out, since the picker takes focus from the box. In the popup it shows as the `/` entry like any other bind, so it needs no hint of its
+  command with its bind's `arg`. It opens with its filter focused, since a search is typed; Esc leaves the filter's INSERT
+  mode, a second Esc returns to the list, and a third closes it. A box-only bind is left out, since the picker takes focus from the box. In the popup it shows as the `/` entry like any other bind, so it needs no hint of its
   own.
 
 ## The editors

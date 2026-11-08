@@ -31,21 +31,21 @@ Re-run each before the first dispatch; a failing one stops the run for the lead.
 
 - `main` matches `origin/main`: `git -C /Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui fetch origin && git -C
   /Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui status -sb` → `## main...origin/main`. At plan time `main` was
-  `1a938e2f` plus this plan's doc commit.
+  `e9570be7` plus this plan's doc commit.
 - **The keyboard-reach plan has landed and closed**: `ls docs/features/keyboard-reach/plan-every-pane` → no such
   folder. At plan time it held 10 unticked tasks, a worktree `wigley-ai-gui-keyboard-reach`, and it edits
   `src/plugins/keymap.ts`, `src/plugins/settings/page/settings-view.ts` and the keys help. This plan runs after it, on
   the code it leaves; every path and line here was read before it landed, so each task re-reads its files first.
 - **The form-popup plan has landed**: `grep -n "togglePopup" src/plugins/keymap.ts` → one bind on `<Leader>vf`, and
-  `ls docs/features/session-popups/plan-form-popup` → no such folder. Task 02 moves that bind to `<Leader>bp`. At plan
-  time `sessions.togglePopup` did not exist and the form-popup worktree was open.
+  `ls docs/features/session-popups/plan-form-popup` → no such folder. Task 02 moves that bind to `<Leader>bp`. It had
+  landed by the plan's commit (`e9570be7`).
 - No user keymap needs moving keys: `ls ~/.config/wigley-ai-gui/keymap.json` → no such file (checked at plan time). A
   file found here is read for binds on the moved keys, and each is named to the user in the wrap-up, never edited.
 - `<Leader>b` and `<Leader>/` bind nothing: `grep -nE "<Leader>(b|/)" src/plugins/keymap.ts` → no hit before Task 02.
 
 ## Docs written ahead
 
-Commit `9016b55e` on `leader-keys` (merged to `main` with this plan):
+Commit `28751244` on `leader-keys` (merged to `main` with this plan):
 
 - `docs/keymap.md` § Leader groups (the new table) and § Adding a bind step 5
 - `docs/features/settings/design.md` § Scope (recording) and § Keybindings and Leader menu sections (replacing § Keymap
@@ -107,11 +107,12 @@ Decided by the agent (each reported in the hand-off reply):
 - This plan runs after keyboard-reach and form-popup land (Preconditions).
 - The new section is titled "Keybindings", since the keys plugin's own settings section is already "Keys".
 - The Leader menu lists only binds that fire, as which-key does; a removed default is restored from Keybindings. Reset
-  on an item resets its command's binds. Adding a command that already has a leader bind moves that bind. Default-named
+  on an item resets its command's binds. Adding a command that already has a leader bind, or changing an item's action onto one, moves that bind: one leader path per command. Default-named
   groups with no binds are hidden; groups the user added show empty. Uppercase keys are left off the free-key list.
 - A group's label and its `›` draw in `accent` on the shelf; an action's in `fg-secondary` (design.md's "no accent
   until a row is a group").
-- `Space /` opens with its filter focused, since a search is typed; Esc returns to the list and a second Esc closes.
+- `Space /` opens with its filter focused, since a search is typed; Esc leaves INSERT, a second Esc returns to the
+  list and a third closes.
   The other list pickers keep opening on the list.
 - The search lists page leader binds only: a box-only bind is left out, since the picker takes focus from the box.
 
@@ -139,7 +140,7 @@ Existing files modified (measured at plan time, before keyboard-reach landed; re
   (a `leader search` group), `docs/features/layouts/design.md` (the `keys` row of § Adopters) — the shelf and search (03)
 - `src/plugins/settings/manifest.ts`, `src/plugins/settings/page/{settings-view.ts,keymap-view.ts,keymap-rows.ts,
   keymap-edits.ts,row-filter.ts}`, `src/plugins/settings/layouts/{layout.d.ts,default/layout.js,default/layout.css}`,
-  `src/plugins/settings/main/selftest-script.ts`, `src/plugins/settings/page/settings-kit.ts` (`buildLeaderPanes`) —
+  `src/plugins/settings/main/selftest-script.ts`, `src/plugins/settings/page/layout/settings-kit.ts` (`buildLeaderPanes`) —
   Keybindings (04) and Leader menu (05)
 - `src/contracts/user-config.ts`, `src/main/config/user-config.ts`, `src/shared/key-hints.ts`, and
   `src/plugins/keys/page/which-key.ts` again — `defaultGroups` and `unnamedGroupName` (05)

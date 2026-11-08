@@ -30,7 +30,8 @@ Files:     modify `src/plugins/settings/page/settings-view.ts` · modify `src/pl
            test `src/plugins/settings/page/key-recorder.test.ts` · test `src/plugins/settings/page/keymap-rows.test.ts` ·
            test `src/plugins/settings/page/keymap-edits.test.ts` · test `src/plugins/settings/page/keymap-view.test.ts` ·
            test `src/plugins/settings/page/row-filter.test.ts` · test `src/plugins/settings/page/row-prompt.test.ts` ·
-           test `src/plugins/settings/page/settings-view.test.ts` · test `src/plugins/settings/page/layout/read-layout.test.ts`
+           test `src/plugins/settings/page/settings-view.test.ts` · test `src/plugins/settings/page/start.test.ts` ·
+           test `src/plugins/settings/page/layout/read-layout.test.ts`
 
 Consumes:
 - `captureKey(onKey: (keys: string) => void, onCancel: () => void): Disposable` on the page plugin API's `keys` ← 01
@@ -43,9 +44,8 @@ Consumes:
 
 Produces:
 - `withMovedBind(layer: UserKeymap | null, line: BindLine, to: KeyBind, schema: UserConfigSchema): UserKeymap` in
-  `src/plugins/settings/page/keymap-edits.ts`. Plan.md writes the types as `KeymapLayer` and `KeymapSchema`; the tree
-  names them `UserKeymap` (`src/contracts/keymap.ts`) and `UserConfigSchema` (`src/contracts/user-config.ts`), and
-  `BindLine` is in `keymap-rows.ts` — use those.
+  `src/plugins/settings/page/keymap-edits.ts`. The types are `UserKeymap` (`src/contracts/keymap.ts`) and
+  `UserConfigSchema` (`src/contracts/user-config.ts`); `BindLine` is in `keymap-rows.ts`.
 - `KEYS_SECTION = { id: 'keymap', title: 'Keybindings' }` in `settings-view.ts`, replacing `KEYMAP_SECTION`. The id is
   `keymap`, not plan.md's `keys`: the `keys` plugin declares settings, so the schema already holds a section with id
   `keys` (title `Keys`), and `drawRows` finds a schema section by id first. Task 05 adds `LEADER_SECTION`.
@@ -137,14 +137,17 @@ Produces:
   (labels as `Key to remove`'s: `<keys> — <scope title>`), then records the chosen one. The request: key = the row's
   key, `replacing` = the line's index among the row's drawn `lines`, prompt `Press a key or chord — Tab types it, Esc
   cancels`, `confirm: 'enter'`.
-  - `judge(keys)`: `normalVimKeys(keys)` equal to the leader in force (`keymapLeader`) → refused, reason `leader`,
+  - `judge(keys)`: `normalVimKeys(keys) === normalVimKeys(leader)`, `leader` being the leader in force (`keymapLeader`, raw, so
+    `<Space>` by default; `normalVimKeys('<Space>')` is `' '`, so both sides are normalised) → refused, reason `leader`,
     note `<leader printed> is the leader — Tab types a leader sequence` (printed with `formatVimKeys(leader, leader,
     platform)`). Else `replacedBy(schema, layer, keys, line.bind.scope, command, arg)` non-empty → `moves`, `from` the
     commands' `commandTarget`s, note `<keys printed> runs "<label>" in <scope title>: it moves here`, where `<scope
     title>` is `scopeTitle`; for scope `any` it reads `<keys printed> runs "<label>" everywhere: it moves here`;
     several commands join as `"A" and "B"` (`andList` of the quoted labels; labels via `commandLabel`). Else `free`.
-  - `keep(keys)` → `ctx.commitKeymap(withMovedBind(layer, line, { ...line.bind, keys }, schema), null)`; the bind
-    keeps its scope, `where`, `mode` and `arg`.
+  - `keep(keys)` → when `normalVimKeys(keys)` equals `normalVimKeys(line.bind.keys)` it writes nothing and closes the
+    recording (the recorder has already ended it); else `ctx.commitKeymap(withMovedBind(layer, line, { ...line.bind,
+    keys }, schema), null)`; the bind keeps its scope, `where`, `mode` and `arg`. Without the guard a default line
+    would gain an `unbind` entry and a user bind on identical keys, a no-op pair `r` must undo.
   - `type(typed)` → the line box of today's `addBind`, with text `typed`, preview `keysPreview` in the bind's scope;
     accept: empty closes the box, else commits `withMovedBind` as `keep` does, via `{ box }`.
 - **Add key** (`a`, and Enter / `i` on a row with no lines in force): records with key = the row's key, `replacing:
@@ -155,7 +158,8 @@ Produces:
   today's add box with text `typed`, its accept unchanged (it opens the same scope picker).
 - **Clear** (`d`) and **reset** (`r`): today's `removeBind` and `withCommandReset`, unchanged.
 - **What ends a recording**: Esc; `openSection`; `setLayouts` keeps it (the row redraws with its state); the recording
-  row leaving the drawn rows on a redraw (the recorder's `cancel`); `SettingsView.hidden()`, which `start.ts` calls
+  row leaving the drawn rows on a redraw (the recorder's `cancel`), except the `?` find recording, whose key `find`
+  is never a row and so is exempt from that check; `SettingsView.hidden()`, which `start.ts` calls
   from the mode's `hidden` (today `() => undefined`), so a capture never outlives the mode on screen. While a
   recording runs, `runQuietly`'s guard runs no row action, and the row keeps `is-cursor`.
 - **Self-test keys reach the capture**: the driver presses through `sendInputEvent` keyDown events
@@ -271,7 +275,8 @@ Named per `wigley:writing-tests`: one test per behaviour, cases as table rows.
   text naming only `remaps`; new `advancedText_LeavesOutGroups`.
 - `keymap-view.test.ts`: the `keyRowInput` table's `a default bind in scope any` row expects `tags: []`, and a new
   column checks `group`; new `keymapSection_KeyFilter_RowsShown: $filter` table (which row keys show, and the
-  leader and advanced rows only under `all`); new `keymapSection_FindByKey_HeadersAndRows` (headers `j runs` and
+  leader and advanced rows only under `all`) with a `chips` column of the four literal counts per chip under no query,
+  under a `/` query and under a find query (the Leader and Advanced rows never count); new `keymapSection_FindByKey_HeadersAndRows` (headers `j runs` and
   `Starts with j`, no plugin headers); new `reassign_RecordRequest: $case` table driving the request handed to
   `recordKey` through `judge` / `keep` / `type` with a fake `RowContext` — one bind → `withMovedBind` committed;
   taken keys → `moves` note `⌥O runs "p.b label" everywhere: it moves here` (platform `macos`); the leader → refused note; `type` →
@@ -283,8 +288,11 @@ Named per `wigley:writing-tests`: one test per behaviour, cases as table rows.
 - `settings-view.test.ts`: new `keysSection_FilterKey_CyclesChipsAndLogs` (`f` ×4 logs `key filter bound`,
   `unbound`, `changed`, `all`; `f` in a schema section logs nothing); new `keysSection_FindByKey_EscClearsFirst`
   (`?` then a captured `j` logs `find by key j`; `clearFilter` logs `find by key cleared` and keeps a typed text
-  filter); new `recording_EndsOnSectionOpenAndHide: $case` (`openSection` and `hidden()` each dispose the capture).
-  The fake deps gain `captureKey`.
+  filter); new `recording_EndsOnSectionOpenAndHide: $case` (`openSection` and `hidden()` each dispose the capture). New `recording_Find_SurvivesRedraw` (a `?` recording stays armed across a redraw, though key `find` is no row).
+  The fake deps gain `captureKey`. `start.test.ts` gains `recording_ModeHidden_DisposesTheCapture`: over the part harness it
+  arms a recording, calls the mode's `hidden`, and expects `isCapturing()` false. It uses 01's harness hooks
+  (`pressCapture`, `cancelCapture`, `isCapturing`), so they have a consumer; every other test keeps the fake
+  `captureKey`.
 - `layout/read-layout.test.ts`: its table gains `keyFilters` if it lists the parts.
 
 Self-test, `src/plugins/settings/main/selftest-script.ts`, group `keymap` (`KEYMAP_STEPS`), as keyboard-reach leaves

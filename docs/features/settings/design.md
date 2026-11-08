@@ -122,10 +122,12 @@ The leader tree as which-key shows it, edited in place, in two panes moved betwe
     group already holds in an overlapping scope, then opens the list picker over every page command by label. A
     command already bound under the leader shows that key in `status-warning`; picking it moves that bind instead of
     adding a second. The scope picker then opens as Add key's does.
-  - **Change action** opens the same command picker and keeps the key and scope; **change key** records a new key in
+  - **Change action** opens the same command picker and keeps the key and scope. A picked command that already has a
+    leader bind elsewhere moves that bind here and the item's old bind goes, as Add does: one leader path per command; **change key** records a new key in
     the same group; **move to group** picks a group, then records the key there. Each is one user-layer edit: a user
     bind's entry is rewritten, a default's becomes an `unbind` entry beside the new `binds` entry.
-  - **Clear** and **reset** work as on the Keybindings section, for the one bind.
+  - **Clear** works as on the Keybindings section, on the one bind; **reset** works on the item's command, as on the
+    Keybindings section.
 
 ## The userConfig service
 

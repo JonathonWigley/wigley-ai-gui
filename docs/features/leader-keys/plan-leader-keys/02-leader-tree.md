@@ -13,6 +13,7 @@ Files:     modify `src/plugins/keymap.ts` (`defaultKeymap.groups`; the `// ─�
            `// ── Tabs and sessions ──` banner sections of `defaultKeymap.binds`; `formsBoxBinds`) · modify
            `src/plugins/chat/main/selftest-script.ts` · modify `src/plugins/sessions/main/selftest-script.ts` ·
            modify `src/plugins/session-log/main/selftest-script.ts` · modify
+           `src/plugins/session-stash/main/selftest-script.ts` · modify
            `src/plugins/forms/main/selftest-script.ts` · modify `src/plugins/gallery/page/gallery-view.ts`
 Consumes:  nothing from this plan. `sessions.togglePopup` and its `<Leader>vf` bind from the form-popup plan (a
            precondition in plan.md).
@@ -65,6 +66,8 @@ Produces:  the tree `docs/keymap.md` § Leader groups states, in `defaultKeymap`
   - `sessions/main/selftest-script.ts`: both `RENAME_STEPS` steps' `' ', 'r', 'r'` → `' ', 'b', 'r'`; the comment
     above it "`Space r r` renames panes-a, …, and a second `Space r r` …" → `Space b r` both times.
   - `session-log/main/selftest-script.ts`: the `recently closed` group's `[' ', 'k', 'n']` → `[' ', 'b', 'n']`.
+  - `session-stash/main/selftest-script.ts`: the `[' ', 'k', 'n']` step (the stashed-section screenshot step) →
+    `[' ', 'b', 'n']`; its expected lines stay.
   - `forms/main/selftest-script.ts` (the `user keymap` group, `USER_KEYMAP_STEPS`, and its fixture
     `MOVED_NOT_APPLICABLE_KEYMAP`): the fixture's `unbind` becomes `[{ keys: '<Leader>ax', scope: 'forms.forms',
     where: 'box' }]`; its comment "moving the text box's not-applicable toggle in the form from <Leader>x to
@@ -74,7 +77,9 @@ Produces:  the tree `docs/keymap.md` § Leader groups states, in `defaultKeymap`
     `[',', 'x']` → `[',', 'a', 'x']`; both `[' ', 'x']` → `[' ', 'a', 'x']`; the why "{} restores the Space leader
     and <Leader>x, …" → "…and <Leader>ax, …". Expected `[forms] …` lines stay.
   - `gallery/page/gallery-view.ts`, `emptyStateCells`: `kbd('Space k n', platform)` → `kbd('Space b n', platform)`.
-  - After keyboard-reach and form-popup land, re-run the sweep and treat each new hit the same way:
+  - After keyboard-reach and form-popup land, re-run the sweep and treat each new hit the same way. Run each of the
+    three patterns as its own `grep -rnE` call: the embedded ugrep in the Bash tool misses a hit when `-e` patterns are
+    combined (each alone finds them). The combined form, for reference:
     `grep -rnE -e '<Leader>(kn|rr|vs|vf|x|:)[^a-zA-Z0-9]' -e 'Space (k n|r r|v s|v f|x|:)([^a-z]|$)' -e "' ', '(k',
     'n|r', 'r|v', 's|v', 'f|x|:)'" <repo>/src` with `<repo>` the run's absolute repo path (one line; the quoting
     is zsh-safe as written). After this task it returns only the samples below.
@@ -97,7 +102,7 @@ No unit test is added or changed (see Decisions). `defaultKeymap_MergedWithBuilt
 `src/plugins/keymap.test.ts` runs as it is. The self-test steps above are the proof.
 
 Done when: `npm run typecheck`, `npm run lint` and `npm test -- src/plugins/keymap.test.ts` pass, and `npm run
-selftest -- --plugin chat --plugin sessions --plugin session-log --plugin forms` passes. The keys-plugin popup
+selftest -- --plugin chat --plugin sessions --plugin session-log --plugin session-stash --plugin forms` passes. The keys-plugin popup
 over `Space b` is drawn in 03 and checked in `07-final-verification.md`.
 Commit:    one commit for the group
 

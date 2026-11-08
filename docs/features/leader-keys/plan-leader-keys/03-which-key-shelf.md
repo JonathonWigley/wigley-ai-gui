@@ -106,15 +106,19 @@ Produces:  `keys.searchLeader` — page command in the keys manifest, no argumen
   anchored to `keys.pickerFilter` in scope `keys.picker` with the label `filter` (the notes popup's
   `pickerFilterHint` pattern; it places the `/` bind for the placement check), and `drawRow: (list, action) =>
   parts.leaderSearchRow(list, { label: action.label, keys: action.keys })`. Then it calls `focusFilter()`: a search
-  is typed, so the filter has the keys on open; Esc in the filter returns to the list, where the list keys work,
-  and Esc there closes.
+  is typed, so the filter has the keys on open. The filter is a vim editor box that opens in insert mode, and the
+  keymap binds only `<CR>` in insert mode, so there are three Escapes: the first leaves INSERT, the second (from the
+  filter's normal mode) returns to the list, where the list keys work, and the third closes the picker.
 - **Picker commands** (keys manifest, all `group: 'picker'`, `runsIn: 'page'`, the notes plugin's labels):
   `pickerDown` "next line", `pickerUp` "previous line", `pickerChoose` "pick", `pickerCancel` "close",
   `pickerFilter` "filter", `pickerList` "back to the list". Binds in `// ── Help ──`, scope `keys.picker`: `j` →
   `pickerDown`, `k` → `pickerUp`, `<CR>` → `pickerChoose`, `l` → `pickerChoose`, `<Esc>` → `pickerCancel`, `/` →
   `pickerFilter`; `<CR>` → `pickerChoose` with `where: 'box'`; `<CR>` → `pickerChoose` with `mode: 'insert'`;
-  `<Esc>` → `pickerList` with `where: 'box'` (the notes picker's set plus `l`, as `docs/keymap.md` § Layers'
-  "Every list picker" line asks). Each handler calls the picker's `down`, `up`, `choose`, `cancel`, `focusFilter`,
+  `<Esc>` → `pickerList` with `where: 'box'` (the notes picker's set plus `l`). `docs/keymap.md` § Layers says every
+  list picker also takes `gg`/`G`, but `ListPicker` (`src/contracts/list-picker.ts`) has no top or bottom member at plan
+  time. Re-read it when the task runs: keyboard-reach may have added one. If it has a top/bottom member, bind `gg` and
+  `G` to it (`pickerTop`, `pickerBottom`, `group: 'picker'`, labels "first line" and "last line"). If not, leave `gg`/`G`
+  out and task 06 rewords the doc line to the code. Each handler calls the picker's `down`, `up`, `choose`, `cancel`, `focusFilter`,
   `leaveFilter`.
 - **Choosing** runs the row's command: `api.commands.run(action.command)` with no `arg`, or
   `api.commands.run({ id: action.command }, action.arg)` with one (`CommandKey`, `src/contracts/commands.ts`). The
@@ -134,7 +138,7 @@ Produces:  `keys.searchLeader` — page command in the keys manifest, no argumen
 No existing expected line changes: the title and its log line are unchanged, and labels are never logged. A new
 group goes after `choices` and before `pane resize` in the forms script's group list, named `leader search`, why:
 "Space b opens the session group on the shelf; Space / searches every leader action in force, Enter runs the pick,
-and Esc twice closes the search." Its steps, from the forms page `choices` leaves (scope `forms.forms`):
+and three Escapes close the search: INSERT, the list, closed." Its steps, from the forms page `choices` leaves (scope `forms.forms`):
 
 1. `{ keys: [' '], expect: '[keys] which-key shows Space' }`
 2. `{ keys: ['b'], expect: '[keys] which-key shows Space b', screenshot: 'which-key-shelf' }`
@@ -144,10 +148,12 @@ and Esc twice closes the search." Its steps, from the forms page `choices` leave
    the keys, `help` is `keys.toggleHelp`'s label and ranks first)
 6. `{ keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' }`
 7. `{ keys: [' ', '/'], expect: '[keys] picker shown: Leader actions' }`
-8. `{ keys: ['Escape', 'Escape'], expect: '[keys] picker closed: Leader actions' }`
+8. `{ keys: ['Escape', 'Escape', 'Escape'], expect: '[keys] picker closed: Leader actions' }` (Esc leaves INSERT, Esc
+   returns to the list, Esc closes)
 
 GIVEN the default keymap on the page WHEN the user presses Space b THEN the shelf spans the window's bottom edge,
-headed `Space b  Session`, listing `n New session`, `r Rename session`… (labels as the commands name them)
+headed `Space b  Session`, listing `n New session`, `r Rename the session`… (each label is its command's manifest label, capitalised as the shelf
+draws it)
 GIVEN forms' review scope WHEN the user presses Space / and types `help`, Enter THEN help opens, as `Space ?` does
 GIVEN a pending prefix `groups` does not name WHEN which-key shows THEN the header shows the keys alone
 
