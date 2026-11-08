@@ -231,11 +231,42 @@ export interface UsageAgentEvent {
 
 export const MAIN_AGENT_ID = 'main';
 
+// One part of a context source: a file, a skill, a tool, an MCP server. `isPath` is true when `label` is a full path.
+export interface ContextSourceItem {
+  label: string;
+  isPath: boolean;
+  tokens: number;
+}
+
+// One source of what is in an agent's context, its `items` largest first (empty when the harness names none). `id`
+// stays the same for the same source across replies, so a view can keep a source open.
+export interface ContextSource {
+  id: string;
+  label: string;
+  tokens: number;
+  items: readonly ContextSourceItem[];
+}
+
+// Where the main agent's context comes from, as the harness reports it. `sources` hold only what is in context now,
+// largest first, and sum to `totalTokens`; `deferredTokens` counts what the harness can load on demand and has not
+// (Claude's deferred tools). `contextWindow` and `autocompactAt` are null when the harness reports none.
+export interface ContextBreakdownAgentEvent {
+  type: 'contextBreakdown';
+  agentId: string;
+  at: number;
+  totalTokens: number;
+  contextWindow: number | null;
+  autocompactAt: number | null;
+  deferredTokens: number;
+  sources: readonly ContextSource[];
+}
+
 // The harness-neutral record of what an agent did, `docs/features/agent-tower/design.md` § Agent events.
 // `at` is epoch milliseconds from the adapter's clock. `agentId` is MAIN_AGENT_ID or a subagent's id (Claude: the
 // Agent tool call's id).
 export type AgentEvent =
   | UsageAgentEvent
+  | ContextBreakdownAgentEvent
   | { type: 'sessionStarted'; at: number }
   | { type: 'sessionEnded'; at: number }
   // `name` is the label the agent was given, its type when none; `model` and `effort` are null when unknown.

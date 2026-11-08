@@ -83,11 +83,12 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
       ▾ Main agent   2:05     chat: the activity dock
       ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Light and Medium
       ▾ Skills       4        agent-skills: each skill the main agent started
+      ▾ Context  128k · 13%   context-sources: where the main agent's context comes from
       ▾ Session               chat: project, branch, folder, harness, model · effort
 ```
 
 - **A side part** declares a `title` and an `order`. Chat sorts the sections by `order` and draws each one's frame
-  through the chat layout's `sideSection` part. The orders: Main agent 10, Plan 20, Skills 30, Session 40.
+  through the chat layout's `sideSection` part. The orders: Main agent 10, Plan 20, Skills 30, Context 35, Session 40.
 - **A section's frame:** its title, the summary its part sets (the turn's time, `5/7`, the skill count), and a chevron
   that collapses it. A click on the title toggles the section. Collapsed sections are kept in `uiState` by part id and
   apply to every session. A section takes no key and no focus.
@@ -114,6 +115,16 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   its folder path; the summary counts skills. A subagent's skills stay in the roster and are not listed. A skill's row
   stays through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
   log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
+- **Context:** where the main agent's context comes from, as the harness last reported it (the `contextBreakdown`
+  agent event; Claude's `get_context_usage`, asked at start, after each turn and after a compaction). A stacked bar of
+  the sources, each coloured by its place in the list; under it the context's fill of the window, with a tick where
+  compaction starts and `128k of 1M` / `compacts at 967k` beneath; then one row per source, largest first, with its
+  tokens and its share of the context. Claude's Messages category is split into attachments, tool results, tool calls,
+  agent replies and user messages, each its own source. A click on a source with items (memory files by path with the
+  home as `~`, skills, MCP servers, agents, tools, attachment types) opens or closes them under it, per session, for
+  the page's life. Deferred tools, which are not in context until loaded, are one dim line under the rows. The summary
+  is the total and its share of the window (`128k · 13%`). The section hides until the session's first breakdown; a
+  subagent's context has none.
 - **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
   harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the
   status line.
@@ -206,6 +217,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   be disabled: the config check reports it as a config problem and keeps the last good config.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar's working line;
   `agent-strip` draws the strip; `agent-skills` draws the hub's Skills section. All three read the agents roster.
+- `context-sources` keeps each session's last context breakdown in its own slot and draws the hub's Context section.
 - `usage` keeps the polls, the status-bar plan line, the right bar, the context line and the spend status part.
   `usage-tab-line` draws usage's own whole session-line part (context, cache and spend) in each tab bar.
 - `docs` keeps Docs mode, the per-session index sources and the `addView` export. `docs-session-tab` draws each

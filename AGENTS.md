@@ -238,6 +238,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   agent-skills/  main/ (registers its layouts, hands its self-test script), page/ (the session hub's Skills section,
                  through chat's `addSidePart`), layouts/ (its Layout contract and `default` layout);
                  `docs/features/chat-bar/design.md`
+  context-sources/ manifest.ts, contract.ts (the `context-sources.breakdowns` slot: each session's last main-agent
+                 `contextBreakdown` agent event), main/ (folds `chat.agentEvent` into the slot, deletes on
+                 `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
+                 `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
+                 layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
   auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
                  registers the send gate that compacts a cold-cache session before a message when its context is above
                  the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction; reads
@@ -476,8 +481,8 @@ round; primer: an open primer), since main, not the page, decides.
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane (one section per workflow, `Plan` for Heavy and `Checklist` for the others) and
-  the agent-skills plugin's list are two. A side part takes no key scope and no stop.
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane (one section per workflow, `Plan` for Heavy and `Checklist` for the others),
+  the agent-skills plugin's list and the context-sources plugin's breakdown are three. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.
 - **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
@@ -893,7 +898,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-heavy/main/selftest-script.ts` for
-  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

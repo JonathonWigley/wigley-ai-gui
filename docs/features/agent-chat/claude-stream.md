@@ -760,7 +760,14 @@ message. The request is
 - `get_context_usage` keys: `agents`, `apiUsage`, `autoCompactThreshold`, `autocompactSource`, `categories` (each
   `name`, `kind` of `used`, `free`, `buffer` or `deferred`, and `tokens`), `gridRows`, `isAutoCompactEnabled`,
   `maxTokens`, `mcpInstructions`, `mcpTools`, `memoryFiles`, `messageBreakdown`, `model`, `percentage`,
-  `rawMaxTokens`, `skills`, `slashCommands`, `totalTokens`. On Opus, Sonnet and Haiku with
+  `rawMaxTokens`, `skills`, `slashCommands`, `totalTokens`. The `used` categories sum to `totalTokens`. Each category
+  that lists items does so beside it: `memoryFiles` (`path`, `tokens`), `skills.skillFrontmatter` (`name`, `tokens`),
+  `mcpTools` (`serverName`, `tokens`, `isLoaded`; only loaded tools count toward MCP tools), `mcpInstructions`
+  (`serverName`, `tokens`) and `agents` (`agentType`, `tokens`). `messageBreakdown` splits Messages into
+  `toolCallTokens`, `toolResultTokens`, `attachmentTokens`, `assistantMessageTokens`, `userMessageTokens`,
+  `redirectedContextTokens` and `unattributedTokens`, with `toolCallsByType` (`callTokens`, `resultTokens`) and
+  `attachmentsByType`; on 2.1.318, 2026-11-08, its parts summed to 136k against a 127k Messages category, so the adapter
+  scales them to the category (`context-breakdown.ts`). On Opus, Sonnet and Haiku with
   `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=30` set in both the environment and `settings.json`, it reported
   `maxTokens: 1000000`, `rawMaxTokens: 1000000`, `autoCompactThreshold: 967000`, `autocompactSource: "model-default"`:
   the override does not show in this reply.

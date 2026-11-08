@@ -1,6 +1,7 @@
 import type { MainPart } from '../contracts/plugin';
 import { agentLinesMainPart } from './agent-lines/main/start';
 import { agentSkillsMainPart } from './agent-skills/main/start';
+import { contextSourcesMainPart } from './context-sources/main/start';
 import { agentStripMainPart } from './agent-strip/main/start';
 import { agentsMainPart } from './agents/main/start';
 import { autoCompactMainPart } from './auto-compact/main/start';
@@ -41,6 +42,7 @@ export const mainParts: readonly MainPart[] = [
   agentLinesMainPart,
   agentStripMainPart,
   agentSkillsMainPart,
+  contextSourcesMainPart,
   docsMainPart,
   settingsMainPart,
   backlogMainPart,

@@ -132,6 +132,7 @@ stays in themes.
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `agent-skills` | `agent-skills.layout` | the session hub's Skills section: one row per skill |
+| `context-sources` | `context-sources.layout` | the session hub's Context section: the sources' bar, the window's fill and a row per source with its items |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |

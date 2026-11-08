@@ -1,0 +1,73 @@
+import type { CoreEvents } from '../../../contracts/core-state';
+import type {
+  ChannelShape,
+  PageApi,
+  PagePart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
+import { chatPageKey } from '../../chat/contract';
+import { followRows, sessionsRowsSlot } from '../../sessions/contract';
+import { contextBreakdownsSlot } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
+import type { Layout } from '../layouts/layout';
+import { contextSourcesManifest } from '../manifest';
+import { readContextSourcesLayout } from './layout/read-context-sources-layout';
+import { createContextSection } from './context-section';
+
+type ContextSourcesApi = PageApi<
+  typeof contextSourcesManifest,
+  ChannelShape,
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
+>;
+
+// Draws the session hub's Context section through chat's side parts and the `context-sources.layout` layout. Reads
+// `context-sources.breakdowns`, redrawing a session's section each time its breakdown changes, and names each session
+// by its side-bar label for the page log.
+export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
+  manifest: contextSourcesManifest,
+  start(api: ContextSourcesApi) {
+    const { services } = api;
+    const breakdowns = api.state.read(contextBreakdownsSlot);
+    const chat = api.dependency(chatPageKey);
+    const rows = api.state.read(sessionsRowsSlot);
+    const section = createContextSection({
+      kit: {
+        markdown: services.markdown,
+        keys: api.keys,
+        commands: {
+          exists: (id) => api.keys.command(id) !== undefined,
+          argShape: (id) => api.keys.command(id)?.arg,
+          run: (id) => api.commands.run(id),
+        },
+        platform: api.platform.os,
+        state: api.state.forLayouts,
+      },
+      log: services.log,
+      nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
+      breakdown: (sessionId) => breakdowns.get(sessionId),
+      showPath: (path) => services.paths.tilde(path, services.homeDir),
+    });
+    chat.addSidePart(section.part);
+
+    followRows(rows, { removed: (sessionId) => section.forget(sessionId) });
+    api.events.on('core.pageReady', () => {
+      breakdowns.on((sessionId) => section.breakdownUpdated(sessionId));
+      callEach([...breakdowns.all().keys()], (sessionId) =>
+        section.breakdownUpdated(sessionId),
+      );
+    });
+
+    api.layouts.show<Layout>({
+      defaultLayout,
+      defaultStylesheet,
+      read: readContextSourcesLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts: (shown) => section.setLayouts(shown),
+    });
+
+    return { commands: {} };
+  },
+};

@@ -30,7 +30,8 @@ Built:
 
 Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
 itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted by the Claude adapter and the fake
-harness and read by the workflow plugin (`docs/features/workflow/design.md`).
+harness and read by the workflow plugin (`docs/features/workflow/design.md`); `contextBreakdown` is read by the
+`context-sources` plugin (`docs/features/chat-bar/design.md` § The session hub).
 
 ## Vocabulary
 
@@ -68,6 +69,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `taskFinished` | task id, done or failed | — |
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, one-line summary (started only), success or failure (finished only) | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
+| `contextBreakdown` | agent id (the main agent only), context tokens, context window and autocompact limit (each null when unknown), deferred tokens (loadable, not in context), and the sources in context largest first, each an id, label, tokens and its items (label, tokens, whether the label is a path); after each `get_context_usage` reply | — (the hub's Context section) |
 | `compactionStarted` | trigger: `app` (the app called `compact()`), `manual` (the user sent `/compact`) or `harness` (the harness's own autocompact) | rest begins |
 | `compactionEnded` | trigger, outcome (done, failed or interrupted), context tokens before (null when the harness does not report it, and unless the outcome is done), duration in ms (null when unknown); one for each `compactionStarted`. The after-size is the next `usage` | rest / heal |
 | `userMessage` | — | "message from HQ" |
