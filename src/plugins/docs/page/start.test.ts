@@ -192,7 +192,6 @@ async function reloadWith(
     rows.set(sessionId, rowOf(sessionId));
   }
   await harness.restart();
-  harness.ready();
   return rows;
 }
 

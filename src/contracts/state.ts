@@ -109,9 +109,10 @@ export interface LayoutState {
   read(id: string): LayoutSlotReader;
 }
 
-// What crosses the Bridge. A keyed change with an `undefined` value is a delete. A
-// `cleared` change empties its slot, which keeps its kind, and its listeners hear one
-// delete per entry it held; only main sends one, and main ignores one from the page.
+// What crosses the Bridge. A keyed change with an `undefined` value is a
+// delete. A `cleared` change empties its slot, which keeps its kind, and its
+// listeners hear one delete per entry it held; only main sends one, and main
+// ignores one from the page.
 export type SlotChange =
   | { id: string; kind: 'value'; value: unknown }
   | { id: string; kind: 'keyed'; key: string; value: unknown | undefined }

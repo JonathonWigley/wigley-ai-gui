@@ -70,7 +70,9 @@ export interface PluginStatus {
   readonly neededBy: readonly string[];
 }
 
-// Every built-in plugin, in manifests order: its label, its description, whether it runs now, and the ids of the plugins that run now and depend on it. Main's plugin switch writes it at start and after each change.
+// Every built-in plugin, in manifests order: its label, its description,
+// whether it runs now, and the ids of the plugins that run now and depend on
+// it. Main's plugin switch writes it at start and after each change.
 export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
   {
     id: 'core.plugins',

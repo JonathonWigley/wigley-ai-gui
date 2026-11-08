@@ -403,13 +403,20 @@ async function start() {
       return started;
     },
     manifests,
-    // Main serves the applied list in `plugins.disabled`, and no command, bind or scope of those plugins.
+    // Main serves the applied list in `plugins.disabled`, and no command, bind
+    // or scope of those plugins.
     served.settings.plugins.disabled,
     log,
   );
   anchors.reveal();
   registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
+  );
+  // Main sends plugin parts requests once `started` is set, so the page
+  // listens first: a later throw in this start still answers them.
+  const answerDeps = { reapplyPush: () => applyLivePush(lastPush), log };
+  bridge.onPluginParts((request) =>
+    answerPluginParts(pageHost, request, answerDeps),
   );
   runtimeCatalog.set({
     ...(runtimeCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
@@ -444,8 +451,9 @@ async function start() {
       log,
     },
   );
-  // The page binds rule: main has stripped the plugins that are off, and the page strips the page parts its
-  // host has not started yet, so `requireRegistered` meets no bind of a part still to start.
+  // The page binds rule: main has stripped the plugins that are off, and the
+  // page strips the page parts its host has not started yet, so
+  // `requireRegistered` meets no bind of a part still to start.
   const notStarted = () =>
     pageParts
       .map((part) => part.manifest.id)
@@ -462,11 +470,8 @@ async function start() {
   }
   pageHost.ready();
   restores.partsReady();
-  const answerDeps = { reapplyPush: () => applyLivePush(lastPush), log };
-  bridge.onPluginParts((request) =>
-    answerPluginParts(pageHost, request, answerDeps),
-  );
-  // A reload that raced a switch still ends running what the last push's list says.
+  // A reload that raced a switch still ends running what the last push's list
+  // says.
   const loadDisabled = lastPush.settings.plugins.disabled;
   await answerPluginParts(
     pageHost,

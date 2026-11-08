@@ -136,17 +136,18 @@ export interface HarnessCommandRun {
 // `started` throws while the part is stopped. `ready` calls every started
 // part's `ready`, the real parts' and the part under test's, in start order, as
 // a page load does once its parts start. `restart` stops a started part and
-// starts it again on a new host with the same fakes and the same counts, so what
-// a leaky `dispose` left stays counted, and calls no `ready`. `advance` runs the due timers in due
+// starts it again on a new host with the same fakes and the same counts, so
+// what a leaky `dispose` left stays counted, then calls every started part's
+// `ready`, as the host's own restart does. `advance` runs the due timers in due
 // order, the clock reading each one's due time, and ends `ms` later. `emitted`
 // holds what any started part emitted, in order, under its qualified name; it
 // outlives the stop, so a test reads there what a late read emitted. `state` is
-// the store every part of the harness shares, across stops and restarts. A test
-// writes a slot through `state.publish(key).set(value)`: that claim is held until
-// the writer's `dispose` and `counts` does not hold it, so a test publishes each
-// key once and disposes the writer of a key the part under test publishes before
-// that part starts. `commandRuns` holds each run sent to the other process, in
-// order, under its qualified id.
+// the store every part of the harness shares, across stops and restarts. A
+// test writes a slot through `state.publish(key).set(value)`: that claim is
+// held until the writer's `dispose` and `counts` does not hold it, so a test
+// publishes each key once and disposes the writer of a key the part under test
+// publishes before that part starts. `commandRuns` holds each run sent to the
+// other process, in order, under its qualified id.
 export interface PartHarness<Started> {
   started(): Started;
   ready(): void;
@@ -716,6 +717,7 @@ function partLifecycle<Started>(
     async restart() {
       await lifecycle.stop();
       lifecycle.start();
+      lifecycle.ready();
     },
   };
   return lifecycle;

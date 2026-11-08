@@ -39,15 +39,15 @@ import { createListeners, type Listeners } from '../listeners';
 // value slot is a change, also with an equal value. `publish` and `applyRemote` throw
 // for an id held as another kind. Listeners are held by id apart from the slots, so
 // one added before the slot exists hears the first write.
-// `clearOwner` empties every slot whose id starts with `<pluginId>.`, in the order
-// the slots were created, and each keeps its kind. It throws
-// `Slot "<id>" is held by a live part` for the first one a live writer holds, and
-// clears nothing. Every slot empties first; then `onWrite` runs once with
-// `{ id, kind: 'cleared' }` for each one that held a value or an entry; then their
-// listeners hear one delete per entry, slot by slot in first-set order: `(undefined)`,
-// `(key, undefined)` or `(key, { kind: 'delete' })`. An empty slot is no change. `applyRemote` of a
-// `cleared` change empties its slot the same way without `onWrite`, and does nothing
-// for an absent slot.
+// `clearOwner` empties every slot whose id starts with `<pluginId>.`, in the
+// order the slots were created, and each keeps its kind. It throws
+// `Slot "<id>" is held by a live part` for the first one a live writer holds,
+// and clears nothing. Every slot empties first; then `onWrite` runs once with
+// `{ id, kind: 'cleared' }` for each one that held a value or an entry; then
+// their listeners hear one delete per entry, slot by slot in first-set order:
+// `(undefined)`, `(key, undefined)` or `(key, { kind: 'delete' })`. An empty
+// slot is no change. `applyRemote` of a `cleared` change empties its slot the
+// same way without `onWrite`, and does nothing for an absent slot.
 // `isHeld` is whether a live writer holds the id. `readById` follows the rule on
 // `LayoutSlotReader`.
 export interface SlotStore {
@@ -166,8 +166,8 @@ function applyChange(slot: Slot, change: EntryChange): boolean {
   );
 }
 
-// Empties `slot` and returns the deletes that emptied it, one per entry in first-set
-// order, and none for an empty slot.
+// Empties `slot` and returns the deletes that emptied it, one per entry in
+// first-set order, and none for an empty slot.
 function clearSlot(id: string, slot: Slot): EntryChange[] {
   let deletes: EntryChange[];
   if (slot.kind === 'value') {

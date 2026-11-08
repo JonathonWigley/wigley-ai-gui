@@ -63,9 +63,9 @@ type OpenForm = ReturnType<typeof openForm>;
 // active round. `reload` starts a new page over the same slots and readies it,
 // its open rounds read landing after the page is ready, as main's answer does;
 // `duringRead` runs once the new page is ready and before the read lands, handed
-// the restores the new page tracked as it started. `place` reads a round's
-// place, r1's by default; `select` selects a round's session and lets the
-// selection settle.
+// the restores the new page tracked as it started and readied. `place` reads a
+// round's place, r1's by default; `select` selects a round's session and lets
+// the selection settle.
 async function startOverOpenRounds(open: { forms: OpenForm[] }) {
   let readHeld: Promise<void> = Promise.resolve();
   const harness = startPagePart(formsPagePart, {
@@ -105,7 +105,6 @@ async function startOverOpenRounds(open: { forms: OpenForm[] }) {
     const trackedBefore = harness.restores.length;
     await harness.restart();
     const tracked = harness.restores.slice(trackedBefore);
-    harness.ready();
     await settle();
     await duringRead(tracked);
     read.resolve();
@@ -340,11 +339,11 @@ describe('forms page part', () => {
       settledDuringRead = settledViews.length;
     });
 
-    expect([tracked, settledDuringRead, settledViews]).toEqual([
-      1,
-      0,
-      [{ view: 'review', roundId: 'r1' }],
-    ]);
+    // Sessions' own restore settles before the read lands.
+    expect([
+      tracked - settledDuringRead,
+      settledViews.slice(settledDuringRead),
+    ]).toEqual([1, [{ view: 'review', roundId: 'r1' }]]);
     await harness.stop();
   });
 

@@ -368,7 +368,6 @@ describe('chat page part', () => {
     harness.started().commands.prevEntry({ arg: undefined });
 
     await reloadWith(harness, {}, { s1: [PNG] });
-    harness.ready();
     const info = session.get('s1') as ChatSessionInfo;
     session.set('s1', { ...info, running: true });
 
@@ -387,10 +386,10 @@ describe('chat page part', () => {
 
   it('row_removed_clears_the_place', async () => {
     const harness = startChatPage();
-    await reloadWith(harness, { s1: placeWith('draft') }, { s1: [PNG] });
     const rows = harness.state.publish(sessionsRowsSlot);
     rows.set('s1', ROW);
     loadSessions(harness, [SESSION]);
+    await reloadWith(harness, { s1: placeWith('draft') }, { s1: [PNG] });
     expect(placeKeys(harness)).toEqual({ places: ['s1'], images: ['s1'] });
 
     rows.delete('s1');
@@ -401,14 +400,13 @@ describe('chat page part', () => {
 
   it('row_gone_during_reload_is_pruned', async () => {
     const harness = startChatPage();
+    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
+
     await reloadWith(
       harness,
       { s1: placeWith('kept'), gone: placeWith('gone') },
       { s1: [PNG], gone: [PNG] },
     );
-    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
-
-    harness.ready();
 
     expect(placeKeys(harness)).toEqual({ places: ['s1'], images: ['s1'] });
     await harness.stop();

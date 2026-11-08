@@ -74,6 +74,7 @@ describe('agentLinesPagePart', () => {
 
   it('stopThenStart_StartsAgain', async () => {
     const harness = startOnHarness();
+    harness.ready();
     const before = harness.counts();
 
     await harness.restart();

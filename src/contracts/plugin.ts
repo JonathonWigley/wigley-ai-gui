@@ -214,9 +214,11 @@ export interface PluginManifest<
   // Lowercase letters, digits and `-`: the `wigley-data:` and `wigley-layout:`
   // URL hosts carry the id, and Chromium lowercases a URL's host.
   id: string;
-  // The plugin's name as Settings' Plugins section shows it, in sentence case (`Agent lines`).
+  // The plugin's name as Settings' Plugins section shows it, in sentence case
+  // (`Agent lines`).
   label: string;
-  // One sentence on what the plugin adds for the user, as Settings' Plugins section shows it.
+  // One sentence on what the plugin adds for the user, as Settings' Plugins
+  // section shows it.
   description: string;
   dependsOn: {
     readonly main: readonly string[];
@@ -769,15 +771,18 @@ export interface PageStart<M extends PluginManifest> {
   exports?(consumer: Registrations): unknown;
   // Runs when the host stops the part.
   dispose?(): void | Promise<void>;
-  // Called by the host once every part of this process has started at launch (main) or page load (page),
-  // and after a live start, once every part that start brought up has started.
+  // Called by the host once every part of this process has started at launch
+  // (main) or page load (page), and after a live start, once every part that
+  // start brought up has started.
   ready?(): void;
-  // A reason the part must not stop now, in words the user reads (a round is open in <session>), or null.
-  // The switch asks it before a switch-off; a restart and quit do not ask.
+  // A reason the part must not stop now, in words the user reads (a round is
+  // open in <session>), or null. The switch asks it before a switch-off; a
+  // restart and quit do not ask.
   mayStop?(): string | null;
 }
 
-// Starts on every page load.
+// Starts on every page load, and again when the host starts or restarts it
+// live.
 export interface PagePart<M extends PluginManifest = PluginManifest> {
   manifest: M;
   // `any`: one parts list holds parts with different channels and events.
@@ -947,7 +952,8 @@ export interface MainServices {
   pluginSwitch: PluginSwitchService;
 }
 
-// The part of main's plugin switch a main part reaches: the reason turning `pluginId` off would be refused now, or null.
+// The part of main's plugin switch a main part reaches: the reason turning
+// `pluginId` off would be refused now, or null.
 export interface PluginSwitchService {
   mayDisable(pluginId: string): Promise<string | null>;
 }
@@ -1015,15 +1021,17 @@ export interface MainStart<M extends PluginManifest> {
   // registrations, and undoes only what the plugin API cannot see. Quit stops
   // every main part, and the live app may exit before a returned promise settles.
   dispose?(): void | Promise<void>;
-  // Called by the host once every part of this process has started at launch (main) or page load (page),
-  // and after a live start, once every part that start brought up has started.
+  // Called by the host once every part of this process has started at launch
+  // (main) or page load (page), and after a live start, once every part that
+  // start brought up has started.
   ready?(): void;
-  // A reason the part must not stop now, in words the user reads (a round is open in <session>), or null.
-  // The switch asks it before a switch-off; a restart and quit do not ask.
+  // A reason the part must not stop now, in words the user reads (a round is
+  // open in <session>), or null. The switch asks it before a switch-off; a
+  // restart and quit do not ask.
   mayStop?(): string | null;
 }
 
-// Starts once, at launch.
+// Starts at launch, and again when the host starts or restarts it live.
 export interface MainPart<M extends PluginManifest = PluginManifest> {
   manifest: M;
   // `any`: one parts list holds parts with different channels and events.

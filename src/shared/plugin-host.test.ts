@@ -70,7 +70,8 @@ interface Hooks {
 }
 
 // Starts `parts` that `disabled` does not name, each returning what `hooks`
-// gives for it, with the host's lines kept in `logged` as `<source>: <message>`.
+// gives for it, with the host's lines kept in `logged` as
+// `<source>: <message>`.
 function startHooked(
   parts: TestPart[],
   hooks: (id: string, context: PartContext) => Hooks,
@@ -452,21 +453,40 @@ describe('startPlugins', () => {
     },
   );
 
-  it('start throws, starting nothing, when a named part depends on a part not started and not named', () => {
-    const recorded: string[] = [];
-    const host = startHooked(
-      [part('a'), part('b', ['a'])],
-      recordingHooks(recorded),
-      ['a', 'b'],
-    );
+  it.each([
+    { dependency: 'not started', disabled: ['a', 'b'], stopsA: false },
+    { dependency: 'whose stop is in flight', disabled: ['b'], stopsA: true },
+  ])(
+    'start throws, starting nothing, when a named part depends on a part $dependency and not named',
+    async ({ disabled, stopsA }) => {
+      const recorded: string[] = [];
+      let finishDispose = () => {};
+      const host = startHooked(
+        [part('a'), part('b', ['a'])],
+        (id) => {
+          recorded.push(`start ${id}`);
+          return {
+            dispose: () =>
+              new Promise<void>((resolve) => {
+                finishDispose = resolve;
+              }),
+          };
+        },
+        disabled,
+      );
+      recorded.length = 0;
+      const stopping = stopsA ? host.stop('a') : Promise.resolve([]);
 
-    expect(() => host.start(['b'])).toThrow(
-      'Plugin "b" depends on plugin "a", which is not started',
-    );
+      expect(() => host.start(['b'])).toThrow(
+        'Plugin "b" depends on plugin "a", which is not started',
+      );
 
-    expect(recorded).toEqual([]);
-    expect(host.started.size).toBe(0);
-  });
+      expect(recorded).toEqual([]);
+      expect(host.started.has('b')).toBe(false);
+      finishDispose();
+      await stopping;
+    },
+  );
 
   it("ready calls each started part's ready in start order, and logs a throw and goes on", () => {
     const readied: string[] = [];
@@ -544,24 +564,46 @@ describe('startPlugins', () => {
     expect(host.started.has('b')).toBe(false);
   });
 
-  it('a start that throws leaves earlier candidates started and runs no ready', () => {
-    const readied: string[] = [];
-    const host = startHooked(
-      [part('x'), part('y')],
-      (id) => {
-        if (id === 'y') {
-          throw new Error('y start failed');
-        }
-        return { ready: () => readied.push(id) };
-      },
-      ['x', 'y'],
-    );
+  // `y` depends on `x` and its start number `throwingStart` throws, so `z`,
+  // listed after it, never starts.
+  it.each([
+    {
+      name: 'start',
+      disabled: ['x', 'y', 'z'],
+      throwingStart: 1,
+      run: async (host: PluginHost<unknown>) => host.start(['x', 'y', 'z']),
+    },
+    {
+      name: 'restart',
+      disabled: [],
+      throwingStart: 2,
+      run: (host: PluginHost<unknown>) => host.restart('x'),
+    },
+  ])(
+    '$name whose start throws partway readies the parts started before it and rethrows',
+    async ({ disabled, throwingStart, run }) => {
+      const readied: string[] = [];
+      let yStarts = 0;
+      const host = startHooked(
+        [part('x'), part('y', ['x']), part('z', ['x'])],
+        (id) => {
+          if (id === 'y') {
+            yStarts += 1;
+            if (yStarts === throwingStart) {
+              throw new Error('y start failed');
+            }
+          }
+          return { ready: () => readied.push(id) };
+        },
+        disabled,
+      );
 
-    expect(() => host.start(['x', 'y'])).toThrow('y start failed');
+      await expect(run(host)).rejects.toThrow('y start failed');
 
-    expect(host.started.has('x')).toBe(true);
-    expect(readied).toEqual([]);
-  });
+      expect([...host.started.keys()]).toEqual(['x']);
+      expect(readied).toEqual(['x']);
+    },
+  );
 
   it('a ready that throws inside start(ids) is logged and not rethrown', () => {
     const logged: string[] = [];

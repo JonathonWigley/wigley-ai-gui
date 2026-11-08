@@ -32,8 +32,9 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 // active primer. `reload` starts a new page over the same slots and readies it,
 // its open primers read landing after the page is ready, as main's answer does;
 // `duringRead` runs once the new page is ready and before the read lands, handed
-// the restores the new page tracked as it started. `place` reads p1's place;
-// `select` selects a primer's session and lets the selection settle.
+// the restores the new page tracked as it started and readied. `place` reads
+// p1's place; `select` selects a primer's session and lets the selection
+// settle.
 async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
   let readHeld: Promise<void> = Promise.resolve();
   const harness = startPagePart(primerPagePart, {
@@ -73,7 +74,6 @@ async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
     const trackedBefore = harness.restores.length;
     await harness.restart();
     const tracked = harness.restores.slice(trackedBefore);
-    harness.ready();
     await settle();
     await duringRead(tracked);
     read.resolve();
@@ -174,11 +174,11 @@ describe('primer page part', () => {
       settledDuringRead = settledPlaces.length;
     });
 
-    expect([tracked, settledDuringRead, settledPlaces]).toEqual([
-      1,
-      0,
-      [CANCEL_PROMPT_ON_TASK_ONE],
-    ]);
+    // Sessions' own restore settles before the read lands.
+    expect([
+      tracked - settledDuringRead,
+      settledPlaces.slice(settledDuringRead),
+    ]).toEqual([1, [CANCEL_PROMPT_ON_TASK_ONE]]);
     await harness.stop();
   });
 
