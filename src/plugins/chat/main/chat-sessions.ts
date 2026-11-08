@@ -792,6 +792,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     updateActiveTime(session);
     const turnFinished = activity === 'idle' && previous !== 'idle';
     const turnStarted = activity !== 'idle' && previous === 'idle';
+    // Read before the emit: a `turnFinished` listener may start the next
+    // stretch's compaction.
+    const ranATurn = !isHoldUp(session) && !session.isOnlyAppCompaction;
+    if (turnFinished) {
+      session.isOnlyAppCompaction = false;
+    }
     if (turnStarted && !isReplayed) {
       deps.emit('turnStarted', { sessionId });
     }
@@ -802,7 +808,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       !deps.window.isFocused() || deps.selectedSessionId() !== sessionId;
     const workIsOver = session.backgroundIds.size === 0;
     const isTheTurnsOwnEnd = !isReplayed && !session.isStopRequested;
-    const ranATurn = !isHoldUp(session) && !session.isOnlyAppCompaction;
     if (
       turnFinished &&
       userIsElsewhere &&
@@ -811,9 +816,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       ranATurn
     ) {
       announceTurnFinished(session);
-    }
-    if (turnFinished) {
-      session.isOnlyAppCompaction = false;
     }
     if (turnFinished || turnStarted) {
       save();

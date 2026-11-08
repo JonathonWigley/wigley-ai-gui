@@ -6838,6 +6838,47 @@ describe('createChatSessions compact', () => {
     ).toBe(calls);
   });
 
+  it('compact_FromATurnFinishedListener_ItsIdleAnnouncesNothing', async () => {
+    const test = await started();
+    test.harness.holdCompactions();
+    test.setFocused(false);
+    const { events } = test.process;
+    let compacted = false;
+    test.setOnEmit((emitted) => {
+      if (emitted.event === 'turnFinished' && !compacted) {
+        compacted = test.chat.compact(ROW_ID, REASON);
+      }
+    });
+
+    test.activity('working');
+    events.agentEvent({
+      type: 'agentSpawned',
+      at: 0,
+      agentId: 'agent-1',
+      parentAgentId: MAIN_AGENT_ID,
+      agentType: 'general-purpose',
+      description: 'review',
+      name: 'review',
+      model: null,
+      effort: null,
+    });
+    test.activity('idle');
+    await flush();
+    events.agentEvent({
+      type: 'agentFinished',
+      at: 0,
+      agentId: 'agent-1',
+      outcome: 'done',
+    });
+    test.harness.releaseCompactions();
+    await flush();
+
+    expect(compacted).toBe(true);
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(test.chat.sessions()[0].activity).toBe('idle');
+    expect(test.announced).toEqual([]);
+  });
+
   it('compact_HarnessThrows_ReturnsFalseAndShowsNothing', async () => {
     const fake = createFakeAgentHarness(
       { now: () => 1000 },

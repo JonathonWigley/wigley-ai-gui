@@ -385,6 +385,7 @@ export interface AgentProcess {
   setControl(id: string, value: string): void;
   // Starts a compaction with trigger `app`. It makes no user entry. It throws while the process is not idle. A
   // `compact()` that returns is always followed by a `compactionStarted` and `compactionEnded` pair, even when none ran.
+  // The pair arrives asynchronously, after `compact()` returns.
   compact(): void;
   // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
