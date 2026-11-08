@@ -238,8 +238,8 @@ The keyboard is first; the mouse works everywhere.
     hides when there is nothing else to move to. A split handle's resize prompt `⌥⇧H ◂ ▸ ⌥⇧L`
     (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
   - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
-    (`s star  r rename  d trash`): at the row's end in Docs and the Sessions list, and in Settings and Backlog, where it
-    wraps when the row has no room; on a line of its own under the label in Primer; in a column of
+    (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
+    wraps when the row has no room; on a line of its own under the label in Primer and in the Sessions list's card; in a column of
     its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
