@@ -292,7 +292,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [Doc re-read](12-doc-re-read.md) — after 11
 
 ### Wave 9
-- [ ] [Final verification](13-final-verification.md) — after 12
+- [x] [Final verification](13-final-verification.md) — after 12
 
 ## Run log
 
@@ -311,6 +311,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 09 · c2f84175 · diff read: mayDisable on the channel and main handler, plugin-rows (PLUGIN_LIST_PATH, lockedText, withPluginSwitched, matchesPlugin), plugin-rows-view, pluginRow in layout.d.ts/default layout/read-layout, self-test groups plugin switch and locked plugin in, disabled plugins out, both design docs; typecheck and lint clean; worker ran src/plugins/settings, 13 files 142 tests passed · concerns: PickTrue test asserts { plugins: { disabled: [] } } where the task said {}; the gallery self-test write carries the outside-edits group's stale keySequenceTimeoutMs; filter usage first row plugin:usage unverified until the self-test runs; settings design.md has no Plugins rows section and DESIGN.md § Settings no Tag line (tasks 11/12); setting-rows.ts exports userValue and keymap-view.test.ts fake gained three members (outside the file list)
 - 11 · 0a4cec12 · diff read: each entry the task names is edited, plus the page restores sentence (partsReady) and the module map (plugin-switch, applied-plugins, page-parts, quit-wait); drive action ids checked (driveFor('core') + stopPlugin); lint clean · concerns: for review: several rewrapped AGENTS.md lines run past the file's wrap width (slot, layout, disabled-plugin entries)
 - 12 · 9aef9ed7 · diff read: each listed doc edited, followups items removed/added; the task's three greps hold (pageReady grep excludes plan-command-consumers, Wave 3's folder); lint clean · concerns: session-clock/design.md fixed outside the file list; the Plugins row shows true/false (not on/off) and the docs say so; no followup for mainStartList (still used) or the repeated config-applied log line
+- 13 · 496e14d2 · filtered self-tests: 16 plugins all passed first run; drive (run hr13): checks 1,2,3,6,7,9,10 passed; 4 failed (restart gave rows new ids) → fixed in 496e14d2, re-run passed (same ids, frames, badges, a message sends; transcript under fake reads 'Earlier conversation not read' as a relaunch does); 8 failed (lock tag overflow) → fixed in e43e63f9 (ellipsis + tooltip, plus help dropping an off plugin's scope), re-checked by screenshot; 5 passed with concerns (re-attach unproven under fake) · concerns: check 4 and 5 transcript/re-attach need a real-harness run (user's account); sessions page ready() may prune a session's pane place before chat's slower restore returns its rows (not seen); the page flips to Gallery mode briefly during a sessions restart (pre-existing to the fix); chat's <C-n> bind is still served under gallery's scope while gallery is off (unreachable); wait-log misses switch lines logged before it starts
 ### Contract changes
 - check-layers src/main/config layers: as planned unchanged → gains src/main/plugins · why: user-config.ts imports appliedCommands and AppliedPlugins · consumers: 08 (plugin-switch.ts in src/main/plugins must not import src/main/config, or the layers cycle) · group 06
 - 07: chat's rule and wording live on the view as ChatTabs.mayStop(rows), start.ts passes rows.all().values(); the ?? sessionId label fallback never applies. createForms returns presenter typed AgentFormChannelPresenter<Round, FormBody>.
@@ -334,6 +335,8 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 10: a second quit holds in every mode but drive, self-test included (the self-test exit skips will-quit today) · group 10
 - 09: a rejected mayDisable logs write failed, toasts and rethrows from the view's RowContext; the row's pick swallows it and writes nothing · group 09
 - 09: picking the shown value logs unchanged through commit's same-layer check; the plugin list leaf is looked up at pick, not at draw · group 09
+- 13: row ids persist in open-sessions.json, so a relaunch also restores rows under their old ids (one rule for restart and relaunch, no restore window) · group 13
 ### Review rounds
 ### Test gate
 - vitest whole suite after task 11 (HEAD 44e39dda): 539 files, 10378 tests passed, no type errors; filtered self-tests and drive checks are task 13's
+- filtered self-tests at 8916ae71, one run each: settings, forms, primer, docs, backlog, agent-lines, agent-skills, agent-strip, chat, notes, sessions, unity-pool, usage, workflow-heavy, workflow-light, workflow-medium — all passed first run (logs /tmp/claude-hot-reload/selftest/<id>.log)

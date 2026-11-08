@@ -1,6 +1,6 @@
 # 13 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 9 · Depends on: 12
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Done when: each check above reports passed, or failed with a named fix or concer
 Commit: none, unless a fix lands through the fix path.
 
 ## Proof
+
+Commit 496e14d2 · proof: filtered self-tests: 16 plugins all passed first run; drive (run hr13): checks 1,2,3,6,7,9,10 passed; 4 failed (restart gave rows new ids) → fixed in 496e14d2, re-run passed (same ids, frames, badges, a message sends; transcript under fake reads 'Earlier conversation not read' as a relaunch does); 8 failed (lock tag overflow) → fixed in e43e63f9 (ellipsis + tooltip, plus help dropping an off plugin's scope), re-checked by screenshot; 5 passed with concerns (re-attach unproven under fake) · concerns: check 4 and 5 transcript/re-attach need a real-harness run (user's account); sessions page ready() may prune a session's pane place before chat's slower restore returns its rows (not seen); the page flips to Gallery mode briefly during a sessions restart (pre-existing to the fix); chat's <C-n> bind is still served under gallery's scope while gallery is off (unreachable); wait-log misses switch lines logged before it starts
