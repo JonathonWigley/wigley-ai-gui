@@ -28,7 +28,11 @@ function waves(progress: PlanProgress): ChecklistGroup[] {
   const groups = new Map<number | null, ChecklistItem[]>();
   for (const task of progress.tasks) {
     const group = groups.get(task.wave) ?? [];
-    group.push({ text: task.text, done: task.done });
+    group.push({
+      text: task.text,
+      done: task.done,
+      running: task.status === 'in progress',
+    });
     groups.set(task.wave, group);
   }
   return [...groups].map(([wave, items]) => ({

@@ -2,7 +2,11 @@
 // stage, make both busy and not, the plan-ready countdown on the second plan
 // ready. The stage ids are sample data, not stage rules.
 import type { StageId, SessionFlow } from '../../workflow/contract';
-import type { PlanProgress, PlanTaskLine } from '../../../shared/plan-progress';
+import type {
+  PlanProgress,
+  PlanTaskLine,
+  TaskStatus,
+} from '../../../shared/plan-progress';
 import { HEAVY_WORKFLOW_ID, type HeavyState } from '../contract';
 
 // `busy` sets the sample's `turnRunning`; `countdown` starts its auto-start.
@@ -31,15 +35,23 @@ const PREVIEW_PLAN_DIR = '~/docs/features/preview/plan-preview';
 const PREVIEW_TITLE = 'Preview plan';
 
 // The sample plan's seven tasks, by the wave each sits under.
-const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done'>[] = [
-  { wave: 1, text: 'Write the contract', file: null, status: null },
-  { wave: 1, text: 'Read the plan file', file: null, status: null },
-  { wave: 1, text: 'Fold the signals', file: null, status: null },
-  { wave: 2, text: 'Draw the row chip', file: null, status: null },
-  { wave: 2, text: 'Draw the composer strip', file: null, status: null },
-  { wave: 2, text: 'Add the side pane', file: null, status: null },
-  { wave: 3, text: 'Run the self-test', file: null, status: null },
+const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done' | 'status'>[] = [
+  { wave: 1, text: 'Write the contract', file: null },
+  { wave: 1, text: 'Read the plan file', file: null },
+  { wave: 1, text: 'Fold the signals', file: null },
+  { wave: 2, text: 'Draw the row chip', file: null },
+  { wave: 2, text: 'Draw the composer strip', file: null },
+  { wave: 2, text: 'Add the side pane', file: null },
+  { wave: 3, text: 'Run the self-test', file: null },
 ];
+
+// The stages whose sample tasks carry a status: each done task `done`, the
+// first open one `in progress`.
+const STAGES_RUNNING_TASKS: ReadonlySet<StageId> = new Set([
+  'make',
+  'review',
+  'fix',
+]);
 
 // How far the sample plan has come at each stage that has one.
 const PREVIEW_PROGRESS: Readonly<
@@ -88,9 +100,11 @@ function previewProgress(stage: StageId): PlanProgress | null {
   if (reached === undefined) {
     return null;
   }
+  const runsTasks = STAGES_RUNNING_TASKS.has(stage);
   const tasks = PREVIEW_TASKS.map((task, index) => ({
     ...task,
     done: index < reached.checked,
+    status: runsTasks ? sampleStatus(index, reached.checked) : null,
   }));
   return {
     checked: reached.checked,
@@ -100,4 +114,11 @@ function previewProgress(stage: StageId): PlanProgress | null {
     title: PREVIEW_TITLE,
     tasks,
   };
+}
+
+function sampleStatus(index: number, checked: number): TaskStatus | null {
+  if (index < checked) {
+    return 'done';
+  }
+  return index === checked ? 'in progress' : null;
 }

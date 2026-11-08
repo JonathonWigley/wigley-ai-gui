@@ -191,7 +191,9 @@ function sameProgress(
       return (
         task.wave === other.wave &&
         task.text === other.text &&
-        task.done === other.done
+        task.done === other.done &&
+        task.file === other.file &&
+        task.status === other.status
       );
     });
   return sameScalars && sameTasks;

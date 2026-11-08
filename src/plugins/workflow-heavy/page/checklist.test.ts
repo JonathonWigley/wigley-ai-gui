@@ -5,7 +5,7 @@ import {
   HEAVY_WORKFLOW_ID,
   withHeavyState,
 } from '../contract';
-import type { PlanProgress } from '../../../shared/plan-progress';
+import type { PlanProgress, TaskStatus } from '../../../shared/plan-progress';
 import { heavyChecklist } from './checklist';
 
 const BASE_FLOW: SessionFlow = {
@@ -21,14 +21,16 @@ const BASE_FLOW: SessionFlow = {
   runningSubagents: [],
 };
 
-// A plan of `tasks`, `[wave, done]` each, named by position.
-function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
-  const lines = tasks.map(([wave, done], index) => ({
+type TaskRow = [wave: number | null, done: boolean, status: TaskStatus | null];
+
+// A plan of `tasks`, `[wave, done, status]` each, named by position.
+function planOf(tasks: TaskRow[]): PlanProgress {
+  const lines = tasks.map(([wave, done, status], index) => ({
     wave,
     done,
     text: `t${index}`,
     file: null,
-    status: null,
+    status,
   }));
   return {
     checked: lines.filter((line) => line.done).length,
@@ -50,15 +52,15 @@ describe('heavyChecklist', () => {
 
   it.each<{
     name: string;
-    tasks: [wave: number | null, done: boolean][];
+    tasks: TaskRow[];
     view: unknown;
   }>([
     {
       name: 'one group per wave',
       tasks: [
-        [1, true],
-        [1, true],
-        [2, false],
+        [1, true, null],
+        [1, true, null],
+        [2, false, null],
       ],
       view: {
         title: 'Plan A',
@@ -68,30 +70,38 @@ describe('heavyChecklist', () => {
           {
             title: 'Wave 1',
             items: [
-              { text: 't0', done: true },
-              { text: 't1', done: true },
+              { text: 't0', done: true, running: false },
+              { text: 't1', done: true, running: false },
             ],
           },
-          { title: 'Wave 2', items: [{ text: 't2', done: false }] },
+          {
+            title: 'Wave 2',
+            items: [{ text: 't2', done: false, running: false }],
+          },
         ],
       },
     },
     {
       name: 'a box with no wave',
-      tasks: [[null, false]],
+      tasks: [[null, false, null]],
       view: {
         title: 'Plan A',
         checked: 0,
         total: 1,
-        groups: [{ title: 'Tasks', items: [{ text: 't0', done: false }] }],
+        groups: [
+          {
+            title: 'Tasks',
+            items: [{ text: 't0', done: false, running: false }],
+          },
+        ],
       },
     },
     {
       name: 'a split wave keeps its first place',
       tasks: [
-        [1, true],
-        [2, false],
-        [1, false],
+        [1, true, null],
+        [2, false, null],
+        [1, false, null],
       ],
       view: {
         title: 'Plan A',
@@ -101,11 +111,39 @@ describe('heavyChecklist', () => {
           {
             title: 'Wave 1',
             items: [
-              { text: 't0', done: true },
-              { text: 't2', done: false },
+              { text: 't0', done: true, running: false },
+              { text: 't2', done: false, running: false },
             ],
           },
-          { title: 'Wave 2', items: [{ text: 't1', done: false }] },
+          {
+            title: 'Wave 2',
+            items: [{ text: 't1', done: false, running: false }],
+          },
+        ],
+      },
+    },
+    {
+      name: 'a task in progress runs',
+      tasks: [
+        [1, true, 'done'],
+        [1, false, 'in progress'],
+        [1, false, 'not started'],
+        [1, false, null],
+      ],
+      view: {
+        title: 'Plan A',
+        checked: 1,
+        total: 4,
+        groups: [
+          {
+            title: 'Wave 1',
+            items: [
+              { text: 't0', done: true, running: false },
+              { text: 't1', done: false, running: true },
+              { text: 't2', done: false, running: false },
+              { text: 't3', done: false, running: false },
+            ],
+          },
         ],
       },
     },

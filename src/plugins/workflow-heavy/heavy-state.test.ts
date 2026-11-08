@@ -72,6 +72,23 @@ const PROGRESS_RETITLED_TASK: PlanProgress = {
   ],
 };
 
+const PROGRESS_TASK_RUNNING: PlanProgress = {
+  ...PROGRESS,
+  tasks: [
+    PROGRESS.tasks[0],
+    { ...PROGRESS.tasks[1], status: 'in progress' },
+    PROGRESS.tasks[2],
+  ],
+};
+const PROGRESS_TASK_LINKED: PlanProgress = {
+  ...PROGRESS,
+  tasks: [
+    PROGRESS.tasks[0],
+    { ...PROGRESS.tasks[1], file: '02-second.md' },
+    PROGRESS.tasks[2],
+  ],
+};
+
 const PLAN_X = '/r/docs/features/x/plan-a';
 const UNCHANGED = 'unchanged';
 // A stage no Heavy rule names, so only the bookkeeping moves.
@@ -229,6 +246,34 @@ const FOLD_ROWS: {
     expected: flowWith({
       planDir: PLAN_X,
       progress: PROGRESS_RETITLED_TASK,
+      reviewRoundsAtMake: 0,
+    }),
+  },
+  {
+    name: 'planChanged with a changed task status replaces progress',
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: planChanged(PROGRESS_TASK_RUNNING),
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS_TASK_RUNNING,
+      reviewRoundsAtMake: 0,
+    }),
+  },
+  {
+    name: 'planChanged with a changed task file replaces progress',
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: planChanged(PROGRESS_TASK_LINKED),
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS_TASK_LINKED,
       reviewRoundsAtMake: 0,
     }),
   },

@@ -69,6 +69,8 @@ interface HeavyTestSettings {
 const FLOWS_PATH = `/data/workflow/${FLOWS_FILE}`;
 
 const settled = () => new Promise((settle) => setImmediate(settle));
+// Git that finds every folder outside a clone, so each plan has one copy.
+const NO_CLONE_GIT = { topLevel: async () => null };
 
 // Project files whose reads, from `holdReads` on, wait for `release`.
 function holdableReads() {
@@ -244,6 +246,7 @@ function startWorkflowPart(
         return { dispose: () => undefined };
       },
       services: {
+        git: NO_CLONE_GIT,
         files: projectFiles,
         log: (line: string) => logs.push(line),
         clock: time.clock,
@@ -520,7 +523,7 @@ function startPartsInHarnesses(
   const heavy = startMainPart(workflowHeavyMainPart, {
     dependencies: [dependency, FAKE_SESSIONS, FAKE_CHAT],
     settings,
-    services,
+    services: { git: NO_CLONE_GIT as never, ...services },
   });
   return { engine, heavy };
 }
