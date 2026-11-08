@@ -1,6 +1,6 @@
 # 08 — Chat names each call's agent and each touched worktree
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -223,3 +223,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 4b3f3339 · proof: diff read; Produces present (createToolCallers, callerGuard, worktreesInCommand, guard wired in start.ts); chat tests 46 files 1454 passed; full typecheck/lint held for 06's in-progress heavy files · concerns: doc sentence on the worktree-add command not matching is untrue: the post-result roots read re-matches that command, so the new worktree lists from the add itself; stale-read row is a timeline check; startChatPart fixture has no services.git, so open-time reads log rejections

@@ -218,8 +218,8 @@ Boundary rules:
 
 ### Wave 3
 - [ ] [Heavy reads the newest plan copy](06-heavy-newest-plan-copy.md) — after 01, 02
-- [ ] [Backlog counts from the newest copy](07-backlog-newest-copy.md) — after 01, 02
-- [ ] [Chat names each call's agent and each touched worktree](08-chat-callers-and-worktrees.md) — after 02, 03
+- [x] [Backlog counts from the newest copy](07-backlog-newest-copy.md) — after 01, 02
+- [x] [Chat names each call's agent and each touched worktree](08-chat-callers-and-worktrees.md) — after 02, 03
 
 ### Wave 4
 - [ ] [Doc re-read](09-doc-re-read.md)
@@ -238,6 +238,8 @@ Review base: 9980e669
 - 04 fix · 97f9d4ff · layer check passes for workflow files; tests pass (54) · concerns: none
 - 05 · 9c23d58b · diff read: agentId on assistant/thinking entries; transcript skips subagent text; held ends, hand-back end, relisting in stream-decoder; follow-up removed; decoder/chat/agents tests pass; typecheck clean for its files · concerns: activity-runs.test.ts also needed agentId (not in Files); a subagent stream_event text block could show the dock as writing (decoder-only case); oxfmt not run
 - 02 · 8fa2e4c7 · diff read: GitWorktree, worktrees, commonDir in git contract and process-git; PlanCopy, PlanCopyDeps, repoTop, planCopies, newestPlanCopy, readPlanCopy in src/shared/plan-copies.ts; full typecheck clean; git/backlog/docs/plan-copies tests pass (1368) · concerns: AGENTS.md git/ entry names worktrees but not commonDir (for 09)
+- 07 · 45db9863 · diff read: BacklogDeps.files widened; readPlan counts and statuses from newestPlanCopy/readPlanCopy, header from index copy; backlog tests pass; backlog self-test owed to the test gate · concerns: listed memory seed relies on memory-files storing before its first await
+- 08 · 4b3f3339 · diff read; Produces present (createToolCallers, callerGuard, worktreesInCommand, guard wired in start.ts); chat tests 46 files 1454 passed; full typecheck/lint held for 06's in-progress heavy files · concerns: doc sentence on the worktree-add command not matching is untrue: the post-result roots read re-matches that command, so the new worktree lists from the add itself; stale-read row is a timeline check; startChatPart fixture has no services.git, so open-time reads log rejections
 ### Contract changes
 ### Rulings
 - Ended/aborted checks after the guard wait run only when a guard was registered at call time; with none the handler runs same-tick as before — Decisions call these checks new to the guard wait — once chat's guard lands every call takes the checks · group 03 · group 03
@@ -247,5 +249,11 @@ Review base: 9980e669
 - A relisted subagent's agentReplied is rebuilt from kept model/context, so its contextWindow is the model's current window — matches later replies — a window learned off-roster shows one event early · group 05 · group 05
 - isDockStep keeps raw steps (no agentId) and main-agent steps — raw carries no agentId — none · group 05 · group 05
 - planCopies falls back to the copy at planDir with no log when git.worktrees rejects — task step 6 — a persistently failing worktree list goes unreported unless 06/07 log it · group 02 · group 02
+- oxfmt --write (npm run lint:fix) run by the lead as a tooling-only pass over entry-list.ts and session-list.test.ts, commit 71588234 — lint failed on format only — none · lead
+- Test rows give files as [path, text, time] triples, not the pairs Decisions names — a written file needs its text — row shape only · group 07 · group 07
+- 08: Bash commands are recorded during replay too; only the result-triggered roots read waits for live · group 08
+- 08: commandOf is a local field reader, since json-fields.ts is outside plugin imports · group 08
+- 08: two roots sharing a last segment list one name · group 08
+- Lead: 09 (doc re-read) dispatched beside 06's re-dispatch, since the 06 fix edits only workflow-heavy-page.test.ts, which no doc names.
 ### Review rounds
 ### Test gate

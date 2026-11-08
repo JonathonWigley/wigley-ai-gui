@@ -1,6 +1,6 @@
 # 06 — Heavy reads the newest plan copy
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 07 — Backlog counts from the newest copy
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -86,3 +86,5 @@ the tests above.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 45db9863 · proof: diff read: BacklogDeps.files widened; readPlan counts and statuses from newestPlanCopy/readPlanCopy, header from index copy; backlog tests pass; backlog self-test owed to the test gate · concerns: listed memory seed relies on memory-files storing before its first await
