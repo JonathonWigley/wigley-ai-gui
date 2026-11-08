@@ -1,6 +1,6 @@
 # 03 — Collapsible keep-body option
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

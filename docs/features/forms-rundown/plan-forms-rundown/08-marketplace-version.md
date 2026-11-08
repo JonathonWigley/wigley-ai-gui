@@ -1,6 +1,6 @@
 # 08 — Marketplace version bump
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -62,3 +62,4 @@ Commit:    one commit, in the marketplace worktree. Do not push: task 10 pushes.
 
 ## Proof
 
+Commit marketplace 44d083c · proof: diff read: both manifests 1.20.1→1.20.2 only; every Done command passes, check_manifests --against origin/main passes after commit · concerns: none

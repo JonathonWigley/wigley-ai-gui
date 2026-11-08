@@ -232,7 +232,7 @@ Boundary rules:
 ### Wave 1
 - [ ] [Question summary field](01-question-summary.md)
 - [ ] [Collapsible keep-body option](03-collapsible-keep-body.md)
-- [ ] [Marketplace version bump](08-marketplace-version.md)
+- [x] [Marketplace version bump](08-marketplace-version.md)
 
 ### Wave 2
 - [ ] [Label-free question card](02-label-free-question-card.md) — after 01
@@ -255,10 +255,12 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 21b036cb
 
 ### Groups
+- 08 · marketplace 44d083c · diff read: both manifests 1.20.1→1.20.2 only; every Done command passes, check_manifests --against origin/main passes after commit · concerns: none
 ### Contract changes
 ### Rulings
+- Rebased the gui and agents branches onto main at preflight (9 and 1 commits behind); the docs-written-ahead commits are now gui 3c06d4c3 (was 4d679c5c) and agents 67c4697 (was 64ba2e3); review bases: gui 21b036cb, marketplace 3689c72, agents 67c4697 — work builds on origin's latest — a stale sha in a later brief would mislead a re-read · lead
 ### Review rounds
 ### Test gate
