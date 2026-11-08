@@ -43,14 +43,32 @@ function setup(
   );
   const clock = fakeTimers();
   const logs: string[] = [];
+  const pageHide = fakePageHide();
   const autosave = startRoundAutosave({
     store,
     save,
     delayMs,
+    onPageHide: pageHide.onPageHide,
     timers: clock.timers,
     log: (message: string) => logs.push(message),
   });
-  return { store, logs, autosave, ...clock };
+  return { store, logs, autosave, pageHide, ...clock };
+}
+
+// A page hide the test fires by hand.
+function fakePageHide() {
+  const listeners = new Set<() => void>();
+  return {
+    onPageHide: (listener: () => void) => {
+      listeners.add(listener);
+      return { dispose: () => void listeners.delete(listener) };
+    },
+    fire: () => {
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+  };
 }
 
 // A save whose promise the test settles by hand.
@@ -72,10 +90,10 @@ async function settle() {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-function typeNotes(store: FormsStore, value: string) {
+function typeNotes(store: FormsStore, value: string, formId = 'r1') {
   store.dispatch({
     type: 'setText',
-    formId: 'r1',
+    formId,
     target: { field: 'notes', item: { kind: 'question', index: 1 } },
     value,
   });
@@ -261,5 +279,44 @@ describe('startRoundAutosave', () => {
     typeNotes(store, 'ab');
 
     expect([...scheduled.values()].map((timer) => timer.ms)).toEqual([50]);
+  });
+
+  it('pagehide_saves_every_unsaved_draft_synchronously', () => {
+    const { calls, save } = heldSaves();
+    const { store, scheduled, pageHide } = setup(save);
+    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+    typeNotes(store, 'a');
+    typeNotes(store, 'b', 'r2');
+
+    pageHide.fire();
+
+    expect(calls.map((call) => call.body.answers[0].notes)).toEqual(['a', 'b']);
+    expect(scheduled.size).toBe(0);
+  });
+
+  it('pagehide_leaves_a_saved_draft_and_a_saving_revision_alone', async () => {
+    const { calls, save } = heldSaves();
+    const { store, pageHide, runDue } = setup(save);
+    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+    typeNotes(store, 'a');
+    typeNotes(store, 'b', 'r2');
+    runDue();
+    calls[1].resolve();
+    await settle();
+
+    pageHide.fire();
+
+    expect(calls).toHaveLength(2);
+  });
+
+  it('dispose_stops_the_pagehide_listener', () => {
+    const { calls, save } = heldSaves();
+    const { store, autosave, pageHide } = setup(save);
+    typeNotes(store, 'a');
+
+    autosave.dispose();
+    pageHide.fire();
+
+    expect(calls).toHaveLength(0);
   });
 });

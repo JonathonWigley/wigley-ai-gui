@@ -58,7 +58,9 @@ import { qualify } from '../../../shared/plugin-manifests';
 import {
   type BacklogChannel,
   type BacklogEdit,
+  type BacklogFocus,
   type BacklogHome,
+  type BacklogPlace,
   backlogOpenHomeRowCommand,
   backlogSelectRowCommand,
 } from '../contract';
@@ -78,7 +80,6 @@ import {
   type BacklogAction,
   type BacklogConfirm,
   type BacklogEditor,
-  type BacklogFocus,
   type BacklogRow,
   type BacklogState,
   backlogReducer,
@@ -93,6 +94,7 @@ import {
   isDraftChanged,
   openHome,
   orderedHomes,
+  placeOf,
   rowTitle,
   selectedRow,
   tagsOf,
@@ -181,6 +183,10 @@ export interface BacklogViewDeps {
   runKey<A>(key: CommandKey<A>, arg: A): void;
   // The open home, for the title bar; null with none open.
   homeShown(home: BacklogHome | null): void;
+  // The last page's place, put back once the first homes load; null for none.
+  savedPlace: BacklogPlace | null;
+  // Hears the place after each change, from the first load on.
+  placeChanged(place: BacklogPlace): void;
 }
 
 // Backlog mode's view: the homes for the side bar, the open home's rows and
@@ -189,7 +195,7 @@ export interface BacklogViewDeps {
 // in `backlogReducer`; the view draws its state after each change, every pane,
 // row, picker row and prompt body through the layout picked for that part.
 // It draws with `default` until the first `setLayouts`. `load` reads the
-// homes; `reload` reads them again (the channel's `changed`); `shown` sets the
+// homes, and the first read to land puts `savedPlace` back; `reload` reads them again (the channel's `changed`); `shown` sets the
 // scope and focus where the keys were left.
 export interface BacklogView {
   sideBar: HTMLElement;
@@ -948,6 +954,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
   drawPanes();
   store.subscribe(() => render());
+  store.subscribe(() => {
+    const state = store.get();
+    if (state.isLoaded) {
+      deps.placeChanged(placeOf(state));
+    }
+  });
 
   // ── Reads and writes ───────────────────────────────────────────────────
   // A read overtaken by a later one is dropped.
@@ -959,6 +971,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     loadedCount += 1;
     dispatch({ type: 'loaded', read: result });
+    if (loadedCount === 1 && deps.savedPlace !== null) {
+      dispatch({ type: 'placeRestored', place: deps.savedPlace });
+    }
     deps.log(`loaded ${String(result.homes.length)} homes`);
   };
 

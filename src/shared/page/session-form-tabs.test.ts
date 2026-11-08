@@ -101,7 +101,7 @@ describe('session form tabs', () => {
     const { tabs, added } = tabsSetup();
     tabs.mount('s1', root());
 
-    tabs.takeOver('f1', 's1');
+    tabs.takeOver('f1', 's1', false);
     tabs.release('f1');
     tabs.release('f1');
 
@@ -112,7 +112,7 @@ describe('session form tabs', () => {
   it('refuses a take over for a session with no mounted tab', () => {
     const { tabs } = tabsSetup();
 
-    expect(() => tabs.takeOver('f1', 's1')).toThrow(
+    expect(() => tabs.takeOver('f1', 's1', false)).toThrow(
       'Form f1 takes over session s1, which has no mounted tab',
     );
   });

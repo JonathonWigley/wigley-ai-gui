@@ -15,7 +15,7 @@ export interface FormTabView {
 
 // The sessions plugin's `SessionTabHandle` fits.
 export interface FormTabHandle {
-  takeOver(): { release(): void };
+  takeOver(options?: { restored?: boolean }): { release(): void };
   isVisible(): boolean;
 }
 
@@ -54,7 +54,9 @@ export interface SessionFormTabs {
   // session has none.
   mount(sessionId: string, root: HTMLElement): void;
   // Takes over the session with its tab for form `formId`; `release` gives it back.
-  takeOver(formId: string, sessionId: string): void;
+  // A `restored` form, one the last page showed, selects nothing and adopts the
+  // take over that page saved.
+  takeOver(formId: string, sessionId: string, restored: boolean): void;
   release(formId: string): void;
   // For each tab: shows its idle state while `statusOf` is null, keeps its status (`statusOf`) for
   // `statusPart`'s tooltip, and calls `formShown` when whether a form shows changed.
@@ -119,14 +121,14 @@ export function createSessionFormTabs(
       const tab = tabOf(sessionId);
       tab.element.insertBefore(root, tab.idle);
     },
-    takeOver(formId, sessionId) {
+    takeOver(formId, sessionId, restored) {
       const tab = tabs.get(sessionId);
       if (tab === undefined) {
         throw new Error(
           `Form ${formId} takes over session ${sessionId}, which has no mounted tab`,
         );
       }
-      takeOvers.set(formId, tab.handle.takeOver());
+      takeOvers.set(formId, tab.handle.takeOver({ restored }));
     },
     release(formId) {
       takeOvers.get(formId)?.release();

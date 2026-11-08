@@ -11,7 +11,7 @@ import {
 } from '../../../shared/page/layout-host/draw-part';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
-import type { QueuedMessage } from '../contract';
+import type { ChatPlace, EntryFocus, QueuedMessage } from '../contract';
 import { chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -53,7 +53,6 @@ import {
 import {
   blockStopId,
   clearAnchor,
-  type EntryFocus,
   entryIdOfStop,
   focusAfterChange,
   focusAfterClose,
@@ -80,7 +79,8 @@ import { resultStepCount } from './working-turn';
 // message's id, `runClicked` on an activity line with its run's id, and
 // `stopClicked` with the stop it lands on, unless it is one the cursor leaves
 // (see `EntryList`). `turnLine` is the element the list keeps as its row after
-// the last entry; its owner draws and hides it.
+// the last entry; its owner draws and hides it. `placeChanged` hears each change
+// that may move `place()`: the cursor, a run or an expander.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -93,7 +93,14 @@ export interface EntryListDeps {
   runClicked(runId: string): void;
   stopClicked(stopId: string): void;
   turnLine: HTMLElement;
+  placeChanged(): void;
 }
+
+// The part of a Chat tab's place the list holds.
+export type EntryListPlace = Pick<
+  ChatPlace,
+  'focus' | 'openRuns' | 'openExpanders'
+>;
 
 // What the entry cursor is on: an entry (for a block stop, the entry holding the
 // block), a run's activity line, or a pending row.
@@ -221,6 +228,14 @@ export interface EntryList {
   // entry's kit, every activity line and every pending row, and forgets the open
   // runs; the list's owner calls it when it drops the list.
   dispose(): void;
+  // The cursor, the open runs and each entry's open expanders, by entry id
+  // (entries with none open left out); a held `restorePlace` value until it
+  // applies.
+  place(): EntryListPlace;
+  // Puts the last page's place back once the list holds entries: now, or at
+  // the rebuild that brings them. A saved stop no entry holds leaves the cursor
+  // at its start, on the latest stop.
+  restorePlace(place: EntryListPlace): void;
 }
 
 // One entry as drawn into its slot: the view the layout returned (null for
@@ -344,6 +359,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let rows: ListRow[] = [];
   let order: string[] = [];
   let focus: EntryFocus = START_FOCUS;
+  // The last page's place, held until the list holds entries.
+  let savedPlace: EntryListPlace | null = null;
   let tick: number | null = null;
   // The elements carrying `is-cursor` or `is-range`.
   const markedElements: HTMLElement[] = [];
@@ -452,6 +469,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     } else if (scroll === 'bottom' || focus.following) {
       scrollToBottom();
     }
+    deps.placeChanged();
   };
 
   // Runs the live run's part update with the time now, and arms the next tick.
@@ -489,6 +507,32 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     focus = focusAfterChange(focus, order, lastStopId());
     drawFocus('follow');
     followWorking();
+  };
+
+  // Opens the saved runs and expanders, then puts the cursor on the saved stop
+  // when a stop holds it, else at its start; false while no entry is held.
+  const applySavedPlace = (): boolean => {
+    if (savedPlace === null || entries.length === 0) {
+      return false;
+    }
+    const saved = savedPlace;
+    savedPlace = null;
+    for (const runId of saved.openRuns) {
+      openRuns.add(runId);
+    }
+    for (const [entryId, states] of Object.entries(saved.openExpanders)) {
+      slots.get(entryId)?.kit.expanders.restore(states);
+    }
+    changed();
+    const { stopId } = saved.focus;
+    const isStopHeld = stopId === null || order.includes(stopId);
+    focus = focusAfterChange(
+      isStopHeld ? saved.focus : START_FOCUS,
+      order,
+      lastStopId(),
+    );
+    drawFocus(focus.following ? 'bottom' : 'slot');
+    return true;
   };
 
   // Draws `messages` as the pending rows, in order, after the entries.
@@ -734,6 +778,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       observeSlot(deps.turnLine);
       putQueued(queued);
       changed();
+      applySavedPlace();
     },
     setQueued(queued) {
       putQueued(queued);
@@ -838,11 +883,18 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       }
       const opens = expanders.isAnyClosed();
       expanders.setAllOpen(opens);
+      deps.placeChanged();
       return { stop, result: opens ? 'expanded' : 'collapsed' };
     },
     toggleRun: (runId) => (runSlots.has(runId) ? toggleRun(runId) : 'nothing'),
-    toggleExpander: (entryId, place) =>
-      slots.get(entryId)?.kit.expanders.toggle(place) ?? 'nothing',
+    toggleExpander(entryId, place) {
+      const result = slots.get(entryId)?.kit.expanders.toggle(place);
+      if (result === undefined) {
+        return 'nothing';
+      }
+      deps.placeChanged();
+      return result;
+    },
     moveFocusTo(stopId) {
       if (!order.includes(stopId)) {
         return false;
@@ -864,6 +916,23 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       disposePartSlots(runSlots);
       disposePartSlots(queuedSlots);
       openRuns.clear();
+    },
+    place() {
+      if (savedPlace !== null) {
+        return savedPlace;
+      }
+      const openExpanders: Record<string, boolean[]> = {};
+      for (const [entryId, slot] of slots) {
+        const states = slot.kit.expanders.openStates();
+        if (states.includes(true)) {
+          openExpanders[entryId] = states;
+        }
+      }
+      return { focus, openRuns: [...openRuns], openExpanders };
+    },
+    restorePlace({ focus: savedFocus, openRuns: runs, openExpanders }) {
+      savedPlace = { focus: savedFocus, openRuns: runs, openExpanders };
+      applySavedPlace();
     },
   };
 }

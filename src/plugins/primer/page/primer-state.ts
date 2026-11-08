@@ -18,12 +18,13 @@ import {
   type PrimerGroup,
   type PrimerItem,
   type PrimerNeed,
+  type PrimerPane,
+  type PrimerPlace,
   PRIMER_SLUG_PATTERN,
+  type TaskRow,
 } from '../contract';
 import type { PrimerScopeName } from '../ids';
 
-// The pane the keys act on; a column is a pane that lists rows.
-export type PrimerPane = 'tasks' | 'items' | 'card';
 export type PrimerColumn = 'tasks' | 'items';
 
 export type FeatureField = 'name' | 'slug' | 'spec' | 'summary' | 'notes';
@@ -35,9 +36,6 @@ export type TextTarget =
   | { field: 'itemComment'; entryId: string; item: number }
   | { field: 'newItem'; entryId: string }
   | { field: 'taskComment'; entryId: string };
-
-// A row of the tasks column.
-export type TaskRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
 
 // The row a card shows. `item` is 1-based within the task's items, as in
 // TextTarget.
@@ -91,7 +89,10 @@ type PrimerOwnAction =
   | { type: 'showTarget'; formId: string; target: TextTarget }
   | { type: 'setText'; formId: string; target: TextTarget; value: string }
   // Commits each task's add-item text as an item, then opens the review.
-  | { type: 'openReview' };
+  | { type: 'openReview' }
+  // Puts primer `formId` back where the last page left it; the view applies
+  // only while the primer is active.
+  | { type: 'placeRestored'; formId: string; place: PrimerPlace };
 
 export type PrimerAction =
   | SessionFormsAction<PresentedPrimer>
@@ -207,7 +208,84 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
       return active === null
         ? state
         : updateForm({ ...state, view: 'review' }, active, addNewItems);
+    case 'placeRestored':
+      return restorePlace(state, action.formId, action.place);
   }
+}
+
+// The primer's place: its view and the view its Cancel prompt returns to are
+// the state's while it is active, else `kept`'s, the place last written for it.
+export function primerPlace(
+  state: PrimerState,
+  primer: OpenPrimer,
+  kept: PrimerPlace | undefined,
+): PrimerPlace {
+  const { selectedTask, selectedItem: item, pane } = primer;
+  if (primer.formId === state.activeFormId && state.view !== 'idle') {
+    return {
+      selectedTask,
+      selectedItem: item,
+      pane,
+      view: state.view,
+      confirmReturnView: state.confirmReturnView,
+    };
+  }
+  return {
+    selectedTask,
+    selectedItem: item,
+    pane,
+    view: kept?.view ?? 'primer',
+    confirmReturnView: kept?.confirmReturnView ?? 'review',
+  };
+}
+
+// A saved task row the primer no longer holds falls back to the Feature row,
+// and a saved item past the task's items to none.
+function restorePlace(
+  state: PrimerState,
+  formId: string,
+  place: PrimerPlace,
+): PrimerState {
+  const placed = updateForm(state, formId, (primer) => {
+    const row = place.selectedTask;
+    const entry = row.kind === 'feature' ? null : entryOf(primer, row.entryId);
+    const isRowHeld = row.kind === 'feature' || entry !== null;
+    const item = place.selectedItem;
+    const isItemHeld =
+      item !== null &&
+      entry !== null &&
+      item >= 1 &&
+      item <= entry.items.length;
+    const restored = withFocus(
+      {
+        ...primer,
+        selectedTask: isRowHeld ? row : FEATURE_ROW,
+        selectedItem: isItemHeld ? item : null,
+      },
+      place.pane,
+    );
+    return isSamePlace(restored, primer) ? primer : restored;
+  });
+  const isViewUnchanged =
+    placed.view === place.view &&
+    placed.confirmReturnView === place.confirmReturnView;
+  if (formId !== placed.activeFormId || isViewUnchanged) {
+    return placed;
+  }
+  return {
+    ...placed,
+    view: place.view,
+    confirmReturnView: place.confirmReturnView,
+  };
+}
+
+function isSamePlace(a: OpenPrimer, b: OpenPrimer): boolean {
+  return (
+    isSameTask(a.selectedTask, b.selectedTask) &&
+    a.selectedItem === b.selectedItem &&
+    a.pane === b.pane &&
+    a.cardColumn === b.cardColumn
+  );
 }
 
 // The Feature row, then the tasks of each group in TASK_GROUPS order, each

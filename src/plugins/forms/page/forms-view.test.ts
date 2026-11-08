@@ -18,6 +18,7 @@ import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
+import type { RoundPlace } from '../contract';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One `insert` call on an editor the host made.
@@ -72,9 +73,15 @@ type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 // `tabs` every tab element by session, and `calls` logs every `setScope` and
 // `setResizeTarget` call, in call order. `targets` holds every drop target the
 // view registered, `inserted` every insert into a box's editor, and
-// `activities` every row activity the view set.
-function formTabSetup(others: string[] = []) {
+// `activities` every row activity the view set. `savedPlaces` stands for the
+// places the last page saved; `takeOvers` holds each take over's session and
+// whether it was restored.
+function formTabSetup(
+  others: string[] = [],
+  savedPlaces: ReadonlyMap<string, RoundPlace> = new Map(),
+) {
   const calls: ScopeCall[] = [];
+  const takeOvers: [string, boolean][] = [];
   const activities: [string, string, RowActivity | null][] = [];
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
@@ -102,7 +109,10 @@ function formTabSetup(others: string[] = []) {
         tabs.set(sessionId, asFake(view.element));
         return {
           select: () => undefined,
-          takeOver: () => ({ release: () => undefined }),
+          takeOver: (options) => {
+            takeOvers.push([sessionId, options?.restored === true]);
+            return { release: () => undefined };
+          },
           isVisible: () => true,
           dispose: () => undefined,
         };
@@ -155,6 +165,7 @@ function formTabSetup(others: string[] = []) {
     },
     toast: () => undefined,
     log: () => undefined,
+    savedPlaces,
   });
   const tab = tabs.get(presented.sessionId);
   if (tab === undefined) {
@@ -170,6 +181,7 @@ function formTabSetup(others: string[] = []) {
     targets,
     inserted,
     activities,
+    takeOvers,
   };
 }
 
@@ -225,6 +237,24 @@ describe('form tabs of several sessions', () => {
     expect(itemsPane(unfocused).hidden).toBe(false);
     expect(calls.at(-2)).toEqual(['setScope', 'review']);
     expect(store.get().activeFormId).toBe('r1');
+  });
+
+  it('restored_round_passes_restored_and_new_round_does_not', () => {
+    const saved: RoundPlace = {
+      focus: 0,
+      reviewRow: 0,
+      view: 'forms',
+      confirmReturnView: 'review',
+    };
+    const { store, takeOvers } = formTabSetup(['r2'], new Map([['r1', saved]]));
+
+    store.dispatch({ type: 'formShown', form: presentedRound('r3') });
+
+    expect(takeOvers).toEqual([
+      ['r1-session', true],
+      ['r2-session', false],
+      ['r3-session', false],
+    ]);
   });
 
   it('draws a round that arrives for an unfocused session', () => {

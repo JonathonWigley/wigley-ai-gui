@@ -41,6 +41,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
 import {
   type SettingsChannel,
+  type SettingsPlace,
   settingsMoveToRowCommand,
   settingsOpenSectionAtCommand,
 } from '../contract';
@@ -212,6 +213,9 @@ export interface SettingsViewDeps {
   // Runs the command `key` with `arg`, as a click does: a row's click runs
   // `settings.moveToRow` and a section's `settings.openSectionAt`.
   runKey<A>(key: CommandKey<A>, arg: A): void;
+  // Hears the place after each change to the cursors, the open section or the
+  // filter.
+  placeChanged(place: SettingsPlace): void;
 }
 
 export type SettingsCommand =
@@ -244,6 +248,7 @@ export type SettingsCommand =
 // where they act: the cursor row's actions in its layout's `rowActions` slot.
 // `setLayouts` draws everything again in the new layouts, keeping the cursor,
 // the open section, the focus side, an open box or filter and an open picker.
+// Each change to the place reaches `placeChanged`.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -263,6 +268,11 @@ export interface SettingsView {
   // then tells `sectionPicked`; an index no section holds logs
   // `no section <index>`.
   openSectionAt(index: number): void;
+  // Puts back a reloaded page's place, before `load`: the first show opens the
+  // saved section with its filter applied, its box closed. A saved section the
+  // schema no longer holds opens the first, and a saved cursor key no row
+  // holds leaves the cursor where the first draw sets it.
+  restorePlace(place: SettingsPlace): void;
 }
 
 // The cursor prompt's label for each action it shows.
@@ -392,6 +402,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let entryDisposes: (() => void)[] = [];
   let cursorKey: string | null = null;
   let openBox: OpenBox | null = null;
+  let isPlaceRestored = false;
 
   const disposeEntries = () => {
     const disposes = entryDisposes;
@@ -484,6 +495,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     if (cursorKey !== null) {
       drawnRows.get(cursorKey)?.element.scrollIntoView({ block: 'nearest' });
     }
+    deps.placeChanged({
+      sectionsCursor,
+      openSectionId,
+      cursorKey,
+      filter: query,
+    });
   };
 
   // The build of a group header, empty state or problem card for `input`.
@@ -880,28 +897,43 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     toast: deps.toast,
   };
 
-  const openSection = (index: number) => {
+  // Opens the section at `index` with `filter` and the cursor on `cursorKey`:
+  // a fresh open clears both.
+  const openSection = (
+    index: number,
+    filter = '',
+    openCursorKey: string | null = null,
+  ) => {
     const section = sectionList()[index];
     if (section === undefined) {
       return;
     }
     openSectionId = section.id;
     hasOpenedSection = true;
-    query = '';
-    filterBox.value = '';
-    filterFrame.hidden = true;
+    query = filter;
+    filterBox.value = filter;
+    filterFrame.hidden = filter.trim() === '';
     openSectionTitle = section.title;
     log(`section ${section.id}`);
     deps.sectionShown(section.title);
-    cursorKey = null;
+    cursorKey = openCursorKey;
     draw(true);
   };
 
-  // The first show opens the first section, once the schema names it.
+  // The first show opens the first section, once the schema names it, or the
+  // restored place's section with its filter and cursor.
   const openFirstSection = () => {
-    if (hasShown && !hasOpenedSection && schema !== null) {
-      openSection(0);
+    if (!hasShown || hasOpenedSection || schema === null) {
+      return;
     }
+    const restoredIndex = sectionList().findIndex(
+      (section) => section.id === openSectionId,
+    );
+    if (isPlaceRestored && restoredIndex !== -1) {
+      openSection(restoredIndex, query, cursorKey);
+      return;
+    }
+    openSection(0);
   };
 
   const moveSections = (to: (count: number) => number) => {
@@ -1123,6 +1155,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       focusSections();
       openSection(index);
       deps.sectionPicked();
+    },
+    restorePlace(place) {
+      isPlaceRestored = true;
+      sectionsCursor = place.sectionsCursor;
+      openSectionId = place.openSectionId;
+      cursorKey = place.cursorKey;
+      query = place.filter;
+      filterBox.value = place.filter;
+      filterFrame.hidden = place.filter.trim() === '';
     },
   };
 }

@@ -14,7 +14,7 @@ import {
   setToggleMark,
   toggleMark,
 } from '../../../../shared/page/ui/toggle-mark';
-import type { PrimerEntry, PrimerItem } from '../../contract';
+import type { PrimerEntry, PrimerItem, TaskRow } from '../../contract';
 import {
   type PrimerCommandName,
   primerCommand,
@@ -46,7 +46,6 @@ import {
   includedCount,
   type OpenPrimer,
   selectedEntry,
-  type TaskRow,
   taskRows,
   type TextTarget,
 } from '../primer-state';

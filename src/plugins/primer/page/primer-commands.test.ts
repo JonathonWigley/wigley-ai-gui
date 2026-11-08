@@ -13,7 +13,12 @@ import type {
   PageCommandContext,
   ToastTone,
 } from '../../../contracts/plugin';
-import type { PrimerBody, PrimerEntry, PrimerFeature } from '../contract';
+import type {
+  PrimerBody,
+  PrimerEntry,
+  PrimerFeature,
+  PrimerPane,
+} from '../contract';
 import { boxKey, type PrimerBox } from './boxes';
 import {
   closePrimerFromMain,
@@ -26,7 +31,6 @@ import {
   buildBody,
   cardRow,
   initialState,
-  type PrimerPane,
   rowName,
   selectedEntry,
 } from './primer-state';

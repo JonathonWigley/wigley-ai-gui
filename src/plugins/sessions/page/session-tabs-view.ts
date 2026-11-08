@@ -2,14 +2,18 @@ import type { PaneDirection } from '../../../contracts/panes';
 import { callEach } from '../../../shared/call-each';
 import { element, moveConnected } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import { type PlaceWrites, placeWrites } from '../../../shared/page/place-slot';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeyHints } from '../../../contracts/plugin';
+import type { KeyedSlotWriter } from '../../../contracts/state';
 import type {
+  SessionsPlace,
   SessionsState,
   SessionTabHandle,
   SessionTabView,
+  TakeOver,
 } from '../contract';
 import type {
   EmptyTextInput,
@@ -32,10 +36,11 @@ import {
   tabsAfterAdd,
   tabsAfterRelease,
   tabsAfterRemove,
+  tabsAfterRestoredAdd,
   tabsAfterSelect,
   tabsAfterTakeOver,
-  type TakeOver,
   takeOversAfterRelease,
+  takeOversWithLiveTabs,
 } from './tabs';
 
 interface Tab {
@@ -45,7 +50,9 @@ interface Tab {
 // A session's frame: its session, its tab bar over the sheet holding its
 // tabs' body and the text saying why no tab shows; its tab ids and selection,
 // and its tabs by id, both in strip order; the take overs its tabs hold, one
-// per tab.
+// per tab; the place the last page saved for its session, null for none, the
+// tabs whose take over came from that place and no take over of this page has
+// claimed, and the writes of its place.
 interface Frame {
   sessionId: string;
   element: HTMLElement;
@@ -56,6 +63,9 @@ interface Frame {
   tabs: TabsState;
   entries: Map<string, Tab>;
   takeOvers: TakeOver[];
+  saved: SessionsPlace | null;
+  savedTakeOverTabIds: Set<string>;
+  placeWrites: PlaceWrites<SessionsPlace>;
   drawnTabs: DrawnPart<SessionsPart>[];
   // The selected tab the strip last scrolled into view.
   scrolledTabId: string | null;
@@ -85,13 +95,15 @@ interface DrawnPane {
 // change to a session's tabs or their selection; `keys`
 // draws the key beside the text asking for a session to be picked; `parts`
 // draws the panes, the tab bars with the bar parts other plugins added, the
-// tabs and that text; `selectTab` runs on a tab's click.
+// tabs and that text; `selectTab` runs on a tab's click. `places` holds each
+// session's place: a new frame reads the last page's, and each change writes it.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
   selectTab(sessionId: string, tabId: string): void;
   keys: Pick<KeyHints, 'anchor'>;
   parts: SessionsParts;
+  places: Pick<KeyedSlotWriter<SessionsPlace>, 'get' | 'set'>;
 }
 
 export interface SessionTabsView {
@@ -147,7 +159,10 @@ export interface SessionTabsView {
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
 // (`vacate`) before its slot leaves the document. The strip follows each tab's
 // `order` (`tabsAfterAdd`). A frame no pane shows, a session's with no row yet
-// included, waits in the hidden holder.
+// included, waits in the hidden holder. Each frame writes its place (selected
+// tab, selection count, take overs) to `places` on each change, and a new frame
+// starts from the place the last page wrote: a tab added late takes back the
+// selection it had while no pick moved it since (`tabsAfterRestoredAdd`).
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, which runs `selectTab`, its tooltip and the
 // active tab's mark.
@@ -196,6 +211,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     bodies.append(body);
     frameElement.append(barHost, bodies);
     holder.append(frameElement);
+    const saved = deps.places.get(sessionId) ?? null;
     const created: Frame = {
       sessionId,
       element: frameElement,
@@ -203,9 +219,15 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       bar: drawBar({ sessionId, barHost }),
       bodies,
       body,
-      tabs: NO_TABS,
+      tabs:
+        saved === null ? NO_TABS : { ...NO_TABS, selections: saved.selections },
       entries: new Map(),
-      takeOvers: [],
+      takeOvers: saved?.takeOvers ?? [],
+      saved,
+      savedTakeOverTabIds: new Set(
+        saved?.takeOvers.map((takeOver) => takeOver.tabId),
+      ),
+      placeWrites: placeWrites((place) => deps.places.set(sessionId, place)),
       drawnTabs: [],
       scrolledTabId: null,
       text: null,
@@ -410,13 +432,27 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     deps.changed();
   };
 
-  // Stores the session's next tabs, running `changed` only when they changed.
+  const writePlace = (frame: Frame) =>
+    frame.placeWrites.write({
+      selectedTabId: frame.tabs.selectedTabId,
+      selections: frame.tabs.selections,
+      takeOvers: frame.takeOvers,
+    });
+
+  // Stores the session's next tabs and writes its place, running `changed` only
+  // when the tabs changed.
   const setTabs = (frame: Frame, tabs: TabsState) => {
-    if (tabs === frame.tabs) {
-      return;
-    }
+    const isChanged = tabs !== frame.tabs;
     frame.tabs = tabs;
-    changed();
+    writePlace(frame);
+    if (isChanged) {
+      changed();
+    }
+  };
+
+  // Drops each take over whose tab the session no longer holds.
+  const dropDeadTakeOvers = (frame: Frame) => {
+    frame.takeOvers = takeOversWithLiveTabs(frame.takeOvers, frame.tabs.tabIds);
   };
 
   const select = (sessionId: string, tabId: string) => {
@@ -434,18 +470,46 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
 
   // Gives back the take over `tabId` holds, if any, as its release does.
   const release = (frame: Frame, tabId: string) => {
+    dropDeadTakeOvers(frame);
+    frame.savedTakeOverTabIds.delete(tabId);
     const held = frame.takeOvers.find((takeOver) => takeOver.tabId === tabId);
     if (held === undefined) {
+      writePlace(frame);
       return;
     }
     frame.takeOvers = takeOversAfterRelease(frame.takeOvers, held);
     setTabs(frame, tabsAfterRelease(frame.tabs, held));
   };
 
+  // Takes over with `tabId`: the take overs whose tab left drop, and a take over
+  // the last page saved for `tabId` gives way to this one.
+  const takeOverFresh = (frame: Frame, tabId: string) => {
+    dropDeadTakeOvers(frame);
+    if (frame.savedTakeOverTabIds.delete(tabId)) {
+      frame.takeOvers = frame.takeOvers.filter(
+        (takeOver) => takeOver.tabId !== tabId,
+      );
+    }
+    const taken = tabsAfterTakeOver(frame.tabs, tabId);
+    const isHeld = frame.takeOvers.some((takeOver) => takeOver.tabId === tabId);
+    if (!isHeld) {
+      frame.takeOvers = [...frame.takeOvers, taken.takeOver];
+    }
+    setTabs(frame, taken.tabs);
+  };
+
+  // Adopts the take over the last page saved for `tabId`, selecting nothing;
+  // false when it saved none.
+  const takeOverRestored = (frame: Frame, tabId: string): boolean => {
+    frame.savedTakeOverTabIds.delete(tabId);
+    return frame.takeOvers.some((takeOver) => takeOver.tabId === tabId);
+  };
+
   const remove = (frame: Frame, tab: Tab) => {
     tab.view.element.remove();
     frame.tabs = tabsAfterRemove(frame.tabs, tab.view.id);
     frame.entries.delete(tab.view.id);
+    writePlace(frame);
     changed();
   };
 
@@ -504,16 +568,21 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       const frame = frameOf(sessionId);
       const tab: Tab = { view };
       const entries = new Map(frame.entries).set(view.id, tab);
-      frame.tabs = tabsAfterAdd(
+      const added = tabsAfterAdd(
         frame.tabs,
         sessionId,
         view.id,
         (id) => entries.get(id)?.view.order,
       );
+      frame.tabs =
+        frame.saved === null
+          ? added
+          : tabsAfterRestoredAdd(added, view.id, frame.saved);
       frame.entries = new Map(
         frame.tabs.tabIds.map((id) => [id, entries.get(id)!]),
       );
       frame.body.append(view.element);
+      writePlace(frame);
       changed();
       return {
         select() {
@@ -521,19 +590,18 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
             select(sessionId, view.id);
           }
         },
-        takeOver() {
+        takeOver(options) {
           const live = liveTab(sessionId, tab);
           if (live === undefined) {
             return { release() {} };
           }
-          const taken = tabsAfterTakeOver(live.tabs, view.id);
-          const isHeld = live.takeOvers.some(
-            (takeOver) => takeOver.tabId === view.id,
-          );
-          if (!isHeld) {
-            live.takeOvers = [...live.takeOvers, taken.takeOver];
+          if (options?.restored === true) {
+            if (!takeOverRestored(live, view.id)) {
+              return { release() {} };
+            }
+          } else {
+            takeOverFresh(live, view.id);
           }
-          setTabs(live, taken.tabs);
           // A handle releases once, so a stale one leaves a later take over.
           let isReleased = false;
           return {

@@ -4,6 +4,7 @@
 import type { CommandKey } from '../../contracts/commands';
 import type { UserKeymap } from '../../contracts/keymap';
 import type { ChannelShape } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 import type {
   ConfigWriteResult,
   UserConfigRead,
@@ -45,3 +46,18 @@ export const settingsOpenSectionAtCommand: CommandKey<
   number,
   'settings.openSectionAt'
 > = { id: 'settings.openSectionAt' };
+
+// Where the user was in Settings mode, so a page reload puts them back: the
+// side bar's cursor, the open section, the cursor row's key and the filter.
+export interface SettingsPlace {
+  sectionsCursor: number;
+  openSectionId: string;
+  cursorKey: string | null;
+  filter: string;
+}
+
+export const settingsPlaceSlot: SlotKey<SettingsPlace, 'page', 'settings'> = {
+  id: 'settings.place',
+  process: 'page',
+  kind: 'value',
+};

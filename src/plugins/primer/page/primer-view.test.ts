@@ -258,6 +258,7 @@ function primerTabSetup(
     },
     toast: () => undefined,
     log,
+    savedPlaces: new Map(),
   });
   const tab = tabs.get(presented.sessionId);
   if (tab === undefined) {

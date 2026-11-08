@@ -12,6 +12,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 import { NUMBER_KEY_COUNT } from './manifest';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
@@ -388,4 +389,24 @@ export interface FormsPageExports {
 export const formsPageKey: DependencyKey<FormsPageExports, 'page', 'forms'> = {
   id: 'forms',
   process: 'page',
+};
+
+// Where an open round's page left it: the focused rail position, the review
+// cursor's row, and the view with the view its Cancel prompt returns to, both
+// kept from the round the page last showed as active. `confirm` is the review's
+// Cancel prompt, which leaves the session open.
+export interface RoundPlace {
+  focus: number;
+  reviewRow: number;
+  view: 'forms' | 'review' | 'confirm';
+  confirmReturnView: 'forms' | 'review';
+}
+
+// Each open round's place, by the round id, written on each change while the
+// round is open; the round closing deletes its key, and the page's open rounds
+// read deletes the keys of rounds that closed while no page ran.
+export const formsPlaceSlot: KeyedSlotKey<RoundPlace, 'page', 'forms'> = {
+  id: 'forms.place',
+  process: 'page',
+  kind: 'keyed',
 };

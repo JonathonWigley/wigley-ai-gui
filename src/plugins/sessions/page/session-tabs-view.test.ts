@@ -8,7 +8,13 @@ import {
   FakeElement,
   findAll,
 } from '../../../shared/page/test-dom';
-import type { SessionTabView } from '../contract';
+import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  type SessionsPlace,
+  sessionsPlaceSlot,
+  type SessionTabHandle,
+  type SessionTabView,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { sessionsViewSetup, stateOf } from './sessions-view-fakes';
@@ -60,6 +66,19 @@ function viewWithFramedAndEmptyPane() {
     );
   expect(liveFocusEdges()).toHaveLength(1);
   return { view, area, pickHint, liveFocusEdges };
+}
+
+// A view over session `s`'s place `saved`, as the last page left it.
+function viewOverSavedPlace(saved: SessionsPlace) {
+  const places = createSlotStore(() => undefined).publish(sessionsPlaceSlot);
+  places.set('s', saved);
+  const { view } = sessionsViewSetup(undefined, undefined, undefined, {
+    places,
+  });
+  const selected = () => view.tabs.selectedTabOf('s')?.id;
+  const savedTabIds = () =>
+    places.get('s')?.takeOvers.map((takeOver) => takeOver.tabId);
+  return { view, selected, savedTabIds };
 }
 
 let moves: { element: unknown; to: unknown }[];
@@ -349,5 +368,119 @@ describe('session tabs view', () => {
 
     expectFocused(first, second);
     expect(edgeClasses(first)).toEqual(firstEdges);
+  });
+
+  it.each([
+    {
+      case: 'the user left the round for chat',
+      selectedTabId: 'chat',
+      selections: 1,
+      afterTakeOver: 'chat',
+      afterRelease: 'chat',
+    },
+    {
+      case: 'the user stayed on the round',
+      selectedTabId: 'form',
+      selections: 0,
+      afterTakeOver: 'form',
+      afterRelease: 'chat',
+    },
+  ])(
+    'restored_take_over_keeps_selection_and_its_release_gives_back_the_saved_tab ($case)',
+    ({ selectedTabId, selections, afterTakeOver, afterRelease }) => {
+      const { view, selected } = viewOverSavedPlace({
+        selectedTabId,
+        selections,
+        takeOvers: [{ tabId: 'form', previousTabId: 'chat', selections: 0 }],
+      });
+      view.tabs.add('s', tabView('chat'));
+      const form = view.tabs.add('s', tabView('form'));
+
+      const taken = form.takeOver({ restored: true });
+      expect(selected()).toBe(afterTakeOver);
+      taken.release();
+
+      expect(selected()).toBe(afterRelease);
+    },
+  );
+
+  it('fresh_take_over_replaces_a_stale_saved_record', () => {
+    const { view, selected } = viewOverSavedPlace({
+      selectedTabId: 'chat',
+      selections: 5,
+      takeOvers: [{ tabId: 'form', previousTabId: 'docs', selections: 0 }],
+    });
+    view.tabs.add('s', tabView('chat'));
+    view.tabs.add('s', tabView('docs'));
+    const form = view.tabs.add('s', tabView('form'));
+
+    const taken = form.takeOver();
+    expect(selected()).toBe('form');
+    taken.release();
+
+    expect(selected()).toBe('chat');
+  });
+
+  it('restored_take_over_with_no_saved_record_releases_nothing', () => {
+    const { view, selected } = viewOverSavedPlace({
+      selectedTabId: 'chat',
+      selections: 0,
+      takeOvers: [],
+    });
+    view.tabs.add('s', tabView('chat'));
+    const form = view.tabs.add('s', tabView('form'));
+
+    const taken = form.takeOver({ restored: true });
+    view.tabs.select('s', 'form');
+    taken.release();
+
+    expect(selected()).toBe('form');
+  });
+
+  it.each([
+    {
+      case: 'a take over',
+      act: (form: SessionTabHandle) => form.takeOver(),
+    },
+    {
+      case: 'a release',
+      act: (form: SessionTabHandle) =>
+        form.takeOver({ restored: true }).release(),
+    },
+  ])(
+    'saved_record_with_no_tab_drops_at_the_next_take_over_or_release ($case)',
+    ({ act }) => {
+      const { view, savedTabIds } = viewOverSavedPlace({
+        selectedTabId: 'form',
+        selections: 0,
+        takeOvers: [
+          { tabId: 'primer', previousTabId: 'chat', selections: 0 },
+          { tabId: 'form', previousTabId: 'primer', selections: 0 },
+        ],
+      });
+      view.tabs.add('s', tabView('chat'));
+      const form = view.tabs.add('s', tabView('form'));
+      expect(savedTabIds()).toEqual(['primer', 'form']);
+
+      act(form);
+
+      expect(savedTabIds()).not.toContain('primer');
+    },
+  );
+
+  it('late_tab_keeps_its_saved_record_past_the_first_set_tabs', () => {
+    const { view, selected } = viewOverSavedPlace({
+      selectedTabId: 'form',
+      selections: 0,
+      takeOvers: [{ tabId: 'form', previousTabId: 'chat', selections: 0 }],
+    });
+    view.tabs.add('s', tabView('chat'));
+    view.tabs.add('s', tabView('docs'));
+    const form = view.tabs.add('s', tabView('form'));
+    expect(selected()).toBe('form');
+
+    form.takeOver({ restored: true }).release();
+
+    expect(selected()).toBe('chat');
   });
 });

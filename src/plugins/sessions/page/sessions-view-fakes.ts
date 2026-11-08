@@ -5,11 +5,14 @@ import {
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { Clock, Timers } from '../../../contracts/ambient';
+import type { KeyedSlotWriter } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type SessionPart,
   sessionsActivitySlot,
+  type SessionsPlace,
+  sessionsPlaceSlot,
   type SessionsState,
 } from '../contract';
 import { createSessionsParts } from './layout/sessions-parts';
@@ -71,11 +74,13 @@ export function sessionsPartsSetup() {
 
 // What `sessionsViewSetup` runs on beyond its stores: `uiState` holds the
 // favorites and recency stamps, `clock` stamps them, a fixed time unless handed
-// in, so rows keep main's order, and `timers` never runs a timer unless handed in.
+// in, so rows keep main's order, `timers` never runs a timer unless handed in,
+// and `places` holds the sessions' tab places, a new empty slot unless handed in.
 export interface SessionsViewOptions {
   uiState?: UiState;
   clock?: Clock;
   timers?: Timers;
+  places?: KeyedSlotWriter<SessionsPlace>;
 }
 
 // A sessions view over fake keys that record each anchor, a log that records
@@ -94,6 +99,7 @@ export function sessionsViewSetup(
     uiState = fakeUiState(),
     clock = { now: () => 0 },
     timers = { set: () => 0, clear: () => undefined },
+    places = createSlotStore(() => undefined).publish(sessionsPlaceSlot),
   }: SessionsViewOptions = {},
 ) {
   const { anchors, logged, services } = fakeKitServices();
@@ -125,6 +131,7 @@ export function sessionsViewSetup(
     recency: createSessionRecency(clock, uiState),
     favorites: createProjectFavorites(uiState),
     activities: createSlotStore(() => undefined).publish(sessionsActivitySlot),
+    places,
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);

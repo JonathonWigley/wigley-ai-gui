@@ -26,6 +26,7 @@ import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import {
   type DocsChannel,
+  type DocsEdits,
   docsEditSectionAtCommand,
   type DocsLinkClick,
   type IndexEntry,
@@ -160,6 +161,9 @@ export interface DocViewDeps {
   // Acts on a `wiki:` or `wigley:` link in the rendered body with the link's
   // text; false when it is no link this view acts on.
   followWikiLink(href: string, title: string): boolean;
+  // Hears each change `edits` may read differently after: a keystroke in the
+  // editor, a write, a reload from disk, the editor closing.
+  editsChanged(): void;
 }
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
@@ -274,6 +278,14 @@ export interface DocView {
   // Focuses the open editor, else the pane.
   focus(): void;
   hasUnsavedEdits(): boolean;
+  // The open editor's unsaved edits over the whole file; null with no editor
+  // or none unsaved.
+  edits(): DocsEdits | null;
+  // Opens the whole-file editor on the shown doc holding a reloaded page's
+  // `edits`, which then read as unsaved. When the file on disk is no longer
+  // `edits.baseText`, the changed-on-disk prompt opens. Logs and does nothing
+  // while an editor is open or the shown file is not `edits.path`.
+  restoreEdits(edits: DocsEdits): void;
   // Toasts and logs the refusal when the editor holds unsaved edits.
   refuseWithUnsavedEdits(): boolean;
   conflictReload(): void;
@@ -1258,6 +1270,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       isBodyRedrawDeferred = false;
       drawBodyPart();
     }
+    deps.editsChanged();
   };
 
   // Draws `rendered` as `doc`'s body, then puts the pane back at `scrollTop`.
@@ -1310,6 +1323,17 @@ export function createDocView(deps: DocViewDeps): DocView {
       .catch((error) => deps.log(`not rendered: ${errorText(error)}`));
   };
 
+  // The whole file's text with the editor's `edited` text in place: a
+  // section's spliced into the file as the section editor opened it.
+  const fileTextOf = (edited: string) =>
+    editingSection === null
+      ? edited
+      : spliceSection(
+          editingSection.openedText,
+          editingSection.section,
+          edited,
+        );
+
   const writeEditor = (overwrite: boolean, after: AfterWrite) => {
     const doc = shown;
     const writing = editor;
@@ -1318,10 +1342,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     const edited = writing.text();
     const editing = editingSection;
-    const text =
-      editing === null
-        ? edited
-        : spliceSection(editing.openedText, editing.section, edited);
+    const text = fileTextOf(edited);
     writingText = text;
     deps.channel
       .invoke('writeDoc', doc.filePath, text, overwrite ? null : doc.text)
@@ -1338,6 +1359,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         if (editing !== null) {
           editing.savedText = edited;
         }
+        deps.editsChanged();
         showBanner(false);
         deps.toast(`Wrote ${doc.name}`, 'success');
         deps.log(`wrote ${doc.name}`);
@@ -1385,6 +1407,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (editingSection !== null) {
         showSectionRows(text);
       }
+      deps.editsChanged();
     },
     write: () => writeEditor(false, 'stay'),
     quit: quitEditor,
@@ -2108,6 +2131,36 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
     },
     hasUnsavedEdits: hasUnsaved,
+    edits() {
+      if (shown === null || editor === null || !hasUnsaved()) {
+        return null;
+      }
+      return {
+        path: shown.filePath,
+        text: fileTextOf(editor.text()),
+        baseText: shown.text,
+      };
+    },
+    restoreEdits(edits) {
+      const doc = shown;
+      const isEditable =
+        doc !== null &&
+        editor === null &&
+        doc.target.detail === null &&
+        deps.paths.samePath(doc.filePath, edits.path);
+      if (!isEditable) {
+        deps.log(`edits on ${edits.path} not restored`);
+        return;
+      }
+      openEditor(doc, 1);
+      editor?.setText(edits.text);
+      deps.log(`restored edits on ${doc.name}`);
+      if (doc.text !== edits.baseText) {
+        showConflict(doc.text, 'stay');
+        deps.log(`changed on disk: ${doc.name}`);
+      }
+      deps.editsChanged();
+    },
     refuseWithUnsavedEdits() {
       if (!view.hasUnsavedEdits()) {
         return false;
@@ -2130,6 +2183,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       shown.text = held.diskText;
       showBanner(false);
       deps.log(`reloaded ${shown.name}`);
+      deps.editsChanged();
     },
     conflictOverwrite() {
       const held = conflict;

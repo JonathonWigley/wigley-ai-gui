@@ -22,6 +22,7 @@ import {
   type RowActivitySource,
   type SessionPart,
   type SessionRow,
+  type SessionsPlace,
   type SessionsState,
 } from '../contract';
 import type { Layout } from '../layouts/layout';
@@ -79,6 +80,8 @@ export interface SessionsViewDeps extends Omit<
   favorites: ProjectFavorites;
   // Writes `sessionsActivitySlot`, which holds the rows' activities.
   activities: KeyedSlotWriter<RowActivitySource[]>;
+  // Holds `sessionsPlaceSlot`, each session's tab place.
+  places: KeyedSlotWriter<SessionsPlace>;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -286,6 +289,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     keys: deps.keys,
     parts,
     selectTab: deps.selectTab,
+    places: deps.places,
     changed() {
       drawSidebar();
       deps.tabsChanged();

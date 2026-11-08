@@ -2,8 +2,10 @@ import type {
   Harness,
   MarkOptions,
   SessionRow,
+  SessionsPlace,
   SessionsState,
   SessionTabView,
+  TakeOver,
 } from '../contract';
 
 // The id `step` places away from `selectedId` in `ids`, wrapping at both
@@ -138,12 +140,28 @@ function tabsWithSelected(tabs: TabsState, tabId: string): TabsState {
     : { ...tabs, selectedTabId: tabId };
 }
 
-// A tab taking over its session, the tab selected when it took over, and
-// the session's `selections` count then.
-export interface TakeOver {
-  tabId: string;
-  previousTabId: string | null;
-  selections: number;
+// The tabs after `tabId` was added, with `tabId` selected uncounted when it is the
+// tab the saved place had selected and no pick changed the selection since the
+// load: a tab added late, after another tab selected itself, takes its place back.
+export function tabsAfterRestoredAdd(
+  tabs: TabsState,
+  tabId: string,
+  saved: SessionsPlace,
+): TabsState {
+  const isSavedTab = tabId === saved.selectedTabId;
+  const isUnpickedSinceLoad = tabs.selections === saved.selections;
+  return isSavedTab && isUnpickedSinceLoad
+    ? tabsWithSelected(tabs, tabId)
+    : tabs;
+}
+
+// The take overs whose tab the session still holds: a saved one whose tab never
+// came back, its round ended while no page ran, drops.
+export function takeOversWithLiveTabs(
+  takeOvers: readonly TakeOver[],
+  tabIds: readonly string[],
+): TakeOver[] {
+  return takeOvers.filter((takeOver) => tabIds.includes(takeOver.tabId));
 }
 
 // The tabs with `tabId` selected, and the take over remembering the tab

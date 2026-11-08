@@ -4,6 +4,11 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { startAutosave } from '../../../shared/page/autosave';
+import { onPageHide } from '../../../shared/page/page-hide';
+import {
+  followSessionFormPlaces,
+  type SessionFormPlaces,
+} from '../../../shared/page/session-form-places';
 import {
   createEditorBoxes,
   type EditorBoxes,
@@ -18,10 +23,12 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  PrimerChannel,
-  PrimerPageEvents,
-  PrimerPageExports,
+import {
+  type PrimerChannel,
+  type PrimerPageEvents,
+  type PrimerPageExports,
+  type PrimerPlace,
+  primerPlaceSlot,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -39,7 +46,7 @@ import {
   presentedOf,
   startPrimerEvents,
 } from './primer-events';
-import { buildBody, initialState } from './primer-state';
+import { buildBody, initialState, primerPlace } from './primer-state';
 import { createPrimerStore, type PrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
@@ -81,9 +88,14 @@ function createBoxes(
 // Listeners first: a primer shown while openForms is in flight arrives in
 // both, and showing an open primer again changes nothing. The active primer
 // follows the session the sessions plugin focuses, and a primer leaves only
-// when main closes it. The `Disposable` stops an `openForms` read still in
-// flight from showing its primers.
-function listenForPrimers(api: PrimerApi, store: PrimerStore): Disposable {
+// when main closes it, and the read's primers go back to the places the last
+// page saved. The `Disposable` stops an `openForms` read still in flight from
+// showing its primers.
+function listenForPrimers(
+  api: PrimerApi,
+  store: PrimerStore,
+  places: SessionFormPlaces<PrimerPlace>,
+): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (primer) =>
     store.dispatch({ type: 'formShown', form: primer }),
@@ -114,6 +126,7 @@ function listenForPrimers(api: PrimerApi, store: PrimerStore): Disposable {
       for (const primer of primers) {
         store.dispatch({ type: 'formShown', form: primer });
       }
+      places.formsRead(primers.map((primer) => primer.formId));
     })
     .catch((error) => log(`open primers not read: ${errorText(error)}`));
   return {
@@ -131,7 +144,8 @@ function listenForPrimers(api: PrimerApi, store: PrimerStore): Disposable {
 // store change emits the primer page events it makes, each logged as it goes;
 // other plugins read the active primer through the exports. The tab draws
 // through the primer layout `primer.layout` names, redrawing as it or the
-// layout changes.
+// layout changes. Each open primer's place (`primerPlaceSlot`) and its unsaved
+// edits, saved at once on page hide, outlive a page reload.
 export const primerPagePart: PagePart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
@@ -141,6 +155,13 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
     );
     const boxes = createBoxes(api, store);
+    const places = followSessionFormPlaces({
+      writer: api.state.publish(primerPlaceSlot),
+      store,
+      placeOf: primerPlace,
+      restore: (formId, place) =>
+        store.dispatch({ type: 'placeRestored', formId, place }),
+    });
     const view = mountPrimerTab({
       areas: api.areas,
       sessions,
@@ -167,6 +188,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       drops: api.drops,
       toast: services.toast,
       log: services.log,
+      savedPlaces: places.saved,
     });
     followRows(api.state.read(sessionsRowsSlot), {
       removed: (sessionId) => view.forgetSession(sessionId),
@@ -194,6 +216,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         }),
       save: (primerId, body) => api.channel.invoke('draft', primerId, body),
       delayMs: () => api.settings().autosaveDelayMs,
+      onPageHide,
       timers: services.timers,
       log: services.log,
     });
@@ -202,7 +225,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const primersRead = listenForPrimers(api, store);
+    const primersRead = listenForPrimers(api, store, places);
     const exports: PrimerPageExports = {
       activePrimer() {
         const primer = activeForm(store.get());
@@ -213,6 +236,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       exports: () => exports,
       dispose() {
         primersRead.dispose();
+        places.dispose();
         autosave.dispose();
         view.dispose();
       },

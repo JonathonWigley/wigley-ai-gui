@@ -11,6 +11,7 @@ export interface RoundAutosaveDeps {
   save(roundId: string, body: FormBody): Promise<void>;
   // Read each time a save is scheduled.
   delayMs(): number;
+  onPageHide(listener: () => void): Disposable;
   timers: Timers;
   log: PluginLog;
 }
@@ -35,6 +36,7 @@ export function startRoundAutosave(deps: RoundAutosaveDeps): Disposable {
       }),
     save: (roundId, body) => deps.save(roundId, body),
     delayMs: () => deps.delayMs(),
+    onPageHide: (listener) => deps.onPageHide(listener),
     timers: deps.timers,
     log: deps.log,
   });

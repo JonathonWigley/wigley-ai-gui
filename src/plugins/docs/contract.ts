@@ -9,6 +9,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 
 // The kinds and sources the app knows; an index entry may name others, which
 // still load (`isKnownKind`, `isKnownSource`).
@@ -164,10 +165,20 @@ export interface IndexLoad {
 // shows it.
 export const MACHINE_SOURCE_ID = 'machine';
 
+const SESSION_SOURCE_PREFIX = 'session:';
+
 // The id the docs main part registers a session's index under, by the
 // session row's id; that session's Docs tab shows it.
 export function sessionSourceId(sessionId: string): string {
-  return `session:${sessionId}`;
+  return `${SESSION_SOURCE_PREFIX}${sessionId}`;
+}
+
+// The session row id `sessionSourceId` built `sourceId` from; null for any
+// other source id.
+export function sessionIdOfSource(sourceId: string): string | null {
+  return sourceId.startsWith(SESSION_SOURCE_PREFIX)
+    ? sourceId.slice(SESSION_SOURCE_PREFIX.length)
+    : null;
 }
 
 // A docs index the page shows a view over, registered by `id` in the docs main
@@ -432,3 +443,30 @@ export interface DocsChannel extends ChannelShape {
     openDoc: { path: string; line: number | null };
   };
 }
+
+// An open editor's unsaved edits: the whole file's text as the editor holds it,
+// and `baseText`, the file's text the edits were made over.
+export interface DocsEdits {
+  path: string;
+  text: string;
+  baseText: string;
+}
+
+// Where the user was in one docs view, so a page reload puts them back: the
+// open doc, the tree's expanded group ids, selected row and filter, and the
+// open editor's unsaved edits, null with none.
+export interface DocsPlace {
+  openPath: string | null;
+  expanded: string[];
+  selectedId: string | null;
+  filter: string;
+  edits: DocsEdits | null;
+}
+
+// Each docs view's place, by the source id the view shows: `MACHINE_SOURCE_ID`
+// for Docs mode's, `sessionSourceId(sessionId)` for a session's Docs tab.
+export const docsPlaceSlot: KeyedSlotKey<DocsPlace, 'page', 'docs'> = {
+  id: 'docs.place',
+  process: 'page',
+  kind: 'keyed',
+};

@@ -17,7 +17,7 @@ import type {
   TreeWikiLink,
 } from '../tree';
 import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
-import { createTreeView, type TreeViewDeps } from './tree-view';
+import { createTreeView, type TreeView, type TreeViewDeps } from './tree-view';
 
 // A tree pane marked `marker` that places every app part.
 function paneLayout(marker: string): Layout {
@@ -50,6 +50,7 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     anchor: noAnchor,
     rowStatus: () => ({ mark: null, detail: null }),
     leafMarks: () => ({ time: null, isStarred: false }),
+    placeChanged: () => undefined,
   };
 }
 
@@ -554,6 +555,41 @@ describe('createTreeView', () => {
     expect(selected()).toEqual(['One']);
     expect(tree.selectedIn('all')).toEqual(page('both'));
   });
+
+  it.each([
+    {
+      name: 'wiki',
+      hasWiki: true,
+      setTree: (tree: TreeView, nodes: TreeNode[]) =>
+        tree.setWikiTree(nodes, [], true),
+    },
+    {
+      name: 'all pages',
+      hasWiki: false,
+      setTree: (tree: TreeView, nodes: TreeNode[]) =>
+        tree.setTree(nodes, NOTHING, NO_HEADINGS, true),
+    },
+  ])(
+    'restored_expansion_survives_the_first_tree: $name',
+    ({ hasWiki, setTree }) => {
+      const { tree, titles, selected } = wikiSetUp({ hasWiki });
+      tree.restorePlace({
+        expanded: ['shelf:Two'],
+        selectedId: 'entry:e:b',
+        filter: '',
+      });
+
+      setTree(tree, [shelf('One', [page('a')]), shelf('Two', [page('b')])]);
+
+      expect(titles()).toEqual(['One', 'Two', 'b']);
+      expect(selected()).toEqual(['b']);
+      expect(tree.place()).toEqual({
+        expanded: ['shelf:Two'],
+        selectedId: 'entry:e:b',
+        filter: '',
+      });
+    },
+  );
 
   it('sessionTree_NoWiki_DrawsNoSwitchAndShowsItsTree', () => {
     const { tree, root, titles } = wikiSetUp({ hasWiki: false });

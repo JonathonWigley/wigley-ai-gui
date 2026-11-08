@@ -2,7 +2,12 @@ import '../../../shared/page/markdown.css';
 import './backlog.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
-import type { BacklogChannel } from '../contract';
+import { placeWrites } from '../../../shared/page/place-slot';
+import {
+  type BacklogChannel,
+  type BacklogPlace,
+  backlogPlaceSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { BacklogLayout } from '../layouts/layout';
@@ -22,13 +27,17 @@ const TITLE = 'Backlog';
 // home's follow-ups, plans and features beside a detail pane in the sheet,
 // drawn with the layout the `layout` setting names. `showMode` shows the mode,
 // or toggles its side bar while it shows. Each `changed` message reads the
-// homes again, keeping the selection and any open editor's draft.
+// homes again, keeping the selection and any open editor's draft. The place
+// (focus, cursors, open home, selection, expansion, filter) goes to
+// `backlog.place` on each change, and a page load puts the last page's back.
 export const backlogPagePart: PagePart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services } = api;
     const docs = api.dependency(docsPageKey);
     let isShown = false;
+    const placeWriter = api.state.publish(backlogPlaceSlot);
+    const place = placeWrites<BacklogPlace>((value) => placeWriter.set(value));
     const view = createBacklogView({
       channel: api.channel,
       editor: services.editor,
@@ -71,6 +80,8 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
                 detail: `${home.repo} ${services.paths.tilde(home.root, services.homeDir)}`,
               },
         ),
+      savedPlace: placeWriter.get() ?? null,
+      placeChanged: (value) => place.write(value),
     });
 
     // The view reads `mode` only once a key runs or a load lands, after

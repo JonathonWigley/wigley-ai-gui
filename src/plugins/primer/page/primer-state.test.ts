@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
-import type { PrimerEntry } from '../contract';
+import type {
+  PrimerEntry,
+  PrimerPane,
+  PrimerPlace,
+  TaskRow,
+} from '../contract';
 import {
   apply,
   cardRow,
@@ -8,7 +13,6 @@ import {
   type OpenPrimer,
   type PrimerAction,
   type PrimerColumn,
-  type PrimerPane,
   type PrimerRow,
   type PrimerState,
   type RowPrompt,
@@ -17,7 +21,6 @@ import {
   selectedEntry,
   sessionTitle,
   submitProblems,
-  type TaskRow,
   taskRows,
   type TextTarget,
 } from './primer-state';
@@ -784,6 +787,51 @@ describe('primer state', () => {
 
       expect(scopeOf(state)).toBe(pane);
       expect(scopeOf(apply(state, { type: 'openReview' }))).toBe('review');
+    },
+  );
+});
+
+describe('placeRestored', () => {
+  it.each<{
+    case: string;
+    place: Pick<PrimerPlace, 'selectedTask' | 'selectedItem'>;
+    expected: { selectedTask: TaskRow; selectedItem: number | null };
+  }>([
+    {
+      case: 'a held task and item',
+      place: { selectedTask: TASK_1, selectedItem: 2 },
+      expected: { selectedTask: TASK_1, selectedItem: 2 },
+    },
+    {
+      case: 'a gone task',
+      place: {
+        selectedTask: { kind: 'task', entryId: 'gone' },
+        selectedItem: 1,
+      },
+      expected: { selectedTask: { kind: 'feature' }, selectedItem: null },
+    },
+    {
+      case: "an item past the task's items",
+      place: { selectedTask: TASK_1, selectedItem: 3 },
+      expected: { selectedTask: TASK_1, selectedItem: null },
+    },
+  ])(
+    'restores the selection, falling back for $case',
+    ({ place, expected }) => {
+      const restored = apply(stateWith(), {
+        type: 'placeRestored',
+        formId: 'p1',
+        place: {
+          ...place,
+          pane: 'items',
+          view: 'review',
+          confirmReturnView: 'review',
+        },
+      });
+
+      expect(selectionOf(restored)).toEqual(expected);
+      expect(primerOf(restored).pane).toBe('items');
+      expect(restored.view).toBe('review');
     },
   );
 });

@@ -3,6 +3,7 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import type {
   AgentCommand,
   ChatEntry,
+  ChatImage,
   ProcessActivity,
   SessionControl,
 } from '../../../contracts/agent';
@@ -37,6 +38,7 @@ import {
   type ChatChannel,
   type ChatComposerPart,
   chatDenyEntryCommand,
+  type ChatPlace,
   chatMoveFocusCommand,
   chatOpenImageCommand,
   chatPullBackMessageCommand,
@@ -118,7 +120,8 @@ export interface SessionRef {
 // attached to its next message and its entries. `enterStop` offers the entry
 // cursor to the composer parts' stops, in part order: the id of the part that
 // took it, null when none did. `isBoxFocused` says whether the box holds
-// focus now.
+// focus now. `boxChanged` tells the tab's place that a `setText`, which reports
+// no `changed`, replaced the box's text.
 export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly running: boolean;
@@ -144,6 +147,17 @@ export interface ChatSession extends SessionRef {
     | 'scrollBy'
   >;
   enterStop(): string | null;
+  boxChanged(): void;
+}
+
+// The last page's place of one session's Chat tab, and the writes of its place
+// now. `writeImages` writes the attached images; an empty list deletes their
+// key.
+export interface TabPlace {
+  saved: ChatPlace | undefined;
+  savedImages: readonly ChatImage[];
+  write(place: ChatPlace): void;
+  writeImages(images: readonly ChatImage[]): void;
 }
 
 // The Chat view with what the commands read: the session a box belongs to,
@@ -191,7 +205,9 @@ export type ChatTabScope = 'chat';
 // row or an attached image's remove, each naming the tab's session; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder, and with
-// `homeDir` shows that folder in the hub's Session section.
+// `homeDir` shows that folder in the hub's Session section. `placeOf` hands
+// each tab made its session's place: the tab puts the saved draft, images and
+// entry place back, and writes its place on each change.
 // `slashCommands` reads the app slash commands registered now, which the `/`
 // completion offers ahead of the agent's, and `completionRows` draws that
 // completion's rows. `timers` and `clock` tick a live activity line's time and
@@ -240,6 +256,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   timers: Timers;
   clock: Clock;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
+  placeOf(sessionId: string): TabPlace;
 }
 
 // Chat's slots as the page reads them.
@@ -262,7 +279,7 @@ export interface ChatSlotReaders {
 // tab's session hub. `factsListeners` hear each status line draw.
 // `placedReturned` holds each returned message's id once it is handed to the box:
 // `chat.returned` is the whole list, which still names them until main hears
-// `returnedPlaced`.
+// `returnedPlaced`. `place` takes the tab's place on each change.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -284,6 +301,7 @@ interface HeldTab {
   stop: ComposerStopHolder;
   factsListeners: Set<() => void>;
   placedReturned: Set<string>;
+  place: TabPlace;
 }
 
 // The session's state in the slots now, from `info`, the value of its key in
@@ -709,7 +727,17 @@ function sessionOf(
     isBoxFocused: () => tab.isBoxFocused,
     attachments: tab.attachments,
     entries: tab.entries,
+    boxChanged: () => writeTabPlace(tab),
   };
+}
+
+// Writes the tab's draft and entry place; none before the box mounts, so the
+// first draws leave the last page's place for the tab to put back.
+function writeTabPlace(tab: HeldTab) {
+  if (tab.box === null) {
+    return;
+  }
+  tab.place.write({ draft: tab.box.text(), ...tab.entries.place() });
 }
 
 // The tab element (`div.chat-tab`: `div.chat-main`, then the session hub's
@@ -790,8 +818,13 @@ function createTab(
     stopClicked: (stopId) =>
       deps.runKey(chatMoveFocusCommand, { sessionId, stopId }),
     turnLine: composer.turnLineSlot,
+    placeChanged: () => writeTabPlace(tab),
   });
-  attachments.onChange((images) => composer.drawAttachments(images));
+  const place = deps.placeOf(sessionId);
+  attachments.onChange((images) => {
+    composer.drawAttachments(images);
+    place.writeImages(images);
+  });
   const root = element('div', 'chat-tab');
   const main = element('div', 'chat-main');
   main.append(entries.element);
@@ -830,6 +863,7 @@ function createTab(
     }),
     factsListeners: new Set(),
     placedReturned: new Set(),
+    place,
   };
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);
@@ -849,7 +883,7 @@ function createTab(
     boxElement,
     '',
     {
-      changed: () => undefined,
+      changed: () => writeTabPlace(tab),
       focused: () => {
         tab.stop.boxFocused();
         tab.isBoxFocused = true;
@@ -869,6 +903,7 @@ function createTab(
       hidesModeLine: true,
     },
   );
+  restoreTabPlace(tab, tab.box);
   const dropDeps = chatDropDepsOf(tab, tab.box, () => view.isHeld(tab), deps);
   tab.dropTarget = deps.drops.addTarget({
     element: root,
@@ -877,6 +912,19 @@ function createTab(
   drawActivity(tab, deps);
   tab.handle.select();
   return tab;
+}
+
+// Puts the last page's draft into `box`, its images back on the tab and its
+// entry place on the list.
+function restoreTabPlace(tab: HeldTab, box: TextEditor) {
+  const { saved, savedImages } = tab.place;
+  for (const image of savedImages) {
+    tab.attachments.add(image);
+  }
+  if (saved !== undefined) {
+    box.setText(saved.draft);
+    tab.entries.restorePlace(saved);
+  }
 }
 
 // The `/` completion of the tab's box. The commands are read on each call:

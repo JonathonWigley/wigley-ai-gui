@@ -31,6 +31,7 @@ import {
   MAX_PRIMER_ITEMS,
   type PrimerBody,
   type PrimerNeed,
+  type PrimerPane,
   type PrimerView,
 } from '../contract';
 import type { primerManifest } from '../manifest';
@@ -40,7 +41,6 @@ import {
   cardRow,
   type OpenPrimer,
   type PrimerAction,
-  type PrimerPane,
   type PrimerState,
   rowName,
   selectedEntry,

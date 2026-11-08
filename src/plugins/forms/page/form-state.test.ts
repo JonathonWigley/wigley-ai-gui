@@ -8,6 +8,7 @@ import type {
   PresentedRound,
   Question,
   Round,
+  RoundPlace,
 } from '../contract';
 import { saveState } from '../../../shared/page/autosave';
 import {
@@ -18,6 +19,7 @@ import {
   initialState,
   progress,
   railItems,
+  roundPlace,
   type FormsAction,
   type FormsState,
   type RoundState,
@@ -1517,5 +1519,55 @@ describe('apply', () => {
     apply(state, { type: 'nextItem' });
     apply(state, { type: 'formClosed', formId: 'r1' });
     expect(state).toEqual(before);
+  });
+});
+
+describe('placeRestored', () => {
+  const REVIEW_ROW_TWO: RoundPlace = {
+    focus: 1,
+    reviewRow: 1,
+    view: 'review',
+    confirmReturnView: 'review',
+  };
+
+  it.each([
+    { case: 'the active round', formId: 'r1', view: 'review' },
+    { case: 'a background round', formId: 'r2', view: 'forms' },
+  ])(
+    'restores focus and review row, and the view only on $case',
+    ({ formId, view }) => {
+      const state = initialState(
+        [presented('r1'), presented('r2')],
+        'r1-session',
+      );
+
+      const restored = apply(state, {
+        type: 'placeRestored',
+        formId,
+        place: REVIEW_ROW_TWO,
+      });
+
+      const round = restored.forms.find((form) => form.formId === formId)!;
+      expect({ focus: round.focus, reviewRow: round.reviewRow }).toEqual({
+        focus: 1,
+        reviewRow: 1,
+      });
+      expect(restored.view).toBe(view);
+    },
+  );
+
+  it("keeps a background round's last written view in its place", () => {
+    const state = initialState(
+      [presented('r1'), presented('r2')],
+      'r1-session',
+    );
+    const background = state.forms[1];
+
+    expect(roundPlace(state, background, REVIEW_ROW_TWO)).toEqual({
+      focus: background.focus,
+      reviewRow: background.reviewRow,
+      view: 'review',
+      confirmReturnView: 'review',
+    });
   });
 });

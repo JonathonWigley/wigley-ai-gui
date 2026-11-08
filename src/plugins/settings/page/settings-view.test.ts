@@ -21,7 +21,7 @@ import {
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { SettingsChannel } from '../contract';
+import type { SettingsChannel, SettingsPlace } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
 import { createSettingsView, type SettingsView } from './settings-view';
@@ -98,11 +98,13 @@ function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
 // named, and `handed`: each scope set and each focus target handed over, in
 // order. `runs` holds each command a click ran with its arg, `logs` each line
 // logged and `picked` the count of `sectionPicked` calls. The side bar shows
-// unless `isSideBarShown` is false.
+// unless `isSideBarShown` is false. `restored` is a reloaded page's place, put
+// back before the load; `places` holds each place the view reported.
 async function shownView(
   isSideBarShown = true,
   schema = SCHEMA,
   keymap: UserKeymap | null = null,
+  restored?: SettingsPlace,
 ) {
   const { channel, written, writtenKeymaps } = fakeChannel(schema, keymap);
   const overlay = asFake(document.createElement('div'));
@@ -112,6 +114,7 @@ async function shownView(
   const runs: [string, unknown][] = [];
   const logs: string[] = [];
   const picked = { count: 0 };
+  const places: SettingsPlace[] = [];
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
@@ -151,7 +154,11 @@ async function shownView(
       picked.count += 1;
     },
     runKey: (key, arg) => runs.push([key.id, arg]),
+    placeChanged: (place) => places.push(place),
   });
+  if (restored !== undefined) {
+    view.restorePlace(restored);
+  }
   await view.load();
   view.shown();
   const move = (direction: PaneDirection): boolean => {
@@ -173,6 +180,7 @@ async function shownView(
     runs,
     logs,
     picked,
+    places,
     sheet: asFake(view.sheet),
   };
 }
@@ -490,6 +498,80 @@ describe('createSettingsView', () => {
 
       expect(logs.slice(logsBefore)).toContain(opened);
       expect(picked.count).toBe(picks);
+    },
+  );
+
+  // Section `q` sits after `p`, holding one row.
+  const TWO_SECTIONS: UserConfigSchema = {
+    ...SCHEMA,
+    sections: [
+      ...SCHEMA.sections,
+      {
+        id: 'q',
+        title: 'Q',
+        leaves: [
+          {
+            path: 'q.size',
+            label: 'Size',
+            description: 'A size',
+            control: { kind: 'string' },
+            fallback: { value: '' },
+          },
+        ],
+      },
+    ],
+  };
+
+  it.each([
+    {
+      name: 'a held section, row and filter',
+      saved: {
+        sectionsCursor: 1,
+        openSectionId: 'q',
+        cursorKey: 'q.size',
+        filter: 'size',
+      },
+      opened: 'section q',
+      cursorKey: 'q.size',
+      isFilterShown: true,
+    },
+    {
+      name: 'a gone row',
+      saved: {
+        sectionsCursor: 0,
+        openSectionId: 'p',
+        cursorKey: 'p.gone',
+        filter: '',
+      },
+      opened: 'section p',
+      cursorKey: 'p.name',
+      isFilterShown: false,
+    },
+    {
+      name: 'a gone section',
+      saved: {
+        sectionsCursor: 2,
+        openSectionId: 'gone',
+        cursorKey: 'q.size',
+        filter: 'size',
+      },
+      opened: 'section p',
+      cursorKey: 'p.name',
+      isFilterShown: false,
+    },
+  ])(
+    'restores_cursor_and_filter: $name',
+    async ({ saved, opened, cursorKey, isFilterShown }) => {
+      const { logs, places, sheet } = await shownView(
+        true,
+        TWO_SECTIONS,
+        null,
+        saved,
+      );
+
+      expect(logs).toContain(opened);
+      expect(places.at(-1)?.cursorKey).toBe(cursorKey);
+      expect(only(sheet, 'settings-filter').hidden).toBe(!isFilterShown);
     },
   );
 });

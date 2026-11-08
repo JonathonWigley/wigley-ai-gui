@@ -9,6 +9,7 @@ import type {
   ItemKind,
   PresentedRound,
   Round,
+  RoundPlace,
 } from '../contract';
 import type { ReducerStore } from '../../../shared/page/reducer-store';
 import {
@@ -115,7 +116,10 @@ type FormsOwnAction =
   // `item` is a rail position; the review's rail sends it for a notice, which
   // has no review row.
   | { type: 'reviewJumpItem'; item: number }
-  | { type: 'setText'; formId: string; target: TextTarget; value: string };
+  | { type: 'setText'; formId: string; target: TextTarget; value: string }
+  // Puts round `formId` back where the last page left it; the view applies only
+  // while the round is active.
+  | { type: 'placeRestored'; formId: string; place: RoundPlace };
 
 export type FormsAction = SessionFormsAction<PresentedRound> | FormsOwnAction;
 
@@ -221,6 +225,8 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
       return updateForm(state, action.formId, (round) =>
         setText(round, action.target, action.value),
       );
+    case 'placeRestored':
+      return restorePlace(state, action.formId, action.place);
     default:
       return state.view === 'forms'
         ? updateForm(state, state.activeFormId, (round) =>
@@ -228,6 +234,30 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
           )
         : state;
   }
+}
+
+// The round's place: its view and the view its Cancel prompt returns to are the
+// state's while it is active, else `kept`'s, the place last written for it.
+export function roundPlace(
+  state: FormsState,
+  round: RoundState,
+  kept: RoundPlace | undefined,
+): RoundPlace {
+  const { focus, reviewRow } = round;
+  if (round.formId === state.activeFormId && state.view !== 'idle') {
+    return {
+      focus,
+      reviewRow,
+      view: state.view,
+      confirmReturnView: state.confirmReturnView,
+    };
+  }
+  return {
+    focus,
+    reviewRow,
+    view: kept?.view ?? 'forms',
+    confirmReturnView: kept?.confirmReturnView ?? 'review',
+  };
 }
 
 export function railItems(round: Round): RailItem[] {
@@ -497,6 +527,30 @@ function restoreAnswer(
     notes: entry.notes,
     dontAsk: entry.dont_ask,
     dontAskReason: entry.dont_ask_reason,
+  };
+}
+
+function restorePlace(
+  state: FormsState,
+  formId: string,
+  place: RoundPlace,
+): FormsState {
+  const { focus, reviewRow } = place;
+  const placed = updateForm(state, formId, (round) =>
+    round.focus === focus && round.reviewRow === reviewRow
+      ? round
+      : { ...round, focus, reviewRow },
+  );
+  const isViewUnchanged =
+    placed.view === place.view &&
+    placed.confirmReturnView === place.confirmReturnView;
+  if (formId !== placed.activeFormId || isViewUnchanged) {
+    return placed;
+  }
+  return {
+    ...placed,
+    view: place.view,
+    confirmReturnView: place.confirmReturnView,
   };
 }
 

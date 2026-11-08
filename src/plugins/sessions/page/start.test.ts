@@ -22,6 +22,8 @@ import {
   sessionsActivitySlot,
   type SessionsPageExports,
   sessionsPageKey,
+  type SessionsPlace,
+  sessionsPlaceSlot,
   sessionsRowsSlot,
   sessionsSelectionSlot,
 } from '../contract';
@@ -194,6 +196,35 @@ function savedPaneSessions(uiState: UiState): (string | null)[] {
   return Object.values(panes.sessions) as (string | null)[];
 }
 
+const SAVED_PLACE: SessionsPlace = {
+  selectedTabId: 'chat',
+  selections: 2,
+  takeOvers: [],
+};
+
+// The last page's places for `s-live` and `s-gone`, and a new page started over
+// them with rows `rowIds` in the mirror.
+function startOverSavedPlaces(rowIds: string[]) {
+  const state = createSlotStore(() => undefined);
+  const oldPage = state.publish(sessionsPlaceSlot);
+  oldPage.set('s-live', SAVED_PLACE);
+  oldPage.set('s-gone', SAVED_PLACE);
+  oldPage.dispose();
+  const rowsWriter = state.publish(sessionsRowsSlot);
+  for (const sessionId of rowIds) {
+    rowsWriter.set(sessionId, sessionRow(sessionId));
+  }
+  const harness = startPagePart(sessionsPagePart, {
+    state,
+    services: { picker: fakeListPickerService() },
+  });
+  return { state, harness, rowsWriter };
+}
+
+function placeKeys(state: ReturnType<typeof createSlotStore>): string[] {
+  return [...state.read(sessionsPlaceSlot, 'test').all().keys()];
+}
+
 describe('sessions page part', () => {
   beforeEach(() => {
     installFakeDom((name, value) => vi.stubGlobal(name, value));
@@ -259,6 +290,24 @@ describe('sessions page part', () => {
     expect([...state.read(sessionsActivitySlot, 'test').all().keys()]).toEqual(
       [],
     );
+  });
+
+  it('row_gone_during_reload_prunes_the_sessions_place', () => {
+    const { state, harness } = startOverSavedPlaces(['s-live']);
+
+    harness.emit('core.pageReady', null);
+
+    expect(placeKeys(state)).toEqual(['s-live']);
+  });
+
+  it('prune_waits_for_page_ready', () => {
+    const { state, harness, rowsWriter } = startOverSavedPlaces([]);
+
+    expect(placeKeys(state)).toEqual(['s-live', 's-gone']);
+    rowsWriter.set('s-live', sessionRow('s-live'));
+    harness.emit('core.pageReady', null);
+
+    expect(placeKeys(state)).toEqual(['s-live']);
   });
 
   it('addTab_TabAdded_FiresTabAdded', async () => {

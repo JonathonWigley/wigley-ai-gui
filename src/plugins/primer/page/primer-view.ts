@@ -68,7 +68,13 @@ import {
   NEEDS_YOU_ACTIVITY,
   type SessionsPageExports,
 } from '../../sessions/contract';
-import type { PrimerEntry, PrimerView } from '../contract';
+import type {
+  PrimerEntry,
+  PrimerPane,
+  PrimerPlace,
+  PrimerView,
+  TaskRow,
+} from '../contract';
 import {
   type PrimerCommandName,
   primerCommand,
@@ -113,7 +119,6 @@ import {
   type OpenPrimer,
   type PrimerAction,
   type PrimerColumn,
-  type PrimerPane,
   type PrimerState,
   rowName,
   type RowPrompt,
@@ -122,7 +127,6 @@ import {
   selectedEntry,
   sessionTitle,
   TASK_GROUPS,
-  type TaskRow,
   taskPosition,
   taskRows,
 } from './primer-state';
@@ -137,7 +141,9 @@ import type { PrimerStore } from './primer-store';
 // `uiState` keeps the tasks and items columns' widths, which every primer's
 // columns open at. `timers` runs the splits' resize prompt linger. Each primer
 // view is a drop target through `drops`, typing files into the primer's box
-// used last.
+// used last. `savedPlaces` holds the places the last page saved, read once at
+// start: a primer it holds was shown before the reload, and does not take over
+// its session again.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity' | 'addRowPart'>;
@@ -162,6 +168,7 @@ export interface PrimerViewDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  savedPlaces: ReadonlyMap<string, PrimerPlace>;
 }
 
 // `forgetSession` drops a session's Primer tab entry and destroys its primer
@@ -470,8 +477,8 @@ interface PrimerViews {
 
 // A primer view per open primer, in its session's Primer tab: built when the
 // primer appears, adding the Primer tab when the session has none and taking
-// over the session with it, and registered as a drop target; destroyed with
-// its editors when the primer leaves.
+// over the session with it, restored for a primer the last page showed, and
+// registered as a drop target; destroyed with its editors when the primer leaves.
 function syncPrimerViews(
   state: PrimerState,
   primerViews: PrimerViews,
@@ -497,7 +504,11 @@ function syncPrimerViews(
         primer.formId,
         addPrimerDropTarget(primer.formId, primerView, deps),
       );
-      tabs.takeOver(primer.formId, primer.sessionId);
+      tabs.takeOver(
+        primer.formId,
+        primer.sessionId,
+        deps.savedPlaces.has(primer.formId),
+      );
     }
   }
 }

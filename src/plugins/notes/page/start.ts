@@ -5,6 +5,8 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
+import { onPageHide } from '../../../shared/page/page-hide';
+import { placeWrites } from '../../../shared/page/place-slot';
 import type { CoreEvents } from '../../../contracts/core-state';
 import type { KeyedSlotReader, SlotReader } from '../../../contracts/state';
 import {
@@ -13,7 +15,12 @@ import {
   type SessionRow,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type { NoteSession, NotesChannel } from '../contract';
+import {
+  type NoteSession,
+  type NotesChannel,
+  type NotesPlace,
+  notesPlaceSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -57,13 +64,17 @@ export function noteSessions(
 
 // The note popup over any mode, on `Space n n`, drawn with the layout the
 // `layout` setting names. It offers the popup the open session rows that carry
-// a host session id, so the popup can attach one.
+// a host session id, so the popup can attach one. The popup's open state and
+// cursors go to `notes.place` on each change, and a page load opens the popup
+// again where the last page left it.
 export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
     const { services } = api;
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
+    const placeWriter = api.state.publish(notesPlaceSlot);
+    const place = placeWrites<NotesPlace>((value) => placeWriter.set(value));
 
     api.events.on('core.pageReady', () => {
       followRows(rows, {
@@ -87,7 +98,13 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       ...noteSessions(rows, active),
       drops: api.drops,
       encoder: canvasEncoder,
+      onPageHide,
+      placeChanged: (value) => place.write(value),
     });
+    const savedPlace = placeWriter.get();
+    if (savedPlace !== undefined) {
+      popup.restorePlace(savedPlace);
+    }
     api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,

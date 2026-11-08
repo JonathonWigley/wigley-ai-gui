@@ -16,12 +16,55 @@ import {
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/page/session-fakes';
 import { sessionsPagePart } from '../../sessions/page/start';
-import type { PresentedPrimer } from '../contract';
+import {
+  type PresentedPrimer,
+  type PrimerPlace,
+  primerPlaceSlot,
+} from '../contract';
 import { primerPagePart } from './start';
 import { presentedPrimer } from './test-primers';
 
 // Lets a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// The primer part over sessions, main holding `open` primers, p1's session's
+// row selected and the page ready, so p1 is the active primer. `reload` starts a
+// new page over the same slots and readies it; `beforeRead` runs once the new
+// page has started, before its open primers read lands. `place` reads p1's place.
+async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
+  const harness = startPagePart(primerPagePart, {
+    parts: [sessionsPagePart],
+    invoke: async (method) =>
+      method === 'openForms' ? open.forms : new Promise(() => undefined),
+    services: {
+      editor: countingEditors().host,
+      markdown: PLAIN_MARKDOWN,
+      picker: fakeListPickerService(),
+    },
+  });
+  const { sessionId } = presentedPrimer('p1');
+  harness.state.publish(sessionsRowsSlot).set(sessionId, sessionRow(sessionId));
+  harness.state.publish(sessionsSelectionSlot).set(sessionId);
+  harness.emit('core.pageReady', null);
+  await settle();
+  const reload = async (beforeRead: () => void = () => undefined) => {
+    await harness.restart();
+    beforeRead();
+    harness.emit('core.pageReady', null);
+    await settle();
+  };
+  const place = () => harness.state.read(primerPlaceSlot, 'test').get('p1');
+  return { harness, open, reload, place };
+}
+
+// Task 1's first item selected, under the review's Cancel prompt.
+const CANCEL_PROMPT_ON_TASK_ONE: PrimerPlace = {
+  selectedTask: { kind: 'task', entryId: '1' },
+  selectedItem: 1,
+  pane: 'tasks',
+  view: 'confirm',
+  confirmReturnView: 'review',
+};
 
 describe('primer page part', () => {
   beforeEach(() => {
@@ -29,6 +72,52 @@ describe('primer page part', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.each<{
+    case: string;
+    act(setup: Awaited<ReturnType<typeof startOverOpenPrimers>>): Promise<void>;
+    expected: PrimerPlace | undefined;
+  }>([
+    {
+      case: 'reload_restores_task_item_pane_and_view',
+      act: ({ reload }) => reload(),
+      expected: CANCEL_PROMPT_ON_TASK_ONE,
+    },
+    {
+      case: 'saved_place_survives_the_first_form_shown_write',
+      act: ({ reload, harness }) =>
+        reload(() => harness.send('formShown', presentedPrimer('p1'))),
+      expected: CANCEL_PROMPT_ON_TASK_ONE,
+    },
+    {
+      case: 'form_closed_deletes_its_place',
+      act: async ({ harness }) =>
+        harness.send('formClosed', { formId: 'p1', byFinish: false }),
+      expected: undefined,
+    },
+    {
+      case: 'closed_while_no_page_ran_is_pruned',
+      act: async ({ open, reload }) => {
+        open.forms = [];
+        await reload();
+      },
+      expected: undefined,
+    },
+  ])('primer place: $case', async ({ act, expected }) => {
+    const setup = await startOverOpenPrimers({
+      forms: [presentedPrimer('p1')],
+    });
+    const { commands } = setup.harness.started();
+    commands.nextRow({} as PageCommandContext);
+    commands.openReview({} as PageCommandContext);
+    commands.askCancel({} as PageCommandContext);
+    expect(setup.place()).toEqual(CANCEL_PROMPT_ON_TASK_ONE);
+
+    await act(setup);
+
+    expect(setup.place()).toEqual(expected);
+    await setup.harness.stop();
   });
 
   it('stops with nothing live and starts again', async () => {

@@ -34,6 +34,7 @@ import type {
   NoteSendResult,
   NoteSession,
   NotesChannel,
+  NotesPlace,
 } from '../contract';
 import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
@@ -133,6 +134,8 @@ interface Harness {
   take(files: readonly DroppedFile[]): void;
   // Sets the picker filter's text as typing it would.
   typeFilter(text: string): void;
+  // Each place the popup reported, in order.
+  places: NotesPlace[];
 }
 
 interface Fakes {
@@ -285,8 +288,12 @@ function fakeChannel(
   } as unknown as PageChannel<NotesChannel>;
 }
 
-// The popup over fakes, opened on `draft`, its body focused.
-async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
+// The popup over fakes, opened on `draft`, its body focused; or, given
+// `restored`, opened as a reloaded page puts it back.
+async function openPopup(
+  draft: NoteDraft = DRAFT,
+  restored?: NotesPlace,
+): Promise<Harness> {
   const doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
   Object.assign(doc, { addEventListener: () => undefined });
   vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: () => 'red' }));
@@ -299,6 +306,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   const inserts: string[] = [];
   const saved: NoteFields[] = [];
   const savedMarkups: [number, string][] = [];
+  const places: NotesPlace[] = [];
   const markupChangeListeners: (() => void)[] = [];
   const time = handTimers();
   let images = draft.images;
@@ -392,8 +400,14 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       savePasted: (file) => fakes.savePasted(file),
     },
     encoder: { encode: (...args) => fakes.encode(...args) },
+    onPageHide: () => ({ dispose: () => undefined }),
+    placeChanged: (place) => places.push(place),
   });
-  popup.commands.open(NO_ARG);
+  if (restored === undefined) {
+    popup.commands.open(NO_ARG);
+  } else {
+    popup.restorePlace(restored);
+  }
   await settle();
   const root = asFake(roots[0]);
   const [title] = findAll(root, 'notes-title');
@@ -425,6 +439,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     fakes,
     take: (files) => targets[0].take(files),
     typeFilter: (text) => filterEvents?.changed(text),
+    places,
   };
 }
 
@@ -927,4 +942,40 @@ describe('note popup', () => {
       );
     },
   );
+
+  it.each([
+    {
+      name: 'held cursors',
+      saved: { isOpen: true, field: 'images', imageIndex: 1 },
+      expected: { isOpen: true, field: 'images', imageIndex: 1 },
+    },
+    {
+      name: 'an image cursor past the strip',
+      saved: { isOpen: true, field: 'tags', imageIndex: 5 },
+      expected: { isOpen: true, field: 'tags', imageIndex: 1 },
+    },
+  ] as const)(
+    'reload_reopens_with_cursors: $name',
+    async ({ saved, expected }) => {
+      const harness = await openPopup(DRAFT, saved);
+
+      expect(harness.logged).toContainEqual(
+        expect.stringMatching(/^popup shown/),
+      );
+      expect(harness.places.at(-1)).toEqual(expected);
+      expect(harness.doc.activeElement).not.toBe(harness.bodyFrame);
+    },
+  );
+
+  it('reload_closed_popup_stays_closed', async () => {
+    const harness = await openPopup(DRAFT, {
+      isOpen: false,
+      field: 'images',
+      imageIndex: 1,
+    });
+
+    expect(harness.logged).not.toContainEqual(
+      expect.stringMatching(/^popup shown/),
+    );
+  });
 });

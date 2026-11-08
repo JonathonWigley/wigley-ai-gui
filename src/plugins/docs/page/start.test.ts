@@ -17,7 +17,15 @@ import {
   type SessionTabHandle,
   type SessionTabView,
 } from '../../sessions/contract';
-import { type DocsPageExports, sessionSourceId } from '../contract';
+import {
+  type DocsEdits,
+  type DocsPageExports,
+  type DocsPlace,
+  docsPlaceSlot,
+  MACHINE_SOURCE_ID,
+  sessionSourceId,
+} from '../contract';
+import type { EditorHost } from '../../../contracts/editor';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DocsView } from './docs-view';
@@ -101,6 +109,90 @@ function fakeSessions(
   );
 }
 
+// A document editor host whose editors hold the text set or typed last.
+function documentEditors(): EditorHost {
+  return {
+    createDocument(_parent: HTMLElement, text: string) {
+      let current = text;
+      return {
+        text: () => current,
+        setText: (next: string) => {
+          current = next;
+        },
+        focus: () => undefined,
+        blur: () => undefined,
+        destroy: () => undefined,
+      };
+    },
+  } as unknown as EditorHost;
+}
+
+// An index entry for the doc at `path`.
+function entryAt(path: string) {
+  return {
+    id: path,
+    kind: 'instructions',
+    source: 'global',
+    owner: 'mine',
+    repo: null,
+    root: null,
+    plugin: null,
+    path,
+    line: null,
+    title: path,
+    meta: {},
+    walked: [],
+    lastLoaded: null,
+    headings: [],
+    links: [],
+  };
+}
+
+// Main's side over an index listing `paths` for every source, each doc reading
+// `# Doc` but `/p/gone.md`, which throws; each read path goes to `readDocs`.
+function servingIndexOf(paths: readonly string[], readDocs: unknown[]) {
+  return async (method: string, ...args: unknown[]): Promise<unknown> => {
+    if (method === 'loadIndex') {
+      return {
+        document: {
+          schemaVersion: 5,
+          generatedAt: '2026-11-05T00:00:00Z',
+          entries: paths.map(entryAt),
+          contexts: [],
+        },
+        message: null,
+        title: 'index',
+        canRebuild: false,
+      };
+    }
+    if (method === 'wikiMainPath') {
+      return '/p/wiki/Main.md';
+    }
+    if (method === 'readDocIfPresent') {
+      return null;
+    }
+    if (method !== 'readDoc') {
+      return { clones: [] };
+    }
+    readDocs.push(args[0]);
+    if (args[0] === '/p/gone.md') {
+      throw new Error('no such file');
+    }
+    return '# Doc';
+  };
+}
+
+const placeAt = (
+  openPath: string | null,
+  edits: DocsEdits | null = null,
+): DocsPlace => ({
+  openPath,
+  expanded: [],
+  selectedId: null,
+  filter: '',
+  edits,
+});
+
 function startDocsPage(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
 ) {
@@ -112,6 +204,7 @@ function startDocsPage(
   const harness = startPagePart(docsPagePart, {
     services: {
       picker,
+      editor: documentEditors(),
       markdown: {
         block: (text) => text,
         inline: (text) => text,
@@ -130,6 +223,32 @@ function startDocsPage(
 }
 
 type DocsPage = ReturnType<typeof startDocsPage>;
+
+// Stops the page, leaves `places` in the docs place slot as the last page's,
+// and holds the rows of `sessionIds` before the page starts again.
+async function reloadWith(
+  { harness }: DocsPage,
+  places: Record<string, DocsPlace>,
+  sessionIds: readonly string[],
+) {
+  await harness.stop();
+  const seed = harness.state.publish(docsPlaceSlot);
+  for (const [sourceId, place] of Object.entries(places)) {
+    seed.set(sourceId, place);
+  }
+  seed.dispose();
+  const rows = harness.state.publish(sessionsRowsSlot);
+  for (const sessionId of sessionIds) {
+    rows.set(sessionId, projectRow(sessionId));
+  }
+  await harness.restart();
+  harness.emit('core.pageReady', null);
+}
+
+const openedPaths = ({ harness }: DocsPage) =>
+  dataEmitted(harness, 'docs.docOpened').map(
+    (data) => (data as { path: string }).path,
+  );
 
 // Opens `path` through Docs mode's `openDoc` message.
 function openByMessage({ harness }: DocsPage, path: string) {
@@ -250,53 +369,8 @@ describe('docs page part lifecycle', () => {
   ])(
     'docOpened_DocOpens_FiresOnlyThen ($case)',
     async ({ open, path, opened }) => {
-      const entry = {
-        id: path,
-        kind: 'instructions',
-        source: 'global',
-        owner: 'mine',
-        repo: null,
-        root: null,
-        plugin: null,
-        path,
-        line: null,
-        title: path,
-        meta: {},
-        walked: [],
-        lastLoaded: null,
-        headings: [],
-        links: [],
-      };
       const readDocs: unknown[] = [];
-      const page = startDocsPage(async (method, ...args) => {
-        if (method === 'loadIndex') {
-          return {
-            document: {
-              schemaVersion: 5,
-              generatedAt: '2026-11-05T00:00:00Z',
-              entries: [entry],
-              contexts: [],
-            },
-            message: null,
-            title: 'index',
-            canRebuild: false,
-          };
-        }
-        if (method === 'wikiMainPath') {
-          return '/p/wiki/Main.md';
-        }
-        if (method === 'readDocIfPresent') {
-          return null;
-        }
-        if (method !== 'readDoc') {
-          return { clones: [] };
-        }
-        readDocs.push(args[0]);
-        if (args[0] === '/p/gone.md') {
-          throw new Error('no such file');
-        }
-        return '# Doc';
-      });
+      const page = startDocsPage(servingIndexOf([path], readDocs));
       const { harness } = page;
 
       await open(page, path, readDocs);
@@ -407,6 +481,80 @@ describe('docs page part lifecycle', () => {
     expect(
       harness.logs.filter(({ message }) => message.includes('trash answer')),
     ).toEqual([expect.objectContaining({ message: 'no trash answer maybe' })]);
+    await harness.stop();
+  });
+
+  it('reload_reopens_the_doc_per_view', async () => {
+    const page = startDocsPage(
+      servingIndexOf(['/p/machine.md', '/p/session.md'], []),
+    );
+    const { harness, liveTabs } = page;
+    openByMessage(page, '/p/machine.md');
+    await vi.waitFor(() => expect(openedPaths(page)).toHaveLength(1));
+    const openedBefore = openedPaths(page).length;
+
+    await reloadWith(
+      page,
+      { [sessionSourceId('s1')]: placeAt('/p/session.md') },
+      ['s1'],
+    );
+    harness.started().commands.showMode({ arg: undefined });
+    liveTabs.get('s1')?.shown?.();
+
+    await vi.waitFor(() =>
+      expect(openedPaths(page).slice(openedBefore).sort()).toEqual([
+        '/p/machine.md',
+        '/p/session.md',
+      ]),
+    );
+    await harness.stop();
+  });
+
+  it('row_gone_during_reload_prunes_its_view_and_keeps_docs_modes', async () => {
+    const page = startDocsPage();
+    const { harness } = page;
+
+    await reloadWith(
+      page,
+      {
+        [MACHINE_SOURCE_ID]: placeAt('/p/machine.md'),
+        [sessionSourceId('gone')]: placeAt('/p/gone.md'),
+        [sessionSourceId('kept')]: placeAt('/p/kept.md'),
+      },
+      ['kept'],
+    );
+
+    expect(
+      [...harness.state.read(docsPlaceSlot, 'test').all().keys()].sort(),
+    ).toEqual([MACHINE_SOURCE_ID, sessionSourceId('kept')].sort());
+    await harness.stop();
+  });
+
+  it('restored_edits_refuse_the_close', async () => {
+    const page = startDocsPage(servingIndexOf(['/p/kept.md'], []));
+    const { harness, liveTabs } = page;
+    const edits = {
+      path: '/p/kept.md',
+      text: '# Doc\nedited',
+      baseText: '# Doc',
+    };
+
+    await reloadWith(
+      page,
+      { [sessionSourceId('s1')]: placeAt('/p/kept.md', edits) },
+      ['s1'],
+    );
+    const tab = liveTabs.get('s1');
+    tab?.shown?.();
+    await vi.waitFor(() =>
+      expect(
+        harness.logs.some(({ message }) =>
+          message.startsWith('restored edits on'),
+        ),
+      ).toBe(true),
+    );
+
+    expect(tab?.beforeClose?.(false)).toBe(false);
     await harness.stop();
   });
 

@@ -9,7 +9,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import { textBoxInput } from '../../../shared/page/text-box';
-import type { IndexHeading } from '../contract';
+import type { DocsPlace, IndexHeading } from '../contract';
 import type { TreeRowInput } from '../layouts/layout';
 import type {
   TreeHeadingMatch,
@@ -73,6 +73,8 @@ export interface TreeViewDeps {
   rowStatus(node: TreeNode): TreeRowStatus;
   // The leaf's last-loaded time and star, read at each draw.
   leafMarks(leaf: TreeLeaf): LeafMarks;
+  // Hears each draw, after which `place` may read differently.
+  placeChanged(): void;
 }
 
 // A leaf's last-loaded time, short with the full date and time as its
@@ -175,9 +177,19 @@ export interface TreeView {
   // Draws the pane, the line and the rows again when a layout pick changed
   // for one of them, keeping the rows' scroll, the filter's text and focus.
   redraw(): void;
+  // The place a page reload puts back: the expanded ids, selection and filter
+  // of the view a new tree shows first, the wiki with `hasWiki`, else All
+  // pages. The other view's start over on a reload.
+  place(): TreePlace;
+  // Puts back a reloaded page's place, before the first `setTree`: the first
+  // tree with rows in that view takes it in place of its default expansion and
+  // first row. The filter applies with its box closed.
+  restorePlace(place: TreePlace): void;
   // Disposes the tree's anchors and drawn parts.
   dispose(): void;
 }
+
+export type TreePlace = Pick<DocsPlace, 'expanded' | 'selectedId' | 'filter'>;
 
 function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
   if (a === null || b === null) {
@@ -229,6 +241,8 @@ interface ViewSlot {
   hasTree: boolean;
   // Every group id a tree of this view has held.
   seenGroups: ReadonlySet<string>;
+  // A reloaded page's state, which the first tree with rows takes.
+  restored: TreeState | null;
 }
 
 function emptySlot(): ViewSlot {
@@ -239,6 +253,7 @@ function emptySlot(): ViewSlot {
     hasRows: false,
     hasTree: false,
     seenGroups: new Set(),
+    restored: null,
   };
 }
 
@@ -305,6 +320,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   };
   let shownView: SidebarView = deps.hasWiki ? 'wiki' : 'all';
   const shownSlot = () => slots[shownView];
+  const placeSlot = slots[shownView];
   let pathOf: (entryId: string) => string = () => '';
   let headingsOf: (entryId: string) => readonly IndexHeading[] = () => [];
   let rows: TreeRow[] = [];
@@ -392,6 +408,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     drawnRows = rows.map(drawRow);
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     showLine();
+    deps.placeChanged();
   };
 
   // Replaces the line only when it changed, so a selection move leaves it; a
@@ -536,10 +553,15 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     deps.log(`selected ${selectedRow()?.node.title}`);
   };
 
-  // The first tree with rows in `slot`: expands its default groups and selects
-  // its first row.
+  // The first tree with rows in `slot`: takes a reloaded page's state, else
+  // expands its default groups and selects its first row.
   const openFirstTree = (slot: ViewSlot) => {
     slot.hasRows = true;
+    if (slot.restored !== null) {
+      slot.state = slot.restored;
+      slot.restored = null;
+      return;
+    }
     slot.state = { ...slot.state, expanded: defaultExpandedIds(slot.tree) };
     slot.state = {
       ...slot.state,
@@ -716,6 +738,14 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
           isRedrawing = false;
         }
       });
+    },
+    place() {
+      const { expanded, selectedId, filter } = placeSlot.state;
+      return { expanded: [...expanded], selectedId, filter };
+    },
+    restorePlace({ expanded, selectedId, filter }) {
+      placeSlot.restored = { expanded: new Set(expanded), selectedId, filter };
+      placeSlot.state = { ...placeSlot.state, filter };
     },
     dispose() {
       isDisposed = true;

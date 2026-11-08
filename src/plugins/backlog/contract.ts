@@ -8,6 +8,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 import type {
   FollowupDraft,
   FollowupEdit,
@@ -168,3 +169,25 @@ export interface BacklogChannel extends ChannelShape {
     changed: { homeRoot: string | null };
   };
 }
+
+// Where the list keys act: the side bar's homes, the open home's rows, or the
+// detail pane.
+export type BacklogFocus = 'homes' | 'items' | 'detail';
+
+// Where the user was in Backlog mode, so a page reload puts them back:
+// `homeCursor` indexes the side bar's homes in order, `selectedKey` is a row's
+// key, and `expanded` the plan and feature paths whose task rows show.
+export interface BacklogPlace {
+  focus: BacklogFocus;
+  homeCursor: number;
+  openRoot: string | null;
+  selectedKey: string | null;
+  expanded: string[];
+  filter: string;
+}
+
+export const backlogPlaceSlot: SlotKey<BacklogPlace, 'page', 'backlog'> = {
+  id: 'backlog.place',
+  process: 'page',
+  kind: 'value',
+};

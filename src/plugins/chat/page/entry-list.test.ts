@@ -389,6 +389,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     runClicked: (runId) => list.toggleRun(runId),
     stopClicked: (stopId) => list.moveFocusTo(stopId),
     turnLine: element('li', TURN_LINE_CLASS),
+    placeChanged: () => undefined,
   });
   const held = new Map<string, ChatEntry>();
   const put = (entry: ChatEntry) => {
@@ -554,6 +555,47 @@ describe('entry list', () => {
     expect(list.moveFocusTo('n1')).toBe(true);
     expect(list.focused()).toEqual({ kind: 'entry', entry: notice('n1') });
   });
+
+  it.each([
+    {
+      name: 'a held stop',
+      stopId: 'n2',
+      isRestoredFirst: false,
+      focused: notice('n2'),
+    },
+    {
+      name: 'a held stop restored before the entries arrive',
+      stopId: 'n2',
+      isRestoredFirst: true,
+      focused: notice('n2'),
+    },
+    {
+      name: 'a stop no entry holds',
+      stopId: 'gone',
+      isRestoredFirst: false,
+      focused: notice('n3'),
+    },
+  ])(
+    'restored_stop_that_no_entry_holds_falls_back ($name)',
+    ({ stopId, isRestoredFirst, focused }) => {
+      const { list } = setUpList(defaultShown());
+      const held = [notice('n1'), notice('n2'), notice('n3')];
+      const place = {
+        focus: { stopId, following: false, anchorId: null },
+        openRuns: [],
+        openExpanders: {},
+      };
+      if (isRestoredFirst) {
+        list.restorePlace(place);
+        list.rebuild(held);
+      } else {
+        list.rebuild(held);
+        list.restorePlace(place);
+      }
+
+      expect(list.focused()).toEqual({ kind: 'entry', entry: focused });
+    },
+  );
 
   it('toggleExpander_EntryWithNoSlot_GivesNothing', () => {
     const { list, put } = setUpList(defaultShown());

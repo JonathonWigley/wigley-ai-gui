@@ -9,6 +9,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 
 // The feature primer's shapes: the open_primer call, the body the page sends
 // back, the payload both tools return, and the page part's events and exports.
@@ -129,3 +130,30 @@ export interface PrimerPageExports {
 
 export const primerPageKey: DependencyKey<PrimerPageExports, 'page', 'primer'> =
   { id: 'primer', process: 'page' };
+
+// The pane the keys act on; a column is a pane that lists rows.
+export type PrimerPane = 'tasks' | 'items' | 'card';
+
+// A row of the tasks column.
+export type TaskRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
+
+// Where an open primer's page left it: the selected task row and item, the
+// focused pane, and the view with the view its Cancel prompt returns to, both
+// kept from the primer the page last showed as active. `confirm` is the
+// review's Cancel prompt, which leaves the session open.
+export interface PrimerPlace {
+  selectedTask: TaskRow;
+  selectedItem: number | null;
+  pane: PrimerPane;
+  view: 'primer' | 'review' | 'confirm';
+  confirmReturnView: 'primer' | 'review';
+}
+
+// Each open primer's place, by the primer's form id, written on each change
+// while the primer is open; the primer closing deletes its key, and the page's
+// open primers read deletes the keys of primers that closed while no page ran.
+export const primerPlaceSlot: KeyedSlotKey<PrimerPlace, 'page', 'primer'> = {
+  id: 'primer.place',
+  process: 'page',
+  kind: 'keyed',
+};

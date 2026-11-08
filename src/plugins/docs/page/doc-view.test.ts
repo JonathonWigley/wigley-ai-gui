@@ -185,6 +185,9 @@ function docViewOver(
         });
         return {
           text: readText,
+          setText: (next: string) => {
+            current = next;
+          },
           focus: () => undefined,
           blur: () => undefined,
           insert: (inserted: string) => inserts.push(inserted),
@@ -236,6 +239,7 @@ function docViewOver(
     },
     parts,
     openChanged: () => undefined,
+    editsChanged: () => undefined,
   } as unknown as DocViewDeps;
   const created = createDocView(deps);
   view = created;
@@ -718,6 +722,39 @@ describe('createDocView', () => {
       });
     },
   );
+
+  describe('restoreEdits', () => {
+    const EDITS = { path: DOC, text: '# Doc\nedited', baseText: '# Doc' };
+
+    it('restored_edits_read_as_unsaved', async () => {
+      const { view } = await sectionDoc('# Doc');
+
+      view.restoreEdits(EDITS);
+
+      expect(view.hasUnsavedEdits()).toBe(true);
+      expect(view.edits()).toEqual(EDITS);
+    });
+
+    it.each([
+      {
+        name: 'disk unchanged keeps the edits',
+        disk: '# Doc',
+        after: EDITS.text,
+      },
+      { name: 'disk changed', disk: '# Disk', after: '# Disk' },
+    ])(
+      'restored_edits_with_changed_disk_open_the_prompt: $name',
+      async ({ disk, after }) => {
+        const { view, editors } = await sectionDoc(disk);
+        view.restoreEdits(EDITS);
+
+        // Reload acts only while the changed-on-disk prompt shows.
+        view.conflictReload();
+
+        expect(editors[0].text()).toBe(after);
+      },
+    );
+  });
 
   describe("a detail's editor retargeted to a target with no detail", () => {
     // A detail whose `i` edits `editedPath`, its editor open, retargeted to

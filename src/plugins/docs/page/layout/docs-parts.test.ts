@@ -302,5 +302,6 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     anchor: noAnchor,
     rowStatus: () => ({ mark: null, detail: null }),
     leafMarks: () => ({ time: null, isStarred: false }),
+    placeChanged: () => undefined,
   };
 }

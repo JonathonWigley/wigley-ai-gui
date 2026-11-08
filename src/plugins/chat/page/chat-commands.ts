@@ -523,6 +523,7 @@ function ranSlashCommand(
 // Empties the box and its attachments, and follows the latest entry.
 function clearBox(session: ChatSession) {
   session.box.setText('');
+  session.boxChanged();
   session.attachments.clear();
   session.entries.latest();
 }
@@ -564,6 +565,7 @@ export function putBack(
     session.box.setText(
       [...texts, ...(typed === '' ? [] : [typed])].join('\n'),
     );
+    session.boxChanged();
   }
   const attached = session.attachments.images();
   session.attachments.clear();
@@ -615,6 +617,7 @@ export function fillComposer(
     return;
   }
   session.box.setText(text);
+  session.boxChanged();
   deps.tabs.reveal(sessionId);
 }
 
@@ -662,6 +665,7 @@ function runSlashCommand(
     args,
   };
   session.box.setText('');
+  session.boxChanged();
   log(`ran /${command.name} in ${session.name}`);
   void (async () => command.run(context))().catch((error: unknown) => {
     log(`/${command.name} failed: ${errorText(error)}`);

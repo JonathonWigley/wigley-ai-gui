@@ -13,6 +13,7 @@ import {
   type PartStore,
 } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
+import { pruneKeys } from '../../../shared/page/place-slot';
 import {
   leafIds,
   type PaneTree,
@@ -27,6 +28,7 @@ import {
   type SessionsChannel,
   sessionsActiveSlot,
   sessionsActivitySlot,
+  sessionsPlaceSlot,
   sessionsFavoriteProjectAtCommand,
   type SessionsPageEvents,
   type SessionsPageExports,
@@ -196,7 +198,9 @@ function createExports(
 // it. A selection naming no row is mid-operation: main deleted that row and its
 // selection write follows, so the state that settles it places the panes, and
 // the focus and the visible tab follow in a microtask, after every reader heard
-// the notice. Activating a session
+// the notice. Each session's tab place (`sessionsPlaceSlot`) outlives a reload:
+// a row leaving deletes it, and `core.pageReady` first deletes the places of rows
+// that ended while no page ran. Activating a session
 // focuses the pane showing it, or loads it into the focused pane; closing one
 // asks main, and a pane whose session leaves closes, the last pane staying.
 // The visible tab, the focused pane's session's selected tab while the mode
@@ -230,6 +234,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     for (const sessionId of activities.all().keys()) {
       activities.delete(sessionId);
     }
+    // Each session's tab place outlives a reload, not its row.
+    const places = api.state.publish(sessionsPlaceSlot);
     let state: SessionsState = { rows: [], selectedSessionId: null };
     // False until the first state's focus is written to `active`.
     let hasPublished = false;
@@ -258,7 +264,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
     rows.on(applyNotice);
     selection.on(applyNotice);
-    api.events.on('core.pageReady', () => apply(currentState()));
+    api.events.on('core.pageReady', () => {
+      pruneKeys(places, (sessionId) => rows.all().has(sessionId));
+      apply(currentState());
+    });
+    // After `applyNotice`, so the row's frame is dropped before its place goes.
+    followRows(rows, { removed: (sessionId) => places.delete(sessionId) });
 
     const rowOf = (sessionId: string) =>
       state.rows.find((row) => row.sessionId === sessionId);
@@ -490,6 +501,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       recency: createSessionRecency(api.services.clock, uiState),
       favorites: createProjectFavorites(uiState),
       activities,
+      places,
     });
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {

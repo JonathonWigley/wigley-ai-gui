@@ -18,6 +18,11 @@ import {
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
+import {
+  type PlaceWrites,
+  placeWrites,
+  pruneKeys,
+} from '../../../shared/page/place-slot';
 import { sheet } from '../../../shared/page/ui/sheet';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
@@ -33,8 +38,11 @@ import {
   type DocsChannel,
   type DocsPageEvents,
   type DocsPageExports,
+  type DocsPlace,
+  docsPlaceSlot,
   type DocsViewHandle,
   MACHINE_SOURCE_ID,
+  sessionIdOfSource,
   sessionSourceId,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -73,6 +81,8 @@ interface SessionDocs {
   view: DocsViewHandle;
   // The docs view behind `view`.
   docsView: DocsView;
+  // The writes of the view's place.
+  place: PlaceWrites<DocsPlace>;
   // Null until `addTab` returns.
   tab: SessionTabHandle | null;
 }
@@ -123,13 +133,17 @@ const machineViewId = 'machine';
 // the star set every view shares, and a view showing closes the others'
 // overlays, since two views' pane scopes may be equal. `toggleTree` hides or
 // shows the active view's tree. `openDoc` opens a doc in Docs mode, and
-// `openMain` the Main page there, from any docs view.
+// `openMain` the Main page there, from any docs view. Each view's place goes
+// to `docs.place` under its source id on each change, and a page load puts the
+// last page's back as the view is made; a session's place leaves with its row.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services } = api;
     const { log } = services;
     const sessions = api.dependency(sessionsPageKey);
+    const rows = api.state.read(sessionsRowsSlot);
+    const placeWriter = api.state.publish(docsPlaceSlot);
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
@@ -190,9 +204,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // Each scope the view sets is followed by `resizeTarget`, the divider the
     // resize keys move while the view has the keys (null moves the side bar),
     // and by the view's focus target, which moves between its tree and doc.
+    // The view's place goes through `place` under `sourceId`, and the last
+    // page's place there is put back.
     const createView = (
       viewId: string,
       sourceId: string,
+      place: PlaceWrites<DocsPlace>,
       isActive: () => boolean,
       openChanged: (path: string | null) => void,
       revealTree: () => void,
@@ -241,9 +258,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           allViews()
             .map((each) => each.unsavedPath())
             .filter((path) => path !== null),
+        placeChanged: (value) => place.write(value),
       });
+      const savedPlace = placeWriter.get(sourceId);
+      if (savedPlace !== undefined) {
+        view.restorePlace(savedPlace);
+      }
       return view;
     };
+
+    // The writes of the place of the view over `sourceId`.
+    const placeOf = (sourceId: string): PlaceWrites<DocsPlace> =>
+      placeWrites((value) => placeWriter.set(sourceId, value));
 
     // The title bar shows the machine view's open doc while Docs mode shows.
     // `openChanged`, `revealTree` and `leafOpened` read `mode` once a doc
@@ -252,6 +278,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const machineView = createView(
       machineViewId,
       MACHINE_SOURCE_ID,
+      placeOf(MACHINE_SOURCE_ID),
       () => isDocsModeShown,
       (path) =>
         mode.setContext(
@@ -376,8 +403,13 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const addView = (
       sourceId: string,
       options: { isVisible(): boolean },
-    ): { handle: DocsViewHandle; view: DocsView } => {
+    ): {
+      handle: DocsViewHandle;
+      view: DocsView;
+      place: PlaceWrites<DocsPlace>;
+    } => {
       addedCount += 1;
+      const place = placeOf(sourceId);
       const viewId = `view:${String(addedCount)}`;
       const split = createSplit({
         ...SESSION_TREE_SPLIT,
@@ -390,6 +422,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         view: createView(
           viewId,
           sourceId,
+          place,
           () => options.isVisible(),
           () => undefined,
           () => {
@@ -427,7 +460,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           callEach([added.view, split], (part) => part.dispose());
         },
       };
-      return { handle, view: added.view };
+      return { handle, view: added.view, place };
     };
 
     const addSessionDocs = ({ sessionId, projectDir }: SessionRow) => {
@@ -437,6 +470,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       const held: SessionDocs = {
         view: added.handle,
         docsView: added.view,
+        place: added.place,
         tab: null,
       };
       sessionDocs.set(sessionId, held);
@@ -461,6 +495,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const disposeSessionDocs = (held: SessionDocs) => {
       callEach([held.tab, held.view], (part) => part?.dispose());
     };
+    // The row's place leaves with it, after its view, which writes no more.
     const removeSessionDocs = (sessionId: string) => {
       const held = sessionDocs.get(sessionId);
       if (held === undefined) {
@@ -468,9 +503,17 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
       sessionDocs.delete(sessionId);
       disposeSessionDocs(held);
+      placeWriter.delete(sessionSourceId(sessionId));
+      held.place.reset();
     };
+    // A session whose row ended while no page ran leaves a place no view
+    // takes; the prune waits for the page mirror to hold the rows.
     api.events.on('core.pageReady', () => {
-      followRows(api.state.read(sessionsRowsSlot), {
+      pruneKeys(placeWriter, (sourceId) => {
+        const sessionId = sessionIdOfSource(sourceId);
+        return sessionId === null || rows.all().has(sessionId);
+      });
+      followRows(rows, {
         added: addSessionDocs,
         removed: removeSessionDocs,
         // Main replaces a session's index source when its host id changes.

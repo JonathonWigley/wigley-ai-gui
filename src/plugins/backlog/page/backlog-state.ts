@@ -7,17 +7,15 @@ import { matchesSubstring } from '../../../shared/matches-substring';
 import type {
   BacklogEdit,
   BacklogFeature,
+  BacklogFocus,
   BacklogHome,
+  BacklogPlace,
   BacklogPlan,
   BacklogRead,
   BacklogTask,
 } from '../contract';
 
 export const AGENT_READY = 'agent-ready';
-
-// Where the list keys act: the side bar's homes, the open home's rows, or the
-// detail pane.
-export type BacklogFocus = 'homes' | 'items' | 'detail';
 
 export type EditorField = 'title' | 'oneLine' | 'tags' | 'body';
 
@@ -83,6 +81,8 @@ export type BacklogRow =
 
 export type BacklogAction =
   | { type: 'loaded'; read: BacklogRead }
+  // A reloaded page's place, put back once the first homes load.
+  | { type: 'placeRestored'; place: BacklogPlace }
   | { type: 'move'; to: 'down' | 'up' | 'top' | 'bottom' }
   | { type: 'open' }
   | { type: 'toggle' }
@@ -365,6 +365,18 @@ export function emptyReason(
   return state.isAgentReadyOnly ? 'agentReadyNone' : 'nothing';
 }
 
+// The part of `state` a page reload puts back.
+export function placeOf(state: BacklogState): BacklogPlace {
+  return {
+    focus: state.focus,
+    homeCursor: state.homeCursor,
+    openRoot: state.openRoot,
+    selectedKey: state.selectedKey,
+    expanded: [...state.expanded],
+    filter: state.filter,
+  };
+}
+
 export function isDraftChanged(editor: BacklogEditor): boolean {
   return EDITOR_FIELDS.some(
     (field) => editor.draft[field] !== editor.initial[field],
@@ -379,6 +391,8 @@ export function backlogReducer(
   switch (action.type) {
     case 'loaded':
       return loaded(state, action.read, matcher);
+    case 'placeRestored':
+      return placeRestored(state, action.place, matcher);
     case 'move':
       return move(state, action.to, matcher);
     case 'open':
@@ -568,6 +582,39 @@ function loaded(
     return reselected;
   }
   return { ...selectPending(reselected, matcher), pendingSelect: null };
+}
+
+// Puts `place` back over the loaded homes. A saved open home no home holds
+// opens none, with focus on the homes; a saved row no shown row holds selects
+// the first; the detail takes focus only with a row selected.
+function placeRestored(
+  state: BacklogState,
+  place: BacklogPlace,
+  matcher: FuzzyMatcher,
+): BacklogState {
+  const homes = orderedHomes(state);
+  const isOpenRootHeld = homes.some((home) => home.root === place.openRoot);
+  const next: BacklogState = {
+    ...state,
+    homeCursor: clampIndex(place.homeCursor, homes.length),
+    openRoot: isOpenRootHeld ? place.openRoot : null,
+    expanded: place.expanded,
+    filter: place.filter,
+    pendingSelect: null,
+  };
+  const rows = visibleRows(next, matcher);
+  const isSelectedShown = rows.some((row) => row.key === place.selectedKey);
+  const selectedKey = isSelectedShown
+    ? place.selectedKey
+    : (rows[0]?.key ?? null);
+  const restored: BacklogState = {
+    ...next,
+    selectedKey,
+    focus: next.openRoot === null ? 'homes' : 'items',
+  };
+  return place.focus === 'detail'
+    ? focusOn(restored, 'detail', matcher)
+    : { ...restored, focus: next.openRoot === null ? 'homes' : place.focus };
 }
 
 function move(

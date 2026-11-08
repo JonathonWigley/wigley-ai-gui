@@ -8,7 +8,13 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import type { ChatImage } from '../../../contracts/agent';
 import { createPartStore } from '../../../shared/page/contributed-parts';
+import {
+  type PlaceWrites,
+  placeWrites,
+  pruneKeys,
+} from '../../../shared/page/place-slot';
 import {
   followRows,
   sessionsActiveSlot,
@@ -20,7 +26,10 @@ import {
   chatCommandsSlot,
   type ChatComposerPart,
   chatControlsSlot,
+  chatDraftImagesSlot,
   chatEntriesSlot,
+  type ChatPlace,
+  chatPlaceSlot,
   type ChatPageExports,
   chatQueuedSlot,
   chatReturnedSlot,
@@ -44,7 +53,7 @@ import { createChatLayouts } from './chat-layouts';
 import { addClearCommands } from './clear-commands';
 import { clipboardWriter } from './clipboard';
 import { createCompletionRows, descriptionDraw } from './completion-rows';
-import { mountChatView } from './chat-view';
+import { mountChatView, type TabPlace } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createMainAgentPart } from './main-agent-part';
 import { createPicker } from './picker';
@@ -95,7 +104,10 @@ type ChatApi = PageApi<
 // start prompt open. A resting session's Chat tab keys as a running one's
 // does; its control chips are disabled until a message starts its process.
 // Each session's row shows its run time, and the exports and the `chat.session`
-// slot offer its clock to other plugins.
+// slot offer its clock to other plugins. Each tab's draft, cursor, open runs and
+// expanders go to `chat.place`, and its attached images to `chat.draftImages`,
+// on each change; a page load puts the last page's back as the tab is made, and
+// a session's keys leave with its row.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -108,6 +120,54 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
+    const placeWriter = api.state.publish(chatPlaceSlot);
+    const imagesWriter = api.state.publish(chatDraftImagesSlot);
+    // Each held tab's writes, by session id.
+    const tabPlaces = new Map<
+      string,
+      {
+        place: PlaceWrites<ChatPlace>;
+        images: PlaceWrites<readonly ChatImage[]>;
+      }
+    >();
+    const placeOf = (sessionId: string): TabPlace => {
+      const place = placeWrites<ChatPlace>((value) =>
+        placeWriter.set(sessionId, value),
+      );
+      const images = placeWrites<readonly ChatImage[]>((value) =>
+        imagesWriter.set(sessionId, value),
+      );
+      tabPlaces.set(sessionId, { place, images });
+      return {
+        saved: placeWriter.get(sessionId),
+        savedImages: imagesWriter.get(sessionId) ?? [],
+        write: (value) => place.write(value),
+        writeImages(value) {
+          if (value.length > 0) {
+            images.write(value);
+            return;
+          }
+          imagesWriter.delete(sessionId);
+          images.reset();
+        },
+      };
+    };
+    // The row's keys leave with it, after its tab, which writes no more.
+    const forgetPlace = (sessionId: string) => {
+      placeWriter.delete(sessionId);
+      imagesWriter.delete(sessionId);
+      const held = tabPlaces.get(sessionId);
+      tabPlaces.delete(sessionId);
+      held?.place.reset();
+      held?.images.reset();
+    };
+    // A session whose row ended while no page ran leaves keys no tab takes;
+    // the prune waits for the page mirror to hold the rows.
+    const pruneEndedPlaces = () => {
+      const isLive = (sessionId: string) => rows.all().has(sessionId);
+      pruneKeys(placeWriter, isLive);
+      pruneKeys(imagesWriter, isLive);
+    };
     const run = (command: string) => api.commands.run(command);
     const runKey = keyRunner(api.commands, services.log);
     const layouts = createChatLayouts(services.log);
@@ -204,12 +264,21 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         returned: api.state.read(chatReturnedSlot),
       },
       onPageReady: (listener) =>
-        void api.events.on('core.pageReady', () => listener()),
+        void api.events.on('core.pageReady', () => {
+          pruneEndedPlaces();
+          listener();
+        }),
       paths: services.paths,
       homeDir: services.homeDir,
       sessions,
       activeSessionId: () => active.get() ?? null,
-      onSessionRemoved: (listener) => followRows(rows, { removed: listener }),
+      onSessionRemoved: (listener) =>
+        followRows(rows, {
+          removed: (sessionId) => {
+            listener(sessionId);
+            forgetPlace(sessionId);
+          },
+        }),
       onActiveChanged: (listener) =>
         active.on((sessionId) => listener(sessionId ?? null)),
       onSessionHostChanged: (listener) =>
@@ -246,6 +315,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       timers: services.timers,
       clock: services.clock,
       drops: api.drops,
+      placeOf,
     });
     sessions.addRowPart(rowClock.part);
     sideParts.add(

@@ -283,6 +283,12 @@ function mounted(
     clock: { now: () => 5000 },
     timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
+    placeOf: () => ({
+      saved: undefined,
+      savedImages: [],
+      write: noEvent,
+      writeImages: noEvent,
+    }),
     toast: (text: string, tone: string) => toasts.push([text, tone]),
     confirm: { open: (name: string) => confirms.push(name) },
     visibleSessionRested: noEvent,

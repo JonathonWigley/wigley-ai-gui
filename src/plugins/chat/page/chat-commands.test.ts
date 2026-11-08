@@ -96,8 +96,8 @@ const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 const gif: ChatImage = { mediaType: 'image/gif', data: 'Z2lm' };
 
 // `scrollBy` records each step and direction in `scrolls` and answers with
-// `scroll`; `latest` counts each call in `latest`. `stateFields` replace the
-// session state's.
+// `scroll`; `latest` counts each call in `latest`; `boxChanged` records the
+// box's text in `drafts`. `stateFields` replace the session state's.
 function session(
   running: boolean,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
@@ -106,6 +106,7 @@ function session(
   const counts = {
     scrolls: [] as [ScrollStep, 1 | -1][],
     latest: 0,
+    drafts: [] as string[],
   };
   const state: ChatSessionState = {
     sessionId: 'row-1',
@@ -144,6 +145,7 @@ function session(
     attachments: createAttachments(),
     entries,
     enterStop: () => null,
+    boxChanged: () => counts.drafts.push(shown.box.text()),
   };
   return Object.assign(shown, { counts });
 }
@@ -1035,6 +1037,21 @@ describe('chat commands', () => {
     expect(run.invoked).toEqual([]);
     expect(message.held.text).toBe('');
     expect(run.marked).toEqual(['row-1']);
+  });
+
+  it.each([
+    { message: 'an app command', text: '/login', isAppCommand: true },
+    { message: 'a message to the agent', text: 'hello', isAppCommand: false },
+  ])('send_clears_the_saved_draft ($message)', async ({ text }) => {
+    const commands = createSlashCommands();
+    commands.add({ name: 'login', description: 'Sign in', run: () => {} });
+    const shown = Object.assign(session(true), { box: box(text) });
+    const run = setUp(shown, undefined, true, commands);
+
+    run.handlers.send({ arg: undefined });
+    await flush();
+
+    expect(shown.counts.drafts.at(-1)).toBe('');
   });
 
   it('send_AppCommandRejects_Toasts', async () => {

@@ -4,6 +4,7 @@ import type {
   AgentCommand,
   AgentEvent,
   ChatEntry,
+  ChatImage,
   CompactionTrigger,
   PlanRowUpdate,
   ProcessActivity,
@@ -216,6 +217,41 @@ export const chatQueuedSlot: KeyedSlotKey<QueuedMessage[], 'main', 'chat'> = {
 };
 export const chatReturnedSlot: KeyedSlotKey<ReturnedMessage[], 'main', 'chat'> =
   { id: 'chat.returned', process: 'main', kind: 'keyed' };
+
+// Which stop of a session's list the entry keys act on, and the range open from
+// an anchor. A stop is a row, or one block of an entry with blocks. A following
+// focus stays on the latest stop as entries arrive.
+export interface EntryFocus {
+  stopId: string | null;
+  following: boolean;
+  anchorId: string | null;
+}
+
+// A Chat tab's place: the box's text, the entry cursor, the open runs' ids, and
+// each entry's expanders' open states, by entry id.
+export interface ChatPlace {
+  draft: string;
+  focus: EntryFocus;
+  openRuns: string[];
+  openExpanders: Record<string, boolean[]>;
+}
+
+// Each Chat tab's place, by session id; the page puts the last page's back as
+// the tab is made, and a session's key leaves with its row.
+export const chatPlaceSlot: KeyedSlotKey<ChatPlace, 'page', 'chat'> = {
+  id: 'chat.place',
+  process: 'page',
+  kind: 'keyed',
+};
+
+// The images attached to each Chat tab's next message, by session id; a tab
+// with none holds no key. Apart from `chat.place`, so a keystroke resends no
+// image.
+export const chatDraftImagesSlot: KeyedSlotKey<
+  readonly ChatImage[],
+  'page',
+  'chat'
+> = { id: 'chat.draftImages', process: 'page', kind: 'keyed' };
 
 export interface PermissionAnswer {
   allowed: boolean;

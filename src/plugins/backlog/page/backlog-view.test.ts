@@ -213,6 +213,8 @@ async function backlogSetup() {
     homePicked: () => {
       picked.count += 1;
     },
+    savedPlace: null,
+    placeChanged: () => undefined,
     homeShown: () => undefined,
     runKey: (key, arg) => runs.push([key.id, arg]),
   });

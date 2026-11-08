@@ -25,6 +25,7 @@ import {
   docsOpenListRowCommand,
   docsOpenNodeCommand,
   docsSwitchTreeViewCommand,
+  type DocsPlace,
   type IndexContext,
   type IndexDocument,
   type IndexEntry,
@@ -180,6 +181,12 @@ export interface DocsView {
   // rebuild to settle, resolved or rejected, and checks again; toasts when
   // the index still does not list it.
   openDoc(path: string, line: number | null): void;
+  // Puts back a reloaded page's place: the tree's at once, before its first
+  // tree, and the open doc through `openDoc`'s path, its unsaved edits back in
+  // its editor once it opens. Until that open settles no place is written, so
+  // a place not restored yet stays in the slot; a doc the index no longer lists
+  // toasts as `openDoc` does.
+  restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
   // view with no wiki.
@@ -288,6 +295,9 @@ export interface DocsViewDeps {
   // The base kit for one part draw whose keys fire in `scope`, its anchors
   // recorded by `rollback`.
   baseKit(scope: DocsScope, rollback: RollbackDeps): BaseKit;
+  // Hears the place after each change to the tree, the open doc or its
+  // unsaved edits.
+  placeChanged(place: DocsPlace): void;
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -404,6 +414,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let isCreatingMain = false;
   // Whether the doc pane's last emptying was `Main.md` trashed from under it.
   let wasMainTrashedFromPane = false;
+  // A reloaded page's place, while its open has not settled.
+  let restoring: DocsPlace | null = null;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -598,6 +610,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         isStarred: deps.starred.has(leaf.entryId),
       };
     },
+    placeChanged: () => writePlace(),
   });
 
   const isMainPath = (path: string | null): boolean => {
@@ -611,6 +624,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     viewId: deps.viewId,
     openChanged: (path) => {
       deps.openChanged(path);
+      writePlace();
       if (wikiMain === null) {
         return;
       }
@@ -662,6 +676,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
+    editsChanged: () => writePlace(),
   });
 
   const recent = createRecentReader({
@@ -672,6 +687,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     log,
     show: (input) => doc.setRecentChanges(input),
   });
+
+  const writePlace = () => {
+    if (restoring !== null) {
+      return;
+    }
+    deps.placeChanged({
+      openPath: doc.openPath(),
+      ...tree.place(),
+      edits: doc.edits(),
+    });
+  };
 
   const refreshRecentOnMain = () => {
     if (isMainPath(doc.openPath())) {
@@ -690,6 +716,25 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       deps.docOpened(target.path);
     }
     return opened;
+  };
+
+  // Waits for the first index read and, when it does not list `path`, for a
+  // rebuild coming or running, then opens `path` unless the open asked as
+  // `number` is no longer the newest; resolves to whether it opened.
+  const openOnceRead = async (
+    path: string,
+    line: number | null,
+    number: number,
+  ): Promise<boolean> => {
+    await firstRead.promise;
+    const awaitedRebuild = firstShowRuns ?? runningRebuild;
+    if (!isListed(path) && awaitedRebuild !== null) {
+      await awaitedRebuild;
+      if (number !== askedOpens) {
+        return false;
+      }
+    }
+    return openListed(path, line, null);
   };
 
   const isListed = (path: string): boolean =>
@@ -1524,17 +1569,27 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     openDoc(path, line) {
       const number = ++askedOpens;
       isDocAsked = true;
-      void (async () => {
-        await firstRead.promise;
-        const awaitedRebuild = firstShowRuns ?? runningRebuild;
-        if (!isListed(path) && awaitedRebuild !== null) {
-          await awaitedRebuild;
-          if (number !== askedOpens) {
-            return;
+      void openOnceRead(path, line, number);
+    },
+    restorePlace(place) {
+      tree.restorePlace(place);
+      const { openPath, edits } = place;
+      if (openPath === null) {
+        return;
+      }
+      const number = ++askedOpens;
+      isDocAsked = true;
+      restoring = place;
+      openOnceRead(openPath, null, number)
+        .then((opened) => {
+          if (opened && edits !== null) {
+            doc.restoreEdits(edits);
           }
-        }
-        await openListed(path, line, null);
-      })();
+        })
+        .catch((error) => log(`place not restored: ${errorText(error)}`))
+        .finally(() => {
+          restoring = null;
+        });
     },
     editSectionAt: (anchor) => doc.editSectionAt(anchor),
     openNode: (nodeId) => tree.openNode(nodeId),

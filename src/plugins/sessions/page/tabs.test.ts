@@ -19,6 +19,7 @@ import {
   tabsAfterAdd,
   tabsAfterRelease,
   tabsAfterRemove,
+  tabsAfterRestoredAdd,
   tabsAfterSelect,
   tabsAfterTakeOver,
   visibleTab,
@@ -243,6 +244,49 @@ describe('tabs', () => {
     });
     expect(tabsAfterSelect(tabs, 'x')).toBe(tabs);
   });
+
+  it.each<{
+    case: string;
+    tabId: string;
+    selections: number;
+    selected: string;
+  }>([
+    {
+      case: 'the saved tab with no pick since',
+      tabId: 'form',
+      selections: 3,
+      selected: 'form',
+    },
+    {
+      case: 'the saved tab after a pick',
+      tabId: 'form',
+      selections: 4,
+      selected: 'chat',
+    },
+    {
+      case: 'another tab',
+      tabId: 'docs',
+      selections: 3,
+      selected: 'chat',
+    },
+  ])(
+    'restored_add_selects_the_saved_tab_only_with_no_pick_since ($case)',
+    ({ tabId, selections, selected }) => {
+      const added: TabsState = {
+        tabIds: ['chat', tabId],
+        selectedTabId: 'chat',
+        selections,
+      };
+
+      const restored = tabsAfterRestoredAdd(added, tabId, {
+        selectedTabId: 'form',
+        selections: 3,
+        takeOvers: [],
+      });
+
+      expect(restored).toEqual({ ...added, selectedTabId: selected });
+    },
+  );
 
   it('tabsAfterTakeOver selects the tab and remembers the one selected before', () => {
     const tabs: TabsState = {

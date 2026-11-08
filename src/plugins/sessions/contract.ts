@@ -359,16 +359,36 @@ export interface SessionTabView {
 // release; the release selects the tab selected before the take over, unless
 // a tab was selected since (by the user or `select`, even back to this one),
 // another tab's take over holds the session, or that tab is gone. A tab holds
-// one take over: taking over again keeps the first. A release hands each later
-// take over that remembered this tab the tab this one remembered, so chat
-// selected, then form and docs taking over, then form and docs releasing,
-// shows chat. `isVisible` reads, at the moment of the call, whether this tab
-// is the visible tab. `dispose` releases the latest take over this handle gave
-// out, then removes the tab. Each call on a tab already dropped does nothing.
+// one take over: taking over again keeps the first, while one the last page
+// saved (`sessionsPlaceSlot`) is replaced. A release hands each later take over
+// that remembered this tab the tab this one remembered, so chat selected, then
+// form and docs taking over, then form and docs releasing, shows chat. A
+// `restored` take over, of a form the last page already showed, selects nothing
+// and adopts the take over the last page saved for this tab, so its release
+// gives back what the first take over took; with none saved its release does
+// nothing. `isVisible` reads, at the moment of the call, whether this tab is the
+// visible tab. `dispose` releases the latest take over this handle gave out,
+// then removes the tab. Each call on a tab already dropped does nothing.
 export interface SessionTabHandle extends Disposable {
   select(): void;
-  takeOver(): { release(): void };
+  takeOver(options?: { restored?: boolean }): { release(): void };
   isVisible(): boolean;
+}
+
+// A tab taking over its session, the tab selected when it took over, and
+// the session's tab `selections` count then.
+export interface TakeOver {
+  tabId: string;
+  previousTabId: string | null;
+  selections: number;
+}
+
+// A session's tab place, as a page reload finds it: the selected tab, how many
+// times the user's picks changed the selection, and the take overs its tabs hold.
+export interface SessionsPlace {
+  selectedTabId: string | null;
+  selections: number;
+  takeOvers: TakeOver[];
 }
 
 // A part another plugin draws for every session on a sessions surface: under
@@ -486,6 +506,15 @@ export const sessionsActivitySlot: KeyedSlotKey<
   'page',
   'sessions'
 > = { id: 'sessions.activity', process: 'page', kind: 'keyed' };
+
+// Each session's tab place, by the session id, written on each change to its
+// tabs, their selection or their take overs; a row leaving deletes its key, and
+// `core.pageReady` deletes the keys of rows that ended while no page ran.
+export const sessionsPlaceSlot: KeyedSlotKey<
+  SessionsPlace,
+  'page',
+  'sessions'
+> = { id: 'sessions.place', process: 'page', kind: 'keyed' };
 
 // Main's rows, keyed by each row's `sessionId`, in the order main added them. In
 // one list operation main writes every row, then the selection, then emits its

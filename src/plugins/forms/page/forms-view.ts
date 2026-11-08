@@ -35,6 +35,7 @@ import {
   NEEDS_YOU_ACTIVITY,
   type SessionsPageExports,
 } from '../../sessions/contract';
+import type { RoundPlace } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
@@ -59,7 +60,9 @@ import { sessionTitle } from './view-model';
 // `timers` runs each round's split resize prompt linger. `commands`,
 // `contributions` and `state` reach every round view's kits and cards. Each
 // round view is a drop target through `drops`, typing files into the round's
-// box used last.
+// box used last. `savedPlaces` holds the places the last page saved, read once
+// at start: a round it holds was shown before the reload, and does not take over
+// its session again.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity' | 'addRowPart'>;
@@ -82,6 +85,7 @@ export interface FormsViewDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  savedPlaces: ReadonlyMap<string, RoundPlace>;
 }
 
 // The layouts every round view picks its cards and panes from.
@@ -240,8 +244,8 @@ interface RoundViews {
 
 // A round view per open round, in its session's Form tab: built when the
 // round appears, adding the Form tab when the session has none and taking
-// over the session with it, and registered as a drop target; destroyed with
-// its editors when the round leaves.
+// over the session with it, restored for a round the last page showed, and
+// registered as a drop target; destroyed with its editors when the round leaves.
 function syncRoundViews(
   state: FormsState,
   roundViews: RoundViews,
@@ -262,7 +266,11 @@ function syncRoundViews(
         round.formId,
         addRoundDropTarget(round.formId, roundView, deps),
       );
-      tabs.takeOver(round.formId, round.sessionId);
+      tabs.takeOver(
+        round.formId,
+        round.sessionId,
+        deps.savedPlaces.has(round.formId),
+      );
     }
   }
 }

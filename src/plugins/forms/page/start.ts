@@ -13,16 +13,23 @@ import {
   formClosesAtOnce,
 } from '../../../shared/page/session-forms';
 import { createReducerStore } from '../../../shared/page/reducer-store';
+import { onPageHide } from '../../../shared/page/page-hide';
+import {
+  followSessionFormPlaces,
+  type SessionFormPlaces,
+} from '../../../shared/page/session-form-places';
 import {
   followRows,
   sessionsActiveSlot,
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  FormsChannel,
-  FormsPageEvents,
-  FormsPageExports,
+import {
+  type FormsChannel,
+  type FormsPageEvents,
+  type FormsPageExports,
+  formsPlaceSlot,
+  type RoundPlace,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -31,7 +38,13 @@ import { formsManifest } from '../manifest';
 import { startRoundAutosave } from './autosave';
 import { type BoxRef, FORMS_BOX_IDENTITY, focusActionFor } from './boxes';
 import { createFormsContributions } from './contributions';
-import { apply, buildBody, type FormsStore, initialState } from './form-state';
+import {
+  apply,
+  buildBody,
+  type FormsStore,
+  initialState,
+  roundPlace,
+} from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
@@ -77,9 +90,14 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
 // Listeners first: a round shown while openForms is in flight arrives in
 // both, and showing an open round again changes nothing. The active round
 // follows the session the sessions plugin focuses, and a round leaves only when
-// main closes it. Main's forms map to the page's rounds here. The `Disposable`
-// stops an `openForms` read still in flight from showing its rounds.
-function listenForRounds(api: FormsApi, store: FormsStore): Disposable {
+// main closes it. Main's forms map to the page's rounds here, and the read's
+// rounds go back to the places the last page saved. The `Disposable` stops an
+// `openForms` read still in flight from showing its rounds.
+function listenForRounds(
+  api: FormsApi,
+  store: FormsStore,
+  places: SessionFormPlaces<RoundPlace>,
+): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (form) =>
     store.dispatch({ type: 'formShown', form: presentedRoundOf(form) }),
@@ -110,6 +128,7 @@ function listenForRounds(api: FormsApi, store: FormsStore): Disposable {
       for (const form of forms) {
         store.dispatch({ type: 'formShown', form: presentedRoundOf(form) });
       }
+      places.formsRead(forms.map((form) => form.formId));
     })
     .catch((error) => log(`open rounds not read: ${errorText(error)}`));
   return {
@@ -127,7 +146,8 @@ function listenForRounds(api: FormsApi, store: FormsStore): Disposable {
 // open rounds change. Every store change emits the forms page events it makes,
 // each logged as it goes; other plugins read the open rounds and add card parts
 // and review columns through the exports, each add or removal rebuilding the
-// open rounds.
+// open rounds. Each open round's place (`formsPlaceSlot`) and its unsaved
+// answers, saved at once on page hide, outlive a page reload.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -138,6 +158,13 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       apply,
     );
     const boxes = createBoxes(api, store);
+    const places = followSessionFormPlaces({
+      writer: api.state.publish(formsPlaceSlot),
+      store,
+      placeOf: roundPlace,
+      restore: (formId, place) =>
+        store.dispatch({ type: 'placeRestored', formId, place }),
+    });
     const contributions = createFormsContributions();
     const view = mountFormsView({
       areas: api.areas,
@@ -165,6 +192,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       drops: api.drops,
       toast: services.toast,
       log: services.log,
+      savedPlaces: places.saved,
     });
     followRows(api.state.read(sessionsRowsSlot), {
       removed: (sessionId) => view.forgetSession(sessionId),
@@ -173,6 +201,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),
       delayMs: () => api.settings().autosaveDelayMs,
+      onPageHide,
       timers: services.timers,
       log: services.log,
     });
@@ -182,7 +211,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const roundsRead = listenForRounds(api, store);
+    const roundsRead = listenForRounds(api, store, places);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,
@@ -209,6 +238,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       }),
       dispose() {
         roundsRead.dispose();
+        places.dispose();
         autosave.dispose();
         layoutRefresh.dispose();
         view.dispose();
