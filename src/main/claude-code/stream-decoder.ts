@@ -346,7 +346,7 @@ export function createStreamDecoder(
   // of one lists it again.
   const revivableAgents = new Set<string>();
   // Subagents a late line listed again, which no end event follows: a result
-  // ends each one that has no tool call open.
+  // ends each one that has no tool call or Agent call open.
   const relistedAgents = new Set<string>();
   // Each subagent's reply spends by message id, by its Agent call id: null for
   // a reply whose model has no list price.
@@ -795,12 +795,15 @@ export function createStreamDecoder(
   }
 
   // A result ends every listed-again subagent with no tool call open `done`,
-  // its end held while it owns a running task; one mid-call waits for a later
-  // result.
+  // its end held while it owns a running task; one mid-call, a pending Agent
+  // call included, waits for a later result.
   function endRelistedAgents(out: DecodedLine) {
-    const toolOwners = new Set(toolAgents.values());
+    const callOwners = new Set([
+      ...toolAgents.values(),
+      ...pendingAgents.values(),
+    ]);
     for (const agentId of relistedAgents) {
-      if (!toolOwners.has(agentId)) {
+      if (!callOwners.has(agentId)) {
         endLaunchedAgent(agentId, true, out);
       }
     }

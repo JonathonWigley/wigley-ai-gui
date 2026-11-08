@@ -2363,6 +2363,25 @@ describe('createStreamDecoder', () => {
       ],
     },
     {
+      case: 'result leaves a listed-again subagent listed while its Agent call runs',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskNotification('b1', 'completed'),
+        agentCall('c1', {}, 'b1'),
+        RESULT_LINE,
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+        spawned('c1', 'Explore', 'b1'),
+        TURN_ENDED,
+      ],
+    },
+    {
       case: "result holds a listed-again subagent's end for its task",
       lines: [
         agentCall('b1'),

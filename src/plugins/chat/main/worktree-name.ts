@@ -38,14 +38,17 @@ export function worktreesInCommand(
   return names;
 }
 
-// True for a command that runs `git worktree`, git's own options (`-C <path>`,
-// `-c <name>=<value>`, `--no-pager`) allowed between the two words.
+// True for a command that runs `git worktree`, git's own options allowed
+// between the two words: a flag (`--no-pager`, `--git-dir=<path>`) or an
+// option with its value as the next word (`-C <path>`, `-c <name>=<value>`,
+// `--git-dir <path>`, `--work-tree <path>`, `--namespace <name>`,
+// `--config-env <name>=<var>`).
 export function runsGitWorktree(command: string): boolean {
   return GIT_WORKTREE.test(command);
 }
 
 const GIT_WORKTREE =
-  /(?:^|[\s;&|(/])git(?:\s+-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+)|\s+-\S+)*\s+worktree(?:\s|$)/;
+  /(?:^|[\s;&|(/`])git(?:\s+(?:-[Cc]|--(?:git-dir|work-tree|namespace|config-env))\s+(?:"[^"]*"|'[^']*'|\S+)|\s+-\S+)*\s+worktree(?=[\s;&|)`]|$)/;
 
 // A folder and its path with every symlink resolved.
 export interface ResolvedFolder {

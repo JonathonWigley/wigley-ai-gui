@@ -154,6 +154,36 @@ describe('runsGitWorktree', () => {
     },
     { case: 'GitByPath', command: '/usr/bin/git worktree list', runs: true },
     {
+      case: 'InBackticks',
+      command: 'echo `git worktree list`',
+      runs: true,
+    },
+    {
+      case: 'EndsAtBacktick',
+      command: 'echo `git worktree`',
+      runs: true,
+    },
+    {
+      case: 'EndsAtSemicolon',
+      command: 'git worktree; git status',
+      runs: true,
+    },
+    {
+      case: 'WithSeparateGitDir',
+      command: 'git --git-dir /r/app/.git worktree add ../wt',
+      runs: true,
+    },
+    {
+      case: 'WithSeparateWorkTree',
+      command: "git --work-tree '/r/my app' worktree list",
+      runs: true,
+    },
+    {
+      case: 'WithGitDirEquals',
+      command: 'git --git-dir=/r/app/.git worktree list',
+      runs: true,
+    },
+    {
       case: 'PathUnderDotWorktrees',
       command: 'ls /r/.worktrees/a && git status',
       runs: false,
