@@ -1,6 +1,6 @@
 # 10 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -56,3 +56,5 @@ Done when: each doc listed is re-read and true; the greps above hold; the `Comma
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 56e6a3b2 · proof: Diff stat read (7 files, +77/-62); GIVEN greps re-run by lead: five landed items count 0 in followups.md, Reload keeps/app restart count 4, no kit.run/runLayoutAction left in followups.md; workers: standing rule grep empty, Wave 3 all ticked. base-kit.ts change is a comment only. · concerns: 10a did not verify that the review's Cancel prompt never closes the session, nor the workflow wf key's nothing-to-run log wording; workflow design.md and keymap.md needed no edit.
