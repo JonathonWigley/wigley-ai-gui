@@ -124,7 +124,7 @@ Boundary rules: the popup knows nothing of forms or chat; forms and primer reach
 - [x] [Self-test scripts](04-selftest-scripts.md) — after 01, 02, 03
 
 ### Wave 4
-- [ ] [Final verification](06-final-verification.md) — after 04
+- [x] [Final verification](06-final-verification.md) — after 04
 
 ### Wave 5
 - [ ] [Doc re-read](05-doc-re-read.md) — after 04, 06 (both repos: the marketplace's two "Primer tab" lines too)
@@ -138,6 +138,7 @@ Review base: aed38a35
 - 01 · 23a30128 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10099) · concerns: command label capitalised as pinned while sibling sessions labels are lower-case; look (slide, scrim, bar spacing) unchecked on screen until 04/06; DESIGN.md and docs/keymap.md oxfmt padding fixed (pre-existing lint failure from the docs-ahead commit)
 - 03 · 616576b6 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10093); takeOver grep only chat's takeOverSkipped · concerns: plan's 'scope after registration' premise did not hold (render's trailing confirm.setBaseScope covers it); enterFrame cancel has no direct sessions test; usage-tab-line manifest still names '(Chat, Form, Primer)' session kinds
 - 04 · b91a040e · diff read; worker ran selftest --plugin forms, chat, docs, sessions PASS and forms,primer PASS; typecheck and lint clean; screenshots read · concerns: chat's floating composer draws over the open popup (z-order; fix dispatched); primer alone fails on a pre-existing cross-script wait; screenshot corners/scrim not measurable (06 queries them)
+- 06 · 09ac737d · drive run fp1: checks 1,3,4,5,6,7,9 pass; 2 failed (bar click logged nothing) and is fixed in 09ac737d, unit row + live click log; 8 failed only in a session whose default round was already submitted (form-service replaysLastSubmitted, already in aed38a35); fresh session passes · concerns: SIDE_BAR_OVER_QUERY is 679px in src/renderer/shell/modes.ts, not 640 (fit at 640 clean); Alt+; is written <A-;>
 ### Contract changes
 - SessionPopupView.beforeClose: boolean → boolean | Promise<boolean> · why: forms' guardSessionClose answers through a promise while its cancel prompt asks · consumers: 03 · group 03
 - FormPopupHandle: setStatus, open, isVisible, dispose (no hide) · why: the helper calls only these · consumers: none outside 03 · group 03
@@ -159,5 +160,8 @@ Review base: aed38a35
 - PrimerTab/mountPrimerTab renamed PrimerPopups/mountPrimerPopups — no name calls the surface a tab; PrimerView taken — none · group 03
 - chat-scope key while hidden is G (following the latest entry) — the next group sets following itself — none · group 04
 - primer proved by --plugin forms,primer rather than primer alone — its 'review and cancel' alsoExpect on 'activated Layout preview' (eb6f544b8, before this plan) needs forms' Layout preview session — goes to follow-ups · group 04
+- Lead fix 2dfe42b0 (after 04): chat's floating composer drew over the popup layer; .session-body sets isolation: isolate so tab z-indexes stay under the popup layer and pane edges.
+- Drive fix 09ac737d: hidden-bar click logs 'opened <title> popup in <label>' via popupOpenedFromBar, as the toggle does · group 06
+- Pre-existing, to follow-ups: re-opening an already-submitted default round in a session replays its answers and shows nothing, silently (form-service replaysLastSubmitted); forms.openRound with no sessionId connects a row without selecting it (sessions.mark); drive skill could say to pass a different round for a second open in one session · group 06
 ### Review rounds
 ### Test gate

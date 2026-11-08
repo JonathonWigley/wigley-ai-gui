@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -44,3 +44,5 @@ Done when: every check above is captured and read, and any failure is fixed or r
 Commit:    none (fixes found here commit with the group they fix, per `wigley:make`)
 
 ## Proof
+
+Commit 09ac737d · proof: drive run fp1: checks 1,3,4,5,6,7,9 pass; 2 failed (bar click logged nothing) and is fixed in 09ac737d, unit row + live click log; 8 failed only in a session whose default round was already submitted (form-service replaysLastSubmitted, already in aed38a35); fresh session passes · concerns: SIDE_BAR_OVER_QUERY is 679px in src/renderer/shell/modes.ts, not 640 (fit at 640 clean); Alt+; is written <A-;>
