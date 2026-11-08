@@ -27,16 +27,15 @@ import {
   sessionsRowsSlot,
   sessionsSelectionSlot,
 } from '../contract';
-import { fakeUiState, sessionRow } from './session-fakes';
+import { sessionRow } from '../contract.test-support';
+import { fakeUiState } from './session-fakes';
 import { sessionsPagePart } from './start';
 
 // Lets a queued microtask and a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const hostRow = (sessionId: string) => ({
-  ...sessionRow(sessionId),
-  hostSessionId: `host-${sessionId}`,
-});
+const hostRow = (sessionId: string) =>
+  sessionRow(sessionId, { hostSessionId: `host-${sessionId}` });
 
 // Saved panes `a` and `b` side by side, showing `s1` and `s2`.
 function savedSplit(focusedId: 'a' | 'b'): UiState {

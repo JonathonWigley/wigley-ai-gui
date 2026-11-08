@@ -9,11 +9,11 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import {
   sessionsActiveSlot,
-  type SessionRow,
   sessionsRowsSlot,
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type PoolClone,
   type PoolSnapshot,
@@ -30,17 +30,12 @@ const CLONE_2 = { pool: 'q', clone: 2 };
 type PoolCommands = PageStart<typeof unityPoolManifest>['commands'];
 const CLONE_PATH = '/x/repo-1';
 
-const ROW: SessionRow = {
-  sessionId: ROW_ID,
+const ROW = sessionRow(ROW_ID, {
   label: 'alpha 1',
   project: 'alpha',
-  harness: 'claude',
-  marked: false,
-  markToast: null,
   projectDir: CLONE_PATH,
   hostSessionId: 'host-1',
-  titles: { user: null, agent: null, firstMessage: null },
-};
+});
 
 const UNHELD_CLONE: PoolClone = {
   number: 1,

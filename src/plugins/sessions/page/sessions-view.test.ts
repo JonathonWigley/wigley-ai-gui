@@ -6,15 +6,11 @@ import {
 } from '../../../shared/page/test-dom';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { NEEDS_YOU_ACTIVITY, type SessionRow } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { fakeUiState } from './session-fakes';
-import {
-  drawnRows,
-  rowNamed,
-  sessionRow,
-  sessionsViewSetup,
-} from './sessions-view-fakes';
+import { drawnRows, rowNamed, sessionsViewSetup } from './sessions-view-fakes';
 
 // A row `id`, in `project`, under host session id `hostSessionId`.
 function rowIn(
@@ -22,7 +18,7 @@ function rowIn(
   project: string,
   hostSessionId: string | null = null,
 ): SessionRow {
-  return { ...sessionRow(id), project, hostSessionId };
+  return sessionRow(id, { project, hostSessionId });
 }
 
 function stateWith(rows: SessionRow[]) {

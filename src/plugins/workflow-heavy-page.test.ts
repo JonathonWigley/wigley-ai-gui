@@ -34,6 +34,7 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from './sessions/contract';
+import { sessionRow } from './sessions/contract.test-support';
 import {
   type SessionFlow,
   workflowFlowsSlot,
@@ -162,17 +163,11 @@ const MARKDOWN = {
 };
 
 function rowOf(sessionId: string): SessionRow {
-  return {
-    sessionId,
+  return sessionRow(sessionId, {
     label: 'proj',
     project: 'proj',
-    harness: 'claude',
-    marked: false,
-    markToast: null,
     projectDir: '/p/proj',
-    hostSessionId: null,
-    titles: { user: null, agent: null, firstMessage: null },
-  };
+  });
 }
 
 // A page part of `id` that hands each dependent `exports`, as a provider's part

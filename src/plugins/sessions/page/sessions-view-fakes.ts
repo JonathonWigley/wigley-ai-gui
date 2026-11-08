@@ -17,19 +17,18 @@ import {
 } from '../contract';
 import { createSessionsParts } from './layout/sessions-parts';
 import { createProjectFavorites } from './project-favorites';
-import { fakeUiState, sessionRow } from './session-fakes';
+import { sessionRow } from '../contract.test-support';
+import { fakeUiState } from './session-fakes';
 import { createSessionRecency } from './session-recency';
 import { mountSessionsView } from './sessions-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
-export { sessionRow };
-
 export function stateOf(
   sessionIds: string[],
   selectedSessionId: string | null,
 ): SessionsState {
-  return { rows: sessionIds.map(sessionRow), selectedSessionId };
+  return { rows: sessionIds.map((id) => sessionRow(id)), selectedSessionId };
 }
 
 // The page services the sessions parts read: fake keys that record each anchor

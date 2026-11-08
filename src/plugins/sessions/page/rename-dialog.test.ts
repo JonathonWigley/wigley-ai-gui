@@ -8,6 +8,7 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { SessionRow, SessionTitles } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createRenameDialog } from './rename-dialog';
@@ -20,17 +21,7 @@ const NO_TITLES: SessionTitles = {
 };
 
 function row(titles: SessionTitles = NO_TITLES): SessionRow {
-  return {
-    sessionId: 's1',
-    label: 'gamma',
-    project: 'project',
-    harness: 'claude',
-    marked: false,
-    markToast: null,
-    projectDir: null,
-    hostSessionId: null,
-    titles,
-  };
+  return sessionRow('s1', { label: 'gamma', titles });
 }
 
 // A promise and the calls that settle it.

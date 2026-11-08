@@ -28,6 +28,7 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type PageStage,
   type PageWorkflow,
@@ -218,17 +219,11 @@ describe('workflow page part', () => {
   });
 
   function row(sessionId: string): SessionRow {
-    return {
-      sessionId,
+    return sessionRow(sessionId, {
       label: sessionId,
-      project: 'project',
-      harness: 'claude',
-      marked: false,
-      markToast: null,
       projectDir: '/r',
       hostSessionId: `h-${sessionId}`,
-      titles: { user: null, agent: null, firstMessage: null },
-    };
+    });
   }
 
   // A harness past `core.pageReady` whose slots held rows and flows of s1, s2 and

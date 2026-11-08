@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionRow } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import {
   activationTarget,
   echoesAfterReply,
@@ -17,17 +18,13 @@ import {
   shownElsewhere,
 } from './pane-sessions';
 
-const ROWS: SessionRow[] = ['1', '2', '3', '4'].map((n) => ({
-  sessionId: `s${n}`,
-  label: `s${n}`,
-  project: 'project',
-  harness: null,
-  marked: false,
-  markToast: null,
-  projectDir: null,
-  hostSessionId: `h${n}`,
-  titles: { user: null, agent: null, firstMessage: null },
-}));
+const ROWS: SessionRow[] = ['1', '2', '3', '4'].map((n) =>
+  sessionRow(`s${n}`, {
+    label: `s${n}`,
+    harness: null,
+    hostSessionId: `h${n}`,
+  }),
+);
 
 // p1 shows s1, p2 shows s2, p3 is empty.
 const PANES: PaneSessions = new Map([

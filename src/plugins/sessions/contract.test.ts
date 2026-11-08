@@ -2,19 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KeyedSlotWriter } from '../../contracts/state';
 import { createSlotStore } from '../../shared/state/slot-store';
 import { followRows, type SessionRow, sessionsRowsSlot } from './contract';
+import { sessionRow } from './contract.test-support';
 
 function row(sessionId: string, hostSessionId: string | null): SessionRow {
-  return {
-    sessionId,
-    label: sessionId,
-    project: 'project',
-    harness: 'claude',
-    marked: false,
-    markToast: null,
-    projectDir: null,
-    hostSessionId,
-    titles: { user: null, agent: null, firstMessage: null },
-  };
+  return sessionRow(sessionId, { label: sessionId, hostSessionId });
 }
 
 describe('followRows', () => {

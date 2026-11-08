@@ -2,10 +2,11 @@
 // rules do not allow. The rules are CORE_LAYERS, written here, and each plugin's
 // entries, derived in `layer-rules.mts` from the plugin folders and each
 // manifest's `dependsOn` and `reads`, with PLUGIN_EXTRAS added. A file belongs to
-// the layer with the longest matching path; imports inside a file's own layer are
-// always allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
-// `.test-support.ts` module of shared test cases) may also import the test
-// packages. An import is allowed when the imported file's own layer is listed
+// the layer with the longest matching path, except that a plugin contract's
+// `contract.test-support.ts` (fixtures of its records) belongs to that
+// contract's layer; imports inside a file's own layer are always allowed, and a
+// test file (`.test.ts`, a `.test-d.ts` type test or a `.test-support.ts` module
+// of shared test cases) may also import the test packages. An import is allowed when the imported file's own layer is listed
 // exactly: allowing `src/shared` does not admit `src/shared/page`. It also fails
 // when `src/plugins/main.ts`, `page.ts` or `manifests.ts` misses a plugin
 // folder's part or manifest, lists one twice, or lists anything else.
@@ -755,7 +756,13 @@ const TEST_FILE_SUFFIXES = ['.test.ts', '.test-d.ts', '.test-support.ts'];
 
 type Layers = Record<string, LayerRule>;
 
+const CONTRACT_SUPPORT = /\/contract\.test-support(\.ts)?$/;
+
 function layerOf(file: string, layers: Layers): string | undefined {
+  const contract = file.replace(CONTRACT_SUPPORT, '/contract.ts');
+  if (contract !== file && contract in layers) {
+    return contract;
+  }
   return Object.keys(layers)
     .filter((layer) => file === layer || file.startsWith(`${layer}/`))
     .sort((a, b) => b.length - a.length)[0];

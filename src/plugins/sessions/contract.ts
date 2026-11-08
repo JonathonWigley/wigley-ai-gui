@@ -212,8 +212,9 @@ export interface SessionsMainExports {
   // selected when this mark comes within 30 seconds of the release, unless in
   // between came an `activate` or `activateExistingRow`, a selecting `open`,
   // a mark that selected another session from none, or a `release` of another
-  // selected row; the session's end drops it too. A row not yet selected keeps
-  // the first mark's `options` as its `markToast` until an activate.
+  // selected row; the session's end drops it too. A mark that finds the row
+  // unmarked stores its `options` as the row's `markToast`, and one that finds
+  // it still marked keeps the toast there; an activate clears it.
   mark(sessionId: string, options: MarkOptions): void;
   // The user's pick: selects the session's row and clears its mark; a
   // connected session with no row, or a row the user closed, gets its row at
@@ -284,7 +285,8 @@ export interface SessionsMainEvents extends EventShape {
 // One session's sidebar row; a connected session's row exists only while
 // marked, activated or kept by a close guard. `marked` is attention a plugin
 // asked for with `mark` and the user has not answered, cleared when selected;
-// `markToast` is the first such mark's toast, kept until an activate clears it;
+// `markToast` is the toast of the last mark that found the row unmarked, kept
+// until an activate clears it;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
 // when the session connects, `hostSessionId` also changed by the owner through
 // `setHostSessionId`. `titles` are the session's titles, kept across a host id

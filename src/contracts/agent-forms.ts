@@ -48,8 +48,9 @@ export interface AgentFormListener<Body> {
   // Throws an Error with the reason when the answers cannot be read; the form
   // then stays open.
   finish(end: AgentFormEnd<Body>): void;
-  // Ends the form cancelled with the answers saved last, as the user's cancel
-  // would; a form already finished or closed ignores it.
+  // The closing session's cancel: ends the form cancelled with the answers
+  // saved last, as the user's cancel would, but sends the session no wake; a
+  // form already finished or closed ignores it.
   cancel(): void;
 }
 

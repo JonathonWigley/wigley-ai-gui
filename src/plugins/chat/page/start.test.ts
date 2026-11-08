@@ -18,6 +18,7 @@ import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   chatCommandsSlot,
   chatControlsSlot,
@@ -35,17 +36,7 @@ import {
 import { chatPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
-const ROW: SessionRow = {
-  sessionId: 's1',
-  label: 'row',
-  project: 'project',
-  harness: 'claude',
-  marked: false,
-  markToast: null,
-  projectDir: null,
-  hostSessionId: 'host-1',
-  titles: { user: null, agent: null, firstMessage: null },
-};
+const ROW = sessionRow('s1', { label: 'row', hostSessionId: 'host-1' });
 
 const SESSION: ChatSessionState = {
   sessionId: 's1',

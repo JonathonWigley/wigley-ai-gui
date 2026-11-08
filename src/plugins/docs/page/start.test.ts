@@ -17,6 +17,7 @@ import {
   type SessionTabHandle,
   type SessionTabView,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type DocsEdits,
   type DocsPageExports,
@@ -63,17 +64,8 @@ vi.mock('./docs-view', async (importOriginal) => {
   };
 });
 
-const projectRow = (sessionId: string) => ({
-  sessionId,
-  label: sessionId,
-  project: 'project',
-  harness: 'claude' as const,
-  marked: false,
-  markToast: null,
-  projectDir: '/p',
-  hostSessionId: null,
-  titles: { user: null, agent: null, firstMessage: null },
-});
+const projectRow = (sessionId: string) =>
+  sessionRow(sessionId, { label: sessionId, projectDir: '/p' });
 
 // What throws the next time one is disposed, once.
 interface ThrowsNext {

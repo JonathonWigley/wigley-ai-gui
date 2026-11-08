@@ -11,11 +11,11 @@ import {
   type SessionRow,
   type SessionsState,
 } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import { PREVIEW_STATE, previewRowState, previewToggle } from './preview';
 import {
   drawnRows,
   rowNamed,
-  sessionRow,
   sessionsViewSetup,
   stateOf,
 } from './sessions-view-fakes';

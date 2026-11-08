@@ -14,7 +14,7 @@ import {
   sessionsRowsSlot,
   sessionsSelectionSlot,
 } from '../../sessions/contract';
-import { sessionRow } from '../../sessions/page/session-fakes';
+import { sessionRow } from '../../sessions/contract.test-support';
 import { sessionsPagePart } from '../../sessions/page/start';
 import {
   type PresentedPrimer,

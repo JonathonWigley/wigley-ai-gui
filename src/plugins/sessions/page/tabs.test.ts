@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionsState } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import {
   hasOtherSession,
   hasOtherTab,
@@ -30,17 +31,9 @@ function stateOf(
   selectedSessionId: string | null,
 ): SessionsState {
   return {
-    rows: sessionIds.map((sessionId) => ({
-      sessionId,
-      label: sessionId,
-      project: 'project',
-      harness: null,
-      marked: false,
-      markToast: null,
-      projectDir: null,
-      hostSessionId: null,
-      titles: { user: null, agent: null, firstMessage: null },
-    })),
+    rows: sessionIds.map((sessionId) =>
+      sessionRow(sessionId, { label: sessionId, harness: null }),
+    ),
     selectedSessionId,
   };
 }
