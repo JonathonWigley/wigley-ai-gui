@@ -162,6 +162,16 @@ describe('workingInput', () => {
       expected: 'thinking',
     },
     {
+      given: "a subagent's streaming assistant last",
+      list: entries('user:u@100', 'tool:t@110', 'assistant!~:a@120'),
+      expected: 'thinking',
+    },
+    {
+      given: "a streaming assistant then a subagent's tool",
+      list: entries('user:u@100', 'assistant!:a@110', 'tool~:s@120'),
+      expected: 'writing',
+    },
+    {
       given: "a finished main tool and a subagent's running tool",
       list: entries('user:u@100', 'tool:a@110', 'tool!~:s@120'),
       expected: 'thinking',

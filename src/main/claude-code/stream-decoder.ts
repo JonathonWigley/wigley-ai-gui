@@ -345,6 +345,9 @@ export function createStreamDecoder(
   // Launched subagents that ended `done` and are not listed again: a later line
   // of one lists it again.
   const revivableAgents = new Set<string>();
+  // Subagents a late line listed again, which no end event follows: a result
+  // ends each one that has no tool call open.
+  const relistedAgents = new Set<string>();
   // Each subagent's reply spends by message id, by its Agent call id: null for
   // a reply whose model has no list price.
   const replySpends = new Map<string, Map<string, number | null>>();
@@ -363,6 +366,10 @@ export function createStreamDecoder(
   let turnEvents: RawEntry | null = null;
   // True from a result until the next turn's init.
   let betweenTurns = false;
+  // True from a subagent's hand-back result to the next result: the turn
+  // Claude may run after it, an empty one as measured, has its init and its
+  // empty result join the hand-back turn's events entry.
+  let isAfterHandback = false;
   // True from a compaction's boundary to the next result, while its
   // `<local-command-stdout>` replay, which the compaction entry stands for, may
   // come.
@@ -490,6 +497,7 @@ export function createStreamDecoder(
     out: DecodedLine,
   ) {
     heldEnds.delete(agentCallId);
+    relistedAgents.delete(agentCallId);
     if (pendingAgents.has(agentCallId) || launchedAgents.has(agentCallId)) {
       return;
     }
@@ -621,6 +629,7 @@ export function createStreamDecoder(
       pendingAgents.delete(endingId);
       launchedAgents.delete(endingId);
       heldEnds.delete(endingId);
+      relistedAgents.delete(endingId);
       if (wasLaunched && isDone) {
         revivableAgents.add(endingId);
       }
@@ -773,6 +782,7 @@ export function createStreamDecoder(
     }
     revivableAgents.delete(agentId);
     launchedAgents.add(agentId);
+    relistedAgents.add(agentId);
     const record = spawnRecords.get(agentId);
     if (record !== undefined) {
       reportSpawn(agentId, record.parentAgentId, record.source, out);
@@ -781,6 +791,18 @@ export function createStreamDecoder(
     const facts = subagentFacts.get(agentId);
     if (facts !== undefined) {
       reportSubagentFacts(agentId, facts.model, facts.contextTokens, out);
+    }
+  }
+
+  // A result ends every listed-again subagent with no tool call open `done`,
+  // its end held while it owns a running task; one mid-call waits for a later
+  // result.
+  function endRelistedAgents(out: DecodedLine) {
+    const toolOwners = new Set(toolAgents.values());
+    for (const agentId of relistedAgents) {
+      if (!toolOwners.has(agentId)) {
+        endLaunchedAgent(agentId, true, out);
+      }
     }
   }
 
@@ -942,7 +964,7 @@ export function createStreamDecoder(
     }
     out.entries.push(
       GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype))
-        ? gathered(event, event.subtype === 'init')
+        ? gathered(event, event.subtype === 'init' && !isAfterHandback)
         : rawEntry(event),
     );
     const error = event.compact_error;
@@ -1175,11 +1197,14 @@ export function createStreamDecoder(
   // turn's open blocks, and its events entry takes events until the next init.
   // Every result ends a turn of the main conversation, an unrequested one
   // included, and teaches the windows its `modelUsage` names; a hand-back's
-  // result also ends its subagent.
+  // result also ends its subagent, and every result ends the subagents late
+  // lines listed again. The empty result after a hand-back's draws no divider:
+  // it joins the events entry.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
     failPendingAgents(out);
     finishByHandback(event, out);
+    endRelistedAgents(out);
     learnWindows(asJson(event.modelUsage));
     reportChangedWindows(out);
     out.agentEvents.push({ type: 'turnEnded' });
@@ -1187,9 +1212,8 @@ export function createStreamDecoder(
     out.turnEnded = true;
     out.turnUsage = turnUsageOf(event, lastMainModel);
     out.turnFailed = isError;
-    out.turnUnrequested = UNREQUESTED_ORIGINS.has(
-      asString(asJson(event.origin).kind),
-    );
+    const origin = asJson(event.origin);
+    out.turnUnrequested = UNREQUESTED_ORIGINS.has(asString(origin.kind));
     out.turnOpener =
       typeof event.user_message_uuid === 'string'
         ? event.user_message_uuid
@@ -1208,17 +1232,27 @@ export function createStreamDecoder(
       costUsd = totalCost - lastTotalCost;
       lastTotalCost = totalCost;
     }
-    resultCount += 1;
-    out.entries.push({
-      kind: 'result',
-      id: `result-${resultCount}`,
-      stopReason: hasStopReason
-        ? (event.stop_reason as string)
-        : asString(event.subtype),
-      costUsd,
-      durationMs: numberOrNull(event.duration_ms),
-      raw: [event],
-    });
+    const isEmptyFollowUp =
+      isAfterHandback &&
+      origin.kind === 'task-notification' &&
+      event.result === '' &&
+      event.num_turns === 0;
+    isAfterHandback = origin.kind === 'peer' && origin.handback === true;
+    if (isEmptyFollowUp) {
+      out.entries.push(gathered(event));
+    } else {
+      resultCount += 1;
+      out.entries.push({
+        kind: 'result',
+        id: `result-${resultCount}`,
+        stopReason: hasStopReason
+          ? (event.stop_reason as string)
+          : asString(event.subtype),
+        costUsd,
+        durationMs: numberOrNull(event.duration_ms),
+        raw: [event],
+      });
+    }
     betweenTurns = true;
     isAfterBoundary = false;
   }

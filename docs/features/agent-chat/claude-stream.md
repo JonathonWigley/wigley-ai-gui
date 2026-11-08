@@ -1004,7 +1004,9 @@ description "read notes" …)`; Explore spawned on the first attempt):
   `user` tool result). `status` `failed` was not observed. It is not always the subagent's last word: on 2026-11-03 a
   background subagent waiting on its own background shell finished about 80 s before its shell ended, then replied and
   handed back. The adapter's log shows the finish and the late replies; the raw line was not captured. The adapter
-  holds a launched subagent's end until the tasks it owns end, and lists it again on a late line
+  holds a launched subagent's end until the tasks it owns end, and lists it again on a late line. No end event follows
+  such late work, so the adapter ends a subagent listed again at its next `task_notification`, its hand-back's
+  `result`, or the next `result` of any turn at which it has no tool call open
   (`docs/features/chat-bar/design.md` § The agent strip).
 - **After the end, the harness runs a turn on the main agent** when the main turn is already over (below):
   `system/init`, `system/status requesting`, an `assistant`, and a `result` whose `origin` is
@@ -1014,7 +1016,8 @@ description "read notes" …)`; Explore spawned on the first attempt):
   `{"spawned":1,"requested":{"background":1,"foreground":0,"unset":0},"started_in_background":1,"max_depth":1,"spawned_by_subagents":0,"completed":1,"failed":0,"killed":{"parent":0,"user":0,"system":0},"refused":{…},"by_type":{"general-purpose":1}}`.
   Neither `result` is a user turn: these two come with no stdin message. A message written while such a turn runs
   folds into it (§ Queued messages). The adapter shows working from such a turn's `init` to its `result`, as for any
-  turn, with no message of its own to close.
+  turn, with no message of its own to close. The empty `result` after a hand-back draws no turn divider: it and its
+  `init` join the hand-back turn's events.
 
 **The subagent's own lines.** `assistant` and `user` events only; **no `stream_event` lines for a subagent** in any
 probe. Every one carries `parent_tool_use_id` equal to the Agent call's `tool_use` id (checked on all subagent lines of

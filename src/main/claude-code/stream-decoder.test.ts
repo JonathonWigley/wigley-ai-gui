@@ -943,6 +943,51 @@ describe('createStreamDecoder', () => {
 
   it.each([
     {
+      given: "a hand-back's result",
+      before: [handbackResult('a4e45e22d2e0fef8f')],
+      result: { result: '', num_turns: 0 },
+      expected: ['turn-events-1', 'turn-events-1'],
+    },
+    {
+      given: "a hand-back's result, then a turn with replies",
+      before: [handbackResult('a4e45e22d2e0fef8f')],
+      result: { result: 'done', num_turns: 1 },
+      expected: ['turn-events-1', 'result-2'],
+    },
+    {
+      given: 'a user turn',
+      before: [RESULT_LINE],
+      result: { result: '', num_turns: 0 },
+      expected: ['turn-events-2', 'result-2'],
+    },
+  ])(
+    'decode_EmptyResultAfterHandback_DrawsNoDivider ($given)',
+    ({ before, result, expected }) => {
+      const decoder = createStreamDecoder();
+      for (const text of [INIT_LINE, ...before]) {
+        decoder.decode(text);
+      }
+
+      const init = decoder.decode(INIT_LINE);
+      const ended = decoder.decode(
+        line({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          ...result,
+          origin: { kind: 'task-notification', producer: 'session-task' },
+        }),
+      );
+
+      expect(ended.turnEnded).toBe(true);
+      expect(
+        [...init.entries, ...ended.entries].map((entry) => entry.id),
+      ).toEqual(expected);
+    },
+  );
+
+  it.each([
+    {
       name: 'both keys',
       fields: { user_message_uuid: 'a', user_message_uuids: ['a', 'b'] },
       opener: 'a',
@@ -2230,6 +2275,30 @@ describe('createStreamDecoder', () => {
       ],
     },
     {
+      case: 'revive of a listed-again subagent outlasts a result',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskStarted('a4e45e22d2e0fef8f', 'b1', 'local_agent'),
+        taskNotification('b1', 'completed'),
+        toolResultLine('t9', { parent: 'b1' }),
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a4e45e22d2e0fef8f', 's1'),
+        toolResultLine('s1'),
+        RESULT_LINE,
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+        started('main', 's1', 'SendMessage', ''),
+        { type: 'toolFinished', agentId: 'main', toolUseId: 's1', ok: true },
+        TURN_ENDED,
+      ],
+    },
+    {
       case: 'revive then a line lists once',
       lines: [
         agentCall('b1'),
@@ -2251,12 +2320,13 @@ describe('createStreamDecoder', () => {
       ],
     },
     {
-      case: 'late tool result lists an ended subagent again',
+      case: 'late tool result lists an ended subagent again until a result',
       lines: [
         agentCall('b1'),
         launchReceipt('b1'),
         taskNotification('b1', 'completed'),
         toolResultLine('t9', { parent: 'b1' }),
+        RESULT_LINE,
       ],
       expected: [
         spawned('b1'),
@@ -2264,6 +2334,75 @@ describe('createStreamDecoder', () => {
         finished('b1', 'done'),
         spawned('b1'),
         launched('b1'),
+        finished('b1', 'done'),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'result leaves a listed-again subagent listed while its call runs',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskNotification('b1', 'completed'),
+        toolUseLine('t1', 'Read', {}, 'b1'),
+        RESULT_LINE,
+        toolResultLine('t1', { parent: 'b1' }),
+        RESULT_LINE,
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+        started('b1', 't1', 'Read', ''),
+        TURN_ENDED,
+        { type: 'toolFinished', agentId: 'b1', toolUseId: 't1', ok: true },
+        finished('b1', 'done'),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: "result holds a listed-again subagent's end for its task",
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskStarted('a4e45e22d2e0fef8f', 'b1', 'local_agent'),
+        taskNotification('b1', 'completed'),
+        toolResultLine('t9', { parent: 'b1' }),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a4e45e22d2e0fef8f'),
+        RESULT_LINE,
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+        taskBegan('bpdumb7hy', 'b1'),
+        TURN_ENDED,
+        taskEnded('bpdumb7hy', 'done'),
+        finished('b1', 'done'),
+      ],
+    },
+    {
+      case: 'notification ends a listed-again subagent',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskStarted('a4e45e22d2e0fef8f', 'b1', 'local_agent'),
+        taskNotification('b1', 'completed'),
+        toolResultLine('t9', { parent: 'b1' }),
+        taskNotification('b1', 'completed'),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
       ],
     },
     {
