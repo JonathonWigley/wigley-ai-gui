@@ -282,7 +282,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [The plugin switch](08-plugin-switch.md) — after 03, 04, 06, 07
 
 ### Wave 6
-- [ ] [Settings' Plugins section](09-settings-plugins.md) — after 08
+- [x] [Settings' Plugins section](09-settings-plugins.md) — after 08
 - [x] [Quit waits for every stop](10-quit-waits.md) — after 08
 
 ### Wave 7
@@ -308,6 +308,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 07 · 810da4d4 · diff read: every Produces present (presenter, forms, primer, docs, notes, backlog, chat mayStop); typecheck and lint clean on the full tree; worker ran the 7 task test files, 156 passed · concerns: docs unsavedPath already refuses while a restore is pending; reloadWith gained an optional rowOf parameter; for review: forms/main/start.ts header comment reads 'That one presenter which owns…' and forms/primer header comment lines run past the wrap width
 - 08 · 7b7b966a · diff read: every Produces present (neededBy, PluginStatus/corePluginsSlot, bridge channels and onPluginParts, PluginSwitchService, createPluginSwitch, createPageParts, addPluginSwitchActions, setPluginsProblem, servedChanged, settings description); typecheck and lint clean on the full tree; worker ran 12 test files, 295 passed · concerns: a restart leaves a page part's binds in the keymap between its page stop and start (a key then runs a command with no handler); each page start re-applies the push and logs '[config] applied a new config' again (task 09's self-test steps); unchecked: a main part restarted under a drive run re-adding its drive actions may throw 'already added'; mainStartList in selftest-config.ts is now redundant under the self-test; for review: plugin-switch.ts and renderer.ts comments run past the wrap width
 - 10 · a35b2ea7 · diff read: QUIT_WAIT_LOG_MS and logSlowQuit present, runQuitTasks holds in every mode and calls logSlowQuit once; typecheck clean; worker ran quit-wait.test.ts, 8 passed · concerns: the logSlowQuit 'once' is shown only by the single timer set; quitStep added beyond the Produces as the testable step
+- 09 · c2f84175 · diff read: mayDisable on the channel and main handler, plugin-rows (PLUGIN_LIST_PATH, lockedText, withPluginSwitched, matchesPlugin), plugin-rows-view, pluginRow in layout.d.ts/default layout/read-layout, self-test groups plugin switch and locked plugin in, disabled plugins out, both design docs; typecheck and lint clean; worker ran src/plugins/settings, 13 files 142 tests passed · concerns: PickTrue test asserts { plugins: { disabled: [] } } where the task said {}; the gallery self-test write carries the outside-edits group's stale keySequenceTimeoutMs; filter usage first row plugin:usage unverified until the self-test runs; settings design.md has no Plugins rows section and DESIGN.md § Settings no Tag line (tasks 11/12); setting-rows.ts exports userValue and keymap-view.test.ts fake gained three members (outside the file list)
 ### Contract changes
 - check-layers src/main/config layers: as planned unchanged → gains src/main/plugins · why: user-config.ts imports appliedCommands and AppliedPlugins · consumers: 08 (plugin-switch.ts in src/main/plugins must not import src/main/config, or the layers cycle) · group 06
 - 07: chat's rule and wording live on the view as ChatTabs.mayStop(rows), start.ts passes rows.all().values(); the ?? sessionId label fallback never applies. createForms returns presenter typed AgentFormChannelPresenter<Round, FormBody>.
@@ -329,5 +330,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 08: the page reconciles at load after pageHost.ready() and restores.partsReady(), before dataset.ready; a page stop that throws also replies every part running before and not after; a page start re-applies the push even when it threw · group 08
 - 08: under the self-test defaultSettings() gives plugins.disabled []; the harness's fake pluginSwitch refuses nothing · group 08
 - 10: a second quit holds in every mode but drive, self-test included (the self-test exit skips will-quit today) · group 10
+- 09: a rejected mayDisable logs write failed, toasts and rethrows from the view's RowContext; the row's pick swallows it and writes nothing · group 09
+- 09: picking the shown value logs unchanged through commit's same-layer check; the plugin list leaf is looked up at pick, not at draw · group 09
 ### Review rounds
 ### Test gate

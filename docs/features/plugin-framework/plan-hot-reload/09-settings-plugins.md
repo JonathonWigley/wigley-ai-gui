@@ -1,6 +1,6 @@
 # 09 — Settings' Plugins section
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -127,3 +127,5 @@ Done when: the project compiles; lint is clean; the test gate runs the tests abo
 Commit: one commit, `Settings: a Plugins section switches each plugin on and off through the plugin switch`.
 
 ## Proof
+
+Commit c2f84175 · proof: diff read: mayDisable on the channel and main handler, plugin-rows (PLUGIN_LIST_PATH, lockedText, withPluginSwitched, matchesPlugin), plugin-rows-view, pluginRow in layout.d.ts/default layout/read-layout, self-test groups plugin switch and locked plugin in, disabled plugins out, both design docs; typecheck and lint clean; worker ran src/plugins/settings, 13 files 142 tests passed · concerns: PickTrue test asserts { plugins: { disabled: [] } } where the task said {}; the gallery self-test write carries the outside-edits group's stale keySequenceTimeoutMs; filter usage first row plugin:usage unverified until the self-test runs; settings design.md has no Plugins rows section and DESIGN.md § Settings no Tag line (tasks 11/12); setting-rows.ts exports userValue and keymap-view.test.ts fake gained three members (outside the file list)
