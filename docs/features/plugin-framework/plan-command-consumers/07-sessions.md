@@ -1,6 +1,6 @@
 # 07 — Sessions queries, close seams and forms knowledge
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)

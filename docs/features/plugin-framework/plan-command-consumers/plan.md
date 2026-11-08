@@ -177,5 +177,6 @@ Review base: 69550804
 - User settled task 06's four open calls, each as recommended and as 06 is written: runAction stays the seam behind workflow.stageAction; keys and buttons both run workflow.stageAction and the runCommand export goes; Light and Medium keep their rejecting stubs; Heavy's closed main-side actions record stays behind its channel.
 - CommandKey constants take the tree's ...Command suffix (agentStripToggleBoxAtCommand, visualExpandCommand, sessionsSelectRowCommand, sessionsSelectTabCommand, sessionsFavoriteProjectAtCommand); core keys keep the SCREAMING style (MODES_SHOW, as PICKER_CHOOSE_ROW). · group 04
 - Task 05 adds the Docs wiki clicks the plan predates (switchTreeView, openListRow, createMain) to the sweep, per the 'every click runs a command' decision. · group 05
+- Task 07 runs alongside task 06 rather than after it: 07 waits only on 02, 03 and 04, and the two share no file. 07 may rename deadlineSeconds in workflow-heavy-main.test.ts and workflow/main/start.test.ts, which 06 does not touch.
 ### Review rounds
 ### Test gate
