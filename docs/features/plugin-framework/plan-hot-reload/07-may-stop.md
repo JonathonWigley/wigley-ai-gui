@@ -1,6 +1,6 @@
 # 07 — Open work answers `mayStop`
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 02, 05
 Plan: [plan.md](plan.md)

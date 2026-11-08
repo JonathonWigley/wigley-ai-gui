@@ -272,7 +272,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [Manifests declare a label and a description](04-manifest-identity.md) — after 02
 
 ### Wave 3
-- [ ] [`ready()` replaces `core.pageReady`](05-ready-hook.md) — after 01, 02, 04 (both edit `plugin-part-harness.test-support.ts` and `slot-store.test-d.ts`)
+- [x] [`ready()` replaces `core.pageReady`](05-ready-hook.md) — after 01, 02, 04 (both edit `plugin-part-harness.test-support.ts` and `slot-store.test-d.ts`)
 
 ### Wave 4
 - [ ] [The served config follows the applied list](06-applied-list.md) — after 05
@@ -303,6 +303,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 03 · d1d1fd0a · diff read; worker typecheck 0, slot-store, slot-holder, page-state, chat-sessions, session-list tests pass · concerns: SlotHolder.clearOwner cannot see page writers, so task 08 must stop page parts before clearing; two tests outside the file list narrowed SlotChange and now skip cleared
 - 02 · 4e2cfd84 · diff read; typecheck 0, lint 0 on the wave 1 tree; plugin-host + page tests and the wave 1 files 663 pass · concerns: stale prose outside scope: PagePart/MainPart comments in contracts/plugin.ts say start once / every page load; AGENTS.md disabled-plugin and stop(id) bullets (task 11); design.md says a restart starts in start order, code follows plan.md parts order (task 12)
 - 04 · 8df51989 · diff read (only label/description lines in 25 manifests); typecheck 0, lint 0; 04-1's 12 test files 425 pass · concerns: apostrophe descriptions double-quoted per oxfmt
+- 05 · 3a42a35f · diff read; typecheck 0, lint 0; pageReady|CoreEvents grep empty in src; worker ran the task's 30 test files 486 pass plus slot-store, harness, plugin-host · concerns: a throwing ready now logs under plugin-host, not the plugin's id; the part harness host has no log so a throwing ready is silent in tests; workflow-heavy-page test's variable is heavy, not engine
 ### Contract changes
 ### Rulings
 - Branch hot-reload is cut from command-consumers e784f07e (Wave 3, in final review), with the plan commits cherry-picked from main — the user's word to start before Wave 3 lands — once Wave 3 lands, rebase onto main and re-check any review fix that touched a Consumes · lead
@@ -314,5 +315,6 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - Staleness check (reports/staleness.md) briefs: task 05 also renames PageRestoresHost.pageReady and its test table and renderer call, rewords the PageRestores comment and the sessionsPlaceSlot comment, and chat's ready keeps Wave 3's pruneEndedPlaces; task 08's PluginSwitchDeps carries timers and exports PLUGIN_RETRY_MS, the switch wiring sits before createWindow's live-only return and selfTestFor is passed in; task 11 also rewords AGENTS.md's restores sentence naming core.pageReady · lead
 - hand-built test manifests take label = id and description 'A test plugin.' · group 04 · group 04
 - Task 05 runs as one opus-medium worker though typed Parallel — removing CoreEvents compiles only once every part moves — one longer dispatch · lead
+- chat-view's test helper calls view.ready() only on the first open, as the old helper's one-shot listener did · group 05 · group 05
 ### Review rounds
 ### Test gate

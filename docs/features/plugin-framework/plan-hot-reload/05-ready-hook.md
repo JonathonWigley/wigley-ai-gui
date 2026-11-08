@@ -1,6 +1,6 @@
 # 05 — `ready()` replaces `core.pageReady`
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 3 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)
@@ -78,3 +78,5 @@ Done when: `grep -rn 'pageReady\|CoreEvents' src` prints nothing; `grep -n 'page
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 3a42a35f · proof: diff read; typecheck 0, lint 0; pageReady|CoreEvents grep empty in src; worker ran the task's 30 test files 486 pass plus slot-store, harness, plugin-host · concerns: a throwing ready now logs under plugin-host, not the plugin's id; the part harness host has no log so a throwing ready is silent in tests; workflow-heavy-page test's variable is heavy, not engine

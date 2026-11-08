@@ -1,6 +1,6 @@
 # 06 — The served config follows the applied list
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
