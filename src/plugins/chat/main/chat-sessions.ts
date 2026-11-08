@@ -611,6 +611,14 @@ function firstMessageTitleOf(text: string): string {
   return [...text.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
 }
 
+// The error sessions' `open` throws when another session holds `rowId`.
+function isRowIdHeldError(error: unknown, rowId: string): boolean {
+  return (
+    error instanceof Error &&
+    error.message === `Session ${rowId} is already open`
+  );
+}
+
 // Chat's owned sessions: each one's agent process while it runs, its chat
 // entries, controls and commands, the activity it shows, the permission
 // calls waiting on the user, the messages queued behind its running turn or its
@@ -635,8 +643,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // before they are read; it stops for good at `detachAll`.
   let isRestored = false;
   let isDetached = false;
-  // Records the restore skipped that hold queued or returned messages, saved unchanged so
-  // the next app start tries them again.
+  // Records the restore skipped that hold queued or returned messages, saved
+  // unchanged so the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
   // A restart keeps a plugin's slots: a row the restore does not open again
   // would stay in them.
@@ -1300,7 +1308,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             profileDir,
             hostSessionId,
             event,
-            // The replay's fold emits no `sessionEnded`, so one here is a real exit.
+            // The replay's fold emits no `sessionEnded`, so one here is a real
+            // exit.
             replayed: replay.isReplaying && event.type !== 'sessionEnded',
           });
         }
@@ -2553,6 +2562,51 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
+  // Opens the record's row under its saved row id, or under a new one when
+  // another session holds that id.
+  function openRestoredRow(
+    record: SavedSession,
+    profileDir: string | null,
+  ): HeldSession {
+    const open = (options: OpenOptions) =>
+      openRow(
+        record.projectDir,
+        record.profile,
+        profileDir,
+        {
+          hostId: record.hostSessionId,
+          entries: [],
+          sent: record.sent,
+          historyPending: record.sent,
+          titles: record.titles,
+          processId: record.processId,
+          launchControls: record.launchControls,
+          launchResume: record.launchResume,
+          controls: record.controls,
+          confirmedPicks: record.confirmedPicks,
+          returnedDrops: record.returnedDrops,
+          activeMs: record.activeMs,
+          origin: 'restored',
+        },
+        options,
+      );
+    const { rowId } = record;
+    if (rowId === null) {
+      return open({ select: false });
+    }
+    try {
+      return open({ select: false, rowId });
+    } catch (error) {
+      if (!isRowIdHeldError(error, rowId)) {
+        throw error;
+      }
+      log(
+        `session ${record.hostSessionId} restored on a new row: row ${rowId} is held`,
+      );
+      return open({ select: false });
+    }
+  }
+
   function restoreRecord(
     record: SavedSession,
     hosted: readonly HostedProcessInfo[] | null,
@@ -2575,28 +2629,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       .find((candidate) => candidate.name === record.profile);
     let session: HeldSession;
     try {
-      session = openRow(
-        record.projectDir,
-        record.profile,
+      session = openRestoredRow(
+        record,
         profile === undefined ? null : profileDirOf(profile),
-        {
-          hostId: hostSessionId,
-          entries: [],
-          sent: record.sent,
-          historyPending: record.sent,
-          titles: record.titles,
-          processId: record.processId,
-          launchControls: record.launchControls,
-          launchResume: record.launchResume,
-          controls: record.controls,
-          confirmedPicks: record.confirmedPicks,
-          returnedDrops: record.returnedDrops,
-          activeMs: record.activeMs,
-          origin: 'restored',
-        },
-        record.rowId === null
-          ? { select: false }
-          : { select: false, rowId: record.rowId },
       );
     } catch (error) {
       log(`session ${hostSessionId} not restored: ${errorText(error)}`);

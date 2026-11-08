@@ -15,28 +15,36 @@ export interface SavedSession {
   busy: boolean;
   // The row's titles when the snapshot was taken.
   titles: SessionTitles;
-  // The id of the row's last process start, which the session host knows it by; null when the row never started one.
+  // The id of the row's last process start, which the session host knows it
+  // by; null when the row never started one.
   processId: string | null;
   // The row's queued messages not yet sent, oldest first, images included.
   queued: UserMessage[];
-  // The messages returned to the box that the page had not placed, oldest first, images included.
+  // The messages returned to the box that the page had not placed, oldest
+  // first, images included.
   returned: UserMessage[];
-  // The `AgentStart.controls` the row's last process start passed; {} when the row never started one.
+  // The `AgentStart.controls` the row's last process start passed; {} when
+  // the row never started one.
   launchControls: Record<string, string>;
-  // The `AgentStart.resume` the row's last process start passed; false when the row never started one.
+  // The `AgentStart.resume` the row's last process start passed; false when
+  // the row never started one.
   launchResume: boolean;
-  // The controls the row held, as its process last reported them; [] when no process reported any.
+  // The controls the row held, as its process last reported them; [] when no
+  // process reported any.
   controls: SessionControl[];
   // Control id → the value the user picked in this row that a report confirmed.
   confirmedPicks: Record<string, string>;
-  // The entry ids of the messages the last process dropped that chat has already returned to the page.
+  // The entry ids of the messages the last process dropped that chat has
+  // already returned to the page.
   returnedDrops: string[];
   // The row's active time at the snapshot, its open span included. A restored
   // row's clock starts paused at it; a file written without it reads as 0.
   activeMs: number;
   // The row's id when the snapshot was taken, which the restored row takes
-  // back, so a restart of chat or sessions keeps every reader's hold on it;
-  // null in a file written without it.
+  // back on a restart of chat or sessions and on a relaunch. The kept id keeps
+  // chat's kept slot keys, the main-side readers keyed by row, and the
+  // WIGLEY_SESSION_ROW of a detached process; it does not keep the pages'
+  // places. Null in a file written without it.
   rowId: string | null;
 }
 

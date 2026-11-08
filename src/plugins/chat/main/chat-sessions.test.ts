@@ -309,6 +309,22 @@ function record(
   };
 }
 
+// A session-slot value an earlier run of chat left under `rowId`.
+function keptSessionInfo(rowId: string): ChatSessionInfo {
+  return {
+    sessionId: rowId,
+    projectDir: '/w/app',
+    profile: 'work',
+    activity: 'idle',
+    background: 0,
+    activeTime: NO_ACTIVE_TIME,
+    running: false,
+    compaction: null,
+    repo: 'app',
+    branch: null,
+  };
+}
+
 // An open-sessions store holding the last snapshot saved and the save count.
 function fakeOpenSessions() {
   let last: SavedSessions | null = null;
@@ -390,6 +406,8 @@ function setUp(
     git?: ChatSessionsDeps['git'];
     files?: ChatSessionsDeps['files'];
     sessionHost?: ChatSessionsDeps['sessionHost'];
+    // Row ids an earlier run of chat left in the session slot.
+    keptRowIds?: string[];
   } = {},
 ) {
   let clockNow = options.clockNow ?? 1000;
@@ -416,6 +434,11 @@ function setUp(
   // Each slot change and `sessionRested`, in the order they left main.
   const timeline: TimelineItem[] = [];
   const store = createSlotStore(() => undefined);
+  const earlierRun = store.publish(chatSessionSlot);
+  for (const rowId of options.keptRowIds ?? []) {
+    earlierRun.set(rowId, keptSessionInfo(rowId));
+  }
+  earlierRun.dispose();
   store.onWrite((change) => timeline.push(change));
   const emitted: Emitted[] = [];
   // Each `noteToolStarted` call and each emit, in the order chat made them.
@@ -429,8 +452,10 @@ function setUp(
   let selectedSessionId: string | null = ROW_ID;
   let uuidCalls = 0;
   const hostIdChanges: string[] = [];
-  // Host ids whose `open` throws, and what each owned `end` also does.
+  // Host ids whose `open` throws, row ids another session holds, and what
+  // each owned `end` also does.
   const refusedOpens = new Set<string>();
+  const heldRowIds = new Set<string>();
   let onOwnedEnd = () => {};
   let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
   const archived = createArchivedSessions(data);
@@ -443,6 +468,9 @@ function setUp(
     open: (info, options) => {
       if (info.sessionId !== null && refusedOpens.has(info.sessionId)) {
         throw new Error(`open of ${info.sessionId} refused`);
+      }
+      if (options?.rowId !== undefined && heldRowIds.has(options.rowId)) {
+        throw new Error(`Session ${options.rowId} is already open`);
       }
       opened.push(info);
       openOptions.push(options);
@@ -581,6 +609,7 @@ function setUp(
       selectedSessionId = sessionId;
     },
     refuseOpen: (hostId: string) => refusedOpens.add(hostId),
+    holdRowId: (rowId: string) => heldRowIds.add(rowId),
     // Runs as each event is emitted, while chat's emit is on the stack.
     setOnEmit: (listen: (emitted: Emitted) => void) => {
       onEmit = listen;
@@ -3120,6 +3149,46 @@ describe('createChatSessions saved sessions', () => {
     ]);
     expect(test.harness.processes).toEqual([]);
     expect(test.harness.pastSessionCalls).toEqual([]);
+  });
+
+  it('createChatSessions_KeysAnEarlierRunLeft_DroppedUntilARestoredRowTakesOneBack', () => {
+    const test = setUp({ keptRowIds: ['kept-row', 'stale-row'] });
+    const keys = () => [
+      ...test.store.read(chatSessionSlot, 'test').all().keys(),
+    ];
+    const afterCreate = keys();
+
+    test.chat.restore(
+      {
+        sessions: [record('host-b', { rowId: 'kept-row' })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    expect(afterCreate).toEqual([]);
+    expect(keys()).toEqual(['kept-row']);
+  });
+
+  it('restore_SavedRowIdHeldByAnotherSession_OpensOnANewRow', () => {
+    const test = setUp();
+    test.holdRowId('kept-row');
+
+    test.chat.restore(
+      {
+        sessions: [record('host-b', { rowId: 'kept-row' })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    expect(test.openOptions).toEqual([{ select: false }]);
+    expect(test.chat.sessions().map((state) => state.sessionId)).toEqual([
+      'row-1',
+    ]);
+    expect(test.logged).toContain(
+      'session host-b restored on a new row: row kept-row is held',
+    );
   });
 
   it.each([
@@ -5799,7 +5868,8 @@ describe('createChatSessions attaching', () => {
       replayed: 'working' as const,
       writesAtResolve: [],
     },
-    // The fake's echo of `a` ends its turn, which writes `b`; no idle came before `a`.
+    // The fake's echo of `a` ends its turn, which writes `b`; no idle came
+    // before `a`.
     {
       given: 'the turn over',
       replayed: 'idle' as const,

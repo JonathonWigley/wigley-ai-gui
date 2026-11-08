@@ -172,8 +172,8 @@ export interface OwnedSession {
 
 // `select` false opens a session in the background: its row is added unmarked
 // and the selected row stays as it was. `rowId` is the id the session's row
-// had before a restart of its owner or of sessions, which the row takes back;
-// left out, the row gets a new one.
+// had before a restart of its owner or of sessions, or before a relaunch,
+// which the row takes back; left out, the row gets a new one.
 export interface OpenOptions {
   select: boolean;
   rowId?: string;
@@ -592,8 +592,9 @@ export const sessionsActivitySlot: KeyedSlotKey<
 
 // Each session's place, by the session id, written on each change to its tabs,
 // their selection or which of its popups are hidden; a row leaving deletes its
-// key, and the sessions page part's `ready()` deletes the keys of rows that
-// ended while no page ran.
+// key, and the sessions page part's `ready()` deletes the keys of rows main
+// does not hold: rows that ended while no page ran, and on a live restart rows
+// that chat's restore has not reopened yet.
 export const sessionsPlaceSlot: KeyedSlotKey<
   SessionsPlace,
   'page',

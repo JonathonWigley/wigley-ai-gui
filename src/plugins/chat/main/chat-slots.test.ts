@@ -115,6 +115,7 @@ describe('createChatSlots', () => {
 
     expect(changes).toHaveLength(12);
     expect(changes[0]).toMatchObject({ id: 'chat.session', key: 'row-1' });
+    expect(changes[6]).toMatchObject({ id: 'chat.session', key: 'row-2' });
     expect(store.read(chatSessionSlot, 'test').all().size).toBe(0);
   });
 

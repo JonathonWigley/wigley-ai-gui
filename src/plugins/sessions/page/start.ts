@@ -217,7 +217,8 @@ function createExports(
 // the focus and the visible tab follow in a microtask, after every reader heard
 // the notice. Each session's place (`sessionsPlaceSlot`) outlives a reload:
 // a row leaving deletes it, and `ready` first deletes the places of rows
-// that ended while no page ran. Activating a session
+// main does not hold: rows that ended while no page ran, and on a live
+// restart rows that chat's restore has not reopened yet. Activating a session
 // focuses the pane showing it, or loads it into the focused pane; closing one
 // asks main, and a pane whose session leaves closes, the last pane staying.
 // The visible surface, the focused pane's session's top open popup, else its
@@ -249,7 +250,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const active = api.state.publish(sessionsActiveSlot);
     active.set(null);
     const activities = api.state.publish(sessionsActivitySlot);
-    // The old page's sources are gone with it, and the new page's set theirs again.
+    // The old page's sources are gone with it, and the new page's set theirs
+    // again.
     for (const sessionId of activities.all().keys()) {
       activities.delete(sessionId);
     }
