@@ -242,7 +242,7 @@ Boundary rules:
 - [x] [Notices stop, state and keys](04-notices-state-keys.md) — after 01, 02 (both edit `layout.d.ts`)
 
 ### Wave 4
-- [ ] [Notices pane](05-notices-pane.md) — after 02, 03, 04
+- [x] [Notices pane](05-notices-pane.md) — after 02, 03, 04
 
 ### Wave 5
 - [ ] [Forms self-test](07-forms-selftest.md) — after 01, 02, 04, 05, 06
@@ -264,6 +264,7 @@ Review base: 21b036cb
 - 06 · a9f2adb2 · diff read: NOTICES_DESCRIPTION, FINDINGS_DESCRIPTION, ASK_ROUND_DESCRIPTION pinned text, three preview notices one per badge, test checks every badge; worker typecheck, lint, named tests pass; order grep leaves only 04's two hits · concerns: none
 - 02 · 5766ea22 · diff read: QuestionCard.summary, buildChoiceReason(label|null), appendAnswerArea/appendChoiceReason with null label, .item-summary and .answer-head CSS as pinned, finding card keeps labels; typecheck passes; worker lint and named tests pass · concerns: forms selftest-script SELFTEST_LAYOUT string still reads input.question (typecheck cannot see it) — task 07 owns it; choiceReason test asserts labels-per-reason rather than exactly one reason on the question row
 - 04 · 29df4efc · diff read: RoundItem, RailItem union, railItems, openNotices/noticeLine, the three actions, railEntryLabel/Title, noticeToggledLine, lineCursorLine, RoundPicks.noticeCards, RailEntryInput.kind, the three commands and binds all present; worker full npm test (10156), typecheck, lint pass · concerns: forms selftest-script expects j ran forms.nextItem in many rows — task 07 owns it; za is not a vim key, so the placement check wants an anchor for forms.toggleNotice — task 05's notices pane must draw it; interim notice cards use the stop's rail position
+- 05 · 2871e979 · diff read: buildNoticesPane, NoticeLineInput, NoticesInput, NoticesKit.line, Layout.notices, PANES/read-layout notices, buildLayoutCard rollback, default notices pane and headless notice card, interim removed, za anchor on cursor line all present; typecheck passes; worker full npm test (10176) and lint pass · concerns: Enter on the notices stop also toggles the cursor line (from 04; vim key, no anchor); live look unchecked (head inside collapsible button, hidden empty summary, prompt position, editors in hidden bodies) — task 10
 ### Contract changes
 ### Rulings
 - Rebased the gui and agents branches onto main at preflight (9 and 1 commits behind); the docs-written-ahead commits are now gui 3c06d4c3 (was 4d679c5c) and agents 67c4697 (was 64ba2e3); review bases: gui 21b036cb, marketplace 3689c72, agents 67c4697 — work builds on origin's latest — a stale sha in a later brief would mislead a re-read · lead
@@ -274,5 +275,8 @@ Review base: 21b036cb
 - noticesStop(state) helper gates every notice-key path to the forms view showing the stop, so review or sending never toggles — matches 'item actions' — a toggle while sending logs nothing · group 04
 - Fixed stale docs outside the list: key-hints design example now primer.nextRow, followups.md names ANSWERABLE_ORDER — docs kept true — none · group 04
 - Task 05's notices pane anchors forms.toggleNotice (za) on the cursor line, through the kit's key-anchor parts — za is not one of vim's own keys, so the end-of-run placement check fails without an anchor and no task drew one — the self-test's placement check fails if missed · lead
+- za prompt is one span.notice-line-prompt per pane draw, made through recordingDeps and moved to the cursor line's head on every update, so a user layout cannot drop it — mirrors the review's jump prompt — placement check fails if missed · group 05
+- Prompt label is 'toggle' rather than the command label — keeps the line short — copy only · group 05
+- Head click compares the line's open state before and after its dispatches and logs only on change — no double log — a click logs nothing if wrong · group 05
 ### Review rounds
 ### Test gate

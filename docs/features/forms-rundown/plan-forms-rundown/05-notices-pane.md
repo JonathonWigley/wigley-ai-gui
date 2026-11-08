@@ -1,6 +1,6 @@
 # 05 — Notices pane
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -253,3 +253,5 @@ Commit: one commit for the group.
 - A head-click row where the open value does not change (the review view shows) logs nothing.
 
 ## Proof
+
+Commit 2871e979 · proof: diff read: buildNoticesPane, NoticeLineInput, NoticesInput, NoticesKit.line, Layout.notices, PANES/read-layout notices, buildLayoutCard rollback, default notices pane and headless notice card, interim removed, za anchor on cursor line all present; typecheck passes; worker full npm test (10176) and lint pass · concerns: Enter on the notices stop also toggles the cursor line (from 04; vim key, no anchor); live look unchecked (head inside collapsible button, hidden empty summary, prompt position, editors in hidden bodies) — task 10
