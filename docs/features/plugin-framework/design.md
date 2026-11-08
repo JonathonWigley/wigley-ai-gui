@@ -43,9 +43,9 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
   the plugin's `contract.ts`.
 - A manifest names the plugins it depends on; they start first, and a plugin's start function may return an
   exported API its dependents receive, typed from the dependency's `contract.ts`.
-- Plugins may publish their own events for other plugins to listen to. One event bus per process; the core forwards
-  the core events both sides need; a plugin's cross-process messages use its own channel. The bus lands in A2,
-  where sessions publish the first events.
+- Plugins may publish their own events for other plugins to listen to. One event bus per process; the core has no
+  events of its own, and a part that needs its siblings started uses `ready()` (§ Hot reload (Wave 4)); a plugin's
+  cross-process messages use its own channel. The bus lands in A2, where sessions publish the first events.
 - Every built-in plugin starts at launch unless the core setting `plugins.disabled` names it; the list arrived with
   the chat bar's optional views (`docs/features/chat-bar/design.md` § Optional plugins). The list also applies live,
   through the switch (§ Hot reload (Wave 4)).
