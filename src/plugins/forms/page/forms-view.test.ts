@@ -324,7 +324,8 @@ describe('form popup resize target', () => {
       ],
     },
     {
-      // A hidden popup sets no scope, so the round's from its first show stays last.
+      // A hidden popup sets no scope, so the round's from its first show stays
+      // last.
       action: 'openReview with the popup hidden',
       isHidden: true,
       actions: [{ type: 'openReview' }],

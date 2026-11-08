@@ -13,7 +13,9 @@ import {
   asFake,
   type FakeElement,
   findAll,
+  type FocusFakeDocument,
   installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import {
   dataEmitted,
@@ -76,12 +78,14 @@ function savedSplit(focusedId: 'a' | 'b'): UiState {
 
 // The part on the harness, its rows and selection written, up to the first
 // state's focus. `activations` holds each session the page asks main to activate.
-// `firstModeTaken` keeps Sessions mode hidden behind another mode.
+// `firstModeTaken` keeps Sessions mode hidden behind another mode; `parts` are
+// real parts started before sessions.
 async function startApplied(
   rowIds: string[],
   selected: string | null,
   uiState: UiState = fakeUiState(),
   firstModeTaken = false,
+  parts: readonly PagePart[] = [],
 ) {
   const activations: unknown[] = [];
   const harness = startPagePart(sessionsPagePart, {
@@ -93,6 +97,7 @@ async function startApplied(
     },
     services: { picker: fakeListPickerService(), uiState },
     firstModeTaken,
+    parts,
   });
   const rows = harness.state.publish(sessionsRowsSlot);
   const selection = harness.state.publish(sessionsSelectionSlot);
@@ -152,6 +157,21 @@ async function startApplied(
     logsSince,
     uiState,
   };
+}
+
+// A stand-in chat page part declaring `chat.focusBox`, run by `focusBox`.
+function chatFocusBoxPart(focusBox: () => void): PagePart {
+  return {
+    manifest: {
+      ...sessionsPagePart.manifest,
+      id: 'chat',
+      commands: {
+        focusBox: { label: 'type a message', group: 'box', runsIn: 'page' },
+      },
+      dependsOn: { main: [], page: [] },
+    },
+    start: () => ({ commands: { focusBox } }),
+  } as unknown as PagePart;
 }
 
 // The sessions the panes hold as uiState saved them last.
@@ -511,6 +531,35 @@ describe('sessions page part', () => {
     expect(setup.exports.shownSessionId()).toBe('s1');
     expect(setup.logsSince(logged)).toContain('hid Popup popup in label s1');
     expect(handle.isVisible()).toBe(false);
+    await setup.harness.stop();
+  });
+
+  it('panePressed_PopupOpenFocusOutside_LetsGoWithNoChatBox', async () => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+    const focusBox = vi.fn();
+    const setup = await startApplied(
+      ['s1', 's2'],
+      's1',
+      savedSplit('a'),
+      false,
+      [chatFocusBoxPart(focusBox)],
+    );
+    const { element: popupElement } = setup.addPopup('s2');
+    const outside = document.createElement('textarea') as unknown as {
+      focus(): void;
+    };
+    outside.focus();
+    // The harness stubs its own copy of the document the fake DOM stubbed.
+    const focused = () =>
+      (document as unknown as FocusFakeDocument).activeElement;
+    expect(focused()).not.toBeNull();
+
+    setup.harness.fireWindow('pointerdown', { target: popupElement });
+    setup.harness.fireWindow('pointerup');
+
+    expect(setup.exports.shownSessionId()).toBe('s2');
+    expect(focused()).toBeNull();
+    expect(focusBox).not.toHaveBeenCalled();
     await setup.harness.stop();
   });
 

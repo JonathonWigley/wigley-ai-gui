@@ -201,20 +201,21 @@ function createExports(
 // The visible surface, the focused pane's session's top open popup, else its
 // selected tab, while the mode shows, sets the base key scope through its
 // `shown`; with none visible the scope is `idle`. `togglePopup` hides and
-// shows the focused pane's session's popup. A round selected while the mode is hidden toasts instead
-// of showing it. The pane keys split, close and swap panes, a split asking
-// which session the new pane shows; a split or pane close does nothing while
-// that picker is open. The pane tree and each pane's session persist in
-// uiState `panes`; a restored pane whose session main does not hold yet waits
-// for it until the first pane key that changes the panes. The side bar, panes,
-// tab bars, popups and the popup bar draw with the layout the `layout` setting
-// names. `openPreview` swaps the side bar's rows for a sample of every row
-// state and back, page-only: it sends nothing to main. `renameSession` opens the rename dialog
-// over the focused pane's session; the rows draw titles cut to the
-// `titleMaxLength` setting, drawn again when it changes. The rows group by
-// project under Favorites and Recent, from the favorites and recency stamps in
-// uiState; the session step keys follow that drawn order, and the project keys
-// change the focused pane's session's project's favorite.
+// shows the focused pane's session's popup. A round selected while the mode is
+// hidden toasts instead of showing it. The pane keys split, close and swap
+// panes, a split asking which session the new pane shows; a split or pane close
+// does nothing while that picker is open. The pane tree and each pane's session
+// persist in uiState `panes`; a restored pane whose session main does not hold
+// yet waits for it until the first pane key that changes the panes. The side
+// bar, panes, tab bars, popups and the popup bar draw with the layout the
+// `layout` setting names. `openPreview` swaps the side bar's rows for a sample
+// of every row state and back, page-only: it sends nothing to main.
+// `renameSession` opens the rename dialog over the focused pane's session; the
+// rows draw titles cut to the `titleMaxLength` setting, drawn again when it
+// changes. The rows group by project under Favorites and Recent, from the
+// favorites and recency stamps in uiState; the session step keys follow that
+// drawn order, and the project keys change the focused pane's session's
+// project's favorite.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {

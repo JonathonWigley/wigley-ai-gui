@@ -187,12 +187,13 @@ export interface SessionTabsView {
 // redraw, holds the plugin's element; only the session's top open popup shows
 // (`is-open`), the rest hidden and `inert`, and the band of the tab body above
 // it is dimmed. A popup's root carries `is-entering` from its add until its
-// first slide up ends or it hides, so the layout's slide up on add runs once. Under the sheet the
-// `popupBar` lists the hidden popups, newest hidden first, a click on an entry
-// opening it; it is absent while none is hidden. A popup that opens takes
-// focus from a text box in the frame's tabs; sessions focuses nothing in it.
-// Until `render` hands it main's first state, it shows no text either. The
-// view keeps each tab's click, its tooltip and the active tab's mark.
+// first slide up ends or it hides, so the layout's slide up on add runs once.
+// Under the sheet the `popupBar` lists the hidden popups, newest hidden first,
+// a click on an entry opening it; it is absent while none is hidden. A popup
+// that opens takes focus from a text box in the frame's tabs; sessions focuses
+// nothing in it. Until `render` hands it main's first state, it shows no text
+// either. The view keeps each tab's click, its tooltip and the active tab's
+// mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   const { parts } = deps;
   const holder = element('div', 'session-frame-holder');

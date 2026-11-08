@@ -19,7 +19,8 @@
   min-height: 0;
 }
 
-/* The inset the up and down edge prompts leave free in their pane's sheet. */
+/* The inset the edge prompts leave free: the up one in their pane's sheet, the
+   down one under its frame. */
 .session-pane {
   --session-edge-inset: var(--wg-space-6);
 }
