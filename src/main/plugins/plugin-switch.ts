@@ -38,8 +38,10 @@ export interface PluginSwitch extends PluginSwitchService {
   mayDisable(pluginId: string): Promise<string | null>;
   // Stops `pluginId` and its dependents, page parts first, then starts what
   // stopped, main parts first; their slots are kept. When a step throws, it
-  // still starts the main and page parts it stopped, then rejects. Rejects
-  // for a plugin that is off or that no manifest has.
+  // starts again each main part it stopped, one at a time, logging a start
+  // that throws, and each page part whose main part runs again or that has no
+  // main part, then rejects. Rejects for a plugin that is off or that no
+  // manifest has.
   restart(pluginId: string): Promise<void>;
   // Clears the retry timer; a later `apply` resolves null and a later
   // `restart` resolves, each doing nothing.
