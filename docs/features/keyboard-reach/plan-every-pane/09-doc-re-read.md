@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 9 · Depends on: 01–08
 Plan: [plan.md](plan.md)
@@ -55,3 +55,5 @@ lead rather than written out; `npm run lint` passes.
 Commit:    one commit, `docs:` scope, or none when no line needed a change (say so in the report)
 
 ## Proof
+
+Commit ad4b5ec6 · proof: diff read (two lines fixed, both true of the code); worker checked every listed claim, lint pass · concerns: None

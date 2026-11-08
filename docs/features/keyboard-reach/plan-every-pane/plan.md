@@ -228,7 +228,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [In-pane key consistency](08-in-pane-consistency.md) — after 04, 05
 
 ### Wave 9
-- [ ] [Doc re-read](09-doc-re-read.md) — after 01–08
+- [x] [Doc re-read](09-doc-re-read.md) — after 01–08
 
 ### Wave 10
 - [ ] [Final verification](10-final-verification.md) — after 09
@@ -246,6 +246,7 @@ Review base: 1a938e2f
 - 06 · 42915d04 · diff read (Produces present, one deps.setScope in takeKeys), typecheck pass; worker ran chat-view/side-sections tests (108 pass), lint pass, selftest --plugin chat,sessions pass (301) · concerns: unity-pool selftest not run after the hub joined the chain; focusedEntry/focusedBlock return the transcript cursor during a hub turn; isAtHub stays set when another plugin sets the base scope until chat next takes keys; a hub key finding no section hands keys to the transcript
 - 07 · cb0c7f2d · diff read (Produces present), typecheck pass; worker ran 7 test files (477 pass), lint pass, selftest --plugin chat,agent-strip pass · concerns: test-dom.ts and chat default layout.test.ts edited outside Files; x hint placement unchecked until Task 10's whole run; images fixture polls chat.sessions every 20ms up to 10s
 - 08 · 5a4594e2 4e4ea888 · diff read per half (Produces present, no pickerPick/pickerClose left in src), typecheck pass each; workers ran the touched tests (all pass; 08a's slip also ran the whole vitest suite, 10358 pass), lint pass, filtered selftests settings, chat, sessions, backlog, docs, notes, forms, primer pass · concerns: page-api filter-hint test has a branch inside its table; theme picker has one row, so its j/G/gg steps move nothing; keys start test vi.mocks help-view for the whole file; primer review-cursor ring not looked at; stale line numbers in the task doc (sessions start.ts:805, backlog-view.ts:343); past plan doc plan-command-consumers/01 still names pickerPick
+- 09 · ad4b5ec6 · diff read (two lines fixed, both true of the code); worker checked every listed claim, lint pass · concerns: None
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 - SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
