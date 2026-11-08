@@ -1,5 +1,6 @@
 // The settings plugin's channel between its main and page parts: the user
-// config's schema, reads and guarded layer writes, served from main.
+// config's schema, reads and guarded layer writes, and the plugin switch's
+// ask before a switch-off, served from main.
 
 import type { CommandKey } from '../../contracts/commands';
 import type { UserKeymap } from '../../contracts/keymap';
@@ -24,6 +25,8 @@ export interface SettingsChannel extends ChannelShape {
       layer: UserKeymap,
       expectedText: string | null,
     ): Promise<ConfigWriteResult>;
+    // The reason turning plugin pluginId off would be refused now, or null.
+    mayDisable(pluginId: string): Promise<string | null>;
   };
   messages: {
     // The ConfigStore served a new config: read again.

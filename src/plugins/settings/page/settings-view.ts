@@ -1,4 +1,5 @@
 import type { CommandKey } from '../../../contracts/commands';
+import type { PluginStatus } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
@@ -52,6 +53,7 @@ import type {
   GroupHeaderInput,
   KeyRowInput,
   LeaderRowInput,
+  PluginRowInput,
   ProblemInput,
   RowKit,
   SettingRowInput,
@@ -68,6 +70,7 @@ import {
   type BuiltRow,
   type BuiltRowsPane,
 } from './layout/settings-kit';
+import { pluginSection } from './plugin-rows-view';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
 import { type PromptAction, rowPromptActions } from './row-prompt';
 import { createSectionsView } from './sections-view';
@@ -81,6 +84,7 @@ const FILE_NAMES: Record<ConfigFile, ProblemInput['file']> = {
   keymap: 'keymap.json',
 };
 
+const PLUGINS_SECTION = { id: 'plugins', title: 'Plugins' };
 const KEYMAP_SECTION = { id: 'keymap', title: 'Keymap' };
 
 // A row part's and an entry part's builder, as a layout defines it.
@@ -106,6 +110,7 @@ export type RowAction = keyof RowActions;
 // Each row part's input, by part name.
 interface RowInputs {
   settingRow: SettingRowInput;
+  pluginRow: PluginRowInput;
   keyRow: KeyRowInput;
   leaderRow: LeaderRowInput;
   advancedRow: AdvancedRowInput;
@@ -117,8 +122,8 @@ type RowPartOf<P extends keyof RowInputs> = { part: P; input: RowInputs[P] };
 export type RowPart = { [P in keyof RowInputs]: RowPartOf<P> }[keyof RowInputs];
 
 // One row: `key` names it in the cursor and log lines (a setting's path,
-// `commandTarget(id, arg)`, `leader` or `advanced`); `draw` is the part that
-// draws it.
+// `plugin:<id>`, `commandTarget(id, arg)`, `leader` or `advanced`); `draw` is
+// the part that draws it.
 export interface SettingsRow {
   key: string;
   file: ConfigFile;
@@ -173,6 +178,14 @@ export interface RowContext {
   commitSettings(layer: Record<string, unknown>, via: CommitVia): void;
   commitKeymap(layer: UserKeymap, via: CommitVia): void;
   toast(text: string, tone: ToastTone): void;
+  // Every built-in plugin as the plugin switch last wrote it.
+  plugins(): readonly PluginStatus[];
+  // The reason turning `pluginId` off would be refused now, or null. A
+  // rejection is logged and toasted before it rejects.
+  mayDisable(pluginId: string): Promise<string | null>;
+  // Logs `refused settings.json: <reason>` and toasts `reason`, as a refused
+  // write with no box open shows.
+  refuse(reason: string): void;
 }
 
 // `markdown`, `keys`, `commands` and `state` are what the layout's kits read.
@@ -216,6 +229,8 @@ export interface SettingsViewDeps {
   // Hears the place after each change to the cursors, the open section or the
   // filter.
   placeChanged(place: SettingsPlace): void;
+  // Every built-in plugin as the plugin switch last wrote it.
+  plugins(): readonly PluginStatus[];
 }
 
 export type SettingsCommand =
@@ -273,6 +288,9 @@ export interface SettingsView {
   // schema no longer holds opens the first, and a saved cursor key no row
   // holds leaves the cursor where the first draw sets it.
   restorePlace(place: SettingsPlace): void;
+  // The plugin switch wrote a new status list: the rows redraw while the
+  // Plugins section is open.
+  pluginsChanged(): void;
 }
 
 // The cursor prompt's label for each action it shows.
@@ -437,6 +455,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   const sectionList = (): { id: string; title: string }[] => [
     ...(schema?.sections ?? []).map(({ id, title }) => ({ id, title })),
+    PLUGINS_SECTION,
     KEYMAP_SECTION,
   ];
 
@@ -529,11 +548,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     if (schema === null || latest === null) {
       return;
     }
-    const section = schema.sections.find((each) => each.id === openSectionId);
-    const drawing =
-      section === undefined
-        ? keymapSection(context, query)
-        : settingSection(section, context, query);
+    const drawing = sectionDrawing(schema);
     const cursorIndex = rows.findIndex((row) => row.key === cursorKey);
     const isSameFilter = query === drawnQuery;
     drawnQuery = query;
@@ -751,6 +766,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     log(`box open ${request.key}`);
   };
 
+  // A write refused with no box open to show it under.
+  const refuse = (file: ConfigFile, problem: string) => {
+    log(`refused ${FILE_NAMES[file]}: ${problem}`);
+    deps.toast(problem, 'error');
+  };
+
   const commit = async (
     file: ConfigFile,
     write: (expectedText: string | null) => Promise<ConfigWriteResult>,
@@ -783,11 +804,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         await refresh(true);
         return;
       case 'refused':
-        log(`refused ${name}: ${result.problem}`);
         if (box !== null && isBoxOpen()) {
+          log(`refused ${name}: ${result.problem}`);
           showUnderBox(box, result.problem);
         } else {
-          deps.toast(result.problem, 'error');
+          refuse(file, result.problem);
         }
         return;
       case 'changedOnDisk': {
@@ -895,6 +916,29 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       );
     },
     toast: deps.toast,
+    plugins: deps.plugins,
+    async mayDisable(pluginId) {
+      try {
+        return await channel.invoke('mayDisable', pluginId);
+      } catch (error) {
+        log(`write failed: ${errorText(error)}`);
+        deps.toast(errorText(error), 'error');
+        throw error;
+      }
+    },
+    refuse: (reason) => refuse('settings', reason),
+  };
+
+  // The open section's drawing: a schema section's setting rows, the Plugins
+  // section's plugin rows, or the Keymap section's rows.
+  const sectionDrawing = (held: UserConfigSchema): SectionDrawing => {
+    if (openSectionId === PLUGINS_SECTION.id) {
+      return pluginSection(context, query);
+    }
+    const section = held.sections.find((each) => each.id === openSectionId);
+    return section === undefined
+      ? keymapSection(context, query)
+      : settingSection(section, context, query);
   };
 
   // Opens the section at `index` with `filter` and the cursor on `cursorKey`:
@@ -1168,6 +1212,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       query = place.filter;
       filterBox.value = place.filter;
       filterFrame.hidden = place.filter.trim() === '';
+    },
+    pluginsChanged() {
+      if (openSectionId === PLUGINS_SECTION.id) {
+        draw();
+      }
     },
   };
 }

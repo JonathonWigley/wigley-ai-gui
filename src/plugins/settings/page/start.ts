@@ -1,4 +1,5 @@
 import './settings.css';
+import { corePluginsSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -27,7 +28,8 @@ const TITLE = 'Settings';
 // sheet, drawn through the `settings.layout` layout. `showMode` shows the
 // mode, or toggles its side bar while it shows; main's `show` message
 // (`Cmd+,`) only shows it. Each `changed` message reads the user config again
-// and redraws; each new layout set redraws in the new layouts. The cursors,
+// and redraws; each new layout set redraws in the new layouts; each change of
+// `core.plugins` redraws the Plugins section. The cursors,
 // the open section and the filter go to `settings.place` on each change, and a
 // page load puts the last page's back.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
@@ -37,6 +39,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     const { log } = services;
     const placeWriter = api.state.publish(settingsPlaceSlot);
     const place = placeWrites<SettingsPlace>((value) => placeWriter.set(value));
+    const plugins = api.state.read(corePluginsSlot);
     const view = createSettingsView({
       channel: api.channel,
       editor: services.editor,
@@ -63,6 +66,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       sectionPicked: () => mode.picked(),
       runKey: keyRunner(api.commands, log),
       placeChanged: (value) => place.write(value),
+      plugins: () => plugins.get() ?? [],
     });
     const savedPlace = placeWriter.get();
     if (savedPlace !== undefined) {
@@ -96,6 +100,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       setLayouts: (shown) => view.setLayouts(shown),
     });
     api.channel.on('changed', () => view.reread());
+    plugins.on(() => view.pluginsChanged());
     api.channel.on('show', () => mode.show());
     view.load().catch((error) => {
       log(`not loaded: ${errorText(error)}`);

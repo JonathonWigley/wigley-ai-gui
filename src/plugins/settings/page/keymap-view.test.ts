@@ -62,6 +62,9 @@ function context(
     commitSettings: unread,
     commitKeymap: unread,
     toast: unread,
+    plugins: unread,
+    mayDisable: unread,
+    refuse: unread,
     ...overrides,
   };
 }

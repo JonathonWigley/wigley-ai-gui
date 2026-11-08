@@ -6,7 +6,7 @@
 // children.
 
 /**
- * A setting, key, leader or advanced row: the label and its end on the first
+ * A setting, plugin, key, leader or advanced row: the label and its end on the first
  * line, with the cursor prompt after them; the description under them; then
  * the open box.
  * @param {HTMLElement} parent
@@ -78,6 +78,20 @@ const layout = {
       drawEnd(end) {
         const value = kit.el(end, 'span', 'settings-row-value', input.value);
         value.classList.toggle('is-unset', input.isUnset);
+      },
+    });
+  },
+  pluginRow(parent, input, kit) {
+    return settingsRow(parent, kit, {
+      label: input.label,
+      description: input.description,
+      isSet: false,
+      defaultText: null,
+      drawEnd(end) {
+        if (input.lockedText !== null) {
+          kit.tag(end, input.lockedText);
+        }
+        kit.el(end, 'span', 'settings-row-value', input.value);
       },
     });
   },

@@ -18,6 +18,11 @@ describe('readSettingsLayout', () => {
       throws: 'keyRow is not a function',
     },
     {
+      case: 'a pluginRow that is not a function',
+      module: { default: { pluginRow: 'x' } },
+      throws: 'pluginRow is not a function',
+    },
+    {
       case: 'a settingRow function',
       module: { default: { settingRow } },
       throws: null,

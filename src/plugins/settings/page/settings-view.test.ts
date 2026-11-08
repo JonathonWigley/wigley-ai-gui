@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
+import type { PluginStatus } from '../../../contracts/core-state';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { UserKeymap } from '../../../contracts/keymap';
@@ -60,10 +61,16 @@ const SCHEMA: UserConfigSchema = {
 };
 
 // A channel serving `schema`, `keymap` and an empty settings file, recording
-// each settings write and each keymap write, which the next read then serves.
-function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
+// each settings write and each keymap write, which the next read then serves,
+// and each `mayDisable` asked, which `mayDisable` answers.
+function fakeChannel(
+  schema: UserConfigSchema,
+  keymap: UserKeymap | null,
+  mayDisable: (pluginId: string) => Promise<string | null>,
+) {
   const written: Record<string, unknown>[] = [];
   const writtenKeymaps: UserKeymap[] = [];
+  const asked: string[] = [];
   const read: UserConfigRead = {
     settings: { state: 'ok', layer: null, text: null },
     keymap: { state: 'ok', layer: keymap, text: null },
@@ -82,6 +89,9 @@ function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
         writtenKeymaps.push(args[0] as UserKeymap);
         read.keymap = { state: 'ok', layer: args[0] as UserKeymap, text: null };
         return { type: 'written' };
+      case 'mayDisable':
+        asked.push(args[0] as string);
+        return mayDisable(args[0] as string);
       default:
         throw new Error(`unexpected ${method}`);
     }
@@ -90,29 +100,46 @@ function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
     invoke,
     on: () => ({ dispose: () => undefined }),
   } as unknown as PageChannel<SettingsChannel>;
-  return { channel, written, writtenKeymaps };
+  return { channel, written, writtenKeymaps, asked };
+}
+
+interface ShownViewOptions {
+  // The side bar shows unless false.
+  isSideBarShown?: boolean;
+  schema?: UserConfigSchema;
+  keymap?: UserKeymap | null;
+  // A reloaded page's place, put back before the load.
+  restored?: SettingsPlace;
+  plugins?: () => readonly PluginStatus[];
+  mayDisable?: (pluginId: string) => Promise<string | null>;
 }
 
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
 // named, and `handed`: each scope set and each focus target handed over, in
 // order. `runs` holds each command a click ran with its arg, `logs` each line
-// logged and `picked` the count of `sectionPicked` calls. The side bar shows
-// unless `isSideBarShown` is false. `restored` is a reloaded page's place, put
-// back before the load; `places` holds each place the view reported.
-async function shownView(
+// logged, `toasts` each toast and `picked` the count of `sectionPicked` calls.
+// `places` holds each place the view reported.
+async function shownView({
   isSideBarShown = true,
   schema = SCHEMA,
-  keymap: UserKeymap | null = null,
-  restored?: SettingsPlace,
-) {
-  const { channel, written, writtenKeymaps } = fakeChannel(schema, keymap);
+  keymap = null,
+  restored,
+  plugins = () => [],
+  mayDisable = async () => null,
+}: ShownViewOptions = {}) {
+  const { channel, written, writtenKeymaps, asked } = fakeChannel(
+    schema,
+    keymap,
+    mayDisable,
+  );
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
   const { anchors, keys } = recordingAnchors();
   const handed: (string | FocusTarget)[] = [];
   const runs: [string, unknown][] = [];
   const logs: string[] = [];
+  const toasts: [string, string][] = [];
   const picked = { count: 0 };
   const places: SettingsPlace[] = [];
   const view = createSettingsView({
@@ -134,7 +161,7 @@ async function shownView(
       run: () => undefined,
     },
     log: (line) => logs.push(line),
-    toast: () => undefined,
+    toast: (text, tone) => toasts.push([text, tone]),
     setScope: (scope) => handed.push(scope),
     setFocusTarget: (target) => handed.push(target),
     isSideBarShown: () => isSideBarShown,
@@ -155,6 +182,7 @@ async function shownView(
     },
     runKey: (key, arg) => runs.push([key.id, arg]),
     placeChanged: (place) => places.push(place),
+    plugins,
   });
   if (restored !== undefined) {
     view.restorePlace(restored);
@@ -174,11 +202,13 @@ async function shownView(
     overlay,
     written,
     writtenKeymaps,
+    asked,
     anchors,
     handed,
     move,
     runs,
     logs,
+    toasts,
     picked,
     places,
     sheet: asFake(view.sheet),
@@ -261,7 +291,7 @@ describe('createSettingsView', () => {
   ] as const)(
     'focusTarget_MovesBetweenSectionsAndRows: $from $direction, side bar $bar',
     async ({ from, direction, bar, after, moved }) => {
-      const { view, handed, move } = await shownView(bar);
+      const { view, handed, move } = await shownView({ isSideBarShown: bar });
       if (from === 'sections') {
         move('left');
       }
@@ -384,11 +414,13 @@ describe('createSettingsView', () => {
       command: command.id,
       arg,
     });
-    const { view, writtenKeymaps } = await shownView(
-      true,
-      { ...SCHEMA, sections: [], commands: { [command.id]: command } },
-      { binds: [bind('a', 1), bind('b', 2), bind('c', 3)] },
-    );
+    const { view, writtenKeymaps, move } = await shownView({
+      schema: { ...SCHEMA, sections: [], commands: { [command.id]: command } },
+      keymap: { binds: [bind('a', 1), bind('b', 2), bind('c', 3)] },
+    });
+    // Plugins, then Keymap.
+    view.openSectionAt(1);
+    move('right');
     // The leader row, then one row per argument.
     view.commands.down();
     view.commands.down();
@@ -412,9 +444,11 @@ describe('createSettingsView', () => {
       label: 'Last',
       description: 'Last',
     };
-    const { view, sheet } = await shownView(true, {
-      ...SCHEMA,
-      sections: [{ ...section, leaves: [...section.leaves, last] }],
+    const { view, sheet } = await shownView({
+      schema: {
+        ...SCHEMA,
+        sections: [{ ...section, leaves: [...section.leaves, last] }],
+      },
     });
     view.commands.down();
     view.commands.down();
@@ -481,7 +515,7 @@ describe('createSettingsView', () => {
   );
 
   it.each([
-    { name: 'a held index', index: 1, opened: 'section keymap', picks: 1 },
+    { name: 'a held index', index: 2, opened: 'section keymap', picks: 1 },
     {
       name: 'an index with no section',
       index: 9,
@@ -537,7 +571,7 @@ describe('createSettingsView', () => {
       isFilterShown: true,
     },
     {
-      // Sections p, q and the keymap: index 2 is the last.
+      // Sections p, q, Plugins and Keymap: index 3 is the last.
       name: 'a sections cursor past the last section',
       saved: {
         sectionsCursor: 9,
@@ -546,7 +580,7 @@ describe('createSettingsView', () => {
         filter: '',
       },
       opened: 'section q',
-      sectionsCursor: 2,
+      sectionsCursor: 3,
       cursorKey: 'q.size',
       isFilterShown: false,
     },
@@ -579,12 +613,10 @@ describe('createSettingsView', () => {
   ])(
     'restores_cursor_and_filter: $name',
     async ({ saved, opened, sectionsCursor, cursorKey, isFilterShown }) => {
-      const { logs, places, sheet } = await shownView(
-        true,
-        TWO_SECTIONS,
-        null,
-        saved,
-      );
+      const { logs, places, sheet } = await shownView({
+        schema: TWO_SECTIONS,
+        restored: saved,
+      });
 
       expect(logs).toContain(opened);
       expect(places.at(-1)?.sectionsCursor).toBe(sectionsCursor);
@@ -592,4 +624,171 @@ describe('createSettingsView', () => {
       expect(only(sheet, 'settings-filter').hidden).toBe(!isFilterShown);
     },
   );
+
+  // Core holding the plugin list leaf, defaulting to `fallback`, and one
+  // other leaf, then section `p`: Plugins sits at index 2.
+  function pluginsSchema(fallback: readonly string[]): UserConfigSchema {
+    return {
+      ...SCHEMA,
+      sections: [
+        {
+          id: 'core',
+          title: 'Core',
+          leaves: [
+            {
+              path: 'keySequenceTimeoutMs',
+              label: 'Key sequence timeout',
+              description: 'A timeout',
+              control: { kind: 'number' },
+              fallback: { value: 1000 },
+            },
+            {
+              path: 'plugins.disabled',
+              label: 'Disabled plugins',
+              description: 'The plugins that do not run',
+              control: { kind: 'json' },
+              fallback: { value: fallback },
+            },
+          ],
+        },
+        ...SCHEMA.sections,
+      ],
+    };
+  }
+
+  const PLUGINS_INDEX = 2;
+
+  function status(id: string, label: string, on: boolean): PluginStatus {
+    return { id, label, description: `Adds ${label}.`, on, neededBy: [] };
+  }
+
+  // Settings open on its Plugins section, the picker open on `pluginId`'s row.
+  async function pickerOnPlugin(pluginId: string, options: ShownViewOptions) {
+    const shown = await shownView(options);
+    shown.view.openSectionAt(PLUGINS_INDEX);
+    shown.view.moveToRow(`plugin:${pluginId}`);
+    shown.view.commands.edit();
+    await settle();
+    return shown;
+  }
+
+  it.each([
+    {
+      name: 'no reason',
+      reason: null,
+      written: [{ plugins: { disabled: ['gallery'] } }],
+      refused: [],
+      toasts: [],
+    },
+    {
+      name: 'a reason',
+      reason: 'Gallery is needed by X',
+      written: [],
+      refused: ['refused settings.json: Gallery is needed by X'],
+      toasts: [['Gallery is needed by X', 'error']],
+    },
+  ])(
+    'pluginRow_PickFalse_AsksMayDisableFirst: $name',
+    async ({ reason, written: expected, refused, toasts: expectedToasts }) => {
+      const { view, written, asked, logs, toasts } = await pickerOnPlugin(
+        'gallery',
+        {
+          schema: pluginsSchema([]),
+          plugins: () => [status('gallery', 'Gallery', true)],
+          mayDisable: async () => reason,
+        },
+      );
+
+      view.commands.pickerDown();
+      view.commands.pickerChoose();
+      await settle();
+
+      expect(asked).toEqual(['gallery']);
+      expect(written).toEqual(expected);
+      expect(logs.filter((line) => line.startsWith('refused'))).toEqual(
+        refused,
+      );
+      expect(toasts).toEqual(expectedToasts);
+    },
+  );
+
+  it('pluginRow_PickFalseOnSettings_RefusesWithoutAsking', async () => {
+    const { view, written, asked, toasts } = await pickerOnPlugin('settings', {
+      schema: pluginsSchema([]),
+      plugins: () => [status('settings', 'Settings', true)],
+    });
+
+    view.commands.pickerDown();
+    view.commands.pickerChoose();
+    await settle();
+
+    expect(asked).toEqual([]);
+    expect(written).toEqual([]);
+    expect(toasts).toEqual([
+      ['Settings cannot switch itself off: edit settings.json', 'error'],
+    ]);
+  });
+
+  it('pluginRow_MayDisableRejects_LogsAndWritesNothing', async () => {
+    const { view, written, logs, toasts } = await pickerOnPlugin('gallery', {
+      schema: pluginsSchema([]),
+      plugins: () => [status('gallery', 'Gallery', true)],
+      mayDisable: () => Promise.reject(new Error('main is gone')),
+    });
+
+    view.commands.pickerDown();
+    view.commands.pickerChoose();
+    await settle();
+
+    expect(written).toEqual([]);
+    expect(logs).toContain('write failed: main is gone');
+    expect(toasts).toEqual([['main is gone', 'error']]);
+  });
+
+  it('pluginRow_PickTrue_WritesWithoutAsking', async () => {
+    const { view, written, asked } = await pickerOnPlugin('gallery', {
+      schema: pluginsSchema(['gallery']),
+      plugins: () => [status('gallery', 'Gallery', false)],
+    });
+
+    view.commands.pickerUp();
+    view.commands.pickerChoose();
+    await settle();
+
+    expect(asked).toEqual([]);
+    expect(written).toEqual([{ plugins: { disabled: [] } }]);
+  });
+
+  it('sections_ListPluginsBeforeKeymap_AndCoreHasNoListRow', async () => {
+    const { view, sheet } = await shownView({ schema: pluginsSchema([]) });
+    setUserLayout(view, {
+      settingRow: (parent, input, kit) =>
+        kit.el(parent, 'li', 'mine-row', input.path),
+    });
+
+    const sectionTitles = findAll(asFake(view.sideBar), 'ui-row-label').map(
+      (label) => label.textContent,
+    );
+    expect(sectionTitles).toEqual(['Core', 'P', 'Plugins', 'Keymap']);
+    expect(findAll(sheet, 'mine-row').map((row) => row.textContent)).toEqual([
+      'keySequenceTimeoutMs',
+    ]);
+  });
+
+  it('pluginsChanged_PluginsSectionOpen_Redraws', async () => {
+    let statuses = [status('gallery', 'Gallery', true)];
+    const { view, sheet } = await shownView({
+      schema: pluginsSchema([]),
+      plugins: () => statuses,
+    });
+    view.openSectionAt(PLUGINS_INDEX);
+    const values = () =>
+      findAll(sheet, 'settings-row-value').map((value) => value.textContent);
+    expect(values()).toEqual(['true']);
+
+    statuses = [status('gallery', 'Gallery', false)];
+    view.pluginsChanged();
+
+    expect(values()).toEqual(['false']);
+  });
 });

@@ -1,4 +1,5 @@
 import type { SettingSection } from '../../../contracts/user-config';
+import { PLUGIN_LIST_PATH } from './plugin-rows';
 import { matchesSetting } from './row-filter';
 import { withoutSetting, withSetting } from './setting-edits';
 import {
@@ -94,13 +95,15 @@ function rowActions(row: SettingRow, ctx: RowContext): RowActions {
 }
 
 // The rows of a settings section that match `query`, drawn from the last
-// good settings layer.
+// good settings layer. The `plugins.disabled` leaf draws no row: the Plugins
+// section switches each plugin, asking the plugin switch before it writes.
 export function settingSection(
   section: SettingSection,
   ctx: RowContext,
   query: string,
 ): SectionDrawing {
   const rows: SettingsRow[] = settingRows(section, ctx.settingsLayer())
+    .filter((row) => row.leaf.path !== PLUGIN_LIST_PATH)
     .filter((row) => matchesSetting(row, query, ctx.matcher))
     .map((row) => {
       const { leaf } = row;
