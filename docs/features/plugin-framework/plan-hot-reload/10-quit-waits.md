@@ -1,6 +1,6 @@
 # 10 — Quit waits for every stop
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -66,3 +66,5 @@ Done when:
 Commit: one commit for the group
 
 ## Proof
+
+Commit a35b2ea7 · proof: diff read: QUIT_WAIT_LOG_MS and logSlowQuit present, runQuitTasks holds in every mode and calls logSlowQuit once; typecheck clean; worker ran quit-wait.test.ts, 8 passed · concerns: the logSlowQuit 'once' is shown only by the single timer set; quitStep added beyond the Produces as the testable step
