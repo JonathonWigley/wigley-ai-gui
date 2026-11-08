@@ -22,7 +22,7 @@ can hear the same events.
 | Log event | Source | When |
 |---|---|---|
 | `opened` | `chat.sessionOpened` | a session started, was resumed, was launched by a plugin, or was restored at app start (`origin`) |
-| `closed` | `chat.sessionClosed` | a row ended, with `reason`: the user, a failed start, or `closeSessionsIn` |
+| `closed` | `chat.sessionClosed` | a row ended, with `reason`: the user, a failed start, `closeSessionsIn`, or a plugin's `close` (`finished`) |
 | `cleared` | `chat.sessionCleared` | `/clear` moved a row to a new host id |
 | `processEnded` | `chat.processEnded` | a live process exited: stopped, clean or crash (a closed or cleared row's process logs none) |
 | `archived` | `chat.sessionArchived` | a saved session was archived or restored from the archive |

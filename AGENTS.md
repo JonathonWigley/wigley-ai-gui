@@ -235,7 +235,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  count and hidden popups, and `followRows`), session-title.ts (the title rules main and page share), main/ (the
                  session list — rows, their titles and origin-repo project names, the selected session, written to the `rows` and `selection` slots, tool routing — the
                  `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
-                 page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
+                 page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections, then
+                 the sections other plugins register through `addSection`, each claiming its own rows —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
                  sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
                  shared list picker's `picker` scope, each session's tabs and popups (`addTab`, `addPopup`, the hidden bar), the row and bar parts other plugins add,
@@ -260,6 +261,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
+  auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed`, queues a user close in `queue.json` in its
+                 plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
+                 closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
+                 through sessions' `addSection`, its header's queued count), layouts/ (its Layout contract and `default`
+                 layout); `docs/features/auto-retro/design.md`
   auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
                  registers the send gate that compacts a cold-cache session before a message when its context is above
                  the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction; reads
@@ -305,7 +311,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
