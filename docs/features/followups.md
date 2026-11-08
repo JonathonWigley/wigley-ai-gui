@@ -19,18 +19,21 @@ Core seams that most items below assume.
   `focusedBlock` hand visual an `HTMLElement`, which a plugin from a user folder cannot read across a reload. Publish
   the focused entry's id and the cursor's block as a page slot in chat's `contract.ts`, and let visual find the
   element from it. Left over from the plugin state registry, which landed without it.
-- **A restart leaves a page part's keys with no handler** — *agent-ready*: a restart stops a plugin's page part and starts
-  it again, and the part's binds stay in the keymap between the two, so a key pressed in that gap runs a command with no
-  handler. Take the binds out at the page stop and put them back at the page start, as the switch-off does through the
-  served config. The restart is drive-only today, so the gap shows when the loader's reload makes it a user action.
-- **A restarted main part adds its drive actions again** — *agent-ready*: a main part that adds drive actions at start
-  may throw `Drive action <id> is already added` when `core.restartPlugin` starts it again under a drive run. Unchecked;
-  run `core.restartPlugin` on such a plugin, and file the actions as disposables the stop takes back if it throws.
+- **A restart leaves a page part's keys with no handler** — *agent-ready*: a restart stops a plugin's page part and
+  starts it again, and the part's binds stay in the keymap between the two, so a key pressed in that gap runs a command
+  with no handler. Take the binds out at the page stop and put them back at the page start, as the switch-off does
+  through the served config. The restart is drive-only today, so the gap shows when the loader's reload makes it a user
+  action.
 - **A page part started live gets no restore window** — *needs a feature plan*: restores stay per page load, so a page
-  part that a restart or switch-on starts live restores nothing (its slots were cleared on a switch-off, and a restart is
-  drive-only). Re-arm restores per live start when a user-run reload makes a part restart with state to return.
-- **A throwing `ready` is silent in the part harness** — *agent-ready*: the host logs `ready of <id> failed: <error>` under
-  `plugin-host`, not under the plugin's id, and the part harness's host has no log, so a test whose `ready` throws
+  part that a restart or switch-on starts live restores nothing (its slots were cleared on a switch-off, and a restart
+  is drive-only). Re-arm restores per live start when a user-run reload makes a part restart with state to return.
+  The same gap shows on a live restart of sessions or chat: the page parts' `ready()` prunes places (`sessions.place`,
+  `chat.place` and its drafts, `docs.place`) before chat's async restore reopens the rows, so the prune drops the places
+  of rows not yet reopened. A restart of sessions also leaves the app in Gallery mode, because the re-added Sessions mode
+  is added hidden. The root cause is that `ready()` cannot tell a page load from a live start. Options: give `ready` a
+  context saying which, or hold the prune until the restore settles.
+- **A throwing `ready` is silent in the part harness** — *agent-ready*: the host logs `ready of <id> failed: <error>`
+  under `plugin-host`, not under the plugin's id, and the part harness's host has no log, so a test whose `ready` throws
   passes in silence. Give the harness host a log, and log under the plugin's id.
 - **Picker ranks recent targets higher** — *needs a feature plan*: every list picker ranks with the `FuzzyMatcher` page
   service, and a row's name outranks its path, so `gui` in the Notes target picker puts `wigley-ai-gui` first. What
@@ -249,6 +252,9 @@ Defects seen in a drive run, a transcript or the user's own use.
 
 What a second harness — Codex, wigley-harness — and the agent settings and plugin features need.
 
+- **The drive `wait-log` misses lines logged before it starts** — *agent-ready*: a driver waiting on a line a page
+  start already logged never sees it. Read earlier lines back with `drive log`, or let `wait-log` scan the log it
+  already holds.
 - **AgentHarnessRegistry** — *agent-ready*: an `AgentHarnessRegistry` service (`register`, `list`, `get`,
   `onChanged`), so a harness plugin registers its adapter instead of `main.ts` building a fixed array. Harness ids
   become open strings with a declared `label`; sessions' `HARNESSES`, `harnessText`, `groupOf`'s "Codex session",
@@ -374,14 +380,17 @@ What Windows support and installers need.
 
 Closed lists that become registrations, so a plugin adds what is hardcoded today.
 
+- **View and interaction behaviours as switchable plugins** — *needs a feature plan*: behaviours such as
+  `chat.completionDescriptions` and `keys.showHints` could ship as plugins the user switches on and off, rather than as
+  settings inside the plugin they change. The live enable switch exists, so the split costs only the plugin boundary.
 - **Runtime plugin loader** — *needs a feature plan*: a `PluginSource` seam (built-in list and a user folder of
   `manifest.json`, `main.js`, `page.js`); main `import()`s from disk and the page through `dataUrl`, and a
-  `validateManifest` gives every plugin the checks `definePlugin` makes at compile time. `requireListed` and the
-  static lists in `src/plugins/{main,page,manifests}.ts` are what block it. It builds on a host that starts, stops and
-  restarts parts live (`PluginHost.start`, `stop`, `restart`, and the enable switch in `src/main/plugins/plugin-switch.ts`)
-  and on the closed bridge (`window.wigley.claim()`). It also adds `reload(id, part)` (`src/shared/plugin-host.ts`), a
-  reload with new code: stop the part and its dependents, import the new module, start them again. A reload leaves
-  the dependents' view of the provider's exports stale, as a restart does not (it takes the dependents with it).
+  `validateManifest` gives every plugin the checks `definePlugin` makes at compile time. `requireListed` and the static
+  lists in `src/plugins/{main,page,manifests}.ts` are what block it. It builds on a host that starts, stops and restarts
+  parts live (`PluginHost.start`, `stop`, `restart`, and the enable switch in `src/main/plugins/plugin-switch.ts`) and
+  on the closed bridge (`window.wigley.claim()`). It also adds `reload(id, part)` (`src/shared/plugin-host.ts`), a
+  reload with new code: stop the part and its dependents, import the new module, start them again. A reload leaves the
+  dependents' view of the provider's exports stale, as a restart does not (it takes the dependents with it).
 - **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
   and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
@@ -620,6 +629,13 @@ because the earlier items rewrite many of these tests anyway.
   non-empty turn right after a hand-back result puts its init in the hand-back turn's events entry, so its divider
   counts one step fewer; a second hand-back right after the first does the same. Key the join on the next result
   being empty rather than on the init.
+- **The live quit hold has no cap** — *needs a decision*: a main part whose dispose never settles makes the app
+  quittable only by force-quit, and the `quit is waiting on …` log goes to stderr only. The plan ruled that a second
+  quit holds. Options: a second quit exits in a live run, or a long cap after the log.
+- **Each page start logs `[config] applied a new config` again** — *agent-ready*: the line repeats at every page start
+  that follows a switch or restart. Log it only when the applied config changed.
+- **Chat's `<C-n>` bind stays served under gallery's scope while gallery is off** — harmless, since the scope is
+  unreachable. Drop it with the other binds of an off plugin if the served config ever lists scopes by owner.
 - **Docs editor-landing issues** — when the docs editor lands: an editor key sequence bound only in other scopes is
   taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in
   docs.…` while forms binds `<Esc>`. A row removed while its round stays open rebuilds that round's popup in a
@@ -641,11 +657,13 @@ because the earlier items rewrite many of these tests anyway.
 - **A page's invoke after its plugin's main part stopped** — *agent-ready*: `plugin:invoke` rejects with `no main
   handler` once main's part has stopped, and the page side only logs it (chat view, doc view). A self-test logs these
   errors after `all passed`: `watchDoc`, `pluginStatus`, `loadIndex`, `loadHistory`. The live switch stops page parts
-  before main parts, so only the lines a quit produces remain: quiet them.
+  before main parts, but a restart leaves running the page part of a plugin that depends on the restarted one only in
+  main, so a restart has the same invoke gap, and a quit produces these lines too: quiet them.
 - **Withdrawn tools reach live hosts late** — *agent-ready*: at a stop, withdrawn tools and shrinking tool lists need
   to reach live hosts before `relay.close`, and the relay's second notice arrives only on the host's next `tools/call`.
 - **A stop drops unsaved text** — notes' popup and a forms draft lose what the user typed when their part stops. A
-  switch-off asks `mayStop` first and refuses while they hold text, so a restart (drive-only) is the stop that still drops it.
+  switch-off asks `mayStop` first and refuses while their text is unsaved or a round is open, so a restart (drive-only) is the stop that still
+  drops it.
 - **A pushed scope after its host is disposed** — `PushedScope.pop` throws after host disposal (notes popup, rename
   dialog, settings view), and `keys.setScope` leaves its base behind. Same trigger as the item above.
 - **A disposed layout preview still opens** — after `dispose`, the layout preview's `show` can open a preview, because
@@ -801,16 +819,12 @@ because the earlier items rewrite many of these tests anyway.
   drive runs and the `sessionsView_FocusChange_KeepsPartWithUpdate` rows. Add a click step, then a step in chat's
   `session hub` group that clicks a head in an unfocused pane and expects its collapse log. Source session: Claude Code
   368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
-- **A row's id changes across an app relaunch, so a re-attached session's `/clear` loses its pool claim** — *needs a
-  feature plan*: once the `unity-pool` plugin lands, the launcher sets `WIGLEY_SESSION_ROW` to the row's app id
-  (`AgentStart.rowId`). Chat reopens each saved row through `sessions.open`, which makes a new `randomHex()` id
-  (`src/plugins/sessions/main/session-list.ts`). A process the session host kept running and chat re-attached keeps
-  the old id in its environment. Its first `/clear` hands off under the old row id and starts the new process under
-  the new one. The pool then misses the handoff, and the claim falls back to the expiry rules
-  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id when the
-  claim names one; a claim naming only its row (`holderRow`, `src/plugins/unity-pool/page/pool-view-model.ts`) loses the
-  badge. To
-  decide: keep a row's app id across relaunch, or have `/clear` pass the old row id to the new process.
+- **A restore that finds its saved row id held opens the row under a fresh id, so its `/clear` loses the pool claim** —
+  *needs a decision*: a row's id now survives a relaunch (`rowId` in `open-sessions.json`), but when another row holds
+  the saved id the restore retries with a fresh one. A kept process re-attached to that row still carries the old id in
+  `WIGLEY_SESSION_ROW`, so its first `/clear` starts the new process under the new id, the pool misses the handoff, and
+  the claim falls back to the expiry rules (`~/wigley-agents/tools/unity-pool/README.md` § Claims). To decide: whether
+  the case is rare enough to leave, or `/clear` passes the old row id to the new process.
 - **Backlog `/` with no home open does nothing and leaves the letters as commands** — *agent-ready*: `openFilter` in
   `src/plugins/backlog/page/backlog-view.ts` returns silently when no home is open, so `backlog.filter` logs, no box
   opens, and the following letters run as `backlog.list` commands. Source session: Claude Code

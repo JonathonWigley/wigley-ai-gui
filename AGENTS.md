@@ -146,7 +146,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue), and the page place slots' helpers (`place-slot.ts`: `placeWrites`, which drops a write
                  equal to the last, and `pruneKeys`, which deletes the keys of rows or forms that ended while no page
-                 ran; `page-hide.ts`: `onPageHide`, which hears the page's teardown; `session-form-places.ts`: the
+                 ran (on a live restart it can also drop the places of rows chat's restore has not reopened yet);
+                 `page-hide.ts`: `onPageHide`, which hears the page's teardown; `session-form-places.ts`: the
                  place follow, restore and prune that forms and the primer share)
                  → imported only by src/renderer and plugins' page/ parts
     pane-tree/   the pane tree: panes as leaves of nested splits, kept as proportions (`pane-tree.ts`: split, close,
@@ -157,7 +158,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services; `plugin-switch.ts`: the live
-                 switch over `plugins.disabled`; `applied-plugins.ts`: the list the parts run on, which the served config carries
+                 switch over `plugins.disabled`; `applied-plugins.ts`: the applied disabled list, the plugins whose
+                 parts do not run, which the served config carries as `plugins.disabled`
   page-parts.ts  asks the page's plugin host to stop, start or check its parts, over `bridge:plugin-parts`
   quit-wait.ts   the quit's hold in every mode and its `quit is waiting on …` log
   state/         the slot holder (`slot-holder.ts`): every slot's value, page-owned ones included, in main's memory, each
@@ -413,17 +415,19 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `files.watch`, `processes.run`, editors, alert counts), and the host disposes them when the plugin stops. A
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
   DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
-- **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list
-  applies live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list: it stops the page
-  parts first (the page answers over `bridge:plugin-parts`), then the main parts, clears the owners' slots, starts
-  main parts first, then page parts, and sets the applied list the served config carries, which holds none of a
-  disabled plugin's commands or binds, so help, which-key and Settings' keymap section list none. A plugin that a
-  running plugin depends on is locked (`neededBy` names the dependents), and naming it is a config problem, so the
-  last good config stays. A part's `mayStop` refusal is also held as a `settings.json` config problem, and the
-  switch asks again every 2 seconds until the part lets go or the list changes. Settings' Plugins section
-  (`src/plugins/settings/page/plugin-rows*.ts`) switches plugins from the `core.plugins` slot, shows what locks
-  a row, and drive actions `core.stopPlugin`, `core.startPlugin` and `core.restartPlugin` do the same for a run. A view that can be
-  switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
+- **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list applies
+  live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list. A switch-off sets the applied
+  list and pushes the served config before it stops any part, so a disabled plugin's binds leave while their handlers
+  still exist; it then stops the page parts (the page answers over `bridge:plugin-parts`), then the main parts, and
+  clears the owners' slots. A switch-on starts the main parts, sets the applied list, then starts the page parts. The
+  served config drops a disabled plugin's commands, binds and key scopes (`appliedCommands`, `appliedScopes` and
+  `withAppliedList` in `src/shared/plugin-manifests.ts`), so help, which-key and Settings' keymap section list none. A
+  plugin that a running plugin depends on is locked (`neededBy` names the dependents), and naming it is a config
+  problem, so the last good config stays. A part's `mayStop` refusal is also held as a `settings.json` config problem,
+  and the switch asks again every 2 seconds until the part lets go or the list changes. Settings' Plugins section
+  (`src/plugins/settings/page/plugin-rows*.ts`) switches plugins from the `core.plugins` slot, shows what locks a row,
+  and drive actions `core.stopPlugin`, `core.startPlugin` and `core.restartPlugin` do the same for a run. A view that
+  can be switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
   plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
@@ -433,28 +437,27 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on or
   reads, which types that plugin's exports, keys and events.
-- **A slot** is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed
-  values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
-  writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
-  `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
-  included, so the value outlives an owner's restart and a page reload, not an app restart. A plugin the switch turns off has
-  its slots cleared (`clearOwner`); a restart keeps them. A page plugin keeps what a reload
-  restores — a draft, a selected row, a view — in a `<id>.place` slot it writes as the state changes and reads at
-  start (`chat.place` with `chat.draftImages`, `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). A
-  restore that settles after the part's start returns and can move the key base goes to `api.restores.track` (docs'
-  reopened doc once its view shows, forms' and primer's open forms read, sessions' first placing of the panes), and
-  `api.restores.onSettled` hears the page load's restores settle: every part's `ready()` ran and no tracked restore
-  pending (`PageRestores` in `src/contracts/plugin.ts`). The restores belong to a page load: the page calls
-  `pageHost.ready(); restores.partsReady()` once the page's parts started at load, and a part started live later
-  gets no new restore window. A key base change before then is a restore's, so notes'
-  restored popup stays open through it. `sessions.activity` clears
-  itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
-  the first panes are placed. A new start publishes the
-  same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
-  reads a slot or hears an event lists its owner in the manifest's `reads`, which carries no start order. A value
-  belongs in a slot and a moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`,
-  `core.windowFocused`, `core.plugins` (each built-in plugin's label, whether it runs and what depends on it) and the two runtime command catalogs (`src/contracts/core-state.ts`)
-  (`docs/features/plugin-framework/design.md` § Commands and state).
+- **A slot** is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed values,
+  or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only writer, and
+  `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through `kit.state.read(id)`. The
+  core holds every slot in main's memory and mirrors it to the page, page-owned slots included, so the value outlives an
+  owner's restart and a page reload, not an app restart. A plugin the switch turns off has its slots cleared
+  (`clearOwner`); a restart keeps them. A page plugin keeps what a reload restores — a draft, a selected row, a view —
+  in a `<id>.place` slot it writes as the state changes and reads at start (`chat.place` with `chat.draftImages`,
+  `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). A restore that settles after the part's
+  start returns and can move the key base goes to `api.restores.track` (docs' reopened doc once its view shows, forms'
+  and primer's open forms read, sessions' first placing of the panes), and `api.restores.onSettled` hears the page
+  load's restores settle: every part's `ready()` ran and no tracked restore pending (`PageRestores` in
+  `src/contracts/plugin.ts`). The restores belong to a page load: the page calls
+  `pageHost.ready(); restores.partsReady()` once the page's parts started at load, and a part started live later gets no
+  new restore window. A key base change before then is a restore's, so notes' restored popup stays open through it.
+  `sessions.activity` clears itself at each page start, since its sources set their activities again, and
+  `sessions.active` goes back to null until the first panes are placed. A new start publishes the same key and reads the
+  last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only reads a slot or hears
+  an event lists its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a
+  moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`,
+  `core.plugins` (each built-in plugin's label, whether it runs and what depends on it) and the two runtime command
+  catalogs (`src/contracts/core-state.ts`) (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
@@ -801,13 +804,15 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   types) and `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the
   layout (the owner's setting — `<plugin>.layout`, or the core `shell.layout` — and `default` when unset), checks it
   with the owner's reader, draws each part, rolls back a part that throws and draws it with `default`, redraws on a
-  reload, and refreshes every show on each config change. The page claims the Bridge once at start, so a layout reaches the app only through its kit, and no `window.wigley` holds the Bridge; this is no sandbox, since a layout shares the page's DOM. A layout draws every pane and every repeated row, card or
-  entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every part a layout
-  draws carries `data-layout="<name>"` and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet
-  link, so a layout's CSS selects under its own name and restyles nothing another layout drew; the default's CSS is one
-  link of its own, ahead of them. A loaded layout stays available while its revision is current, so a round naming one
-  another round loaded draws with it at once. A view that needs agent data to show anything has a preview sample under
-  `Space z l` for iterating its layout in place. `docs/features/layouts/design.md` lists every owner and its surfaces.
+  reload, and refreshes every show on each config change. The page claims the Bridge once at start, so a layout reaches
+  the app only through its kit, and no `window.wigley` holds the Bridge; this is no sandbox, since a layout shares the
+  page's DOM. A layout draws every pane and every repeated row, card or entry; the app keeps selection, keys, scrolling,
+  split widths, text boxes and editors. The root of every part a layout draws carries `data-layout="<name>"` and
+  `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a layout's CSS selects under
+  its own name and restyles nothing another layout drew; the default's CSS is one link of its own, ahead of them. A
+  loaded layout stays available while its revision is current, so a round naming one another round loaded draws with it
+  at once. A view that needs agent data to show anything has a preview sample under `Space z l` for iterating its layout
+  in place. `docs/features/layouts/design.md` lists every owner and its surfaces.
   - **A part a layout leaves out** (not defined, or set to `undefined`) draws with `default`. A part may add only its
     root to its parent: one that leaves another node beside it falls back like one that throws.
   - **A list picker draws a layout's rows** (`drawRow`): the picker owns a drawn row's click, its `ui-row--action`

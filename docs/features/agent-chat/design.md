@@ -354,8 +354,9 @@ interview on 2026-10-23; this file is the record of both.
   - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
-  `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
-  and first-message titles; a file without them reads as untitled), its last process's
+  `open-sessions.json` in chat's plugin data: its host session id, its row id (`rowId`; the restore reopens the row
+  under it), folder and profile, its `titles` (the user, agent and first-message titles; a file without them reads as
+  untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
   messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected

@@ -45,10 +45,12 @@ none. A claim records the row beside the session id, so the pool can hand a clai
 `/clear` starts in the same row: `/clear` gives the row a new host session id and keeps its row id
 (`setHostSessionId`, `src/plugins/sessions/contract.ts`).
 
-A row's id lasts one app run: a relaunch reopens each saved row with a new id. A process the session host kept
-running across the relaunch keeps the variable of its first start. The app still finds that session's claim by its
-host session id, but its first `/clear` after the relaunch starts the new process under the new row id, so the pool
-does not take the handoff and the claim follows the pool's expiry rules.
+A row's id survives an app relaunch. Chat saves it as `rowId` in `open-sessions.json`, and the restore reopens each
+saved row under it (`OpenOptions.rowId`, `src/plugins/sessions/contract.ts`). A process the session host kept running
+across the relaunch keeps the variable of its first start, and the row still holds that id, so its first `/clear`
+hands the claim off as before. When the saved id is already held by another row, the restore opens the row under a
+fresh id: that row's kept process carries the old id, so its first `/clear` starts the new process under the new id,
+the pool does not take the handoff, and the claim follows the pool's expiry rules.
 
 ## Reading the state
 
@@ -148,4 +150,3 @@ pending runs and every redraw. The default look is in `DESIGN.md` § Surfaces (U
 - Releasing an agent's claim or a stranded mark from the app (`release --force`).
 - Claiming a clone from the app: an agent claims for itself.
 - Codex sessions: they read the pool but do not claim.
-- Keeping a row's id across an app relaunch.
