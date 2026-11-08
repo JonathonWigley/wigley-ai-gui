@@ -128,6 +128,11 @@ import { createMainApi, type MainApiServices } from './plugins/main-api';
 import { createPageCommands } from './page-commands';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
+import {
+  type AppliedPlugins,
+  createAppliedPlugins,
+  withAppliedList,
+} from './plugins/applied-plugins';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
@@ -137,7 +142,6 @@ import {
   applySelfTestConfig,
   mainStartList,
   selfTestFilterOf,
-  withMainStartList,
 } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
@@ -630,16 +634,26 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   };
 }
 
-// The ConfigStore over the user config folder in `homeDir`, and the
-// `userConfig` service writing that folder through the store's checks.
-async function loadConfig(
-  homeDir: string,
-): Promise<{ store: ConfigStore; userConfig: UserConfig }> {
+// The ConfigStore over the user config folder in `homeDir`, the `userConfig`
+// service writing that folder through the store's checks, and the applied list
+// the store's `plugins.disabled` starts it on.
+async function loadConfig(homeDir: string): Promise<{
+  store: ConfigStore;
+  userConfig: UserConfig;
+  applied: AppliedPlugins;
+}> {
   const deps = await configStoreDeps(homeDir);
   const store = await loadConfigStore(deps);
+  const applied = createAppliedPlugins(
+    mainStartList(
+      runMode === 'selfTest',
+      store.current().settings.plugins.disabled,
+    ),
+  );
   return {
     store,
-    userConfig: createUserConfig({ ...deps, store, settingInfo }),
+    userConfig: createUserConfig({ ...deps, store, settingInfo, applied }),
+    applied,
   };
 }
 
@@ -814,6 +828,7 @@ function createWindow(
   inputs: StartInputs,
   store: ConfigStore,
   userConfig: UserConfig,
+  applied: AppliedPlugins,
   sessionHost: SessionHost,
 ) {
   const startConfig = store.current();
@@ -914,11 +929,6 @@ function createWindow(
     shellLayoutTypes,
     'src/renderer/shell/layouts/default',
   );
-  // Read once: a changed list reaches main's parts on the next app start.
-  const startList = mainStartList(
-    runMode === 'selfTest',
-    store.current().settings.plugins.disabled,
-  );
   const pageCatalog = slots.read(coreRuntimePageSlot, 'core');
   const pageCommands = createPageCommands({
     page: () => (hasQuitStarted ? null : livePage(window)),
@@ -975,7 +985,7 @@ function createWindow(
     },
     selfTest,
     driveRun,
-    startList,
+    applied.disabled(),
     commands,
     slots,
   );
@@ -1007,9 +1017,9 @@ function createWindow(
   // Read at each request, so a page reload after a config edit starts on the
   // current config.
   const served = () =>
-    withMainStartList(
+    withAppliedList(
       applySelfTestConfig(store.current(), selfTestConfig),
-      startList,
+      applied.disabled(),
     );
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
@@ -1147,7 +1157,7 @@ function startApp() {
         process.env.PATH = shellPath;
       }
       const inputs = await readStartInputs();
-      const { store, userConfig } = await loadConfig(inputs.homeDir);
+      const { store, userConfig, applied } = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
       serveLayoutScheme(
@@ -1175,7 +1185,7 @@ function startApp() {
         timers,
         log: pageLog.log,
       });
-      createWindow(inputs, store, userConfig, sessionHost);
+      createWindow(inputs, store, userConfig, applied, sessionHost);
       // Starts with createWindow's quit tasks, ahead of every part but the first
       // to stop; `current` still answers after it, for the parts still stopping.
       onQuit(() => store.dispose());

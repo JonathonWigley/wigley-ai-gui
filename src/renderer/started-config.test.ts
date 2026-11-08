@@ -29,12 +29,12 @@ describe('startedPluginsConfig', () => {
   it.each([
     {
       case: 'UnstartedPlugin_DropsItsBinds',
-      loadList: ['p'],
+      notStarted: ['p'],
       expected: { ...config, keymap: { ...config.keymap, page: [qBind] } },
     },
-    { case: 'NoneUnstarted_KeepsTheKeymap', loadList: [], expected: config },
-  ])('startedPluginsConfig_$case', ({ loadList, expected }) => {
-    expect(startedPluginsConfig(config, loadList, () => true)).toEqual(
+    { case: 'NoneUnstarted_KeepsTheKeymap', notStarted: [], expected: config },
+  ])('startedPluginsConfig_$case', ({ notStarted, expected }) => {
+    expect(startedPluginsConfig(config, notStarted, () => true)).toEqual(
       expected,
     );
   });

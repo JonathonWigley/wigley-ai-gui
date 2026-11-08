@@ -122,13 +122,10 @@ async function start() {
       applyPush(next);
     }
   });
-  // Read once at page load: a changed list reaches the page parts on the next
-  // load.
   const served = await bridge.config();
-  const pageLoadList = served.settings.plugins.disabled;
   const registry = new CommandRegistry<PageCommandContext<any>>(log);
   const hasHandler = (id: string) => registry.has(id);
-  const config = startedPluginsConfig(served, pageLoadList, hasHandler);
+  const config = startedPluginsConfig(served, [], hasHandler);
   // Read before the plugins start, so each reads its state as it starts.
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
@@ -405,7 +402,8 @@ async function start() {
       return started;
     },
     manifests,
-    pageLoadList,
+    // Main serves the applied list in `plugins.disabled`, and no command or bind of those plugins.
+    served.settings.plugins.disabled,
     log,
   );
   anchors.reveal();
@@ -446,7 +444,7 @@ async function start() {
     },
   );
   applyPush = (next) =>
-    applyStartedPush(startedPluginsConfig(next, pageLoadList, hasHandler));
+    applyStartedPush(startedPluginsConfig(next, [], hasHandler));
   if (heldPush !== null) {
     applyPush(heldPush);
     heldPush = null;

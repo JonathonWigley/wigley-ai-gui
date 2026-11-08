@@ -403,9 +403,10 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
   DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
 - **A disabled plugin** is one named in the core setting `plugins.disabled`: the plugin host starts none of its parts.
-  A page part follows the list on each page load, a main part on each app start. Naming a plugin that a started
-  plugin depends on is a config problem, so the last good config stays. A view that can be switched off is its own
-  plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
+  Both parts follow the list as it stood at app start, and the served config holds none of its commands or binds, so
+  help, which-key and Settings' keymap section list none. Naming a plugin that a started plugin depends on is a config
+  problem, so the last good config stays. A view that can be switched off is its own plugin over a data plugin that
+  stays on (`docs/features/chat-bar/design.md` § Optional plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose

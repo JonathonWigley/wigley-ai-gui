@@ -213,9 +213,9 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 - The core setting `plugins.disabled` lists plugin ids the plugin host does not start. Its default lists
   `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it.
-- Turning a plugin off takes effect for its page part on the next page load and for its main part on the next app
-  start; turning one on takes effect on the next app start, since a page part never starts without its main part (the
-  page reads the union of the setting and main's start list). A plugin that another started plugin depends on cannot
+- Turning a plugin off or on takes effect for both its parts on the next app start: main serves the list it started
+  on as `plugins.disabled`, without that plugin's commands and binds, and the page starts the parts that list leaves
+  on. A plugin that another started plugin depends on cannot
   be disabled: the config check reports it as a config problem and keeps the last good config.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar's working line;
   `agent-strip` draws the strip; `agent-skills` draws the hub's Skills section. All three read the agents roster.

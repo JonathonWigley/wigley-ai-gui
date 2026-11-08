@@ -1,10 +1,7 @@
 import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
-import {
-  overrideSettings,
-  withoutPluginBinds,
-} from '../shared/plugin-manifests';
+import { overrideSettings } from '../shared/plugin-manifests';
 import { SCREENSHOT_NAME } from './drive/page-driver';
 
 // A script as the self-test received it, with the id of the plugin that handed
@@ -181,34 +178,12 @@ export function applySelfTestConfig(
 
 // The plugin ids main does not start: none under the self-test, which starts
 // every plugin, else `disabled`. `applySelfTestConfig` is the page's half of
-// the same rule.
+// the same rule, and `createAppliedPlugins` holds the result.
 export function mainStartList(
   isSelfTest: boolean,
   disabled: readonly string[],
 ): readonly string[] {
   return isSelfTest ? [] : disabled;
-}
-
-// `config` with the plugins main did not start, `startList`, added to its
-// `plugins.disabled`, so the page starts no page part whose main part did not
-// start, and without those plugins' main binds. `mainStartList` gives the list.
-export function withMainStartList(
-  config: AppConfig,
-  startList: readonly string[],
-): AppConfig {
-  const disabled = [
-    ...new Set([...config.settings.plugins.disabled, ...startList]),
-  ];
-  return {
-    ...config,
-    settings: { ...config.settings, plugins: { disabled } },
-    keymap: withoutPluginBinds(
-      config.keymap,
-      config.commands,
-      startList,
-      'main',
-    ),
-  };
 }
 
 // The environment variable `npm run selftest` sets to the run's filter, as
