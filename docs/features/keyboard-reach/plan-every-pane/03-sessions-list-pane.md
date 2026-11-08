@@ -9,6 +9,29 @@ The Sessions side bar becomes a keyboard pane with its own scope and a row curso
 leftmost chat pane through the core's `focusSideBar` (Task 01). The task also folds in the follow-up "Pane focus keys
 leave the keyboard in the old pane": Alt+hjkl between chat panes moves DOM focus as a click does.
 
+Cold-read rulings (lead; each overrides any line below that says otherwise):
+
+- **A key move lands on the transcript in normal mode, in this task.** The key-move helper (`paneKeyFocused`,
+  `focusMain`) blurs the focused element and re-runs the focused pane's tab `shown` (`checkVisible(true)`); it never
+  runs `chat.focusBox`. Only a click (`panePressed`) runs `chat.focusBox`. The log `keys to pane <label>` stays. The
+  test is `paneKeyFocused_ReshowsTheTab` (asserts `shown` ran, `chat.focusBox` did not), not
+  `paneKeyFocused_RunsFocusBox`. So the existing `rename`, `projects` and `drawn order` groups' Space chords after an
+  Alt move keep working.
+- **`focusMain` always** sets main's scope and runs the key-move step; only the `list left` log and `picked` depend
+  on `leave()` returning true. It replaces Task 01's whole body. The visible-tab guard returns before touching
+  `lastVisible`; on leaving the list, `lastVisible = null`, then `checkVisible(true)`, with `none` setting `idle`.
+- **A row click while the list holds the keys** also moves the cursor to the clicked row and calls `cursorMoved`
+  (one `sessions-view` test row).
+- **Harness:** add `src/shared/plugin-part-harness.test-support.ts` to Files. `fakeModes`' `sideBarShown` returns true
+  for a mode with a `sideBar` (or follows a settable flag), the added `Mode` stays reachable to tests, and `picked`
+  is recorded.
+- **More `start.test.ts` rows:** a `pointerdown` or `focusin` inside main's element ends the turn with no `picked`
+  and no focus step; `hidden()` ends it; `sideBarHidden` ends it; a list key other than `Esc` with
+  `sideBarShown()` false logs `list keys ignored` and does nothing.
+- **`list overlay` group order:** keep panes-b favorited through `list row keys` (drop step 14's
+  `unfavorited panes-b`), so the drawn order is b (Favorites), c (Recent); the group starts with `k` from c,
+  expecting `list cursor on panes-b`, and unfavorites b at its end. Fix `problems()`' comment if it names favorites.
+
 Files:
 - modify `src/plugins/sessions/manifest.ts` (scope `sidebar`, the list commands, the plugin comment)
 - modify `src/plugins/keymap.ts` (the list binds; `sessions.sidebar` in the `<C-n>` per-scope list)
@@ -38,9 +61,7 @@ Consumes:
   `focusMain` on Alt+l from the side area (and Alt+h from the right bar). A base scope change the core did not make
   returns its area to main.
 - Task 01 gives Sessions' `mode.add` a `focusMain`; this task replaces that body with the one below.
-- Seam to check against 01: the scope `sideBarOpenedOver` sets (below) must leave the core holding the side area, so
-  Alt+l from the overlay reaches `focusMain`; when 01's core treats that scope change as one it did not make, the
-  lead rules where the side area is set.
+- 01's `sideBarOpened()` sets the side area after `sideBarOpenedOver` runs; this task adds nothing for it.
 - The tree already holds `ModeHandle.picked()`, `ModeHandle.sideBarShown()`, `Mode.sideBarHidden?()`,
   `Mode.sideBarOpenedOver?()` (`src/contracts/plugin.ts`), `appSlot` (`src/shared/page/layout-host/app-slot.ts`),
   the row primitive's `.ui-row.is-cursor` ring (`src/shared/page/ui/row.css`), `chat.focusBox`.

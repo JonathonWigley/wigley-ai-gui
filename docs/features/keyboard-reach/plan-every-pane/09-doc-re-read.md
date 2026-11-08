@@ -5,16 +5,17 @@ Type: Task
 Wave: 9 · Depends on: 01–08
 Plan: [plan.md](plan.md)
 
-Files:     modify only where a line below is untrue of the landed code: `docs/keymap.md`, `AGENTS.md`, `DESIGN.md`
+Files:     modify only where a line below is untrue of the landed code: `docs/keymap.md`, `AGENTS.md`, `DESIGN.md`,
+           `docs/features/chat-bar/design.md`
 Consumes:  the landed code of Tasks 01–08
 Produces:  docs true of the code; no code change
-Decisions: the docs were written ahead (commits `eae58c69`, `586eb976`) from the settled design; this task fixes
+Decisions: the docs were written ahead (commits `eae58c69`, `586eb976`, `09552297`) from the settled design; this task fixes
            each line the implementation moved away from, and never moves code to match a doc (a doc that names
            behaviour the code lacks is a missed task item: report it to the lead instead of writing it out)
 
 ## What to re-read
 
-Read `git show eae58c69 586eb976` for the lines written ahead, then check each against the code and the keymap
+Read `git show eae58c69 586eb976 09552297` for the lines written ahead, then check each against the code and the keymap
 (`src/plugins/keymap.ts`), one claim at a time, batched per `~/wigley-agents/AGENTS.md` § Tools:
 
 - `docs/keymap.md` § Layers:
@@ -30,7 +31,9 @@ Read `git show eae58c69 586eb976` for the lines written ahead, then check each a
     `docs.aside`, `backlog.homes` if Task 05 added it there).
   - the Ctrl+j/k view list: the session hub, an open agent-strip box's tool list (Task 07), the key help (Task 08).
   - line 48's chat `y`/`n` clause (Task 07).
-  - the resize order's hub entry (Task 06).
+  - the resize paragraph's hub entry, "while the hub has the keys" (Task 06; `09552297`).
+- `DESIGN.md` § Splits line and `docs/features/chat-bar/design.md` § Width: the hub by drag and Alt+Shift+h/l while it
+  has the keys (`09552297`).
 - `docs/keymap.md` leader table: the `c` row's `ci` on the page and in a box (Task 07).
 - `AGENTS.md` § Architecture:
   - the mode bullet: `focusSideBar` and `focusMain` as `src/contracts/plugin.ts` documents them (Task 01).

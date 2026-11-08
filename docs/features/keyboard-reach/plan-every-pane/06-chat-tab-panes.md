@@ -57,12 +57,27 @@ Names Task 07 must keep: `ChatTabScope`, the `Omit` entries for the ten hub comm
 
 ## Decisions
 
-- **A key move into a Chat tab lands in normal mode** (lead, settles Task 03's seam). Task 03 makes a key move
-  between Sessions' chat panes, and Sessions' `focusMain`, run `chat.focusBox` as a click does, which puts the box in
-  insert mode. Once this task gives chat its own panes, a key move (`paneKeyFocused` and `focusMain` in
-  `src/plugins/sessions/page/start.ts`) instead hands the Chat tab its last pane with the box in normal mode, through
-  the step `shown` uses; a click keeps `chat.focusBox`. Add `sessions/page/start.ts` to this task's files, and update
-  Task 03's `paneKeyFocused_RunsFocusBox` test and its `keys to pane` self-test step to the new landing.
+- **A key move into a Chat tab** lands on the transcript in normal mode through Task 03's key-move step (it
+  re-runs the tab's `shown`); this task changes nothing in `sessions/`.
+- **Cold-read rulings** (lead; each overrides any line below that says otherwise):
+  - The hub divider is the resize target **only while `chat.hub` holds the keys**. The helper sets
+    `setResizeTarget(scope === 'hub' ? tab.side.divider : null)`, so from the transcript, box or strip
+    Alt+Shift+h/l reach the chat panes' dividers and the side bar as today (`docs/keymap.md` resize order, written
+    ahead in `09552297`).
+  - The hub's turn ends when the DOM focus leaves it: the box's `focused` callback, and a pointerdown in the
+    transcript, call the one helper with `chat` (clearing `isAtHub`). The hub becoming unreachable while it holds
+    the keys (the tab narrows under 640 px, every head goes, `Space v s`) leaves it the Esc way, re-checked where
+    the hub's visibility is already re-computed (`hiddenChanged`, `side.sync`/`rebuild`).
+  - The helper sets or clears `isAtHub` **before** `deps.setScope(...)`, so the scope listener sees the new flag.
+  - `blur({ toNormal: true })` runs only on the moves chat itself takes (returns true); an Alt+l chat declines
+    leaves the box as the core's moves do.
+  - The `k j` self-test step needs two drawn heads. Read the heads drawn at that point (a screenshot of the hub);
+    if fewer than two show, move the step to a point where two do, and if none exists, pin up/down movement with a
+    `side-sections.test.ts` row over two stub heads and drop the self-test step.
+  - Hub resize widths are pinned: a `side-sections.test.ts` row nudges the divider with a stub handle and
+    `measure` and asserts `--chat-side-width` 288 after left and 264 after right from 264; the self-test steps
+    expect `session hub width 288` then `264` after the group resets `hub-width`.
+  - Done when also runs `npm run selftest -- --plugin sessions`.
 
 Pane model of one Chat tab (pinned):
 
@@ -136,7 +151,7 @@ Pane model of one Chat tab (pinned):
   The step is `scrollContent(body, step, direction, textLineHeightPx(body))`; chat-view logs
   `scrollText(\`the ${title} section\`, step, direction, scroll)`, e.g. `scrolled the Session section down a line` or
   `the Session section did not scroll down` (a collapsed or fitting body).
-- **The hub divider is the resize target of all three panes** (and the strip): it is the transcript's and the box's
+- **The hub divider is the hub's resize target** (only while `chat.hub` holds the keys, per the rulings above): it is the transcript's and the box's
   right divider and the hub's left one, so Alt+Shift+h widens the hub by 24 px and Alt+Shift+l narrows it, through
   the existing `createSplitDivider` (`sizedPane: 'end'`). A hidden hub's handle has no layout box, so `nudge` returns
   false and the press passes on (AGENTS.md § A resize target). Each nudge logs `session hub width <n>` through the
@@ -261,7 +276,7 @@ G, j and k walk the section heads, Enter and l fold and unfold one, Ctrl+j scrol
 hub, Esc goes back to the transcript, and Space v s hiding the hub hands the keys back."
 
 Done when: `npm run typecheck` and `npm run lint` pass; `npm test -- src/plugins/chat/page/chat-view.test.ts
-src/plugins/chat/page/side-sections.test.ts` passes; `npm run selftest -- --plugin chat` passes with the `pane keys`
+src/plugins/chat/page/side-sections.test.ts` passes; `npm run selftest -- --plugin chat,sessions` passes with the `pane keys`
 group (a filtered run skips the placement check, which Task 10's whole run carries); `grep -n "deps.setScope"
 src/plugins/chat/page/chat-view.ts` finds only the one helper's call.
 Commit:    one commit for the group

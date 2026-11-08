@@ -433,7 +433,7 @@ round; primer: an open primer), since main, not the page, decides.
   open at their tokens and then are the user's, resized through the split core and kept in `uiState`
   (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, stays hidden
   while empty, and takes contributions through `api.areas.rightBar`; a contribution with rows to act on passes
-  `focus` with it, which sets its own key scope and cursor, and becomes a stop for the core's focus keys. In a window too narrow for both bars beside `main`,
+  `focus` with it, which sets its own key scope and cursor, and `left`, which the core calls when its turn ends, and becomes a stop for the core's focus keys. In a window too narrow for both bars beside `main`,
   the side bar narrows to its least width first; the right bar then narrows to its own, and lies over `main`'s end when
   the room left with the side bar at its least width is less than its least width and `main`'s. Only the side bar
   resizes by keys; the right bar by drag alone.
@@ -547,7 +547,8 @@ round; primer: an open primer), since main, not the page, decides.
   side bar through the mode's `focusSideBar`, right to the right bar's first contribution that took `focus`, Alt+j/k
   between such contributions, and back to main from either through the mode's `focusMain`. The core keeps which
   area holds the keys and resets it to main on every base scope change it did not make, so a click into main ends
-  an area's turn. A hidden side bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
+  an area's turn; the right bar's turn also ends when the DOM focus moves out of it, and the core then calls the
+  contribution's `left`. A narrow mode's side bar opened over main holds the keys as the side area. A hidden side bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
   the pane left behind keeps the caret. The core does nothing at the outer edge but log `no pane <direction>`.
   While a scope is pushed (a dialog, a confirm, a picker, help) the core asks neither and logs
   `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses

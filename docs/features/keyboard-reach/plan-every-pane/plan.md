@@ -45,13 +45,14 @@ Systems touched, all in wigley-ai-gui:
 
 ## Docs written ahead
 
-Commits `eae58c69` and `586eb976` on `keyboard-reach`: `docs/keymap.md` § Layers (the Alt+hjkl chain through the areas, the side-bar
+Commits `eae58c69`, `586eb976` and `09552297` on `keyboard-reach`: `docs/keymap.md` § Layers (the Alt+hjkl chain through the areas, the side-bar
 list rule, the picker key set, gg/G and j/k on every pane, the scroll-key view list, the hub in the resize order, `ci`
 in the chat-controls leader row), `AGENTS.md` (the mode bullet's `focusSideBar`/`focusMain`, the focus-target bullet's
 areas, the right bar's `focus`, the side-part line's hub), and `DESIGN.md` § Keys and focus (the Sessions list's
 cursor prompt). `586eb976` adds the session hub and the doc's right column to the Ctrl+n and scroll-or-rows
 lists with the column's `Enter`/`l`/`Esc`, chat `y`/`n` on the permission under the cursor, `ci` on the page as well
-as in a box, and the hub's Alt+Shift+h/l in AGENTS.md's side-part bullet.
+as in a box, and the hub's Alt+Shift+h/l in AGENTS.md's side-part bullet. `09552297` limits the hub's Alt+Shift+h/l to while
+the hub has the keys, in keymap.md's resize order, DESIGN.md's Splits line and `docs/features/chat-bar/design.md`.
 
 ## Mandatory Reads
 
@@ -144,10 +145,10 @@ Existing files modified (by task):
 | `src/plugins/settings/page/settings-view.ts`, `src/plugins/backlog/page/backlog-view.ts` (`focusMain` members) | 01, 05 |
 | each mode's `mode.add` site: `src/plugins/{sessions,docs,backlog,settings,gallery}/page/start.ts` (`focusMain`) | 01 |
 | `src/plugins/unity-pool/page/{start,pool-view-model}.ts`, `pool-view-model.test.ts`, `unity-pool/layouts/layout.d.ts`, `layouts/default/layout.{js,css}`, `unity-pool/manifest.ts` | 02 |
-| `src/plugins/sessions/page/{start,sidebar-view,sessions-view,sidebar-order}.ts`, `sessions/page/layout/sessions-parts.ts`, `sessions/manifest.ts`, `sessions/layouts/layout.d.ts`, `sessions/layouts/default/layout.{js,css}` (cursor ring), `src/shared/page/pane-tree/pane-tree-view.ts`, `docs/features/followups.md` | 03 |
+| `src/plugins/sessions/page/{start,sidebar-view,sessions-view,sidebar-order}.ts`, `sessions/page/layout/sessions-parts.ts`, `sessions/manifest.ts`, `sessions/layouts/layout.d.ts`, `sessions/layouts/default/layout.{js,css}` (cursor ring), `src/shared/page/pane-tree/pane-tree-view.ts`, `docs/features/followups.md`, `src/shared/plugin-part-harness.test-support.ts` | 03 |
 | `src/plugins/docs/page/{start,docs-state,docs-view,doc-aside,doc-view}.ts`, `doc-view.test.ts`, `docs/manifest.ts` | 04 |
 | `src/plugins/settings/page/{start,settings-view}.ts`, `src/plugins/backlog/page/{start,backlog-view,backlog-state}.ts`, the backlog layout files, `settings`/`backlog` manifests | 05 |
-| `src/plugins/sessions/page/start.ts` (key-move landing), `src/plugins/chat/page/{chat-view,start,side-sections,chat-commands}.ts`, `chat.css`, `chat/manifest.ts`, `src/contracts/editor.ts` and `codemirror-vim-host.ts` (`blur(options?: BlurOptions)`), `src/shared/page/test-dom.ts` (`getClientRects`) | 06 |
+| `src/plugins/chat/page/{chat-view,start,side-sections,chat-commands}.ts`, `chat.css`, `chat/manifest.ts`, `src/contracts/editor.ts` and `codemirror-vim-host.ts` (`blur(options?: BlurOptions)`), `src/shared/page/test-dom.ts` (`getClientRects`) | 06 |
 | `src/plugins/chat/page/{chat-commands,chat-kit,composer-kit,image-viewer,entry-list}.ts`, `chat/manifest.ts`, `chat/layouts/layout.d.ts`, `chat/layouts/default/layout.{js,css}`, `src/plugins/agent-strip/page/{agent-strip,start}.ts`, `agent-strip/manifest.ts`, `src/shared/fake-agent-harness.ts` | 07 |
 | `src/contracts/list-picker.ts`, `src/shared/page/list-picker{,-state}.ts`, `list-picker.css`, `src/renderer/plugins/page-api.ts`, `src/plugins/keys/{manifest.ts,page/help-view.ts}`, `primer`, `forms`, `gallery` page commands and the primer layout, the docs and backlog scroll commands, the six picker plugins' (`sessions`, `chat`, `docs`, `settings`, `backlog`, `notes`) manifests and views | 08 |
 | `src/plugins/keymap.ts` | every code task |
@@ -160,7 +161,9 @@ New contract members (one name, used by every task):
 
 - `Mode.focusSideBar?(): void` — sets the side bar's key scope and focuses its list.
 - `Mode.focusMain(): void` — gives main's last pane back its scope and DOM focus.
-- `RightBarOptions extends ContributeOptions { focus?(): void }`, taken by the right bar area's `contribute`.
+- `RightBarOptions extends ContributeOptions { focus?(): void; left?(): void }`, taken by the right bar area's
+  `contribute`; the core calls `left` when the stop's turn ends (Task 01's rulings).
+- `ModesDeps.sideBarOpened(): void` — modes tells the core the side bar opened over main.
 - `PaneTargets` keeps `area: 'main' | 'side' | 'right'` internally. Public: `baseChanged()` (replaces
   `dropViewTargets`), `stopRemoved(stop)`, `sideBarOpened()`; `createPaneTargets` takes `areas: PaneAreas` last.
 - `PaneAreas { focusSideBar(): boolean; focusMain(): void; rightBarStops(): readonly RightBarStop[] }`,

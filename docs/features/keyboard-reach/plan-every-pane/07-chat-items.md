@@ -15,6 +15,7 @@ its self-test step with a fixture state that builds its target.
 4. Ctrl+j/k and Ctrl+Shift+j/k scroll an open agent-strip box's tool list.
 
 Files:
+- modify `src/plugins/chat/page/chat-view.ts`: the `Pick` on `ChatSession.entries` gains `toggleFocusedBlock` only.
 - modify `src/plugins/chat/page/chat-commands.ts`: `allowOrCopy`, `denyPermission`, `toggleEntry`;
   new handlers `showAttachments` and `removeShownImage`.
 - modify `src/plugins/chat/page/chat-kit.ts`: `Expander` and `Expanders`.
@@ -305,9 +306,12 @@ Self-test steps (the chat script, unless marked):
 - **New group `attachments`**, after `two sessions`. Its why: "Space c i opens the viewer on the
   composer's two attached images, x removes the shown one and shows the one before it, a last x
   closes the viewer, and Space c i then finds none."
-  1. Keys that show `chat-images`'s tab (expected `['<A-S-i>', '<A-S-i>']`; pin them from the row
-     order). Expect `[chat] Chat tab shown in chat-images`,
-     alsoExpect `/^\[chat\] pulled back 1 message\(s\) in chat-images$/`.
+  1. Keys that show `chat-images`'s tab (the Sessions list orders by recency, not by start order, so
+     run the chat script once with the new session, read the row order from the `two sessions` screenshot, and
+     write the real keys here and in step 7; start `chat-images` so it sorts last, after chat-second, and the
+     existing `two sessions` steps — chat-second as chat-selftest's neighbour, the `<A-S-o>` wrap — pass unchanged). Expect `[chat] Chat tab shown in chat-images`,
+     (No alsoExpect: the pulled-back line logs at fixture time in `openSessions`; step 2's `showing 1 of 2` proves
+     the two images.)
   2. `keys: [' ', 'c', 'i']`, expect `[chat] image viewer showing 1 of 2`, `checksFit: true`,
      `screenshot: 'attachments-viewer'`.
   3. `keys: ['l']`, expect `[chat] image viewer showing 2 of 2`.

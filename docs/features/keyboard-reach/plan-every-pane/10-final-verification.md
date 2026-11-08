@@ -18,9 +18,10 @@ Decisions: the touched plugins' self-test scripts run here; the whole self-test 
 ## Gate
 
 1. `npm run typecheck`, `npm run lint`, `npm test`.
-2. `npm run selftest -- --plugin sessions,docs,backlog,settings,gallery,unity-pool,chat,agent-strip,keys,primer,forms,notes`
-   (every plugin a task touched; re-derive from `git diff --stat <review base>..HEAD -- src/plugins` and add any
-   missing).
+2. `npm run selftest -- --plugin <list>`, the list being every plugin a task touched
+   (`git diff --stat <review base>..HEAD -- src/plugins`) that hands a script (`ls src/plugins/*/main/selftest-script.ts`):
+   at plan time sessions, docs, backlog, settings, unity-pool, chat, agent-strip, primer, forms, notes. Gallery and
+   keys hand none; their steps live in the forms and docs scripts. Naming a plugin with no script fails the run.
 
 ## Checks
 
@@ -33,7 +34,7 @@ Whole-run only (on the user's ask):
 2. No `[keys] unplaced x chat.removeShownImage in chat.image` — 07.
 
 Core and right bar (01, 02):
-3. Alt+l from a Chat tab enters the unity-pool panel: the ring on the holder, the chat box without its caret.
+3. Alt+l twice from a Chat tab with the hub shown (once with it hidden) enters the unity-pool panel: the ring on the holder, the chat box without its caret.
 4. j/k/G move the panel ring; Enter on another session's holder shows it and hands the keys to its tab.
 5. Alt+h from the panel returns to the last pane in Sessions, Docs, Backlog, Settings and Gallery, with DOM focus
    there.
@@ -79,6 +80,9 @@ Chat panes (06):
 34. low: Alt+k in insert or visual mode leaves the box in normal mode.
 35. low: the `k j` step's section above Session exists in the fixture.
 
+42. Alt+Shift+l from a Chat tab's transcript still resizes the side bar (one chat pane) or the pane tree's divider.
+43. A click into the box while the hub holds the keys gives the box its keys back (send, `<Leader>c…` work).
+
 Chat items (07):
 36. low: the `attachments-viewer` screenshot shows the `x remove` hint on the counter's line inside the frame.
 37. low: the `block-expanded` screenshot shows the opened `:::details` body inside the block, with the cursor bar
@@ -91,7 +95,7 @@ Chat items (07):
 Real-keyboard only (to the wrap-up, not run here): Alt+hjkl and the cursor keys on a physical keyboard across every
 mode, especially the macOS Option layer (Alt+letters producing characters in a box).
 
-Done when: the gate passes and every check 3–41 has a pass line with its evidence, or a fix landed and the check
+Done when: the gate passes and every check 3–43 has a pass line with its evidence, or a fix landed and the check
 re-ran; checks 1–2 and the real-keyboard pass are named in the report for the hand-off.
 Commit:    a fix only, per failing check, with its test
 

@@ -29,6 +29,7 @@ Produces:  in `src/contracts/plugin.ts`:
            `PaneTargets.baseChanged(): void` (replaces `dropViewTargets`)
            `PaneTargets.stopRemoved(stop: RightBarStop): void`
            `PaneTargets.sideBarOpened(): void` (the narrow overlay; see below)
+           `ModesDeps.sideBarOpened(): void` · `RightBarOptions.left?(): void` · `RightBarStop.left?(): void` (rulings)
            in `src/renderer/shell/modes.ts`: `CoreModes.focusSideBar(): boolean` · `CoreModes.focusMain(): void`
            in `src/renderer/shell/shell.ts`:
            `export type ShellAreas = Record<Exclude<AreaName, 'rightBar'>, Area> & { rightBar: RightBarArea }`
@@ -49,7 +50,25 @@ Decisions: the chain is plan.md's diagram, verbatim (Design Overview) · `focusM
            turn ended from the DOM focus leaving its element, since every move takes the DOM focus (agent) ·
            Task 01 adds no key bind
 
-## The contract
+## Cold-read rulings
+
+Lead rulings; each overrides any line below that says otherwise.
+
+- **Overlay wiring:** `ModesDeps.sideBarOpened(): void` (Produces). `modes.ts` calls it right after
+  `mode.sideBarOpenedOver?.()`, only when the mode has `focusSideBar`. The renderer passes
+  `() => paneTargets.sideBarOpened()` through a late-bound closure, since `createModes` runs before
+  `createPaneTargets`. Tests: a `pane-targets.test.ts` row (`sideBarOpened()`, then Alt+l → asked `['main']`, logged
+  `focus in the side bar` then `focus back in main`); a `modes.test.ts` row (a narrow mode with `focusSideBar`
+  opened over runs the dep after the hook; one without `focusSideBar` doesn't).
+- **The right area's turn ends when the DOM focus leaves the right bar.** `RightBarOptions` gains `left?(): void`, and
+  `RightBarStop` gains `left?(): void`. The core owns one `focusin` listener on the document: while
+  `area === 'right'`, a `focusin` whose target is outside the right bar element sets `area = 'main'`, calls
+  `heldStop.left?.()`, clears `heldStop`, and calls `areas.focusMain()` unless a base scope change already ran since the
+  stop took the keys. Window blur (no `focusin`) changes nothing, so returning to the window resumes the panel's turn.
+  Every other way the turn ends (Alt+h, `baseChanged`, `stopRemoved`) also calls `heldStop.left?.()`. Test rows:
+  `focusin` outside while right → `left` and `main` asked; `focusin` inside → nothing; base change then `focusin` → `left`
+  only.
+
 
 `src/contracts/plugin.ts`, each member with its doc comment, beside the existing ones on `Mode`:
 

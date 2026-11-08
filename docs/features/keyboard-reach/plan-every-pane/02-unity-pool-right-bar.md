@@ -41,6 +41,19 @@ Decisions: the panel is a right-bar stop with a cursor over its session holders,
            (agent) · the panel always passes `focus`, holders or none: with none, each command logs
            `no session holder` (agent)
 
+## Cold-read rulings
+
+Lead rulings; each overrides any line below that says otherwise.
+
+- The panel ends its turn (`hasKeys = false`, redraw) from `RightBarOptions.left`, which the core calls (Task 01's
+  rulings), not from its own `focusout`. It passes `left` beside `focus`.
+- Re-entry: `focus()` puts the cursor on the shown session's holder when it holds a clone, else index 0. Add a
+  self-test step that re-enters after Alt+h and expects that row.
+- Self-test step: with the panel holding the keys, write the unknown-version state, expecting `[unity-pool] panel
+  hidden` and `[page] focus back in main`.
+- Enter on a holder whose session has no pool: the panel can hide (and the core log `focus back in main`) before or
+  after the new tab's `shown`; either order is accepted, and no step asserts the line's absence.
+
 ## Behaviour
 
 - **Contribute.** `drawPanel`'s first `api.areas.rightBar.contribute(panelSlot, { order: PANEL_ORDER, focus })`.
