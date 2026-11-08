@@ -100,7 +100,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
   moves its left one; `Alt+Shift+j`/`Alt+Shift+k` move the pane's lower divider down and up, else its
   upper one. Key repeat supplies the speed. A press resizes the view's own focused pane first (a Chat tab's session
-  hub included), then
+  hub while the hub has the keys), then
   the focused chat pane, then the side bar (left and right only): with no split pane focused and one
   chat pane (a Chat tab, Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side
   bar. A view's divider that is hidden (its split stacked, or its start pane hidden) passes the press on. A divider

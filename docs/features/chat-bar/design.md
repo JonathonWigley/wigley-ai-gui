@@ -104,8 +104,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.
 - **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
-  session, kept in `uiState` as `hub-width` across a relaunch. No key moves it: `Alt+Shift+h`/`l` stay with the chat panes'
-  dividers.
+  session, kept in `uiState` as `hub-width` across a relaunch. While the hub has the keys `Alt+Shift+h`/`l` move it 24 px; from the
+  transcript, box or strip they stay with the chat panes' dividers and the side bar.
 - **Plan or Checklist:** the section is the workflow plugin's side pane, one section for each workflow, drawn only while
   a session's flow is of that workflow. It is titled `Plan` for Heavy, which draws it from the first read of a plan until
   Dismiss or a new plan, and `Checklist` for Light and Medium, which draw it once the agent has set a checklist
