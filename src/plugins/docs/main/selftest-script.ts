@@ -275,6 +275,80 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     { width: 'start', keys: ['<A-h>'], expect: '[docs] tree focused' },
   ];
+  const wikiRightColumn: SelfTestStep[] = [
+    { width: 1600, keys: ['<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['<A-l>'],
+      expect: '[docs] right column focused',
+      checksFit: 'held',
+      screenshot: 'aside-cursor',
+      why: 'The cursor ring sits on Opening notes, the first row. The fit check holds the width, since the minimum width takes the column out of sight, which hands the keys to the doc.',
+    },
+    { keys: ['j'], expect: '[docs] right column cursor: Middle notes' },
+    {
+      keys: [' ', 'k', 'd'],
+      expect: '[page] side bar hidden',
+      why: 'Hiding the side bar from the right column leaves the keys there.',
+    },
+    { keys: [' ', 'k', 'd'], expect: '[page] side bar shown' },
+    {
+      keys: ['j'],
+      expect: '[docs] right column cursor: Closing notes',
+      why: "The doc pane's focusin does not take the column's keys, and the tree hiding keeps them in the column.",
+    },
+    {
+      keys: ['G', 'g', 'g'],
+      expect: '[docs] right column cursor: Opening notes',
+    },
+    {
+      keys: ['j', 'Enter'],
+      expect: '[docs] moved within guide.md to line 7',
+      alsoExpect: [DOC_FOCUSED],
+      why: 'Enter on an On this page row moves the doc to the section and focuses the doc.',
+    },
+    {
+      keys: ['<A-l>'],
+      expect: '[docs] right column focused',
+      why: 'The cursor stayed on Middle notes.',
+    },
+    { keys: ['<A-h>'], expect: '[docs] doc focused' },
+    {
+      keys: ['<A-l>', 'Escape'],
+      expect: '[docs] doc focused',
+      why: 'Esc in the right column returns to the doc.',
+    },
+    {
+      keys: ['<A-h>', '<A-l>', 'Tab', 'Enter'],
+      expect: '[docs] opened target.md',
+      alsoExpect: [DOC_FOCUSED],
+      why: "Focus on the pane starts Tab at the doc's first link, target.md.",
+    },
+    {
+      keys: ['<A-l>', 'G'],
+      expect: '[docs] right column cursor: Fixture guide',
+      why: "Linked from's only row: guide.md links target.md.",
+    },
+    {
+      keys: ['Enter'],
+      expect: '[docs] opened guide.md',
+      alsoExpect: [DOC_FOCUSED],
+      why: 'Enter on a Linked from row opens the linking doc and focuses it.',
+    },
+    { keys: ['<A-l>'], expect: '[docs] right column focused' },
+    {
+      width: 800,
+      keys: [],
+      expect: '[docs] right column out of sight',
+      alsoExpect: [DOC_FOCUSED],
+      why: 'The column held focus as it left sight, so the doc takes it.',
+    },
+    {
+      keys: ['<A-l>'],
+      expect: '[page] no pane right',
+      why: 'With the column out of sight Option+l passes on to the core; no right bar part takes focus in the docs fixture, whose session is in no Unity pool.',
+    },
+    { width: 'start', keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
   const wikiWithNoMain: SelfTestStep[] = [
     { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows All pages' },
     {
@@ -904,6 +978,16 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: [' ', 'v', 't'], expect: '[page] side bar hidden' },
     { keys: [' ', 'v', 't'], expect: '[page] side bar shown' },
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    {
+      keys: ['<A-l>'],
+      expect: '[docs] doc focused',
+      why: "From Docs mode's side bar Option+l returns to the doc through the mode's focusMain.",
+    },
+    {
+      keys: ['<A-h>'],
+      expect: '[docs] tree focused',
+      why: 'The narrow window group starts with the tree holding the keys.',
+    },
   ];
   const narrowWindow: SelfTestStep[] = [
     {
@@ -935,6 +1019,12 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: ['<A-h>'],
       expect: '[docs] tree focused',
       why: 'The tree scope comes back for the filter and the kind picker.',
+    },
+    { keys: ['<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['<A-h>'],
+      expect: '[docs] tree focused',
+      why: "In a session Docs tab the tree is the view's own pane, which the view's focus target reaches, not a side bar.",
     },
     {
       keys: ['/', ...UNMATCHED_FILTER, 'Enter'],
@@ -1063,6 +1153,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       steps: wikiNarrowWindow,
     },
     {
+      name: 'wiki right column',
+      why: "The doc's right column is a pane: Option+l enters it while it shows, j, k, gg and G move its cursor across On this page and Linked from, Enter jumps to the section or opens the linking doc and focuses the doc, Option+h and Esc return to the doc, the doc takes focus when the column leaves sight, and with the column out of sight Option+l passes on to the core. Hiding and showing the side bar from the column keeps the keys there.",
+      steps: wikiRightColumn,
+    },
+    {
       name: 'wiki with no Main.md',
       why: 'With Main.md gone the sidebar empties and gh shows the empty Main page with focus on it, i creates the file from the starter text and edits it, and an outside write brings the shelves back. Trashing Main.md while it shows ends on the empty page, and writing it back opens it. The group leaves All pages shown, with References and Third-party collapsed, for the groups after it.',
       steps: wikiWithNoMain,
@@ -1119,7 +1214,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'side bar',
-      why: "Space k d and Space v t hide and show Docs mode's side bar, hiding it focuses the doc, and Option+h brings it back and focuses the tree.",
+      why: "Space k d and Space v t hide and show Docs mode's side bar, hiding it focuses the doc, and Option+h brings it back and focuses the tree. Option+l returns from the side bar to the doc.",
       steps: sideBar,
     },
     {

@@ -207,6 +207,7 @@ function docViewOver(
     openListEntry: () => undefined,
     createMain: () => undefined,
     followWikiLink: () => false,
+    asideSightLost: () => undefined,
     pushConflictScope: fakePushedScope,
     anchor: (anchoring: HTMLElement, command: string) => {
       anchored[command] = anchoring;

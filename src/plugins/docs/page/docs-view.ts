@@ -139,6 +139,12 @@ export interface DocsViewCommands {
   trash(): void;
   confirmYes(): void;
   confirmNo(): void;
+  asideDown(): void;
+  asideUp(): void;
+  asideTop(): void;
+  asideBottom(): void;
+  asideOpen(): void;
+  backToDoc(): void;
 }
 
 // `tree` and `doc` are the two panes; the caller places them (a side bar and
@@ -184,7 +190,8 @@ export interface DocsView {
   // Closes the filter box, keeping its filter, its scope popped, without
   // moving focus; nothing while the box is closed.
   dismissFilter(): void;
-  // The tree's container hid it: the doc pane takes focus and the doc scope.
+  // The tree's container hid it: the doc pane takes focus and the doc scope,
+  // unless the right column holds the keys, which keeps them.
   treeHidden(): void;
   // Whether the tree shows now: the doc pane keeps the `is-tree-hidden` class
   // while it does not, which hides the doc pane's edge prompt to the tree.
@@ -194,8 +201,14 @@ export interface DocsView {
   treeOpenedOver(): void;
   // The scope this view's keys use now.
   focusScope(): DocsPaneScope;
-  // Moves focus between the tree and the doc pane by `paneFocusedBy`, with
-  // the pane's scope; its caller hands it over with each pane scope it sets.
+  // The tree takes focus and the tree scope: Docs mode's side bar entered.
+  focusTree(): void;
+  // Main's last pane takes focus and its scope back: the right column when it
+  // held the keys last and is still in sight, else the doc pane.
+  focusMain(): void;
+  // Moves focus between the tree, the doc pane and the right column by
+  // `paneFocusedBy`, with the pane's scope; its caller hands it over with each
+  // pane scope it sets.
   focusTarget: FocusTarget;
   hasUnsavedEdits(): boolean;
   // The open doc's path while its editor holds unsaved edits, else null.
@@ -253,8 +266,9 @@ export interface DocsViewDeps {
   docOpened(path: string): void;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
-  // Whether the tree's container shows it now.
-  isTreeShown(): boolean;
+  // Whether the tree shows now as this view's own pane, beside the doc; false
+  // for a tree in a mode's side bar, which the core reaches.
+  isTreeOwnPane(): boolean;
   // Hears each doc or list page opened from the tree, by a row's click, `l` or
   // Enter, and each Main page `gh` shows.
   leafOpened(): void;
@@ -628,6 +642,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     openListEntry: (entryId) => void openListEntry(entryId),
     createMain: () => void createMain(),
     followWikiLink: (href, title) => followWikiLink(href, title),
+    asideSightLost: () => asideSightLost(),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
@@ -698,10 +713,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const restoreFocus = () => {
-    if (focused === 'doc') {
-      doc.focus();
-    } else {
+    if (focused === 'aside' && doc.aside.isInSight()) {
+      doc.aside.focus();
+    } else if (focused === 'tree') {
       tree.focus();
+    } else {
+      doc.focus();
     }
   };
 
@@ -727,16 +744,48 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     log('tree focused');
   };
 
+  const focusAsideAndLog = () => {
+    focused = 'aside';
+    doc.aside.focus();
+    applyScope();
+    log('right column focused');
+  };
+
+  const focusPaneAndLog: Record<DocsPaneScope, () => void> = {
+    tree: focusTreePaneAndLog,
+    doc: focusDocAndLog,
+    aside: focusAsideAndLog,
+  };
+
   const focusTarget: FocusTarget = {
     move(direction) {
-      const next = paneFocusedBy(focused, direction, deps.isTreeShown());
-      if (next === 'doc') {
-        focusDocAndLog();
-      } else if (next === 'tree') {
-        focusTreePaneAndLog();
+      const next = paneFocusedBy(focused, direction, {
+        isTreeOwnPane: deps.isTreeOwnPane(),
+        isAsideInSight: doc.aside.isInSight(),
+      });
+      if (next !== null) {
+        focusPaneAndLog[next]();
       }
       return next !== null;
     },
+  };
+
+  // The column left sight while it held the keys: the doc takes them, its DOM
+  // focus moving only while this view is active and no pane outside the doc
+  // holds the focus (the right bar may hold it).
+  const asideSightLost = () => {
+    if (focused !== 'aside') {
+      return;
+    }
+    focused = 'doc';
+    const active = globalThis.document.activeElement;
+    const isFocusOutside =
+      active !== null &&
+      active !== globalThis.document.body &&
+      !doc.element.contains(active);
+    if (deps.isActive() && !isFocusOutside) {
+      focusDocAndLog();
+    }
   };
 
   const openInEditor = async (entry: IndexEntry, line: number) => {
@@ -763,15 +812,20 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const { picker } = dialogs;
   const overlays = dialogs.elements.map((dialog) => deps.addOverlay(dialog));
 
+  // The right column sits inside the doc pane, so a focus landing there is
+  // the column's.
   for (const [pane, scope] of [
     [tree.element, 'tree'],
     [doc.element, 'doc'],
   ] as const) {
-    pane.addEventListener('focusin', () => {
+    pane.addEventListener('focusin', (event) => {
       if (isRedrawing) {
         return;
       }
-      focused = scope;
+      const isInAside =
+        event.target instanceof HTMLElement &&
+        doc.aside.element.contains(event.target);
+      focused = isInAside ? 'aside' : scope;
       applyScope();
     });
   }
@@ -1426,6 +1480,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     confirmYes: () => dialogs.confirmYes(),
     confirmNo: () => dialogs.confirmNo(),
+    asideDown: () => doc.aside.move(1),
+    asideUp: () => doc.aside.move(-1),
+    asideTop: () => doc.aside.top(),
+    asideBottom: () => doc.aside.bottom(),
+    // A linking doc's open focuses the doc pane as it lands.
+    asideOpen: () => {
+      if (doc.aside.openCursor() === 'section') {
+        focusDocAndLog();
+      }
+    },
+    backToDoc: focusDocAndLog,
   };
 
   // A star toggle from any view redraws this one's tree, once it has read. An
@@ -1523,11 +1588,23 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       doc.closeConflict();
     },
     dismissFilter: () => tree.dismissFilter(),
-    treeHidden: focusDoc,
+    treeHidden() {
+      if (focused !== 'aside') {
+        focusDoc();
+      }
+    },
     treeShownChanged: (isShown) =>
       doc.element.classList.toggle('is-tree-hidden', !isShown),
     treeOpenedOver: focusTreePane,
     focusScope: () => focused,
+    focusTree: focusTreePaneAndLog,
+    focusMain() {
+      if (focused === 'aside' && doc.aside.isInSight()) {
+        focusAsideAndLog();
+      } else {
+        focusDocAndLog();
+      }
+    },
     focusTarget,
     layoutsChanged() {
       isRedrawing = true;

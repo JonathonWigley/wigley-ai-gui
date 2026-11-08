@@ -2256,17 +2256,96 @@ describe('treeRowStatus', () => {
 
 describe('paneFocusedBy', () => {
   it.each([
-    { from: 'tree', direction: 'right', isTreeShown: true, after: 'doc' },
-    { from: 'doc', direction: 'left', isTreeShown: true, after: 'tree' },
-    { from: 'doc', direction: 'left', isTreeShown: false, after: null },
-    { from: 'tree', direction: 'left', isTreeShown: true, after: null },
-    { from: 'doc', direction: 'right', isTreeShown: true, after: null },
-    { from: 'tree', direction: 'up', isTreeShown: true, after: null },
-    { from: 'doc', direction: 'down', isTreeShown: true, after: null },
+    {
+      from: 'tree',
+      direction: 'right',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: 'doc',
+    },
+    {
+      from: 'tree',
+      direction: 'right',
+      isTreeOwnPane: false,
+      isAsideInSight: false,
+      after: 'doc',
+    },
+    {
+      from: 'doc',
+      direction: 'left',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: 'tree',
+    },
+    {
+      from: 'doc',
+      direction: 'left',
+      isTreeOwnPane: false,
+      isAsideInSight: true,
+      after: null,
+    },
+    {
+      from: 'doc',
+      direction: 'right',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: 'aside',
+    },
+    {
+      from: 'doc',
+      direction: 'right',
+      isTreeOwnPane: true,
+      isAsideInSight: false,
+      after: null,
+    },
+    {
+      from: 'aside',
+      direction: 'left',
+      isTreeOwnPane: false,
+      isAsideInSight: true,
+      after: 'doc',
+    },
+    {
+      from: 'aside',
+      direction: 'right',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: null,
+    },
+    {
+      from: 'tree',
+      direction: 'left',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: null,
+    },
+    {
+      from: 'tree',
+      direction: 'up',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: null,
+    },
+    {
+      from: 'doc',
+      direction: 'down',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: null,
+    },
+    {
+      from: 'aside',
+      direction: 'up',
+      isTreeOwnPane: true,
+      isAsideInSight: true,
+      after: null,
+    },
   ] as const)(
-    'paneFocusedBy: $from $direction, tree shown $isTreeShown',
-    ({ from, direction, isTreeShown, after }) => {
-      expect(paneFocusedBy(from, direction, isTreeShown)).toBe(after);
+    'paneFocusedBy: $from $direction, own tree $isTreeOwnPane, aside $isAsideInSight',
+    ({ from, direction, isTreeOwnPane, isAsideInSight, after }) => {
+      expect(
+        paneFocusedBy(from, direction, { isTreeOwnPane, isAsideInSight }),
+      ).toBe(after);
     },
   );
 });

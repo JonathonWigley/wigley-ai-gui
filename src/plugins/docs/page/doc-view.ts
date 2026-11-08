@@ -36,7 +36,7 @@ import {
   sectionText,
   spliceSection,
 } from '../sections';
-import { createDocAside } from './doc-aside';
+import { createDocAside, type DocAside } from './doc-aside';
 import { createDocHistory, type DocPlace } from './doc-history';
 import { docLinkOf, docLinksText, pastedImagePath } from './doc-links';
 import {
@@ -144,6 +144,9 @@ export interface DocViewDeps {
   // Acts on a `wiki:` or `wigley:` link in the rendered body with the link's
   // text; false when it is no link this view acts on.
   followWikiLink(href: string, title: string): boolean;
+  // The right column left sight after being in sight, or was cleared while
+  // shown.
+  asideSightLost(): void;
 }
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
@@ -183,6 +186,9 @@ export interface DocViewDeps {
 // body under the whole-file editor.
 export interface DocView {
   element: HTMLElement;
+  // The right column; a section row's action moves the doc to its line and
+  // focuses the pane.
+  aside: DocAside;
   // `isHistoryMove` records no place, for an open the history itself asked for.
   open(
     target: DocTarget,
@@ -480,8 +486,12 @@ export function createDocView(deps: DocViewDeps): DocView {
     paths: deps.paths,
     homeDir: deps.homeDir,
     log: deps.log,
-    moveToLine: (line) => moveWithinDoc(line, null),
+    moveToLine: (line) => {
+      moveWithinDoc(line, null);
+      view.focus();
+    },
     followLink: (path, line) => deps.followFile(path, line, null),
+    sightLost: () => deps.asideSightLost(),
   });
   const body = element('div', 'md docs-body');
   const bodyMount = createMarkdownMount(deps.markdown, deps.log);
@@ -1701,6 +1711,7 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   const view: DocView = {
     element: root,
+    aside,
     async open(target, options) {
       if (view.refuseWithUnsavedEdits()) {
         return false;
@@ -1753,7 +1764,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawHeader();
       drawBody(rendered);
       pane.scrollTop = 0;
-      aside.scrollToTop();
+      aside.reset();
       watchFile(target.detail === null ? target.path : null, name);
       deps.log(`opened ${name}`);
       if (target.line !== null) {

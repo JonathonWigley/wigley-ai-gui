@@ -25,28 +25,55 @@ export interface DocAsideDeps {
   moveToLine(line: number): void;
   // Opens the doc at `path`, which links here, at the `line` of its link.
   followLink(path: string, line: number): void;
+  // It left sight after being in sight, or was cleared while shown.
+  sightLost(): void;
 }
 
-// One row of the column: its part's input, its root's tooltip and what a click
-// on it does.
+// What a row of the column leads to: a section of this doc (On this page), or a
+// doc linking here (Linked from).
+export type AsideRowKind = 'section' | 'linkedFrom';
+
+// One row of the column: its part's input, its root's tooltip, its kind and
+// what a click or `openCursor` on it does.
 interface AsideRow {
   input: AsideLinkInput;
   tooltip: string;
+  kind: AsideRowKind;
   action(): void;
+}
+
+// A drawn row, in the cursor's walk.
+interface CursorRow {
+  row: AsideRow;
+  element: HTMLElement;
 }
 
 // The doc pane's right column, drawn by the layout's `pageAside`: On this page
 // and Linked from. It hides while it holds nothing, and logs each time the
 // narrow rule, which is CSS alone, takes it out of sight or brings it back.
+// Its cursor walks the rows of both lists in drawn order, stopping at either
+// end, and logs the row each press reaches; the cursor row carries
+// `is-selected` and `is-cursor` only while the column holds focus.
 export interface DocAside {
   element: HTMLElement;
-  // Draws `sections` and `links` at the scroll it had; with neither, as `clear`.
+  // Draws `sections` and `links` at the scroll it had, the cursor at its index
+  // clamped to the last row; with neither, as `clear`.
   show(sections: readonly DocSection[], links: readonly LinkedFromRow[]): void;
-  // Removes what it drew and hides.
+  // Removes what it drew, hides, and puts the cursor on the first row.
   clear(): void;
   // True while it holds a section or a link.
   isShown(): boolean;
-  scrollToTop(): void;
+  // True while it holds a row and has a laid-out width, read now.
+  isInSight(): boolean;
+  // Takes the DOM focus, drawing the ring on the cursor row in sight.
+  focus(): void;
+  move(by: 1 | -1): void;
+  top(): void;
+  bottom(): void;
+  // Runs the cursor row's action and returns its kind; null with no row.
+  openCursor(): AsideRowKind | null;
+  // Scrolls to the top and puts the cursor on the first row.
+  reset(): void;
   dispose(): void;
 }
 
@@ -54,11 +81,17 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
   const { parts } = deps;
   const root = element('div', 'docs-aside');
   root.hidden = true;
+  root.tabIndex = -1;
   const onThisPageSection = element('div', 'docs-aside-section');
   const linkedFromSection = element('div', 'docs-aside-section');
   let drawnAside: DrawnPart | null = null;
   // The headings and rows drawn in the two sections.
   let drawnRows: DrawnPart[] = [];
+  // The link rows of both sections, in drawn order.
+  let cursorRows: CursorRow[] = [];
+  let cursor = 0;
+  // Whether the cursor row draws the focus ring.
+  let hasRing = false;
   let isInSight = false;
   const observer = new ResizeObserver(() => {
     if (root.hidden) {
@@ -68,13 +101,49 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
     if (isInSightNow !== isInSight) {
       isInSight = isInSightNow;
       deps.log(`right column ${isInSightNow ? 'in' : 'out of'} sight`);
+      if (!isInSightNow) {
+        deps.sightLost();
+      }
     }
   });
   observer.observe(root);
 
+  const markCursor = () => {
+    cursorRows.forEach(({ element: rowElement }, index) => {
+      const isCursor = hasRing && index === cursor;
+      rowElement.classList.toggle('is-selected', isCursor);
+      rowElement.classList.toggle('is-cursor', isCursor);
+    });
+  };
+
+  // Puts the cursor on the row at `index`, clamped to the rows, and logs it;
+  // nothing with no row.
+  const moveCursorTo = (index: number) => {
+    if (cursorRows.length === 0) {
+      return;
+    }
+    cursor = Math.max(0, Math.min(index, cursorRows.length - 1));
+    markCursor();
+    const { row, element: rowElement } = cursorRows[cursor];
+    rowElement.scrollIntoView({ block: 'nearest' });
+    deps.log(`right column cursor: ${row.input.title}`);
+  };
+
+  root.addEventListener('focusout', (event) => {
+    const next = (event as FocusEvent).relatedTarget;
+    const isLeavingColumn = !(
+      next instanceof HTMLElement && root.contains(next)
+    );
+    if (isLeavingColumn) {
+      hasRing = false;
+      markCursor();
+    }
+  });
+
   const disposeDrawn = () => {
     const drawn = [...drawnRows, drawnAside];
     drawnRows = [];
+    cursorRows = [];
     drawnAside = null;
     callEach(drawn, (part) => part?.dispose());
   };
@@ -93,14 +162,25 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
     for (const row of rows) {
       const drawn = parts.draw('asideLink', section, row.input, (kit) => kit);
       drawn.element.title = row.tooltip;
-      rowAction(drawn.element, row.action);
+      const index = cursorRows.length;
+      rowAction(drawn.element, () => {
+        cursor = index;
+        markCursor();
+        row.action();
+      });
       drawnRows.push(drawn);
+      cursorRows.push({ row, element: drawn.element });
     }
   };
 
   const clear = () => {
+    const wasShown = !root.hidden;
     disposeDrawn();
     root.hidden = true;
+    cursor = 0;
+    if (wasShown) {
+      deps.sightLost();
+    }
   };
 
   return {
@@ -132,6 +212,7 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
         sections.map((section) => ({
           input: { title: section.title, depth: section.level - least },
           tooltip: section.title,
+          kind: 'section',
           action: () => deps.moveToLine(section.startLine),
         })),
       );
@@ -141,15 +222,39 @@ export function createDocAside(deps: DocAsideDeps): DocAside {
         links.map((link) => ({
           input: { title: link.title, depth: 0 },
           tooltip: deps.paths.tilde(link.path, deps.homeDir),
+          kind: 'linkedFrom',
           action: () => deps.followLink(link.path, link.line),
         })),
       );
+      cursor = Math.min(cursor, cursorRows.length - 1);
+      hasRing = root.contains(document.activeElement);
+      markCursor();
       root.scrollTop = scrollTop;
     },
     clear,
     isShown: () => !root.hidden,
-    scrollToTop() {
+    isInSight: () => !root.hidden && root.offsetWidth > 0,
+    focus() {
+      root.focus();
+      hasRing = true;
+      markCursor();
+      cursorRows[cursor]?.element.scrollIntoView({ block: 'nearest' });
+    },
+    move: (by) => moveCursorTo(cursor + by),
+    top: () => moveCursorTo(0),
+    bottom: () => moveCursorTo(cursorRows.length - 1),
+    openCursor() {
+      const held = cursorRows[cursor];
+      if (held === undefined) {
+        return null;
+      }
+      held.row.action();
+      return held.row.kind;
+    },
+    reset() {
       root.scrollTop = 0;
+      cursor = 0;
+      markCursor();
     },
     dispose() {
       callEach<() => void>(

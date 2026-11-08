@@ -50,6 +50,7 @@ function setUp(extra: Layout = {}) {
   const log = vi.fn();
   const moveToLine = vi.fn();
   const followLink = vi.fn();
+  const sightLost = vi.fn();
   const aside = createDocAside({
     parts,
     paths: posixPaths,
@@ -57,6 +58,7 @@ function setUp(extra: Layout = {}) {
     log,
     moveToLine,
     followLink,
+    sightLost,
   });
   const root = asFake(aside.element);
   const rows = () => findAll(root, LINK);
@@ -69,6 +71,7 @@ function setUp(extra: Layout = {}) {
     log,
     moveToLine,
     followLink,
+    sightLost,
     rows,
     headings,
   };
@@ -237,6 +240,36 @@ describe('createDocAside', () => {
       expect(log.mock.calls).toEqual([]);
     });
 
+    it.each([
+      { name: 'leaving sight calls once', widths: [240, 0, 0], calls: 1 },
+      { name: 'never in sight calls none', widths: [0, 0], calls: 0 },
+    ])(
+      'resize_FocusedColumnLeavesSight_CallsSightLostOnce $name',
+      ({ widths, calls }) => {
+        const { aside, reportWidth, sightLost } = observed();
+        aside.show([section('A', 2)], []);
+        aside.focus();
+
+        widths.forEach(reportWidth);
+
+        expect(sightLost.mock.calls.length).toBe(calls);
+      },
+    );
+
+    it.each([
+      { name: 'hidden root', isShown: false, width: 240, isInSight: false },
+      { name: 'width 0', isShown: true, width: 0, isInSight: false },
+      { name: 'laid out', isShown: true, width: 240, isInSight: true },
+    ])('isInSight_ReadsRowsAndWidth $name', ({ isShown, width, isInSight }) => {
+      const { aside, root } = observed();
+      if (isShown) {
+        aside.show([section('A', 2)], []);
+      }
+      Object.assign(root, { offsetWidth: width });
+
+      expect(aside.isInSight()).toBe(isInSight);
+    });
+
     it('dispose_ARowThrows_StillDisposesTheRestAndTheObserver', () => {
       const { parts } = fakeDocsParts(() =>
         withUser<Layout>(defaultLayout, {}),
@@ -266,6 +299,7 @@ describe('createDocAside', () => {
         log: vi.fn(),
         moveToLine: vi.fn(),
         followLink: vi.fn(),
+        sightLost: vi.fn(),
       });
       aside.show([section('A', 2), section('B', 2)], []);
 
@@ -278,6 +312,155 @@ describe('createDocAside', () => {
         disposed: ['asideLink', 'asideLink', 'pageAside'],
         disconnects: 1,
       });
+    });
+  });
+
+  describe('cursor', () => {
+    const SECTIONS = [section('A', 2, 3), section('B', 3, 7)];
+    const LINKS = [linkRow('S', '/home/s.md', 5)];
+
+    // The column over the fixture, focused, its lines and cursor rows read.
+    function focusedColumn() {
+      const shown = setUp();
+      shown.aside.show(SECTIONS, LINKS);
+      shown.aside.focus();
+      const cursorRows = () =>
+        shown
+          .rows()
+          .filter((row) => row.classList.contains('is-cursor'))
+          .map((row) => row.textContent);
+      const lastLine = () => shown.log.mock.calls.at(-1)?.[0];
+      return { ...shown, cursorRows, lastLine };
+    }
+
+    it.each([
+      { keys: ['j'], cursor: 'B' },
+      { keys: ['j', 'j'], cursor: 'S' },
+      { keys: ['j', 'j', 'j'], cursor: 'S' },
+      { keys: ['k'], cursor: 'A' },
+      { keys: ['G'], cursor: 'S' },
+      { keys: ['G', 'gg'], cursor: 'A' },
+    ])(
+      'move_AcrossBothLists_SkipsHeadingsAndStopsAtEnds $keys',
+      ({ keys, cursor }) => {
+        const { aside, cursorRows, lastLine } = focusedColumn();
+        const press: Record<string, () => void> = {
+          j: () => aside.move(1),
+          k: () => aside.move(-1),
+          gg: () => aside.top(),
+          G: () => aside.bottom(),
+        };
+
+        keys.forEach((key) => press[key]());
+
+        expect({ line: lastLine(), cursorRows: cursorRows() }).toEqual({
+          line: `right column cursor: ${cursor}`,
+          cursorRows: [cursor],
+        });
+      },
+    );
+
+    it.each([
+      {
+        name: 'section',
+        moves: 0,
+        kind: 'section',
+        moved: [[3]],
+        followed: [],
+      },
+      {
+        name: 'linkedFrom',
+        moves: 2,
+        kind: 'linkedFrom',
+        moved: [],
+        followed: [['/home/s.md', 5]],
+      },
+    ])(
+      'openCursor_ByRowKind_RunsItsAction $name',
+      ({ moves, kind, moved, followed }) => {
+        const { aside, moveToLine, followLink } = focusedColumn();
+        for (let step = 0; step < moves; step++) {
+          aside.move(1);
+        }
+
+        expect({
+          kind: aside.openCursor(),
+          moved: moveToLine.mock.calls,
+          followed: followLink.mock.calls,
+        }).toEqual({ kind, moved, followed });
+      },
+    );
+
+    it('openCursor_NoRows_ReturnsNullAndRunsNothing', () => {
+      const { aside, moveToLine, followLink } = setUp();
+      aside.show([], []);
+
+      expect({
+        kind: aside.openCursor(),
+        calls: [...moveToLine.mock.calls, ...followLink.mock.calls],
+      }).toEqual({ kind: null, calls: [] });
+    });
+
+    it('cursorClasses_FocusLeavesColumn_RemovesRing', () => {
+      const { root, rows } = focusedColumn();
+      const ringed = () =>
+        rows()
+          .filter(
+            (row) =>
+              row.classList.contains('is-selected') ||
+              row.classList.contains('is-cursor'),
+          )
+          .map((row) => [
+            row.textContent,
+            row.classList.contains('is-selected'),
+            row.classList.contains('is-cursor'),
+          ]);
+      const focusedRing = ringed();
+      const outside = document.createElement('div');
+
+      outside.focus();
+      root.fire('focusout', { relatedTarget: outside });
+
+      expect({ focusedRing, afterRing: ringed() }).toEqual({
+        focusedRing: [['A', true, true]],
+        afterRing: [],
+      });
+    });
+
+    it('show_FewerRows_ClampsCursor', () => {
+      const { aside, cursorRows } = focusedColumn();
+      aside.bottom();
+
+      aside.show([section('A', 2)], []);
+
+      expect(cursorRows()).toEqual(['A']);
+    });
+
+    it('reset_AfterMoves_CursorOnFirstRow', () => {
+      const { aside, root, cursorRows } = focusedColumn();
+      aside.bottom();
+      root.scrollTop = 40;
+
+      aside.reset();
+
+      expect({ cursorRows: cursorRows(), scrollTop: root.scrollTop }).toEqual({
+        cursorRows: ['A'],
+        scrollTop: 0,
+      });
+    });
+
+    it.each([
+      { name: 'shown', isShown: true, calls: 1 },
+      { name: 'hidden', isShown: false, calls: 0 },
+    ])('clear_WhileShown_CallsSightLost $name', ({ isShown, calls }) => {
+      const { aside, sightLost } = setUp();
+      if (isShown) {
+        aside.show(SECTIONS, LINKS);
+      }
+
+      aside.clear();
+
+      expect(sightLost.mock.calls.length).toBe(calls);
     });
   });
 });

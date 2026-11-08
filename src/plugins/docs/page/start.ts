@@ -229,7 +229,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         openChanged,
         docOpened: (path) => api.events.emit('docOpened', { path }),
         revealTree,
-        isTreeShown: () => !isTreeHiddenIn(view),
+        isTreeOwnPane: () => addedViewOf(view)?.isTreeHidden === false,
         leafOpened,
         addOverlay: (element) => api.areas.overlay.contribute(element),
         layouts: () => current,
@@ -315,7 +315,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // `add` calls `shown` before it returns only for the first mode added;
     // Sessions mode starts before Docs mode. Focus leaves the tree for the
     // doc as the side bar hides, and moves to the tree as it opens over the
-    // doc, by `treeHiddenIn` and `treeOpenedOverIn`.
+    // doc, by `treeHiddenIn` and `treeOpenedOverIn`. The core's Alt+h past the
+    // doc enters the tree as the side bar, and its way back returns to main's
+    // last pane.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
@@ -340,7 +342,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         treeOpenedOverIn(machineView);
         showTreeEdge(machineView);
       },
-      focusMain: () => machineView.treeHidden(),
+      focusSideBar: () => machineView.focusTree(),
+      focusMain: () => machineView.focusMain(),
     });
     // A narrowing hides the side bar without telling the mode, so the machine
     // view's edge prompt follows the window too, once the core has laid out.
@@ -636,6 +639,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         trash: onActiveView('trash'),
         confirmYes: onActiveView('confirmYes'),
         confirmNo: onActiveView('confirmNo'),
+        asideDown: onActiveView('asideDown'),
+        asideUp: onActiveView('asideUp'),
+        asideTop: onActiveView('asideTop'),
+        asideBottom: onActiveView('asideBottom'),
+        asideOpen: onActiveView('asideOpen'),
+        backToDoc: onActiveView('backToDoc'),
       },
       exports: (consumer): DocsPageExports => ({
         addView: (sourceId, options) =>

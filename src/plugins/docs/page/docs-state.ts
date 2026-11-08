@@ -1099,21 +1099,29 @@ function statusCounts(
   return counts;
 }
 
-export type DocsPaneScope = 'tree' | 'doc';
+export type DocsPaneScope = 'tree' | 'doc' | 'aside';
 
 // The pane a focus move `direction` from `focused` lands on: `right` from the
-// tree to the doc, `left` from the doc to the tree while `isTreeShown`; null
-// for every other move, which leaves focus where it is.
+// tree to the doc, and from the doc to the right column while
+// `isAsideInSight`; `left` from the column to the doc, and from the doc to the
+// tree while `isTreeOwnPane`. Null for every other move, which the core
+// carries on past the view's edge.
 export function paneFocusedBy(
   focused: DocsPaneScope,
   direction: PaneDirection,
-  isTreeShown: boolean,
+  panes: { isTreeOwnPane: boolean; isAsideInSight: boolean },
 ): DocsPaneScope | null {
-  if (focused === 'tree' && direction === 'right') {
-    return 'doc';
+  if (direction === 'right') {
+    if (focused === 'tree') {
+      return 'doc';
+    }
+    return focused === 'doc' && panes.isAsideInSight ? 'aside' : null;
   }
-  if (focused === 'doc' && direction === 'left' && isTreeShown) {
-    return 'tree';
+  if (direction === 'left') {
+    if (focused === 'aside') {
+      return 'doc';
+    }
+    return focused === 'doc' && panes.isTreeOwnPane ? 'tree' : null;
   }
   return null;
 }

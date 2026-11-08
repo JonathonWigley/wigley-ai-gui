@@ -120,6 +120,16 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     confirmNo: { label: 'keep it', group: 'confirm', runsIn: 'page' },
+    asideDown: { label: 'next row', group: 'aside', runsIn: 'page' },
+    asideUp: { label: 'previous row', group: 'aside', runsIn: 'page' },
+    asideTop: { label: 'first row', group: 'aside', runsIn: 'page' },
+    asideBottom: { label: 'last row', group: 'aside', runsIn: 'page' },
+    asideOpen: {
+      label: 'jump to the section or open the linking doc',
+      group: 'aside',
+      runsIn: 'page',
+    },
+    backToDoc: { label: 'back to the doc', group: 'focus', runsIn: 'page' },
   },
   scopes: {
     tree: 'In the docs tree',
@@ -128,6 +138,7 @@ export const docsManifest = definePlugin({
     picker: 'In a docs list',
     box: 'In a docs text box',
     confirm: 'In the Trash confirmation',
+    aside: "In the doc's right column",
   },
   settings: { scriptPath: '', layout: 'default', recentChangesLimit: 10 },
   settingInfo: {
