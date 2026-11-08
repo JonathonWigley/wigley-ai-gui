@@ -63,7 +63,7 @@ Names Task 07 must keep: `ChatTabScope`, the `Omit` entries for the ten hub comm
   - The hub divider is the resize target **only while `chat.hub` holds the keys**. The helper sets
     `setResizeTarget(scope === 'hub' ? tab.side.divider : null)`, so from the transcript, box or strip
     Alt+Shift+h/l reach the chat panes' dividers and the side bar as today (`docs/keymap.md` resize order, written
-    ahead in `09552297`).
+    ahead in `3e3c2fcb`).
   - The hub's turn ends when the DOM focus leaves it: the box's `focused` callback, and a pointerdown in the
     transcript, call the one helper with `chat` (clearing `isAtHub`). The hub becoming unreachable while it holds
     the keys (the tab narrows under 640 px, every head goes, `Space v s`) leaves it the Esc way, re-checked where
@@ -71,6 +71,8 @@ Names Task 07 must keep: `ChatTabScope`, the `Omit` entries for the ten hub comm
   - The helper sets or clears `isAtHub` **before** `deps.setScope(...)`, so the scope listener sees the new flag.
   - `blur({ toNormal: true })` runs only on the moves chat itself takes (returns true); an Alt+l chat declines
     leaves the box as the core's moves do.
+  - Main gained a context-sources side part (`src/plugins/context-sources/page/context-section.ts`) after the draft;
+    it is a hub section like the others, and may be the second head the `k j` step needs.
   - The `k j` self-test step needs two drawn heads. Read the heads drawn at that point (a screenshot of the hub);
     if fewer than two show, move the step to a point where two do, and if none exists, pin up/down movement with a
     `side-sections.test.ts` row over two stub heads and drop the self-test step.

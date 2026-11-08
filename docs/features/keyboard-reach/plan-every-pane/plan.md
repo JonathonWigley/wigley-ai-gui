@@ -29,7 +29,7 @@ Systems touched, all in wigley-ai-gui:
 
 ## Preconditions
 
-- Worktree branch `keyboard-reach` from `main` at `e38de06f`, which matched `origin/main` at plan time
+- Worktree branch `keyboard-reach` from `main` at `9ea97ead` (rebased from `e38de06f`), which matched `origin/main` at plan time
   (`git -C /Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui fetch origin && git status -sb` → `## main...origin/main`).
   Re-run, and rebase onto `main` if it moved.
 - A sibling plan, `docs/features/session-popups/plan-form-popup/`, is not started (every box unticked; checked with
@@ -45,13 +45,13 @@ Systems touched, all in wigley-ai-gui:
 
 ## Docs written ahead
 
-Commits `eae58c69`, `586eb976` and `09552297` on `keyboard-reach`: `docs/keymap.md` § Layers (the Alt+hjkl chain through the areas, the side-bar
+Commits `e02122c5`, `2991f516` and `3e3c2fcb` on `keyboard-reach`: `docs/keymap.md` § Layers (the Alt+hjkl chain through the areas, the side-bar
 list rule, the picker key set, gg/G and j/k on every pane, the scroll-key view list, the hub in the resize order, `ci`
 in the chat-controls leader row), `AGENTS.md` (the mode bullet's `focusSideBar`/`focusMain`, the focus-target bullet's
 areas, the right bar's `focus`, the side-part line's hub), and `DESIGN.md` § Keys and focus (the Sessions list's
-cursor prompt). `586eb976` adds the session hub and the doc's right column to the Ctrl+n and scroll-or-rows
+cursor prompt). `2991f516` adds the session hub and the doc's right column to the Ctrl+n and scroll-or-rows
 lists with the column's `Enter`/`l`/`Esc`, chat `y`/`n` on the permission under the cursor, `ci` on the page as well
-as in a box, and the hub's Alt+Shift+h/l in AGENTS.md's side-part bullet. `09552297` limits the hub's Alt+Shift+h/l to while
+as in a box, and the hub's Alt+Shift+h/l in AGENTS.md's side-part bullet. `3e3c2fcb` limits the hub's Alt+Shift+h/l to while
 the hub has the keys, in keymap.md's resize order, DESIGN.md's Splits line and `docs/features/chat-bar/design.md`.
 
 ## Mandatory Reads
