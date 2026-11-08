@@ -1,6 +1,6 @@
 # 07 — Open work answers `mayStop`
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 02, 05
 Plan: [plan.md](plan.md)
@@ -99,3 +99,5 @@ Done when: `grep -n 'mayStop' src/plugins/forms/main/start.ts src/plugins/primer
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 810da4d4 · proof: diff read: every Produces present (presenter, forms, primer, docs, notes, backlog, chat mayStop); typecheck and lint clean on the full tree; worker ran the 7 task test files, 156 passed · concerns: docs unsavedPath already refuses while a restore is pending; reloadWith gained an optional rowOf parameter; for review: forms/main/start.ts header comment reads 'That one presenter which owns…' and forms/primer header comment lines run past the wrap width
