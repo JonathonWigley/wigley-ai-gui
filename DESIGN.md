@@ -63,12 +63,12 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
   L0 backdrop: crust with two faint washes, seen only through L1
 ```
 
-| Layer       | What lives here                                                                    | Material                                                                                              |
-| ----------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| L0 backdrop | The window itself                                                                  | `--wg-window-background` with `--wg-window-ambient`                                                   |
-| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
-| L2 content  | the session popup (forms, primer), chat transcript, docs, editors, the forms rail, diffs                    | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
-| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                         | The `material-floating` class                                                                         |
+| Layer       | What lives here                                                                          | Material                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| L0 backdrop | The window itself                                                                        | `--wg-window-background` with `--wg-window-ambient`                                                   |
+| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header       | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
+| L2 content  | the session popup (forms, primer), chat transcript, docs, editors, the forms rail, diffs | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
+| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                               | The `material-floating` class                                                                         |
 
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
