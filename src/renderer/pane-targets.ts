@@ -34,8 +34,9 @@ export interface PaneAreas {
 // - the side bar goes right to `areas.focusMain` (`focus back in main`).
 // - a right-bar stop goes left to `areas.focusMain`, and down or up to the
 //   next or previous stop.
-// Any other move logs `no pane <direction>`. The area is written after the
-// hook it calls, whose own base scope change resets it.
+// Any other move logs `no pane <direction>`. A move into an area writes the
+// area after the hook it calls, whose own base scope change resets it; a move
+// back to main writes it before `focusMain`.
 // `baseChanged` runs on every base scope change: it forgets the view's two
 // targets, keeping the outer panes until `setOuterPanes(null)`, and gives the
 // keys back to main without calling `focusMain`, so a click into main ends an

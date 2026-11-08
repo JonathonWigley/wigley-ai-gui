@@ -2553,7 +2553,7 @@ describe('createDocView', () => {
 
     it.each([
       {
-        state: 'doc at the top',
+        state: 'doc, to the end',
         edge: 'end' as const,
         setUp: async (view: DocView) => view.open(target(null)),
         expected: {
@@ -2563,7 +2563,7 @@ describe('createDocView', () => {
         },
       },
       {
-        state: 'doc partway down',
+        state: 'doc, to the top',
         edge: 'top' as const,
         setUp: async (view: DocView) => view.open(target(null)),
         expected: {

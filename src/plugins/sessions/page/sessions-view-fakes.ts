@@ -79,9 +79,9 @@ export interface SessionsViewOptions {
 }
 
 // A sessions view over fake keys that record each anchor, a log that records
-// each line, `activated` recording each session a row
-// click activates, `cursorMoves` each row `cursorMoved` reports (null for none), the row parts its rows draw (`rowParts`, a new store
-// unless one is handed in) and the bar parts its tab bars draw (`barParts`,
+// each line, `activated` recording each session a row click activates,
+// `cursorMoves` each row `cursorMoved` reports (null for none), the row parts
+// its rows draw (`rowParts`, a new store unless one is handed in) and the bar parts its tab bars draw (`barParts`,
 // likewise), and the title length `titleMaxLength` reads (40 unless one is
 // handed in). Runs under `installFakeDom`.
 export function sessionsViewSetup(

@@ -179,13 +179,13 @@ function showBoxTarget(store: PrimerStore, box: PrimerBox | undefined) {
   }
 }
 
-// The active primer, or null outside view 'primer' or with none.
 // The card row's name, null with no active primer.
 function selectedRowName(state: PrimerState): string | null {
   const primer = activeForm(state);
   return primer === null ? null : rowName(cardRow(primer));
 }
 
+// The active primer, or null outside view 'primer' or with none.
 function shownPrimer(state: PrimerState): OpenPrimer | null {
   return state.view === 'primer' ? activeForm(state) : null;
 }

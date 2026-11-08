@@ -1,4 +1,3 @@
-import type { OuterPanes } from '../contracts/panes';
 import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
@@ -24,6 +23,7 @@ import type {
 } from '../contracts/markdown';
 import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
+import type { OuterPanes } from '../contracts/panes';
 import type {
   AreaName,
   ChannelShape,

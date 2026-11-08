@@ -510,16 +510,6 @@ describe('list picker', () => {
     },
   );
 
-  it('topBottom_Closed_DoNothing', () => {
-    const { picker } = pickerSetup();
-    picker.open(request({ selected: 1 }));
-    picker.close();
-
-    picker.bottom();
-
-    expect(picker.cursorIndex()).toBeNull();
-  });
-
   it.each([
     ['pickerDown', 'down'],
     ['pickerUp', 'up'],

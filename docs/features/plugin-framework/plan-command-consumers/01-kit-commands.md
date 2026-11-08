@@ -214,7 +214,7 @@ A record lists `field value`, fields sorted by name, joined with `, `.
 - `list-picker.ts` would make all six plugins write the same row command. The core therefore owns `picker.chooseRow` and `picker.cancel`, as `coreCommands` entries with `runsIn: 'page'`.
 - Each declares an `arg`, so neither lists anywhere while unbound, and six plugins' Settings pages gain nothing.
 - The arg names the owner, because every plugin's picker has its own open state and a click must reach the picker that drew the row.
-- The plugins' own `pickerChoose`, `pickerCancel`, `pickerPick` and `pickerClose` commands stay for their keys. They act on the cursor, as a key does. A click names a row, as a pointer does.
+- The shared key commands every picker plugin spreads (`LIST_PICKER_COMMANDS`, handled by `listPickerCommands` in `src/shared/list-picker-commands.ts`) stay for their keys. They act on the cursor, as a key does. A click names a row, as a pointer does.
 
 **Picker wiring.**
 

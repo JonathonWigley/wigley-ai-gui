@@ -5,9 +5,9 @@ import type {
   DrawRowInput,
   ListPicker,
 } from '../../contracts/list-picker';
-import type { ListPickerCommand } from '../list-picker-commands';
 import type { PluginLog } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
+import type { ListPickerCommand } from '../list-picker-commands';
 import { element } from './dom';
 import { floatingPanel, openFloatingPanel } from './ui/floating-panel';
 import { inputFrame } from './ui/input-frame';
