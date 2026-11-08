@@ -80,23 +80,10 @@ function viewWithFramedAndEmptyPane() {
 }
 
 let moves: { element: unknown; to: unknown }[];
-// The animation frames requested and not yet run.
-let pendingFrames: (() => void)[];
 
 beforeEach(() => {
   ({ moves } = installMarkdownDom(vi.stubGlobal));
-  pendingFrames = [];
-  vi.stubGlobal('requestAnimationFrame', (run: () => void) =>
-    pendingFrames.push(run),
-  );
-  vi.stubGlobal('cancelAnimationFrame', () => undefined);
 });
-
-function runFrames() {
-  for (const run of pendingFrames.splice(0)) {
-    run();
-  }
-}
 
 // A view showing session `s` in its one pane, counting each `tabsChanged`.
 function popupSetup() {
@@ -112,14 +99,17 @@ function popupSetup() {
 }
 
 // What the frames in `area` show of their popups: the title of each root
-// carrying `is-open`, of each root that is `inert`, and each hidden bar
-// entry's text.
+// carrying `is-open`, of each carrying `is-entering`, of each root that is
+// `inert`, and each hidden bar entry's text.
 function popupsShown(area: FakeElement) {
   const roots = findAll(area, 'session-popup');
   const titles = (shown: FakeElement[]) =>
     shown.map((root) => root.attributes.get('aria-label'));
   return {
     open: titles(roots.filter((root) => root.classList.contains('is-open'))),
+    entering: titles(
+      roots.filter((root) => root.classList.contains('is-entering')),
+    ),
     inert: titles(roots.filter((root) => root.inert)),
     bar: findAll(area, 'session-popup-bar-entry').map(
       (entry) => entry.textContent,
@@ -419,7 +409,6 @@ describe('session popups', () => {
         const entries = findAll(area, 'session-popup-bar-entry');
         entries.find((entry) => entry.textContent === `title ${id}`)!.click();
       }
-      runFrames();
     }
 
     const shown = popupsShown(area);
@@ -432,29 +421,53 @@ describe('session popups', () => {
     );
   });
 
-  it('sessionPopups_Added_OpensOnTheNextFrameAndInertWhileNotOpen', () => {
-    const { view, area } = popupSetup();
-
-    const handle = view.tabs.addPopup('s', popupView('a'));
-
-    expect(popupsShown(area)).toEqual({
-      open: [],
-      inert: ['title a'],
+  it.each([
+    {
+      case: 'its own transition ends',
+      settle: (root: FakeElement) => root.fire('transitionend'),
+      entering: [],
       bar: [],
-    });
-    runFrames();
-    expect(popupsShown(area)).toEqual({
-      open: ['title a'],
-      inert: [],
+    },
+    {
+      case: 'its own transition is cancelled',
+      settle: (root: FakeElement) => root.fire('transitioncancel'),
+      entering: [],
       bar: [],
-    });
-    handle.hide();
-    expect(popupsShown(area)).toEqual({
-      open: [],
-      inert: ['title a'],
+    },
+    {
+      case: "a child's transition ends",
+      settle: (root: FakeElement) =>
+        root.fire('transitionend', { target: new FakeElement('div') }),
+      entering: ['title a'],
+      bar: [],
+    },
+    {
+      case: 'it hides first',
+      settle: (_root: FakeElement, handle: SessionPopupHandle) => handle.hide(),
+      entering: [],
       bar: ['title a'],
-    });
-  });
+    },
+  ])(
+    'sessionPopups_Added_OpensAtOnceEnteringUntil ($case)',
+    ({ settle, entering, bar }) => {
+      const { view, area } = popupSetup();
+
+      const handle = view.tabs.addPopup('s', popupView('a'));
+      const onAdd = popupsShown(area);
+      settle(findAll(area, 'session-popup')[0]!, handle);
+
+      expect(onAdd).toEqual({
+        open: ['title a'],
+        entering: ['title a'],
+        inert: [],
+        bar: [],
+      });
+      expect({
+        entering: popupsShown(area).entering,
+        bar: popupsShown(area).bar,
+      }).toEqual({ entering, bar });
+    },
+  );
 
   it('sessionPopups_OpenPopup_HidesTheTabFromIsVisible', () => {
     const { view } = popupSetup();
@@ -541,7 +554,6 @@ describe('session popups', () => {
     setup.area.isPageRoot = true;
     const popup = popupView('a');
     setup.view.tabs.addPopup('s', popup);
-    runFrames();
     moves.length = 0;
 
     setup.view.setLayouts(withUser<Layout>(defaultLayout, {}));

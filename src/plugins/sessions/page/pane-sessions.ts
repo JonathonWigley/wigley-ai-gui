@@ -295,15 +295,15 @@ export interface PressedPaneFacts {
 }
 
 // Where that release sends the keys: `keep` leaves them where the press put
-// them; `toBox` has whatever holds focus let go, and the pane's Chat box, when
-// its visible tab has one, take them in insert mode.
-export type PressedFocusAction = 'keep' | 'toBox';
+// them; `letGo` has whatever holds focus let go; `toBox` lets go too, and the
+// pane's Chat box, when its visible tab has one, takes them in insert mode.
+export type PressedFocusAction = 'keep' | 'letGo' | 'toBox';
 
 // A selection in the pane stays, and so does the focus it came with. A text
 // box the press focused keeps the keys, the Chat box going through `toBox` to
 // enter insert mode at its caret. Any other focus, or one outside the pane,
-// lets go. Over an open popup the focus stays where the press put it, so no
-// chat box under the popup takes the keys.
+// lets go. Over an open popup any focus in the pane stays, and one outside it
+// lets go with no chat box under the popup taking the keys.
 export function pressedFocusAction(
   facts: PressedPaneFacts,
 ): PressedFocusAction {
@@ -314,9 +314,10 @@ export function pressedFocusAction(
     isChatTabShown,
     isPopupOpen,
   } = facts;
+  if (isPopupOpen) {
+    return hasSelectionInPane || isFocusInPane ? 'keep' : 'letGo';
+  }
   const isOnTextBoxInPane = isFocusInPane && doesFocusTakeText;
   const isOnOtherTabsTextBox = isOnTextBoxInPane && !isChatTabShown;
-  return isPopupOpen || hasSelectionInPane || isOnOtherTabsTextBox
-    ? 'keep'
-    : 'toBox';
+  return hasSelectionInPane || isOnOtherTabsTextBox ? 'keep' : 'toBox';
 }

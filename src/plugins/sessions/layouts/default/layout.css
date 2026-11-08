@@ -363,8 +363,9 @@
 /* A session popup: an L2 sheet raised over the session's tabs, its top edge at
    `sessions.popup-top` down the popup layer, `radius-lg` on its top corners,
    no shadow. It slides up from below while open (`is-open`) and down out of
-   sight when hidden, then takes no paint. Its body fills it, so the plugin's
-   element fills the sheet. */
+   sight when hidden, then takes no paint. On add it starts below and slides up
+   once (`is-entering`). Its body fills it, so the plugin's element fills the
+   sheet. */
 .session-popup {
   position: absolute;
   inset: var(--wg-sessions-popup-top) 0 0;
@@ -385,6 +386,12 @@
   transition:
     transform var(--wg-duration-slow) var(--wg-ease-out),
     visibility 0s;
+}
+
+@starting-style {
+  .session-popup.is-open.is-entering {
+    transform: translateY(100%);
+  }
 }
 
 .session-popup-body {

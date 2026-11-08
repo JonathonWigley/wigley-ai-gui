@@ -48,16 +48,12 @@ interface Tab {
   status: string;
 }
 
-// A popup with the status it last set, whether it is open, whether the
-// animation frame after its add ran (until then it draws closed, so its slide
-// up runs) and that frame's id while it waits, and its drawn `popup` part,
-// whose body holds its element.
+// A popup with the status it last set, whether it is open, and its drawn
+// `popup` part, whose body holds its element.
 interface Popup {
   view: SessionPopupView;
   status: string;
   isOpen: boolean;
-  hasEntered: boolean;
-  enterFrame: number | null;
   part: DrawnPart<PopupPart>;
 }
 
@@ -189,8 +185,9 @@ export interface SessionTabsView {
 // included, waits in the hidden holder. Over the sheet lies the frame's popup
 // layer: each popup's `popup` part, drawn once on add and again on a layout
 // redraw, holds the plugin's element; only the session's top open popup shows
-// (`is-open`), sliding up on the animation frame after its add, the rest
-// hidden and `inert`, and the strip above it is dimmed. Under the sheet the
+// (`is-open`), the rest hidden and `inert`, and the band of the tab body above
+// it is dimmed. A popup's root carries `is-entering` from its add until its
+// first slide up ends or it hides, so the layout's slide up on add runs once. Under the sheet the
 // `popupBar` lists the hidden popups, newest hidden first, a click on an entry
 // opening it; it is absent while none is hidden. A popup that opens takes
 // focus from a text box in the frame's tabs; sessions focuses nothing in it.
@@ -301,15 +298,17 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     }
   };
 
-  // Shows the top open popup once it entered, every other popup hidden and
-  // inert, and dims the strip above it.
+  // Shows the top open popup, every other popup hidden, inert and done
+  // entering, and dims the band of the tab body above it.
   const showTopPopup = (frame: Frame) => {
-    const top = topOpenPopup(frame.popups);
-    const shown = top?.hasEntered === true ? top : undefined;
+    const shown = topOpenPopup(frame.popups);
     for (const popup of frame.popups) {
       const root = popup.part.built.element;
       root.classList.toggle('is-open', popup === shown);
       root.inert = popup !== shown;
+      if (popup !== shown) {
+        root.classList.remove(ENTERING);
+      }
     }
     frame.popupLayer.classList.toggle('has-open', shown !== undefined);
   };
@@ -571,7 +570,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 
   const removePopup = (frame: Frame, popup: Popup) => {
-    cancelEnterFrame(popup);
     disposePart(popup.part);
     popup.view.element.remove();
     frame.popups = frame.popups.filter((held) => held !== popup);
@@ -600,7 +598,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     disposeText(frame);
     frame.bar.dispose();
     for (const popup of frame.popups) {
-      cancelEnterFrame(popup);
       popup.part.dispose();
     }
     frame.popupBar?.dispose();
@@ -704,21 +701,12 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         view,
         status: '',
         isOpen: true,
-        hasEntered: false,
-        enterFrame: null,
         part: drawPopup(frame, view),
       };
+      markEntering(popup.part.built.element);
       frame.popups = [...frame.popups, popup];
       blurFocusInTabs(frame);
       changed();
-      popup.enterFrame = requestAnimationFrame(() => {
-        popup.enterFrame = null;
-        const live = livePopup(sessionId, popup);
-        if (live !== undefined) {
-          popup.hasEntered = true;
-          showTopPopup(live);
-        }
-      });
       return {
         setStatus(status) {
           if (livePopup(sessionId, popup) !== undefined) {
@@ -801,6 +789,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
   };
 }
+
+const ENTERING = 'is-entering';
 
 function disposePart(part: DrawnPart<SessionsPart>): void {
   part.dispose();
@@ -893,9 +883,18 @@ function drawTab(
   return drawn;
 }
 
-function cancelEnterFrame(popup: Popup) {
-  if (popup.enterFrame !== null) {
-    cancelAnimationFrame(popup.enterFrame);
-    popup.enterFrame = null;
-  }
+// Marks a popup's root `is-entering` until its own transition ends or is
+// cancelled, as `openFloatingPanel` marks a panel `is-opening`.
+function markEntering(root: HTMLElement): void {
+  root.classList.add(ENTERING);
+  const settle = (event: Event) => {
+    if (event.target !== root) {
+      return;
+    }
+    root.classList.remove(ENTERING);
+    root.removeEventListener('transitionend', settle);
+    root.removeEventListener('transitioncancel', settle);
+  };
+  root.addEventListener('transitionend', settle);
+  root.addEventListener('transitioncancel', settle);
 }

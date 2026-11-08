@@ -36,7 +36,7 @@ export const sessionsManifest = definePlugin({
       runsIn: 'page',
     },
     togglePopup: {
-      label: "Hide or show the session's popup",
+      label: "hide or show the session's popup",
       group: 'sessions',
       runsIn: 'page',
     },
@@ -108,7 +108,7 @@ export const sessionsManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The sessions layout Sessions mode's side bar, panes and tab bars draw in: a folder name in sessions' layouts folder, or default.",
+        "The sessions layout Sessions mode's side bar, panes, tab bars, session popups and their hidden bar draw in: a folder name in sessions' layouts folder, or default.",
     },
     titleMaxLength: {
       label: 'Title length',

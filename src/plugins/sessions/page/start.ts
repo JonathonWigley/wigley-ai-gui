@@ -206,10 +206,10 @@ function createExports(
 // which session the new pane shows; a split or pane close does nothing while
 // that picker is open. The pane tree and each pane's session persist in
 // uiState `panes`; a restored pane whose session main does not hold yet waits
-// for it until the first pane key that changes the panes. The side bar, panes
-// and tab bars draw with the layout the `layout` setting names. `openPreview`
-// swaps the side bar's rows for a sample of every row state and back,
-// page-only: it sends nothing to main. `renameSession` opens the rename dialog
+// for it until the first pane key that changes the panes. The side bar, panes,
+// tab bars, popups and the popup bar draw with the layout the `layout` setting
+// names. `openPreview` swaps the side bar's rows for a sample of every row
+// state and back, page-only: it sends nothing to main. `renameSession` opens the rename dialog
 // over the focused pane's session; the rows draw titles cut to the
 // `titleMaxLength` setting, drawn again when it changes. The rows group by
 // project under Favorites and Recent, from the favorites and recency stamps in
@@ -467,7 +467,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         }
         blurFocusedElement();
         const canFocusBox =
-          sessionId !== null && api.keys.command('chat.focusBox') !== undefined;
+          action === 'toBox' &&
+          sessionId !== null &&
+          api.keys.command('chat.focusBox') !== undefined;
         if (canFocusBox) {
           api.commands.run('chat.focusBox');
         }

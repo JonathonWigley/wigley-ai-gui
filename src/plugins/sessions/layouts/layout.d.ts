@@ -36,7 +36,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - `has-favorites` on the side bar's `rows` while Favorites holds a group, and `is-reordering` there while a group is
 //   dragged;
 // - `is-open` on the root of the popup that shows, the top open popup of its session, and `inert` on every other
-//   popup's root; the click on each `popupBar` entry, which opens its popup, set as on a tab, and the entry's
+//   popup's root; `is-entering` on a popup's root from its add until its first transition on that root ends or the
+//   popup hides, so a slide up on add keyed on it runs once; the click on each `popupBar` entry, which opens its popup, set as on a tab, and the entry's
 //   `aria-label` (its popup's `title`).
 // The tab bodies, the sheet that holds them, the popup layer over them and the elements other plugins add stay the
 // app's.

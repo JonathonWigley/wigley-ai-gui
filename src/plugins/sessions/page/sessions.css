@@ -21,8 +21,9 @@
    divider's resize prompt sits centred on its handle, so the side prompts sit
    below the pane's vertical centre and the up and down prompts at the right
    corner, each clear of the resize prompt. The up and down prompts sit in an
-   inset their pane's sheet leaves free, the up one between the tab bar and
-   the sheet, so no content draws under them. */
+   inset their pane leaves free, the up one between the tab bar and the sheet,
+   the down one under the frame, its hidden popups' bar included, so no
+   content draws under them. */
 .session-pane-edge {
   position: absolute;
   z-index: 2;
@@ -37,7 +38,13 @@
 
 .session-pane:has(> .session-pane-edge.is-down)
   > .session-pane-body
-  .session-bodies {
+  > .session-area {
+  padding-bottom: var(--session-edge-inset);
+}
+
+.session-pane:has(> .session-pane-edge.is-down)
+  > .session-pane-body
+  > .session-bodies {
   margin-bottom: var(--session-edge-inset);
 }
 
@@ -157,9 +164,9 @@
 }
 
 /* The popup layer fills the sheet over the tab body, above the pane edges,
-   and takes no pointer but on the popup that shows and on the strip above
-   it, which the frame-local scrim dims while a popup shows and which absorbs
-   a click. */
+   and takes no pointer but on the popup that shows and on the band of the tab
+   body above it, which the frame-local scrim dims while a popup shows and
+   which absorbs a click. */
 .session-bodies > .session-popups {
   position: absolute;
   z-index: 3;

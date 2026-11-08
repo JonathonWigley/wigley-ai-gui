@@ -329,8 +329,8 @@ export interface SessionTabHandle extends Disposable {
 // cancel prompt).
 // `shown` runs each time this popup becomes the visible surface: the top open
 // popup of the focused chat pane's session while Sessions mode shows. Its
-// plugin sets its base key scope and moves focus there; sessions focuses
-// nothing. `shown` may run inside `addPopup`, before its handle returns, so it
+// plugin sets its base key scope there and may move focus into the popup;
+// sessions focuses nothing. `shown` may run inside `addPopup`, before its handle returns, so it
 // must not read that handle.
 export interface SessionPopupView {
   id: string;
