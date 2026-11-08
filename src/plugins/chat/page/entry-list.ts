@@ -233,8 +233,11 @@ export interface EntryList {
   // applies.
   place(): EntryListPlace;
   // Puts the last page's place back once the list holds entries: now, or at
-  // the rebuild that brings them. A saved stop no entry holds leaves the cursor
-  // at its start, on the latest stop.
+  // the rebuild that brings them. A saved stop the list does not hold leaves
+  // the cursor at its start, on the latest stop, and the place stays held: each
+  // rebuild tries it again, as one whose layouts draw runs and steps, until a
+  // stop holds it or the user moves the cursor (by a scroll too), opens or
+  // closes a range, toggles a run or an expander, or calls `scrollBy`.
   restorePlace(place: EntryListPlace): void;
 }
 
@@ -359,7 +362,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let rows: ListRow[] = [];
   let order: string[] = [];
   let focus: EntryFocus = START_FOCUS;
-  // The last page's place, held until the list holds entries.
+  // The last page's place, held until a stop of the list holds its cursor or the
+  // user moves the cursor.
   let savedPlace: EntryListPlace | null = null;
   let tick: number | null = null;
   // The elements carrying `is-cursor` or `is-range`.
@@ -510,13 +514,14 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   };
 
   // Opens the saved runs and expanders, then puts the cursor on the saved stop
-  // when a stop holds it, else at its start; false while no entry is held.
-  const applySavedPlace = (): boolean => {
+  // and lets the saved place go when a stop holds it, else puts the cursor at
+  // its start and keeps the place for the next rebuild, whose layouts may draw
+  // the stop; nothing while no entry is held.
+  const applySavedPlace = () => {
     if (savedPlace === null || entries.length === 0) {
-      return false;
+      return;
     }
     const saved = savedPlace;
-    savedPlace = null;
     for (const runId of saved.openRuns) {
       openRuns.add(runId);
     }
@@ -526,13 +531,20 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     changed();
     const { stopId } = saved.focus;
     const isStopHeld = stopId === null || order.includes(stopId);
+    if (isStopHeld) {
+      savedPlace = null;
+    }
     focus = focusAfterChange(
       isStopHeld ? saved.focus : START_FOCUS,
       order,
       lastStopId(),
     );
     drawFocus(focus.following ? 'bottom' : 'slot');
-    return true;
+  };
+
+  // A move of the user's wins over a saved place still waiting for its stop.
+  const dropSavedPlace = () => {
+    savedPlace = null;
   };
 
   // Draws `messages` as the pending rows, in order, after the entries.
@@ -665,6 +677,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const settleInBand = (direction: 1 | -1, isAtBottom: boolean) => {
     const nearest = nearestStopInBand(direction);
     if (nearest !== null) {
+      dropSavedPlace();
       focus = focusStop(focus, order, nearest);
     }
     focus = focusAfterScrollEvent(focus, isAtBottom);
@@ -789,17 +802,20 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       changed();
     },
     move(step) {
+      dropSavedPlace();
       focus = moveFocus(focus, order, step);
       drawFocus('slot');
       return focusedStop();
     },
     moveToMessage(step) {
+      dropSavedPlace();
       focus = moveToMessage(focus, order, messageIds(rows), step);
       drawFocus('slot');
       return focusedStop();
     },
     isAtLastStop: () => isAtLastStop(focus, order),
     latest() {
+      dropSavedPlace();
       focus = focusLatest(lastStopId(), focus.anchorId);
       drawFocus('bottom');
       if (!isListHidden()) {
@@ -807,17 +823,20 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       }
     },
     first() {
+      dropSavedPlace();
       focus = focusFirst(order, focus.anchorId);
       drawFocus('top');
       return focusedStop();
     },
     toggleRange() {
+      dropSavedPlace();
       focus = toggleAnchor(focus);
       drawFocus('marks');
       return focus.stopId !== null;
     },
     isRangeOpen: () => focus.anchorId !== null,
     cancelRange() {
+      dropSavedPlace();
       const wasOpen = focus.anchorId !== null;
       focus = clearAnchor(focus);
       drawFocus('marks');
@@ -854,6 +873,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus(focus.following ? 'bottom' : 'slot');
     },
     scrollBy(step, direction) {
+      dropSavedPlace();
       const scroll = scrollContent(
         list,
         step,
@@ -870,6 +890,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     focusedBlock: () =>
       focus.stopId === null ? null : (blockOfStop(focus.stopId) ?? null),
     toggleFocused() {
+      dropSavedPlace();
       const stop = focusedStop();
       if (stop === null || stop.kind === 'queued') {
         return null;
@@ -886,8 +907,15 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       deps.placeChanged();
       return { stop, result: opens ? 'expanded' : 'collapsed' };
     },
-    toggleRun: (runId) => (runSlots.has(runId) ? toggleRun(runId) : 'nothing'),
+    toggleRun(runId) {
+      if (!runSlots.has(runId)) {
+        return 'nothing';
+      }
+      dropSavedPlace();
+      return toggleRun(runId);
+    },
     toggleExpander(entryId, place) {
+      dropSavedPlace();
       const result = slots.get(entryId)?.kit.expanders.toggle(place);
       if (result === undefined) {
         return 'nothing';
@@ -899,6 +927,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       if (!order.includes(stopId)) {
         return false;
       }
+      dropSavedPlace();
       focus = focusStop(focus, order, stopId);
       drawFocus('marks');
       return true;

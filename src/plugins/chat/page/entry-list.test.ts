@@ -556,33 +556,83 @@ describe('entry list', () => {
     expect(list.focused()).toEqual({ kind: 'entry', entry: notice('n1') });
   });
 
-  it.each([
+  const notices = [notice('n1'), notice('n2'), notice('n3')];
+  const withRun = [user('u1'), tool('t1'), tool('t2'), assistant('done')];
+
+  // `thenActivity`: the restore lands on the default layout, and a layout with
+  // activity in the transcript shows after it; `movesFirst`: the user moves the
+  // cursor up before that layout shows.
+  it.each<{
+    name: string;
+    held: ChatEntry[];
+    stopId: string;
+    openRuns?: string[];
+    isRestoredFirst?: boolean;
+    thenActivity?: boolean;
+    movesFirst?: boolean;
+    focused: EntryListStop;
+  }>([
     {
       name: 'a held stop',
+      held: notices,
       stopId: 'n2',
-      isRestoredFirst: false,
-      focused: notice('n2'),
+      focused: { kind: 'entry', entry: notice('n2') },
     },
     {
       name: 'a held stop restored before the entries arrive',
+      held: notices,
       stopId: 'n2',
       isRestoredFirst: true,
-      focused: notice('n2'),
+      focused: { kind: 'entry', entry: notice('n2') },
     },
     {
       name: 'a stop no entry holds',
+      held: notices,
       stopId: 'gone',
-      isRestoredFirst: false,
-      focused: notice('n3'),
+      focused: { kind: 'entry', entry: notice('n3') },
+    },
+    {
+      name: 'a run stop the first layout does not draw',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+    },
+    {
+      name: 'a step stop the first layout does not draw',
+      held: withRun,
+      stopId: 't2',
+      openRuns: ['activity:t1'],
+      thenActivity: true,
+      focused: { kind: 'entry', entry: tool('t2') },
+    },
+    {
+      name: 'a run stop the first layout does not draw, the user moving first',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: true,
+      focused: { kind: 'entry', entry: user('u1') },
     },
   ])(
     'restored_stop_that_no_entry_holds_falls_back ($name)',
-    ({ stopId, isRestoredFirst, focused }) => {
-      const { list } = setUpList(defaultShown());
-      const held = [notice('n1'), notice('n2'), notice('n3')];
+    ({
+      held,
+      stopId,
+      openRuns = [],
+      isRestoredFirst = false,
+      thenActivity = false,
+      movesFirst = false,
+      focused,
+    }) => {
+      const { list, layouts } = setUpList(defaultShown());
       const place = {
         focus: { stopId, following: false, anchorId: null },
-        openRuns: [],
+        openRuns,
         openExpanders: {},
       };
       if (isRestoredFirst) {
@@ -592,8 +642,15 @@ describe('entry list', () => {
         list.rebuild(held);
         list.restorePlace(place);
       }
+      if (movesFirst) {
+        list.move(-1);
+      }
+      if (thenActivity) {
+        layouts.set(activityShown());
+        list.rebuild(held);
+      }
 
-      expect(list.focused()).toEqual({ kind: 'entry', entry: focused });
+      expect(list.focused()).toEqual(focused);
     },
   );
 
