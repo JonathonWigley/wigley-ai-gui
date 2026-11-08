@@ -304,6 +304,13 @@ export interface ChatSessions {
   // throws, which is logged. Its handle removes only this registration; a second
   // `dispose` does nothing.
   addIdleCompactThreshold(read: () => number | null): Disposable;
+  // Starts an app compaction in an idle session chat holds, its process
+  // running, with no compaction running and no hold up; the session's
+  // `compaction` shows `reason` from now until the compaction ends, and a
+  // message sent meanwhile queues behind it. Returns false, logged, and starts
+  // nothing for any other session, during an attach, or when the process's
+  // `compact` throws.
+  compact(sessionId: string, reason: string): boolean;
   // Adds `section` at the end of the sections `resumeSections` asks. Each call is
   // its own registration, and its handle removes only it; a second `dispose` does
   // nothing.
@@ -371,11 +378,11 @@ interface HeldSession {
   // Control id → the value the user picked that the running process has not
   // reported yet.
   pendingPicks: Map<string, string>;
-  // Since the last idle, the process ran a hold's compaction and no message was
-  // written to it, so that idle ends no turn.
-  isOnlyAHoldsCompaction: boolean;
-  // The reason of the hold whose compaction is starting or running, until that
-  // compaction ends.
+  // Since the last idle, the process ran an app compaction, a hold's or
+  // `compact`'s, and no message was written to it, so that idle ends no turn.
+  isOnlyAppCompaction: boolean;
+  // The reason of the app compaction starting or running, a hold's or
+  // `compact`'s, until that compaction ends.
   compactionReason: string | null;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
@@ -772,7 +779,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // A replayed turn's end announces nothing, since it ended while the app was
   // closed, and neither does one `stopAll` caused, an idle with a hold up, whose
-  // row is still to go out, or the end of a stretch that ran only a hold's
+  // row is still to go out, or the end of a stretch that ran only an app
   // compaction.
   function updateActivity(session: HeldSession, isReplayed = false) {
     const previous = session.slots.info().activity;
@@ -795,7 +802,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       !deps.window.isFocused() || deps.selectedSessionId() !== sessionId;
     const workIsOver = session.backgroundIds.size === 0;
     const isTheTurnsOwnEnd = !isReplayed && !session.isStopRequested;
-    const ranATurn = !isHoldUp(session) && !session.isOnlyAHoldsCompaction;
+    const ranATurn = !isHoldUp(session) && !session.isOnlyAppCompaction;
     if (
       turnFinished &&
       userIsElsewhere &&
@@ -806,7 +813,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       announceTurnFinished(session);
     }
     if (turnFinished) {
-      session.isOnlyAHoldsCompaction = false;
+      session.isOnlyAppCompaction = false;
     }
     if (turnFinished || turnStarted) {
       save();
@@ -1425,7 +1432,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       processStarts: 0,
       confirmedPicks: new Map(Object.entries(opening.confirmedPicks)),
       pendingPicks: new Map(),
-      isOnlyAHoldsCompaction: false,
+      isOnlyAppCompaction: false,
       compactionReason: null,
       exit: null,
       branchReads: 0,
@@ -1552,7 +1559,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.pendingPicks.clear();
     clearBackground(session);
     session.isStopRequested = false;
-    session.isOnlyAHoldsCompaction = false;
+    session.isOnlyAppCompaction = false;
   }
 
   // Starts the session's process with the held mode and the confirmed picks,
@@ -2126,14 +2133,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const row = appendQueued(session, message, reason);
     save();
     log(`send held in ${sessionId}: ${reason}`);
-    session.compactionReason = reason;
-    session.isOnlyAHoldsCompaction = true;
-    try {
-      session.process?.compact();
-    } catch (error) {
-      session.compactionReason = null;
-      session.isOnlyAHoldsCompaction = false;
-      log(`compaction not started in ${sessionId}: ${errorText(error)}`);
+    if (!startAppCompaction(session, reason)) {
       session.rowOrders.delete(row.id);
       session.slots.setQueued(
         session.slots.queued().filter((queued) => queued.id !== row.id),
@@ -2141,6 +2141,65 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       save();
       return false;
     }
+    return true;
+  }
+
+  // Asks the process for a compaction under `reason`; false, logged, when
+  // `compact` throws.
+  function startAppCompaction(session: HeldSession, reason: string): boolean {
+    session.compactionReason = reason;
+    session.isOnlyAppCompaction = true;
+    try {
+      session.process?.compact();
+    } catch (error) {
+      session.compactionReason = null;
+      session.isOnlyAppCompaction = false;
+      log(
+        `compaction not started in ${session.sessionId}: ${errorText(error)}`,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  // Why `compact` starts nothing in `session` now; null when it can start one.
+  function compactRefusal(session: HeldSession | undefined): string | null {
+    if (session === undefined || isDetached) {
+      return 'not held';
+    }
+    if (session.process === null || session.attaching !== null) {
+      return 'no running process';
+    }
+    if (isHoldUp(session)) {
+      return 'a hold is up';
+    }
+    if (session.slots.info().compaction !== null) {
+      return 'a compaction runs';
+    }
+    if (session.slots.info().activity !== 'idle') {
+      return 'not idle';
+    }
+    return null;
+  }
+
+  // The `compact` export: the compaction shows from the call, so a message
+  // sent before the harness reports its start queues behind it.
+  function compact(sessionId: string, reason: string): boolean {
+    const session = held.get(sessionId);
+    const refusal = compactRefusal(session);
+    if (session === undefined || refusal !== null) {
+      log(`compact for session ${sessionId} ignored: ${refusal}`);
+      return false;
+    }
+    if (!startAppCompaction(session, reason)) {
+      return false;
+    }
+    log(`compacting ${sessionId}: ${reason}`);
+    setCompaction(session, {
+      trigger: 'app',
+      reason,
+      startedAt: deps.clock.now(),
+    });
     return true;
   }
 
@@ -2231,7 +2290,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       throw new Error(`session ${session.sessionId} has no running process`);
     }
     const entryId = process.send(message);
-    session.isOnlyAHoldsCompaction = false;
+    session.isOnlyAppCompaction = false;
     if (!session.sent) {
       session.sent = true;
       setFirstMessageTitle(session, message.text);
@@ -3127,6 +3186,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         },
       };
     },
+    compact,
     addResumeSection(section) {
       const registration = { section };
       resumeSectionRegistrations.add(registration);

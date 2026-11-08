@@ -79,8 +79,9 @@ export interface QueuedMessage extends UserMessage {
   holdReason: string | null;
 }
 
-// A compaction running in a session. `reason` is the send gate's reason for a
-// compaction a hold started; null for any other.
+// A compaction running in a session. `reason` is the reason of an app
+// compaction, the send gate's for a hold's or the caller's for chat main's
+// `compact`; null for any other.
 export interface SessionCompaction {
   trigger: CompactionTrigger;
   reason: string | null;
@@ -487,6 +488,14 @@ export interface ChatMainExports {
   // running process keeps what it started with. Disposing the handle removes the
   // reader.
   addIdleCompactThreshold(read: () => number | null): Disposable;
+  // Compacts an idle session chat holds (trigger `app`), its dock showing
+  // `reason` from the call until the compaction ends; messages sent meanwhile
+  // queue behind it, and a working stretch that ran only it raises no
+  // `Turn finished` alert. True when it started one. False, logged, starting
+  // nothing, for a session chat does not hold, one whose process is not
+  // running or still attaching, one not idle, one with a compaction running or
+  // a hold up, or when the harness refuses.
+  compact(sessionId: string, reason: string): boolean;
   // Sections show at the top of the start prompt in registration order. One
   // whose `rows` fails is logged and left out. Disposing the handle removes the
   // section.

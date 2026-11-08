@@ -6759,6 +6759,149 @@ function emittedOf<K extends Emitted['event']>(
   );
 }
 
+describe('createChatSessions compact', () => {
+  const REASON = 'auto · agents running · 214k';
+
+  it('compact_IdleSession_ShowsItsReasonFromTheCallToTheEnd', async () => {
+    const test = await started({ clockNow: 1500 });
+    test.harness.holdCompactions();
+
+    expect(test.chat.compact(ROW_ID, REASON)).toBe(true);
+
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+    expect(test.chat.sessions()[0].compaction).toEqual({
+      trigger: 'app',
+      reason: REASON,
+      startedAt: 1500,
+    });
+    await flush();
+    expect(test.chat.sessions()[0].compaction?.reason).toBe(REASON);
+    test.harness.releaseCompactions();
+    await flush();
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+  });
+
+  it.each<{
+    given: string;
+    sessionId?: string;
+    act(test: Awaited<ReturnType<typeof started>>): Promise<void> | void;
+    logged: string;
+  }>([
+    {
+      given: 'a session chat does not hold',
+      sessionId: 'row-9',
+      act: () => undefined,
+      logged: 'compact for session row-9 ignored: not held',
+    },
+    {
+      given: 'a resting session',
+      act: async (test) => {
+        test.process.events.ended({ code: 0, error: null });
+        await flush();
+      },
+      logged: 'compact for session row-1 ignored: no running process',
+    },
+    {
+      given: 'a turn running',
+      act: (test) => test.activity('working'),
+      logged: 'compact for session row-1 ignored: not idle',
+    },
+    {
+      given: 'a compaction running',
+      act: (test) =>
+        test.process.events.agentEvent(compactionStartedEvent('manual')),
+      logged: 'compact for session row-1 ignored: a compaction runs',
+    },
+    {
+      given: 'a hold up',
+      act: async (test) => {
+        test.harness.holdCompactions();
+        test.chat.addSendGate(answerA);
+        await test.chat.send(ROW_ID, IDLE_SEND);
+      },
+      logged: 'compact for session row-1 ignored: a hold is up',
+    },
+  ])('compact_Refused_StartsNothing: $given', async (row) => {
+    const test = await started();
+    await row.act(test);
+    const before = test.chat.sessions()[0].compaction;
+    const calls = test.process.calls.filter(
+      (call) => call.method === 'compact',
+    ).length;
+
+    expect(test.chat.compact(row.sessionId ?? ROW_ID, REASON)).toBe(false);
+
+    expect(test.logged).toContain(row.logged);
+    expect(test.chat.sessions()[0].compaction).toEqual(before);
+    expect(
+      test.process.calls.filter((call) => call.method === 'compact').length,
+    ).toBe(calls);
+  });
+
+  it('compact_HarnessThrows_ReturnsFalseAndShowsNothing', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const test = setUp({
+      harnesses: [
+        {
+          ...fake,
+          start: (request, events) => ({
+            ...fake.start(request, events),
+            compact: () => {
+              throw new Error('refused');
+            },
+          }),
+        },
+      ],
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    test.setFocused(false);
+
+    expect(test.chat.compact(ROW_ID, REASON)).toBe(false);
+
+    expect(test.logged).toContain('compaction not started in row-1: refused');
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    fake.processes[0].events.activity('working');
+    fake.processes[0].events.activity('idle');
+    expect(test.announced).toHaveLength(1);
+  });
+
+  it('compact_MessageSentDuringIt_QueuesUntilItsEnd', async () => {
+    const test = await started();
+    test.harness.holdCompactions();
+    test.chat.compact(ROW_ID, REASON);
+
+    await test.chat.send(ROW_ID, LATER);
+
+    expect(test.chat.sessions()[0].queued.map((row) => row.text)).toEqual([
+      'later',
+    ]);
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+    test.harness.releaseCompactions();
+    await flush();
+    expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
+  });
+
+  it('compact_StretchRanOnlyIt_NoTurnFinishedAlert', async () => {
+    const test = await started();
+    test.setFocused(false);
+
+    test.chat.compact(ROW_ID, REASON);
+    await flush();
+
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(test.chat.sessions()[0].activity).toBe('idle');
+    expect(test.announced).toEqual([]);
+    test.activity('working');
+    test.activity('idle');
+    expect(test.announced).toHaveLength(1);
+  });
+});
+
 const AGENT_TITLES: SessionTitles = {
   user: null,
   agent: 'agent title',

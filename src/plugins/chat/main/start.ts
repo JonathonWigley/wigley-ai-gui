@@ -534,6 +534,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       addSendGate: (gate) => consumer.track(chat.addSendGate(gate)),
       addIdleCompactThreshold: (read) =>
         consumer.track(chat.addIdleCompactThreshold(read)),
+      compact: (sessionId, reason) => chat.compact(sessionId, reason),
       addResumeSection: (section) =>
         consumer.track(chat.addResumeSection(section)),
     });
