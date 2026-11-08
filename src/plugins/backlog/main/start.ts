@@ -19,6 +19,8 @@ import {
   followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
+import { newestPlanCopy, readPlanCopy } from '../../../shared/plan-copies';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import {
   type DocsMainEvents,
   type DocsMainExports,
@@ -81,7 +83,7 @@ const PLAN_DATES_LINE = /^(Target|Written): /;
 interface BacklogDeps {
   docs: DocsMainExports;
   git: Git;
-  files: Pick<Files, 'realPath' | 'list'>;
+  files: Pick<Files, 'read' | 'modified' | 'list' | 'realPath' | 'stat'>;
   paths: Paths;
   clock: Clock;
   log: PluginLog;
@@ -249,14 +251,42 @@ function planHeader(
   };
 }
 
+// The plan's counts and task statuses from `progress`. A task no line names,
+// or whose line has no status, keeps its index status.
+function withProgress(
+  plan: PlanShape,
+  progress: PlanProgress,
+  paths: Paths,
+): PlanShape {
+  return {
+    ...plan,
+    checked: progress.checked,
+    total: progress.total,
+    tasks: plan.tasks.map((task) => {
+      const file = paths.base(task.path);
+      const line = progress.tasks.find((candidate) => candidate.file === file);
+      return { ...task, status: line?.status ?? task.status };
+    }),
+  };
+}
+
+// The plan with its header from the index's copy, and its counts and task
+// statuses from the newest copy across its clone's checkouts; the index's
+// counts and statuses when no copy holds a `plan.md`. Null, logged, when a
+// read fails.
 async function readPlan(
   deps: BacklogDeps,
   plan: PlanShape,
 ): Promise<BacklogPlan | null> {
   try {
     const text = await deps.docs.readDoc(plan.path);
-    const folderName = deps.paths.base(deps.paths.parent(plan.path));
-    return { ...plan, ...planHeader(text, folderName) };
+    const planDir = deps.paths.parent(plan.path);
+    const header = planHeader(text, deps.paths.base(planDir));
+    const copy = await newestPlanCopy(planDir, deps);
+    const progress = copy === null ? null : await readPlanCopy(copy, deps);
+    const counted =
+      progress === null ? plan : withProgress(plan, progress, deps.paths);
+    return { ...counted, ...header };
   } catch (error) {
     logSkipped(deps.log, plan.path, error);
     return null;
