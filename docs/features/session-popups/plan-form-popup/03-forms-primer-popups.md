@@ -1,6 +1,6 @@
 # 03 — Forms and primer in popups; tab take-over removed
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -62,3 +62,5 @@ Done when: `npm test` and `npm run lint` pass; the test gate runs the tests abov
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 616576b6 · proof: diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10093); takeOver grep only chat's takeOverSkipped · concerns: plan's 'scope after registration' premise did not hold (render's trailing confirm.setBaseScope covers it); enterFrame cancel has no direct sessions test; usage-tab-line manifest still names '(Chat, Form, Primer)' session kinds

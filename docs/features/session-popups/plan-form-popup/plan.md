@@ -118,7 +118,7 @@ Boundary rules: the popup knows nothing of forms or chat; forms and primer reach
 - [x] [Docs tab plugin](02-docs-session-tab-plugin.md)
 
 ### Wave 2
-- [ ] [Forms and primer in popups](03-forms-primer-popups.md) — after 01
+- [x] [Forms and primer in popups](03-forms-primer-popups.md) — after 01
 
 ### Wave 3
 - [ ] [Self-test scripts](04-selftest-scripts.md) — after 01, 02, 03
@@ -136,7 +136,10 @@ Review base: aed38a35
 ### Groups
 - 02 · e79f0073 · diff read; tsc --noEmit and npm run lint clean after wave 1; worker's targeted tests green · concerns: none beyond rulings; docs' own test no longer covers addView teardown when an anchor dispose throws (moved to docs-session-tab)
 - 01 · 23a30128 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10099) · concerns: command label capitalised as pinned while sibling sessions labels are lower-case; look (slide, scrim, bar spacing) unchecked on screen until 04/06; DESIGN.md and docs/keymap.md oxfmt padding fixed (pre-existing lint failure from the docs-ahead commit)
+- 03 · 616576b6 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10093); takeOver grep only chat's takeOverSkipped · concerns: plan's 'scope after registration' premise did not hold (render's trailing confirm.setBaseScope covers it); enterFrame cancel has no direct sessions test; usage-tab-line manifest still names '(Chat, Form, Primer)' session kinds
 ### Contract changes
+- SessionPopupView.beforeClose: boolean → boolean | Promise<boolean> · why: forms' guardSessionClose answers through a promise while its cancel prompt asks · consumers: 03 · group 03
+- FormPopupHandle: setStatus, open, isVisible, dispose (no hide) · why: the helper calls only these · consumers: none outside 03 · group 03
 ### Rulings
 - defaults row in settings.test.ts rather than manifests.test.ts — settings test owns defaultSettingsFor — the row moves if wrong · group 02
 - docs' internal addView returns the DocsViewHandle directly — sourceReplaced on the handle left {handle, view} with no reader — none · group 02
@@ -148,5 +151,10 @@ Review base: aed38a35
 - enter frame uses global requestAnimationFrame; tests stub it — as docs/start.ts does — future tests must stub it · group 01
 - dim strip is an app-owned div.session-popup-scrim under the popup; layer/scrim CSS in sessions.css, popup look and slide in default layout.css — a user layout without the transition still gets inert and clipping · group 01
 - default popup part draws a frame only (aria-label title, body); title/icon only in bar entries — not asked for · group 01
+- SessionPopupView.beforeClose widened to boolean | Promise<boolean>, as SessionTabView's — forms' close guard answers through a promise while its cancel prompt asks, and mayClose already awaits — none (type-only) · lead, on 03's BLOCKED
+- no extra setBaseScope/setScopeFor after a view registers — the render's trailing confirm.setBaseScope runs after registration; single-session view tests prove it — one render with a null target if wrong · group 03
+- 01's addPopup now stores and cancels its enter animation frame on remove/drop — a disposed popup's frame stayed live and failed forms/primer stop tests — revert re-reds those cases · group 03
+- forms-view formClosed row expecting idle scope replaced by 'forms sets no further scope or target' — no idle surface remains; the tab under sets its own scope — forms would need an idle scope otherwise · group 03
+- PrimerTab/mountPrimerTab renamed PrimerPopups/mountPrimerPopups — no name calls the surface a tab; PrimerView taken — none · group 03
 ### Review rounds
 ### Test gate
