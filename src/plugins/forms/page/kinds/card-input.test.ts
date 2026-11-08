@@ -109,13 +109,14 @@ describe('cardInput', () => {
     expect(input.recommend).toBeNull();
   });
 
-  it('noticeCardInput_CarriesBadge', () => {
+  it('noticeCardInput_CarriesIndexAndBadge', () => {
     const { round } = presentedRound('r1', {
       notices: [notice('Zeta'), { ...notice('Eta'), badge: 'Dispatched' }],
     });
 
     const input = noticeFormat.cardInput(round, 2);
 
+    expect(input.index).toBe(2);
     expect(input.label).toBe('N2');
     expect(input.title).toBe('Eta');
     expect(input.badge).toBe('Dispatched');

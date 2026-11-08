@@ -257,6 +257,7 @@ describe('form popups of several sessions', () => {
     const saved: RoundPlace = {
       focus: 0,
       reviewRow: 0,
+      noticeLine: 0,
       view: 'forms',
       confirmReturnView: 'review',
     };

@@ -104,6 +104,12 @@ export const formsManifest = definePlugin({
       runsIn: 'page',
       arg: 'number',
     },
+    focusNoticeAt: {
+      label: 'focus the numbered notice line',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
     focusItem: {
       label: 'focus the item',
       group: 'items',

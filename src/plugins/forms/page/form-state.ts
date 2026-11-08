@@ -256,16 +256,23 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
 // The round's place: its view and the view its Cancel prompt returns to are the
 // state's while it is active, else 'forms', the view activating its session opens.
 export function roundPlace(state: FormsState, round: RoundState): RoundPlace {
-  const { focus, reviewRow } = round;
+  const { focus, reviewRow, noticeLine } = round;
   if (round.formId === state.activeFormId && state.view !== 'idle') {
     return {
       focus,
       reviewRow,
+      noticeLine,
       view: state.view,
       confirmReturnView: state.confirmReturnView,
     };
   }
-  return { focus, reviewRow, view: 'forms', confirmReturnView: 'review' };
+  return {
+    focus,
+    reviewRow,
+    noticeLine,
+    view: 'forms',
+    confirmReturnView: 'review',
+  };
 }
 
 // The answerable items, then the notices stop when the round has notices.
@@ -550,11 +557,16 @@ function restorePlace(
   place: RoundPlace,
 ): FormsState {
   const { focus, reviewRow } = place;
-  const placed = updateForm(state, formId, (round) =>
-    round.focus === focus && round.reviewRow === reviewRow
+  const placed = updateForm(state, formId, (round) => {
+    const noticeLine = restoredNoticeLine(round, place.noticeLine);
+    const isPlaceUnchanged =
+      round.focus === focus &&
+      round.reviewRow === reviewRow &&
+      round.noticeLine === noticeLine;
+    return isPlaceUnchanged
       ? round
-      : { ...round, focus, reviewRow },
-  );
+      : { ...round, focus, reviewRow, noticeLine };
+  });
   const isViewUnchanged =
     placed.view === place.view &&
     placed.confirmReturnView === place.confirmReturnView;
@@ -566,6 +578,13 @@ function restorePlace(
     view: place.view,
     confirmReturnView: place.confirmReturnView,
   };
+}
+
+// The saved line cursor held to the round's notices: 1 to their count, 0 with
+// none.
+function restoredNoticeLine(round: RoundState, line: number): number {
+  const count = round.openNotices.length;
+  return count === 0 ? 0 : Math.min(Math.max(line, 1), count);
 }
 
 function openReview(state: FormsState): FormsState {

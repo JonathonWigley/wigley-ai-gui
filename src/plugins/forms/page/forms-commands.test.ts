@@ -605,6 +605,7 @@ describe('formsCommandHandlers', () => {
   // From Alpha, rail position 0; a null `focus` is focus left where it was.
   it.each<{
     name: string;
+    command: 'toggleNoticeAt' | 'focusNoticeAt';
     view: 'forms' | 'review';
     notice: number;
     noticeLine: number;
@@ -613,7 +614,8 @@ describe('formsCommandHandlers', () => {
     logs: string[];
   }>([
     {
-      name: 'notice 2 moves the cursor onto it and opens it',
+      name: 'toggleNoticeAt notice 2 moves the cursor onto it and opens it',
+      command: 'toggleNoticeAt',
       view: 'forms',
       notice: 2,
       noticeLine: 2,
@@ -622,7 +624,8 @@ describe('formsCommandHandlers', () => {
       logs: ['opened notice 2'],
     },
     {
-      name: 'under the review changes nothing',
+      name: 'toggleNoticeAt under the review changes nothing',
+      command: 'toggleNoticeAt',
       view: 'review',
       notice: 2,
       noticeLine: 1,
@@ -631,7 +634,28 @@ describe('formsCommandHandlers', () => {
       logs: [],
     },
     {
-      name: 'a notice the round lacks is logged',
+      name: 'toggleNoticeAt logs a notice the round lacks',
+      command: 'toggleNoticeAt',
+      view: 'forms',
+      notice: 3,
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: null,
+      logs: ['no notice 3'],
+    },
+    {
+      name: 'focusNoticeAt notice 2 moves the cursor onto it and leaves it closed',
+      command: 'focusNoticeAt',
+      view: 'forms',
+      notice: 2,
+      noticeLine: 2,
+      openNotices: [false, false],
+      focus: 2,
+      logs: [],
+    },
+    {
+      name: 'focusNoticeAt logs a notice the round lacks',
+      command: 'focusNoticeAt',
       view: 'forms',
       notice: 3,
       noticeLine: 1,
@@ -640,8 +664,16 @@ describe('formsCommandHandlers', () => {
       logs: ['no notice 3'],
     },
   ])(
-    'toggleNoticeAt: $name',
-    ({ view, notice, noticeLine, openNotices, focus, logs: expectedLogs }) => {
+    'notice At commands: $name',
+    ({
+      command,
+      view,
+      notice,
+      noticeLine,
+      openNotices,
+      focus,
+      logs: expectedLogs,
+    }) => {
       const { run, store, round, logs } = setup([], undefined, twoNotices);
       store.dispatch({ type: 'focusItem', item: 0 });
       if (view === 'review') {
@@ -650,7 +682,7 @@ describe('formsCommandHandlers', () => {
       const focusBefore = round().focus;
       logs.length = 0;
 
-      run('toggleNoticeAt', { arg: notice });
+      run(command, { arg: notice });
 
       expect(round()).toMatchObject({
         noticeLine,

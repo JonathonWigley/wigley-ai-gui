@@ -23,8 +23,12 @@ export interface QuestionCard {
   round: RoundInfo;
 }
 // The body of the notice's line on the notices pane. It draws under the line's head, so it need not draw the badge or
-// the title.
+// the title. `index` is the notice's 1-based place among the notices, the `arg` of `forms.focusNoticeAt`, which moves
+// the line cursor onto it, and `forms.toggleNoticeAt`. A click acts on this notice through
+// `kit.command('forms.focusNoticeAt', input.index)`, obtained while the card builds, or
+// `kit.button(parent, label, 'forms.focusNoticeAt', { arg: input.index })`.
 export interface NoticeCard {
+  index: number;
   label: string;
   title: string;
   context: string;
@@ -89,10 +93,12 @@ export interface FormsBaseKit extends BaseKit {
 }
 
 export interface Kit extends FormsBaseKit {
-  // This card's item's rail position, the `arg` of `forms.focusItem` and the `forms.*At` commands, and the `item` of
+  // This card's item's rail position, the `arg` of `forms.focusItem`, `forms.clearChoiceAt`,
+  // `forms.acceptRecommendationAt`, `forms.toggleNotApplicableAt` and `forms.toggleDontAskAt`, and the `item` of
   // `forms.chooseAt`. A click acts on this item through them, whatever box holds focus: `kit.command(id, arg)` checks
   // its command while the card builds, so obtain each runner then. `forms.chooseAt`'s `number` is 1-based, a
   // question's choice or a finding's entry (`FindingCardEntry.number`); picking the held number again clears the pick.
+  // The notice commands, `forms.focusNoticeAt` and `forms.toggleNoticeAt`, take the notice's `NoticeCard.index`.
   readonly position: number;
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
@@ -243,9 +249,10 @@ export interface NoticesKit extends FormsBaseKit {
   // Draws the line for notice `index` (its chevron, its open state, its hidden body holding the notice's
   // `cards.notice`, and the cursor mark), appends it to `parent`, and returns the line's head for the layout to draw
   // into. Call it on an attached `parent`. Each line draws once; a line the pane leaves out is appended at the end of
-  // the pane. The app owns the click, which runs `forms.toggleNoticeAt` with `index`, the open state and the cursor. The head sits inside the line's toggle button, so
-  // a click on it toggles the line: draw nothing interactive there. On each update the app appends the toggle key's
-  // prompt (`span.notice-line-prompt`) to the end of the cursor line's head.
+  // the pane. The app owns the click, which runs `forms.toggleNoticeAt` with `index`, the open state and the cursor.
+  // The head sits inside the line's toggle button, so a click on it toggles the line: draw nothing interactive there.
+  // On each update the app appends the toggle key's prompt (`span.notice-line-prompt`) to the end of the cursor line's
+  // head.
   line(parent: HTMLElement, index: number): HTMLElement;
 }
 

@@ -112,6 +112,13 @@ export const formsToggleNoticeAtCommand: CommandKey<
   'forms.toggleNoticeAt'
 > = { id: 'forms.toggleNoticeAt' };
 
+// Moves the line cursor onto the 1-based notice, which focuses the notices
+// stop, and nothing more.
+export const formsFocusNoticeAtCommand: CommandKey<
+  number,
+  'forms.focusNoticeAt'
+> = { id: 'forms.focusNoticeAt' };
+
 // Focuses the item at the rail position, and nothing more.
 export const formsFocusItemCommand: CommandKey<number, 'forms.focusItem'> = {
   id: 'forms.focusItem',
@@ -400,12 +407,14 @@ export const formsPageKey: DependencyKey<FormsPageExports, 'page', 'forms'> = {
 };
 
 // Where an open round's page left it: the focused rail position, the review
-// cursor's row, and the view with the view its Cancel prompt returns to, both
-// kept from the round the page last showed as active. `confirm` is the review's
-// Cancel prompt, which leaves the session open.
+// cursor's row, the notices stop's line cursor (1-based, 0 with no notices),
+// and the view with the view its Cancel prompt returns to, both kept from the
+// round the page last showed as active. `confirm` is the review's Cancel
+// prompt, which leaves the session open.
 export interface RoundPlace {
   focus: number;
   reviewRow: number;
+  noticeLine: number;
   view: 'forms' | 'review' | 'confirm';
   confirmReturnView: 'forms' | 'review';
 }

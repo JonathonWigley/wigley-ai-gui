@@ -227,6 +227,9 @@ export function formsCommandHandlers(
       }
     },
     toggleNoticeAt: ({ arg }) => toggleNamedNotice(deps, arg),
+    focusNoticeAt: ({ arg }) => {
+      focusNamedNotice(deps, arg);
+    },
     focusItem: ({ arg }) => {
       focusNamedItem(deps, arg);
     },
@@ -422,19 +425,32 @@ function pickNamedRailItem(deps: FormsCommandDeps, position: number) {
 }
 
 // Moves the active round's line cursor onto notice `notice`, 1-based, which
-// focuses the notices stop, then opens or closes that line, as a click on its
-// head does; a notice the round lacks is logged.
+// focuses the notices stop; returns the round, or null with no round, and null
+// with the miss logged for a notice the round lacks.
+function focusNamedNotice(
+  deps: FormsCommandDeps,
+  notice: number,
+): RoundState | null {
+  const round = activeForm(deps.store.get());
+  if (round === null) {
+    return null;
+  }
+  if (round.openNotices[notice - 1] === undefined) {
+    deps.log(`no notice ${notice}`);
+    return null;
+  }
+  deps.store.dispatch({ type: 'focusNotice', notice });
+  return round;
+}
+
+// Focuses notice `notice` as focusNamedNotice does, then opens or closes its
+// line, as a click on its head does.
 function toggleNamedNotice(deps: FormsCommandDeps, notice: number) {
   const { store, log } = deps;
-  const round = activeForm(store.get());
+  const round = focusNamedNotice(deps, notice);
   if (round === null) {
     return;
   }
-  if (round.openNotices[notice - 1] === undefined) {
-    log(`no notice ${notice}`);
-    return;
-  }
-  store.dispatch({ type: 'focusNotice', notice });
   toggleNoticeLine(
     { dispatch: store.dispatch, getState: store.get, log },
     round.formId,

@@ -1705,6 +1705,7 @@ describe('placeRestored', () => {
   const REVIEW_ROW_TWO: RoundPlace = {
     focus: 1,
     reviewRow: 1,
+    noticeLine: 0,
     view: 'review',
     confirmReturnView: 'review',
   };
@@ -1735,6 +1736,40 @@ describe('placeRestored', () => {
     },
   );
 
+  it.each([
+    { case: 'a line inside the notices', notices: 3, saved: 2, line: 2 },
+    { case: 'a line past the last notice', notices: 2, saved: 5, line: 2 },
+    { case: 'line 0 on a round with notices', notices: 2, saved: 0, line: 1 },
+    {
+      case: 'a line on a round without notices',
+      notices: 0,
+      saved: 2,
+      line: 0,
+    },
+  ])(
+    'restores the notice line held to the notices: $case',
+    ({ notices, saved, line }) => {
+      const state = initialState(
+        [
+          presented('r1', {
+            notices: Array.from({ length: notices }, (_, i) =>
+              notice(`N${i + 1}`),
+            ),
+          }),
+        ],
+        'r1-session',
+      );
+
+      const restored = apply(state, {
+        type: 'placeRestored',
+        formId: 'r1',
+        place: { ...REVIEW_ROW_TWO, noticeLine: saved },
+      });
+
+      expect(active(restored).noticeLine).toBe(line);
+    },
+  );
+
   it("writes the forms view in a background round's place", () => {
     const state = apply(
       initialState([presented('r1'), presented('r2')], 'r1-session'),
@@ -1745,6 +1780,7 @@ describe('placeRestored', () => {
     expect(roundPlace(state, background)).toEqual({
       focus: background.focus,
       reviewRow: background.reviewRow,
+      noticeLine: background.noticeLine,
       view: 'forms',
       confirmReturnView: 'review',
     });

@@ -6,6 +6,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 import { chatPageKey } from '../../chat/contract';
 import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import { contextBreakdownsSlot } from '../contract';
@@ -37,11 +38,7 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

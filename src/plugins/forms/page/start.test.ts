@@ -132,6 +132,7 @@ function moveToReviewRowThree(
 const REVIEW_ROW_THREE: RoundPlace = {
   focus: 1,
   reviewRow: 2,
+  noticeLine: 0,
   view: 'review',
   confirmReturnView: 'review',
 };
