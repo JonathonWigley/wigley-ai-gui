@@ -242,6 +242,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   session-log/   manifest.ts and main/ only (hears chat's and sessions' lifecycle events, appends each to
                  `session-events.jsonl` in its plugin data, registers the Recently closed resume section through chat's
                  `addResumeSection`, hands its self-test script); `docs/features/session-log/design.md`
+  session-stash/ manifest.ts, contract.ts, main/ (keeps each asked stash until its session's user close, writes it to
+                 `stashed.json` in its plugin data, removes it on resume, registers the Stashed resume section through
+                 chat's `addResumeSection` ahead of session-log's, hands its self-test script), page/ (`Space '`: the
+                 note dialog over the focused pane's session, then sessions' `closeSession`), layouts/ (its Layout
+                 contract and `default` layout); `docs/features/session-stash/design.md`
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
@@ -274,7 +279,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual and workflow, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
+                 to visual and workflow, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the placement check over the core's anchors), layouts/
@@ -874,7 +879,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-heavy/main/selftest-script.ts` for
-  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

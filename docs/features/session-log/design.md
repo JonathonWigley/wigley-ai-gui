@@ -38,7 +38,7 @@ setting.
 ## Recently closed
 
 The start prompt asks chat for its resume sections, and `session-log` registers one, Recently closed, through chat's
-`addResumeSection`. It shows at the top of the Folder step across every folder and profile, where a pick resumes at
+`addResumeSection`, below `session-stash`'s Stashed (`docs/features/session-stash/design.md`). It shows at the top of the Folder step across every folder and profile, where a pick resumes at
 once, and at the top of the Session step filtered to the chosen folder and profile. `recentlyClosedCount` caps it, and
 0 hides it. The newest row sits last, next to the cursor, so `k` then Enter reopens the session closed last.
 
