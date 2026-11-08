@@ -49,6 +49,7 @@ import { createMainAgentPart } from './main-agent-part';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
 import { createRowClock } from './row-clock';
+import { createRowProfile } from './row-profile';
 import { createSessionPart } from './session-part';
 import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
@@ -246,6 +247,17 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       drops: api.drops,
     });
     sessions.addRowPart(rowClock.part);
+    const rowProfile = createRowProfile({
+      layouts,
+      kit: partDeps,
+      paths: services.paths,
+      homeDir: services.homeDir,
+      log: services.log,
+      profiles: () => api.settings().profiles,
+      profileDirOf: (sessionId) => rows.get(sessionId)?.profileDir ?? null,
+    });
+    sessions.addRowPart(rowProfile.part);
+    api.onSettingsChanged(() => rowProfile.profilesChanged());
     sideParts.add(
       createMainAgentPart({
         surfaceOf: (sessionId) => view.composerOf(sessionId),

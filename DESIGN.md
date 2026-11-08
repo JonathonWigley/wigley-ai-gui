@@ -392,6 +392,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with no profile it holds a muted `No profiles` line. A meter's percent is never narrower than `100%`, so the meters
   line up from row to row. In the status line and the details, the 5h and Week rows always show; any other row (a
   model-scoped limit) shows only while used, and extra usage only while on and spent.
+- **Profile:** every session row whose harness the app runs opens its row parts' line with a neutral Tag naming its
+  profile: the name chat's profiles setting gives the session's config folder (`work`, `personal`), else the folder's
+  last segment. A session with no config folder of its own counts as its harness's default folder.
 - **Unity pool:** a session row holding a pool clone carries a neutral Tag, `Unity 3`, in its row parts' line, and
   one waiting in a pool's queue an `attention` Tag, `Unity: queued 2nd`; one Tag per pool. While the shown session is
   in a pool, the right bar holds the pool panel after the usage details: a section header `Unity pool · <pool>`, a

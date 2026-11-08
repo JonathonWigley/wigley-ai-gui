@@ -983,7 +983,10 @@ describe('createSessionList', () => {
   it.each([
     {
       name: 'a claude session in a profile',
-      session: { ...info('/work/x', 'claude'), profileDir: '~/.claude-personal' },
+      session: {
+        ...info('/work/x', 'claude'),
+        profileDir: '~/.claude-personal',
+      },
       profileDir: 'resolved:~/.claude-personal',
     },
     {
@@ -996,14 +999,17 @@ describe('createSessionList', () => {
       session: info('/work/x', 'codex'),
       profileDir: null,
     },
-  ])('connect_RowCarriesTheResolvedConfigFolder ($name)', ({ session, profileDir }) => {
-    const { list } = setUp();
+  ])(
+    'connect_RowCarriesTheResolvedConfigFolder ($name)',
+    ({ session, profileDir }) => {
+      const { list } = setUp();
 
-    const { session: connected } = list.connect(session);
-    list.mark(connected.id);
+      const { session: connected } = list.connect(session);
+      list.mark(connected.id);
 
-    expect(list.state().rows[0].profileDir).toBe(profileDir);
-  });
+      expect(list.state().rows[0].profileDir).toBe(profileDir);
+    },
+  );
 
   it('selects the opened row over the selected one', () => {
     const { list } = setUp();

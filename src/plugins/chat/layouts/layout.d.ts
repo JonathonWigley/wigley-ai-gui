@@ -206,6 +206,12 @@ export interface RowClockInput {
   isRunning: boolean;
 }
 
+// `name` is the session's profile: the name chat's profiles setting gives its config folder, else the folder's last
+// segment.
+export interface RowProfileInput {
+  name: string;
+}
+
 // One session hub section's frame: `summary` is the text its part set, null for none; `collapsed` holds while its body
 // is hidden.
 export interface SideSectionInput {
@@ -604,6 +610,14 @@ export interface ChatLayout {
     input: RowClockInput,
     kit: BaseKit,
   ): PartView<RowClockInput>;
+  // The session's profile, drawn into the session row's `chat.rowProfile` wrapper; the app orders the wrapper among the
+  // row's parts. The app draws the part again when the layouts or chat's profiles change, and draws nothing for a
+  // session with no config folder.
+  rowProfile?(
+    parent: HTMLElement,
+    input: RowProfileInput,
+    kit: BaseKit,
+  ): PartView<RowProfileInput>;
   // One section's frame in the session hub, drawn into the side part's wrapper. The app sends the input again when the
   // section collapses, expands or its summary changes; a part with no `update` draws again, and the body moves over.
   sideSection?(

@@ -1306,6 +1306,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   closeConfirm: true,
   imageViewer: true,
   rowClock: true,
+  rowProfile: true,
   sideSection: true,
   sessionFacts: true,
 };

@@ -53,7 +53,7 @@ mark at the line's end:
 - `usage.rowCache`, usage's row part, draws the cache mark through usage's `rowCache` layout part: a cache icon,
   `status-error` once the cache is cold or while the session has no usage yet, its tooltip the minutes left.
 - Each plugin orders its own row part's wrapper (`sessions.css`: a part may set its own wrapper's `order`):
-  `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`, `chat.rowClock` 3 in `chat.css`.
+  `chat.rowProfile` -1, `chat.rowClock` 3 in `chat.css`, and `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`.
   `usage.rowLine` also has `margin-left: auto`, which takes the free room, so the meter, run time and cache mark sit
   at the line's end. The used tokens hold at least `999k`'s width, the run time `00m 00s`'s and the cache mark its icon's,
   the last two even while they draw nothing, so the meters line up from row to row.
