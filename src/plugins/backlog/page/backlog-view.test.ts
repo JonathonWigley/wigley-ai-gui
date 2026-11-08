@@ -53,10 +53,11 @@ function item(title: string): FollowupItem {
   };
 }
 
-// The plan's newest copy, in a linked worktree.
+// The plan's newest copy, in a linked worktree, and its task's.
 const PLAN_COPY = '/wt/docs/features/feature/plan-p/plan.md';
+const TASK_COPY = '/wt/docs/features/feature/plan-p/01-t.md';
 
-// One repo with one home holding two follow-ups and one plan.
+// One repo with one home holding two follow-ups and one plan of one task.
 const READ: BacklogRead = {
   homes: [
     {
@@ -81,7 +82,14 @@ const READ: BacklogRead = {
           total: 0,
           target: null,
           written: null,
-          tasks: [],
+          tasks: [
+            {
+              path: `${ROOT}/feature/plan-p/01-t.md`,
+              copyPath: TASK_COPY,
+              title: 'Task',
+              status: null,
+            },
+          ],
         },
       ],
       features: [],
@@ -140,10 +148,12 @@ type ScopeCall =
 // `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
 // the core's focus key toward `direction` on the last focus target set.
 // `targets` holds every drop target the view registered; `readDocs` each
-// path the view read through the channel.
+// path the view read through the channel; `openedDocs` each path it asked
+// Docs to open.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
   const readDocs: string[] = [];
+  const openedDocs: string[] = [];
   const targets: DropTarget[] = [];
   let focusTarget: FocusTarget | null = null;
   const { host, created } = fakeEditorHost();
@@ -191,7 +201,7 @@ async function backlogSetup() {
       run: () => undefined,
     },
     tags: () => ['agent-ready', 'later'],
-    openDoc: () => undefined,
+    openDoc: (path) => openedDocs.push(path),
     setScope: (scope) => calls.push(['setScope', scope]),
     setResizeTarget: (target) =>
       calls.push(['setResizeTarget', target === null ? null : 'target']),
@@ -237,6 +247,7 @@ async function backlogSetup() {
     move,
     targets,
     readDocs,
+    openedDocs,
   };
 }
 
@@ -372,6 +383,26 @@ describe('backlog view layouts', () => {
 
     expect(readDocs).toEqual([PLAN_COPY]);
   });
+
+  // `expand` opens the plan's task rows, the task row then being the bottom.
+  it.each([
+    { case: 'a plan', expand: false, opened: `${ROOT}/feature/plan-p/plan.md` },
+    { case: 'a task', expand: true, opened: `${ROOT}/feature/plan-p/01-t.md` },
+  ])(
+    'Open in Docs on $case opens the index copy, not the newest',
+    async ({ expand, opened }) => {
+      const { view, openedDocs } = await backlogSetup();
+      view.commands.listBottom();
+      if (expand) {
+        view.commands.open();
+        view.commands.listBottom();
+      }
+
+      view.commands.openInDocs();
+
+      expect(openedDocs).toEqual([opened]);
+    },
+  );
 
   it('a reload keeps the open filter text and focus', async () => {
     const { view, sheet } = await backlogSetup();

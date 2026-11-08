@@ -113,10 +113,11 @@ plan is written from them. A decision here stands unless the user changes it.
   count is the boxes under `## Tasks`, not the docs index's count of every checkbox in the file. Opening one renders
   `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a key to open the file in Docs mode for hand
   edits.
-- A row and its detail read one copy: a plan, and each task its newest copy's `plan.md` links, open that copy's file;
+- A row and its detail read one copy: a plan, and each task its newest copy's `plan.md` links, show that copy's file;
   a task it does not link keeps the index's file and status. A worktree copy's `Status:` value outside the three task
   statuses shows no status, never another copy's. The title, target and written date stay the index copy's, and the
-  selection and expansion stay keyed on the index's path, so they hold when the newest copy moves.
+  selection and expansion stay keyed on the index's path, so they hold when the newest copy moves. Open in Docs opens
+  the index's file, since Docs opens only indexed files and the index skips linked worktrees.
 
 ## Git
 

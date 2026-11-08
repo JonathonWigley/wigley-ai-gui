@@ -797,6 +797,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     );
   };
 
+  // The file the detail reads: a plan's or task's newest copy.
   const docPathOf = (shown: BacklogRow): string => {
     switch (shown.kind) {
       case 'followup':
@@ -1174,6 +1175,20 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     deps.log(scrollText('the detail', step, direction, scroll));
   };
 
+  // Docs opens only indexed files, and the index skips linked worktrees.
+  const indexPathOf = (
+    shown: Exclude<BacklogRow, { kind: 'followup' }>,
+  ): string => {
+    switch (shown.kind) {
+      case 'plan':
+        return shown.plan.path;
+      case 'feature':
+        return shown.feature.path;
+      case 'task':
+        return shown.task.path;
+    }
+  };
+
   const openInDocs = () => {
     const shown = actedRow(store.get(), matcher);
     if (shown === null) {
@@ -1182,7 +1197,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     if (shown.kind === 'followup') {
       deps.openDoc(shown.path, shown.item.line);
     } else {
-      deps.openDoc(docPathOf(shown));
+      deps.openDoc(indexPathOf(shown));
     }
   };
 
