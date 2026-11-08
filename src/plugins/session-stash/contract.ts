@@ -6,10 +6,15 @@ export interface StashRequest {
   note: string | null;
 }
 
-// `stash` keeps the request until the session's close: a user close of a
-// session that was sent a message writes its stash, and anything else drops
-// it.
+// `stash` keeps the request until the session's close and answers true, or
+// answers false, keeping nothing, for a session chat does not own (a terminal
+// session). A user close of a kept session that was sent a message writes its
+// stash; any other close drops it. `drop` forgets a kept request whose close
+// did not happen.
 export interface SessionStashChannel extends ChannelShape {
-  invoke: { stash(request: StashRequest): void };
+  invoke: {
+    stash(request: StashRequest): boolean;
+    drop(sessionId: string): void;
+  };
   messages: Record<never, never>;
 }

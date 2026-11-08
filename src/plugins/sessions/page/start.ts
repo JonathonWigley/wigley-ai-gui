@@ -150,18 +150,20 @@ function createExports(
     addRowPart: (part) => rowParts.add(part),
     addBarPart: (part) => barParts.add(part),
     activate,
-    closeSession(sessionId) {
-      if (!mayClose(view.tabs.tabsOf(sessionId))) {
-        return;
+    async closeSession(sessionId) {
+      if (!(await mayClose(view.tabs.tabsOf(sessionId)))) {
+        return false;
       }
-      api.channel
-        .invoke('closeSession', sessionId)
-        .then((closed) => {
-          if (!closed) {
-            log(`session close kept by main: ${labelOf(sessionId)}`);
-          }
-        })
-        .catch((error) => log(`session not closed: ${errorText(error)}`));
+      try {
+        const closed = await api.channel.invoke('closeSession', sessionId);
+        if (!closed) {
+          log(`session close kept by main: ${labelOf(sessionId)}`);
+        }
+        return closed;
+      } catch (error) {
+        log(`session not closed: ${errorText(error)}`);
+        return false;
+      }
     },
     shownSessionId,
     setActivity: (sessionId, sourceId, activity) =>
@@ -866,7 +868,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           }
           const sessionId = view.panes.focusedSessionId();
           if (sessionId !== null) {
-            exports.closeSession(sessionId);
+            void exports.closeSession(sessionId);
           }
         },
         splitDown: paneKey(unlessPicking(() => split('column'))),

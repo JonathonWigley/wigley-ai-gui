@@ -7464,6 +7464,25 @@ describe('createChatSessions resume sections', () => {
       { title: 'quick', rows: [quick] },
     ]);
   });
+
+  it('resumeSections_LaterSection_RefusesSessionsAnEarlierOneListed', async () => {
+    const test = setUp();
+    const ids = ['host-a', 'host-b', 'host-c'];
+    test.chat.addResumeSection({
+      title: 'first',
+      rows: () => Promise.resolve([rowFor('host-b')]),
+    });
+    test.chat.addResumeSection({
+      title: 'capped',
+      rows: (isResumable) =>
+        Promise.resolve(ids.filter(isResumable).slice(-2).map(rowFor)),
+    });
+
+    expect(await test.chat.resumeSections()).toEqual([
+      { title: 'first', rows: [rowFor('host-b')] },
+      { title: 'capped', rows: [rowFor('host-a'), rowFor('host-c')] },
+    ]);
+  });
 });
 
 describe('createChatSessions queue order', () => {

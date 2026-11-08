@@ -93,7 +93,7 @@ function listenForPrimers(
     closePrimerFromMain(
       {
         store,
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
+        closeSession: (sessionId) => void sessions.closeSession(sessionId),
         toast,
         log,
       },
@@ -231,7 +231,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         store,
         boxes,
         finish: (primerId, end) => api.channel.invoke('finish', primerId, end),
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
+        closeSession: (sessionId) => void sessions.closeSession(sessionId),
         scrollPrimer: (step, direction) => view.scrollBy(step, direction),
         openPreview: () => api.channel.invoke('openPreview'),
         toast: services.toast,

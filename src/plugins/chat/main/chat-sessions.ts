@@ -57,6 +57,7 @@ import {
   type ResumeRequest,
   type ReturnedMessage,
   type ResumeSection,
+  type ResumeSectionRow,
   type ResumeSectionRows,
   type SendGate,
   type SessionCloseReason,
@@ -2616,26 +2617,42 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }));
   }
 
+  // Asks each section in registration order, so a later section's
+  // `isResumable` also refuses the sessions an earlier one listed.
   async function resumeSections(): Promise<ResumeSectionRows[]> {
     const archivedIds = await archivedIdsOrNone();
+    const listed = new Set<string>();
     const isResumable = (hostSessionId: string) =>
+      !listed.has(hostSessionId) &&
       !archivedIds.has(hostSessionId) &&
       holding(hostSessionId) === undefined &&
       !isOpenOnOtherRow(hostSessionId);
-    const answers = await Promise.all(
-      [...resumeSectionRegistrations].map(async ({ section }) => {
-        try {
-          return {
-            title: section.title,
-            rows: await section.rows(isResumable),
-          };
-        } catch (error) {
-          log(`resume section ${section.title} not read: ${errorText(error)}`);
-          return { title: section.title, rows: [] };
-        }
-      }),
-    );
-    return answers.filter((answer) => answer.rows.length > 0);
+    const answers: ResumeSectionRows[] = [];
+    // A copy, so a section registered or removed while one is read changes
+    // nothing in this ask.
+    for (const { section } of Array.from(resumeSectionRegistrations)) {
+      const rows = await rowsOfSection(section, isResumable);
+      for (const row of rows) {
+        listed.add(row.hostSessionId);
+      }
+      if (rows.length > 0) {
+        answers.push({ title: section.title, rows });
+      }
+    }
+    return answers;
+  }
+
+  // The section's rows; none when they cannot be read, logged.
+  async function rowsOfSection(
+    section: ResumeSection,
+    isResumable: (hostSessionId: string) => boolean,
+  ): Promise<ResumeSectionRow[]> {
+    try {
+      return await section.rows(isResumable);
+    } catch (error) {
+      log(`resume section ${section.title} not read: ${errorText(error)}`);
+      return [];
+    }
   }
 
   async function resume(request: ResumeRequest): Promise<string> {

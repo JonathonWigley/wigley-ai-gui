@@ -471,9 +471,9 @@ describe('tabs', () => {
     expect(showsNoSelectionText(stateOf(['a'], 'a'))).toBe(false);
   });
 
-  it('mayClose stops at the first guard that keeps the session', () => {
+  it('mayClose stops at the first guard that keeps the session', async () => {
     const calls: number[] = [];
-    const guards = (answers: boolean[]) =>
+    const guards = (answers: (boolean | Promise<boolean>)[]) =>
       answers.map((answer, i) => ({
         beforeClose: () => {
           calls.push(i);
@@ -481,10 +481,14 @@ describe('tabs', () => {
         },
       }));
 
-    expect(mayClose(guards([true, false, true]))).toBe(false);
+    expect(await mayClose(guards([true, false, true]))).toBe(false);
     expect(calls).toEqual([0, 1]);
-    expect(mayClose([])).toBe(true);
-    expect(mayClose(guards([true, true]))).toBe(true);
+    expect(await mayClose([])).toBe(true);
+    expect(await mayClose(guards([true, true]))).toBe(true);
+    calls.length = 0;
+    expect(await mayClose(guards([Promise.resolve(false), true]))).toBe(false);
+    expect(calls).toEqual([0]);
+    expect(await mayClose(guards([Promise.resolve(true), true]))).toBe(true);
   });
 
   it('visibleTab is null while the mode is hidden, none with no tab, else the selected tab', () => {

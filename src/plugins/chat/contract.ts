@@ -127,8 +127,10 @@ export interface ResumeSectionRows {
 
 // A titled list of saved sessions at the top of the start prompt. `rows` is in
 // list order: the last row sits next to the cursor. `isResumable` is false for
-// a session chat holds, one open in the app on another row, and an archived one.
-// The start prompt waits for `rows`, so a section that never settles holds it.
+// a session chat holds, one open in the app on another row, an archived one,
+// and one an earlier section listed: chat asks the sections one at a time, in
+// registration order, so a section's cap counts only sessions it shows. The
+// start prompt waits for `rows`, so a section that never settles holds it.
 export interface ResumeSection {
   title: string;
   rows(

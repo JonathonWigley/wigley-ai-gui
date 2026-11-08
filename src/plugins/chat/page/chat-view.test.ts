@@ -167,6 +167,11 @@ function mounted(
   // What `activeTime` read while `addTab` ran, as a row drawn then reads it.
   const readDuringAddTab: (ActiveTime | null)[] = [];
   let removeSession: (sessionId: string) => void = noEvent;
+  // Each tab's close guard, and each session the end-session confirm opened
+  // for; the confirm answers `confirmAnswer.ended`.
+  const beforeCloses = new Map<string, () => boolean | Promise<boolean>>();
+  const confirmed: string[] = [];
+  const confirmAnswer = { ended: false };
   let activeSessionId: string | null = null;
   const view = mountChatView({
     channel,
@@ -184,8 +189,15 @@ function mounted(
     paths: posixPaths,
     homeDir: '/w',
     sessions: {
-      addTab: (sessionId: string, added: { element: HTMLElement }) => {
+      addTab: (
+        sessionId: string,
+        added: {
+          element: HTMLElement;
+          beforeClose: () => boolean | Promise<boolean>;
+        },
+      ) => {
         readDuringAddTab.push(view.activeTime(sessionId));
+        beforeCloses.set(sessionId, added.beforeClose);
         tab.element = asFake(added.element);
         tabElements.set(sessionId, tab.element);
         return {
@@ -197,7 +209,6 @@ function mounted(
         };
       },
       activate: noEvent,
-      closeSession: noEvent,
       setActivity: (
         _sessionId: string,
         _source: string,
@@ -248,6 +259,14 @@ function mounted(
     drops: { addTarget: () => ({ dispose: noEvent }) },
     toast: (text: string, tone: string) => toasts.push([text, tone]),
     visibleSessionRested: noEvent,
+    confirm: {
+      open: (name: string) => {
+        confirmed.push(name);
+        return Promise.resolve(confirmAnswer.ended);
+      },
+      end: noEvent,
+      keep: noEvent,
+    },
   } as unknown as ChatViewDeps);
   const ready = () => {
     pageReady();
@@ -255,6 +274,9 @@ function mounted(
   };
   return {
     view,
+    beforeClose: (sessionId: string) => beforeCloses.get(sessionId)?.(),
+    confirmed,
+    confirmAnswer,
     activeTimeCalls,
     readDuringAddTab,
     removeSession: (sessionId: string) => removeSession(sessionId),
@@ -944,5 +966,41 @@ describe('mountChatView slots', () => {
     view.setInfo('row-1', { activity: 'idle' });
 
     expect(view.activities.at(-1)).toBe(word);
+  });
+});
+
+describe('mountChatView close guard', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { case: 'idle', running: false, ended: false, closes: true, asked: 0 },
+    {
+      case: 'working, user ends it',
+      running: true,
+      ended: true,
+      closes: true,
+      asked: 1,
+    },
+    {
+      case: 'working, user keeps it',
+      running: true,
+      ended: false,
+      closes: false,
+      asked: 1,
+    },
+  ])('beforeClose_EachState_AnswersTheConfirmsAnswer ($case)', async (test) => {
+    const view = mounted();
+    view.pageLoad([
+      stateOf([], { running: test.running, activity: 'working' }),
+    ]);
+    view.confirmAnswer.ended = test.ended;
+
+    const closes = await view.beforeClose('row-1');
+
+    expect(closes).toBe(test.closes);
+    expect(view.confirmed).toHaveLength(test.asked);
   });
 });

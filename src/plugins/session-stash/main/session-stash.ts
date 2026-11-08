@@ -5,23 +5,27 @@ import { editableTitle } from '../../sessions/contract';
 import type { StashRequest } from '../contract';
 import type { StashRecord, StashStore } from './stash-store';
 
+// `ownsSession` is whether chat owns the row, so its close fires
+// `chat.sessionClosed`.
 export interface SessionStashDeps {
   store: StashStore;
   log: PluginLog;
   now: () => number;
+  ownsSession: (sessionId: string) => boolean;
 }
 
-// The stash flow over chat's events. `request` keeps a note for the session
-// in memory until its close; `closed` writes the stash of a pending session the
-// user closed after sending it a message, and drops the pending note of any
-// close; `messageSent` drops a pending note, since a send means the user
-// carried on (a close confirm they turned down); `opened` removes the stash of
-// a session resumed from the start prompt. `rows` is the Stashed section's
-// rows: the resumable stashes, newest last. A failed write is logged.
+// The stash flow over chat's events. `request` keeps a note for a session chat
+// owns in memory until its close and returns true; for any other session it
+// keeps nothing, logs the refusal and returns false. `drop` forgets a kept note
+// whose close did not happen. `closed` writes the stash of a kept session the
+// user closed after sending it a message, and drops the kept note of any close.
+// `opened` removes the stash of a session resumed from the start prompt.
+// `rows` is the Stashed section's rows: the resumable stashes, newest last. A
+// failed write is logged.
 export interface SessionStash {
-  request(request: StashRequest): void;
+  request(request: StashRequest): boolean;
+  drop(sessionId: string): void;
   closed(closed: ChatMainEvents['sessionClosed']): void;
-  messageSent(sessionId: string): void;
   opened(opened: ChatMainEvents['sessionOpened']): void;
   rows(
     isResumable: (hostSessionId: string) => boolean,
@@ -59,7 +63,17 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
 
   return {
     request({ sessionId, note }) {
+      if (!deps.ownsSession(sessionId)) {
+        log(`stash refused: ${sessionId} is not a session the app started`);
+        return false;
+      }
       pending.set(sessionId, note);
+      return true;
+    },
+    drop(sessionId) {
+      if (pending.delete(sessionId)) {
+        log(`stash dropped: ${sessionId} stayed open`);
+      }
     },
     closed(closed) {
       const note = pending.get(closed.sessionId);
@@ -80,11 +94,6 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
         (error: unknown) =>
           log(`stash of "${record.title}" not written: ${errorText(error)}`),
       );
-    },
-    messageSent(sessionId) {
-      if (pending.delete(sessionId)) {
-        log('stash dropped: a message was sent');
-      }
     },
     opened(opened) {
       if (opened.origin !== 'resumed') {

@@ -19,7 +19,8 @@ type SessionStashApi = MainApi<
   QualifiedEvents<'chat', ChatMainEvents>
 >;
 
-// Keeps each stash the page asks for until its session's close, writes it to
+// Keeps each stash the page asks for, of a session chat owns, until its
+// session's close or the page's drop, writes it to
 // `stashed.json` in the plugin data, and gives chat the Stashed section over
 // that file. It starts before session-log, so Stashed sits above Recently
 // closed. Registers the layouts and hands the self-test its script.
@@ -34,13 +35,12 @@ export const sessionStashMainPart: MainPart<typeof sessionStashManifest> = {
       store,
       log: services.log,
       now: () => services.clock.now(),
+      ownsSession: (sessionId) => chat.profileOf(sessionId) !== null,
     });
 
     api.channel.handle('stash', (request) => stash.request(request));
+    api.channel.handle('drop', (sessionId) => stash.drop(sessionId));
     api.events.on('chat.sessionClosed', (closed) => stash.closed(closed));
-    api.events.on('chat.messageSent', ({ sessionId }) =>
-      stash.messageSent(sessionId),
-    );
     api.events.on('chat.sessionOpened', (opened) => stash.opened(opened));
 
     chat.addResumeSection({

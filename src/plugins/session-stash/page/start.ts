@@ -1,6 +1,5 @@
 import './session-stash.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
-import { errorText } from '../../../shared/error-text';
 import {
   editableTitle,
   sessionsPageKey,
@@ -14,6 +13,7 @@ import { sessionStashManifest } from '../manifest';
 import { readSessionStashLayout } from './layout/read-session-stash-layout';
 import { createSessionStashParts } from './layout/session-stash-parts';
 import { createNoteDialog } from './note-dialog';
+import { type StashFlowDeps, stashSession } from './stash-flow';
 
 type SessionStashApi = PageApi<
   typeof sessionStashManifest,
@@ -21,10 +21,10 @@ type SessionStashApi = PageApi<
 >;
 
 // `stash` opens the note dialog over the focused pane's session while
-// Sessions mode shows, as sessions' close key acts. Its accept hands main the
-// session and its note, then closes the session through sessions'
-// `closeSession`, so the close asks what any close asks (chat's end-session
-// confirm mid-turn) and main writes the stash once the close lands.
+// Sessions mode shows, as sessions' close key acts. Its accept runs
+// `stashSession`: main keeps the note, then sessions' `closeSession` asks what
+// any close asks (chat's end-session confirm mid-turn), main writes the stash
+// once the close lands, and a kept close drops the note.
 export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
   manifest: sessionStashManifest,
   start(api: SessionStashApi) {
@@ -54,16 +54,20 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
       return editableTitle(row.titles) || row.label;
     };
 
+    const flow: StashFlowDeps = {
+      ask: (request) => api.channel.invoke('stash', request),
+      drop: (sessionId) => api.channel.invoke('drop', sessionId),
+      closeSession: (sessionId) => sessions.closeSession(sessionId),
+      log,
+      toast: services.toast,
+    };
+
     const noteDialog = createNoteDialog({
       pushScope: () => api.keys.pushScope('note'),
       stash(sessionId, note) {
-        log(`stashing ${nameOf(sessionId)}`);
-        api.channel
-          .invoke('stash', { sessionId, note })
-          .then(() => sessions.closeSession(sessionId))
-          .catch((error: unknown) =>
-            log(`stash not asked: ${errorText(error)}`),
-          );
+        const name = nameOf(sessionId);
+        log(`stashing ${name}`);
+        void stashSession(flow, { sessionId, note }, name);
       },
       parts,
     });

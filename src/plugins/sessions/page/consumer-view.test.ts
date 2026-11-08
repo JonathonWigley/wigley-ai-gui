@@ -38,7 +38,7 @@ function fakeExports() {
       },
     }),
     activate: () => undefined,
-    closeSession: () => undefined,
+    closeSession: () => Promise.resolve(true),
     shownSessionId: () => null,
     setActivity: (sessionId, sourceId, activity) =>
       activities.push([sessionId, sourceId, activity]),

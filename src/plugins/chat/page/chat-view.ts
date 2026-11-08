@@ -196,10 +196,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   onPageReady(listener: () => void): void;
   paths: Paths;
   homeDir: string;
-  sessions: Pick<
-    SessionsPageExports,
-    'addTab' | 'activate' | 'closeSession' | 'setActivity'
-  >;
+  sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
   activeSessionId(): string | null;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
@@ -256,7 +253,6 @@ interface HeldTab {
   sessionId: string;
   name: string;
   state: ChatSessionState;
-  closeConfirmed: boolean;
   handle: SessionTabHandle | null;
   unseen: Unseen;
   activity: RowActivity | null;
@@ -720,7 +716,7 @@ function createTab(
   view: {
     isHeld(tab: HeldTab): boolean;
     shown(tab: HeldTab): void;
-    beforeClose(tab: HeldTab): boolean;
+    beforeClose(tab: HeldTab): boolean | Promise<boolean>;
   },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
@@ -778,7 +774,6 @@ function createTab(
     sessionId: state.sessionId,
     name,
     state,
-    closeConfirmed: false,
     handle: null,
     unseen: null,
     activity: null,
@@ -1026,21 +1021,19 @@ function drawActivity(
 }
 
 // A session closes at once unless Claude is still working on it: then the
-// Chat tab shows and the end-session confirmation asks first.
-function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
-  const isBusy =
-    tab.state.running && tab.state.activity !== 'idle' && !tab.closeConfirmed;
+// Chat tab shows and the end-session confirmation answers.
+function mayClose(
+  tab: HeldTab,
+  deps: ChatViewDeps,
+): boolean | Promise<boolean> {
+  const isBusy = tab.state.running && tab.state.activity !== 'idle';
   if (!isBusy) {
     return true;
   }
   tab.handle?.select();
   blurFocusedElement();
-  deps.confirm.open(tab.name, () => {
-    tab.closeConfirmed = true;
-    deps.sessions.closeSession(tab.sessionId);
-  });
   deps.log(`closing the session asks to end ${tab.name}`);
-  return false;
+  return deps.confirm.open(tab.name);
 }
 
 // Writes the observed composer's border-box height, rounded, as the unitless

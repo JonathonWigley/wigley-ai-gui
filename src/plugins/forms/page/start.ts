@@ -88,7 +88,7 @@ function listenForRounds(
     closeRoundFromMain(
       {
         store,
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
+        closeSession: (sessionId) => void sessions.closeSession(sessionId),
         toast,
         log,
       },
@@ -227,7 +227,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         store,
         boxes,
         finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
+        closeSession: (sessionId) => void sessions.closeSession(sessionId),
         layouts: {
           openPreview: () => api.channel.invoke('openPreview'),
         },

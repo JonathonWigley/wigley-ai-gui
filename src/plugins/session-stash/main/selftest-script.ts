@@ -35,12 +35,9 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: [' ', 'k', 'n'],
         expect: '[chat] picker shown: Folder',
-        alsoExpect: [
-          /^\[chat\] resume section Stashed: \d+ rows$/,
-          /^\[chat\] resume section Recently closed: \d+ rows$/,
-        ],
+        alsoExpect: [/^\[chat\] resume section Stashed: \d+ rows$/],
         screenshot: 'stashed-section',
-        why: 'Session-log lists the closed session too, and chat shows it once, under Stashed, the first section.',
+        why: 'Chat asks Stashed first, so session-log leaves the stashed session out of Recently closed, which a filtered run then leaves out as empty.',
       },
       {
         keys: ['/', ...NOTE_WORD, 'Enter'],

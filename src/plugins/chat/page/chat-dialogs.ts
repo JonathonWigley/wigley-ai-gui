@@ -31,11 +31,12 @@ export interface ReasonBox {
   cancel(): void;
 }
 
-// The end-session confirmation: `open` shows it for one session; `end` hides
-// it and runs that session's `end`; `keep`, and the pushed scope's base
-// changing, hide it ending nothing. Each does nothing while it is hidden.
+// The end-session confirmation: `open` shows it for one session and resolves
+// to the user's answer: true once `end` hides it, false once `keep`, the
+// pushed scope's base changing or a later `open` hides it. `end` and `keep` do
+// nothing while it is hidden.
 export interface CloseConfirm {
-  open(name: string, end: () => void): void;
+  open(name: string): Promise<boolean>;
   end(): void;
   keep(): void;
 }
@@ -141,7 +142,11 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
   part.draw({ session: '' });
   deps.layouts.onChange(() => part.redraw());
 
-  let open: { name: string; end(): void; scope: PushedScope } | null = null;
+  let open: {
+    name: string;
+    answer(ended: boolean): void;
+    scope: PushedScope;
+  } | null = null;
   const hide = () => {
     const held = open;
     if (held === null) {
@@ -153,26 +158,29 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
     return held;
   };
   const confirm: CloseConfirm = {
-    open(name, end) {
-      hide();
+    open(name) {
+      hide()?.answer(false);
       const scope = deps.pushScope();
-      const opened = { name, end, scope };
-      scope.onBaseChanged(() => {
-        if (open === opened) {
-          confirm.keep();
-        }
+      return new Promise<boolean>((answer) => {
+        const opened = { name, answer, scope };
+        scope.onBaseChanged(() => {
+          if (open === opened) {
+            confirm.keep();
+          }
+        });
+        open = opened;
+        part.update({ session: name });
+        dialog.show();
       });
-      open = opened;
-      part.update({ session: name });
-      dialog.show();
     },
     end() {
-      hide()?.end();
+      hide()?.answer(true);
     },
     keep() {
       const kept = hide();
       if (kept !== null) {
         deps.log(`kept ${kept.name}`);
+        kept.answer(false);
       }
     },
   };

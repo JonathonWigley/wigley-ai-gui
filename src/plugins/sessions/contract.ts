@@ -291,8 +291,9 @@ export interface SessionsChannel extends ChannelShape {
 // The page part's exports and events.
 
 // A tab a plugin adds to a session. The tab bar draws its `icon`, a Codicon
-// name, with `title` as its tooltip and accessible name. `beforeClose` returns
-// whether the session may close now; false keeps it. `shown` runs each time
+// name, with `title` as its tooltip and accessible name. `beforeClose` answers
+// whether the session may close now, false keeping it; a promise answers once
+// the tab has asked the user (chat's end-session confirm). `shown` runs each time
 // this tab becomes the visible tab: the selected tab of the focused chat pane's
 // session while Sessions mode shows. Its plugin sets its base key scope there.
 // `shown` may run inside `addTab`, before its handle returns, so it must not
@@ -303,7 +304,7 @@ export interface SessionTabView {
   icon: string;
   element: HTMLElement;
   order?: number;
-  beforeClose(): boolean;
+  beforeClose(): boolean | Promise<boolean>;
   shown(): void;
 }
 
@@ -396,8 +397,10 @@ export interface SessionsPageExports {
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
   activate(sessionId: string): void;
-  // Asks each of the session's tabs `beforeClose`, then asks main to close it.
-  closeSession(sessionId: string): void;
+  // Asks each of the session's tabs `beforeClose` in turn, then asks main to
+  // close it. Resolves to true once the row closed; false when a tab or main
+  // kept it, or the ask to main failed (logged).
+  closeSession(sessionId: string): Promise<boolean>;
   // The focused pane's session while Sessions mode shows, the session the
   // close and rename keys act on; null while the mode is hidden or the pane is
   // empty.

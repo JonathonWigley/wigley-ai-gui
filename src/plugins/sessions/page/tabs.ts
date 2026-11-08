@@ -258,10 +258,15 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
 
 // Asks each view in order whether its session may close, stopping at the
 // first that says no.
-export function mayClose(
+export async function mayClose(
   views: readonly Pick<SessionTabView, 'beforeClose'>[],
-): boolean {
-  return views.every((view) => view.beforeClose());
+): Promise<boolean> {
+  for (const view of views) {
+    if (!(await view.beforeClose())) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // What Sessions mode shows: the selected tab of the selected session; `'none'`

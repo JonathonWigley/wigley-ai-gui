@@ -58,6 +58,7 @@ function setUp() {
     store,
     log: (line) => logged.push(line),
     now: () => AT,
+    ownsSession: (sessionId) => sessionId !== 'terminal',
   });
   return {
     data,
@@ -134,13 +135,23 @@ describe('createSessionStash', () => {
       logged: [],
     },
     {
-      given: 'a message sent before the close',
+      given: 'a close the page dropped as kept open',
       run: (test: ReturnType<typeof setUp>) => {
         test.stash.request({ sessionId: 's1', note: 'n' });
-        test.stash.messageSent('s1');
+        test.stash.drop('s1');
         test.stash.closed(closed('s1'));
       },
-      logged: ['stash dropped: a message was sent'],
+      logged: ['stash dropped: s1 stayed open'],
+    },
+    {
+      given: 'a session chat does not own',
+      run: (test: ReturnType<typeof setUp>) => {
+        expect(test.stash.request({ sessionId: 'terminal', note: 'n' })).toBe(
+          false,
+        );
+        test.stash.closed(closed('terminal'));
+      },
+      logged: ['stash refused: terminal is not a session the app started'],
     },
     {
       given: 'a second close after the first dropped the pending note',
