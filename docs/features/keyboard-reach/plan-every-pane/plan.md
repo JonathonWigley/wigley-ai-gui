@@ -210,7 +210,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Unity-pool right-bar stop](02-unity-pool-right-bar.md) — after 01
 
 ### Wave 3
-- [ ] [Sessions list pane](03-sessions-list-pane.md) — after 01
+- [x] [Sessions list pane](03-sessions-list-pane.md) — after 01
 
 ### Wave 4
 - [ ] [Docs side bar and right column](04-docs-side-bar-and-aside.md) — after 01
@@ -240,8 +240,11 @@ Review base: 1a938e2f
 ### Groups
 - 01 · 5e5cca77 · diff read (every Produces present or in Contract changes), typecheck pass, worker ran 6 touched test files (278 pass) · concerns: baseChanged row asserts ['outer left','side bar'] since baseChanged drops the view target; a hook moving DOM focus before its setScope while a stop holds the keys runs focusMain early (narrow sideBarOpenedOver); a click into main from the right bar runs focusMain on mousedown before the click picks its pane — live check; lint oxfmt fails on docs/keymap.md, pre-existing from docs-ahead 3e3c2fcb
 - 02 · 9c50228e · diff read (Produces present, five binds found), typecheck pass; worker ran pool-view-model tests (70 pass), lint pass, selftest --plugin unity-pool pass · concerns: no typed HolderInput literals existed to gain isCursor; drawPanel builds panelInput twice per draw to clamp the cursor; re-entry step cannot tell the shown session's holder from index 0 (one holder in the fixture); inline panelSlot.style.outline='none' to stop :focus-visible drawing a second ring
+- 03 · 8173424e · diff read (12 binds, SessionList, SidebarCursor, cursor rules, keyFocused, isPrompted/cursorPrompt present; follow-up removed), typecheck pass; worker ran 1026+212 tests, lint, selftest sessions and unity-pool pass · concerns: sessions-view-fakes.ts edited outside Files for the two deps; paneKeyFocused_ReshowsTheTab's no-focusBox check is weak (harness cannot run it); an Alt pane move runs the new tab's shown twice; selected card always one line taller (hidden prompt line) — visual check; right-bar focusin and list focusin-in-main listeners can both run on one move (disjoint state)
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
+- SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
+- PagePartHarness gains mode(id), picks, setSideBarShown, scope(), outerPanes() · why: start.test needs them · consumers: 04, 05, 06 tests · group 03
 ### Rulings
 - Alt+j/k between stops calls the left stop's left before the next stop's focus — left runs on every end of a turn — harmless if wrong · group 01 · group 01
 - every return to main writes area=main and calls left before focusMain (unlike entering, written after the hook) so a focusin during focusMain finds main already holding — double focusMain if wrong · group 01 · group 01
@@ -249,5 +252,10 @@ Review base: 1a938e2f
 - focus() also logs cursor on <label> so the re-entry step can expect the row — an extra log line if wrong · group 02 · group 02
 - added exported heldCloneCursor in pool-view-model.ts for re-entry — one more export if wrong · group 02 · group 02
 - lead: docs/keymap.md oxfmt reflow committed on its own (9764f9bc), a pre-existing lint failure on main · lead · group 02
+- harness sideBarShown follows a settable flag, false by default — later tests call setSideBarShown(true) · group 03 · group 03
+- cursor ring is the card's border-color focus-border with box-shadow none, not the inset ring — reads 2px if the plan meant inset · group 03 · group 03
+- pointerdown/focusin inside main end the turn through checkVisible(true) (chat's shown moves no DOM focus) · group 03 · group 03
+- list.cursorSessionId() returns the selected row's id while the list lacks the keys · group 03 · group 03
+- list overlay ends with Space p f unfavoriting panes-b so the script ends with no favorites · group 03 · group 03
 ### Review rounds
 ### Test gate

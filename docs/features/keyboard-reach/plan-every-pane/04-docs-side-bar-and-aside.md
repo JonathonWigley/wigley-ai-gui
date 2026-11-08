@@ -1,6 +1,6 @@
 # 04 — Docs side bar through the core, and the doc's right column as a pane
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 01
 Plan: [plan.md](plan.md)

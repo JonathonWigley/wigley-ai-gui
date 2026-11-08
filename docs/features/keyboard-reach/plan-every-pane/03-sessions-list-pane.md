@@ -1,6 +1,6 @@
 # 03 — Sessions list pane
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -285,3 +285,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 8173424e · proof: diff read (12 binds, SessionList, SidebarCursor, cursor rules, keyFocused, isPrompted/cursorPrompt present; follow-up removed), typecheck pass; worker ran 1026+212 tests, lint, selftest sessions and unity-pool pass · concerns: sessions-view-fakes.ts edited outside Files for the two deps; paneKeyFocused_ReshowsTheTab's no-focusBox check is weak (harness cannot run it); an Alt pane move runs the new tab's shown twice; selected card always one line taller (hidden prompt line) — visual check; right-bar focusin and list focusin-in-main listeners can both run on one move (disjoint state)
