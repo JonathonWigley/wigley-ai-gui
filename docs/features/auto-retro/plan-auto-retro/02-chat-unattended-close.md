@@ -58,6 +58,8 @@ Decisions:
   `CANCELLED_REASON`.
 - **The reason text**, verbatim:
   `This session runs unattended: nobody answers its permission prompts, so the app denied this tool call. Work without it, and report what it would have done.`
+- **No Turn finished alert.** `announceTurnFinished`'s call site in `chat-sessions.ts` (the `turnFinished &&
+  userIsElsewhere && …` condition) adds `!session.unattended`: an unattended row raises no alert and is not marked.
 - **No harness change.** Chat adds no `AgentStart` field and no control for an unattended row. The harness keeps
   its default permission mode. No file under `src/main/claude-code/` changes (plan.md § Boundary rules).
 - **`close` is modelled on `closeSessionsIn`.** In `start.ts`, the export calls `requireHeld(sessionId)`, so a
@@ -100,9 +102,13 @@ denied at once.
 GIVEN a row chat holds WHEN a plugin calls `close(rowId, 'finished')` THEN `sessionClosed` fires with reason
 `finished`, and the promise resolves only after the row's owned session ended.
 GIVEN a row id chat does not hold WHEN a plugin calls `close` THEN it rejects and fires nothing.
+GIVEN an unattended row and the window unfocused WHEN its turn finishes THEN no alert is announced and the row is not
+marked.
 GIVEN a `finished` close WHEN Recently closed or the stash reads it THEN neither lists nor stashes it.
 
 Tests:
+- `chat-sessions.test.ts`, beside `turnFinished_unfocused_alertsAndMarks`: `turnFinished_unattendedRow_NoAlertNoMark`
+  — the same setup with a row launched `unattended: true`; no `alerts.announce` call and no `mark`.
 - `chat-sessions.test.ts`, in `describe('createChatSessions')` beside the `permission_` tests:
   `it.each` `permission_LaunchedRow_AnswersByUnattended: $given`. Each row launches with
   `{ projectDir: PROJECT_DIR, profile: DEFAULT_PROFILES[0].name, message: { text: 'go', images: [] } }` plus the row's

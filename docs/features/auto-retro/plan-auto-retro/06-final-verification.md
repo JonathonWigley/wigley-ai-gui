@@ -14,19 +14,23 @@ Decisions: the live checks follow `wigley:writing-tests` § What earns a live ru
 ## Gates
 
 - Marketplace worktree: every command in its `AGENTS.md` § Done.
-- GUI worktree: `npm run lint`, and `npm test` over the test files 02, 03 and 04 name.
-- GUI self-test, filtered: `npm run selftest -- --plugin sessions --plugin session-log --plugin session-stash`
-  (the sidebar drawing and the close reasons changed; `AGENTS.md` § Running and testing forbids a whole run unasked).
+- GUI worktree: `npm run typecheck`, `npm run lint`, and `npm test` over the test files 02, 03 and 04 name.
+- GUI self-test, filtered: `npm run selftest -- --plugin chat --plugin sessions --plugin session-log --plugin session-stash`
+  (chat's close path, restore and permissions, the sidebar drawing and the close reasons changed; `AGENTS.md` § Running and testing forbids a whole run unasked).
 
 ## Live checks (drive run, fake harness; the `drive` skill's loop)
+
+Checks 1 and 2 run on the default settle. Before checks 3 to 6, run `setting auto-retro.settleSeconds 600`, so a
+retro row stays open while the check drives it; set it back to 5 after check 6.
 
 1. **Expected — a close queues a retro row.** `chat.start`, send `hi` (press `i` first), close the row with the
    sessions close key. GIVEN that close WHEN the page redraws THEN a Retro section shows below Recent, holding one
    row titled as the closed row, drawn muted with a dashed accent edge. Screenshot the side bar.
 2. **Expected — the row closes itself.** GIVEN the retro row from check 1 WHEN its turn ends (the fake harness
    answers) and 5 s pass THEN the row and the Retro section are gone, and `app.log` holds the auto-retro close line.
-3. **Expected — the queued count.** Start and send to three rows, close them one after another. THEN one retro row
-   runs and the Retro header reads `2 queued`; it counts down as each run closes. Screenshot the header.
+3. **Expected — the queued count.** Start and send to three rows; once all three have sent, close them in one burst.
+   THEN one retro row runs and the Retro header reads `2 queued`; close that retro row with the close key, and the
+   header reads `1 queued`. Screenshot the header.
 4. **Low-confidence — a restart keeps a retro row a retro row.** With a retro row open, `restart`. THEN the row is
    still in the Retro section; close it with the close key; THEN no new retro row appears.
 5. **Low-confidence — the session keys walk the Retro section.** With a retro row open, step through sessions with

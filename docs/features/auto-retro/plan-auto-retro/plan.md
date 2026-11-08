@@ -50,6 +50,8 @@ Each was checked at plan time; `wigley:make` runs each again before the first di
   - `docs/features/session-log/design.md`: the `closed` row names the `finished` reason
   - `docs/features/layouts/design.md` Adopters and `DESIGN.md` § Side bar: plugin sections
   - `docs/features/session-groups/design.md` § Order and § Drawing: plugin sections (cold-read fix)
+  - `docs/features/agent-chat/design.md` **Turn finished** and `docs/features/auto-retro/design.md` § The queue, § Done,
+    § Decisions: no alert for an unattended row, self-test, settle setting, restore miss (cold-read fix)
   - `docs/features/agent-chat/design.md` § Chat plugin: **Saved sessions** (`unattended`, which closes remove a
     record) and **Permissions** (an unattended row denies at once), in `0f26aa34`
 - Marketplace commits `e7fdbfd` and `1dbe437` on `auto-retro`:

@@ -53,13 +53,14 @@ Produces:
     | { kind: 'launching' }
     | { kind: 'launched'; hostSessionId: string }
     | { kind: 'launchFailed' }
-    | { kind: 'started'; profiles: readonly string[] };
+    | { kind: 'started'; profiles: readonly string[] }
+    | { kind: 'restoreMissed' };
   export function nextQueue(queue: RetroQueue, event: QueueEvent): RetroQueue;
   export function parseQueue(text: string): RetroQueue;
   ```
 - `main/queue-file.ts`: `export const QUEUE_FILE = 'queue.json'`;
   `export function createQueueFile(data: Files): { load(): Promise<RetroQueue>; save(queue: RetroQueue): Promise<void>; settled(): Promise<void> }`
-- `main/retro-done.ts`: `export const RETRO_SETTLE_MS = 5000`;
+- `main/retro-done.ts`: `export const DEFAULT_SETTLE_SECONDS = 5`; `export const RESTORE_WAIT_MS = 30_000`;
   `export function isRetroDone(info: ChatSessionInfo | undefined, hasStarted: boolean): boolean`
 - `main/start.ts`: `export const autoRetroMainPart: MainPart<typeof autoRetroManifest>`
 - `page/start.ts`: `export const autoRetroPagePart: PagePart<typeof autoRetroManifest>`
@@ -72,12 +73,15 @@ Produces:
 Decisions:
 - **Manifest.** `id: 'auto-retro'`; `dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] }`;
   `reads: { main: [], page: [] }`; no commands, scopes or theme tokens. Settings
-  `{ folder: '~/wigley-agents', layout: 'default' }`. `settingInfo`:
+  `{ folder: '~/wigley-agents', layout: 'default', settleSeconds: 5 }`. `settingInfo`:
   - `folder`: label `Retro folder`; description `The folder each background retro runs in: the clone that holds the
     retro ledger. ~ is the home folder.`
   - `layout`: label `Layout`; description `The auto-retro layout the Retro section's queued count draws in: a folder
     name in auto-retro's layouts folder, or default.` (The `layout` setting is not in the brief; `api.layouts.show`
     needs it, as in unity-pool.)
+  - `settleSeconds`: label `Settle seconds`; description `How long a retro row rests idle before it closes. 0 closes
+    it at once.` A whole number, minimum 0; a value below 0 or not a number reads as the default 5. Read at each
+    timer set, so a drive check can hold a row open.
   - The manifest's top comment says what the plugin does and why it names `chat` and `sessions`.
 - **Registration.** `autoRetroManifest` in `builtInManifests` after `sessionLogManifest`; `autoRetroMainPart` in
   `mainParts` after `sessionLogMainPart`; `autoRetroPagePart` in `pageParts` after `unityPoolPagePart`.
@@ -100,12 +104,17 @@ Decisions:
   - `started`: a `running` with `hostSessionId` null goes back to the head of `queued` (a launch a quit cut short).
     A `running` whose item's profile is not in `profiles` is dropped: `running = null` and its host id leaves
     `launched`. Otherwise no change.
+  - `restoreMissed`: a `running` with a host id goes: `running = null` and its host id leaves `launched`. Otherwise
+    no change.
   - `nextQueue` returns a new object and never changes its input.
 - **`parseQueue`** throws `queue.json is not a queue` for text that is not JSON or not the `RetroQueue` shape.
 - **The file** (`queue-file.ts`): `load` returns `EMPTY_QUEUE` for a missing file and throws for an unreadable one.
   `save` writes the whole queue as JSON with 2-space indent, each write after the one before settles, as
   `session-stash`'s `stash-store.ts` does.
 - **Start** (`main/start.ts`). The part:
+  0. In `api.services.runMode === 'selfTest'` the part registers its layouts and publishes the slot as
+     `{ rows: [], queued: 0 }`, and subscribes to nothing, so no self-test script's close launches a retro (as
+     `forms/main/start.ts` gates on `runMode`). Every other run mode, `drive` included, runs the steps below.
   1. Registers its layouts (`api.layouts.register({ layoutTypes })`, `layoutTypes` from `../layouts/layout.d.ts?raw`)
      and publishes `autoRetroStateSlot`.
   2. Subscribes to `chat.sessionClosed`, `chat.sessionCleared` and `chat.turnStarted` at once, and runs every
@@ -120,22 +129,29 @@ Decisions:
      row's host id enters `launched` only after its row exists, so a launched row joins at `launched` (below) and
      counts as not started.
   6. Applies `launching` and launches when the result has a new `running`.
-  - After each change: `save`, then write the slot (`{ rows, queued: queue.queued.length }`), then launch when
-    `running` is new.
+  7. When `running` has a host id after `started`, sets a `RESTORE_WAIT_MS` timer. When it fires and no row in
+     `sessionsRowsSlot` has that host id, applies `restoreMissed` and logs `dropped retro <host id>: its row did not
+     come back`.
+  - After every applied event other than `launching`, apply `launching` once; then `save`, then write the slot
+    (`{ rows, queued: queue.queued.length }`), then launch when `running` is new.
 - **The launch.** `chat.launch({ projectDir: paths.expandTilde(settings().folder, homeDir), profile: item.profile,
   message: { text: '/wigley:retro auto ' + item.hostIds.join(' '), images: [] }, unattended: true })`. The folder is
   read at each launch. One launch at a time. On resolve with row id `r`: read `sessionsRowsSlot.get(r)?.hostSessionId`.
   - A host id: apply `launched`; `r` joins the slot's `rows`; call `sessions.setTitle(r, 'user', item.title)` when `item.title` is not null; log
     `launched retro <r> for <host ids, space-joined>`.
-  - No row (it already closed): apply `launchFailed`; log `retro row <r> gone at launch`.
+  - No row (it already closed), or a row whose `hostSessionId` is null: apply `launchFailed`; log
+    `retro row <r> gone at launch`.
   - On reject: apply `launchFailed`; log `retro launch failed for <host ids>: <errorText(error)>`. Then the next
     item launches.
 - **Done** (`isRetroDone`, pure): false for `info` undefined or `hasStarted` false; true for `info.running` false;
   true for `activity === 'idle' && background === 0 && compaction === null`; false otherwise. `hasStarted` is true
   for a restored row, and for a launched row once `chat.turnStarted` names it or its `chat.session` value shows an
-  `activity` other than `idle`.
-- **The settle.** The part reads `chatSessionSlot` for the running row only. When `isRetroDone` turns true it sets
-  a `RETRO_SETTLE_MS` timer; any value for that row that reads not done clears the timer. When the timer fires and
+  `activity` other than `idle`. The part keeps a `Set` of started row ids: it adds every row id `turnStarted` names,
+  before or after the row joins `rows`, and every restored row at join; it removes a row id when the row leaves
+  `sessionsRowsSlot`.
+- **The settle.** The part reads `chatSessionSlot` for the running row only. It evaluates `isRetroDone` on each
+  value for that row, when the row joins `rows` (its current value), and when its started flag turns true. When it
+  turns true it sets a timer of `settleSeconds × 1000` ms; any value for that row that reads not done clears the timer. When the timer fires and
   the row still reads done, it calls `chat.close(r, 'finished')` and logs `retro <r> finished`. A close that rejects
   logs `retro <r> not closed: <error>` and changes nothing: a row chat no longer holds already fired its
   `sessionClosed`. The `sessionClosed` of the retro row clears `running`, and the next item launches.
@@ -171,7 +187,7 @@ h1', images: [] }, unattended: true }`, the new row's user title is set to `Fix 
 
 GIVEN the retro row running
 WHEN its `chat.session` value reads idle, background 0, no compaction, after its first turn started
-THEN `close('retro-1', 'finished')` runs 5000 ms later, not at 4999 ms
+THEN `close('retro-1', 'finished')` runs 5000 ms later (the default `settleSeconds`), not at 4999 ms
 
 GIVEN a queued close and a quit before its launch resolved
 WHEN the app starts again
@@ -207,6 +223,8 @@ Tests:
   - `a start drops a run whose profile is gone` — running `{ A (profile 'old'), 'r1' }`, launched `['r1']`, started
     `['work']` → running null, launched `[]`
   - `a start keeps a run whose profile is there` — same with started `['old', 'work']` → no change
+  - `a missed restore frees the run` — running `{ A, 'r1' }`, launched `['r1']`, queued `[B]`, restoreMissed →
+    running null, launched `[]`, queued `[B]`
 - `retro-queue.test.ts`, `parseQueue_BadText_Throws: $case` — rows `not json` (`{`), `an array` (`[]`), `no launched`
   (the queue's JSON without `launched`), `an item with no hostIds`; each throws `queue.json is not a queue`. One row
   `round trip`: `parseQueue(JSON.stringify(q))` equals `q` for a queue with every field set.
@@ -221,7 +239,8 @@ Tests:
     data parses to `launched: ['retro-host-1']`, and the log holds `launched retro retro-1 for h1`.
   - `sessionClosed_TwoCloses_LaunchesOneAtATime` — two closes while the first launch has not resolved: `launch`
     called once, slot `queued` is 1; after the first row's `sessionClosed` (reason `finished`), `launch` is called
-    a second time with `/wigley:retro auto h2`.
+    a second time with `/wigley:retro auto h2`, and `queue.json` no longer lists the first row's host id in
+    `launched`.
   - `doneRow_AfterTheSettle_ClosesFinished` — the second GIVEN; also a `working` value at 3000 ms after done
     restarts the settle, so the close comes 5000 ms after the last idle value.
   - `restart_LaunchCutShort_LaunchesAgain` — the third GIVEN, through `harness.restart()` with a `launch` that never
@@ -231,6 +250,19 @@ Tests:
     sets row `retro-9` with host `retro-host-1`. After the restart: slot `rows` is `['retro-9']`; an idle, background
     0 `chat.session` value for `retro-9` closes it after 5000 ms (a restored row counts as started); a user
     `sessionClosed` of `retro-host-1` queues nothing and calls no `launch`.
+  - `restart_RestoredRowAlreadyIdle_ClosesWithoutANewValue` — as above, but the idle value for `retro-9` is set
+    before the restart and no new value follows: `close('retro-9', 'finished')` runs 5000 ms after the restart.
+  - `restart_RunningRowNeverRestored_IsDroppedAfter30s` — a first start launches `retro-1` (host `retro-host-1`),
+    and one more close queues h2. The test deletes row `retro-1` and restarts with no row for `retro-host-1`: at
+    29 999 ms no second launch; at 30 000 ms the log holds `dropped retro retro-host-1: its row did not come back`
+    and `launch` runs with `/wigley:retro auto h2`.
+  - `doneRow_IdleBeforeFirstTurn_IsNotClosed` — the launched row's value is idle, background 0, for 10 000 ms with no
+    `turnStarted`: no close. Then `turnStarted` for it and an idle value: the close runs 5000 ms later.
+  - `doneRow_SettleSecondsZero_ClosesAtOnce` — setting `settleSeconds: 0`: the close runs on the next timer tick.
+  - `sessionCleared_ThenClose_LaunchesWithEveryId` — `sessionCleared` old `h0` new `h1`, then a user, sent close of
+    `h1`: `launch` gets `/wigley:retro auto h0 h1`.
+  - `selfTestRunMode_UserClose_LaunchesNothing` — `runMode: 'selfTest'`: a user, sent close calls no `launch`, and
+    the slot reads `{ rows: [], queued: 0 }`.
   - `launchRejected_LogsAndLaunchesTheNext` — two queued closes, the first `launch` rejects with
     `new Error('unknown profile')`: the log holds `retro launch failed for h1: unknown profile`, and the second launch
     runs.
