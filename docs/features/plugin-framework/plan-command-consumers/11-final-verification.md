@@ -15,7 +15,7 @@ Decisions:
 
 - This task holds only what `wigley:writing-tests` § What earns a live run instead admits. A GIVEN/WHEN/THEN a test pins earns no live check.
 - Run the drive checks in one `drive` run. Reload with `eval` of `location.reload()`, then `ready`, whose `load` number must rise.
-- Self-test: filtered runs only, naming each touched plugin with a script: `forms`, `primer`, `chat`, `sessions`, `agent-strip`, `agent-lines`, `agent-skills`, `usage`, `settings`, `docs`, `notes`, `backlog`, `workflow`, `unity-pool` (`visual` and `keys` have no `main/selftest-script.ts`; measured at plan time, re-verify). The whole self-test runs only when the user asks in the current turn, since a run takes half an hour or more.
+- Self-test: filtered runs only, naming each touched plugin with a script: `forms`, `primer`, `chat`, `sessions`, `agent-strip`, `agent-lines`, `agent-skills`, `usage`, `settings`, `docs`, `notes`, `backlog`, `workflow`, `workflow-heavy`, `workflow-light`, `workflow-medium`, `unity-pool` (`visual` and `keys` have no `main/selftest-script.ts`; measured at plan time, re-verify). The whole self-test runs only when the user asks in the current turn, since a run takes half an hour or more.
 - The agent launches no browser. Drive runs the app itself through its own tooling.
 - A failing check in a path with a plan-time fallback is named below. Other failures go to `wigley:make`'s fix path.
 - **Fallback for check 1:** if main does not hold a flushed draft, report it as a concern and ask the user. The recommended fix is writing each form's body to its place slot on each change, since a slot write leaves before `pagehide`.
@@ -51,7 +51,7 @@ Tag: **expected** is the change doing what it was made to do; **low-confidence**
 
    Reason: event order and focus between a real press and a command are what a test's direct call skips.
 10. **expected** — default look. Take `screenshot`s of each swept plugin's default view and a session row, and compare by eye with `main`'s: no text, spacing or order moved. Hover a row with an open round: its tooltip holds the status. Reason: correctness here is a judgement on screen.
-11. **expected** — Settings, help. Open Settings' keys rows and which-key help. Assert no `*InSession`, `workflow.stageAction` or other declared-arg row shows without a bind, and each row shows once per bound arg. Reason: the merged catalog is live-served.
+11. **expected** — Settings, help. Open Settings' keys rows and which-key help. Assert no `workflow.stageAction` or other declared-arg row shows without a bind, and each row shows once per bound arg. Reason: the merged catalog is live-served.
 
 ## Filtered self-test
 

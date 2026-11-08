@@ -5,107 +5,252 @@ Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)
 
-Files:
-- create `src/plugins/workflow/action-registry.ts` · `src/plugins/workflow/stages/main-actions.ts`
-- modify `src/plugins/workflow/contract.ts` · `manifest.ts` · `flow.ts` · `stages/index.ts` · `stages/stage-parts.ts` · `stages/make/main.ts` · `stages/plan-ready/main.ts` · `stages/plan-ready/page.ts` · `stages/closed/main.ts` · `stages/closed/page.ts` · `main/actions.ts` · `main/start.ts` · `page/start.ts` · `page/workflow-view.ts` · `page/layout/workflow-kit.ts` · `page/layout/workflow-parts.ts` (each under `src/plugins/workflow/`)
-- modify `docs/features/workflow/design.md` (the paragraph that says `stages/index.ts` lists the commands; measured at line 90, re-verify)
-- test `src/plugins/workflow/action-registry.test.ts` (create) · `main/actions.test.ts` · `main/start.test.ts` · `page/workflow-view.test.ts` · `page/start.test.ts` · `flow.test.ts` · `stages/page-stages.test.ts` · `stages/main-stages.test.ts`
+**Contents**
 
-Consumes (copied, since `plan-commands-and-state/` is gone; each is in the tree):
-- `commands.run(id: CommandId): Promise<void>` and `commands.run<A>(key: CommandKey<A>, arg: A): Promise<void>`, on `MainApi` and `PageApi`. An unknown id or a bad arg throws at the call. A handler's failure is logged under the owning plugin, and the promise resolves. A run from the other process goes over the bridge.
-- `commands.register(short: string, decl: CommandDecl, handler: CommandHandler): Disposable`, on both APIs.
-- `commands.intercept(id, wrap)` and `onDidRun(listener)` work in the process that runs the handler.
+- **Intent** — what the task lands, and what the user sees after it.
+- **Files** — what this task modifies and tests.
+- **Consumes** — the tree's signatures and task 01's.
+- **Produces** — the command, its key and the changed signatures.
+- **Decisions** — the command path, the engine's gate, Heavy's commands, light and medium.
+- **Behaviour** — GIVEN/WHEN/THEN.
+- **Tests** — each with the break it catches.
+- **Done when**, **Commit**, **Proof**.
+
+## Intent
+
+Every stage button and every stage key runs one engine command, `workflow.stageAction`, with the session and the action in its arg. A plugin then hooks every stage action of every workflow level at one id. The user sees no change: the same buttons, the same keys, the same Settings rows, the same log lines.
+
+This task was written after the workflow levels split. The engine (`src/plugins/workflow/`) owns `workflow.stageAction` and the gate. Each level owns its actions behind `PageWorkflow.runAction`. Heavy keeps its own session commands in its manifest, so its keys and Settings rows stay.
+
+## Files
+
+Engine:
+
+- modify `src/plugins/workflow/manifest.ts`
+- modify `src/plugins/workflow/contract.ts`
+- modify `src/plugins/workflow/page/start.ts`
+- modify `src/plugins/workflow/page/workflow-view.ts`
+- modify `src/plugins/workflow/page/layout/workflow-kit.ts`
+- modify `src/plugins/workflow/page/layout/workflow-draw.ts`
+- modify `src/plugins/workflow/layouts/layout.d.ts` (the `actionButton` and `finishedFold` comments only)
+- modify `src/plugins/workflow/page/engine-parts.test-support.ts`
+- test `src/plugins/workflow/page/start.test.ts`
+- test `src/plugins/workflow/page/workflow-view.test.ts`
+- test `src/plugins/workflow/page/layout/workflow-draw.test.ts`
+
+Heavy:
+
+- modify `src/plugins/workflow-heavy/page/start.ts`
+- modify `src/plugins/workflow-heavy/stages/index.ts` (the file comment only)
+- test `src/plugins/workflow-heavy-page.test.ts`
+
+Docs:
+
+- modify `docs/features/workflow/design.md`: the paragraph that starts `Each action names a command of the owner plugin` (measured at line 148) and the Decisions bullet `**Actions are commands of the owner plugin.**` (measured at line 310). Re-verify both.
+
+Not changed: `src/plugins/keymap.ts`, `src/plugins/workflow-heavy/manifest.ts`, `src/plugins/workflow-heavy/main/*`, `src/plugins/workflow-heavy/contract.ts`, `src/plugins/workflow-light/*`, `src/plugins/workflow-medium/*`. The layout tests of the three levels call `testWorkflowKit` with today's arguments and do not change.
+
+## Consumes
+
+From the tree:
+
+- `commands.run(id: CommandId): Promise<void>` and `commands.run<A>(key: CommandKey<A>, arg: A): Promise<void>` on `PageApi`. An unknown id or a bad arg throws at the call. A handler's failure is logged under the owning plugin, and the promise resolves.
+- `commands.intercept(id, wrap)` and `onDidRun(listener)`, in the process that runs the handler.
 - `export interface CommandKey<A, Id extends string = string> { readonly id: Id; readonly argType?: A; }`, in `src/contracts/commands.ts`.
-- `CommandDecl.arg?: CommandArgShape`, where `CommandArgShape = 'number' | 'string' | { readonly [field: string]: 'number' | 'string' }`.
-- `PageCommandContext<A = undefined>` is `{ editor?: TextEditor; arg: A }`. `MainCommandContext<A = undefined>` is `{ chord?: string; arg: A }`. A handler is `(context) => void | Promise<void>`.
-- `BaseKit.button(parent: HTMLElement, label: string, command: CommandId, options?: { arg?: CommandArg; variant?: ButtonVariant; keys?: string | null }): HTMLButtonElement` and `BaseKit.command(id: CommandId, arg?: CommandArg): () => void` ← 01.
-- Listing rule ← 01: a command with a declared `arg` lists in Settings, help and the palette only when a key binds it.
+- `CommandDecl.arg?: CommandArgShape`, where `CommandArgShape = 'number' | 'string' | { readonly [field: string]: 'number' | 'string' }`. A manifest handler reads its arg as `context.arg`, as `forms.choose` does in `src/plugins/forms/page/forms-commands.ts`.
+- `checkCommandArg(id, shape, arg)` in `src/shared/command-args.ts`.
+- `PageWorkflow.runAction(sessionId: string, command: string, flow: SessionFlow): Promise<void>` in `src/plugins/workflow/contract.ts` (measured at line 366).
+- `WorkflowView.runFor(sessionId: string, command: string): Promise<void>` in `src/plugins/workflow/page/workflow-view.ts` (measured at line 572).
+- `MAIN_ACTION = 'mainAction'` and `TOGGLE_FINISHED_WAVES = 'toggleFinishedWaves'` in `src/plugins/workflow/page/layout/workflow-kit.ts`.
+- `HEAVY_COMMANDS` in `src/plugins/workflow-heavy/stages/index.ts`: `clearAndMake`, `cancelCountdown`, `makeInNewSession`, `resumeMake`, `openPlan`, `retro`, `dismiss`, each `runsIn: 'page'`, no `arg`. `workflow-heavy/manifest.ts` declares them.
+- `startPagePart(part, { parts })` in `src/shared/plugin-part-harness.test-support.ts`: `parts` starts real providers in the same command world as the part under test.
 
-Produces:
-- In `src/plugins/workflow/contract.ts`:
-  ```ts
-  export type StageActionArg = { sessionId: string };
-  export type StageRunArg = { sessionId: string; action: string };
-  export const workflowStageActionKey: CommandKey<StageRunArg, 'workflow.stageAction'>;
-  export function stageWorkerKey(action: string): CommandKey<StageActionArg>;   // id `workflow.${action}InSession`
-  export interface StagePageTools { openDoc(path: string): void; paths: Pick<Paths, 'join'>; }
-  export type StageActionSpec = StageActionBase &
-    ({ side: 'main' } | { side: 'page'; run(flow: SessionFlow, tools: StagePageTools): void | Promise<void> });
-  // StageActionBase: today's command, label, keyOnly, available, enabled, plus help?: string
-  export interface StageMainTools {
-    chat: Pick<ChatMainExports, 'send' | 'clear' | 'launch' | 'profileOf'>;
-    signal(sessionId: string, signal: WorkflowSignal): void;
-    cancelCountdown(sessionId: string): void;
-  }
-  export interface MainStageAction {
-    command: string;
-    label: string;
-    idleOnly?: true;
-    run(sessionId: string, flow: SessionFlow, tools: StageMainTools): Promise<void>;
-  }
-  // MainStage gains: actions?: readonly MainStageAction[]; planArgsSkill?: string;
-  ```
-  `WorkflowChannel.invoke.runAction` and `WorkflowActionRequest` go. `WorkflowChannel.messages` gains `actionFailed: { sessionId: string; command: string; message: string }`.
-- In `src/plugins/workflow/action-registry.ts`: `createActionRegistry<A extends { command: string }>(register: (action: A) => Disposable): { add(actions: readonly A[]): Disposable }`.
-- In `src/plugins/workflow/stages/main-actions.ts`: `MAKE_SKILL = 'wigley:make'`, `CLEAR_AND_MAKE_ACTION`, `RESUME_MAKE_MAIN_ACTION`, `MAKE_IN_NEW_SESSION_ACTION`, `CANCEL_COUNTDOWN_ACTION`, `RETRO_ACTION`, `DISMISS_ACTION`, each a `MainStageAction`.
-- Manifest command `workflow.stageAction`: `{ label: 'run a stage action in a session', group: 'workflow', runsIn: 'page', arg: { sessionId: 'string', action: 'string' } }`. It serves every action button and the finished-waves fold.
-- `workflow.<action>InSession` commands, registered at runtime, one per action, each with `arg: { sessionId: 'string' }` and `runsIn` equal to the action's side. Today's actions: `cancelCountdown`, `clearAndMake`, `makeInNewSession`, `resumeMake`, `retro`, `dismiss` (main); `openPlan` (page). Count measured at plan time, re-verify.
+From task 01 (`01-kit-commands.md` § Produces):
 
-Decisions:
+- `BaseKit.button(parent: HTMLElement, label: string, command: string, options?: KitButtonOptions): HTMLButtonElement`, with `KitButtonOptions { arg?: KitCommandArg; variant?: ButtonVariant; keys?: string | null }`. An unknown id, or an `arg` the command does not declare, throws while the part builds.
+- `KitCommands { exists(id): boolean; argShape(id): CommandArgShape | undefined; run(id, arg?): void }` and `kitCommandsOf(api)` in `src/shared/page/layout-host/base-kit.ts`. Task 01 moves the engine's `drawDeps.kit.commands` literal in `workflow/page/start.ts` to `kitCommandsOf(api)`.
+- `keyRunner(commands: Pick<PageApi['commands'], 'run'>, log: PluginLog): <A>(key: CommandKey<A>, arg: A) => void` in `base-kit.ts`. It voids the promise and logs a throw at the call as `command <id> failed: <error text>`.
+- Listing rule: a command with a declared `arg` lists in Settings and help only when a key binds it.
 
-The command paths, after the task:
+## Produces
 
-```
- key  ─► workflow.<action>     page, no arg, on the selected session ─┐
- button or fold ─► workflow.stageAction {sessionId, action}   page ───┤
-                                                                      ▼
-                     view.runFor(sessionId, action): preview, available, enabled
-                                                                      ▼
-                     commands.run(stageWorkerKey(action), {sessionId})
-                       ├─ side page: the stage's run(flow, tools)
-                       └─ side main: routed; idle-only check; the stage's run(...)
+In `src/plugins/workflow/contract.ts`:
+
+```ts
+// The session a stage action runs for, and the action: `mainAction`,
+// `toggleFinishedWaves`, or the short command id of a stage's action.
+export interface StageActionArg { sessionId: string; action: string }
+export const workflowStageActionKey: CommandKey<StageActionArg, 'workflow.stageAction'> =
+  { id: 'workflow.stageAction' };
+
+export interface WorkflowDraw {
+  sideTitle: string;
+  chip(parent: HTMLElement, input: ChipInput, sessionId: string): Drawn;
+  strip(parent: HTMLElement, input: StripInput, sessionId: string): Drawn;
+  sidePane(parent: HTMLElement, input: SidePaneInput, sessionId: string): Drawn;
+}
+
+export interface WorkflowPageExports {
+  addWorkflow(workflow: PageWorkflow): Disposable;
+  createWorkflowDraw(api: PagePluginApi, options: WorkflowDrawOptions): WorkflowDraw;
+}
 ```
 
-- **The manifest wins for today's ids.** `WORKFLOW_COMMANDS` stays in the manifest with today's ids and labels. Reason: `src/plugins/keymap.ts` types each default bind by `QualifiedCommandId<BuiltInManifest, …>`, so a default bind needs a manifest id, and today's keys and Settings rows stay as they are. `<Leader>ww`, `wn`, `wr`, `wo`, `wt` and `wd` keep working with no edit to `keymap.ts`.
-- **Each process registers only the workers it runs.** The page's registry registers a worker only for a `side: 'page'` action. Main's registry registers a worker for each `MainStageAction`. So a `side: 'main'` action's worker has one declaration, in main, and a run from the page reaches it over the bridge.
-- **`register` never declares an id the manifest holds.** The page's stage registration tests `Object.hasOwn(WORKFLOW_COMMANDS, action.command)`, for an action of either side. When the manifest holds the id, it registers no key command. When it does not, it registers the no-arg key command `workflow.<action>`, label `action.help`, group `workflow`, `runsIn: 'page'`, whose handler is `runOnSelected`. `addStage` throws `action <command> has no help` when that action has no `help`. The built-in actions need no `help`.
-- **No new default key.** A stage binds no key. The user binds a stage's key command in `keymap.json`.
-- **A worker takes a session; a key does not.** One id cannot serve both, since a bind holds a fixed arg and a button draws for a session that may not be selected. So each action has a key command and a worker. The worker lists nowhere, by the listing rule, so Settings shows one row per action, as today.
-- **An intercept on the worker sees every user route:** key and button. `onDidRun` likewise. The worker lists nowhere, so the palette does not reach it.
-- **A direct worker run skips the gate.** A plugin that calls `commands.run(stageWorkerKey(action), { sessionId })` skips `runFor`: preview, `available`, `enabled` and `nothing to run`. Main's idle-only check still runs for a main action. The reason: `MainStageAction` holds no `available` or `enabled`, so main cannot check them, and the calling plugin chose that session. Every user route passes through `runFor`.
-- `view.runFor` stays the one gate. It keeps the preview check, `mainAction`, the `toggleFinishedWaves` case, `available`, `enabled` and the `nothing to run` log. `runSpec` and its closed switch go. `runFor` replaces them with `await deps.runWorker(sessionId, spec)` in today's `try`. `WorkflowViewDeps.openDoc`, `.paths` and `.runAction` go; `runWorker(sessionId: string, spec: StageActionSpec): Promise<void>` replaces them.
-- `RunCommand` and the `run` parameter of `createWorkflowKit` and of `parts.chip`, `.strip`, `.sidePane` go. Each takes `sessionId`. `actionButton` draws through `base.button(parent, action.label, workflowStageActionKey.id, { arg: { sessionId, action: main ? MAIN_ACTION : action.command }, variant })`, and keeps its `stopPropagation` listener and `disabled`. The fold draws the same way with `action: TOGGLE_FINISHED_WAVES`. Both keep their hints, since a sweep keeps what the user sees and `workflow.stageAction` has no bind to hint. `actionButton` keeps `options.anchor`: unless it is `false`, the button calls `base.keyHint(button, qualify(workflowManifest.id, command))`, where `command` is the key command's short id. The fold keeps `base.keyHint(fold, qualify(workflowManifest.id, TOGGLE_FINISHED_WAVES))`. Neither passes the `keys` option. The layout contract keeps its `actionButton` signature.
-- **A failure is a message.** A run resolves after a handler fails, so the page can no longer read main's error from the promise. The main worker catches the failure, logs `<action> not run in <name>: <message>` (today's text) and sends `actionFailed`. The page's `actionFailed` listener toasts `Workflow: <message>` with tone `error` (today's text). The page worker logs and toasts the same text in its own `catch`, and `runFor` keeps its `catch` for a run that throws at the call.
-- **`ran <action> in <name>` logs in the process that runs the worker,** with today's text, only when the action ran. Main's name, in this line and in the `not run` line, is `sessions.label(sessionId)`, else `paths.base(flow.projectDir)` as `fireCountdown` reads it, else `sessionId`, since `actions.run` throws when the session has no flow. Today the page logs `ran` also for a main run that refused a busy flow; that false line goes.
-- `main/actions.ts` keeps `createWorkflowActions` and its `run(sessionId, command): Promise<boolean>` contract. The closed `actions` record and `IDLE_ONLY_COMMANDS` go. `WorkflowActionsDeps` gains `actionOf(command: string): MainStageAction | null`, read from the registered stages, and carries `StageMainTools`. `action.idleOnly` replaces the set: `clearAndMake`, `resumeMake` and `retro` set it.
-- **Who holds which main action:** plan-ready main: `cancelCountdown`, `clearAndMake`, `makeInNewSession`. Make main: `resumeMake`. Closed main: `retro`, `dismiss`. A page half of another stage may name an action a main stage holds: review and fix name `resumeMake` (measured at plan time, re-verify).
-- **A shared action registers once.** `OPEN_PLAN_ACTION` and `RESUME_MAKE_ACTION` sit in many stages. `createActionRegistry` counts holders per command, registers on the first holder and disposes with the last. The same object under a held command adds a holder. A different object under a held command throws `action <command> is already registered`. `add` is atomic: it checks every action in its list, then registers them. A throw leaves the registry as it was.
-- `addStage` in each process adds the stage's actions to its registry and disposes them with the stage. The `no help` check and `add` run first, and the stage joins the list only after both pass, so a stage that throws leaves nothing behind. The built-in loops take the same path. The main loop keeps its single `contributeStepTool` call.
-- The auto-start stays a direct `actions.run` call in `fireCountdown`. It is no user action, and its failure logs `auto-start failed` with no toast, as today. `MainStage.autoCommand` keeps naming an action by its short name.
-- **The flow fold stops naming the make skill.** `MAKE_SKILL` leaves `flow.ts`. `applyBookkeeping` takes the stages `foldFlow` holds. On `skillStarted`, it sets `planDir` from `argsPath` when any stage has `planArgsSkill` and `startsSkill(signal, stage.planArgsSkill)` holds. `make/main.ts` sets `planArgsSkill: MAKE_SKILL`, and its `enter` reads the same constant. `/wigley:make` and `/wigley:retro` text moves with the actions into `stages/main-actions.ts`.
-- `OPEN_PLAN_ACTION.run` holds today's `openPlan` body and its `the session has no plan` throw. `PLAN_FILE` moves to `stage-parts.ts`.
-- `WORKFLOW_COMMANDS` loses no entry. `stageAction`, `toggleSidePane`, `toggleFinishedWaves` and `openPreview` stay beside it in the manifest.
-- **Comments that go untrue.** `stages/index.ts`'s file comment names `the commands their actions and keys run`: reword it to what the file holds after this task. `contract.ts`'s comments at lines 140 and 225 (measured at plan time, re-verify) name `runAction`: reword them.
+`RunCommand` goes. `WorkflowPageExports.runCommand` goes. `PageWorkflow.runAction` stays with its signature.
 
-GIVEN a stage added through `addStage` with a page action WHEN its button is clicked THEN the stage's `run` runs for the session the button draws, with no edit to `workflow-view.ts`.
-GIVEN a stage added through `addStage` with a main action in its main half and its page half WHEN its button is clicked THEN main runs the action through routing, and no `runAction` channel exists.
-GIVEN `<Leader>wn` binds `workflow.makeInNewSession` WHEN the key runs THEN it acts on the selected session as today, and Settings shows one row for it.
-GIVEN a chip drawn for a session that is not selected WHEN its main action is clicked THEN the action runs for the drawn session, and the selection stays.
-GIVEN the preview session WHEN any button runs THEN the log reads `preview runs nothing for <action>`, except `toggleFinishedWaves`, which runs.
-GIVEN a main action whose stage throws WHEN it runs from a button THEN main logs `<action> not run in <name>: <message>`, and the page toasts `Workflow: <message>`.
-GIVEN a plugin's intercept on `workflow.clearAndMakeInSession` WHEN the key or the button runs THEN the intercept wraps the handler both times.
-GIVEN a flow with no such stage WHEN `skillStarted` of `wigley:make` folds THEN `planDir` stays. GIVEN the make stage is registered WHEN it folds THEN `planDir` comes from `argsPath`.
+In `src/plugins/workflow/manifest.ts`, one new command:
 
-Tests:
-- `action-registry.test.ts`: `shared_action_registers_once_and_goes_with_its_last_holder` catches a second `register` throwing on `openPlan`, or a stage's dispose removing an action another stage holds. `different_action_under_a_held_command_throws`. `add_that_throws_registers_none_of_its_actions`, which catches a half-added stage left as a holder.
-- `workflow-view.test.ts`: `stage_added_with_a_page_action_runs_it` catches a surviving closed switch. Rows at the `ran clearAndMake in proj`, `ran makeInNewSession in proj` and `ran resumeMake in proj` cases (measured at lines 409-437) move: this table now asserts `runWorker` got the session and the spec. `chip_button_runs_for_its_own_session_not_the_selected_one` catches a button routed through `runOnSelected`. `action_button_keeps_its_key_hint_and_anchor_false_draws_none` catches a hint lost to the `workflow.stageAction` id.
-- `main/actions.test.ts`: existing table keeps its rows, built on stage actions. Add the row `action_of_an_added_stage_runs`, which catches a closed record left behind.
-- `main/start.test.ts`: the harness's `runAction` helper (measured at line 270) runs `stageWorkerKey(command)` through the fake `commands`. Add `failed_main_action_logs_and_sends_actionFailed`, which catches a failure lost in the resolved promise. Add `refused_busy_action_logs_no_ran`. Add `main_worker_logs_ran_once`, which catches a `ran` line lost when the log moves off the page. Add `failure_with_no_flow_names_the_session_id`, which catches a read of a null flow's `projectDir`. Add `worker_lists_nowhere`: each worker declares its `arg`, and `keymap.ts` binds none. It catches a second Settings row for `<Leader>wn`.
-- `page/start.test.ts`: `added_stage_action_gets_a_key_command_and_built_in_ids_do_not_register_twice` catches a throw from declaring a manifest id again; `actionFailed_toasts_main's_message`. `page_registers_no_worker_for_a_main_action` catches the second declaration throwing in main. `intercept_on_worker_wraps_key_and_button`, through the harness's commands, catches a route that calls a stage's `run` past `commands.run`. `page_worker_failure_logs_and_toasts`, with `the session has no plan`, catches a failure lost in the resolved promise. `add_stage_that_throws_leaves_no_stage`.
-- `flow.test.ts`: row `a stage's planArgsSkill sets planDir, and no stage naming it leaves planDir`, which catches a fold still naming the skill.
-- `stages/page-stages.test.ts`: the `undeclared` test (measured at line 449) changes to: every built-in page action names a `WORKFLOW_COMMANDS` id, and every `side: 'main'` action names an action of a built-in main stage. It catches a button with no worker.
+| Command | `arg` | Label | Group | `runsIn` | Site |
+|---|---|---|---|---|---|
+| `workflow.stageAction` | `{ sessionId: 'string', action: 'string' }` | `run a stage action for a session` | `workflow` | `page` | every `kit.actionButton`, `kit.finishedFold`, and every stage key |
 
-Done when: `grep -n 'runAction\|switch (spec.command)\|MAKE_SKILL' src/plugins/workflow/flow.ts src/plugins/workflow/contract.ts src/plugins/workflow/page/workflow-view.ts` prints nothing; compiles; the design doc's paragraph reads true; the test gate runs the tests above. The live checks are in [11](11-final-verification.md).
+It takes no default key, and lists nowhere while unbound, by the listing rule.
+
+In `src/plugins/workflow/page/layout/workflow-kit.ts`:
+
+```ts
+export function createWorkflowKit(
+  services: OwnerKitServices,
+  rollback: RollbackDeps,
+  sessionId: string,
+  clock: Clock,
+  manifest: Pick<PluginManifest, 'id' | 'commands'>,
+): WorkflowKit;
+```
+
+In `src/plugins/workflow/page/engine-parts.test-support.ts`:
+
+```ts
+export function testWorkflowKit(
+  manifest: Pick<PluginManifest, 'id' | 'commands'>,
+  now = 0,
+  sessionId = 's1',
+): { kit: WorkflowKit; anchors: RecordedAnchor[]; runs: { id: CommandId; arg: unknown }[] };
+```
+
+Its fake `commands.argShape` returns `{ sessionId: 'string', action: 'string' }` for `workflow.stageAction` and `undefined` for every other id. Its `run` pushes onto `runs`. Use the anchor type `recordingAnchors()` returns today. `workflow-draw.test.ts`'s own kit fake gets the same `argShape` rule.
+
+## Decisions
+
+The command path, after the task:
+
+```
+ button / fold ─► kit.button ─► workflow.stageAction { sessionId: drawn session, action } ─┐
+ engine key (ww, wf)   ─► workflow.mainAction / toggleFinishedWaves ─┐                     │
+ Heavy key (wn wr wo wt wd, …) ─► workflow-heavy.<action> ───────────┴► stageAction        │
+                                   { sessionId: selected session, action }                 │
+                                                                                           ▼
+                 engine handler: view.runFor(sessionId, action)
+                   toggleFinishedWaves · preview check · mainAction · available · enabled
+                                                                                           ▼
+                 workflow.runAction(sessionId, spec.command, flow)   (the flow's level)
+                   Heavy: openPlan opens the doc; every other action invokes its channel's runAction
+```
+
+**One engine command.**
+
+- The engine declares `workflow.stageAction`. Its handler, in the object `workflow/page/start.ts` returns, is `stageAction: (context) => view.runFor(context.arg.sessionId, context.arg.action)`. It returns the promise.
+- `view.runFor` stays the one gate, unchanged: the `toggleFinishedWaves` case, the preview check, `mainAction`, `available`, `enabled`, the `nothing to run` log, the `catch` that logs `<action> not run in <name>: <message>` and toasts `Workflow: <message>` with tone `error`, and the `ran <action> in <name>` log. Every log line and toast keeps today's text.
+- An intercept or an `onDidRun` listener on `workflow.stageAction` sees every user route of every level: each button, each fold, each stage key. An intercept on a key command (`workflow-heavy.clearAndMake`) sees that key only.
+
+**`PageWorkflow.runAction` stays as the seam behind the command.** The engine names no level's actions. The flow's level dispatches its own, as today. Heavy's `runAction` keeps its `openPlan` branch and its channel `runAction` call. Heavy's main side keeps its channel handler, `createWorkflowActions`, its closed `actions` record and `IDLE_ONLY_COMMANDS`: they are Heavy's own plumbing behind a command a user route already ran.
+
+**Buttons.**
+
+- `RunCommand` and the `run` parameter go from `createWorkflowKit`, from `WorkflowDraw.chip`, `.strip` and `.sidePane`, and from `kitFor` in `workflow-draw.ts`. Each takes the `sessionId` of the part it draws. `workflow-view.ts`'s `drawPart` passes `part.sessionId`, and its `runCommand` helper goes.
+- `actionButton` draws through `base.button(parent, action.label, workflowStageActionKey.id, { arg: { sessionId, action: command }, variant })`, where `command` is `MAIN_ACTION` for the main action, else `action.command`. The variant rule stays: `options.variant`, else `primary` for the main action and `secondary` for the rest. It keeps its `stopPropagation` click listener and its `disabled`.
+- `finishedFold` draws through `base.button` with today's label (`▾ <text>` while open, else `▸ <text>`), `workflowStageActionKey.id`, and `{ arg: { sessionId, action: TOGGLE_FINISHED_WAVES }, variant: 'ghost' }`. It keeps its class, its `aria-expanded` and its hint.
+- Each keeps today's hint, since a sweep keeps what the user sees and `workflow.stageAction` has no bind to hint. `actionButton` keeps `options.anchor`: unless it is `false`, it calls `base.keyHint(button, qualify(hintOwner, command))`, with today's `hintOwner`. The fold keeps `base.keyHint(fold, qualify(workflowManifest.id, TOGGLE_FINISHED_WAVES))`. Neither passes the `keys` option.
+- `workflow-kit.ts` stops importing `textButton`.
+- The layout contract keeps its `actionButton` and `finishedFold` signatures. Their comments in `layouts/layout.d.ts` say that a click runs `workflow.stageAction` with the session the part draws and the action. Keep the rest of each comment.
+
+**Keys.**
+
+- Each stage key runs `workflow.stageAction` on the selected session, so the one intercept sees keys too. The key commands keep their ids, labels and binds, so `keymap.ts`, Settings and help do not change.
+- The engine's `runOnSelected` in `workflow/page/start.ts` keeps its `no selected session for <command>` log. With a session, it runs `keyRunner(api.commands, log)(workflowStageActionKey, { sessionId, action: command })` in place of `void view.runFor(sessionId, command)`. It serves `mainAction` and `toggleFinishedWaves`. `toggleSidePane` and `openPreview` do not change.
+- Heavy's `runOnSelected` in `workflow-heavy/page/start.ts` does the same in place of `void workflow.runCommand(sessionId, command)`. It keeps its `no selected session for <command>` log, and its seven commands.
+- `WorkflowPageExports.runCommand` goes, since no caller is left. Its sentence in the `WorkflowPageExports` comment in `contract.ts` (measured at line 399) goes.
+
+**Heavy's commands stay in its manifest.** `HEAVY_COMMANDS` keeps all seven entries: the five `keymap.ts` binds (`makeInNewSession`, `resumeMake`, `openPlan`, `retro`, `dismiss`), plus `clearAndMake` and `cancelCountdown`. So the user can bind each, and Settings lists each once, as today. Each stage action's `command` stays a key of `HEAVY_COMMANDS`, so the `action` a button sends is the same short id the key sends.
+
+**Light and Medium do not change.** Their stages have no actions, so `runFor` logs `nothing to run` before `runAction`, and their rejecting `runAction` stays unreached. `docs/features/workflow/design.md`'s line on it (measured at line 123) stays true.
+
+**Comments that go untrue.** Reword each to what the code does after this task:
+
+- `stages/index.ts`'s file comment, `and the commands their actions and keys run`: the commands are the keys' commands, and a button runs `workflow.stageAction` with the same short id.
+- `workflow-heavy/page/start.ts`'s part comment, `Each command runs on the selected session, through the engine.`: it runs `workflow.stageAction` on the selected session.
+- `workflow-view.ts`'s `WorkflowView` comment: `runFor` is the one path, which `workflow.stageAction` runs.
+- `workflow-kit.ts`'s `createWorkflowKit` comment: `run runs a command for the session the part draws` becomes `sessionId` is the session each button runs `workflow.stageAction` for.
+- `contract.ts`'s `PageWorkflow.runAction` comment: it runs one of its stages' actions for the session `workflow.stageAction` names, after the engine's gate.
+
+**Design doc.** In `docs/features/workflow/design.md`:
+
+- The paragraph at line 148: each action names a command of the owner plugin, which its key runs. A button, a fold and a key all run the engine's `workflow.stageAction` with the session and the action, and the flow's level runs the action through its `runAction`. Light and Medium declare none.
+- The Decisions bullet at line 310: keep its reason. It says the engine owns one command for every stage action, the level owns the actions, and the engine names no stage or skill.
+
+**Self-test lines.** No `expect` line moves: no log line changes. Heavy's script presses `<Leader>wd` and expects `shows idle` (measured in `workflow-heavy/main/selftest-script.ts` at line 138). The key now reaches `runAction` through `workflow.stageAction`.
+
+## Behaviour
+
+- GIVEN a chip drawn for session `b` while `a` is selected WHEN its main action button is clicked THEN `workflow.stageAction` runs with `{ sessionId: 'b', action: 'mainAction' }`, Heavy's channel gets `{ sessionId: 'b', command: 'clearAndMake' }`, the click goes no further, and the selection stays.
+- GIVEN session `s1` is selected WHEN `<Leader>wn` runs THEN `workflow.stageAction` runs with `{ sessionId: 's1', action: 'makeInNewSession' }`, and the log and toast lines read as today.
+- GIVEN a plugin's intercept on `workflow.stageAction` that calls no `next` WHEN a Heavy key or a stage button runs THEN the action does not run.
+- GIVEN the preview session WHEN any button runs THEN the log reads `preview runs nothing for <action>`, except `toggleFinishedWaves`, which runs.
+- GIVEN Settings WHEN it draws THEN it shows no `workflow.stageAction` row, and one row for each `workflow-heavy.*` and `workflow.*` key command, as today.
+
+## Tests
+
+One test per behaviour; a case of a rule an existing test owns is a row in that test.
+
+`src/plugins/workflow/page/workflow-view.test.ts`, `describe('workflow kit')`, through `testWorkflowKit(LIGHT, NOW, 'b')`:
+
+- `button_Click_RunsStageActionForTheKitsSession`, a table. It catches a button left on a closure, or one sent for the selected session.
+
+  | Case | Draw | `runs` after a click |
+  |---|---|---|
+  | main action | `actionButton` with `{ command: 'go', main: true }` | `[{ id: 'workflow.stageAction', arg: { sessionId: 'b', action: 'mainAction' } }]` |
+  | other action | `actionButton` with `{ command: 'go', main: false }` | `[{ id: 'workflow.stageAction', arg: { sessionId: 'b', action: 'go' } }]` |
+  | fold | `finishedFold(…, 'x', false)` | `[{ id: 'workflow.stageAction', arg: { sessionId: 'b', action: 'toggleFinishedWaves' } }]` |
+
+- `actionButton_main$main_Anchors $command` and `finishedFold_AnchorsTheEnginesCommand` stay as they are. They catch a hint moved onto `workflow.stageAction`.
+
+`src/plugins/workflow/page/start.test.ts`:
+
+- `stageAction_RunsTheGateForTheArgsSession`, a table over the engine part with one stub workflow whose stage holds action `go`. It catches a handler that reads the selected session, or one that skips `runFor`.
+
+  | Case | Selected | Arg | Then |
+  |---|---|---|---|
+  | named session | `a` | `{ sessionId: 'b', action: 'go' }` | the stub's `runAction` got `('b', 'go', <b's flow>)` |
+  | main action | `a` | `{ sessionId: 'b', action: 'mainAction' }` | the stub's `runAction` got `('b', 'go', <b's flow>)` |
+  | unknown action | `a` | `{ sessionId: 'b', action: 'nope' }` | log ends `nothing to run for nope in <b's name>`; `runAction` not called |
+
+- `engineKeys_RunStageActionOnTheSelectedSession`, a table with rows `mainAction` and `toggleFinishedWaves`. With `s1` selected, an `onDidRun` listener hears `workflow.stageAction` with `{ sessionId: 's1', action: <row> }`. It catches a key that calls `view.runFor` past the command.
+
+`src/plugins/workflow/page/layout/workflow-draw.test.ts`: the three `() => undefined` arguments become a session id, `'s1'`. No new test.
+
+`src/plugins/workflow-heavy-page.test.ts`:
+
+- `setUp` starts Heavy with `parts: [workflowPagePart]`, so both parts share one command world and Heavy's `commands.run` reaches the engine's handler. The `runCommand` spy goes. `view.runFor` and `view.toggleFinishedWaves` run `workflow.stageAction` through the harness. Fakes stay for sessions, chat and docs. Re-verify the dependency rules of `parts` in the harness before the move.
+- `commands_WithASelectedSession_RunThroughTheEngine %s`: its seven rows stay. Each now asserts that an `onDidRun` listener hears `workflow.stageAction` with `{ sessionId: 's1', action: <command> }`. It catches a key that skips the command.
+- `commandWithNoSelectedSession_LogsAndRunsNothing`: in place of `runCommand` not called, assert no `workflow.stageAction` run was heard. Keep the log line and `invoked` assertions.
+- `button_ChipOfUnselectedSession_RunsForItsOwnSession` and `finishedFold_Click_OpensItsSessionsWavesAndStatesIt` stay as they are. They now run through `workflow.stageAction`, and catch a button that reaches the wrong session or loses `stopPropagation`.
+- `intercept_OnStageAction_WrapsKeysAndButtons`, a table. An intercept on `workflow.stageAction` records each arg and calls no `next`. It catches a route that reaches `runAction` past the command.
+
+  | Case | Run | Intercept heard | `invoked` |
+  |---|---|---|---|
+  | Heavy key | `commands.clearAndMake` with `s1` selected, flow in `planReady` | `{ sessionId: 's1', action: 'clearAndMake' }` | `[]` |
+  | button | click the main action on `b`'s chip, flow in `planReady` | `{ sessionId: 'b', action: 'mainAction' }` | `[]` |
+
+`src/plugins/workflow-heavy/page/start.test.ts`, the light and medium `page/start.test.ts` files, and every `workflow-heavy/main` test: no change, since `runAction` and the channel stay.
+
+Filtered self-tests: `workflow`, `workflow-heavy`, `workflow-light`, `workflow-medium`. No `expect` line moves.
+
+## Done when
+
+- `grep -rn 'RunCommand\|runCommand\|textButton(' src/plugins/workflow src/plugins/workflow-heavy src/plugins/workflow-heavy-page.test.ts` prints nothing.
+- `grep -n 'stageAction' src/plugins/workflow/manifest.ts src/plugins/workflow/contract.ts src/plugins/workflow/page/start.ts` prints the declaration, the key and the handler.
+- It compiles; the design doc's two passages read true; the test gate runs the tests above. The live checks are in [11](11-final-verification.md).
+
 Commit: one commit for the group.
 
 ## Proof

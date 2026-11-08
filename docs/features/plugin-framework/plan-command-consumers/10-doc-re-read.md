@@ -27,7 +27,7 @@ Re-read each section against the code. Fix each stale line. Run `wigley:writing-
   - every place that names `kit.button` or `kit.run`
   - the sessions row contract (`status` went)
   - the reload text. At plan time `grep -n 'draft\|page reload' docs/features/layouts/design.md` prints nothing, though `followups.md` says this doc tells that a layout reload keeps chat's box and a page reload empties it. Re-run the grep. A line that says so changes. With no line, add one sentence under the decisions: a layout reload moves chat's box into the redrawn composer, and a page reload restores the draft and images through `chatPlaceSlot` and `chatDraftImagesSlot`.
-- `docs/features/workflow/design.md`: the action paragraph, as task 06 landed it, and every other mention of `runAction` or a closed list of actions.
+- `docs/features/workflow/design.md`: the action paragraph (`Each action names a command of the owner plugin`) and the Decisions bullet `Actions are commands of the owner plugin`, as task 06 landed them, the Keys section, and every other mention of `workflow.stageAction`, `runAction`, `runCommand` or a closed list of actions.
 - `docs/features/agent-chat/design.md`: the "**Status**: a row's tab status…" line (measured at line 473), since `setStatus` went.
 - `AGENTS.md` § Architecture: the "A command" and "A slot" entries, kit entries, sessions entries, and the new § Intent bullet. Each must match the landed names.
 

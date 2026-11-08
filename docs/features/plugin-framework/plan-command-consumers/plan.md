@@ -160,10 +160,13 @@ Each sweep task lists the commands it adds under Produces, each as `<plugin>.<sh
 
 ## Run log
 
-Review base:
+Review base: 69550804
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Review base is 69550804, not c3a76bdb: the Docs wiki merge landed on main between preflight and the first dispatch. Tasks 05 and 08 re-grep the docs plugin, which that merge rewrote (main-page, list-page, list-pane, section-edit, wiki-main-source, tree-view).
+- Task 06 is stale after the workflow levels split (workflow/stages, main/actions.ts and workflow-parts.ts moved to workflow-heavy; addStage is gone). User chose: run the other tasks, and rewrite 06 for the split before Wave 3 with the same goal and keys — the engine owns workflow.stageAction, Heavy declares its own session commands. The changed design goes in the report.
+- Task 01 reuses the landed KitCommandArg, argShape and keys(command, arg?) rather than adding a CommandArg type; task 11's filtered self-test list names workflow-heavy, workflow-light and workflow-medium.
 ### Review rounds
 ### Test gate
