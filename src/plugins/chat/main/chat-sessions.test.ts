@@ -322,6 +322,7 @@ function keptSessionInfo(rowId: string): ChatSessionInfo {
     compaction: null,
     repo: 'app',
     branch: null,
+    worktrees: [],
   };
 }
 
