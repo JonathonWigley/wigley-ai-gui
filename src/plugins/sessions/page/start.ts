@@ -247,9 +247,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Read once; the first state places it.
     const saved = readSavedPanes(uiState.get(PANES_KEY));
     let hasRestored = false;
-    // The restore tracked from the first apply until the first apply that is
-    // not mid-operation shows the restored panes' visible tab, setting the key
-    // base, in its microtask.
+    // The one restore tracked from the first apply, a throwing one included,
+    // until the first apply that is not mid-operation shows the restored
+    // panes' visible tab, setting the key base, in its microtask.
     let restoreFollowed: PromiseWithResolvers<void> | null = null;
     // The restored panes still waiting for their sessions (`restorePlan`),
     // until the first pane key closes them.
@@ -641,7 +641,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const apply = (next: SessionsState) => {
       const before = state;
-      if (!hasRestored) {
+      if (!hasRestored && restoreFollowed === null) {
         restoreFollowed = Promise.withResolvers<void>();
         api.restores.track(restoreFollowed.promise);
       }

@@ -342,15 +342,36 @@ describe('sessions page part', () => {
   });
 
   // A rowless first selection is mid-operation: main's next selection write
-  // settles it.
+  // settles it. A first apply that throws leaves its restore for the next
+  // apply to settle.
   it.each([
-    { case: 'first selection has its row', firstSelection: 's1' },
-    { case: 'first selection is rowless', firstSelection: 'gone' },
+    {
+      case: 'first selection has its row',
+      firstSelection: 's1',
+      throwsFirstApply: false,
+    },
+    {
+      case: 'first selection is rowless',
+      firstSelection: 'gone',
+      throwsFirstApply: false,
+    },
+    {
+      case: 'first apply throws',
+      firstSelection: 's1',
+      throwsFirstApply: true,
+    },
   ])(
     'pageReady_TracksOnlyTheRestoreUntilItsFocusFollows ($case)',
-    async ({ firstSelection }) => {
+    async ({ firstSelection, throwsFirstApply }) => {
+      const uiState = fakeUiState();
+      if (throwsFirstApply) {
+        // The first render saves the new row's recency stamp.
+        vi.spyOn(uiState, 'set').mockImplementationOnce(() => {
+          throw new Error('ui state write failed');
+        });
+      }
       const harness = startPagePart(sessionsPagePart, {
-        services: { picker: fakeListPickerService(), uiState: fakeUiState() },
+        services: { picker: fakeListPickerService(), uiState },
       });
       const rows = harness.state.publish(sessionsRowsSlot);
       rows.set('s1', hostRow('s1'));
@@ -358,6 +379,9 @@ describe('sessions page part', () => {
       selection.set(firstSelection);
 
       harness.emit('core.pageReady', null);
+      if (throwsFirstApply) {
+        harness.emit('core.pageReady', null);
+      }
       const [restore] = harness.restores;
       selection.set('s1');
       await restore;
