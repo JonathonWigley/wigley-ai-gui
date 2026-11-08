@@ -808,6 +808,38 @@ describe('chat main part', () => {
     expect(chat.closeReasons()).toEqual(['project-closed']);
   });
 
+  it('exports_Close_EndsTheRow_ResolvesOnceItEnded', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    const releaseEnds = chat.holdProcessEnds();
+    let resolved = false;
+
+    const closing = chat.exports.close('row-1', 'finished').then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+
+    expect(resolved).toBe(false);
+    expect(chat.ended).toEqual([]);
+    releaseEnds();
+    await closing;
+    expect(resolved).toBe(true);
+    expect(chat.ended).toEqual(['row-1']);
+    const listed = chat.sessionsInSlots();
+    expect(listed.map((state) => state.sessionId)).toEqual(['row-2']);
+    expect(chat.closeReasons()).toEqual(['finished']);
+  });
+
+  it('exports_Close_NotHeld_RejectsAndFiresNothing', async () => {
+    const chat = startChatPart();
+
+    await expect(chat.exports.close('row-9', 'finished')).rejects.toThrow(
+      'chat holds no session row-9',
+    );
+    expect(chat.closeReasons()).toEqual([]);
+  });
+
   it('sessionsClosed_UserClose_SaysUser', () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });

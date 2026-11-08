@@ -46,6 +46,9 @@ export interface SavedSession {
   // WIGLEY_SESSION_ROW of a detached process; it does not keep the pages'
   // places. Null in a file written without it.
   rowId: string | null;
+  // The row was launched unattended: each permission prompt is denied at once.
+  // A file written without it reads as false.
+  unattended: boolean;
 }
 
 // The titles of a session that has none.
@@ -68,7 +71,8 @@ type LaterSavedField =
   | 'confirmedPicks'
   | 'returnedDrops'
   | 'activeMs'
-  | 'rowId';
+  | 'rowId'
+  | 'unattended';
 
 type StoredSession = Omit<SavedSession, LaterSavedField> &
   Partial<Pick<SavedSession, LaterSavedField>>;
@@ -190,7 +194,8 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalStringRecord(value.confirmedPicks) &&
     isOptionalStrings(value.returnedDrops) &&
     isOptionalActiveMs(value.activeMs) &&
-    isOptionalId(value.rowId)
+    isOptionalId(value.rowId) &&
+    (value.unattended === undefined || typeof value.unattended === 'boolean')
   );
 }
 
@@ -233,6 +238,7 @@ function parseSavedSessions(text: string): SavedSessions {
       returnedDrops: stored.returnedDrops ?? [],
       activeMs: stored.activeMs ?? 0,
       rowId: stored.rowId ?? null,
+      unattended: stored.unattended ?? false,
     })),
     selectedHostSessionId,
   };

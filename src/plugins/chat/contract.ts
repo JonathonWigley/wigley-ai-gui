@@ -48,6 +48,9 @@ export interface LaunchRequest {
   projectDir: string;
   profile: string;
   message: UserMessage;
+  // True for a session nobody answers: chat denies each permission prompt at
+  // once. Kept with the row across a relaunch.
+  unattended?: boolean;
 }
 
 // `hostSessionId` is the harness's id for the saved session.
@@ -402,7 +405,27 @@ export interface ChatAgentEvent {
 }
 
 export type SessionOrigin = 'new' | 'resumed' | 'launched' | 'restored';
-export type SessionCloseReason = 'user' | 'start-failed' | 'project-closed';
+// Why chat closed a row: `user` the sessions plugin's close, `start-failed` a
+// start that threw, `project-closed` `closeSessionsIn`, `finished` a plugin's
+// `close` for a session whose work ended.
+export type SessionCloseReason =
+  | 'user'
+  | 'start-failed'
+  | 'project-closed'
+  | 'finished';
+
+const USER_CLOSES: Record<SessionCloseReason, boolean> = {
+  user: true,
+  'start-failed': false,
+  'project-closed': false,
+  finished: false,
+};
+
+// True only for the user's own close, the one Recently closed and the stash
+// take.
+export function isUserClose(reason: SessionCloseReason): boolean {
+  return USER_CLOSES[reason];
+}
 export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the
@@ -481,7 +504,8 @@ export interface ChatMainEvents extends EventShape {
 // The main part's exports.
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
-  // selected row as it was. Resolves to the new row's sessionId; rejects,
+  // selected row as it was. With `unattended` true the row denies each
+  // permission prompt at once and raises no `Turn finished` alert. Resolves to the new row's sessionId; rejects,
   // opening nothing, on an image chat refuses (with the refusal text), an
   // unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
@@ -511,6 +535,10 @@ export interface ChatMainExports {
   // Each fires `sessionClosed` with reason `project-closed`. Resolves once
   // each one's owned session has ended and its row is gone, or chat stops.
   closeSessionsIn(projectDir: string): Promise<void>;
+  // Ends one session chat owns, as a sessions.closed would, without asking the
+  // close guards; fires sessionClosed with `reason`. Resolves once its row is
+  // gone or chat stops; rejects for a session chat does not hold.
+  close(sessionId: string, reason: SessionCloseReason): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started
   // with. Disposing it leaves later starts without it.

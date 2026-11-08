@@ -70,7 +70,7 @@ import type {
   SavedSession,
   SavedSessions,
 } from './open-sessions';
-import { CANCELLED_REASON } from './permission-tool';
+import { CANCELLED_REASON, UNATTENDED_REASON } from './permission-tool';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
 import { createChatSlots } from './chat-slots';
 
@@ -305,6 +305,7 @@ function record(
     returnedDrops: [],
     activeMs: 0,
     rowId: null,
+    unattended: false,
     ...fields,
   };
 }
@@ -1662,6 +1663,24 @@ describe('createChatSessions', () => {
       expect(test.markOptions).toEqual([{ text, action: 'read it' }]);
     },
   );
+  it('turnFinished_unattendedRow_NoAlertNoMark', async () => {
+    const test = setUp();
+    test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: DEFAULT_PROFILES[0].name,
+      message: { text: 'go', images: [] },
+      unattended: true,
+    });
+    await flush();
+    test.setFocused(false);
+    const { events } = test.harness.processes[0];
+
+    events.activity('working');
+    events.activity('idle');
+
+    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
+  });
 
   it('turnFinished_otherSessionSelected_alertsAndMarks', async () => {
     const test = await started();
@@ -2823,6 +2842,51 @@ describe('createChatSessions', () => {
     expect(await settled(call)).toBe('pending');
   });
 
+  it.each([
+    {
+      given: 'unattended: true',
+      flag: { unattended: true },
+      unattended: true,
+    },
+    { given: 'unattended absent', flag: {}, unattended: false },
+  ])(
+    'permission_LaunchedRow_AnswersByUnattended: $given',
+    async ({ flag, unattended }) => {
+      const test = setUp();
+      test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: DEFAULT_PROFILES[0].name,
+        message: { text: 'go', images: [] },
+        ...flag,
+      });
+      await flush();
+      test.harness.processes[0].events.activity('working');
+
+      const call = test.chat
+        .permissionToolSession(test.agentSession)
+        .call('permission_prompt', BASH_ARGS, {
+          toolUseId: 'tu-1',
+          signal: signal().signal,
+        });
+      const result = await settled(call);
+
+      const activities = test.sent('activity').map((sent) => sent.activity);
+      if (unattended) {
+        expect(replyText(result)).toBe(
+          JSON.stringify({ behavior: 'deny', message: UNATTENDED_REASON }),
+        );
+        expect(test.sent('entry').at(-1)?.entry).toMatchObject({
+          kind: 'permission',
+          answer: { allowed: false, reason: UNATTENDED_REASON },
+        });
+        expect(activities).not.toContain('waiting');
+      } else {
+        expect(result).toBe('pending');
+        expect(activities.at(-1)).toBe('waiting');
+      }
+    },
+  );
+
   it('permission_allow_repliesWithTheInput', async () => {
     const test = await started();
     test.activity('working');
@@ -3476,8 +3540,55 @@ describe('createChatSessions saved sessions', () => {
         returnedDrops: [],
         activeMs: 0,
         rowId: ROW_ID,
+        unattended: false,
       },
     ]);
+  });
+
+  it('save_LaunchedRow_RecordKeepsUnattended', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: { text: 'go', images: [] },
+      unattended: true,
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.unattended),
+    ).toEqual([true, false]);
+  });
+
+  it('restore_UnattendedRecord_DeniesPermissionAtOnce', async () => {
+    const test = setUp();
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { unattended: true })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+    await test.chat.send(ROW_ID, { text: 'hi', images: [] });
+    await flush();
+
+    const result = await settled(
+      test.chat
+        .permissionToolSession(test.agentSession)
+        .call('permission_prompt', BASH_ARGS, {
+          toolUseId: 'tu-1',
+          signal: signal().signal,
+        }),
+    );
+
+    expect(result).not.toBe('pending');
+    expect(JSON.parse(replyText(result))).toEqual({
+      behavior: 'deny',
+      message: UNATTENDED_REASON,
+    });
   });
 
   it('save_BeforeRestore_WritesNothing', async () => {
@@ -4309,6 +4420,7 @@ describe('createChatSessions clear', () => {
           returnedDrops: [],
           activeMs: 0,
           rowId: ROW_ID,
+          unattended: false,
         },
       ],
       selectedHostSessionId: 'uuid-2',

@@ -82,6 +82,7 @@ import {
   type PermissionRequest,
   permissionReplyText,
   readPermissionRequest,
+  UNATTENDED_REASON,
 } from './permission-tool';
 import type { RecentFolders } from './recent-folders';
 import type { ToolCallers } from './tool-callers';
@@ -140,8 +141,9 @@ export interface ChatSessions {
   activeTimeOf(sessionId: string): ActiveTime | null;
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
-  // message; returns the row's sessionId. Throws before opening anything on
-  // an image chat would refuse to attach.
+  // message; returns the row's sessionId. A request with `unattended` true
+  // makes the row deny each permission prompt at once. Throws before opening
+  // anything on an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
   // Opens a row for each saved session in order, unselected, under its saved
   // row id, with its saved titles, queued messages and returned messages, then
@@ -436,6 +438,9 @@ interface HeldSession {
   unheldProcessId: string | null;
   // The running guard step for `unheldProcessId`.
   unheldSettling: Promise<void> | null;
+  // Nobody answers this row: each permission prompt is denied at once, and a
+  // finished turn raises no alert. Saved with the row, kept across a clear.
+  unattended: boolean;
 }
 
 // What one guard step on an unheld process leaves its caller to do: whether a
@@ -599,6 +604,7 @@ function savedSessionOf(
     returnedDrops: [...session.returnedDrops],
     activeMs: activeMsAt(activeTime, now),
     rowId: session.sessionId,
+    unattended: session.unattended,
   };
 }
 
@@ -828,8 +834,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // A replayed turn's end announces nothing, since it ended while the app was
   // closed, and neither does one `stopAll` caused, an idle with a hold up, whose
-  // row is still to go out, or the end of a stretch that ran only an app
-  // compaction.
+  // row is still to go out, the end of a stretch that ran only an app
+  // compaction, or any turn of an unattended row.
   function updateActivity(session: HeldSession, isReplayed = false) {
     const previous = session.slots.info().activity;
     const activity = shownActivity(session);
@@ -862,7 +868,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       userIsElsewhere &&
       workIsOver &&
       isTheTurnsOwnEnd &&
-      ranATurn
+      ranATurn &&
+      !session.unattended
     ) {
       announceTurnFinished(session);
     }
@@ -1420,6 +1427,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       returnedDrops: readonly string[];
       activeMs: number;
       origin: SessionOrigin;
+      unattended: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1511,6 +1519,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       isStopRequested: false,
       unheldProcessId: null,
       unheldSettling: null,
+      unattended: opening.unattended,
     };
     held.set(sessionId, session);
     takeOverSkipped(session);
@@ -2064,6 +2073,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       entries: ChatEntry[];
       titles: SessionTitles;
       origin: SessionOrigin;
+      unattended: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -2086,6 +2096,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         returnedDrops: [],
         activeMs: 0,
         origin: opening.origin,
+        unattended: opening.unattended,
       },
       options,
     );
@@ -2141,6 +2152,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         returnedDrops: [],
         activeMs: 0,
         origin: 'resumed',
+        unattended: false,
       },
       { select: true },
     );
@@ -2154,6 +2166,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     request: StartRequest,
     origin: SessionOrigin,
     options: OpenOptions,
+    unattended: boolean,
   ): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
@@ -2167,6 +2180,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries: [],
         titles: NO_TITLES,
         origin,
+        unattended,
       },
       options,
     );
@@ -2514,7 +2528,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(refusal);
       }
     }
-    const session = startNew(request, 'launched', { select: false });
+    const session = startNew(
+      request,
+      'launched',
+      { select: false },
+      request.unattended === true,
+    );
     deliverWritten(session, request.message);
     const { sessionId } = session;
     log(`launched session ${sessionId} in ${request.projectDir}`);
@@ -2587,6 +2606,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           returnedDrops: record.returnedDrops,
           activeMs: record.activeMs,
           origin: 'restored',
+          unattended: record.unattended,
         },
         options,
       );
@@ -2984,6 +3004,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries,
         titles,
         origin: 'resumed',
+        unattended: false,
       },
       { select: true },
     );
@@ -3009,6 +3030,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       answer: null,
       raw: [args],
     };
+    if (session.unattended) {
+      const denied: PermissionAnswer = {
+        allowed: false,
+        reason: UNATTENDED_REASON,
+      };
+      session.slots.putEntry({ ...entry, answer: denied });
+      return Promise.resolve(
+        textResult(permissionReplyText(denied, request.input)),
+      );
+    }
     return new Promise<ToolResult>((resolve) => {
       const pending: PendingPermission = {
         entry,
@@ -3190,7 +3221,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
-    start: (request) => startNew(request, 'new', { select: true }).sessionId,
+    start: (request) =>
+      startNew(request, 'new', { select: true }, false).sessionId,
     launch,
     restore,
     loadHistory,

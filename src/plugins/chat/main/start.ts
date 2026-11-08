@@ -262,7 +262,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
 // exports to other plugins a background launch, a send, clear and active time
-// read on the sessions it holds, a close of every session in a folder, a registration of
+// read on the sessions it holds, a close of every session in a folder or of one
+// session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, and one of the resume
 // sections the start prompt lists.
@@ -434,8 +435,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.events.on('sessions.hostSessionChanged', (session) =>
       chat.recordOpenHostId(session),
     );
-    // closeSessionsIn's waits, by session id: each resolves when its session
-    // ends or chat stops.
+    // closeSessionsIn's and close's waits, by session id: each resolves when its
+    // session ends or chat stops.
     const endWaits = new Map<string, () => void>();
     api.events.on('sessions.ended', ({ sessionId }) => {
       chat.sessionEnded(sessionId);
@@ -540,6 +541,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
           chat.closed(sessionId, 'project-closed');
         }
         await Promise.all(ended);
+      },
+      close: async (sessionId, reason) => {
+        requireHeld(sessionId);
+        const ended = new Promise<void>((resolve) =>
+          endWaits.set(sessionId, resolve),
+        );
+        chat.closed(sessionId, reason);
+        await ended;
       },
       addInstructions: (text) => consumer.track(chat.addInstructions(text)),
       addSendGate: (gate) => consumer.track(chat.addSendGate(gate)),

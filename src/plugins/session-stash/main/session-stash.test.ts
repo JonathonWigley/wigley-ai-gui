@@ -135,6 +135,14 @@ describe('createSessionStash', () => {
       logged: [],
     },
     {
+      given: 'a finished close',
+      run: (test: ReturnType<typeof setUp>) => {
+        test.stash.request({ sessionId: 's1', note: 'n' });
+        test.stash.closed(closed('s1', { reason: 'finished' }));
+      },
+      logged: [],
+    },
+    {
       given: 'a close the page dropped as kept open',
       run: (test: ReturnType<typeof setUp>) => {
         test.stash.request({ sessionId: 's1', note: 'n' });

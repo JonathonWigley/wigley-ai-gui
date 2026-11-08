@@ -34,6 +34,7 @@ const TWO_SESSIONS: SavedSessions = {
       returnedDrops: [],
       activeMs: 42000,
       rowId: 'row-alpha',
+      unattended: true,
     },
     {
       hostSessionId: 's-beta',
@@ -52,6 +53,7 @@ const TWO_SESSIONS: SavedSessions = {
       returnedDrops: [],
       activeMs: 0,
       rowId: 'row-beta',
+      unattended: false,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -76,6 +78,7 @@ const ONE_SESSION: SavedSessions = {
       returnedDrops: [],
       activeMs: 1500,
       rowId: null,
+      unattended: false,
     },
   ],
   selectedHostSessionId: null,
@@ -137,6 +140,7 @@ describe('createOpenSessions', () => {
             returnedDrops: [],
             activeMs: 0,
             rowId: null,
+            unattended: false,
           },
         ],
         selectedHostSessionId: null,
@@ -290,6 +294,10 @@ describe('createOpenSessions', () => {
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], launchResume: 'yes' },
       ]),
+    },
+    {
+      file: 'unattended a string',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], unattended: 'yes' }]),
     },
     {
       file: 'selectedHostSessionId a number',
