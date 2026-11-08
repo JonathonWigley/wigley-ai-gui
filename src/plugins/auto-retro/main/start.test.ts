@@ -251,22 +251,48 @@ describe('autoRetroMainPart', () => {
     ]);
   });
 
-  it('sessionClosed_RunningRowClosedByUser_LogsTheDroppedRetroAndLaunchesTheNext', async () => {
-    const part = startPart();
-    await settled();
-    await part.close('h1');
-    await part.close('h2');
+  // `inSettle` closes the row after it reads done, inside the settle wait.
+  it.each([
+    { reason: 'user', inSettle: false, logsLostRetro: true },
+    { reason: 'project-closed', inSettle: false, logsLostRetro: true },
+    { reason: 'finished', inSettle: false, logsLostRetro: false },
+    { reason: 'user', inSettle: true, logsLostRetro: false },
+  ] satisfies {
+    reason: SessionCloseReason;
+    inSettle: boolean;
+    logsLostRetro: boolean;
+  }[])(
+    'sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone ($reason, in settle: $inSettle) → logs: $logsLostRetro',
+    async ({ reason, inSettle, logsLostRetro }) => {
+      const part = startPart();
+      await settled();
+      await part.close('h1');
+      await part.close('h2');
+      if (inSettle) {
+        await part.startedThenIdle('retro-1');
+        part.harness.advance(SETTLE_MS - 1);
+      }
 
-    await part.close('retro-host-1');
+      part.harness.emit('chat.sessionClosed', {
+        ...closedEvent('retro-host-1', reason),
+        sessionId: 'retro-1',
+      });
+      await settled();
 
-    expect(part.messages()).toContain(
-      'retro row-retro-host-1 closed before done; h1 not analyzed',
-    );
-    expect(part.texts()).toEqual([
-      '/wigley:retro auto h1',
-      '/wigley:retro auto h2',
-    ]);
-  });
+      const lostRetroLogs = part
+        .messages()
+        .filter((message) => message.includes('closed before done'));
+      expect(lostRetroLogs).toEqual(
+        logsLostRetro
+          ? ['retro retro-1 closed before done; h1 not analyzed']
+          : [],
+      );
+      expect(part.texts()).toEqual([
+        '/wigley:retro auto h1',
+        '/wigley:retro auto h2',
+      ]);
+    },
+  );
 
   it('restart_LaunchCutShort_LaunchesAgain', async () => {
     const part = startPart();

@@ -244,10 +244,14 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         );
     };
 
+    // A close of the running row logs the lost retro unless the row already read done: closed `finished`, or in
+    // its settle wait.
     const closed = (event: ChatMainEvents['sessionClosed']) => {
       const { running } = queue;
       const isRunningRow = running?.hostSessionId === event.hostSessionId;
-      if (running !== null && isRunningRow && event.reason !== 'finished') {
+      const isDone =
+        event.reason === 'finished' || settle?.rowId === event.sessionId;
+      if (running !== null && isRunningRow && !isDone) {
         log(
           `retro ${event.sessionId} closed before done; ${hostIdsText(running.item)} not analyzed`,
         );
