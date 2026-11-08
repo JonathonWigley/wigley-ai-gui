@@ -15,6 +15,8 @@ import { definePlugin } from './define-plugin';
 
 const manifest = definePlugin({
   id: 'p',
+  label: 'p',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {

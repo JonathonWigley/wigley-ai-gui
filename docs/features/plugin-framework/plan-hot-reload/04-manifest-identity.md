@@ -1,6 +1,6 @@
 # 04 — Manifests declare a label and a description
 
-Status: not started
+Status: in progress
 Type: Parallel
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)

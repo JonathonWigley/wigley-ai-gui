@@ -29,6 +29,8 @@ function manifest(
 ): PluginManifest {
   return {
     id,
+    label: id,
+    description: 'A test plugin.',
     dependsOn: { main: [], page: [] },
     reads: { main: [], page: [] },
     commands: {},

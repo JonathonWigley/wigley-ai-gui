@@ -4,6 +4,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // no surface and no layout.
 export const windowManifest = definePlugin({
   id: 'window',
+  label: 'Window',
+  description:
+    'Adds the command that brings the app forward from any other app.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {

@@ -34,6 +34,7 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // compile, and so does a slot key read from a plugin in neither its `dependsOn`
 // nor its `reads` there. Throws when the id holds anything but lowercase letters,
 // digits and `-`, and for the id `core`, whose slots and events are the core's.
+// `label` and `description` name the plugin in Settings' Plugins section.
 export function definePlugin<
   const Id extends string,
   const Cmds extends Record<string, CommandDecl>,
@@ -46,6 +47,8 @@ export function definePlugin<
 >(
   manifest: {
     id: Id;
+    label: string;
+    description: string;
     dependsOn: { main: readonly DM[]; page: readonly DP[] };
     reads: { main: readonly RM[]; page: readonly RP[] };
     commands: Cmds;

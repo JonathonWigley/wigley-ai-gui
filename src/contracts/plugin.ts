@@ -214,6 +214,10 @@ export interface PluginManifest<
   // Lowercase letters, digits and `-`: the `wigley-data:` and `wigley-layout:`
   // URL hosts carry the id, and Chromium lowercases a URL's host.
   id: string;
+  // The plugin's name as Settings' Plugins section shows it, in sentence case (`Agent lines`).
+  label: string;
+  // One sentence on what the plugin adds for the user, as Settings' Plugins section shows it.
+  description: string;
   dependsOn: {
     readonly main: readonly string[];
     readonly page: readonly string[];

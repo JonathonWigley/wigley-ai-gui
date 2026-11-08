@@ -5,6 +5,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // owns no command, layout or setting.
 export const docsSessionTabManifest = definePlugin({
   id: 'docs-session-tab',
+  label: 'Docs session tab',
+  description:
+    'Adds a Docs tab in each session, over the docs that session reads.',
   dependsOn: { main: [], page: ['docs', 'sessions'] },
   reads: { main: [], page: [] },
   commands: {},

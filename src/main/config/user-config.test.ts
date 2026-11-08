@@ -37,6 +37,8 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 
 const listPlugin = definePlugin({
   id: 'p',
+  label: 'p',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -58,6 +60,8 @@ const listPlugin = definePlugin({
 
 const quietPlugin = definePlugin({
   id: 'quiet',
+  label: 'quiet',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},
@@ -69,6 +73,8 @@ const quietPlugin = definePlugin({
 
 const dependentPlugin = definePlugin({
   id: 'q',
+  label: 'q',
+  description: 'A test plugin.',
   dependsOn: { main: ['p'], page: [] },
   reads: { main: [], page: [] },
   commands: {},
@@ -608,6 +614,8 @@ describe('createUserConfig', () => {
   it('gives a boolean control to a boolean default and a boolean kind', async () => {
     const flagPlugin = definePlugin({
       id: 'f',
+      label: 'f',
+      description: 'A test plugin.',
       dependsOn: { main: [], page: [] },
       reads: { main: [], page: [] },
       commands: {},
@@ -680,6 +688,8 @@ describe('createUserConfig', () => {
   it("serves a plugin's accelerator in place of the default on its chord", async () => {
     const overPlugin = definePlugin({
       id: 'over',
+      label: 'over',
+      description: 'A test plugin.',
       dependsOn: { main: [], page: [] },
       reads: { main: [], page: [] },
       commands: { quit: { label: 'Quit', group: 'App', runsIn: 'main' } },

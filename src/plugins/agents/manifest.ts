@@ -5,6 +5,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // the plugins that draw it read (agent-lines, agent-strip, agent-skills). It draws nothing itself.
 export const agentsManifest = definePlugin({
   id: 'agents',
+  label: 'Agents',
+  description:
+    'Tracks the subagents, tasks and skills each session runs, for the views that draw them.',
   dependsOn: { main: ['sessions'], page: [] },
   reads: { main: ['chat'], page: [] },
   commands: {

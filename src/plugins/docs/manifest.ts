@@ -9,6 +9,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // `recentChangesLimit` caps the commits the Main page's Recent changes lists.
 export const docsManifest = definePlugin({
   id: 'docs',
+  label: 'Docs',
+  description:
+    'Adds Docs mode, to browse and edit every agent doc on the machine.',
   dependsOn: { main: ['sessions'], page: [] },
   reads: { main: [], page: ['sessions'] },
   commands: {

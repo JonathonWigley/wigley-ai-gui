@@ -12,6 +12,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // or disabled hints show.
 export const keysManifest = definePlugin({
   id: 'keys',
+  label: 'Keys',
+  description:
+    'Shows key hints: which-key while a key sequence waits, and the help overlay of every key.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {

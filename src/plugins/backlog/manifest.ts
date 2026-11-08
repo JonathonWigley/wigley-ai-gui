@@ -8,6 +8,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // neither has a key.
 export const backlogManifest = definePlugin({
   id: 'backlog',
+  label: 'Backlog',
+  description:
+    'Adds Backlog mode, with the follow-ups, plans and primed features of every features home.',
   dependsOn: { main: ['docs'], page: ['docs'] },
   reads: { main: [], page: [] },
   commands: {

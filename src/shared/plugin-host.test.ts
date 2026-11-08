@@ -17,6 +17,8 @@ function part(
   return {
     manifest: {
       id,
+      label: id,
+      description: 'A test plugin.',
       dependsOn: { main: dependsOn, page: otherProcess },
       reads: { main: [], page: [] },
       commands: {},

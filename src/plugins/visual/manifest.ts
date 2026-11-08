@@ -10,6 +10,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // agents about visuals.
 export const visualManifest = definePlugin({
   id: 'visual',
+  label: 'Visuals',
+  description:
+    'Draws the html code blocks an agent writes as live visuals, with a full-size view.',
   dependsOn: { main: ['chat'], page: ['chat'] },
   reads: { main: [], page: [] },
   commands: {

@@ -6,6 +6,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // registers the layout contract.
 export const galleryManifest = definePlugin({
   id: 'gallery',
+  label: 'Gallery',
+  description:
+    'Adds Gallery mode, a debug view of every design primitive in every state.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {

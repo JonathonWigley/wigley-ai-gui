@@ -8,6 +8,9 @@ import { HEAVY_COMMANDS } from './stages';
 // runs Clear & make, by itself after a countdown when `autoClearAndMake` is on.
 export const workflowHeavyManifest = definePlugin({
   id: 'workflow-heavy',
+  label: 'Heavy workflow',
+  description:
+    'Tracks a planned run from primer to close, with its stage actions and Clear & make.',
   dependsOn: {
     main: ['workflow', 'chat', 'sessions'],
     page: ['workflow', 'docs'],

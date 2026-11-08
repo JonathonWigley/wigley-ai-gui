@@ -10,6 +10,9 @@ const CHOICE_LABEL = 'pick the numbered choice or action (again clears)';
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
+  label: 'Forms',
+  description:
+    'Shows each review round an agent asks in a Form tab, where you answer it.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

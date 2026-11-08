@@ -46,6 +46,8 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 
 const listPlugin = definePlugin({
   id: 'p',
+  label: 'p',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -123,6 +125,8 @@ function resolveTheme(
 // A plugin named as a core setting is, declaring no settings.
 const coreNamedPlugin = definePlugin({
   id: 'window',
+  label: 'window',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},
@@ -385,6 +389,8 @@ describe('loadConfigStore', () => {
   it('keeps the last good settings when the list disables a needed plugin', async () => {
     const dependent = definePlugin({
       id: 'q',
+      label: 'q',
+      description: 'A test plugin.',
       dependsOn: { main: ['p'], page: [] },
       reads: { main: [], page: [] },
       commands: {},

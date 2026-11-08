@@ -3,6 +3,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // The primer's scopes are its view's places, each titled for the key help.
 export const primerManifest = definePlugin({
   id: 'primer',
+  label: 'Primer',
+  description:
+    'Shows each feature primer an agent opens in a Primer tab, where you answer it.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

@@ -9,6 +9,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // with; `popup-top` places a session popup's top edge down its frame's body.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
+  label: 'Sessions',
+  description:
+    'Adds Sessions mode, with a sidebar row for each agent session beside its panes and tabs.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {

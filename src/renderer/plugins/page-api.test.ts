@@ -71,6 +71,8 @@ import {
 
 const manifest: PluginManifest = {
   id: 'p',
+  label: 'p',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},

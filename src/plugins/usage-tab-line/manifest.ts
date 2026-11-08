@@ -5,6 +5,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // It owns no layout and no setting.
 export const usageTabLineManifest = definePlugin({
   id: 'usage-tab-line',
+  label: 'Usage tab line',
+  description: "Shows each session's usage line in its tab bar.",
   dependsOn: { main: [], page: ['usage', 'sessions'] },
   reads: { main: [], page: [] },
   commands: {},

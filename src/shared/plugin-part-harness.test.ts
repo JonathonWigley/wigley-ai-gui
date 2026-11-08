@@ -39,6 +39,8 @@ const otherKey: DependencyKey<{ ping(): string }, 'main', 'other'> = {
 
 const mainManifest = definePlugin({
   id: 'sample',
+  label: 'sample',
+  description: 'A test plugin.',
   dependsOn: { main: ['dep', 'other'], page: [] },
   reads: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'main' } },
@@ -50,6 +52,8 @@ const mainManifest = definePlugin({
 
 const pageManifest = definePlugin({
   id: 'sample',
+  label: 'sample',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'page' } },
@@ -61,6 +65,8 @@ const pageManifest = definePlugin({
 
 const depManifest = definePlugin({
   id: 'dep',
+  label: 'dep',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},

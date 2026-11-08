@@ -6,6 +6,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // `chat` for its composer part and its self-test's launch.
 export const agentStripManifest = definePlugin({
   id: 'agent-strip',
+  label: 'Agent strip',
+  description:
+    'Shows a box for each subagent and task above the Chat composer.',
   dependsOn: {
     main: ['chat', 'sessions'],
     page: ['chat', 'sessions'],

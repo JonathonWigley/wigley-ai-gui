@@ -586,6 +586,8 @@ function requireNoFakeIsReal(
 export function providerManifest(id: string): PluginManifest {
   return {
     id,
+    label: id,
+    description: 'A test plugin.',
     dependsOn: { main: [], page: [] },
     reads: { main: [], page: [] },
     commands: {},

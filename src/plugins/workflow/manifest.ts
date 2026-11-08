@@ -10,6 +10,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // has no key of its own.
 export const workflowManifest = definePlugin({
   id: 'workflow',
+  label: 'Workflow',
+  description:
+    "Shows each session's workflow on its row, above the composer and in a side pane.",
   dependsOn: {
     main: ['chat', 'sessions'],
     page: ['chat', 'sessions'],

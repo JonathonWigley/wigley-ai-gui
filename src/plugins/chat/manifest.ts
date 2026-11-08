@@ -10,6 +10,9 @@ export const DEFAULT_PROFILES: ChatProfile[] = [
 
 export const chatManifest = definePlugin({
   id: 'chat',
+  label: 'Chat',
+  description:
+    'Runs agent sessions in the Chat tab, with the transcript, the composer and the start prompt.',
   dependsOn: { main: ['sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

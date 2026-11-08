@@ -7,6 +7,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // `chat` for its self-test's launch.
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
+  label: 'Unity pool',
+  description:
+    'Shows which Unity pool clone each session holds, with Hold and Release buttons.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

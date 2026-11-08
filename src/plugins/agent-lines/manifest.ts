@@ -5,6 +5,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // from agents' `agents.rosters` slot. Its main names `chat` and `sessions` for its self-test's launch.
 export const agentLinesManifest = definePlugin({
   id: 'agent-lines',
+  label: 'Agent lines',
+  description:
+    'Shows a working line under each session row while its agents run subagents or tasks.',
   dependsOn: {
     main: ['chat', 'sessions'],
     page: ['sessions'],

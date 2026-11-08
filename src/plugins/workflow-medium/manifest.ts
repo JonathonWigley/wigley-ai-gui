@@ -7,6 +7,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // self-test.
 export const workflowMediumManifest = definePlugin({
   id: 'workflow-medium',
+  label: 'Medium workflow',
+  description:
+    'Tracks a change with one review through interview, build, review, fix and land.',
   dependsOn: {
     main: ['workflow', 'chat', 'sessions'],
     page: ['workflow'],

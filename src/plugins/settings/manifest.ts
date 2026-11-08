@@ -7,6 +7,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // clicks on a row and a section, each naming its target, so neither has a key.
 export const settingsManifest = definePlugin({
   id: 'settings',
+  label: 'Settings',
+  description: 'Adds Settings mode, to change every setting and key bind.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
