@@ -51,14 +51,19 @@ function disposeThrowingOn(
 }
 
 // What the fakes saw: each tab added and each view added, the live ones by
-// session, and each dispose in order. The fakes file nothing under the
+// session, the `isVisible` each view was added with by source, each view
+// shown by source, and each dispose in order. A tab's `isVisible` reads
+// whether its session is in `visibleTabs`. The fakes file nothing under the
 // dependent, so only the part's own teardown empties `liveTabs` and
 // `liveViews`.
 interface Seen {
   tabs: SessionTabView[];
   liveTabs: Map<string, SessionTabView>;
+  visibleTabs: Set<string>;
   sources: string[];
   liveViews: Map<string, DocsViewHandle>;
+  viewIsVisible: Map<string, () => boolean>;
+  shownViews: string[];
   replaced: string[];
   disposed: string[];
   hasUnsavedEdits: boolean;
@@ -71,11 +76,12 @@ function fakeDocs(seen: Seen) {
     docsPageKey,
     () =>
       ({
-        addView(sourceId: string) {
+        addView(sourceId: string, options: { isVisible(): boolean }) {
           seen.sources.push(sourceId);
+          seen.viewIsVisible.set(sourceId, () => options.isVisible());
           const handle: DocsViewHandle = {
             element: {} as HTMLElement,
-            shown: () => undefined,
+            shown: () => seen.shownViews.push(sourceId),
             hasUnsavedEdits: () => seen.hasUnsavedEdits,
             sourceReplaced: () => seen.replaced.push(sourceId),
             dispose() {
@@ -101,7 +107,7 @@ function fakeSessions(seen: Seen) {
           seen.tabs.push(tab);
           seen.liveTabs.set(sessionId, tab);
           return {
-            isVisible: () => false,
+            isVisible: () => seen.visibleTabs.has(sessionId),
             dispose() {
               seen.liveTabs.delete(sessionId);
               seen.disposed.push(`tab ${sessionId}`);
@@ -118,8 +124,11 @@ function startWithRows(sessionIds: readonly string[]) {
   const seen: Seen = {
     tabs: [],
     liveTabs: new Map(),
+    visibleTabs: new Set(),
     sources: [],
     liveViews: new Map(),
+    viewIsVisible: new Map(),
+    shownViews: [],
     replaced: [],
     disposed: [],
     hasUnsavedEdits: false,
@@ -154,6 +163,32 @@ describe('docsSessionTabPagePart', () => {
     );
     await harness.stop();
   });
+
+  it.each([
+    { state: 'hidden', isTabVisible: false },
+    { state: 'visible', isTabVisible: true },
+  ])(
+    'tab_ShownOrVisible_ReachesOnlyItsSessionsView (s1 tab $state)',
+    async ({ isTabVisible }) => {
+      const { harness, seen } = startWithRows(['s1', 's2']);
+      if (isTabVisible) {
+        seen.visibleTabs.add('s1');
+      }
+
+      seen.liveTabs.get('s1')?.shown();
+
+      expect({
+        shown: seen.shownViews,
+        visible: ['s1', 's2'].map((sessionId) =>
+          seen.viewIsVisible.get(sessionSourceId(sessionId))?.(),
+        ),
+      }).toEqual({
+        shown: [sessionSourceId('s1')],
+        visible: [isTabVisible, false],
+      });
+      await harness.stop();
+    },
+  );
 
   it.each([
     { state: 'no unsaved edits', hasUnsavedEdits: false, toasts: [] },

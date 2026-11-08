@@ -24,7 +24,12 @@ import { createMarkdownMount } from '../../../shared/page/markdown-mount';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
-import type { DocsChannel, IndexEntry, IndexLink } from '../contract';
+import {
+  type DocsChannel,
+  type IndexEntry,
+  type IndexLink,
+  UNSAVED_TEXT,
+} from '../contract';
 import { splitFrontmatter } from '../frontmatter';
 import type { DocHeaderInput, RecentChangesInput } from '../layouts/layout';
 import { linkedFrom } from '../linked-from';
@@ -46,7 +51,6 @@ import {
   type ReadOnlyReason,
   readOnlyText,
   topVisibleLine,
-  UNSAVED_TEXT,
 } from './docs-state';
 import {
   hiddenBlockFlags,

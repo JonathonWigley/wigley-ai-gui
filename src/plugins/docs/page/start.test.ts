@@ -15,6 +15,7 @@ import { fakeListPickerService } from '../../../shared/page/fake-list-picker-ser
 
 function startDocsPage(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
+  anchorDispose?: () => void,
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const picker = fakeListPickerService();
@@ -28,6 +29,7 @@ function startDocsPage(
         ...NO_FENCES,
       },
     },
+    anchorDispose,
     firstModeTaken: true,
     invoke,
   });
@@ -265,15 +267,37 @@ describe('docs page part lifecycle', () => {
     expect(picker.created).toHaveLength(1);
   });
 
-  it('exports_ConsumerDisposed_DisposesItsView', () => {
-    const { harness, exportsTo } = startDocsPage();
-    const consumer = createRegistrations();
-    const observersBefore = harness.counts().observers;
-    exportsTo(consumer).addView('extra', { isVisible: () => false });
-    expect(harness.counts().observers).toBeGreaterThan(observersBefore);
+  it.each([
+    { state: 'no dispose throws', error: null },
+    { state: 'one anchor dispose throws', error: 'anchor gone' },
+  ])(
+    'exports_ConsumerDisposed_DisposesEveryView ($state)',
+    async ({ error }) => {
+      let isAnchorThrowOwed = false;
+      const { harness, exportsTo } = startDocsPage(undefined, () => {
+        if (isAnchorThrowOwed) {
+          isAnchorThrowOwed = false;
+          throw new Error('anchor gone');
+        }
+      });
+      const consumer = createRegistrations();
+      const observersBefore = harness.counts().observers;
+      for (const sourceId of ['s1', 's2']) {
+        exportsTo(consumer).addView(sourceId, { isVisible: () => false });
+      }
+      expect(harness.counts().observers).toBeGreaterThan(observersBefore);
+      isAnchorThrowOwed = error !== null;
 
-    consumer.dispose();
+      const disposing = () => consumer.dispose();
 
-    expect(harness.counts().observers).toBe(observersBefore);
-  });
+      if (error === null) {
+        expect(disposing).not.toThrow();
+      } else {
+        expect(disposing).toThrow(error);
+      }
+      expect(harness.counts().observers).toBe(observersBefore);
+      await harness.stop();
+      expect(harness.counts()).toEqual(noCounts);
+    },
+  );
 });

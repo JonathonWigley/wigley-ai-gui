@@ -597,8 +597,6 @@ export function renameRecord(
     : { type: 'renamed', from: skill, to: paths.parent(renamed) };
 }
 
-export { UNSAVED_TEXT };
-
 // Why a doc opens read-only: a third-party download (`plugin` null for a
 // synced skill), or an installed copy of the user's plugin with no file in
 // the clone.

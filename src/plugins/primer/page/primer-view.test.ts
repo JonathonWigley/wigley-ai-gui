@@ -105,8 +105,10 @@ interface NamedAnchor {
 // popup, the visible surface, and each of `others` open in its own session's
 // popup; `popup` is p1's popup element, `popups` every popup element by
 // session, and `added` each popup's session and id in add order. The fake
-// `addPopup` runs the popup's `shown` inside the call, as sessions does for the
-// focused session. The boxes and the commands are wired as the page wires them; `anchors` holds every anchor the view named,
+// `addPopup` runs the popup's `shown` inside the call and reports it visible
+// for p1's session alone, as sessions does for the focused session;
+// `hidePopup` hides p1's popup. The boxes and the commands are wired as the
+// page wires them; `anchors` holds every anchor the view named,
 // `resizeTargets` every split handed to the resize keys, `focusTargets` every
 // target handed to the focus keys, `uiWrites` every
 // uiState write over the values `uiState` starts with, `targets` every drop
@@ -158,6 +160,7 @@ function primerPopupSetup(
   const popups = new Map<string, FakeElement>();
   const added: [string, string][] = [];
   const activities: [string, string, RowActivity | null][] = [];
+  let isPopupHidden = false;
   const view = mountPrimerPopups({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
@@ -166,12 +169,15 @@ function primerPopupSetup(
       addPopup: (sessionId, view) => {
         popups.set(sessionId, asFake(view.element));
         added.push([sessionId, view.id]);
-        view.shown();
+        const isPresented = sessionId === presented.sessionId;
+        if (isPresented) {
+          view.shown();
+        }
         return {
           setStatus: () => undefined,
           open: () => undefined,
           hide: () => undefined,
-          isVisible: () => true,
+          isVisible: () => isPresented && !isPopupHidden,
           dispose: () => undefined,
         };
       },
@@ -268,6 +274,9 @@ function primerPopupSetup(
     popup,
     popups,
     added,
+    hidePopup: () => {
+      isPopupHidden = true;
+    },
     // Fires `command` with no editor in its context, as a page key does.
     run: (command: PrimerCommand) => handlers[command]({ arg: undefined }),
   };
@@ -344,28 +353,53 @@ describe('primer column widths', () => {
     },
   );
 
-  it.each<{ name: string; actions: PrimerAction[]; key: string | null }>([
+  it.each<{
+    name: string;
+    isHidden: boolean;
+    actions: PrimerAction[];
+    key: string | null;
+  }>([
     {
       name: 'the tasks column',
+      isHidden: false,
       actions: [{ type: 'selectTask', row: 1 }],
       key: 'tasks-width',
     },
     {
       name: 'the items column',
+      isHidden: false,
       actions: [{ type: 'focusPane', pane: 'items' }],
       key: 'items-width',
     },
     {
       name: 'the card',
+      isHidden: false,
       actions: [{ type: 'focusPane', pane: 'card' }],
       key: 'items-width',
     },
-    { name: 'the review', actions: [{ type: 'openReview' }], key: null },
+    {
+      name: 'the review',
+      isHidden: false,
+      actions: [{ type: 'openReview' }],
+      key: null,
+    },
+    {
+      // A hidden popup hands no split, so the tasks column's from its first
+      // show stays.
+      name: 'the review with the popup hidden',
+      isHidden: true,
+      actions: [{ type: 'openReview' }],
+      key: 'tasks-width',
+    },
   ])(
     'hands the resize keys the split of the focused pane: $name',
-    ({ actions, key }) => {
-      const { store, popup, resizeTargets, uiWrites } = primerPopupSetup();
+    ({ isHidden, actions, key }) => {
+      const { store, popup, resizeTargets, uiWrites, hidePopup } =
+        primerPopupSetup();
       measureSplits(popup);
+      if (isHidden) {
+        hidePopup();
+      }
       for (const action of actions) {
         store.dispatch(action);
       }

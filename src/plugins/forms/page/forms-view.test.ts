@@ -71,9 +71,11 @@ type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 // element, `popups` every popup element by session, `added` each popup's
 // session and id in add order, and `calls` logs every `setScope` and
 // `setResizeTarget` call, in call order. The fake `addPopup` runs the popup's
-// `shown` inside the call, as sessions does for the focused session. `targets` holds every drop target the
-// view registered, `inserted` every insert into a box's editor, and
-// `activities` every row activity the view set.
+// `shown` inside the call and reports it visible for r1's session alone, as
+// sessions does for the focused session; `hidePopup` hides r1's popup.
+// `targets` holds every drop target the view registered, `inserted` every
+// insert into a box's editor, and `activities` every row activity the view
+// set.
 function formPopupSetup(others: string[] = []) {
   const calls: ScopeCall[] = [];
   const activities: [string, string, RowActivity | null][] = [];
@@ -95,6 +97,7 @@ function formPopupSetup(others: string[] = []) {
   );
   const popups = new Map<string, FakeElement>();
   const added: [string, string][] = [];
+  let isPopupHidden = false;
   mountFormsView({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
@@ -103,12 +106,15 @@ function formPopupSetup(others: string[] = []) {
       addPopup: (sessionId, view) => {
         popups.set(sessionId, asFake(view.element));
         added.push([sessionId, view.id]);
-        view.shown();
+        const isPresented = sessionId === presented.sessionId;
+        if (isPresented) {
+          view.shown();
+        }
         return {
           setStatus: () => undefined,
           open: () => undefined,
           hide: () => undefined,
-          isVisible: () => true,
+          isVisible: () => isPresented && !isPopupHidden,
           dispose: () => undefined,
         };
       },
@@ -174,6 +180,9 @@ function formPopupSetup(others: string[] = []) {
     targets,
     inserted,
     activities,
+    hidePopup: () => {
+      isPopupHidden = true;
+    },
   };
 }
 
@@ -289,9 +298,15 @@ describe('form popup resize target', () => {
     vi.unstubAllGlobals();
   });
 
-  it.each<{ action: string; actions: FormsAction[]; last: ScopeCall[] }>([
+  it.each<{
+    action: string;
+    isHidden: boolean;
+    actions: FormsAction[];
+    last: ScopeCall[];
+  }>([
     {
       action: 'none, the round shows',
+      isHidden: false,
       actions: [],
       last: [
         ['setScope', 'forms'],
@@ -301,21 +316,38 @@ describe('form popup resize target', () => {
     {
       // The cancel prompt is asked from the review.
       action: 'askCancel',
+      isHidden: false,
       actions: [{ type: 'openReview' }, { type: 'askCancel' }],
       last: [
         ['setScope', 'confirm'],
         ['setResizeTarget', 'target'],
       ],
     },
-  ])('$action sets the scope, then the resize target', ({ actions, last }) => {
-    const { store, calls } = formPopupSetup();
+    {
+      // A hidden popup sets no scope, so the round's from its first show stays last.
+      action: 'openReview with the popup hidden',
+      isHidden: true,
+      actions: [{ type: 'openReview' }],
+      last: [
+        ['setScope', 'forms'],
+        ['setResizeTarget', 'target'],
+      ],
+    },
+  ])(
+    '$action sets the scope, then the resize target',
+    ({ isHidden, actions, last }) => {
+      const { store, calls, hidePopup } = formPopupSetup();
+      if (isHidden) {
+        hidePopup();
+      }
 
-    for (const action of actions) {
-      store.dispatch(action);
-    }
+      for (const action of actions) {
+        store.dispatch(action);
+      }
 
-    expect(calls.slice(-2)).toEqual(last);
-  });
+      expect(calls.slice(-2)).toEqual(last);
+    },
+  );
 
   it('a closed last round leaves the scope to the surface under its popup', () => {
     const { store, calls } = formPopupSetup();
