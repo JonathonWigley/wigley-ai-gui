@@ -1,6 +1,6 @@
 # 07 — Chat's mouse-only items
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 7 · Depends on: 06
 Plan: [plan.md](plan.md)

@@ -219,7 +219,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Settings and Backlog side bars](05-settings-backlog-side-bars.md) — after 01
 
 ### Wave 6
-- [ ] [Chat tab panes](06-chat-tab-panes.md) — after 01
+- [x] [Chat tab panes](06-chat-tab-panes.md) — after 01
 
 ### Wave 7
 - [ ] [Chat mouse-only items](07-chat-items.md) — after 06
@@ -243,11 +243,13 @@ Review base: 1a938e2f
 - 03 · 8173424e · diff read (12 binds, SessionList, SidebarCursor, cursor rules, keyFocused, isPrompted/cursorPrompt present; follow-up removed), typecheck pass; worker ran 1026+212 tests, lint, selftest sessions and unity-pool pass · concerns: sessions-view-fakes.ts edited outside Files for the two deps; paneKeyFocused_ReshowsTheTab's no-focusBox check is weak (harness cannot run it); an Alt pane move runs the new tab's shown twice; selected card always one line taller (hidden prompt line) — visual check; right-bar focusin and list focusin-in-main listeners can both run on one move (disjoint state)
 - 04 · d74620f7 · diff read (Produces present; focusDoc landed as focusMain), typecheck pass; worker ran 5 test files (398 pass), lint pass, selftest --plugin docs pass · concerns: dialog-from-column step not added (no dialog key reachable from docs.aside); no unit row for DocsView.focusMain's column branch (no docs-view.test.ts); isTreeOwnPane false for machine view by addedViewOf; asideSightLost moves DOM focus only when view active and focus not outside the doc pane
 - 05 · bb601a25 · diff read (Produces present), typecheck pass; worker ran settings/backlog/keymap tests (291 pass), lint pass, selftest --plugin settings and --plugin backlog pass · concerns: Backlog focusMain ends with syncFocus(always) not render(true): an unchanged state sets no scope again (no path found where that matters); pick-comment prose edits beyond Produces
+- 06 · 42915d04 · diff read (Produces present, one deps.setScope in takeKeys), typecheck pass; worker ran chat-view/side-sections tests (108 pass), lint pass, selftest --plugin chat,sessions pass (301) · concerns: unity-pool selftest not run after the hub joined the chain; focusedEntry/focusedBlock return the transcript cursor during a hub turn; isAtHub stays set when another plugin sets the base scope until chat next takes keys; a hub key finding no section hands keys to the transcript
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 - SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
 - PagePartHarness gains mode(id), picks, setSideBarShown, scope(), outerPanes() · why: start.test needs them · consumers: 04, 05, 06 tests · group 03
 - 04: DocsView.focusDoc() landed as DocsView.focusMain() (column when it held the keys last and is in sight, else the doc); no other consumer
+- 06: SectionCursor gains leave() (blurs the holder) and enter() focuses it; FakeElement gains hasLayoutBox and getClientRects(); chat-commands.ts, chat.css, editor contract and vim host edited beyond plan.md's File Structure row
 ### Rulings
 - Alt+j/k between stops calls the left stop's left before the next stop's focus — left runs on every end of a turn — harmless if wrong · group 01 · group 01
 - every return to main writes area=main and calls left before focusMain (unlike entering, written after the hook) so a focusin during focusMain finds main already holding — double focusMain if wrong · group 01 · group 01
@@ -263,5 +265,7 @@ Review base: 1a938e2f
 - 04: right column focused self-test step uses checksFit 'held' — the min-width fit check takes the column out of sight and hands keys to the doc · group 04
 - 04: a click on an On this page row focuses the doc; Enter on a section row also logs doc focused · group 04
 - 05: Backlog shared homes/list binds written as one flatMap over [backlog.homes, backlog.list]; h / a i d t T o stay list-only · group 05
+- 06: resize target is the hub divider only while the hub holds the keys (null otherwise) · group 06
+- 06: pane keys group runs at width 1400 (hub hidden under the 900px start width) and returns to start · group 06
 ### Review rounds
 ### Test gate

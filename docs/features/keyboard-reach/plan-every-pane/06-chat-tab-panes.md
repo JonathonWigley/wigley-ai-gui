@@ -1,6 +1,6 @@
 # 06 — Chat tab panes: transcript, box and session hub on the focus keys
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -285,3 +285,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 42915d04 · proof: diff read (Produces present, one deps.setScope in takeKeys), typecheck pass; worker ran chat-view/side-sections tests (108 pass), lint pass, selftest --plugin chat,sessions pass (301) · concerns: unity-pool selftest not run after the hub joined the chain; focusedEntry/focusedBlock return the transcript cursor during a hub turn; isAtHub stays set when another plugin sets the base scope until chat next takes keys; a hub key finding no section hands keys to the transcript
