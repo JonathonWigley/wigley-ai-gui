@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAIN_AGENT_ID } from '../../contracts/agent';
 import {
   endsInsideLine,
   mainReplies,
@@ -290,6 +291,7 @@ describe('transcriptEntries', () => {
         kind: 'assistant',
         id: 'history:a2-0',
         at: 0,
+        agentId: MAIN_AGENT_ID,
         text: 'hello',
         streaming: false,
         raw: [a2],

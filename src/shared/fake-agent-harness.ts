@@ -675,6 +675,7 @@ function emitToolTurn(
   emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
+    agentId: MAIN_AGENT_ID,
     text: reply,
     streaming: false,
     raw: [{ fake: 'assistant', text: reply }],
@@ -729,6 +730,7 @@ function emitStepsTurn(
   emitEntry({
     kind: 'thinking',
     id: `step-${turn}-${FAKE_STEP_TOOLS.length + 1}`,
+    agentId: MAIN_AGENT_ID,
     text: thought,
     streaming: false,
     raw: [{ fake: 'thinking', text: thought }],
@@ -1039,6 +1041,7 @@ function emitEchoTurn(
   emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
+    agentId: MAIN_AGENT_ID,
     text: prefix,
     streaming: true,
     raw: [first],
@@ -1046,6 +1049,7 @@ function emitEchoTurn(
   emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
+    agentId: MAIN_AGENT_ID,
     text: `${prefix}${text}`,
     streaming: false,
     raw: [first, { fake: 'assistant', text }],
@@ -1072,6 +1076,7 @@ function emitBlocksTurn(
   emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
+    agentId: MAIN_AGENT_ID,
     text: FAKE_BLOCKS_REPLY,
     streaming: false,
     raw: [{ fake: 'assistant', text: FAKE_BLOCKS_REPLY }],
@@ -1109,6 +1114,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
       kind: 'assistant',
       id: `history:${sessionId}-assistant`,
       at: FAKE_HISTORY_AT + 1000,
+      agentId: MAIN_AGENT_ID,
       text: 'fake earlier reply',
       streaming: false,
       raw: [{ fake: 'history-assistant' }],
@@ -1338,6 +1344,7 @@ export function createFakeAgentHarness(
       emitEntry({
         kind: 'assistant',
         id: `assistant-${compaction.turn}`,
+        agentId: MAIN_AGENT_ID,
         text: reply,
         streaming: false,
         raw: [{ fake: 'assistant', text: reply }],
@@ -1387,6 +1394,7 @@ export function createFakeAgentHarness(
       emitEntry({
         kind: 'assistant',
         id: `assistant-${turn}`,
+        agentId: MAIN_AGENT_ID,
         text: SAMPLE_VISUALS_OPEN_TEXT,
         streaming: true,
         raw: [first],
@@ -1397,6 +1405,7 @@ export function createFakeAgentHarness(
         emitEntry({
           kind: 'assistant',
           id: `assistant-${turn}`,
+          agentId: MAIN_AGENT_ID,
           text: SAMPLE_VISUALS_TEXT,
           streaming: false,
           raw: [
@@ -1449,6 +1458,7 @@ export function createFakeAgentHarness(
       emitEntry({
         kind: 'assistant',
         id: `assistant-${askedTurn}`,
+        agentId: MAIN_AGENT_ID,
         text: reply,
         streaming: false,
         raw: [{ fake: 'assistant', text: reply }],
@@ -1541,6 +1551,7 @@ export function createFakeAgentHarness(
         emitEntry({
           kind: 'assistant',
           id: `assistant-${turn}`,
+          agentId: MAIN_AGENT_ID,
           text: reply,
           streaming: false,
           raw: [{ fake: 'assistant', text: reply }],

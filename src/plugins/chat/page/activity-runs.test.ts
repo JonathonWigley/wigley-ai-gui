@@ -12,7 +12,15 @@ function entry(kind: ChatEntryKind, id: string, at = 1000): ChatEntry {
       return { kind, id, at, text: 'ask', images: [], delivery: null, raw: [] };
     case 'assistant':
     case 'thinking':
-      return { kind, id, at, text: 'text', streaming: false, raw: [] };
+      return {
+        kind,
+        id,
+        at,
+        agentId: MAIN_AGENT_ID,
+        text: 'text',
+        streaming: false,
+        raw: [],
+      };
     case 'tool':
       return {
         kind,

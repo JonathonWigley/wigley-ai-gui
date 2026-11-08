@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import {
   asHtml,
@@ -24,6 +25,7 @@ describe('createEntryKit', () => {
         kind: 'assistant',
         id: 'a1',
         at: 1000,
+        agentId: MAIN_AGENT_ID,
         text: 'hi',
         streaming: false,
         raw: [],

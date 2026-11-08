@@ -161,17 +161,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   `fake: hold`. The dock now draws in the session hub, and these measurements predate that move; recheck both sizes
   before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
   c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
-- **Background subagent misattributed and dropped early** — *needs a feature plan*: two faults a real session showed
-  on 2026-11-03, a haiku background subagent under an Opus main told to run `sleep 90`. Take the first one first; it
-  misattributes who said what. (1) The subagent's replies show in the main transcript as the main agent's: the
-  decoder's text entries read no `parent_tool_use_id` (`decodeTextBlock`, `src/main/claude-code/stream-decoder.ts`).
-  Only a background subagent was seen doing this; check a foreground one. To decide: where a subagent's text belongs,
-  such as its strip box or nowhere. (2) A subagent waiting on its own background shell lost its strip box about 80 s
-  before it really ended, then replied and handed back with no box. The box follows `agentFinished`, which for a
-  launched subagent comes from `task_notification` (`finishByNotification`; `docs/features/agent-chat/claude-stream.md`
-  § its end event notes the measurement). The raw line was not captured, so capture it first. To decide: whether a late
-  reply lists the subagent again, or its box waits for the shells it owns. Source session: Claude Code
-  2294388c-6fcc-4d43-a794-070e11683453 in /Users/jonathonwigley/Documents/ai-dev
 
 - **A quit can lose a session's open run time** — *needs a feature plan*: chat's final save at quit is not waited for
   (`detachAll`, `chat-sessions.ts`), and `src/main/main.ts` lets the user's quit exit without waiting, so a cut write

@@ -13,7 +13,7 @@ type ResultEntry = Extract<ChatEntry, { kind: 'result' }>;
 // The activity dock's input while the session works. The turn starts at the
 // later of the last `user` entry and the first entry after the last `result`
 // entry; with neither, it is every entry. A turn with no entries starts at
-// `now`. Steps leave out subagents' tool calls. While `compaction` is not null
+// `now`. Steps leave out subagents' steps. While `compaction` is not null
 // the state is `compacting` and the time counts from the compaction's start,
 // whatever the turn does.
 export function workingInput(
@@ -142,10 +142,10 @@ function turnState(turn: readonly ChatEntry[]): WorkingState {
   return 'thinking';
 }
 
-// A step the dock shows: every step but a subagent's tool call.
+// A step the dock shows: every step but a subagent's.
 function isDockStep(entry: ChatEntry): entry is StepEntry {
   return (
-    isStep(entry) && (entry.kind !== 'tool' || entry.agentId === MAIN_AGENT_ID)
+    isStep(entry) && (entry.kind === 'raw' || entry.agentId === MAIN_AGENT_ID)
   );
 }
 

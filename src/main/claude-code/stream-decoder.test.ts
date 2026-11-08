@@ -5,21 +5,27 @@ import { createStreamDecoder } from './stream-decoder';
 // Lines shaped after the excerpts in docs/features/agent-chat/claude-stream.md.
 const line = (event: object) => JSON.stringify(event);
 
-const streamLine = (event: object) =>
-  line({ type: 'stream_event', event, parent_tool_use_id: null });
+const streamLine = (event: object, parent: string | null = null) =>
+  line({ type: 'stream_event', event, parent_tool_use_id: parent });
 
-const messageStart = (id: string) =>
-  streamLine({
-    type: 'message_start',
-    message: { id, type: 'message', role: 'assistant', content: [] },
-  });
+const messageStart = (id: string, parent: string | null = null) =>
+  streamLine(
+    {
+      type: 'message_start',
+      message: { id, type: 'message', role: 'assistant', content: [] },
+    },
+    parent,
+  );
 
-const textStart = (index: number) =>
-  streamLine({
-    type: 'content_block_start',
-    index,
-    content_block: { type: 'text', text: '' },
-  });
+const textStart = (index: number, parent: string | null = null) =>
+  streamLine(
+    {
+      type: 'content_block_start',
+      index,
+      content_block: { type: 'text', text: '' },
+    },
+    parent,
+  );
 
 const textDelta = (index: number, text: string) =>
   streamLine({
@@ -289,6 +295,20 @@ const subagentReply = (
       usage,
     },
     parent_tool_use_id: agentId,
+  });
+
+// A subagent's hand-back turn's `result`: its `origin` names the subagent's
+// `task_id`.
+const handbackResult = (taskId: string) =>
+  line({
+    type: 'result',
+    subtype: 'success',
+    origin: {
+      kind: 'peer',
+      from: taskId,
+      senderTaskId: taskId,
+      handback: true,
+    },
   });
 
 // The measured subagent Read, claude-stream.md § Subagents (4.76).
@@ -775,6 +795,71 @@ describe('createStreamDecoder', () => {
       const [entry] = decoder.decode(input).entries;
 
       expect(entry).toMatchObject(expected);
+    },
+  );
+
+  it.each([
+    {
+      case: 'main streamed text',
+      lines: [
+        messageStart('m1'),
+        textStart(0),
+        textDelta(0, 'Hi'),
+        blockStop(0),
+        line(assistantEvent('m1', [{ type: 'text', text: 'Hi' }])),
+      ],
+      kind: 'assistant',
+      agentId: 'main',
+    },
+    {
+      case: 'main unstreamed text',
+      lines: [line(assistantEvent('m1', [{ type: 'text', text: 'Hi' }]))],
+      kind: 'assistant',
+      agentId: 'main',
+    },
+    {
+      case: 'subagent text',
+      lines: [subagentReply(MEASURED_AGENT_CALL, 'm2', 'claude-haiku-5-5', {})],
+      kind: 'assistant',
+      agentId: MEASURED_AGENT_CALL,
+    },
+    {
+      case: 'subagent thinking',
+      lines: [
+        line({
+          ...assistantEvent('m2', [{ type: 'thinking', thinking: 'hmm' }]),
+          parent_tool_use_id: MEASURED_AGENT_CALL,
+        }),
+      ],
+      kind: 'thinking',
+      agentId: MEASURED_AGENT_CALL,
+    },
+    {
+      case: 'subagent streamed text',
+      lines: [
+        messageStart('m3', 'b1'),
+        textStart(0, 'b1'),
+        line({
+          ...assistantEvent('m3', [{ type: 'text', text: 'Hi' }]),
+          parent_tool_use_id: 'b1',
+        }),
+      ],
+      kind: 'assistant',
+      agentId: 'b1',
+    },
+  ])(
+    'decode_TextAndThinking_CarryTheirAgent ($case)',
+    ({ lines, kind, agentId }) => {
+      const decoder = createStreamDecoder();
+
+      const sends = lines
+        .flatMap((text) => decoder.decode(text).entries)
+        .filter((entry) => entry.kind === kind);
+
+      expect(sends).not.toHaveLength(0);
+      for (const entry of sends) {
+        expect(entry).toMatchObject({ kind, agentId });
+      }
     },
   );
 
@@ -1927,6 +2012,7 @@ describe('createStreamDecoder', () => {
         reviveStarted('a8e9e7aad968da282', 's1'),
         taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
         taskNotification('s1', 'completed', 'a8e9e7aad968da282'),
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
       ],
       expected: [
         spawned('a1'),
@@ -1936,6 +2022,7 @@ describe('createStreamDecoder', () => {
         spawned('a1'),
         launched('a1'),
         taskBegan('bpdumb7hy', 'a1'),
+        taskEnded('bpdumb7hy', 'done'),
         finished('a1', 'done'),
       ],
     },
@@ -2023,7 +2110,7 @@ describe('createStreamDecoder', () => {
       ],
     },
     {
-      case: 'task outlives its subagent',
+      case: "launched subagent's end waits for its task",
       lines: [
         agentCall('a1'),
         launchReceipt('a1'),
@@ -2036,8 +2123,198 @@ describe('createStreamDecoder', () => {
         spawned('a1'),
         launched('a1'),
         taskBegan('bpdumb7hy', 'a1'),
-        finished('a1', 'done'),
         taskEnded('bpdumb7hy', 'done'),
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: "launched subagent's end waits for its last task",
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        taskStarted('bq2', 'tb3', 'local_bash', 'a8e9e7aad968da282'),
+        taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
+        taskNotification('tb3', 'completed', 'bq2'),
+      ],
+      expected: [
+        spawned('a1'),
+        launched('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        taskBegan('bq2', 'a1'),
+        taskEnded('bpdumb7hy', 'done'),
+        taskEnded('bq2', 'done'),
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: "held end keeps the notification's outcome",
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        taskNotification('a1', 'stopped', 'a8e9e7aad968da282'),
+        handbackResult('a8e9e7aad968da282'),
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
+      ],
+      expected: [
+        spawned('a1'),
+        launched('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        TURN_ENDED,
+        taskEnded('bpdumb7hy', 'done'),
+        finished('a1', 'failed'),
+      ],
+    },
+    {
+      case: "foreground subagent's end does not wait for its task",
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        toolResultLine('a1'),
+      ],
+      expected: [
+        spawned('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: 'revive of a held subagent drops its held end',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a8e9e7aad968da282', 's1'),
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
+      ],
+      expected: [
+        spawned('a1'),
+        launched('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        started('main', 's1', 'SendMessage', ''),
+        taskEnded('bpdumb7hy', 'done'),
+      ],
+    },
+    {
+      case: 'late line lists an ended subagent again',
+      lines: [
+        agentCall('b1', { name: 'notes-reader', model: 'haiku' }),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-haiku-5-5', { output_tokens: 1000 }),
+        taskNotification('b1', 'completed'),
+        toolUseLine('t1', 'Read', { file_path: 'notes.txt' }, 'b1'),
+      ],
+      expected: [
+        spawned('b1', 'Explore', 'main', {
+          name: 'notes-reader',
+          model: 'haiku',
+        }),
+        launched('b1'),
+        replied('b1', 'claude-haiku-5-5', 0.0005, 0, null),
+        finished('b1', 'done'),
+        spawned('b1', 'Explore', 'main', {
+          name: 'notes-reader',
+          model: 'haiku',
+        }),
+        launched('b1'),
+        replied('b1', 'claude-haiku-5-5', 0.0005, 0, null),
+        started('b1', 't1', 'Read', 'notes.txt'),
+      ],
+    },
+    {
+      case: 'revive then a line lists once',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskStarted('a4e45e22d2e0fef8f', 'b1', 'local_agent'),
+        taskNotification('b1', 'completed'),
+        toolUseLine('s1', 'SendMessage', {}),
+        reviveStarted('a4e45e22d2e0fef8f', 's1'),
+        toolUseLine('t1', 'Read', {}, 'b1'),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        started('main', 's1', 'SendMessage', ''),
+        spawned('b1'),
+        launched('b1'),
+        started('b1', 't1', 'Read', ''),
+      ],
+    },
+    {
+      case: 'late tool result lists an ended subagent again',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskNotification('b1', 'completed'),
+        toolResultLine('t9', { parent: 'b1' }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+      ],
+    },
+    {
+      case: 'hand-back result ends a listed-again subagent',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskStarted('a4e45e22d2e0fef8f', 'b1', 'local_agent'),
+        taskNotification('b1', 'completed'),
+        toolResultLine('t9', { parent: 'b1' }),
+        handbackResult('a4e45e22d2e0fef8f'),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'late line after a stopped end lists nothing',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskNotification('b1', 'stopped'),
+        toolUseLine('t1', 'Read', {}, 'b1'),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'failed'),
+        started('b1', 't1', 'Read', ''),
+      ],
+    },
+    {
+      case: 'hand-back result of an ended subagent ends nothing',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskStarted('a4e45e22d2e0fef8f', 'b1', 'local_agent'),
+        taskNotification('b1', 'completed'),
+        handbackResult('a4e45e22d2e0fef8f'),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        finished('b1', 'done'),
+        TURN_ENDED,
       ],
     },
     {

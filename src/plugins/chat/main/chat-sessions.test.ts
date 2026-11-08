@@ -565,7 +565,15 @@ function connected(id: string, hostId: string): AgentSession {
 }
 
 function assistant(id: string, text: string): ChatEntry {
-  return { kind: 'assistant', id, at: 1000, text, streaming: false, raw: [] };
+  return {
+    kind: 'assistant',
+    id,
+    at: 1000,
+    agentId: MAIN_AGENT_ID,
+    text,
+    streaming: false,
+    raw: [],
+  };
 }
 
 const IDLE_SEND: UserMessage = { text: 'idle send', images: [] };

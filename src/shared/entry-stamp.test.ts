@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAIN_AGENT_ID } from '../contracts/agent';
 import { createEntryStamp } from './entry-stamp';
 
 describe('createEntryStamp', () => {
@@ -8,6 +9,7 @@ describe('createEntryStamp', () => {
     const draft = (id: string, text: string) => ({
       kind: 'assistant' as const,
       id,
+      agentId: MAIN_AGENT_ID,
       text,
       streaming: false,
       raw: [],

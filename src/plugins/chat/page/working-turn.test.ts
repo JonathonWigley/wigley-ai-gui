@@ -21,7 +21,15 @@ function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
       return { kind, id, at, text: 'ask', images: [], delivery: null, raw: [] };
     case 'assistant':
     case 'thinking':
-      return { kind, id, at, text: 'text', streaming: false, raw: [] };
+      return {
+        kind,
+        id,
+        at,
+        agentId: MAIN_AGENT_ID,
+        text: 'text',
+        streaming: false,
+        raw: [],
+      };
     case 'tool':
       return {
         kind,
@@ -75,8 +83,8 @@ function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
 
 // Each spec is `<kind>:<id>@<at>`, with an optional `!` after the kind for an
 // entry still open (a streaming assistant or thinking, a tool with no result,
-// a permission with no answer) and `~` for a subagent's tool. A result may add
-// `$<cost>` and `/<stop reason>` after its time.
+// a permission with no answer) and `~` for a subagent's tool, assistant or
+// thinking. A result may add `$<cost>` and `/<stop reason>` after its time.
 function entries(...specs: string[]): ChatEntry[] {
   return specs.map((spec) => {
     const match = /^(\w+)(!?)(~?):(\w+)@(\d+)(?:\$([\d.]+))?(?:\/(\w+))?$/.exec(
@@ -88,7 +96,11 @@ function entries(...specs: string[]): ChatEntry[] {
     const [, kindName, open, subagent, id, at, cost, stopReason] = match;
     const kind = kindName as ChatEntryKind;
     const built = entry(kind, id, Number(at));
-    if (built.kind === 'tool' && subagent !== '') {
+    const hasAgent =
+      built.kind === 'tool' ||
+      built.kind === 'assistant' ||
+      built.kind === 'thinking';
+    if (hasAgent && subagent !== '') {
       built.agentId = SUBAGENT_ID;
     }
     if (built.kind === 'result') {
@@ -198,6 +210,17 @@ describe('workingInput', () => {
     {
       given: "a subagent's tool between two main tools",
       list: entries('user:u@100', 'tool:a@110', 'tool~:s@115', 'tool:b@120'),
+      now: 900,
+      expected: { startedAt: 100, steps: ['a', 'b'], now: 900 },
+    },
+    {
+      given: "a subagent's thinking between two main tools",
+      list: entries(
+        'user:u@100',
+        'tool:a@110',
+        'thinking~:s@115',
+        'tool:b@120',
+      ),
       now: 900,
       expected: { startedAt: 100, steps: ['a', 'b'], now: 900 },
     },
