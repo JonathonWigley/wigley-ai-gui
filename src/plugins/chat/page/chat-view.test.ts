@@ -124,7 +124,8 @@ const returnedTwo: ReturnedMessage = {
 // toast. `sideParts` and `composerParts` are the view's part stores, `layouts` its
 // chat layouts, `removeSession` closes a session's tab as the sessions plugin
 // does, and `setActive` names the focused pane's session. `keyCalls` records
-// each `setScope`, `setResizeTarget` and `setFocusTarget` in order, and
+// each `setScope`, `setResizeTarget` and `setFocusTarget` in order, a
+// `setScope` reporting its scope in force as the core does, and
 // `boxCalls` each `focus` and `blur` on the box with its options, the fake box
 // reporting focus and blur as the editor does. `visible` is what every tab's
 // `isVisible` answers, `show` runs a session's tab's `shown`, `scopeChanged`
@@ -280,7 +281,11 @@ function mounted(
         } as unknown as TextEditor;
       },
     },
-    setScope: (scope: string) => keyCalls.push(['setScope', scope]),
+    // The core reports the base set as the scope in force, nothing pushed.
+    setScope: (scope: string) => {
+      keyCalls.push(['setScope', scope]);
+      scopeChanged(`chat.${scope}`);
+    },
     setResizeTarget: (target: ResizeTarget | null) =>
       keyCalls.push(['setResizeTarget', target]),
     setFocusTarget: (target: FocusTarget | null) =>
@@ -1097,9 +1102,40 @@ describe('mountChatView close guard', () => {
 });
 
 describe('mountChatView pane keys', () => {
-  beforeEach(() =>
-    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
-  );
+  // Each ResizeObserver the view builds: its callback and what it observes.
+  interface StubObserver {
+    callback: () => void;
+    observed: Set<unknown>;
+  }
+  let observers: StubObserver[];
+  beforeEach(() => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+    observers = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        private record: StubObserver;
+        constructor(callback: () => void) {
+          this.record = { callback, observed: new Set() };
+          observers.push(this.record);
+        }
+        observe(target: unknown) {
+          this.record.observed.add(target);
+        }
+        disconnect() {
+          this.record.observed.clear();
+        }
+      },
+    );
+  });
+  // Runs each observer of `target`, as the browser does when it resizes.
+  const resize = (target: unknown) => {
+    for (const { callback, observed } of observers) {
+      if (observed.has(target)) {
+        callback();
+      }
+    }
+  };
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -1182,6 +1218,17 @@ describe('mountChatView pane keys', () => {
       stopExits: () => stopExits as ComposerStopExits | null,
     };
   }
+
+  // The hub's holder losing its layout box, as a hidden or narrowed hub does,
+  // and every section head losing its own.
+  const hideHub = (root: FakeElement) => {
+    findAll(root, 'chat-side-parts')[0].hasLayoutBox = false;
+  };
+  const hideHeads = (root: FakeElement) => {
+    for (const head of findAll(root, 'chat-side-section-head')) {
+      head.hasLayoutBox = false;
+    }
+  };
 
   const FOCUS_BOX = [['focus', undefined]];
   const BLUR_TO_NORMAL = [['blur', { toNormal: true }]];
@@ -1275,6 +1322,20 @@ describe('mountChatView pane keys', () => {
       scope: 'chat',
       line: 'cursor back on the entries in app',
       leftStop: true,
+    },
+    {
+      from: 'strip',
+      direction: 'right',
+      returned: true,
+      scope: 'hub',
+      line: 'focused the session hub in app',
+      leftStop: true,
+    },
+    {
+      from: 'strip',
+      direction: 'right',
+      isHubReachable: false,
+      returned: false,
     },
   ])(
     'chatView_FocusMove_MovesBetweenTheTabsPanes: $from $direction (hub reachable: $isHubReachable)',
@@ -1377,25 +1438,112 @@ describe('mountChatView pane keys', () => {
     },
   );
 
-  it('chatView_HubRing_FollowsTheScopeInForce', () => {
+  // Breaks: the ring kept under a pushed scope, the transcript's cursor bar
+  // back under a scope pushed over the hub, a hidden tab keeping the hub.
+  it('chatView_HubMarks_FollowTheScopeInForce', () => {
     const tab = shownTab();
-    const isRinged = () => tab.root.classList.contains('is-at-hub');
+    const marks = () => ({
+      ringed: tab.root.classList.contains('is-hub-in-force'),
+      transcriptBarHidden: tab.root.classList.contains('is-at-hub'),
+    });
     tab.putFocus('hub from the box');
 
-    tab.mount.scopeChanged('chat.hub');
-    expect(isRinged()).toBe(true);
+    expect(marks()).toEqual({ ringed: true, transcriptBarHidden: true });
     tab.mount.scopeChanged('keys.help');
-    expect(isRinged()).toBe(false);
+    expect(marks()).toEqual({ ringed: false, transcriptBarHidden: true });
     tab.mount.scopeChanged('chat.hub');
-    expect(isRinged()).toBe(true);
+    expect(marks()).toEqual({ ringed: true, transcriptBarHidden: true });
 
     tab.mount.visible.value = false;
     tab.mount.scopeChanged('sessions.sidebar');
-    expect(isRinged()).toBe(false);
+    expect(marks()).toEqual({ ringed: false, transcriptBarHidden: false });
     tab.mount.visible.value = true;
     tab.clear();
 
     expect(tab.target().move('left')).toBe(false);
     expect(tab.mount.boxCalls).toEqual([]);
+  });
+
+  // Each way the hub's turn ends on its own, and the scopes it must not end
+  // under: the hub, entered from the transcript, holds the keys first.
+  // Breaks: a hub key with no section keeping the keys; `hiddenChanged`,
+  // a resize, a press or the box missing the exit; the exit running under
+  // another plugin's base scope or a pushed one, stealing its keys; the hub
+  // left hidden when its own scope comes back.
+  it.each<{
+    case: string;
+    act: (tab: ReturnType<typeof shownTab>) => void;
+    scopes: string[];
+  }>([
+    {
+      case: 'a hub key finding no section shown',
+      act: (tab) => {
+        hideHeads(tab.root);
+        tab.mount.view.hub.move(1);
+      },
+      scopes: ['chat'],
+    },
+    {
+      case: 'hiddenChanged with the hub hidden',
+      act: (tab) => {
+        hideHub(tab.root);
+        tab.mount.view.hub.hiddenChanged();
+      },
+      scopes: ['chat'],
+    },
+    {
+      case: 'hiddenChanged with the hub still shown',
+      act: (tab) => tab.mount.view.hub.hiddenChanged(),
+      scopes: [],
+    },
+    {
+      case: 'the tab narrowing until the hub hides',
+      act: (tab) => {
+        hideHub(tab.root);
+        resize(tab.root);
+      },
+      scopes: ['chat'],
+    },
+    {
+      case: 'a pointer down on the entries',
+      act: (tab) => findAll(tab.root, 'chat-entries')[0].fire('pointerdown'),
+      scopes: ['chat'],
+    },
+    {
+      case: 'the box taking focus',
+      act: (tab) => tab.session().box.focus(),
+      scopes: ['chat'],
+    },
+    {
+      case: 'another base scope in force, hub hidden',
+      act: (tab) => {
+        tab.mount.scopeChanged('unity-pool.panel');
+        hideHub(tab.root);
+        tab.mount.view.hub.hiddenChanged();
+        resize(tab.root);
+      },
+      scopes: [],
+    },
+    {
+      case: 'a pushed scope, hub hidden, then the hub scope back',
+      act: (tab) => {
+        tab.mount.scopeChanged('keys.help');
+        hideHub(tab.root);
+        tab.mount.view.hub.hiddenChanged();
+        tab.mount.scopeChanged('chat.hub');
+      },
+      scopes: ['chat'],
+    },
+  ])('chatView_HubTurn_EndsOnItsOwnOnlyUnderItsScope: $case', (row) => {
+    const tab = shownTab();
+    tab.putFocus('hub from the transcript');
+    tab.clear();
+
+    row.act(tab);
+
+    const scopes = tab.mount.keyCalls
+      .filter(([call]) => call === 'setScope')
+      .map(([, scope]) => scope);
+    expect(scopes).toEqual(row.scopes);
   });
 });

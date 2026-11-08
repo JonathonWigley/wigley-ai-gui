@@ -10,6 +10,8 @@ import {
   asHtml,
   FakeElement,
   findAll,
+  type FocusFakeDocument,
+  type FocusFakeElement,
   installFakeDom,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
@@ -714,6 +716,30 @@ describe('the section cursor', () => {
       expect(side.cursor.isReachable()).toBe(reachable);
     },
   );
+
+  // Breaks: `leave` blurring the holder alone, a no-op while an element in it
+  // holds the focus; `leave` taking the focus from outside the hub.
+  it.each<{ case: string; focused: 'holder' | 'inside' | 'outside' }>([
+    { case: 'the holder focused', focused: 'holder' },
+    { case: 'an element in the holder focused', focused: 'inside' },
+    { case: 'an element outside the hub focused', focused: 'outside' },
+  ])('sectionCursor_Leave_TakesTheFocusOffTheHub: $case', ({ focused }) => {
+    const { parts, openTab } = setUp();
+    parts.add(recordingPart('a', 10).part);
+    const { root, side } = openTab();
+    const holder = holderOf(root) as FocusFakeElement;
+    const target = {
+      holder,
+      inside: findAll(root, 'chat-side-section-body')[0] as FocusFakeElement,
+      outside: document.createElement('div') as unknown as FocusFakeElement,
+    }[focused];
+    target.focus();
+
+    side.cursor.leave();
+
+    const doc = document as unknown as FocusFakeDocument;
+    expect(doc.activeElement).toBe(focused === 'outside' ? target : null);
+  });
 
   it('sectionCursor_ScrollBy_ScrollsTheCursorsBody', () => {
     vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '18px' }));

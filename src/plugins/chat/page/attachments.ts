@@ -1,4 +1,5 @@
 import type { ChatImage } from '../../../contracts/agent';
+import type { Disposable } from '../../../contracts/disposable';
 import type { DroppedFile } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
 import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
@@ -9,20 +10,21 @@ import { pathOf } from '../../../shared/page/file-drop/file-path';
 import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 
 // The images attached to one Chat tab's next message, in the order attached.
-// Each change tells every `onChange` listener the images held after it.
-// `removeLast` reports whether there was an image to remove.
+// Each change tells every `onChange` listener the images held after it, until
+// its handle is disposed. `removeLast` reports whether there was an image to
+// remove.
 export interface Attachments {
   images(): ChatImage[];
   add(image: ChatImage): void;
   removeAt(index: number): void;
   removeLast(): boolean;
   clear(): void;
-  onChange(listener: (images: ChatImage[]) => void): void;
+  onChange(listener: (images: ChatImage[]) => void): Disposable;
 }
 
 export function createAttachments(): Attachments {
   let held: ChatImage[] = [];
-  const listeners: ((images: ChatImage[]) => void)[] = [];
+  const listeners = new Set<(images: ChatImage[]) => void>();
   const set = (next: ChatImage[]) => {
     held = next;
     for (const listener of listeners) {
@@ -42,7 +44,10 @@ export function createAttachments(): Attachments {
     },
     clear: () => set([]),
     onChange(listener) {
-      listeners.push(listener);
+      // A wrapper per subscription, so each handle removes only its own.
+      const wrapped = (images: ChatImage[]) => listener(images);
+      listeners.add(wrapped);
+      return { dispose: () => listeners.delete(wrapped) };
     },
   };
 }

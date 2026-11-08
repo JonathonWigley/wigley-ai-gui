@@ -347,6 +347,7 @@ export function chatCommandHandlers(
           session.attachments.removeAt(index);
           return session.attachments.images();
         },
+        onChanged: (listener) => session.attachments.onChange(listener),
       });
     }),
     submitCode: () => deps.signIn.submitCode(),

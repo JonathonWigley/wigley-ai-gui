@@ -151,7 +151,8 @@ export interface ChatSession extends SessionRef {
 // cursor's section; `leave` gives the keys to the transcript, as Esc does;
 // `scroll` scrolls the cursor's section body. `hiddenChanged` runs after the
 // hub is hidden or shown: a hub no longer reachable gives its keys to the
-// transcript. A key that finds no section shown does the same.
+// transcript while its own scope is in force. A key that finds no section
+// shown does the same.
 export interface HubKeys {
   move(by: 1 | -1): void;
   toEdge(edge: 'first' | 'last'): void;
@@ -274,7 +275,8 @@ export interface ChatSlotReaders {
 // baseline a `chat.session` write compares with. `handle` is null until `addTab` returns, and
 // `box` and `dropTarget` until the editor mounts into the attached tab.
 // `composerSize` follows the drawn composer's height for as long as the tab is
-// held. `unseen` is the finished turn the row still shows, and `activity` the
+// held, and `rootSize` the tab's own size, under which the hub can hide.
+// `unseen` is the finished turn the row still shows, and `activity` the
 // activity last set on the row. `stop` holds the composer part holding the
 // tab's entry cursor. `main` holds the entries and the composer; `side` is the
 // tab's session hub; `isAtHub` is set while the hub holds the keys, and
@@ -302,6 +304,7 @@ interface HeldTab {
   attachments: Attachments;
   composer: ComposerSurface;
   composerSize: ResizeObserver;
+  rootSize: ResizeObserver;
   dropTarget: Disposable | null;
   stop: ComposerStopHolder;
   factsListeners: Set<() => void>;
@@ -346,13 +349,24 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const tabs = new Map<string, HeldTab>();
   // The kinds whose failed draw has toasted since the layouts were shown.
   const toastedKinds = new Set<ChatEntryKind>();
+  // The scope keys fire in, as `onScopeChanged` last reported it.
+  let scopeInForce: ViewScope | undefined;
+  // A hub holding the keys that can no longer be reached gives them to the
+  // transcript, only while its own scope is in force: under another scope the
+  // keys are not chat's to hand.
+  const leaveUnreachableHub = (tab: HeldTab) => {
+    const isHubInForce = tab.isAtHub && scopeInForce === HUB_SCOPE;
+    if (isHubInForce && !tab.side.cursor.isReachable()) {
+      hubToEntries(tab, deps);
+    }
+  };
   deps.layouts.onChange(() => {
     toastedKinds.clear();
     for (const tab of tabs.values()) {
       tab.entries.rebuild(tab.state.entries);
       drawComposer(tab);
       tab.side.rebuild();
-      leaveUnreachableHub(tab, deps);
+      leaveUnreachableHub(tab);
     }
   });
   const drawEveryComposer = () => {
@@ -365,7 +379,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   deps.sideParts.onChanged(() => {
     for (const tab of tabs.values()) {
       tab.side.sync();
-      leaveUnreachableHub(tab, deps);
+      leaveUnreachableHub(tab);
     }
   });
   let pendingReveal: string | null = null;
@@ -431,6 +445,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         focusIfRevealed(shownTab);
       },
       beforeClose: (closing) => mayClose(closing, deps),
+      resized: leaveUnreachableHub,
     });
     tabs.set(state.sessionId, tab);
     tab.side.sync();
@@ -571,20 +586,25 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   };
   deps.onActiveChanged(clearUnseen);
   deps.onSessionHostChanged(clearUnseen);
-  // Another tab, pane or mode took the keys; a scope pushed over the visible
-  // tab keeps its stop and its hub, whose ring shows only under the hub's own
-  // scope.
+  // Another tab, pane or mode took the keys; a scope over the visible tab keeps
+  // its stop and its hub, whose ring shows only under the hub's own scope.
+  // Chat's transcript scope in force means the hub holds nothing. The hub's
+  // scope in force again finds a hub hidden meanwhile, under another scope.
   deps.onScopeChanged((scope) => {
+    scopeInForce = scope;
     for (const tab of tabs.values()) {
       const isVisible = tab.handle?.isVisible() === true;
       tab.stop.scopeChanged(isVisible);
-      if (!isVisible) {
+      if (!isVisible || scope === CHAT_SCOPE) {
         tab.isAtHub = false;
       }
-      tab.root.classList.toggle(
-        'is-at-hub',
-        isVisible && tab.isAtHub && scope === HUB_SCOPE,
-      );
+      markHub(tab, scope);
+    }
+    if (scope === HUB_SCOPE) {
+      const tab = visibleTab();
+      if (tab !== undefined) {
+        leaveUnreachableHub(tab);
+      }
     }
   });
 
@@ -632,7 +652,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     hiddenChanged() {
       const tab = visibleTab();
       if (tab !== undefined) {
-        leaveUnreachableHub(tab, deps);
+        leaveUnreachableHub(tab);
       }
     },
   };
@@ -695,6 +715,7 @@ function tearDownTab(tab: HeldTab) {
       () => tab.dropTarget?.dispose(),
       () => tab.box?.destroy(),
       () => tab.composerSize.disconnect(),
+      () => tab.rootSize.disconnect(),
       () => tab.composer.dispose(),
       () => tab.side.close(),
       () => tab.entries.dispose(),
@@ -762,13 +783,27 @@ type KeysDeps = Pick<
 
 type PaneDeps = KeysDeps & Pick<ChatViewDeps, 'log'>;
 
-// The hub's scope as the core names it in force.
+// The hub's and the transcript's scopes as the core names them in force.
 const HUB_SCOPE = 'chat.hub';
+const CHAT_SCOPE = 'chat.chat';
+
+// Marks the tab `is-at-hub` while the hub holds its keys, which hides the
+// transcript's cursor bar under any scope, and `is-hub-in-force` while the
+// hub's own scope is in force too, which rings the hub's cursor head.
+function markHub(tab: HeldTab, scope: ViewScope | undefined) {
+  tab.root.classList.toggle('is-at-hub', tab.isAtHub);
+  tab.root.classList.toggle(
+    'is-hub-in-force',
+    tab.isAtHub && scope === HUB_SCOPE,
+  );
+}
 
 // Gives the tab the keys in `scope`: the hub flag first, so the scope's
 // listeners read it, then the scope, then the targets its change dropped.
+// The hub's mark follows the flag even when a pushed scope hides the change.
 function takeKeys(tab: HeldTab, scope: ChatTabScope, deps: KeysDeps) {
   tab.isAtHub = scope === 'hub';
+  tab.root.classList.toggle('is-at-hub', tab.isAtHub);
   deps.setScope(scope);
   handTargets(tab, deps);
 }
@@ -864,14 +899,6 @@ function hubToEntries(tab: HeldTab, deps: PaneDeps) {
   deps.log(`cursor back on the entries in ${tab.name}`);
 }
 
-// A hub holding the keys that can no longer be reached gives them to the
-// transcript.
-function leaveUnreachableHub(tab: HeldTab, deps: PaneDeps) {
-  if (tab.isAtHub && !tab.side.cursor.isReachable()) {
-    hubToEntries(tab, deps);
-  }
-}
-
 // Asks main for the session's earlier conversation each time its tab shows;
 // main reads it once, and it arrives as a `replace` in `chat.entries`.
 function askHistory(tab: HeldTab, deps: ChatViewDeps) {
@@ -914,8 +941,9 @@ function sessionOf(
 // and its status line) added to its session, with the box's editor mounted
 // once the element is attached; it is marked `is-at-stop` while a composer part's stop
 // holds the entry cursor, and the box taking focus leaves that part, and
-// `is-at-hub` while the hub's own scope is in force on the visible tab; the
-// box taking focus, or a pointer down on the entries, ends the hub's turn. The
+// `is-at-hub` while the hub holds the keys; the box taking focus, a pointer
+// down on the entries, or the tab shrinking until the hub hides ends the hub's
+// turn (`view.resized` runs on each size change). The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
 // before the handle and box are set. Once the box is mounted the tab element is
@@ -929,6 +957,7 @@ function createTab(
     isHeld(tab: HeldTab): boolean;
     shown(tab: HeldTab): void;
     beforeClose(tab: HeldTab): boolean | Promise<boolean>;
+    resized(tab: HeldTab): void;
   },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
@@ -1001,6 +1030,7 @@ function createTab(
     attachments,
     composer,
     composerSize: followComposerHeight(root, entries),
+    rootSize: new ResizeObserver(() => view.resized(tab)),
     dropTarget: null,
     stop: createComposerStopHolder({
       sessionId: state.sessionId,
@@ -1025,6 +1055,7 @@ function createTab(
     factsListeners: new Set(),
     placedReturned: new Set(),
   };
+  tab.rootSize.observe(root);
   entries.element.addEventListener('pointerdown', () => {
     if (tab.isAtHub) {
       hubToEntries(tab, deps);

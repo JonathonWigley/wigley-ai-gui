@@ -47,6 +47,24 @@ describe('attachments', () => {
     expect(removed).toBe(true);
     expect(reported).toEqual([[png], [png, gif], [gif], []]);
   });
+
+  // Breaks: a disposed handle still hearing, or removing another listener.
+  it('onChange_HandleDisposed_HearsNoMoreAndOthersStillHear', () => {
+    const attachments = createAttachments();
+    const kept: ChatImage[][] = [];
+    const disposed: ChatImage[][] = [];
+    attachments.onChange((images) => kept.push(images));
+    const handle = attachments.onChange((images) => disposed.push(images));
+
+    attachments.add(png);
+    handle.dispose();
+    attachments.add(gif);
+
+    expect({ kept, disposed }).toEqual({
+      kept: [[png], [png, gif]],
+      disposed: [[png]],
+    });
+  });
 });
 
 // The largest byte count whose base64 text is at most the cap.

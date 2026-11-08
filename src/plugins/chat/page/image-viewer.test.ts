@@ -51,18 +51,31 @@ function viewerSetup() {
   return { viewer, logs, drawn };
 }
 
-// A removal over `images` that records each index it is asked to remove.
+// A removal over `images` that records each index it is asked to remove and
+// tells its listeners of each change, as the attachments do; `change` is a
+// change made elsewhere, and `listening` counts the listeners held.
 function removalOver(images: ChatImage[]) {
   const held = [...images];
   const calls: number[] = [];
+  const listeners = new Set<() => void>();
+  const change = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
   const removal: ImageRemoval = {
     remove(index) {
       calls.push(index);
       held.splice(index, 1);
+      change();
       return [...held];
     },
+    onChanged(listener) {
+      listeners.add(listener);
+      return { dispose: () => listeners.delete(listener) };
+    },
   };
-  return { removal, calls };
+  return { removal, calls, change, listening: () => listeners.size };
 }
 
 describe('createImageViewer', () => {
@@ -148,4 +161,20 @@ describe('createImageViewer', () => {
       ).toEqual(last);
     },
   );
+
+  // Breaks: the viewer ignoring an outside change, so `x` removes by a stale
+  // index; the viewer closing on its own removal; the watch left after close.
+  it('removalChange_MadeElsewhere_ClosesAndStopsListening', () => {
+    const setup = viewerSetup();
+    const { removal, calls, change, listening } = removalOver([red, green]);
+    setup.viewer.open([red, green], 1, removal);
+    const logsBefore = setup.logs.length;
+
+    change();
+    setup.viewer.removeShown();
+
+    expect(setup.logs.slice(logsBefore)).toEqual(['image viewer closed']);
+    expect(calls).toEqual([]);
+    expect(listening()).toBe(0);
+  });
 });

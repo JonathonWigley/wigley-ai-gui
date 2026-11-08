@@ -1108,6 +1108,7 @@ describe('chat commands', () => {
       viewed: [],
       logs: ['no attached image'],
       leftAfterRemovingSecond: undefined,
+      changesHeard: 0,
     },
     {
       given: 'two attached images',
@@ -1115,21 +1116,27 @@ describe('chat commands', () => {
       viewed: [{ images: [png, jpeg], index: 0 }],
       logs: [],
       leftAfterRemovingSecond: [png],
+      changesHeard: 1,
     },
   ])(
     'showAttachments_$given',
-    ({ attached, viewed, logs, leftAfterRemovingSecond }) => {
+    ({ attached, viewed, logs, leftAfterRemovingSecond, changesHeard }) => {
       const shown = session(true);
       attached.forEach((image) => shown.attachments.add(image));
       const run = setUp(shown);
 
       run.handlers.showAttachments({ arg: undefined });
+      // The viewer hears the attachments change, so it never removes by a
+      // stale index.
+      let heard = 0;
+      run.removals[0]?.onChanged(() => heard++);
       const left = run.removals[0]?.remove(1);
 
       expect(run.viewed).toEqual(viewed);
       expect(run.logs).toEqual(logs);
       expect(left).toEqual(leftAfterRemovingSecond);
       expect(shown.attachments.images()).toEqual(leftAfterRemovingSecond ?? []);
+      expect(heard).toBe(changesHeard);
     },
   );
 

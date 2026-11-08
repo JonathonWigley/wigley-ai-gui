@@ -11,7 +11,11 @@ import {
   type PartStore,
   placeContributedPart,
 } from '../../../shared/page/contributed-parts';
-import { appended, element } from '../../../shared/page/dom';
+import {
+  appended,
+  blurFocusedElement,
+  element,
+} from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
   type DrawnPart,
@@ -67,7 +71,8 @@ export interface SideSectionsDeps {
 // the next call. `isReachable` is true while the hub is not hidden, its holder
 // has a layout box and at least one head shows. `enter` focuses the holder and
 // keeps the cursor when its section still shows, else puts it on the first
-// shown head; `leave` blurs the holder when it holds the DOM focus. `move` steps
+// shown head; `leave` takes the DOM focus off the holder or the element in it
+// that holds it. `move` steps
 // one head, stopping at either end, and `toEdge` goes to the first or last.
 // `toggle` folds or unfolds the cursor's section, as a click on its head does,
 // and `scrollBy` scrolls its body. Each returns the cursor section's title, or
@@ -459,7 +464,7 @@ function sectionCursor(
     },
     leave() {
       if (holder.contains(document.activeElement)) {
-        holder.blur();
+        blurFocusedElement();
       }
     },
     move(by) {

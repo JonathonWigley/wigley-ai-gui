@@ -1,4 +1,5 @@
 import type { ChatImage } from '../../../contracts/agent';
+import type { Disposable } from '../../../contracts/disposable';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
 import '../../../shared/page/ui/dialog.css';
@@ -7,9 +8,11 @@ import type { ImageViewerInput } from '../layouts/layout';
 import { createImageViewerPart, type DialogPartDeps } from './dialog-kits';
 
 // Where a viewer's images came from, when they can be removed there: `remove`
-// removes the image at `index` and returns the images left.
+// removes the image at `index` and returns the images left; `onChanged` hears
+// each change of the images there until its handle is disposed.
 export interface ImageRemoval {
   remove(index: number): readonly ChatImage[];
+  onChanged(listener: () => void): Disposable;
 }
 
 // The full-size image viewer over a message's images, or the composer's
@@ -18,7 +21,8 @@ export interface ImageRemoval {
 // `previous` step through the images and stop at the ends; `removeShown`
 // removes the shown image through the `removal` the viewer was opened with,
 // then shows the image now at its place, else the one before it, else closes;
-// `close`, and the pushed scope's base changing, hide it and pop the scope.
+// `close`, the pushed scope's base changing, and a change of the removal's
+// images the viewer did not make, hide it and pop the scope.
 // Each does nothing while the viewer is closed.
 export interface ImageViewer {
   open(
@@ -43,6 +47,9 @@ interface OpenImages {
   index: number;
   removal: ImageRemoval | null;
   scope: PushedScope;
+  // Hears the removal's images change; null with no removal.
+  removalWatch: Disposable | null;
+  isRemoving: boolean;
 }
 
 // A dialog-layer surface in the overlay: the `imageViewer` part on the dim
@@ -89,12 +96,21 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
         index,
         removal: removal ?? null,
         scope,
+        removalWatch: null,
+        isRemoving: false,
       };
-      scope.onBaseChanged(() => {
+      const closeOpened = () => {
         if (open === opened) {
           viewer.close();
         }
-      });
+      };
+      scope.onBaseChanged(closeOpened);
+      opened.removalWatch =
+        removal?.onChanged(() => {
+          if (!opened.isRemoving) {
+            closeOpened();
+          }
+        }) ?? null;
       open = opened;
       backdrop.hidden = false;
       show(opened, part.draw);
@@ -113,7 +129,13 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
       log(
         `removed attached image ${shown.index + 1} of ${shown.images.length}`,
       );
-      const left = shown.removal.remove(shown.index);
+      shown.isRemoving = true;
+      let left: readonly ChatImage[];
+      try {
+        left = shown.removal.remove(shown.index);
+      } finally {
+        shown.isRemoving = false;
+      }
       if (left.length === 0) {
         viewer.close();
         return;
@@ -128,6 +150,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
         return;
       }
       open = null;
+      held.removalWatch?.dispose();
       backdrop.hidden = true;
       part.clear();
       held.scope.pop();

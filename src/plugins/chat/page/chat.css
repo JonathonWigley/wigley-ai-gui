@@ -110,7 +110,7 @@
   width: 100%;
 }
 
-.chat-tab.is-at-hub .chat-side-section-head.is-cursor {
+.chat-tab.is-hub-in-force .chat-side-section-head.is-cursor {
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
 }
 
