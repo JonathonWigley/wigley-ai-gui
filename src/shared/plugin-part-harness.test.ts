@@ -360,25 +360,61 @@ describe('plugin part harness', () => {
     expect(harness.fences).toEqual([]);
   });
 
-  it('knows only the commands of the part that asks', () => {
-    let own: unknown;
-    let another: unknown;
-    const part = pagePart((api) => {
-      own = api.keys.command('sample.run');
-      another = api.keys.command('chat.newSession');
-      return { commands: { run() {} } };
+  it("knows the commands every real part declares, and no fake dependency's", () => {
+    const pageDepKey: DependencyKey<object, 'page', 'pen'> = {
+      id: 'pen',
+      process: 'page',
+    };
+    const chat: PagePart = {
+      manifest: {
+        ...pageManifest,
+        id: 'chat',
+        commands: {
+          newSession: { label: 'New', group: 'Chat', runsIn: 'page' },
+        },
+      },
+      start: () => ({ commands: { newSession() {} } }),
+    } as unknown as PagePart;
+    const asked = [
+      'sample.run',
+      'chat.newSession',
+      'pen.write',
+      'sample.missing',
+    ] as const;
+    let found: Record<string, unknown> = {};
+    const part: PagePart = {
+      manifest: { ...pageManifest, dependsOn: { main: [], page: ['pen'] } },
+      start(api) {
+        found = Object.fromEntries(
+          asked.map((id) => [id, api.keys.command(id)]),
+        );
+        return { commands: { run() {} } };
+      },
+    };
+
+    startPagePart(part, {
+      parts: [chat],
+      dependencies: [fakeDependency(pageDepKey, () => ({}))],
     });
 
-    startPagePart(part);
-
-    expect(own).toEqual({
-      id: 'sample.run',
-      plugin: 'sample',
-      label: 'Run',
-      group: 'Sample',
-      runsIn: 'page',
+    expect(found).toEqual({
+      'sample.run': {
+        id: 'sample.run',
+        plugin: 'sample',
+        label: 'Run',
+        group: 'Sample',
+        runsIn: 'page',
+      },
+      'chat.newSession': {
+        id: 'chat.newSession',
+        plugin: 'chat',
+        label: 'New',
+        group: 'Chat',
+        runsIn: 'page',
+      },
+      'pen.write': undefined,
+      'sample.missing': undefined,
     });
-    expect(another).toBeUndefined();
   });
 
   it('rejects a fake dependency the manifest does not list', () => {
