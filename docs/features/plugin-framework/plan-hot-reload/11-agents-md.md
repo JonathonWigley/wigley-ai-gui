@@ -1,6 +1,6 @@
 # 11 — AGENTS.md says what landed
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 09, 10
 Plan: [plan.md](plan.md)
@@ -42,3 +42,5 @@ Done when: every entry listed is true against the code; the greps above hold.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 0a4cec12 · proof: diff read: each entry the task names is edited, plus the page restores sentence (partsReady) and the module map (plugin-switch, applied-plugins, page-parts, quit-wait); drive action ids checked (driveFor('core') + stopPlugin); lint clean · concerns: for review: several rewrapped AGENTS.md lines run past the file's wrap width (slot, layout, disabled-plugin entries)
