@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04, 06
 Plan: [plan.md](plan.md)
@@ -36,3 +36,5 @@ Done when: every doc agrees with the code, the grep shows only expected hits, an
 Commit:    one commit per repo for the doc fixes
 
 ## Proof
+
+Commit 8647d68b (marketplace 0e0fc50) · proof: task grep shows only true or unrelated hits; npm run lint clean; marketplace check_manifests and check_pointers pass · concerns: none

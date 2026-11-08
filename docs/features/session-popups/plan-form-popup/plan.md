@@ -127,7 +127,7 @@ Boundary rules: the popup knows nothing of forms or chat; forms and primer reach
 - [x] [Final verification](06-final-verification.md) — after 04
 
 ### Wave 5
-- [ ] [Doc re-read](05-doc-re-read.md) — after 04, 06 (both repos: the marketplace's two "Primer tab" lines too)
+- [x] [Doc re-read](05-doc-re-read.md) — after 04, 06 (both repos: the marketplace's two "Primer tab" lines too)
 
 ## Run log
 
@@ -139,6 +139,7 @@ Review base: aed38a35
 - 03 · 616576b6 · diff read; tsc --noEmit and npm run lint clean; worker ran npm test green (10093); takeOver grep only chat's takeOverSkipped · concerns: plan's 'scope after registration' premise did not hold (render's trailing confirm.setBaseScope covers it); enterFrame cancel has no direct sessions test; usage-tab-line manifest still names '(Chat, Form, Primer)' session kinds
 - 04 · b91a040e · diff read; worker ran selftest --plugin forms, chat, docs, sessions PASS and forms,primer PASS; typecheck and lint clean; screenshots read · concerns: chat's floating composer draws over the open popup (z-order; fix dispatched); primer alone fails on a pre-existing cross-script wait; screenshot corners/scrim not measurable (06 queries them)
 - 06 · 09ac737d · drive run fp1: checks 1,3,4,5,6,7,9 pass; 2 failed (bar click logged nothing) and is fixed in 09ac737d, unit row + live click log; 8 failed only in a session whose default round was already submitted (form-service replaysLastSubmitted, already in aed38a35); fresh session passes · concerns: SIDE_BAR_OVER_QUERY is 679px in src/renderer/shell/modes.ts, not 640 (fit at 640 clean); Alt+; is written <A-;>
+- 05 · 8647d68b (marketplace 0e0fc50) · task grep shows only true or unrelated hits; npm run lint clean; marketplace check_manifests and check_pointers pass · concerns: none
 ### Contract changes
 - SessionPopupView.beforeClose: boolean → boolean | Promise<boolean> · why: forms' guardSessionClose answers through a promise while its cancel prompt asks · consumers: 03 · group 03
 - FormPopupHandle: setStatus, open, isVisible, dispose (no hide) · why: the helper calls only these · consumers: none outside 03 · group 03
@@ -165,3 +166,4 @@ Review base: aed38a35
 - Pre-existing, to follow-ups: re-opening an already-submitted default round in a session replays its answers and shows nothing, silently (form-service replaysLastSubmitted); forms.openRound with no sessionId connects a row without selecting it (sessions.mark); drive skill could say to pass a different round for a second open in one session · group 06
 ### Review rounds
 ### Test gate
+- Picked per writing-tests § Picking tests for a gate over aed38a35..HEAD (sessions, forms, primer, chat, docs, docs-session-tab, settings, shared/page): npm test 10094 passed, no type errors; npm run selftest -- --plugin sessions,forms,primer,chat,docs all passed (docs-session-tab has no self-test script; its unit tests ran in npm test).
