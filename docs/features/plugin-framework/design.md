@@ -10,6 +10,7 @@
 - **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
+- **Hot reload (Wave 4)** — the closed bridge, core services that stay fixed, live stop, start and restart, the `ready` and `mayStop` hooks, the live enable switch, and quit waiting for every stop.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -214,3 +215,55 @@ and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds
   `closeSession` call never cancels: main refuses it with the guard's reason.
 - **Row decoration is the row part.** Row parts and activities landed after the follow-up asked for `setBadge`, so
   `setStatus` gives way to a row part and `setBadge` is not added.
+
+## Hot reload (Wave 4)
+
+Settled in the 2026-11-07 interview for Wave 4 steps 1 and 2 of `docs/features/intent-alignment/master-plan.md`.
+Plan folder `plan-hot-reload/`. The runtime plugin loader (step 3) gets its own plan once this one lands, because its
+design rests on a reload that has run.
+
+- **The raw bridge is closed.** The preload hands the Bridge over once, through a claim the core takes at start, and
+  no global holds it after that. Layouts, and later the plugins the loader reads from a user folder, reach the app only
+  through the kit and the plugin API, so every call stays inside a contract and its disposal. A sanctioned power-user
+  hook was rejected: reload can undo only what the API tracked, and the kit already covers what a layout needs
+  (`kit.command`, `kit.state.read`). This is not a sandbox. Layouts and plugin data modules still share the page's DOM,
+  as they must to draw. The window states `contextIsolation` and `sandbox` in code, so a changed Electron default cannot
+  open the page.
+- **Core services are not replaceable by a plugin.** Markdown, editor, alerts, the fuzzy matcher and markup stay
+  adapters that the composition root picks. Plugins extend them through seams, such as markdown fences and the
+  picker's layout hooks. Each service is built at one place in its composition root, so the app swaps a service
+  everywhere by changing that one line (the user's condition). A `provides` registry was rejected for now: it adds
+  start order and live swapping that no second provider needs yet, and it can come later behind the same contracts.
+- **A restart takes the dependents with it.** The host stops a plugin's dependents first, then the plugin, then starts
+  the plugin and every dependent it stopped, in start order. So a dependent may keep its view of a provider's exports for
+  its whole run. A stable export proxy was rejected: every export would have to survive a restart, and a registration
+  made through the old run would belong to a provider that is gone.
+- **`ready()` replaces `core.pageReady`.** A part's start may return `ready()`. The host calls it once every part has
+  started at page load, and again after a live start, once the whole restarted set has started. A core slot or a replayed
+  event was rejected: readiness is a phase of the part's lifecycle, so the host that owns the lifecycle calls it, and no
+  part writes its own "already ready?" check.
+- **`mayStop()` refuses a switch-off that would lose work.** A part may return `mayStop()`, which gives a reason while
+  it holds open work (an open round, unsaved doc edits), in the same shape as the close guard. The switch refuses with
+  that reason. A confirm that drops the work, and keeping the work across a switch-off, were rejected: one loses work, and
+  the other keeps slots for a plugin that is off.
+- **Switching off clears a plugin's slots; a restart keeps them.** A plugin switched off has its slots emptied, so a
+  reader does not see stale rows, and each reader's `on` hears the change. A stop and start of the same plugin keeps its
+  slots, so it starts from the last value as before.
+- **The switch runs in main.** One main module compares the disabled list on each config change. It stops page parts
+  before main parts, and starts main parts before page parts, so no page part calls a main handler that has gone. It
+  publishes each plugin's state (on or off, and the plugins that need it) in a core slot. Config's dependency check uses
+  the same rule, so a refused write and a locked switch cannot disagree.
+- **A plugin others need is locked.** Settings shows its switch as locked, with "needed by" naming the plugins that are
+  on and depend on it. The user switches those off first. Switching the dependents off with it was rejected, because
+  `sessions` or `chat` would take 15 or more plugins down in one press.
+- **Settings has a Plugins section.** It shows one row per plugin: the plugin's label, a one-line description, and on
+  or off, set with the picker the boolean settings use. Each manifest declares the label and the description.
+- **The served config follows the running set.** Help, which-key and Settings stop listing a plugin that is off. The
+  lists frozen at start are removed.
+- **Chat switched off works as at quit.** The agent processes go on running in the session host, and their rows close.
+  Chat switched on again joins them again, as after a relaunch.
+- **Quit waits for every stop to settle**, however long that takes, and logs an error after 5 seconds that names each
+  part still stopping. A cap was rejected by the user: a hung stop shows in the log, and quitting past it would cut the
+  save the wait is for.
+- **No reload key yet.** Built-in code does not change while the app runs, so drive actions stop, start and restart a
+  plugin to prove the host. The loader plan adds the reload the user runs.

@@ -30,7 +30,9 @@ When an item lands, tick its box here and remove it from `followups.md`, in the 
 
 Plans: Waves 0 and 2 have landed and their plan folder is gone.
 `docs/features/plugin-framework/plan-command-consumers/` holds Wave 3. The settled design is `plugin-framework/design.md` § Commands and
-state.
+state. `docs/features/plugin-framework/plan-hot-reload/` holds Wave 4 steps 1 and 2, to run after Wave 3 closes; its
+settled design is `plugin-framework/design.md` § Hot reload (Wave 4). Step 3, the runtime loader, gets its own plan
+after it.
 
 ## Order
 
