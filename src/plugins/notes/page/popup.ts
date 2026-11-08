@@ -722,6 +722,17 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Whether the user may change the draft now.
   const mayEdit = () => fieldsShown() && !isLocked();
 
+  // Whether `what` must not change the draft now; logs why when it must not.
+  const editRefused = (what: string): boolean => {
+    if (mayEdit()) {
+      return false;
+    }
+    const reason =
+      inFlight === null ? 'popup not editable' : `${inFlight} in flight`;
+    log(`${what} skipped: ${reason}`);
+    return true;
+  };
+
   // Puts a draft main answered into the open popup: a fresh one takes the
   // selected session and its default target, saved at once.
   const showDraft = (draft: NoteDraft) => {
@@ -1093,9 +1104,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   const removeSession = () => {
-    if (isLocked()) {
-      return;
-    }
     dispatch({ type: 'edited', fields: detachSession(store.get().fields) });
     log('session none');
   };
@@ -1220,8 +1228,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Images join the Images field; every other file goes into the Body as its
   // path.
   const take = (files: readonly DroppedFile[]) => {
-    if (!mayEdit()) {
-      log(`files skipped: ${inFlight ?? 'popup not editable'}`);
+    if (editRefused('files')) {
       return;
     }
     const imageFiles = files.filter((file) =>
@@ -1336,8 +1343,15 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     confirmYes: () => void confirmDiscard(),
     confirmNo: keepDraft,
     pickColour: ({ arg }) => markupView.pickColourByName(arg),
-    removeImageAt: ({ arg }) => void removeImageAt(arg),
+    removeImageAt: ({ arg }) => {
+      if (!editRefused(`image ${arg + 1} removal`)) {
+        void removeImageAt(arg);
+      }
+    },
     removeSession: ({ arg }) => {
+      if (editRefused(`session ${arg} removal`)) {
+        return;
+      }
       if (store.get().fields.session?.sessionId === arg) {
         removeSession();
       } else {

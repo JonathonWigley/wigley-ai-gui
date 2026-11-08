@@ -932,38 +932,83 @@ describe('note popup', () => {
   });
 
   it.each([
-    {
-      name: 'its attached id',
-      arg: 'a',
-      locks: false,
-      logged: 'session none',
-    },
-    {
-      name: 'another id',
-      arg: 'b',
-      locks: false,
-      logged: 'session b not attached',
-    },
-    { name: 'a locked draft', arg: 'a', locks: true, logged: null },
+    { name: 'its attached id', arg: 'a', logged: 'session none' },
+    { name: 'another id', arg: 'b', logged: 'session b not attached' },
   ])(
     'removeSession_RemovesOnlyTheAttachedUnlockedSession ($name)',
-    async ({ arg, locks, logged }) => {
+    async ({ arg, logged }) => {
+      const harness = await openPopup({ ...DRAFT, session: SESSIONS[0] });
+      const loggedBefore = harness.logged.length;
+
+      harness.popup.commands.removeSession({ arg });
+
+      expect(harness.logged.slice(loggedBefore)).toEqual([logged]);
+    },
+  );
+
+  // Each state crossed with each click command; the refusal is the only line.
+  it.each(
+    [
+      {
+        state: 'popup closed',
+        reason: 'popup not editable',
+        setUp: (harness: Harness) => harness.popup.commands.close(NO_ARG),
+      },
+      {
+        state: 'discard confirmation showing',
+        reason: 'popup not editable',
+        setUp: (harness: Harness) => harness.popup.commands.discard(NO_ARG),
+      },
+      {
+        state: 'markup open',
+        reason: 'popup not editable',
+        setUp(harness: Harness) {
+          harness.popup.commands.nextField(NO_ARG);
+          harness.popup.commands.nextField(NO_ARG);
+          harness.popup.commands.act(NO_ARG);
+        },
+      },
+      {
+        state: 'send in flight',
+        reason: 'send in flight',
+        setUp(harness: Harness) {
+          harness.fakes.sendToFollowup = () => new Promise(() => undefined);
+          harness.popup.commands.sendFollowup(NO_ARG);
+        },
+      },
+    ].flatMap((row) => [
+      {
+        ...row,
+        command: 'removeImageAt',
+        run: (harness: Harness) =>
+          harness.popup.commands.removeImageAt({ arg: 1 }),
+        logged: `image 2 removal skipped: ${row.reason}`,
+      },
+      {
+        ...row,
+        command: 'removeSession',
+        run: (harness: Harness) =>
+          harness.popup.commands.removeSession({ arg: 'a' }),
+        logged: `session a removal skipped: ${row.reason}`,
+      },
+    ]),
+  )(
+    'removeCommand_WhileNotEditable_RemovesNothing ($command, $state)',
+    async ({ setUp, run, logged }) => {
       const harness = await openPopup({
         ...DRAFT,
         target: '/home/me/a',
         title: 'A note',
         session: SESSIONS[0],
       });
-      if (locks) {
-        harness.popup.commands.sendFollowup(NO_ARG);
-      }
+      setUp(harness);
+      await settle();
       const loggedBefore = harness.logged.length;
 
-      harness.popup.commands.removeSession({ arg });
+      run(harness);
+      await settle();
 
-      expect(harness.logged.slice(loggedBefore)).toEqual(
-        logged === null ? [] : [logged],
-      );
+      expect(harness.logged.slice(loggedBefore)).toEqual([logged]);
     },
   );
 
