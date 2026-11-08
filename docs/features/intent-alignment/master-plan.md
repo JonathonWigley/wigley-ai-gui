@@ -29,9 +29,8 @@ item per feature session.
 When an item lands, tick its box here and remove it from `followups.md`, in the same commit.
 
 Plans: Waves 0, 2 and 3 have landed and their plan folders are gone. The settled design is
-`plugin-framework/design.md` § Commands and state. `docs/features/plugin-framework/plan-hot-reload/` holds Wave 4 steps
-1 and 2, ready to run now that Wave 3 has closed; its settled design is `plugin-framework/design.md` § Hot reload
-(Wave 4). Step 3, the runtime loader, gets its own plan after it.
+`plugin-framework/design.md` § Commands and state. Wave 4 steps 1 and 2 have landed and their plan folder is gone; the
+design is `plugin-framework/design.md` § Hot reload (Wave 4). Step 3, the runtime loader, needs its own plan.
 
 ## Order
 
@@ -104,9 +103,9 @@ Checkpoint, after the items above:
 ## Wave 4: plugin hot reload
 
 1. Decide both before plugins load from a user folder (∥):
-   - [ ] Layout access to the raw bridge [plan]
-   - [ ] Replaceable core services decision [plan]
-2. [ ] PluginHost stop and reload, with a live enable switch [plan]
+   - [x] Layout access to the raw bridge [plan]
+   - [x] Replaceable core services decision [plan]
+2. [x] PluginHost stop and reload, with a live enable switch [plan]
 3. [ ] Runtime plugin loader [plan]
 
 ## Lane H: harness seams

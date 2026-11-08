@@ -335,3 +335,4 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 09: picking the shown value logs unchanged through commit's same-layer check; the plugin list leaf is looked up at pick, not at draw · group 09
 ### Review rounds
 ### Test gate
+- vitest whole suite after task 11 (HEAD 44e39dda): 539 files, 10378 tests passed, no type errors; filtered self-tests and drive checks are task 13's

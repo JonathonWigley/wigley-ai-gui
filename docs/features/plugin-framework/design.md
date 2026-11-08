@@ -47,7 +47,8 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
   the core events both sides need; a plugin's cross-process messages use its own channel. The bus lands in A2,
   where sessions publish the first events.
 - Every built-in plugin starts at launch unless the core setting `plugins.disabled` names it; the list arrived with
-  the chat bar's optional views (`docs/features/chat-bar/design.md` § Optional plugins).
+  the chat bar's optional views (`docs/features/chat-bar/design.md` § Optional plugins). The list also applies live,
+  through the switch (§ Hot reload (Wave 4)).
 - Key scopes are plugin-declared and qualified (`forms.review`); plugin settings live in the manifest under the
   plugin's id (which-key's delay is a setting, 200 ms default); fonts and theme stay core settings.
 - Core: plugin host, shell and areas, commands, key engine (sequences, chords, leader), settings, themes, the
@@ -148,8 +149,8 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
 - **Late registrations.** A registration made after its plugin stopped (a `then` that resolves late) is disposed at
   once rather than leaked.
 - **Stop now, reload later.** `stop(id)` lands in Wave 1, and quit uses it for main parts in reverse start order,
-  so disposal has a real caller before Wave 4's reload. Reload and the live enable switch stay in Wave 4. A stop at
-  quit leaves what must outlast it: chat's stop detaches the processes the session host keeps
+  so disposal has a real caller. Wave 4 added the live `start`, `restart` and the enable switch on the same stop; a
+  reload with new code waits for the runtime loader. A stop at quit leaves what must outlast it: chat's stop detaches the processes the session host keeps
   (`docs/features/session-host/design.md`), and main sends the page no plugin message from the first quit task on, so
   rows those stops end stay in the page's saved panes and recency.
 - **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (workflow-heavy
@@ -190,8 +191,8 @@ Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/inten
   nobody has measured, and they can come later behind the same slot.
 - **A slot outlives its owner's stop.** The next start publishes the same key, reads the last value and rebuilds from it.
   A key another live part holds throws, and a page load releases the previous page's claims. A disabled or never-started
-  owner reads undefined. `sessions.activity` clears itself at a page start, since each source sets its activity again, and
-  `sessions.active` goes back to null until the first panes are placed. Clearing a slot for a plugin switched off live falls to Wave 4.
+  owner reads undefined, and the live switch empties a switched-off plugin's slots (§ Hot reload (Wave 4)). `sessions.activity` clears itself at a page start, since each source sets its activity again, and
+  `sessions.active` goes back to null until the first panes are placed.
 - **Soft reads.** A manifest's `reads` list allows a slot read, or hearing an event, with the contract import and no
   start order. `dependsOn` stays for exports and for needing the other plugin started first.
 - **Forms' and primer's rounds stay on their channels.** Their owners' state is mostly live `ask_round` calls, so a slot
@@ -230,12 +231,11 @@ Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/inten
 
 ## Hot reload (Wave 4)
 
-Settled in the 2026-11-07 interview for Wave 4 steps 1 and 2 of `docs/features/intent-alignment/master-plan.md`.
-Plan folder `plan-hot-reload/`. The runtime plugin loader (step 3) gets its own plan once this one lands, because its
-design rests on a reload that has run.
+Settled in the 2026-11-07 interview for Wave 4 steps 1 and 2 of `docs/features/intent-alignment/master-plan.md`, and
+landed. The runtime plugin loader (step 3) gets its own plan, because its design rests on a reload that has run.
 
-- **The raw bridge is closed.** The preload hands the Bridge over once, through a claim the core takes at start, and
-  no global holds it after that. Layouts, and later the plugins the loader reads from a user folder, reach the app only
+- **The raw bridge is closed.** The preload exposes `window.wigley` as `{ claim() }` alone. The core calls `claim()` once at
+  start and gets the Bridge; a second call throws `the bridge was already claimed`, so no global holds the Bridge. Layouts, and later the plugins the loader reads from a user folder, reach the app only
   through the kit and the plugin API, so every call stays inside a contract and its disposal. A sanctioned power-user
   hook was rejected: reload can undo only what the API tracked, and the kit already covers what a layout needs
   (`kit.command`, `kit.state.read`). This is not a sandbox. Layouts and plugin data modules still share the page's DOM,
@@ -247,35 +247,40 @@ design rests on a reload that has run.
   everywhere by changing that one line (the user's condition). A `provides` registry was rejected for now: it adds
   start order and live swapping that no second provider needs yet, and it can come later behind the same contracts.
 - **A restart takes the dependents with it.** The host stops a plugin's dependents first, then the plugin, then starts
-  the plugin and every dependent it stopped, in start order. So a dependent may keep its view of a provider's exports for
+  the plugin and every dependent it stopped, in the parts list's order with each part's dependencies first. So a dependent may keep its view of a provider's exports for
   its whole run. A stable export proxy was rejected: every export would have to survive a restart, and a registration
   made through the old run would belong to a provider that is gone.
-- **`ready()` replaces `core.pageReady`.** A part's start may return `ready()`. The host calls it once every part has
-  started at page load, and again after a live start, once the whole restarted set has started. A core slot or a replayed
+- **`ready()` replaces the page-ready event.** A part's start may return `ready()`. The host calls it once every part has
+  started at page load, and after a live start, once the whole set that start brought up has started. A core slot or a replayed
   event was rejected: readiness is a phase of the part's lifecycle, so the host that owns the lifecycle calls it, and no
   part writes its own "already ready?" check.
 - **`mayStop()` refuses a switch-off that would lose work.** A part may return `mayStop()`, which gives a reason while
-  it holds open work (an open round, unsaved doc edits), in the same shape as the close guard. The switch refuses with
-  that reason. A confirm that drops the work, and keeping the work across a switch-off, were rejected: one loses work, and
-  the other keeps slots for a plugin that is off.
+  it holds open work (an open round, unsaved doc edits), in the same shape as the close guard. The host asks it before
+  a switch-off, and the switch refuses with that reason. A refusal reaches the user as a `settings.json` config problem,
+  `"plugins.disabled" names "<id>", which cannot stop now: <reason>`, and the switch asks again every 2 seconds until the
+  part lets go or the list changes. Settings asks first, so its own pick is refused with a toast and writes nothing. A confirm that drops the work, and keeping the work across a switch-off, were rejected: one loses
+  work, and the other keeps slots for a plugin that is off.
 - **Switching off clears a plugin's slots; a restart keeps them.** A plugin switched off has its slots emptied, so a
   reader does not see stale rows, and each reader's `on` hears the change. A stop and start of the same plugin keeps its
   slots, so it starts from the last value as before.
-- **The switch runs in main.** One main module compares the disabled list on each config change. It stops page parts
-  before main parts, and starts main parts before page parts, so no page part calls a main handler that has gone. It
-  publishes each plugin's state (on or off, and the plugins that need it) in a core slot. Config's dependency check uses
-  the same rule, so a refused write and a locked switch cannot disagree.
+- **The switch runs in main.** One main module (`src/main/plugins/plugin-switch.ts`) compares the disabled list on each config
+  change. It stops page parts before main parts, and starts main parts before page parts, so no page part calls a main handler that has gone.
+  It publishes each plugin's state (label, description, on or off, and the plugins that need it) in the `core.plugins`
+  slot. Config's dependency check and the lock use the same `neededBy` rule, so a refused write and a locked switch
+  cannot disagree.
 - **A plugin others need is locked.** Settings shows its switch as locked, with "needed by" naming the plugins that are
   on and depend on it. The user switches those off first. Switching the dependents off with it was rejected, because
   `sessions` or `chat` would take 15 or more plugins down in one press.
 - **Settings has a Plugins section.** It shows one row per plugin: the plugin's label, a one-line description, and on
-  or off, set with the picker the boolean settings use. Each manifest declares the label and the description.
+  or off, set with the picker the boolean settings use (`docs/features/settings/design.md` § Plugins section). Each
+  manifest declares the label and the description. The raw `plugins.disabled` row is gone from Core, since its box
+  would write the list without asking the switch; a hand edit of `settings.json` stays the raw route.
 - **The served config follows the running set.** Help, which-key and Settings stop listing a plugin that is off. The
   lists frozen at start are removed.
 - **Chat switched off works as at quit.** The agent processes go on running in the session host, and their rows close.
   Chat switched on again joins them again, as after a relaunch.
-- **Quit waits for every stop to settle**, however long that takes, and logs an error after 5 seconds that names each
-  part still stopping. A cap was rejected by the user: a hung stop shows in the log, and quitting past it would cut the
+- **Quit waits for every stop to settle**, in every run mode, however long that takes, and logs
+  `quit is waiting on <ids>` to stderr after 5 seconds, naming each part still stopping. A cap was rejected by the user: a hung stop shows in the log, and quitting past it would cut the
   save the wait is for.
-- **No reload key yet.** Built-in code does not change while the app runs, so drive actions stop, start and restart a
-  plugin to prove the host. The loader plan adds the reload the user runs.
+- **No reload key yet.** Built-in code does not change while the app runs, so the drive actions `core.stopPlugin`,
+  `core.startPlugin` and `core.restartPlugin` stop, start and restart a plugin to prove the host. The loader plan adds the reload the user runs.

@@ -41,6 +41,7 @@ session under it.
      └─ no live process ── row rests (today's path, notice when its turn was running)
 
  quit / install-app ──▶ app disconnects; host keeps every process running
+ chat switched off live ──▶ chat's stop detaches its processes as a quit does; the app stays connected and the host keeps them
  turn ends while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
  host has no process and no app ──▶ host exits
  host dies ──▶ rows rest; next host ends what its record left ──▶ only then serves a spawn

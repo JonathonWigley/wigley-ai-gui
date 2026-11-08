@@ -33,8 +33,9 @@ Built.
 
 - Chat saves each session's total at the moment of the save, the open span included, with the session
   (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and tries once
-  more when the app quits. The app does not wait for that last write, so a quit that cuts it short leaves the last
-  saved total, which can lack the whole open span. A restored session's clock starts paused at that total.
+  more when chat stops, at quit or when chat is switched off. A quit waits for that write to settle (`src/main/quit-wait.ts`), so a
+  quit that ends the app early, such as a second quit in a drive run, can still leave the last saved total, which can
+  lack the whole open span. A restored session's clock starts paused at that total.
 - A kept run's work while the app is closed is not counted. A run still working restarts its clock at relaunch, and a
   turn that ended meanwhile adds nothing, so the row's time can run below the run's own.
 - A session opened from Claude's saved history (the resume picker) starts at zero, unless a saved record the restore

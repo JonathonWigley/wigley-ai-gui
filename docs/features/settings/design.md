@@ -5,6 +5,7 @@
 - **Scope** — what this feature covers and what stays a follow-up.
 - **The mode** — the plugin, its keys, the side bar sections.
 - **Setting rows** — declarations, controls by kind, commit and reset.
+- **Plugins section** — one switch per plugin, the lock, a refused pick, the filter.
 - **Keybindings and Leader menu sections** — the action list with its keys, the leader tree, recording a key, the advanced box.
 - **The userConfig service** — the seam that reads and writes the user's layers through the ConfigStore's checks.
 - **Disk changes and broken files** — hot reload, stale writes, a file that fails its check.
@@ -61,6 +62,25 @@ plan is written from them. A decision here stands unless the user changes it.
   check's message under it.
 - A setting read only when something is created (window size, the claude command) says so in its description; the row
   shows the new value at once and the app applies it to the next one.
+
+## Plugins section
+
+- One row per plugin, in manifest order: its label, its one-line description (both declared in the plugin's manifest),
+  and at the end its state, `true` or `false`, with the shared list picker as the control (Enter or `i`). The
+  `default` layout draws it as the `pluginRow` part.
+- The state comes from the `core.plugins` slot, which says what runs now, and not from `settings.json`, which says what
+  the user asked for. The row redraws when the slot changes, so a refused switch-off keeps showing `true`.
+- A plugin that running plugins depend on carries a `Needed by <label>, <label>` Tag before its state and cannot be
+  switched off; the user switches those plugins off first. Settings' own row carries `Edit settings.json to turn off`,
+  since switched off from its own section it could come back only by a hand edit.
+- A pick writes the `plugins.disabled` list in `settings.json`, through the same checks as every setting; the switch
+  applies the change at once. A pick of `false` on a running plugin asks the switch first (`mayDisable`): a reason
+  (a dependency, or open work the plugin's `mayStop` guards) logs `refused settings.json: <reason>`, shows as a toast,
+  and writes nothing. A pick of `true` writes without asking.
+- Core shows no `plugins.disabled` row: its JSON box would write the list without that ask. A hand edit of
+  `settings.json` still works, and a switch-off it names that cannot happen yet shows as a config problem.
+- `/` filters the rows by label and id, fuzzy. While `settings.json` fails its check the section shows the same problem
+  card as Core and refuses each pick.
 
 ## Keybindings and Leader menu sections
 

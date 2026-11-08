@@ -15,31 +15,23 @@ headings): the Backlog plugin reads it as one follow-up per top-level list item.
 
 Core seams that most items below assume.
 
-- **PluginHost stop and reload, with a live enable switch** — *needs a feature plan*: `PluginHost` has `stop(id)`
-  and `stopAll()` (stop landed, plan-foundation-sweeps); add `reload(id, part)` (`src/shared/plugin-host.ts`),
-  stopping dependents first and starting them again after. Dependents hold the view `exports(consumer)` gave them, so
-  a reload leaves them stale: hand them a stable export proxy or restart them too. A reloaded main part keeps its live state in the slots it
-  publishes, not its `start` closure: a start already reads the last value, so what is left is clearing a slot for a
-  plugin switched off live and how a reloaded owner re-attaches to its writer. On top of it, the `plugins.disabled` setting
-  (`src/config/settings.ts`, read once by `startPlugins`) takes effect live from a per-plugin switch in Settings
-  mode, so view and interaction behaviours (the completion row's description, key hints and the like) ship as
-  plugins the user switches on and off rather than settings inside the plugin they change. Builds on
-  disposable registrations landed (plan-foundation-sweeps).
-- **Parts that follow at `core.pageReady` follow nothing after a part restart** — *needs a feature plan*: `core.pageReady`
-  fires once per page load, and about ten page parts subscribe inside it (`src/plugins/docs/page/start.ts` is one), so a
-  part restarted later never subscribes again. No path reaches this until a reload lands. To decide, with the reload
-  above: a catch-up for a part that starts after the page is ready, or subscribing at `start`.
-- **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
-  (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (forms' on an
-  unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Chat stops after
-  forms, so a forms `dispose` that suspends can keep chat's `detachAll`, and with it the last save, from running (the
-  cut save itself: **A quit can lose a session's open run time**). Hold the quit until `stopAll`
-  settles, and prove it in a live quit, which a drive run cannot show because it holds the quit itself. The hold
-  changes quit latency, which is why it waits here.
 - **Visual reads chat's focused entry through a slot** — *agent-ready*: `ChatPageExports.focusedEntry` and
   `focusedBlock` hand visual an `HTMLElement`, which a plugin from a user folder cannot read across a reload. Publish
   the focused entry's id and the cursor's block as a page slot in chat's `contract.ts`, and let visual find the
   element from it. Left over from the plugin state registry, which landed without it.
+- **A restart leaves a page part's keys with no handler** — *agent-ready*: a restart stops a plugin's page part and starts
+  it again, and the part's binds stay in the keymap between the two, so a key pressed in that gap runs a command with no
+  handler. Take the binds out at the page stop and put them back at the page start, as the switch-off does through the
+  served config. The restart is drive-only today, so the gap shows when the loader's reload makes it a user action.
+- **A restarted main part adds its drive actions again** — *agent-ready*: a main part that adds drive actions at start
+  may throw `Drive action <id> is already added` when `core.restartPlugin` starts it again under a drive run. Unchecked;
+  run `core.restartPlugin` on such a plugin, and file the actions as disposables the stop takes back if it throws.
+- **A page part started live gets no restore window** — *needs a feature plan*: restores stay per page load, so a page
+  part that a restart or switch-on starts live restores nothing (its slots were cleared on a switch-off, and a restart is
+  drive-only). Re-arm restores per live start when a user-run reload makes a part restart with state to return.
+- **A throwing `ready` is silent in the part harness** — *agent-ready*: the host logs `ready of <id> failed: <error>` under
+  `plugin-host`, not under the plugin's id, and the part harness's host has no log, so a test whose `ready` throws
+  passes in silence. Give the harness host a log, and log under the plugin's id.
 - **Picker ranks recent targets higher** — *needs a feature plan*: every list picker ranks with the `FuzzyMatcher` page
   service, and a row's name outranks its path, so `gui` in the Notes target picker puts `wigley-ai-gui` first. What
   remains is recency: a recently updated target ranks higher. `NoteHome` has no updated time, and "updated" still needs
@@ -184,11 +176,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
   c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
 
-- **A quit can lose a session's open run time** — *needs a feature plan*: chat's final save at quit is not waited for
-  (`detachAll`, `chat-sessions.ts`), and `src/main/main.ts` lets the user's quit exit without waiting, so a cut write
-  leaves the last saved total, which can lack the whole span of a long turn. Deciding means choosing between a bounded
-  hold on the quit path and a synchronous write. `docs/features/session-clock/design.md` § Across relaunch states the
-  current behaviour.
 - **`/clear` then relaunch loses the row's selection** — *agent-ready*: select a row, `/clear` it (running or idle),
   and restart; no row is selected and the main pane says `Pick a session in the side bar`, though
   `open-sessions.json`'s `selectedHostSessionId` holds the row's new host id. A selected row with no `/clear` stays
@@ -390,7 +377,11 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **Runtime plugin loader** — *needs a feature plan*: a `PluginSource` seam (built-in list and a user folder of
   `manifest.json`, `main.js`, `page.js`); main `import()`s from disk and the page through `dataUrl`, and a
   `validateManifest` gives every plugin the checks `definePlugin` makes at compile time. `requireListed` and the
-  static lists in `src/plugins/{main,page,manifests}.ts` are what block it. Builds on PluginHost stop and reload.
+  static lists in `src/plugins/{main,page,manifests}.ts` are what block it. It builds on a host that starts, stops and
+  restarts parts live (`PluginHost.start`, `stop`, `restart`, and the enable switch in `src/main/plugins/plugin-switch.ts`)
+  and on the closed bridge (`window.wigley.claim()`). It also adds `reload(id, part)` (`src/shared/plugin-host.ts`), a
+  reload with new code: stop the part and its dependents, import the new module, start them again. A reload leaves
+  the dependents' view of the provider's exports stale, as a restart does not (it takes the dependents with it).
 - **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
   and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
@@ -428,15 +419,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   rebuild. Redraw only the cards a changed layout draws, reading `LayoutSet.changed` (kept unread for this, by the
   user's ruling). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
   doc pane redraws its frame only after the editor closes.
-- **Layout access to the raw bridge** — *needs a feature plan*: the page imports every layout module into its main
-  world (`importModule` in `src/renderer/renderer.ts`), where preload exposes the whole Bridge as `window.wigley`
-  (`src/preload/preload.ts`). A user layout can therefore invoke any plugin's channel outside every API, contract and
-  disposal. Decide whether this is a sanctioned power-user hook (then document it and type it) or closed (layouts
-  in a scope with no `window.wigley`, data through the kit). The plugin state registry's `kit.state.read`
-  (landed) is the sanctioned route for data a layout needs.
-- **Replaceable core services decision** — *needs a feature plan*: decide whether core services (`markdown`,
-  `editor`, `alerts`) are replaceable by a plugin (a `provides` service registry) or deliberately not, and record it
-  in `plugin-framework/design.md`.
 
 ## Features
 
@@ -658,12 +640,12 @@ because the earlier items rewrite many of these tests anyway.
   sites, and grep every async path in one pass: the docs view's guards landed one site at a time, across three rounds.
 - **A page's invoke after its plugin's main part stopped** — *agent-ready*: `plugin:invoke` rejects with `no main
   handler` once main's part has stopped, and the page side only logs it (chat view, doc view). A self-test logs these
-  errors after `all passed`: `watchDoc`, `pluginStatus`, `loadIndex`, `loadHistory`. Decide whether a live `stop(id)`
-  stops the page part first, and quiet the lines a quit produces.
+  errors after `all passed`: `watchDoc`, `pluginStatus`, `loadIndex`, `loadHistory`. The live switch stops page parts
+  before main parts, so only the lines a quit produces remain: quiet them.
 - **Withdrawn tools reach live hosts late** — *agent-ready*: at a stop, withdrawn tools and shrinking tool lists need
   to reach live hosts before `relay.close`, and the relay's second notice arrives only on the host's next `tools/call`.
-- **A stop drops unsaved text** — notes' popup and a forms draft lose what the user typed when their part stops. The
-  page-stop path has no production caller yet, so this bites when a plugin can be switched off live.
+- **A stop drops unsaved text** — notes' popup and a forms draft lose what the user typed when their part stops. A
+  switch-off asks `mayStop` first and refuses while they hold text, so a restart (drive-only) is the stop that still drops it.
 - **A pushed scope after its host is disposed** — `PushedScope.pop` throws after host disposal (notes popup, rename
   dialog, settings view), and `keys.setScope` leaves its base behind. Same trigger as the item above.
 - **A disposed layout preview still opens** — after `dispose`, the layout preview's `show` can open a preview, because

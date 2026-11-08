@@ -11,7 +11,7 @@
 - **The context line** — context and cache, above the box.
 - **The status line** — repo, branch, controls, spend, the running indicator.
 - **Subagent facts** — name, model, effort and cost, and where each comes from.
-- **Optional plugins** — `plugins.disabled`, and the views that start switched off.
+- **Optional plugins** — `plugins.disabled`, the live switch, and the views that start switched off.
 - **Decisions** — what the user settled, with the reason for each.
 - **Rejected** — the alternatives weighed and why each lost.
 
@@ -211,12 +211,14 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 ## Optional plugins
 
-- The core setting `plugins.disabled` lists plugin ids the plugin host does not start. Its default lists
-  `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it.
-- Turning a plugin off or on takes effect for both its parts on the next app start: main serves the list it started
-  on as `plugins.disabled`, without that plugin's commands and binds, and the page starts the parts that list leaves
-  on. A plugin that another started plugin depends on cannot
-  be disabled: the config check reports it as a config problem and keeps the last good config.
+- The core setting `plugins.disabled` lists plugin ids the plugin host does not run. Its default lists
+  `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it as the Plugins section, one switch per plugin.
+- Turning a plugin off or on takes effect at once, for both its parts, through the switch in main
+  (`docs/features/plugin-framework/design.md` § Hot reload (Wave 4)). Main serves the applied list as `plugins.disabled`, without a
+  disabled plugin's commands and binds, and the page runs the parts that applied list leaves on. A plugin that another
+  running plugin depends on cannot be disabled: the config check reports it as a config problem and keeps the last good
+  config, and Settings locks its switch. A plugin holding open work refuses the switch-off the same way, as a config
+  problem the switch retries.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar's working line;
   `agent-strip` draws the strip; `agent-skills` draws the hub's Skills section. All three read the agents roster.
 - `context-sources` keeps each session's last context breakdown in its own slot and draws the hub's Context section.

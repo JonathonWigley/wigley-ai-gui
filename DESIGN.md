@@ -487,7 +487,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows,
   each a label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the
   user set carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame,
-  its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
+  its check message under it in `status-error`. A Plugins row ends in the plugin's state, and a plugin that running
+  plugins need, or Settings itself, carries a neutral Tag with the reason before it. A file that fails its check shows an error Card at the section's
   top.
 - **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Light's, Medium's or Heavy's
   own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
