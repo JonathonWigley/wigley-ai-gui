@@ -68,12 +68,16 @@ const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
 // and side bar in the window, and its item in the activity bar, once at its
 // `add`, and the `Disposable` it returns takes them out; `marked` marks the shown mode in the activity bar; `layOutSideBar`
 // lays out the side bar area; `showContext` shows the title bar's context;
-// `isNarrow` is whether the window starts narrow (`SIDE_BAR_OVER_QUERY`).
+// `isNarrow` is whether the window starts narrow (`SIDE_BAR_OVER_QUERY`);
+// `sideBarOpened` runs after a mode with `focusSideBar` has heard its side bar
+// open over the content (`sideBarOpenedOver`), so the core holds that side
+// bar as the area with the keys.
 export interface ModesDeps {
   place(mode: Mode, handle: ModeHandle): Disposable;
   marked(modeId: string): void;
   layOutSideBar(layout: SideBarLayout): void;
   showContext(context: ModeContext | null): void;
+  sideBarOpened(): void;
   isNarrow: boolean;
   log: Log;
 }
@@ -82,9 +86,15 @@ export interface ModesDeps {
 // the 680 px breakpoint, closing every mode's overlay on widening and laying
 // out the shown mode's side bar again. It tells the mode only when widening
 // closes its open overlay onto a side bar the user hid; a narrowing tells
-// nothing.
+// nothing. `focusSideBar` calls the shown mode's `focusSideBar` and returns
+// true when the mode has one and its side bar lies beside or over the
+// content; otherwise it calls nothing and returns false, with no mode shown
+// too. `focusMain` calls the shown mode's `focusMain`, and does nothing with
+// no mode shown.
 export interface CoreModes extends Modes {
   narrowChanged(isNarrow: boolean): void;
+  focusSideBar(): boolean;
+  focusMain(): void;
 }
 
 interface AddedMode {
@@ -131,6 +141,9 @@ export function createModes(deps: ModesDeps): CoreModes {
       mode.sideBarHidden?.();
     } else if (layout === 'over') {
       mode.sideBarOpenedOver?.();
+      if (mode.focusSideBar !== undefined) {
+        deps.sideBarOpened();
+      }
     }
   };
 
@@ -240,6 +253,19 @@ export function createModes(deps: ModesDeps): CoreModes {
       return shownMode.mode.id;
     },
     onChanged: (listener) => listeners.add(listener),
+    focusSideBar() {
+      const mode = shownMode?.mode;
+      const isSideBarShown =
+        shownMode !== null && layoutOf(shownMode) !== 'hidden';
+      if (mode?.focusSideBar === undefined || !isSideBarShown) {
+        return false;
+      }
+      mode.focusSideBar();
+      return true;
+    },
+    focusMain() {
+      shownMode?.mode.focusMain();
+    },
     narrowChanged(next) {
       const before = shownMode === null ? null : layoutOf(shownMode);
       isNarrow = next;

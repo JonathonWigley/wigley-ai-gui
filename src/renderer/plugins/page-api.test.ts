@@ -477,6 +477,7 @@ describe('createPageApi', () => {
     const element = {} as HTMLElement;
     const shown = () => {};
     const hidden = () => {};
+    const focusMain = () => {};
 
     api.modes.add({
       id: 'browse',
@@ -485,10 +486,19 @@ describe('createPageApi', () => {
       element,
       shown,
       hidden,
+      focusMain,
     });
 
     expect(added).toEqual([
-      { id: 'p.browse', title: 'Browse', icon: 'x', element, shown, hidden },
+      {
+        id: 'p.browse',
+        title: 'Browse',
+        icon: 'x',
+        element,
+        shown,
+        hidden,
+        focusMain,
+      },
     ]);
   });
 

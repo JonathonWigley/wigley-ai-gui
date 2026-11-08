@@ -71,6 +71,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       hidden: () => undefined,
       sideBarHidden: () => view.sideBarHidden(),
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
+      focusMain: () => view.focusMain(),
     });
 
     api.layouts.show<SettingsLayout>({

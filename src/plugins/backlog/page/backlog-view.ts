@@ -191,6 +191,9 @@ export interface BacklogView {
   sideBarHidden(): void;
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
+  // Main takes the keys back: from the homes to the rows, else the scope,
+  // targets and DOM focus of the pane that had them, the editor's included.
+  focusMain(): void;
   // Draws every pane, the rows, an open picker's rows and the prompts' bodies
   // again with `shown`, keeping an open editor's draft and focused box, an
   // open filter, the scroll, the selection and the focus.
@@ -1317,6 +1320,13 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     sideBarOpenedOver() {
       if (store.get().editor === null) {
         dispatch({ type: 'focus', focus: 'homes' });
+      }
+    },
+    focusMain() {
+      if (store.get().focus === 'homes') {
+        dispatch({ type: 'focus', focus: 'items' });
+      } else {
+        render(true);
       }
     },
     setLayouts(next) {

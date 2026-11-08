@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
+import { blurFocusedElement } from '../../../shared/page/dom';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -63,6 +64,10 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
         }
       },
     });
+    const takeKeys = () => {
+      api.keys.setScope('gallery');
+      api.panes.setResizeTarget(view.resizeTarget());
+    };
     const mode = api.modes.add({
       id: 'gallery',
       title: 'Gallery',
@@ -70,11 +75,14 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
       element: view.element,
       shown() {
         isShown = true;
-        api.keys.setScope('gallery');
-        api.panes.setResizeTarget(view.resizeTarget());
+        takeKeys();
       },
       hidden() {
         isShown = false;
+      },
+      focusMain() {
+        takeKeys();
+        blurFocusedElement();
       },
     });
     mode.setContext({

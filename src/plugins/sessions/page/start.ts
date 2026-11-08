@@ -496,6 +496,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         api.panes.setOuterPanes(null);
         checkVisible();
       },
+      // The idle pane holds no box, so the DOM focus leaves the area left.
+      focusMain() {
+        if (lastVisible === 'none') {
+          api.keys.setScope('idle');
+          blurFocusedElement();
+        } else {
+          checkVisible(true);
+        }
+      },
     });
 
     // Lays out the first state's panes as `restorePlan` says.

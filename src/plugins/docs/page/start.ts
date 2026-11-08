@@ -340,6 +340,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         treeOpenedOverIn(machineView);
         showTreeEdge(machineView);
       },
+      focusMain: () => machineView.treeHidden(),
     });
     // A narrowing hides the side bar without telling the mode, so the machine
     // view's edge prompt follows the window too, once the core has laid out.

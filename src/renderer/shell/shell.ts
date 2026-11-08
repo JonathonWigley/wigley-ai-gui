@@ -8,12 +8,16 @@ import type {
   AreaName,
   ContributeOptions,
   KeyHints,
+  RightBarArea,
+  RightBarOptions,
   ShellLayout,
 } from '../../contracts/plugin';
 import type { UiState } from '../../contracts/ui-state';
+import { createListeners } from '../../shared/listeners';
 import { NO_ANCHOR } from '../../shared/page/ui/key-anchors';
 import { createSplitDivider } from '../../shared/page/ui/split';
 import { clampSplitWidth } from '../../shared/page/ui/split-width';
+import type { RightBarStop } from '../pane-targets';
 import type { SideBarLayout } from './modes';
 
 const AREA_NAMES: readonly AreaName[] = [
@@ -88,6 +92,13 @@ export function nextInTrack<Entry extends { placement: Placement }>(
   return sorted.slice(index).find((entry) => inTrack(entry.placement.align));
 }
 
+// The shell's areas: every area takes `ContributeOptions`, and the right bar
+// `RightBarOptions`, whose `focus` makes the contribution a stop for the
+// core's focus keys.
+export type ShellAreas = Record<Exclude<AreaName, 'rightBar'>, Area> & {
+  rightBar: RightBarArea;
+};
+
 // The window's shell: `areas` are the areas contributions go to, kept across
 // layouts. `setLayout` places them by `layout`, moving every contribution into
 // it, and returns the `Disposable` that restores the layout the shell was
@@ -102,10 +113,18 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // the side bar is beside the content; the right bar resizes by its handle's
 // drag alone. `reloadBarOpenWidths` reads the `sidebar-width` and
 // `rightbar-width` tokens again, after a theme is applied, and redraws each
-// bar at its token while the user has stored no width for it. `dispose` disposes
-// both dividers, stops watching the root's width and removes both handles.
+// bar at its token while the user has stored no width for it.
+// `rightBarStops` lists one `RightBarStop` per right-bar contribution that
+// passed `focus`, in the right bar's drawn order, top to bottom. A stop's
+// contribution `dispose` takes it out of that list, then tells each
+// `onRightBarStopRemoved` listener once. `rightBarHolds` is whether `node` is
+// in the right bar's element. `dispose` disposes both dividers, stops
+// watching the root's width and removes both handles.
 export interface Shell {
-  areas: Record<AreaName, Area>;
+  areas: ShellAreas;
+  rightBarStops(): readonly RightBarStop[];
+  onRightBarStopRemoved(listener: (stop: RightBarStop) => void): Disposable;
+  rightBarHolds(node: Node): boolean;
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
   setChromeLayout(name: string): void;
@@ -157,9 +176,11 @@ const CHROME_AREAS: readonly AreaName[] = [
   'statusBar',
 ];
 
+// `stop` is set on a right-bar contribution that passed `focus`.
 interface Contribution {
   element: HTMLElement;
   placement: Placement;
+  stop?: RightBarStop;
 }
 
 // An area's element and the container each alignment's contributions go in:
@@ -378,7 +399,21 @@ export function mountShell(
     }
   };
 
-  const createArea = (name: AreaName): Area => {
+  const stopsRemoved = createListeners<RightBarStop>();
+
+  // A stop for a right-bar contribution that passed `focus`.
+  const stopFor = (
+    name: AreaName,
+    options: RightBarOptions | undefined,
+  ): RightBarStop | undefined => {
+    const focus = options?.focus;
+    if (name !== 'rightBar' || focus === undefined) {
+      return undefined;
+    }
+    return { focus, left: options?.left };
+  };
+
+  const createArea = (name: AreaName): RightBarArea => {
     const live = contributions[name];
     let sequence = 0;
     return {
@@ -395,7 +430,8 @@ export function mountShell(
         );
         element.dataset.align = placement.align;
         track.insertBefore(element, following?.element ?? null);
-        const contribution = { element, placement };
+        const stop = stopFor(name, options);
+        const contribution: Contribution = { element, placement, stop };
         live.splice(index, 0, contribution);
         updateHidden(name);
         let isDisposed = false;
@@ -408,13 +444,16 @@ export function mountShell(
             live.splice(live.indexOf(contribution), 1);
             element.remove();
             updateHidden(name);
+            if (stop !== undefined) {
+              stopsRemoved.tell(stop);
+            }
           },
         };
       },
     };
   };
 
-  const areas = {} as Record<AreaName, Area>;
+  const areas = {} as Record<AreaName, RightBarArea>;
   for (const name of AREA_NAMES) {
     contributions[name] = [];
     areas[name] = createArea(name);
@@ -558,6 +597,12 @@ export function mountShell(
 
   return {
     areas,
+    rightBarStops: () =>
+      contributions.rightBar.flatMap((contribution) =>
+        contribution.stop === undefined ? [] : [contribution.stop],
+      ),
+    onRightBarStopRemoved: (listener) => stopsRemoved.add(listener),
+    rightBarHolds: (node) => mounted.rightBar.element.contains(node),
     setLayout(next) {
       replaceLayout(next);
       const mounted = generation;

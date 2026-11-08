@@ -481,6 +481,57 @@ describe('mountShell', () => {
     },
   );
 
+  it('mountShell_RightBarStops_FollowDrawnOrder', () => {
+    const { shell } = mountMeasuredShell();
+    const focused: number[] = [];
+    const later = new FakeElement('div');
+    const inside = new FakeElement('span');
+    const outside = new FakeElement('div');
+    later.append(inside);
+
+    shell.areas.rightBar.contribute(asHtml(later), {
+      order: 10,
+      focus: () => focused.push(10),
+    });
+    shell.areas.rightBar.contribute(asHtml(new FakeElement('div')), {
+      order: 0,
+    });
+    shell.areas.rightBar.contribute(asHtml(new FakeElement('div')), {
+      order: 5,
+      focus: () => focused.push(5),
+    });
+    for (const stop of shell.rightBarStops()) {
+      stop.focus();
+    }
+
+    expect(focused).toEqual([5, 10]);
+    expect([
+      shell.rightBarHolds(asHtml(inside)),
+      shell.rightBarHolds(asHtml(outside)),
+    ]).toEqual([true, false]);
+  });
+
+  it('mountShell_RightBarStopDisposed_TellsOnce', () => {
+    const { shell } = mountMeasuredShell();
+    const removed: unknown[] = [];
+    shell.onRightBarStopRemoved((stop) => removed.push(stop));
+    const plain = shell.areas.rightBar.contribute(
+      asHtml(new FakeElement('div')),
+    );
+    const stopping = shell.areas.rightBar.contribute(
+      asHtml(new FakeElement('div')),
+      { focus: () => undefined },
+    );
+    const [stop] = shell.rightBarStops();
+
+    plain.dispose();
+    stopping.dispose();
+    stopping.dispose();
+
+    expect(removed).toEqual([stop]);
+    expect(shell.rightBarStops()).toEqual([]);
+  });
+
   it('mountShell_RightBarContributions_HideItWhileEmpty', () => {
     const { shell, root, rightHandle } = mountMeasuredShell();
     const hiddenStates = () => [

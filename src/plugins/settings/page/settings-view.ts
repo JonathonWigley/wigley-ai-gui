@@ -247,6 +247,8 @@ export interface SettingsView {
   sideBarHidden(): void;
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
+  // Main takes the keys back: focus moves to the rows.
+  focusMain(): void;
   commands: Record<SettingsCommand, () => void>;
 }
 
@@ -1093,6 +1095,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       }
     },
     sideBarOpenedOver: focusSections,
+    focusMain: focusRows,
     commands,
   };
 }

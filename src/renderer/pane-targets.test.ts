@@ -5,7 +5,12 @@ import type {
   PaneDirection,
   ResizeTarget,
 } from '../contracts/panes';
-import { createPaneTargets, type PaneTargets } from './pane-targets';
+import {
+  createPaneTargets,
+  type PaneAreas,
+  type PaneTargets,
+  type RightBarStop,
+} from './pane-targets';
 
 // Targets that answer `answer` and record each ask as `<target> <direction>`,
 // with every log line the pane targets wrote.
@@ -26,6 +31,13 @@ function recordingTargets() {
   });
   return { asked, logged, resizer, mover, log: (m: string) => logged.push(m) };
 }
+
+// Areas with no side bar stop and no right-bar stops.
+const NO_AREAS: PaneAreas = {
+  focusSideBar: () => false,
+  focusMain: () => undefined,
+  rightBarStops: () => [],
+};
 
 // `null` leaves the target unset.
 type Answer = boolean | null;
@@ -104,6 +116,7 @@ describe('createPaneTargets', () => {
         fakes.resizer('side bar', sideBar),
         () => pushed,
         fakes.log,
+        NO_AREAS,
       );
       if (view !== null) {
         targets.setResizeTarget(fakes.resizer('view', view));
@@ -188,6 +201,7 @@ describe('createPaneTargets', () => {
         fakes.resizer('side bar', true),
         () => pushed,
         fakes.log,
+        NO_AREAS,
       );
       if (view !== null) {
         targets.setFocusTarget(fakes.mover('view', view));
@@ -246,6 +260,7 @@ describe('createPaneTargets', () => {
         fakes.resizer('side bar', true),
         () => false,
         fakes.log,
+        NO_AREAS,
       );
 
       act(targets, fakes.resizer('view', true), {
@@ -263,6 +278,7 @@ describe('createPaneTargets', () => {
       fakes.resizer('side bar', true),
       () => false,
       fakes.log,
+      NO_AREAS,
     );
     targets.setResizeTarget(fakes.resizer('view resize', true));
     targets.setFocusTarget(fakes.mover('view focus', true));
@@ -271,10 +287,332 @@ describe('createPaneTargets', () => {
       resize: fakes.resizer('outer resize', true),
     });
 
-    targets.dropViewTargets();
+    targets.baseChanged();
     targets.focus('left');
     targets.resize('right');
 
     expect(fakes.asked).toEqual(['outer focus left', 'outer resize right']);
+  });
+
+  // Pane targets whose view and outer panes answer false, over fake areas
+  // that record each ask into the same `asked`: `side bar`, `main`, and
+  // `stop <n>` for the nth right-bar stop, plus `left <n>` when `hasLeft`.
+  // `focusSideBar` answers `sideBar`, after the targets' own `baseChanged`
+  // when `sideBarSetsScope`, as a mode's own `setScope` runs it.
+  function areaTargets(options: {
+    sideBar?: boolean;
+    stops?: number;
+    hasLeft?: boolean;
+    sideBarSetsScope?: boolean;
+  }) {
+    const fakes = recordingTargets();
+    let isPushed = false;
+    const stops: RightBarStop[] = Array.from(
+      { length: options.stops ?? 0 },
+      (_, index) => ({
+        focus: () => fakes.asked.push(`stop ${index + 1}`),
+        left: options.hasLeft
+          ? () => fakes.asked.push(`left ${index + 1}`)
+          : undefined,
+      }),
+    );
+    let liveStops = stops;
+    const targets: PaneTargets = createPaneTargets(
+      fakes.resizer('side bar resize', true),
+      () => isPushed,
+      fakes.log,
+      {
+        focusSideBar() {
+          fakes.asked.push('side bar');
+          if (options.sideBarSetsScope) {
+            targets.baseChanged();
+          }
+          return options.sideBar ?? false;
+        },
+        focusMain: () => fakes.asked.push('main'),
+        rightBarStops: () => liveStops,
+      },
+    );
+    targets.setFocusTarget(fakes.mover('view', false));
+    targets.setOuterPanes({
+      focus: fakes.mover('outer', false),
+      resize: fakes.resizer('outer resize', false),
+    });
+    return {
+      ...fakes,
+      targets,
+      stops,
+      push: () => {
+        isPushed = true;
+      },
+      remove(stop: RightBarStop) {
+        liveStops = liveStops.filter((live) => live !== stop);
+        targets.stopRemoved(stop);
+      },
+      clear() {
+        fakes.asked.length = 0;
+        fakes.logged.length = 0;
+      },
+    };
+  }
+
+  type AreaFakes = ReturnType<typeof areaTargets>;
+
+  it.each<{
+    row: string;
+    sideBar?: boolean;
+    stops?: number;
+    sideBarSetsScope?: boolean;
+    before?: PaneDirection[];
+    between?(fakes: AreaFakes): void;
+    direction: PaneDirection;
+    asked: string[];
+    logged: string[];
+  }>([
+    {
+      row: 'main, left, side bar true',
+      sideBar: true,
+      direction: 'left',
+      asked: ['view left', 'outer left', 'side bar'],
+      logged: ['focus in the side bar'],
+    },
+    {
+      row: 'main, left, side bar false',
+      sideBar: false,
+      direction: 'left',
+      asked: ['view left', 'outer left', 'side bar'],
+      logged: ['no pane left'],
+    },
+    {
+      row: 'main, right, 2 stops',
+      stops: 2,
+      direction: 'right',
+      asked: ['view right', 'outer right', 'stop 1'],
+      logged: ['focus in the right bar'],
+    },
+    {
+      row: 'main, right, 0 stops',
+      direction: 'right',
+      asked: ['view right', 'outer right'],
+      logged: ['no pane right'],
+    },
+    {
+      row: 'main, up, 2 stops',
+      stops: 2,
+      direction: 'up',
+      asked: ['view up', 'outer up'],
+      logged: ['no pane up'],
+    },
+    {
+      row: 'side, right',
+      sideBar: true,
+      before: ['left'],
+      direction: 'right',
+      asked: ['main'],
+      logged: ['focus back in main'],
+    },
+    {
+      row: 'side, left',
+      sideBar: true,
+      before: ['left'],
+      direction: 'left',
+      asked: [],
+      logged: ['no pane left'],
+    },
+    {
+      row: 'side, down',
+      sideBar: true,
+      before: ['left'],
+      direction: 'down',
+      asked: [],
+      logged: ['no pane down'],
+    },
+    {
+      row: 'right on stop 1 of 2, down',
+      stops: 2,
+      before: ['right'],
+      direction: 'down',
+      asked: ['stop 2'],
+      logged: ['focus in the right bar'],
+    },
+    {
+      row: 'right on stop 2 of 2, down',
+      stops: 2,
+      before: ['right', 'down'],
+      direction: 'down',
+      asked: [],
+      logged: ['no pane down'],
+    },
+    {
+      row: 'right on stop 2 of 2, up',
+      stops: 2,
+      before: ['right', 'down'],
+      direction: 'up',
+      asked: ['stop 1'],
+      logged: ['focus in the right bar'],
+    },
+    {
+      row: 'right, left',
+      stops: 2,
+      before: ['right'],
+      direction: 'left',
+      asked: ['main'],
+      logged: ['focus back in main'],
+    },
+    {
+      row: 'right, right',
+      stops: 2,
+      before: ['right'],
+      direction: 'right',
+      asked: [],
+      logged: ['no pane right'],
+    },
+    {
+      row: 'side, scope pushed',
+      sideBar: true,
+      before: ['left'],
+      between: (fakes) => fakes.push(),
+      direction: 'right',
+      asked: [],
+      logged: ['no pane right while a scope is pushed'],
+    },
+    {
+      row: 'side, then baseChanged, left',
+      sideBar: true,
+      before: ['left'],
+      between: (fakes) => fakes.targets.baseChanged(),
+      direction: 'left',
+      asked: ['outer left', 'side bar'],
+      logged: ['focus in the side bar'],
+    },
+    {
+      row: 'side, entered by a focusSideBar that sets its own scope, right',
+      sideBar: true,
+      sideBarSetsScope: true,
+      before: ['left'],
+      direction: 'right',
+      asked: ['main'],
+      logged: ['focus back in main'],
+    },
+    {
+      row: 'side bar opened over main, right',
+      between: (fakes) => fakes.targets.sideBarOpened(),
+      direction: 'right',
+      asked: ['main'],
+      logged: ['focus in the side bar', 'focus back in main'],
+    },
+  ])(
+    "reaches the areas past main's edge: $row",
+    ({ before = [], between, direction, asked, logged, ...options }) => {
+      const fakes = areaTargets(options);
+      for (const press of before) {
+        fakes.targets.focus(press);
+      }
+      fakes.clear();
+      between?.(fakes);
+
+      fakes.targets.focus(direction);
+
+      expect(fakes.asked).toEqual(asked);
+      expect(fakes.logged).toEqual(logged);
+    },
+  );
+
+  it.each<{
+    case: string;
+    act(fakes: AreaFakes): void;
+    asked: string[];
+    logged: string[];
+  }>([
+    {
+      case: 'the holding stop removed',
+      act(fakes) {
+        fakes.targets.focus('right');
+        fakes.clear();
+        fakes.remove(fakes.stops[0]);
+        fakes.targets.focus('left');
+      },
+      asked: ['left 1', 'main', 'view left', 'outer left', 'side bar'],
+      logged: ['focus back in main', 'focus in the side bar'],
+    },
+    {
+      case: 'another stop removed',
+      act(fakes) {
+        fakes.targets.focus('right');
+        fakes.clear();
+        fakes.remove(fakes.stops[2]);
+        fakes.targets.focus('down');
+      },
+      asked: ['left 1', 'stop 2'],
+      logged: ['focus in the right bar'],
+    },
+    {
+      case: 'removed while the side area holds',
+      act(fakes) {
+        fakes.targets.focus('left');
+        fakes.clear();
+        fakes.remove(fakes.stops[0]);
+      },
+      asked: [],
+      logged: [],
+    },
+  ])(
+    "stopRemoved ends only the holding stop's turn: $case",
+    ({ act, asked, logged }) => {
+      const fakes = areaTargets({ sideBar: true, stops: 3, hasLeft: true });
+
+      act(fakes);
+
+      expect(fakes.asked).toEqual(asked);
+      expect(fakes.logged).toEqual(logged);
+    },
+  );
+
+  it.each<{
+    case: string;
+    act(fakes: AreaFakes): void;
+    asked: string[];
+  }>([
+    {
+      case: 'focus left the right bar while a stop holds',
+      act: (fakes) => fakes.targets.focusLeftRightBar(),
+      asked: ['left 1', 'main'],
+    },
+    {
+      case: 'a base change, then focus left the right bar',
+      act(fakes) {
+        fakes.targets.baseChanged();
+        fakes.targets.focusLeftRightBar();
+      },
+      asked: ['left 1'],
+    },
+    {
+      case: 'Alt+j to the next stop',
+      act: (fakes) => fakes.targets.focus('down'),
+      asked: ['left 1', 'stop 2'],
+    },
+    {
+      case: 'Alt+h back to main',
+      act: (fakes) => fakes.targets.focus('left'),
+      asked: ['left 1', 'main'],
+    },
+  ])("ends a right-bar stop's turn with its left: $case", ({ act, asked }) => {
+    const fakes = areaTargets({ stops: 2, hasLeft: true });
+    fakes.targets.focus('right');
+    fakes.clear();
+
+    act(fakes);
+
+    expect(fakes.asked).toEqual(asked);
+  });
+
+  it('ignores focus leaving the right bar while main or the side bar holds the keys', () => {
+    const fakes = areaTargets({ sideBar: true, stops: 2, hasLeft: true });
+
+    fakes.targets.focusLeftRightBar();
+    fakes.targets.focus('left');
+    fakes.targets.focusLeftRightBar();
+
+    expect(fakes.asked).toEqual(['view left', 'outer left', 'side bar']);
   });
 });

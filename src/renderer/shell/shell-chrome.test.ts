@@ -66,6 +66,7 @@ function mode(id: string, title: string): Mode {
     element: asHtml(new FakeElement('div')),
     shown: () => undefined,
     hidden: () => undefined,
+    focusMain: () => undefined,
   };
 }
 

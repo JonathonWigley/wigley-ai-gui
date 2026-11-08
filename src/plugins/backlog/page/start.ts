@@ -90,6 +90,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       },
       sideBarHidden: () => view.sideBarHidden(),
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
+      focusMain: () => view.focusMain(),
     });
 
     api.layouts.show<BacklogLayout>({

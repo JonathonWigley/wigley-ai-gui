@@ -231,6 +231,8 @@ async function start() {
     marked: (modeId) => chrome.markMode(modeId),
     layOutSideBar: (layout) => shell.layOutSideBar(layout),
     showContext: (context) => chrome.showContext(context),
+    // `paneTargets` is made below; no mode is added before it.
+    sideBarOpened: () => paneTargets.sideBarOpened(),
     isNarrow: narrow.matches,
     log,
   });
@@ -252,10 +254,23 @@ async function start() {
     shell.sideBarDivider,
     () => scopeStack.anyPushed(),
     (message) => log('page', message),
+    {
+      focusSideBar: () => modes.focusSideBar(),
+      focusMain: () => modes.focusMain(),
+      rightBarStops: () => shell.rightBarStops(),
+    },
   );
   // Targets a view set under the previous base belong to a view no longer in
-  // force.
-  scopeStack.onBaseChange(() => paneTargets.dropViewTargets());
+  // force, and the base change ends an area's turn.
+  scopeStack.onBaseChange(() => paneTargets.baseChanged());
+  shell.onRightBarStopRemoved((stop) => paneTargets.stopRemoved(stop));
+  document.addEventListener('focusin', (event) => {
+    const isInRightBar =
+      event.target instanceof Node && shell.rightBarHolds(event.target);
+    if (!isInRightBar) {
+      paneTargets.focusLeftRightBar();
+    }
+  });
   const drops = createDropTargets({
     document,
     bridge,

@@ -385,14 +385,36 @@ export interface Area {
   contribute(element: HTMLElement, options?: ContributeOptions): Disposable;
 }
 
+// A right-bar contribution's placement, and its turn under the core's focus
+// keys. `focus` makes the contribution a stop for them, in the right bar's
+// drawn order: the core calls it when Alt+l leaves main's right edge and this
+// is the first stop, or Alt+j/Alt+k reach it from the stop before or after.
+// It sets the contribution's own key scope, draws its cursor and moves the DOM
+// focus into the contribution's element. The turn ends when the DOM focus
+// leaves the right bar (a click into main, a mode change), Alt+h moves back to
+// main, a base scope change the core did not make runs, or the contribution is
+// disposed; the core calls `left` each time, and on a disposal holding the
+// keys it calls the shown mode's `focusMain`.
+export interface RightBarOptions extends ContributeOptions {
+  focus?(): void;
+  left?(): void;
+}
+
+// The right bar beside `main`: an `Area` whose contributions take
+// `RightBarOptions`.
+export interface RightBarArea {
+  contribute(element: HTMLElement, options?: RightBarOptions): Disposable;
+}
+
 // The areas a plugin contributes to: the title bar, the panel, the status
-// bar, the right bar beside `main` and the overlay. The core draws the
+// bar, the right bar beside `main` (a `RightBarArea`, whose contributions may
+// be stops for the core's focus keys) and the overlay. The core draws the
 // activity bar and the side bar from the modes, and `main` belongs to the
 // modes, filled through `modes.add`.
 export type PluginAreas = Record<
-  'titleBar' | 'panel' | 'statusBar' | 'rightBar' | 'overlay',
+  'titleBar' | 'panel' | 'statusBar' | 'overlay',
   Area
->;
+> & { rightBar: RightBarArea };
 
 // What the title bar shows for a mode at its centre: `title`, with `detail`
 // after it in the secondary text colour when it is not null.
@@ -419,6 +441,15 @@ export interface ModeContext {
 // there. Neither
 // runs for a hidden mode, a mode without a side bar, or a side bar already
 // in that state.
+// `focusSideBar` runs when the core's Alt+h leaves main's left edge while
+// this mode shows with its side bar beside or over the content: it sets the
+// side bar's key scope, focuses the side bar's list and draws its cursor, and
+// the core then holds the side bar as the area with the keys. A mode without
+// it is no stop on the left. `focusMain` runs when Alt+l leaves the side bar,
+// Alt+h leaves the right bar, or the right-bar stop holding the keys is
+// disposed: it gives main's last focused pane back its key scope, its resize
+// and focus targets and the DOM focus, as `shown` does for that pane, so no
+// box in the area left behind keeps the caret.
 export interface Mode {
   id: string;
   title: string;
@@ -429,6 +460,8 @@ export interface Mode {
   hidden(): void;
   sideBarHidden?(): void;
   sideBarOpenedOver?(): void;
+  focusSideBar?(): void;
+  focusMain(): void;
 }
 
 // `show` hides the shown mode and shows this one; on the shown mode it does

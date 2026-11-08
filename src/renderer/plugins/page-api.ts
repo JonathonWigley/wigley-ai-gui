@@ -12,8 +12,8 @@ import type {
 } from '../../contracts/panes';
 import type {
   Area,
-  AreaName,
   ChannelShape,
+  ContributeOptions,
   DependencyKey,
   KeyHints,
   PageChannel,
@@ -59,6 +59,7 @@ import type { ScopeStack } from '../key-scope';
 import { type LiveConfig, onChangedPart } from '../live-config';
 import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
+import type { ShellAreas } from '../shell/shell';
 
 // The services the page core hands the plugin APIs: each plugin's `uiState`,
 // `picker` and scoped `log` are made from these, `log` being the core's own.
@@ -87,7 +88,7 @@ export type PageApiServices = Omit<
 // `anchors` holds every key hint of the page load, and `boxFocus` tells whether
 // focus is in a text box.
 export interface PageApiDeps {
-  areas: Record<AreaName, Area>;
+  areas: ShellAreas;
   modes: Modes;
   setLayout(layout: ShellLayout): Disposable;
   transparency: PageTransparency;
@@ -417,11 +418,13 @@ function pageChannel(
 }
 
 function pluginAreas(
-  areas: Record<AreaName, Area>,
+  areas: ShellAreas,
   registrations: Registrations,
 ): PluginAreas {
-  const tracked = (area: Area): Area => ({
-    contribute: (element, options) =>
+  const tracked = <Options extends ContributeOptions>(area: {
+    contribute(element: HTMLElement, options?: Options): Disposable;
+  }) => ({
+    contribute: (element: HTMLElement, options?: Options) =>
       registrations.track(area.contribute(element, options)),
   });
   return {

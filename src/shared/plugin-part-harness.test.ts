@@ -83,6 +83,7 @@ const browseMode = {
   element,
   shown() {},
   hidden() {},
+  focusMain() {},
 };
 
 const sampleFence = {

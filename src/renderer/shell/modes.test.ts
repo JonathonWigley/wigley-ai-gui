@@ -4,7 +4,9 @@ import { createModes } from './modes';
 // The test environment has no DOM, so each mode's element and side bar are
 // plain objects holding `hidden`; `calls` records the deps the registry drives,
 // each mode's `shown` and `hidden`, and each change heard; `told` records each
-// mode's `sideBarHidden` and `sideBarOpenedOver`.
+// mode's `sideBarHidden`, `sideBarOpenedOver`, `focusSideBar` and `focusMain`,
+// and the `sideBarOpened` dep. A mode added with `focusesSideBar` gives
+// `focusSideBar`.
 function setup(isNarrow = false) {
   const logs: string[] = [];
   const calls: string[] = [];
@@ -17,11 +19,17 @@ function setup(isNarrow = false) {
     marked: (modeId) => calls.push(`marked ${modeId}`),
     layOutSideBar: (layout) => calls.push(`side bar ${layout}`),
     showContext: (context) => calls.push(`context ${context?.title ?? null}`),
+    sideBarOpened: () => told.push('side bar opened'),
     isNarrow,
     log: (source, message) => logs.push(`[${source}] ${message}`),
   });
   modes.onChanged((modeId) => calls.push(`changed ${modeId}`));
-  const add = (id: string, title: string, hasSideBar = false) => {
+  const add = (
+    id: string,
+    title: string,
+    hasSideBar = false,
+    focusesSideBar = false,
+  ) => {
     const element = { hidden: false } as HTMLElement;
     const sideBar = hasSideBar ? ({ hidden: false } as HTMLElement) : undefined;
     const handle = modes.add({
@@ -34,6 +42,10 @@ function setup(isNarrow = false) {
       hidden: () => calls.push(`hidden ${id}`),
       sideBarHidden: () => told.push(`side bar hidden ${id}`),
       sideBarOpenedOver: () => told.push(`opened over ${id}`),
+      focusSideBar: focusesSideBar
+        ? () => told.push(`focus side bar ${id}`)
+        : undefined,
+      focusMain: () => told.push(`focus main ${id}`),
     });
     return { element, sideBar, handle };
   };
@@ -523,6 +535,7 @@ describe('side bar callbacks', () => {
       marked: () => undefined,
       layOutSideBar: () => undefined,
       showContext: () => undefined,
+      sideBarOpened: () => undefined,
       isNarrow: true,
       log: () => undefined,
     });
@@ -536,6 +549,7 @@ describe('side bar callbacks', () => {
         shown: () => events.push(`shown ${id}`),
         hidden: () => undefined,
         sideBarHidden: () => events.push(`side bar hidden ${id}`),
+        focusMain: () => undefined,
       });
     addMode('a.one', { hidden: false } as HTMLElement);
     const two = addMode('b.two');
@@ -548,4 +562,112 @@ describe('side bar callbacks', () => {
       'shown b.two',
     ]);
   });
+});
+
+describe('the core focus keys', () => {
+  it.each<{
+    case: string;
+    isNarrow: boolean;
+    hasSideBar: boolean;
+    focusesSideBar: boolean;
+    toggles: number;
+    told: string[];
+    reached: boolean;
+  }>([
+    {
+      case: 'beside',
+      isNarrow: false,
+      hasSideBar: true,
+      focusesSideBar: true,
+      toggles: 0,
+      told: ['focus side bar b.two'],
+      reached: true,
+    },
+    {
+      case: 'over, narrow and toggled open',
+      isNarrow: true,
+      hasSideBar: true,
+      focusesSideBar: true,
+      toggles: 1,
+      told: ['focus side bar b.two'],
+      reached: true,
+    },
+    {
+      case: 'hidden by the toggle',
+      isNarrow: false,
+      hasSideBar: true,
+      focusesSideBar: true,
+      toggles: 1,
+      told: [],
+      reached: false,
+    },
+    {
+      case: 'mode without focusSideBar',
+      isNarrow: false,
+      hasSideBar: true,
+      focusesSideBar: false,
+      toggles: 0,
+      told: [],
+      reached: false,
+    },
+    {
+      case: 'mode without a side bar',
+      isNarrow: false,
+      hasSideBar: false,
+      focusesSideBar: true,
+      toggles: 0,
+      told: [],
+      reached: false,
+    },
+  ])(
+    "focusSideBar reaches the shown mode's side bar only while it shows: $case",
+    ({ isNarrow, hasSideBar, focusesSideBar, toggles, told, reached }) => {
+      const fakes = setup(isNarrow);
+      fakes.add('a.one', 'One', true, true);
+      const two = fakes.add('b.two', 'Two', hasSideBar, focusesSideBar);
+      two.handle.show();
+      for (let toggle = 0; toggle < toggles; toggle += 1) {
+        two.handle.toggleSideBar();
+      }
+      fakes.told.length = 0;
+
+      expect(fakes.modes.focusSideBar()).toBe(reached);
+      expect(fakes.told).toEqual(told);
+    },
+  );
+
+  it("focusMain calls the shown mode's hook, not a hidden mode's", () => {
+    const { modes, told, add } = setup();
+    add('a.one', 'One', true, true);
+    add('b.two', 'Two', true, true).handle.show();
+    told.length = 0;
+
+    modes.focusMain();
+
+    expect(told).toEqual(['focus main b.two']);
+  });
+
+  it.each<{ case: string; focusesSideBar: boolean; told: string[] }>([
+    {
+      case: 'with focusSideBar',
+      focusesSideBar: true,
+      told: ['opened over a.one', 'side bar opened'],
+    },
+    {
+      case: 'without focusSideBar',
+      focusesSideBar: false,
+      told: ['opened over a.one'],
+    },
+  ])(
+    'tells the core after the hook as a narrow side bar opens over the content: $case',
+    ({ focusesSideBar, told }) => {
+      const fakes = setup(true);
+      const one = fakes.add('a.one', 'One', true, focusesSideBar);
+      fakes.told.length = 0;
+
+      one.handle.toggleSideBar();
+
+      expect(fakes.told).toEqual(told);
+    },
+  );
 });
