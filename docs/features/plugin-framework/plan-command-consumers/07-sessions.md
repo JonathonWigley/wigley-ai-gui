@@ -1,6 +1,6 @@
 # 07 — Sessions queries, close seams and forms knowledge
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -130,3 +130,5 @@ Done when: `grep -rn 'confirmClosesSession\|closesSession\|asks to cancel' src` 
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 2401f08b · proof: Grep of every Produces: addCloseGuard(mayClose, cancelHold), closeSession(id, atOnce): string|null, closesAtOnce, beforeClose(atOnce), tabShown, hidden?, tooltip?, MarkOptions, markToast, host, label in sessions/contract.ts; cancel(), HOST_DEADLINE_FIELD, label() in agent-forms.ts; takeOversAfterRelease, markToastText, isMarkToast, mayClose, closesAtOnce in tabs.ts; mayCloseSessionForm, formClosesAtOnce, mayCloseRound, mayClosePrimer present; setStatus, confirmClosesSession, askClose, deadlineSeconds: null gone. Typecheck exit 0, lint clean (lead run); worker: full vitest 10130 pass, self-tests sessions, forms+primer, chat, docs, notes pass. · concerns: Chat's confirmed close is a plain close, so with a round also open main refuses and the user presses again; cancelHold follows finish's wake path (collect message to an ending session); a background form no longer selects its session on refusal; select:true with the mode hidden no longer toasts; a non-number relay deadline_seconds now gets the default instead of refusing the hello; preview sessions lose their title-bar detail line; mark text frozen at mark time and can go stale; SessionRowInput.status removal breaks user layouts that read it; docs beforeClose ignores atOnce (intended); weak 'review cancel leaves session open' test; cancelHolds iterates the live guard Set; 89 files touched, beyond the list for deadlineSeconds/markToast cleanup; forms/primer listenForRounds/listenForPrimers lost an unused sessions param.

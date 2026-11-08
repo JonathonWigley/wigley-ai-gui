@@ -1,6 +1,6 @@
 # 08 — Work and place survive a page reload
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
