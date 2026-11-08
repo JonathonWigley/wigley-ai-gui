@@ -25,8 +25,10 @@ interview on 2026-10-23; this file is the record of both.
   next ones). Its seam is `AgentHarness` in `src/contracts/agent.ts`; each harness is one **harness adapter**.
 - **Agent process** — one running session of a harness, started by the app: one `claude` child process.
 - **Chat entry** — one item in a session's chat, in the app's own shape: a user message, an assistant message,
-  thinking, a tool call (with its result and the id of the agent that made it: `main` for the session's own agent,
-  else the subagent's id the agent events use), a permission request, a turn result, a notice, or a raw entry. Every entry
+  thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw entry. An assistant
+  message, thinking and a tool call carry the id of the agent that made them: `main` for the session's own agent, else
+  the subagent's id the agent events use. The transcript draws only the main agent's assistant messages and thinking; a
+  subagent's text shows nowhere, and its tool calls show in its strip box (`docs/features/chat-bar/design.md`). Every entry
   carries the raw harness events it was built from. Of Claude's stream events it keeps only a text or thinking block's
   `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
   event already holds what it carries. Every entry carries `at`, the epoch milliseconds it first appeared; a later

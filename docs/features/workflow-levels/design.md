@@ -59,6 +59,10 @@ stage rules, so two workflows may both have a `build` stage. Each plugin owns it
   a word outside that workflow's stages is ignored.
 - **The checklist** comes from `set_workflow_checklist`, each call replacing the whole list, so a
   missed call cannot leave the app out of step. Heavy never calls it: Heavy's skills are unchanged.
+- **Only the main agent** moves the stage and sets the checklist. A subagent's call of either tool succeeds and changes
+  nothing, so delegated work never overwrites the session's own step.
+- **Heavy's checklist** reads the newest copy of the plan across the clone and its worktrees, and shows a task as
+  running while its task document reads `Status: in progress`.
 
 ## Where it draws
 

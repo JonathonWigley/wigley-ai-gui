@@ -134,7 +134,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   `sessions.titleMaxLength` with `…`; the plugin's session instruction asks for 2 to 4 words within that limit. A task has no context or cost. Rows stack under the cards and scroll
   past four rows.
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
-  when the session's process exits. Nothing stays to be closed, so the strip has no close control.
+  when the session's process exits. A background subagent ends at its `task_notification` only once every task it owns
+  has ended, since a subagent waiting on its own shell can be notified before it finishes. A line from a subagent
+  already ended brings its box back, and the box leaves again at the subagent's next end. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the cards scroll sideways; `‹` and `›` buttons at their ends scroll by one card and hide when there
   is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws while the strip shows; a redraw in a hidden tab, or a rebuilt composer, starts the list at the top.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending

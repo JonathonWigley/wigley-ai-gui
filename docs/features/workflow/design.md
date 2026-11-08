@@ -76,10 +76,10 @@ Dismiss. `wigley:make` starting moves any stage to make, fix included, and claim
 workflow or none holds it. A standalone `wigley:explore` or `wigley:review` shows its level and trail through the level
 skill that started the run.
 
-Running means the flow is busy: a turn or a main-agent subagent runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's Needs you label marks a waiting round.
+Running means the flow is busy: a turn or a subagent at any depth runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's Needs you label marks a waiting round.
 
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
-  `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a main-agent subagent runs.
+  `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a subagent runs.
 - **Make in new session** starts a background session in the same folder with `/wigley:make <plan folder>` through
   chat's `launch`, hands the plan to it, and returns this session to idle. One plan shows in one session.
 - **Resume make** shows when the plan has open boxes, and is enabled only when the session is not busy, as after a
@@ -90,8 +90,13 @@ Running means the flow is busy: a turn or a main-agent subagent runs. Paused mea
 
 The last `plan.md` written in a session is its plan. `wigley:make`'s argument names the plan when it is a plan
 folder. Only the main agent moves the stage, with one exception: a subagent's write of a `plan-*/plan.md` names the
-plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or write by a subagent is not a signal. A
-reported step does not name its caller, so a subagent's report moves the stage as the main agent's does.
+plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or write by a subagent is not a signal, and
+a subagent's `set_workflow_step` or `set_workflow_checklist` call succeeds and changes nothing (§ Signals).
+
+A plan folder has a copy in each checkout of its repo: the same repo-relative folder in the main clone and in each git
+worktree of that clone. Heavy reads the **newest copy**: the one whose `plan.md` or task documents changed last. A
+`wigley:make` run in a worktree ticks the worktree's copy, often through a shell, so the plan the session named in the
+main clone still shows the run's progress. A plan outside a git clone (`~/wigley-features/`) has one copy.
 
 ## Light's stages
 
@@ -172,7 +177,7 @@ Main folds these, for owned sessions only:
 | file written | `chat.agentEvent` `fileWritten` (a Write or Edit) | the full path |
 | turn ended | `chat.agentEvent` `turnEnded` | — |
 | turn started | `chat.agentEvent` `turnStarted` (every turn, a subagent's result turn included) | — |
-| subagent started, finished | `chat.agentEvent` `agentSpawned` with the main agent as parent, `agentFinished` | the agent id |
+| subagent started, finished | `chat.agentEvent` `agentSpawned` of any agent, a subagent's own included, and `agentFinished` | the agent id |
 | cleared | `sessions.hostSessionChanged` | — (the flow is rekeyed to the new host session id) |
 | step reported | the `set_workflow_step` tool | the stage the step names |
 | checklist reported | the `set_workflow_checklist` tool | the whole list of `{ text, done }` items |
@@ -180,14 +185,15 @@ Main folds these, for owned sessions only:
 
 `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that
 the Claude adapter and the fake harness emit, so the fold never reads a harness's JSON. A subagent's `skillStarted` is
-no signal, and neither is its `fileWritten` unless the path is a `plan-*/plan.md`. A `sessionEnded` of the flow's current host session (a process that exits
+no signal. Every agent's `fileWritten` is a signal, and Heavy reads only a `plan-*/plan.md` path from it. A `sessionEnded` of the flow's current host session (a process that exits
 mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps
 its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops
 the session's flow.
 
-Heavy's plan rows come from `workflow-heavy`'s plan watch: it reads the flow's plan folder and signals `planChanged`
-with the plan's progress (title, ticked, total, current wave, review rounds, the task lines) and `planGone` when the
-folder is deleted. Make in new session and Dismiss signal `handedOff` and `dismissed`. All four ride `custom`.
+Heavy's plan rows come from `workflow-heavy`'s plan watch: it watches every copy of the flow's plan folder, reads the
+newest copy, and signals `planChanged` with the plan's progress (title, ticked, total, current wave, review rounds, the
+task lines, each with the `Status:` line of its task document) and `planGone` when no copy is left. It lists the repo's
+worktrees again at each plan check and when git's worktree list changes, so a worktree made during the run joins. Make in new session and Dismiss signal `handedOff` and `dismissed`. All four ride `custom`.
 
 **The claim.** A workflow claims the skills that start it: Light `wigley:light`, Medium `wigley:medium`, Heavy
 `wigley:feature`, `wigley:feature-primer` and `wigley:make`. `wigley:review` and every other skill claim nothing, so they
@@ -209,6 +215,12 @@ leaves the flow in its last step.
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done }`. Each call replaces the whole list,
   so a missed call cannot leave the app out of step. Heavy never calls it: Heavy's checklist comes from `plan.md`.
+- Only the main agent's call counts. The engine contributes both tools as main-agent-only. Sessions asks its tool-call
+  guards before it runs a contributed tool, and chat's guard names the agent behind the call's tool-use id from the
+  stream's tool events. A subagent's call succeeds with a
+  text saying that only the main agent's report changes the session, and changes nothing. The same guard covers
+  sessions' `set_session_title`. A call whose agent chat has not seen yet waits up to 2 s for the stream, then counts as
+  the main agent's. A session with no stream (a terminal session) counts every call as the main agent's.
 - An unknown step answers with a tool error naming the accepted values.
 - A report the stage rules ignore, or one for a session with no flow, succeeds and says it was ignored, so a skill run
   outside the app's workflow carries on.
@@ -260,8 +272,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   workflow. The section's title is `Plan` for Heavy and `Checklist` for Light and Medium.
   - Heavy's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
     checklist folds finished waves into one row, shows the current wave in full, and shows each later wave as one line.
-    The current wave's open tasks show running or paused only in make, because the plan file does not say which task an
-    agent works on.
+    A task whose task document reads `Status: in progress` shows running; every other open task shows pending.
   - Light's and Medium's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
   - The trail stays on the strip alone.
@@ -325,7 +336,13 @@ The layout preview opens on `<Leader>zlw`.
   added upkeep and showed nothing new. Open plan shows the whole plan.
 - **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
   the checklist draws no row per round.
-- **A plan reader of its own.** Backlog reads only plan titles, and the docs index's counts carry no waves or Run log.
+- **One plan reader, shared with Backlog.** `src/shared/plan-progress.ts` reads a plan's boxes, waves, Run log and task
+  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the newest, so Heavy and Backlog always show
+  the same count. The docs index's counts take every checkbox in the file and carry no waves or Run log.
+- **The newest copy, not the session's.** A run in a worktree ticks that worktree's copy, often through a shell that
+  sends no write event, so following the session's own path or its agents' write paths would miss it.
+- **Only the main agent reports.** A subagent's step or checklist describes its own task, not the session's, and the
+  user asked for no per-agent surface: its call changes nothing.
 - **Only scroll events move the side list's kept scroll.** A draw writes the kept value and never reads the list. A
   list with no box drops the write and reads 0, so a draw that read it back jumped the list to the top. A list that
   shrinks until it stops overflowing keeps its old value and returns there when it grows.
@@ -339,6 +356,8 @@ The layout preview opens on `<Leader>zlw`.
 - Migrating a saved flow from an older shape: a `flows.json` that fails validation starts the app with no flows.
 - Codex and wigley-harness: their adapters emit the same events when they land.
 - Stages for `wigley:debug`, `wigley:explore` and the rest: they run inside a level and claim nothing.
-- A running state or a timer per task: the plan file does not say which task an agent works on.
+- A timer per task, and which agent works a task: the task document names neither.
+- A record or surface per subagent: the agent strip shows what runs, and the user asked only that the existing views
+  stay correct.
 - Keyboard scroll of the side list: the pane takes no keyboard focus.
 - A screen for the run log.

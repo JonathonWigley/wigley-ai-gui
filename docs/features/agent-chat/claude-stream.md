@@ -995,8 +995,9 @@ description "read notes" …)`; Explore spawned on the first attempt):
   `<task-notification>` user message appeared. `task_notification` comes 0 ms after the subagent's last line (its last
   `user` tool result). `status` `failed` was not observed. It is not always the subagent's last word: on 2026-11-03 a
   background subagent waiting on its own background shell finished about 80 s before its shell ended, then replied and
-  handed back. The adapter's log shows the finish and the late replies; the raw line was not captured, and the adapter
-  has no other route that finishes a launched subagent.
+  handed back. The adapter's log shows the finish and the late replies; the raw line was not captured. The adapter
+  holds a launched subagent's end until the tasks it owns end, and lists it again on a late line
+  (`docs/features/chat-bar/design.md` § The agent strip).
 - **After the end, the harness runs a turn on the main agent** when the main turn is already over (below):
   `system/init`, `system/status requesting`, an `assistant`, and a `result` whose `origin` is
   `{"kind":"peer","from":"a5d2bf79d0e109653","senderTaskId":"a5d2…","name":"general-purpose","body":"[Subagent hand-back] …","handback":true,"handbackReportText":"spike"}`;

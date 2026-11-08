@@ -92,7 +92,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `command-registry.ts`, which holds `onDidRun`,
                  `runtime-commands.ts`: the commands and binds parts add while they run, as each process's catalog, and a
                  part's `commands.onDidRun`,
-                 `keys-for.ts`: the keys that run a command, as help and hints read them)
+                 `keys-for.ts`: the keys that run a command, as help and hints read them,
+                 `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
+                 documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
+                 newest of them, both read by workflow-heavy and backlog)
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
@@ -171,7 +174,7 @@ src/main/        core main process; main.ts is its composition root
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, a log over named paths, and a commit of named paths
+                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, a clone's worktrees, a log over named paths, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
@@ -317,8 +320,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the `No workflow` tag is the exception to
                  the layout rule: the engine draws it with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
-  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, plan-reader.ts (ticked, total, wave and review rounds from a
-                 plan.md), stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan
+  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan
                  folders, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
                  the countdown, the preview samples), layouts/ (the built-in `default` layout); Heavy's workflow: the
                  `wigley:feature` run, make, review, fix and close
@@ -673,7 +675,10 @@ round; primer: an open primer), since main, not the page, decides.
   doc in Docs mode with `openDoc`.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
-  names no tool. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
+  names no tool. Before it runs a call, sessions asks each **tool-call guard** (`addToolCallGuard`, beside
+  `addCloseGuard`), so a rule over calls is one registration. A contribution may mark its tools main-agent-only (the
+  workflow tools and `set_session_title`); chat's guard answers a subagent's call of such a tool with a success that
+  changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
