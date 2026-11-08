@@ -30,7 +30,7 @@ const selectedLine = (index: number) =>
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'strip keys',
-    why: 'j from the last entry enters the strip on its first box, each card shows its name, kind tag and runtime, each row its Shell tag, title and runtime, l and h move through the cards and then the rows, Enter opens and closes a box, k hands the cursor back, and an interrupt ends the items so their boxes leave.',
+    why: "j from the last entry enters the strip on its first box, each card shows its name, kind tag and runtime, each row its Shell tag, title and runtime, l and h move through the cards and then the rows, Enter opens and closes a box, Ctrl+j and Ctrl+Shift+k reach an open box's tool list and say so with none open, k hands the cursor back, and an interrupt ends the items so their boxes leave.",
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
@@ -82,8 +82,21 @@ const GROUPS: SelfTestGroup[] = [
         screenshot: 'strip-opened',
       },
       {
+        keys: ['<C-j>'],
+        expect: '[agent-strip] the tool list did not scroll down',
+        why: "Box 1's subagent has one tool, so its list does not overflow; the key reaches the open box's list.",
+      },
+      {
+        keys: ['<C-S-k>'],
+        expect: '[agent-strip] the tool list did not scroll up',
+      },
+      {
         keys: ['Enter'],
         expect: `[agent-strip] closed box 1 in ${SELFTEST_PROJECT_NAME}`,
+      },
+      {
+        keys: ['<C-j>'],
+        expect: `[agent-strip] no open tool list in ${SELFTEST_PROJECT_NAME}`,
       },
       {
         keys: ['k'],

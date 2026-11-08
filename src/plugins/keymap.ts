@@ -449,6 +449,12 @@ export const defaultKeymap = {
     { keys: 'h', scope: 'chat.image', command: 'chat.prevImage' },
     { keys: 'l', scope: 'chat.image', command: 'chat.nextImage' },
     { keys: '<Esc>', scope: 'chat.image', command: 'chat.closeImage' },
+    { keys: 'x', scope: 'chat.image', command: 'chat.removeShownImage' },
+    {
+      keys: '<Leader>ci',
+      scope: 'chat.chat',
+      command: 'chat.showAttachments',
+    },
     ...chatBoxBinds(),
     {
       keys: '<Leader>cm',
@@ -539,6 +545,26 @@ export const defaultKeymap = {
       keys: '<CR>',
       scope: 'agent-strip.strip',
       command: 'agent-strip.toggleBox',
+    },
+    {
+      keys: '<C-j>',
+      scope: 'agent-strip.strip',
+      command: 'agent-strip.lineDown',
+    },
+    {
+      keys: '<C-k>',
+      scope: 'agent-strip.strip',
+      command: 'agent-strip.lineUp',
+    },
+    {
+      keys: '<C-S-j>',
+      scope: 'agent-strip.strip',
+      command: 'agent-strip.halfPageDown',
+    },
+    {
+      keys: '<C-S-k>',
+      scope: 'agent-strip.strip',
+      command: 'agent-strip.halfPageUp',
     },
 
     // ── Visual ─────────────────────────────────────────────────────────────

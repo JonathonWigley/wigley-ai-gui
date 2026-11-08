@@ -20,7 +20,7 @@ import {
 import type { ChatSession, ChatTabs } from './chat-view';
 import type { ListStop } from './activity-runs';
 import type { EntryListStop, TranscriptScroll } from './entry-list';
-import type { ImageViewer } from './image-viewer';
+import type { ImageRemoval, ImageViewer } from './image-viewer';
 import type { Picker, PickerRequest } from './picker';
 import type { SignInDialog } from './sign-in-dialog';
 import { createSlashCommands, type SlashCommands } from './slash-commands';
@@ -42,6 +42,15 @@ const userEntry: ChatEntry = {
   text: 'hi',
   images: [],
   delivery: null,
+  raw: [],
+};
+
+const assistantEntry: ChatEntry = {
+  id: 'entry-2',
+  at: 1000,
+  kind: 'assistant',
+  text: 'done',
+  streaming: false,
   raw: [],
 };
 
@@ -72,6 +81,13 @@ const pendingPermission: ChatEntry = {
   input: {},
   answer: null,
   raw: [],
+};
+
+const newerPermission: ChatEntry = { ...pendingPermission, id: 'permission-2' };
+const answeredPermission: ChatEntry = {
+  ...pendingPermission,
+  id: 'permission-0',
+  answer: { allowed: true, reason: null },
 };
 
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
@@ -133,21 +149,30 @@ function session(
 }
 
 // Entries focused on `entry`'s stop, as `focusedOnStop`.
-function focusedOn(entry: ChatEntry) {
-  return focusedOnStop({ kind: 'entry', entry });
+function focusedOn(entry: ChatEntry, blockExpander = false) {
+  return focusedOnStop({ kind: 'entry', entry }, blockExpander);
 }
 
 // Entries focused on `stop`: `focused` and `move` answer with it, and
 // `toggleFocused` counts each call in `toggles` and answers that it expanded
-// `stop`.
-function focusedOnStop(stop: EntryListStop) {
-  const counts = { toggles: 0 };
+// `stop`. With `blockExpander`, `toggleFocusedBlock` counts each call in
+// `blockToggles` and answers that it expanded the stop's entry's block;
+// without, it answers null.
+function focusedOnStop(stop: EntryListStop, blockExpander = false) {
+  const counts = { toggles: 0, blockToggles: 0 };
   const entries = {
     focused: () => stop,
     move: () => stop,
     toggleFocused() {
       counts.toggles++;
       return { stop, result: 'expanded' as const };
+    },
+    toggleFocusedBlock() {
+      if (!blockExpander || stop.kind !== 'entry') {
+        return null;
+      }
+      counts.blockToggles++;
+      return { entry: stop.entry, result: 'expanded' as const };
     },
   } as Partial<ChatSession['entries']> as ChatSession['entries'];
   return Object.assign(entries, { counts });
@@ -176,7 +201,8 @@ function box(text: string) {
 // `invoked` records each call to chat main, `opened` each picker request,
 // `viewed` each image viewer opening, `revealed` each session the tabs
 // reveal, `marked` each session the tabs mark sent, `toasts` each toast and
-// `toastTones` its tone, `allowed` each permission entry allowed and `clipboard`
+// `toastTones` its tone, `allowed` and `denied` each permission entry allowed
+// and denied, `removals` the removal each viewer opening was given, and `clipboard`
 // each clipboard write. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
@@ -190,6 +216,8 @@ function setUp(
   clipboardFailure?: Error,
 ) {
   const allowed: string[] = [];
+  const denied: string[] = [];
+  const removals: (ImageRemoval | undefined)[] = [];
   const clipboard: string[] = [];
   const invoked: unknown[][] = [];
   const opened: PickerRequest<unknown>[] = [];
@@ -225,7 +253,7 @@ function setUp(
     } as unknown as ChatCommandDeps['channel'],
     permissions: {
       allow: (_session, entry) => allowed.push(entry.id),
-      deny: () => undefined,
+      deny: (_session, entry) => denied.push(entry.id),
     },
     reasonBox: {} as ReasonBox,
     confirm: {} as CloseConfirm,
@@ -233,8 +261,13 @@ function setUp(
     signIn: {} as SignInDialog,
     slashCommands,
     viewer: {
-      open(images: readonly ChatImage[], index: number) {
+      open(
+        images: readonly ChatImage[],
+        index: number,
+        removal?: ImageRemoval,
+      ) {
         viewed.push({ images, index });
+        removals.push(removal);
       },
     } as ImageViewer,
     writeClipboard(text) {
@@ -253,6 +286,8 @@ function setUp(
     handlers: chatCommandHandlers(deps),
     deps,
     allowed,
+    denied,
+    removals,
     clipboard,
     invoked,
     revealed,
@@ -435,6 +470,30 @@ describe('chat commands', () => {
 
     expect(run.viewed).toEqual([{ images: [png, jpeg], index: 0 }]);
     expect(entries.counts.toggles).toBe(0);
+  });
+
+  it('toggleEntry_blockExpanderInUserEntryWithImages_togglesBlockAndOpensNoViewer', () => {
+    const entries = focusedOn({ ...userEntry, images: [png, jpeg] }, true);
+    const shown = Object.assign(session(true), { entries });
+    const run = setUp(shown);
+
+    run.handlers.toggleEntry({ arg: undefined });
+
+    expect(entries.counts.blockToggles).toBe(1);
+    expect(entries.counts.toggles).toBe(0);
+    expect(run.viewed).toEqual([]);
+    expect(run.logs).toEqual(['expanded user block']);
+  });
+
+  it('toggleEntry_blockWithoutExpander_togglesWholeEntry', () => {
+    const entries = focusedOn(assistantEntry);
+    const shown = Object.assign(session(true), { entries });
+    const run = setUp(shown);
+
+    run.handlers.toggleEntry({ arg: undefined });
+
+    expect(entries.counts.toggles).toBe(1);
+    expect(run.logs).toEqual(['expanded assistant entry']);
   });
 
   it('toggleEntry_userEntryWithoutImages_togglesAndOpensNoViewer', () => {
@@ -807,6 +866,7 @@ describe('chat commands', () => {
   it.each([
     {
       given: 'a pending permission',
+      focused: null,
       stateEntries: [pendingPermission],
       isRangeOpen: false,
       selected: { text: 'kept', blockCount: 1 },
@@ -820,6 +880,7 @@ describe('chat commands', () => {
     },
     {
       given: 'a pending permission and an open range',
+      focused: null,
       stateEntries: [pendingPermission],
       isRangeOpen: true,
       selected: { text: 'a\n\nb', blockCount: 2 },
@@ -833,6 +894,7 @@ describe('chat commands', () => {
     },
     {
       given: 'no pending permission and a cursor block',
+      focused: null,
       stateEntries: [],
       isRangeOpen: false,
       selected: { text: 'one block', blockCount: 1 },
@@ -846,6 +908,7 @@ describe('chat commands', () => {
     },
     {
       given: 'an open range of three blocks',
+      focused: null,
       stateEntries: [],
       isRangeOpen: true,
       selected: { text: 'a\n\nb\n\nc', blockCount: 3 },
@@ -859,6 +922,7 @@ describe('chat commands', () => {
     },
     {
       given: 'an open range and a clipboard write that fails',
+      focused: null,
       stateEntries: [],
       isRangeOpen: true,
       selected: { text: 'a\n\nb', blockCount: 2 },
@@ -872,6 +936,7 @@ describe('chat commands', () => {
     },
     {
       given: 'a pending permission and an open range with nothing to copy',
+      focused: null,
       stateEntries: [pendingPermission],
       isRangeOpen: true,
       selected: null,
@@ -885,6 +950,7 @@ describe('chat commands', () => {
     },
     {
       given: 'a stop with nothing to copy',
+      focused: null,
       stateEntries: [],
       isRangeOpen: false,
       selected: null,
@@ -896,9 +962,69 @@ describe('chat commands', () => {
       cancels: 0,
       logs: ['nothing to copy'],
     },
+    {
+      given: 'a waiting card under the cursor with an older one waiting',
+      focused: newerPermission,
+      stateEntries: [pendingPermission, newerPermission],
+      isRangeOpen: false,
+      selected: null,
+      failure: undefined,
+      allowed: ['permission-2'],
+      clipboard: [],
+      toasts: [],
+      tones: [],
+      cancels: 0,
+      logs: [],
+    },
+    {
+      given: 'an answered card under the cursor with one waiting',
+      focused: answeredPermission,
+      stateEntries: [answeredPermission, pendingPermission],
+      isRangeOpen: false,
+      selected: null,
+      failure: undefined,
+      allowed: ['permission-1'],
+      clipboard: [],
+      toasts: [],
+      tones: [],
+      cancels: 0,
+      logs: [],
+    },
+    {
+      given: 'a stale waiting copy under the cursor of a card since answered',
+      focused: newerPermission,
+      stateEntries: [
+        pendingPermission,
+        { ...answeredPermission, id: 'permission-2' },
+      ],
+      isRangeOpen: false,
+      selected: null,
+      failure: undefined,
+      allowed: ['permission-1'],
+      clipboard: [],
+      toasts: [],
+      tones: [],
+      cancels: 0,
+      logs: [],
+    },
+    {
+      given: 'a range open with a waiting card under the cursor',
+      focused: newerPermission,
+      stateEntries: [pendingPermission, newerPermission],
+      isRangeOpen: true,
+      selected: { text: 'a', blockCount: 1 },
+      failure: undefined,
+      allowed: [],
+      clipboard: ['a'],
+      toasts: ['Copied 1 block'],
+      tones: ['success'],
+      cancels: 1,
+      logs: ['copied 1 block in app'],
+    },
   ])(
     'allowOrCopy_$given',
     async ({
+      focused,
       stateEntries,
       isRangeOpen,
       selected,
@@ -912,6 +1038,8 @@ describe('chat commands', () => {
     }) => {
       let cancelled = 0;
       const entries = {
+        focused: () =>
+          focused === null ? null : { kind: 'entry', entry: focused },
         isRangeOpen: () => isRangeOpen,
         selectedSource: () => selected,
         cancelRange() {
@@ -934,6 +1062,74 @@ describe('chat commands', () => {
       expect(run.toastTones).toEqual(tones);
       expect(cancelled).toBe(cancels);
       expect(run.logs).toEqual(logs);
+    },
+  );
+
+  it.each([
+    {
+      given: 'a waiting card under the cursor',
+      focused: newerPermission,
+      stateEntries: [pendingPermission, newerPermission],
+      denied: ['permission-2'],
+      logs: [],
+    },
+    {
+      given: 'an answered card under the cursor',
+      focused: answeredPermission,
+      stateEntries: [answeredPermission, pendingPermission],
+      denied: ['permission-1'],
+      logs: [],
+    },
+    {
+      given: 'no card waiting',
+      focused: answeredPermission,
+      stateEntries: [answeredPermission],
+      denied: [],
+      logs: ['no pending permission in app'],
+    },
+  ])('denyPermission_$given', ({ focused, stateEntries, denied, logs }) => {
+    const entries = focusedOn(focused);
+    const shown = Object.assign(
+      session(true, undefined, { entries: stateEntries }),
+      { entries },
+    );
+    const run = setUp(shown);
+
+    run.handlers.denyPermission({ arg: undefined });
+
+    expect(run.denied).toEqual(denied);
+    expect(run.logs).toEqual(logs);
+  });
+
+  it.each([
+    {
+      given: 'no attached image',
+      attached: [],
+      viewed: [],
+      logs: ['no attached image'],
+      leftAfterRemovingSecond: undefined,
+    },
+    {
+      given: 'two attached images',
+      attached: [png, jpeg],
+      viewed: [{ images: [png, jpeg], index: 0 }],
+      logs: [],
+      leftAfterRemovingSecond: [png],
+    },
+  ])(
+    'showAttachments_$given',
+    ({ attached, viewed, logs, leftAfterRemovingSecond }) => {
+      const shown = session(true);
+      attached.forEach((image) => shown.attachments.add(image));
+      const run = setUp(shown);
+
+      run.handlers.showAttachments({ arg: undefined });
+      const left = run.removals[0]?.remove(1);
+
+      expect(run.viewed).toEqual(viewed);
+      expect(run.logs).toEqual(logs);
+      expect(left).toEqual(leftAfterRemovingSecond);
+      expect(shown.attachments.images()).toEqual(leftAfterRemovingSecond ?? []);
     },
   );
 

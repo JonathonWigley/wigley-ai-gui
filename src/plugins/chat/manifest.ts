@@ -48,9 +48,19 @@ export const chatManifest = definePlugin({
       group: 'box',
       runsIn: 'page',
     },
+    showAttachments: {
+      label: 'show the attached images',
+      group: 'box',
+      runsIn: 'page',
+    },
     nextImage: { label: 'next image', group: 'image', runsIn: 'page' },
     prevImage: { label: 'previous image', group: 'image', runsIn: 'page' },
     closeImage: { label: 'close the image', group: 'image', runsIn: 'page' },
+    removeShownImage: {
+      label: 'remove the shown image',
+      group: 'image',
+      runsIn: 'page',
+    },
     interrupt: { label: 'interrupt the turn', group: 'chat', runsIn: 'page' },
     nextEntry: { label: 'next block', group: 'entries', runsIn: 'page' },
     prevEntry: { label: 'previous block', group: 'entries', runsIn: 'page' },
@@ -71,7 +81,7 @@ export const chatManifest = definePlugin({
       runsIn: 'page',
     },
     toggleEntry: {
-      label: 'expand or collapse the entry',
+      label: "expand or collapse the block's expander, else the entry",
       group: 'entries',
       runsIn: 'page',
     },

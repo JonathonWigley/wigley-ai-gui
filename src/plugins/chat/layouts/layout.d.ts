@@ -476,11 +476,13 @@ export interface CloseConfirmKit extends BaseKit {
   // element.
   actions(parent: HTMLElement): HTMLElement;
 }
-// `src` a `data:` URL; `index` the image's place from 0 among `count`.
+// `src` a `data:` URL; `index` the image's place from 0 among `count`; `removable` while the images are the
+// composer's attached ones, which `removeShownImage` removes from.
 export interface ImageViewerInput {
   src: string;
   index: number;
   count: number;
+  removable: boolean;
 }
 export interface SideSectionKit extends BaseKit {
   // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus: a click in the

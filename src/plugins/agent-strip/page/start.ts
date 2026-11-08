@@ -87,6 +87,10 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
         focusBox: () => strip.toBox('insert'),
         appendBox: () => strip.toBox('append'),
         toggleBox: () => strip.toggleBox(),
+        lineDown: () => strip.scrollToolList('line', 1),
+        lineUp: () => strip.scrollToolList('line', -1),
+        halfPageDown: () => strip.scrollToolList('halfPage', 1),
+        halfPageUp: () => strip.scrollToolList('halfPage', -1),
       },
     };
   },

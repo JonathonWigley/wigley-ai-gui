@@ -1060,6 +1060,7 @@ export const FAKE_BLOCKS_REPLY = [
   'The third paragraph.',
   '- The first item\n- The second item',
   '```ts\nconst answer = 42;\n```',
+  ':::details Fixture details\nThe hidden line.\n:::',
 ].join('\n\n');
 
 function emitBlocksTurn(

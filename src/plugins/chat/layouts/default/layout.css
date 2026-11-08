@@ -362,6 +362,18 @@
   object-fit: contain;
 }
 
+/* The counter and the remove key's hint, on one line under the image. */
+.chat-image-viewer-line {
+  align-items: baseline;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--wg-space-3);
+}
+
+.chat-image-viewer-remove[hidden] {
+  display: none;
+}
+
 .chat-image-viewer-count {
   color: var(--wg-fg);
   flex-shrink: 0;

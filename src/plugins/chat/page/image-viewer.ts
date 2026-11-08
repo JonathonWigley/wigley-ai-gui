@@ -6,15 +6,29 @@ import { imageUrl } from './attachments';
 import type { ImageViewerInput } from '../layouts/layout';
 import { createImageViewerPart, type DialogPartDeps } from './dialog-kits';
 
-// The full-size image viewer over a message's images: `open` shows the image
-// at `index` and pushes the viewer's scope; `next` and `previous` step
-// through the images and stop at the ends; `close`, and the pushed scope's
-// base changing, hide it and pop the scope. Each does nothing while the
-// viewer is closed.
+// Where a viewer's images came from, when they can be removed there: `remove`
+// removes the image at `index` and returns the images left.
+export interface ImageRemoval {
+  remove(index: number): readonly ChatImage[];
+}
+
+// The full-size image viewer over a message's images, or the composer's
+// attached ones: `open` shows the image at `index` and pushes the viewer's
+// scope, holding the images it was given until a removal; `next` and
+// `previous` step through the images and stop at the ends; `removeShown`
+// removes the shown image through the `removal` the viewer was opened with,
+// then shows the image now at its place, else the one before it, else closes;
+// `close`, and the pushed scope's base changing, hide it and pop the scope.
+// Each does nothing while the viewer is closed.
 export interface ImageViewer {
-  open(images: readonly ChatImage[], index: number): void;
+  open(
+    images: readonly ChatImage[],
+    index: number,
+    removal?: ImageRemoval,
+  ): void;
   next(): void;
   previous(): void;
+  removeShown(): void;
   close(): void;
 }
 
@@ -27,13 +41,15 @@ export interface ImageViewerDeps extends DialogPartDeps {
 interface OpenImages {
   images: readonly ChatImage[];
   index: number;
+  removal: ImageRemoval | null;
   scope: PushedScope;
 }
 
 // A dialog-layer surface in the overlay: the `imageViewer` part on the dim
 // backdrop, the image fitted inside the window and `<n> of <count>` under it
-// when there is more than one in the default layout; it draws again on a
-// layout change, keeping its index.
+// when there is more than one in the default layout, with the remove key's
+// hint while the images can be removed; it draws again on a layout change,
+// keeping its index.
 export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
   const { log } = deps;
   const backdrop = element('div', 'ui-scrim chat-image-viewer');
@@ -64,11 +80,16 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
     show(open, part.update);
   };
   const viewer: ImageViewer = {
-    open(images, index) {
+    open(images, index, removal) {
       viewer.close();
       blurFocusedElement();
       const scope = deps.pushScope();
-      const opened: OpenImages = { images, index, scope };
+      const opened: OpenImages = {
+        images,
+        index,
+        removal: removal ?? null,
+        scope,
+      };
       scope.onBaseChanged(() => {
         if (open === opened) {
           viewer.close();
@@ -80,6 +101,27 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
     },
     next: () => step(1),
     previous: () => step(-1),
+    removeShown() {
+      const shown = open;
+      if (shown === null) {
+        return;
+      }
+      if (shown.removal === null) {
+        log('sent images cannot be removed');
+        return;
+      }
+      log(
+        `removed attached image ${shown.index + 1} of ${shown.images.length}`,
+      );
+      const left = shown.removal.remove(shown.index);
+      if (left.length === 0) {
+        viewer.close();
+        return;
+      }
+      shown.images = left;
+      shown.index = Math.min(shown.index, left.length - 1);
+      show(shown, part.update);
+    },
     close() {
       const held = open;
       if (held === null) {
@@ -96,11 +138,12 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
 }
 
 function inputOf(
-  shown: Pick<OpenImages, 'images' | 'index'>,
+  shown: Pick<OpenImages, 'images' | 'index' | 'removal'>,
 ): ImageViewerInput {
   return {
     src: imageUrl(shown.images[shown.index]),
     index: shown.index,
     count: shown.images.length,
+    removable: shown.removal !== null,
   };
 }

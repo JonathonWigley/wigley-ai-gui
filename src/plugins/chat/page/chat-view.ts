@@ -139,6 +139,7 @@ export interface ChatSession extends SessionRef {
     | 'selectedSource'
     | 'focused'
     | 'toggleFocused'
+    | 'toggleFocusedBlock'
     | 'scrollBy'
   >;
   enterStop(): string | null;

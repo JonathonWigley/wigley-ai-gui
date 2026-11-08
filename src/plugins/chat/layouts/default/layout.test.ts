@@ -1276,6 +1276,8 @@ function fakeSurfaceKit() {
     copyButton: (parent: HTMLElement) => part(parent, 'button', 'copy'),
     codeBox: (parent: HTMLElement) => part(parent, 'div', 'codeBox'),
     actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
+    keyHint: (parent: HTMLElement, command: string) =>
+      part(parent, 'span', `hint:${command}`),
   };
   const kit = parts as unknown as ComposerKit &
     StatusLineKit &
@@ -1594,31 +1596,45 @@ describe('default chat layout surfaces', () => {
     expect(branchRow.parentNode).toBeNull();
   });
 
-  it('imageViewer_Default_UpdateMovesCounterAndHidesItForOne', () => {
+  it('imageViewer_Default_UpdateMovesCounterAndHidesItForOneAndTheRemoveHintWhenNotRemovable', () => {
     const { kit } = fakeSurfaceKit();
     const view = drawSurface(
       'imageViewer',
-      { src: 'data:a', index: 0, count: 2 },
+      { src: 'data:a', index: 0, count: 2, removable: true },
       kit,
     );
-    const [picture, counter] = asFake(view.element).children;
-    expect([picture.src, counter.textContent, counter.hidden]).toEqual([
+    const [picture, line] = asFake(view.element).children;
+    const [counter, remove] = line.children;
+    const shown = () => [
+      picture.src,
+      counter.textContent,
+      counter.hidden,
+      remove.dataset.part,
+      remove.hidden,
+    ];
+    expect(shown()).toEqual([
       'data:a',
       '1 of 2',
       false,
-    ]);
-
-    view.update?.({ src: 'data:b', index: 1, count: 2 });
-    expect([picture.src, counter.textContent, counter.hidden]).toEqual([
-      'data:b',
-      '2 of 2',
+      'hint:removeShownImage',
       false,
     ]);
 
-    view.update?.({ src: 'data:c', index: 0, count: 1 });
-    expect([picture.src, counter.textContent, counter.hidden]).toEqual([
+    view.update?.({ src: 'data:b', index: 1, count: 2, removable: true });
+    expect(shown()).toEqual([
+      'data:b',
+      '2 of 2',
+      false,
+      'hint:removeShownImage',
+      false,
+    ]);
+
+    view.update?.({ src: 'data:c', index: 0, count: 1, removable: false });
+    expect(shown()).toEqual([
       'data:c',
       '1 of 1',
+      true,
+      'hint:removeShownImage',
       true,
     ]);
   });

@@ -2324,4 +2324,134 @@ describe('block stops', () => {
     expect(cursorLabel(list)).toBe(focused);
     expect(scroller.scrollTop).toBe(123);
   });
+
+  type ExpanderPart = 'details' | 'collapsible';
+  type BlockShape =
+    | 'details block'
+    | 'details inside'
+    | 'collapsible before details'
+    | 'neither';
+
+  // Draws one marked block of `shape`, with a kit collapsible outside it, and
+  // records each `details` and kit collapsible it drew, in drawing order.
+  function expanderBlock(shape: BlockShape) {
+    const drawn: { part: ExpanderPart; isOpen: () => boolean }[] = [];
+    const details = (parent: HTMLElement, kit: ChatKit) => {
+      const made = kit.el(parent, 'details') as HTMLDetailsElement;
+      drawn.push({ part: 'details', isOpen: () => made.open === true });
+      return made;
+    };
+    const collapsible = (parent: HTMLElement, kit: ChatKit) => {
+      const made = kit.collapsibleCard(parent, {
+        summary: 'more',
+        body: () => element('div'),
+      });
+      drawn.push({ part: 'collapsible', isOpen: () => made.isOpen() });
+    };
+    const builder: AnyBuilder = (parent, _input, kit) => {
+      const root = kit.el(parent, 'div', 'marked');
+      collapsible(root, kit);
+      const block =
+        shape === 'details block' ? details(root, kit) : kit.el(root, 'div');
+      block.dataset.mdLines = '0,1';
+      if (shape === 'collapsible before details') {
+        collapsible(block, kit);
+      }
+      if (
+        shape === 'details inside' ||
+        shape === 'collapsible before details'
+      ) {
+        details(block, kit);
+      }
+      return { element: root };
+    };
+    return { builder, drawn };
+  }
+
+  it.each<{
+    given: string;
+    shape: BlockShape;
+    onActivity?: boolean;
+    result: 'expanded' | null;
+    open: [ExpanderPart, boolean][];
+  }>([
+    {
+      given: 'the block is a details',
+      shape: 'details block',
+      result: 'expanded',
+      open: [
+        ['collapsible', false],
+        ['details', true],
+      ],
+    },
+    {
+      given: 'a details inside the block',
+      shape: 'details inside',
+      result: 'expanded',
+      open: [
+        ['collapsible', false],
+        ['details', true],
+      ],
+    },
+    {
+      given: 'a kit collapsible before a details',
+      shape: 'collapsible before details',
+      result: 'expanded',
+      open: [
+        ['collapsible', false],
+        ['collapsible', true],
+        ['details', false],
+      ],
+    },
+    {
+      given: 'a block with neither',
+      shape: 'neither',
+      result: null,
+      open: [['collapsible', false]],
+    },
+    {
+      given: 'an activity stop',
+      shape: 'details block',
+      onActivity: true,
+      result: null,
+      open: [
+        ['collapsible', false],
+        ['details', false],
+      ],
+    },
+  ])('toggleFocusedBlock_$given', ({ shape, onActivity, result, open }) => {
+    vi.stubGlobal('Node', { DOCUMENT_POSITION_PRECEDING: 2 });
+    const { builder, drawn } = expanderBlock(shape);
+    const { list, put } = setUpList(
+      activityShown({ entries: { assistant: builder } }),
+    );
+    const reply = assistantText('a', 'reply');
+    [user('u1'), tool('t1'), reply].forEach(put);
+    if (onActivity === true) {
+      list.move(-1);
+    }
+
+    const toggled = list.toggleFocusedBlock();
+
+    expect(list.focused()?.kind).toBe(
+      onActivity === true ? 'activity' : 'entry',
+    );
+    expect(toggled).toEqual(result === null ? null : { entry: reply, result });
+    expect(drawn.map(({ part, isOpen }) => [part, isOpen()])).toEqual(open);
+  });
+
+  it('toggleFocusedBlock_Twice_ClosesWhatTheFirstOpened', () => {
+    vi.stubGlobal('Node', { DOCUMENT_POSITION_PRECEDING: 2 });
+    const { builder, drawn } = expanderBlock('details inside');
+    const { list, put } = setUpList(
+      activityShown({ entries: { assistant: builder } }),
+    );
+    put(assistantText('a', 'reply'));
+
+    list.toggleFocusedBlock();
+    const second = list.toggleFocusedBlock();
+
+    expect(second?.result).toBe('collapsed');
+    expect(drawn.map(({ isOpen }) => isOpen())).toEqual([false, false]);
+  });
 });

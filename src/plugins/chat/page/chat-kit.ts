@@ -25,6 +25,9 @@ export interface KitDeps extends SurfaceKitDeps {
   openImages(images: readonly ChatImage[], index: number): void;
 }
 
+// One of a kit's expanders: a collapsible card or row, or an expander.
+export type Expander = Pick<CollapsibleCard, 'element' | 'isOpen' | 'setOpen'>;
+
 // The expanders one kit made (its expanders, collapsible cards and rows), in
 // creation order.
 export interface Expanders {
@@ -34,6 +37,8 @@ export interface Expanders {
   openStates(): boolean[];
   // Opens each expander whose creation-order place is open in `states`.
   restore(states: readonly boolean[]): void;
+  // The expanders whose element `container` contains, in creation order.
+  inside(container: HTMLElement): Expander[];
 }
 
 // One built entry's kit: the parts the layout drew from it, kept up to date by
@@ -46,8 +51,6 @@ export interface EntryKit {
   expanders: Expanders;
   dispose(): void;
 }
-
-type Expander = Pick<CollapsibleCard, 'isOpen' | 'setOpen'>;
 
 // The base kit, its key hints anchored in the Chat tab's scope, under chat's
 // own parts.
@@ -130,6 +133,8 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
           }
         });
       },
+      inside: (container) =>
+        expanders.filter((expander) => container.contains(expander.element)),
     },
   };
 }

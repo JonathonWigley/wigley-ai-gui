@@ -34,6 +34,26 @@ export const agentStripManifest = definePlugin({
       group: 'agent strip',
       runsIn: 'page',
     },
+    lineDown: {
+      label: 'scroll the tool list a line down',
+      group: 'agent strip',
+      runsIn: 'page',
+    },
+    lineUp: {
+      label: 'scroll the tool list a line up',
+      group: 'agent strip',
+      runsIn: 'page',
+    },
+    halfPageDown: {
+      label: 'scroll the tool list half a page down',
+      group: 'agent strip',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll the tool list half a page up',
+      group: 'agent strip',
+      runsIn: 'page',
+    },
   },
   scopes: { strip: 'In the agent strip' },
   settings: { layout: 'default' },

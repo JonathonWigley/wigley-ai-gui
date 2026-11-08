@@ -12,6 +12,7 @@ import {
   FAKE_BLOCKS_TEXT,
   FAKE_COLD_TEXT,
   FAKE_END_TEXT,
+  FAKE_HISTORY_IMAGES,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
   FAKE_PERMISSION_TEXT,
@@ -48,6 +49,14 @@ const SELFTEST_PROJECT_NAME = 'chat-selftest';
 // A second session whose Chat tab the steps show while the first holds a
 // pending permission.
 const SECOND_PROJECT_NAME = 'chat-second';
+// A third session whose box holds two attached images, for the image viewer's
+// remove key. It starts between the other two, so it lists between them and
+// chat-second stays the session before chat-selftest, the list wrapping.
+const IMAGES_PROJECT_NAME = 'chat-images';
+// How long the images session's hold turn may take to report running, and how
+// often it is asked.
+const RUNNING_TIMEOUT_MS = 10_000;
+const RUNNING_POLL_MS = 20;
 
 export interface ChatSelfTestDeps {
   homeDir: string;
@@ -60,6 +69,8 @@ export interface ChatSelfTestDeps {
     | 'sessions'
     | 'setArchived'
     | 'addSendGate'
+    | 'send'
+    | 'interrupt'
   >;
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: readonly AgentHarness[];
@@ -373,6 +384,28 @@ const BLOCK_CURSOR_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
+// Back in chat-second, G rests on the reply's last block, the details block.
+const BLOCK_EXPANDER_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  { keys: ['Escape', 'G'], expect: '[chat] following the latest entry' },
+  {
+    keys: ['Enter'],
+    expect: '[chat] expanded assistant block',
+    screenshot: 'block-expanded',
+  },
+  { keys: ['Enter'], expect: '[chat] collapsed assistant block' },
+  {
+    keys: ['k'],
+    expect: '[chat] focused assistant entry',
+    why: "k moves to the reply's code block, which holds no expander.",
+  },
+  {
+    keys: ['Enter'],
+    expect: '[chat] assistant entry has nothing to expand',
+  },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
 const SENDING_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('hello'),
@@ -389,6 +422,33 @@ const SENDING_STEPS: SelfTestStep[] = [
     why: 'Enter in insert mode left the box in insert mode.',
   },
   { keys: ['Escape', 'Escape'], expect: '[chat] left the box' },
+];
+
+// A fake permission turn's card, newer than the fixture's, with the cursor on
+// it: Esc leaves the box on the card, k goes to its user entry and j back.
+const NEWER_CARD_FOCUSED_STEPS: SelfTestStep[] = [
+  {
+    keys: sendKeys(FAKE_PERMISSION_TEXT),
+    expect: '[chat] permission entry added in chat-selftest',
+  },
+  { keys: ['Escape', 'k'], expect: '[chat] focused user entry' },
+  { keys: ['j'], expect: '[chat] focused permission entry' },
+];
+
+const PERMISSION_CURSOR_STEPS: SelfTestStep[] = [
+  ...NEWER_CARD_FOCUSED_STEPS,
+  {
+    keys: ['y'],
+    expect: '[chat] result entry added in chat-selftest',
+    alsoExpect: [/^\[chat\] allowed Bash in chat-selftest$/],
+  },
+  ...NEWER_CARD_FOCUSED_STEPS,
+  { keys: ['n'], expect: '[chat] deny reason box shown for Bash' },
+  {
+    keys: ['<D-Enter>'],
+    expect: '[chat] result entry added in chat-selftest',
+    alsoExpect: [/^\[chat\] denied Bash in chat-selftest$/],
+  },
 ];
 
 const PERMISSION_CARD_STEPS: SelfTestStep[] = [
@@ -831,10 +891,42 @@ const IMAGES_STEPS: SelfTestStep[] = [
     why: "The first entry is the resumed history's message with the fake's two images.",
   },
   { keys: ['l'], expect: '[chat] image viewer showing 2 of 2' },
+  { keys: ['x'], expect: '[chat] sent images cannot be removed' },
   { keys: ['l'], expect: '[chat] no next image' },
   { keys: ['h'], expect: '[chat] image viewer showing 1 of 2' },
   { keys: ['h'], expect: '[chat] no previous image' },
   { keys: ['Escape'], expect: '[chat] image viewer closed' },
+];
+
+// chat-images' box holds the two images its fixture returned there.
+const ATTACHMENTS_STEPS: SelfTestStep[] = [
+  {
+    keys: ['<A-S-o>'],
+    expect: '[chat] Chat tab shown in chat-images',
+    why: 'The Sessions list shows chat-selftest, chat-images, then chat-second, so chat-images is the next session down.',
+  },
+  {
+    keys: [' ', 'c', 'i'],
+    expect: '[chat] image viewer showing 1 of 2',
+    checksFit: true,
+    screenshot: 'attachments-viewer',
+  },
+  { keys: ['l'], expect: '[chat] image viewer showing 2 of 2' },
+  {
+    keys: ['x'],
+    expect: '[chat] image viewer showing 1 of 1',
+    alsoExpect: [/^\[chat\] removed attached image 2 of 2$/],
+  },
+  {
+    keys: ['x'],
+    expect: '[chat] image viewer closed',
+    alsoExpect: [/^\[chat\] removed attached image 1 of 1$/],
+  },
+  { keys: [' ', 'c', 'i'], expect: '[chat] no attached image' },
+  {
+    keys: ['<A-S-i>'],
+    expect: '[chat] Chat tab shown in chat-selftest',
+  },
 ];
 
 const IDLE_CLOSE_STEPS: SelfTestStep[] = [
@@ -868,6 +960,11 @@ const GROUPS: SelfTestGroup[] = [
     steps: TWO_SESSIONS_STEPS,
   },
   {
+    name: 'attachments',
+    why: "Space c i opens the viewer on the composer's two attached images, x removes the shown one and shows the one before it, a last x closes the viewer, and Space c i then finds none.",
+    steps: ATTACHMENTS_STEPS,
+  },
+  {
     name: 'row activity',
     why: 'the row shows working during a turn, done after it in an unfocused session, nothing once viewed, and needs you while the fake asks a permission mid-turn',
     steps: ROW_ACTIVITY_STEPS,
@@ -893,9 +990,19 @@ const GROUPS: SelfTestGroup[] = [
     steps: BLOCK_CURSOR_STEPS,
   },
   {
+    name: 'block expander',
+    why: "Enter on fake: blocks' details block opens and closes that one expander; on a block with none it toggles the whole entry, as before.",
+    steps: BLOCK_EXPANDER_STEPS,
+  },
+  {
     name: 'sending',
     why: 'Enter in normal mode and Cmd+Enter in insert mode send from the box, each message drawing its reply, and Esc leaves insert mode then the box.',
     steps: SENDING_STEPS,
+  },
+  {
+    name: 'permission cursor',
+    why: "y and n answer the waiting card under the cursor, not the oldest: two fake permission turns each make a newer card, the cursor's card is allowed and then denied while the fixture's card stays waiting for the next group's y.",
+    steps: PERMISSION_CURSOR_STEPS,
   },
   {
     name: 'permission card',
@@ -959,7 +1066,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'images',
-    why: "Space c x finds no attached image; the image viewer opens on the first of a message's two images, steps between them and stops at either end, and Esc closes it.",
+    why: "Space c x finds no attached image; the image viewer opens on the first of a message's two images, steps between them and stops at either end, and Esc closes it; x over a sent message's images removes nothing.",
     steps: IMAGES_STEPS,
   },
   {
@@ -1030,6 +1137,8 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'hello', imageCount: 0 },
   { method: 'send', text: 'one\ntwo', imageCount: 0 },
   { method: 'send', text: 'hello', imageCount: 0 },
+  { method: 'send', text: FAKE_PERMISSION_TEXT, imageCount: 0 },
+  { method: 'send', text: FAKE_PERMISSION_TEXT, imageCount: 0 },
   { method: 'send', text: FAKE_TOOL_TEXT, imageCount: 0 },
   { method: 'send', text: FAKE_STEPS_TEXT, imageCount: 0 },
   { method: 'interrupt' },
@@ -1218,16 +1327,18 @@ function fakePermissionAsk(
   };
 }
 
-// The self-test's two project folders.
+// The self-test's three project folders.
 interface SelfTestProjects {
   selftest: string;
   second: string;
+  images: string;
 }
 
-// Makes both self-test project folders under the home's real path, the one
-// the page shows as `~`, then starts two chat sessions each run, first closing
-// every session chat holds in a self-test project (a resumed one included)
-// and unarchiving the fake's saved sessions: the second project's, then the
+// Makes the three self-test project folders under the home's real path, the
+// one the page shows as `~`, then starts three chat sessions each run, first
+// closing every session chat holds in a self-test project (a resumed one
+// included) and unarchiving the fake's saved sessions: the second project's,
+// the images project's, whose box it fills with two returned images, then the
 // self-test's, whose Chat tab it shows. Asks one permission prompt through
 // chat's tool in the self-test's session, which the steps allow; the answer
 // asks a forms round there over a relay that joins the session, which the
@@ -1276,28 +1387,64 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     const madeProjects = {
       selftest: path.join(home, SELFTEST_PROJECT_NAME),
       second: path.join(home, SECOND_PROJECT_NAME),
+      images: path.join(home, IMAGES_PROJECT_NAME),
     };
     await files.makeFolder(madeProjects.selftest);
     await files.makeFolder(madeProjects.second);
+    await files.makeFolder(madeProjects.images);
     selftestProject = madeProjects.selftest;
     return madeProjects;
   }
 
   // Closes every session an earlier run left open in a self-test project.
-  function closeEarlierSessions({ selftest, second }: SelfTestProjects) {
+  function closeEarlierSessions({
+    selftest,
+    second,
+    images,
+  }: SelfTestProjects) {
     for (const state of chat.sessions()) {
-      if ([selftest, second].includes(state.projectDir)) {
+      if ([selftest, second, images].includes(state.projectDir)) {
         chat.closed(state.sessionId, 'project-closed');
       }
     }
   }
 
-  function openSessions(
+  // Sends a hold turn, queues a message of two images behind it and interrupts,
+  // which returns the message to the session's box.
+  async function attachImages(sessionId: string) {
+    await chat.send(sessionId, { text: FAKE_HOLD_TEXT, images: [] });
+    await waitForTurnRunning(sessionId);
+    await chat.send(sessionId, { text: '', images: [...FAKE_HISTORY_IMAGES] });
+    chat.interrupt(sessionId);
+  }
+
+  async function waitForTurnRunning(sessionId: string) {
+    const deadline = Date.now() + RUNNING_TIMEOUT_MS;
+    const isRunning = () =>
+      chat
+        .sessions()
+        .some(
+          (state) =>
+            state.sessionId === sessionId &&
+            state.running &&
+            state.activity !== 'idle',
+        );
+    while (!isRunning()) {
+      if (Date.now() > deadline) {
+        throw new Error(`${IMAGES_PROJECT_NAME}'s hold turn never ran`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, RUNNING_POLL_MS));
+    }
+  }
+
+  async function openSessions(
     run: number,
-    { selftest, second }: SelfTestProjects,
+    { selftest, second, images }: SelfTestProjects,
   ): Promise<ChatSelfTestResult> {
     chat.start({ projectDir: second, profile: 'work' });
+    const imagesId = chat.start({ projectDir: images, profile: 'work' });
     const id = chat.start({ projectDir: selftest, profile: 'work' });
+    await attachImages(imagesId);
     sessions.activate(id);
     const process = selftestProcess(marks, selftest, false);
     const permission = askFixturePermission(chat, id, selftest, {

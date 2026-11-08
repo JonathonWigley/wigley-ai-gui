@@ -1,7 +1,9 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
+import type { ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
+import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import {
@@ -15,6 +17,7 @@ import type {
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import type { HScroller } from '../../../shared/page/ui/h-scroller';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import type {
   Roster,
   RosterAgent,
@@ -65,7 +68,9 @@ export interface AgentStripDeps {
 // `stop` takes the entry cursor. The commands act on the strip holding the
 // cursor and do nothing while none does: `prevBox` / `nextBox` move the
 // selection, `leave` hands the cursor back to the entries, `toBox` to the chat
-// box, `toggleBox` opens or closes the selected box and scrolls it into view.
+// box, `toggleBox` opens or closes the selected box and scrolls it into view,
+// `scrollToolList` scrolls the open agent box's tool list by `step`, logging
+// `no open tool list in <name>` when the session has none open.
 // `rosterUpdated` redraws a session's strip after its roster changed;
 // `setLayouts` redraws every strip; `forget` drops a session that left.
 export interface AgentStrip {
@@ -76,6 +81,7 @@ export interface AgentStrip {
   toBox(how: 'insert' | 'append'): void;
   rosterUpdated(sessionId: string): void;
   toggleBox(): void;
+  scrollToolList(step: ScrollStep, direction: 1 | -1): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;
 }
@@ -714,6 +720,29 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         toggleOpen(selection.sessionId, selection.key);
         revealSelected();
       }
+    },
+    scrollToolList(step, direction) {
+      if (selection === null) {
+        return;
+      }
+      const { sessionId } = selection;
+      const openKey = openKeys.get(sessionId);
+      const box = held
+        .get(sessionId)
+        ?.boxes.find((drawn) => drawn.key === openKey);
+      const list =
+        box?.kind === 'agent' ? box.toolList?.built.element : undefined;
+      if (list === undefined) {
+        deps.log(`no open tool list in ${deps.nameOf(sessionId)}`);
+        return;
+      }
+      const scroll = scrollContent(
+        list,
+        step,
+        direction,
+        textLineHeightPx(list),
+      );
+      deps.log(scrollText('the tool list', step, direction, scroll));
     },
     setLayouts(shown) {
       layoutParts.setLayouts(shown);

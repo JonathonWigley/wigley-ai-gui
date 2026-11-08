@@ -23,7 +23,11 @@ import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import type { WriteClipboard } from './clipboard';
 import type { EntryListStop } from './entry-list';
-import { controlText, oldestPendingPermission } from './chat-state';
+import {
+  controlText,
+  oldestPendingPermission,
+  type PermissionEntry,
+} from './chat-state';
 import type {
   ChatSession,
   ChatTabs,
@@ -236,14 +240,19 @@ export function chatCommandHandlers(
     halfPageUp: inSession((session) =>
       scrollTranscript(session, 'halfPage', -1, log),
     ),
-    // A focused pending row is pulled back; a focused user entry with images
-    // opens the viewer on its first image and toggles nothing; a focused
-    // activity line opens or closes, and any other focused entry toggles its
-    // expanders.
+    // A focused pending row is pulled back; an expander in the cursor's block
+    // opens or closes alone; a focused user entry with images opens the viewer
+    // on its first image and toggles nothing; a focused activity line opens or
+    // closes, and any other focused entry toggles its expanders.
     toggleEntry: inSession((session) => {
       const focused = session.entries.focused();
       if (focused?.kind === 'queued') {
         pullBackQueued(deps, session, focused.message.id);
+        return;
+      }
+      const toggledBlock = session.entries.toggleFocusedBlock();
+      if (toggledBlock !== null) {
+        log(`${toggledBlock.result} ${toggledBlock.entry.kind} block`);
         return;
       }
       const entry = focused?.kind === 'entry' ? focused.entry : null;
@@ -270,7 +279,7 @@ export function chatCommandHandlers(
     }),
     // An open range is intent to copy, so a permission landing on it waits.
     allowOrCopy: inSession((session) => {
-      const pending = oldestPendingPermission(session.state.entries);
+      const pending = permissionTarget(session);
       if (pending === null || session.entries.isRangeOpen()) {
         copySelection(deps, session);
         return;
@@ -278,7 +287,7 @@ export function chatCommandHandlers(
       deps.permissions.allow(session, pending);
     }),
     denyPermission: inSession((session) => {
-      const pending = oldestPendingPermission(session.state.entries);
+      const pending = permissionTarget(session);
       if (pending === null) {
         log(`no pending permission in ${session.name}`);
         return;
@@ -325,6 +334,20 @@ export function chatCommandHandlers(
     nextImage: () => deps.viewer.next(),
     prevImage: () => deps.viewer.previous(),
     closeImage: () => deps.viewer.close(),
+    removeShownImage: () => deps.viewer.removeShown(),
+    showAttachments: inSession((session) => {
+      const images = session.attachments.images();
+      if (images.length === 0) {
+        log('no attached image');
+        return;
+      }
+      deps.viewer.open(images, 0, {
+        remove(index) {
+          session.attachments.removeAt(index);
+          return session.attachments.images();
+        },
+      });
+    }),
     submitCode: () => deps.signIn.submitCode(),
     cancelSignIn: () => deps.signIn.cancel(),
     copySignInLink: () => deps.signIn.copyLink(),
@@ -608,6 +631,23 @@ function runSlashCommand(
     log(`/${command.name} failed: ${errorText(error)}`);
     deps.toast(`/${command.name} failed: ${errorText(error)}`, 'error');
   });
+}
+
+// The waiting permission card under the cursor, read from the state since the
+// cursor's stop may hold an older copy; else the oldest waiting one; else null.
+function permissionTarget(session: ChatSession): PermissionEntry | null {
+  const focused = session.entries.focused();
+  const focusedId =
+    focused?.kind === 'entry' && focused.entry.kind === 'permission'
+      ? focused.entry.id
+      : null;
+  const underCursor = session.state.entries.find(
+    (entry): entry is PermissionEntry =>
+      entry.id === focusedId &&
+      entry.kind === 'permission' &&
+      entry.answer === null,
+  );
+  return underCursor ?? oldestPendingPermission(session.state.entries);
 }
 
 function moveEntry(session: ChatSession, step: 1 | -1, log: PluginLog) {

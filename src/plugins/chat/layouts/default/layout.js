@@ -985,20 +985,27 @@ const layout = {
     kit.actions(body);
     return { element: body };
   },
-  imageViewer(parent, input) {
+  // The remove key's hint shares the counter's line, shown while the images
+  // can be removed.
+  imageViewer(parent, input, kit) {
     const frame = root(parent, 'chat-image-viewer-frame');
     const picture = /** @type {HTMLImageElement} */ (
       el('img', 'chat-image-viewer-image')
     );
+    const line = el('div', 'chat-image-viewer-line');
     const counter = el('div', 'chat-image-viewer-count');
-    frame.append(picture, counter);
-    showImage(picture, counter, input);
-    return {
-      element: frame,
-      update(next) {
-        showImage(picture, counter, next);
-      },
+    line.append(counter);
+    const remove = kit.keyHint(line, 'removeShownImage', {
+      label: 'remove',
+      className: 'chat-image-viewer-remove',
+    });
+    frame.append(picture, line);
+    const show = (/** @type {import('../layout').ImageViewerInput} */ next) => {
+      showImage(picture, counter, next);
+      remove.hidden = !next.removable;
     };
+    show(input);
+    return { element: frame, update: show };
   },
 };
 

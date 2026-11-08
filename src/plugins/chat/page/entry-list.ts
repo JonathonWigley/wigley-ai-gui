@@ -35,7 +35,13 @@ import {
   listRows,
   rowStops,
 } from './activity-runs';
-import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
+import {
+  createEntryKit,
+  type EntryKit,
+  type Expander,
+  type Expanders,
+  type KitDeps,
+} from './chat-kit';
 import {
   type ChatLayouts,
   type ChatPartDraws,
@@ -200,6 +206,14 @@ export interface EntryList {
   // an entry, opens every expander when any is closed, else closes them all.
   // Null with no focused stop, or on a pending row, which toggles nothing.
   toggleFocused(): { stop: ListStop; result: ToggleResult } | null;
+  // Opens or closes the first expander, in document order, of the cursor's
+  // block: the block itself when it is a `details`, a `details` inside it, or
+  // one of its kit's expanders inside it. Null when the cursor has no block or
+  // its block holds no expander.
+  toggleFocusedBlock(): {
+    entry: ChatEntry;
+    result: 'expanded' | 'collapsed';
+  } | null;
   // Stops following the list's size, scrolls, clicks and the tick, disposes every
   // entry's kit, every activity line and every pending row, and forgets the open
   // runs; the list's owner calls it when it drops the list.
@@ -824,6 +838,21 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       expanders.setAllOpen(opens);
       return { stop, result: opens ? 'expanded' : 'collapsed' };
     },
+    toggleFocusedBlock() {
+      const { stopId } = focus;
+      const block = stopId === null ? undefined : blockOfStop(stopId);
+      if (stopId === null || block === undefined) {
+        return null;
+      }
+      const slot = slots.get(entryIdOfStop(stopId))!;
+      const target = firstExpanderIn(block, slot.kit.expanders);
+      if (target === null) {
+        return null;
+      }
+      const opens = !target.isOpen();
+      target.setOpen(opens);
+      return { entry: slot.entry, result: opens ? 'expanded' : 'collapsed' };
+    },
     dispose() {
       list.removeEventListener('scroll', onListScroll);
       list.removeEventListener('click', onListClick);
@@ -949,6 +978,45 @@ function messageIds(rows: readonly ListRow[]): string[] {
 
 function isMessage(entry: ChatEntry): boolean {
   return entry.kind === 'user' || entry.kind === 'assistant';
+}
+
+// The block's first expander in document order, so the outermost and topmost
+// wins: the block when it is a `details`, a `details` inside it, or one of the
+// kit's `expanders` inside it; null with none.
+function firstExpanderIn(
+  block: HTMLElement,
+  expanders: Expanders,
+): Expander | null {
+  const details = [
+    ...(block.tagName === 'DETAILS' ? [block] : []),
+    ...block.querySelectorAll<HTMLElement>('details'),
+  ] as HTMLDetailsElement[];
+  const candidates = [
+    ...details.map(detailsExpander),
+    ...expanders.inside(block),
+  ];
+  return candidates.reduce<Expander | null>(
+    (first, next) =>
+      first === null || isBefore(next.element, first.element) ? next : first,
+    null,
+  );
+}
+
+function detailsExpander(details: HTMLDetailsElement): Expander {
+  return {
+    element: details,
+    isOpen: () => details.open,
+    setOpen: (open) => {
+      details.open = open;
+    },
+  };
+}
+
+function isBefore(node: HTMLElement, other: HTMLElement): boolean {
+  return (
+    (other.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING) !==
+    0
+  );
 }
 
 // The cursor's blocks of `entry` as drawn into `slot`, in document order; only a

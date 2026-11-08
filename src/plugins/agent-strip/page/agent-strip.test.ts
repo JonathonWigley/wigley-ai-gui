@@ -19,7 +19,7 @@ import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 import type { ComposerStopExits } from '../../chat/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { AgentBoxInput, Layout } from '../layouts/layout';
-import { createAgentStrip } from './agent-strip';
+import { type AgentStrip, createAgentStrip } from './agent-strip';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const NOW = 1_000_000;
@@ -1072,6 +1072,58 @@ describe('agent strip', () => {
 
     expect(selected()).toEqual([0]);
     expect(logged).toEqual(loggedBefore);
+  });
+
+  it('scrollToolList_OpenAgentBox_ScrollsItsList', () => {
+    vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '20px' }));
+    const { strip, build, enter, boxes, logged } = setUp({
+      agents: [agent('a1', 60_000, 5)],
+      tasks: [],
+      skills: [],
+    });
+    build();
+    enter();
+    strip.toggleBox();
+    const list = Object.assign(findAll(boxes()[0], 'agent-strip-toolList')[0], {
+      scrollHeight: 300,
+      clientHeight: 100,
+    });
+
+    strip.scrollToolList('line', 1);
+
+    expect(list.scrollTop).toBe(20);
+    expect(logged.at(-1)).toBe('scrolled the tool list down a line');
+  });
+
+  it.each<{ given: string; open: (strip: AgentStrip) => void }>([
+    {
+      given: 'a task row open',
+      open: (strip) => {
+        strip.nextBox();
+        strip.nextBox();
+        strip.toggleBox();
+      },
+    },
+    { given: 'none open', open: () => undefined },
+  ])('scrollToolList_NoOpenList_Logs ($given)', ({ open }) => {
+    const { strip, build, enter, logged } = setUp(MIXED);
+    build();
+    enter();
+    open(strip);
+
+    strip.scrollToolList('halfPage', -1);
+
+    expect(logged.at(-1)).toBe('no open tool list in proj');
+  });
+
+  it('scrollToolList_NoSelection_DoesNothing', () => {
+    const { strip, build, logged } = setUp(MIXED);
+    build();
+    const before = [...logged];
+
+    strip.scrollToolList('line', 1);
+
+    expect(logged).toEqual(before);
   });
 
   it('toggleBox_OpensOneAtATime', () => {

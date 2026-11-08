@@ -193,13 +193,39 @@ export class FakeElement {
     );
   }
 
-  // Takes one class selector such as `.md-fence` or one data attribute selector
-  // such as `[data-md-lines]`, read from `dataset`; every match under this
-  // element, depth first.
+  // Takes one tag name such as `details`, one class selector such as
+  // `.md-fence` or one data attribute selector such as `[data-md-lines]`, read
+  // from `dataset`; every match under this element, depth first.
   querySelectorAll(selector: string): FakeElement[] {
-    return selector.startsWith('[')
-      ? collectUnder(this, (node) => matchesSelector(node, selector))
-      : findAll(this, selector.slice(1));
+    return collectUnder(this, (node) => matchesSelector(node, selector));
+  }
+
+  // Where `other` sits from this element, as the DOM's position bits: 4 when it
+  // follows, 2 when it precedes, with 16 when this element contains it and 8
+  // when it contains this element; 1 in another tree, 0 for this element.
+  compareDocumentPosition(other: FakeElement): number {
+    if (other === this) {
+      return 0;
+    }
+    if (this.contains(other)) {
+      return 16 | 4;
+    }
+    if (other.contains(this)) {
+      return 8 | 2;
+    }
+    const mine = ancestry(this);
+    const theirs = ancestry(other);
+    if (mine[0] !== theirs[0]) {
+      return 1;
+    }
+    let depth = 1;
+    while (mine[depth] === theirs[depth]) {
+      depth++;
+    }
+    const siblings = mine[depth - 1].childNodes;
+    return siblings.indexOf(theirs[depth]) > siblings.indexOf(mine[depth])
+      ? 4
+      : 2;
   }
 
   // Takes a comma list of tag names, class selectors and data attribute
@@ -294,6 +320,15 @@ function matchesSelector(node: FakeElement, selector: string): boolean {
     letter.toUpperCase(),
   );
   return node.dataset[key] !== undefined;
+}
+
+// `node` and every element over it, the root first.
+function ancestry(node: FakeElement): FakeElement[] {
+  const chain: FakeElement[] = [];
+  for (let at: FakeElement | null = node; at !== null; at = at.parentNode) {
+    chain.unshift(at);
+  }
+  return chain;
 }
 
 function textNode(text: string): FakeElement {
