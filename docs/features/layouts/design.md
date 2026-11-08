@@ -119,7 +119,7 @@ stays in themes.
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
-| `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
+| `forms` | `forms.layout` | question, finding and notice cards; head, rail, review and notices panes |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session rows; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree, its rows and its Wiki and All pages switch; the rendered doc, its page frame and right column, header, disk banner, section edit control and editor frame; Recent changes and the missing Main page's empty state; the list pages and their rows; the box and confirm dialogs, the create dialog's completion and picker rows |

@@ -787,8 +787,9 @@ round; primer: an open primer), since main, not the page, decides.
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
-  `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
-  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,
+  `rail`, `review` and `notices` panes. The `notices` pane is the round's one notices page, after every finding and
+  question: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
+  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, notice line, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
   `kbd`, `button` — variant and `keys` — and `sectionHeader`, and `command(qualifiedId)` and `keysFor(qualifiedId)`
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
