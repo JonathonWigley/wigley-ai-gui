@@ -11,6 +11,7 @@ import {
   chatMainKey,
   type SendGate,
 } from '../../chat/contract';
+import { type SessionFlow, workflowFlowsSlot } from '../../workflow/contract';
 import { autoCompactMainPart } from './start';
 
 const ASK = {
@@ -37,13 +38,30 @@ const COLD_USAGE: ChatAgentEvent = {
   },
 };
 
+// A Medium session waiting on one subagent, its main turn over.
+const WAITING_FLOW: SessionFlow = {
+  sessionId: 's1',
+  projectDir: '/repo',
+  workflow: 'medium',
+  movedUpFrom: null,
+  stage: 'build',
+  checklist: null,
+  state: null,
+  missedLevel: false,
+  turnRunning: false,
+  runningSubagents: ['agent-1'],
+};
+
 // The part on the harness, over a chat that records what is registered and
-// files each handle with `consumer.track`, as chat's view does. `setting` is the
-// object the part reads its settings from.
+// files each handle with `consumer.track`, as chat's view does, and records each
+// `compact` call, answering `compactAnswer`. `setting` is the object the part
+// reads its settings from.
 function startPart() {
-  const setting = { minTokens: 150000 };
+  const setting = { minTokens: 150000, agentWaitMinTokens: 200000 };
   const gates = new Set<SendGate>();
   const readers = new Set<() => number | null>();
+  const compacts: [string, string][] = [];
+  const answers = { compact: true };
   const harness = startMainPart(autoCompactMainPart, {
     settings: setting,
     dependencies: [
@@ -59,11 +77,23 @@ function startPart() {
               readers.add(read);
               return consumer.track({ dispose: () => readers.delete(read) });
             },
+            compact(sessionId: string, reason: string) {
+              compacts.push([sessionId, reason]);
+              return answers.compact;
+            },
           }) as unknown as ChatMainExports,
       ),
     ],
   });
-  return { setting, gates, readers, harness };
+  const flows = harness.state.publish(workflowFlowsSlot);
+  return { setting, gates, readers, compacts, answers, flows, harness };
+}
+
+function usageOf(contextTokens: number): ChatAgentEvent {
+  return {
+    ...COLD_USAGE,
+    event: { ...COLD_USAGE.event, contextTokens } as ChatAgentEvent['event'],
+  };
 }
 
 describe('autoCompactMainPart', () => {
@@ -106,5 +136,64 @@ describe('autoCompactMainPart', () => {
     expect(part.harness.counts()).toEqual(before);
     expect(part.gates.size).toBe(1);
     expect(part.readers.size).toBe(1);
+  });
+
+  it('agentWait_FlowWaitsAboveThreshold_CompactsOncePerWait', () => {
+    const part = startPart();
+    part.harness.emit('chat.agentEvent', usageOf(214_000));
+
+    part.flows.set('s1', WAITING_FLOW);
+    part.harness.emit('chat.turnFinished', { sessionId: 's1', how: 'idle' });
+
+    expect(part.compacts).toEqual([['s1', 'auto · agents running · 214k']]);
+  });
+
+  it('agentWait_RefusedThenIdle_CompactsAtTheIdle', () => {
+    const part = startPart();
+    part.harness.emit('chat.agentEvent', usageOf(214_000));
+    part.answers.compact = false;
+    part.flows.set('s1', WAITING_FLOW);
+    part.answers.compact = true;
+
+    part.harness.emit('chat.turnFinished', { sessionId: 's1', how: 'idle' });
+    part.harness.emit('chat.turnFinished', { sessionId: 's1', how: 'idle' });
+
+    expect(part.compacts).toHaveLength(2);
+  });
+
+  it('agentWait_CompactionEndsThenMainTurn_RearmsForTheNextWait', () => {
+    const part = startPart();
+    part.harness.emit('chat.agentEvent', usageOf(214_000));
+    part.flows.set('s1', WAITING_FLOW);
+    const event = (data: ChatAgentEvent['event']) =>
+      part.harness.emit('chat.agentEvent', { ...COLD_USAGE, event: data });
+
+    event({ type: 'turnStarted', at: 1 });
+    event({
+      type: 'compactionEnded',
+      at: 2,
+      trigger: 'app',
+      outcome: 'failed',
+      beforeTokens: null,
+      durationMs: null,
+    });
+    part.flows.set('s1', WAITING_FLOW);
+    expect(part.compacts).toHaveLength(1);
+
+    event({ type: 'turnStarted', at: 3 });
+    part.flows.set('s1', { ...WAITING_FLOW, turnRunning: true });
+    part.flows.set('s1', WAITING_FLOW);
+
+    expect(part.compacts).toHaveLength(2);
+  });
+
+  it('agentWait_SettingZero_CompactsNothing', () => {
+    const part = startPart();
+    part.setting.agentWaitMinTokens = 0;
+    part.harness.emit('chat.agentEvent', usageOf(214_000));
+
+    part.flows.set('s1', WAITING_FLOW);
+
+    expect(part.compacts).toEqual([]);
   });
 });
