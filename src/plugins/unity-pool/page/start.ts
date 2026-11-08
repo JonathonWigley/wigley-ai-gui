@@ -80,8 +80,9 @@ interface HeldWrapper {
 // `unity-pool.layout` layout. Reads the pools from `unity-pool.snapshot`, each
 // row's match keys from `sessions.rows` and the shown session from
 // `sessions.active`; asks main for the shown
-// session's folder's origin name once per folder while any pool exists. Hold
-// and Release run through main, one at a time per clone, each clone's last
+// session's folder's origin name once per folder while any pool exists. A
+// holder's click selects its row through `sessions.activate`. Hold and Release
+// run through main, one at a time per clone, each clone's last
 // result kept until the page reloads. Redraws all at `core.pageReady`, on each of
 // those, on each layouts set and once a minute for the times. Logs each row's badges and the
 // panel's showing, hiding and counts when they change, and a Hold or Release
@@ -246,9 +247,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
 
     const drawPanel = (pool: PoolState, now: number) => {
       const input = withShownPaths(
-        panelInput(pool, [...rows.all().values()], now, pendingOf(pool.pool), {
-          select: (sessionId) => sessions.activate(sessionId),
-        }),
+        panelInput(pool, [...rows.all().values()], now, pendingOf(pool.pool)),
       );
       const last = panel;
       panel = null;
@@ -380,6 +379,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       commands: {
         hold: ({ arg }) => runAction(arg.pool, 'hold', arg.clone),
         release: ({ arg }) => runAction(arg.pool, 'release', arg.clone),
+        selectHolder: ({ arg }) => sessions.activate(arg),
       },
       dispose() {
         isDisposed = true;

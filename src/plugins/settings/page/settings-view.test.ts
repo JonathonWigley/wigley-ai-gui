@@ -15,7 +15,7 @@ import {
 } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
-  type FakeElement,
+  FakeElement,
   type FocusFakeDocument,
   type FocusFakeElement,
   findAll,
@@ -96,7 +96,9 @@ function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
 // named, and `handed`: each scope set and each focus target handed over, in
-// order. The side bar shows unless `isSideBarShown` is false.
+// order. `runs` holds each command a click ran with its arg, `logs` each line
+// logged and `picked` the count of `sectionPicked` calls. The side bar shows
+// unless `isSideBarShown` is false.
 async function shownView(
   isSideBarShown = true,
   schema = SCHEMA,
@@ -107,6 +109,9 @@ async function shownView(
   const anchor = () => ({ dispose: () => undefined });
   const { anchors, keys } = recordingAnchors();
   const handed: (string | FocusTarget)[] = [];
+  const runs: [string, unknown][] = [];
+  const logs: string[] = [];
+  const picked = { count: 0 };
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
@@ -125,7 +130,7 @@ async function shownView(
       argShape: () => undefined,
       run: () => undefined,
     },
-    log: () => undefined,
+    log: (line) => logs.push(line),
     toast: () => undefined,
     setScope: (scope) => handed.push(scope),
     setFocusTarget: (target) => handed.push(target),
@@ -142,7 +147,10 @@ async function shownView(
     }),
     anchor,
     sectionShown: () => undefined,
-    sectionPicked: () => undefined,
+    sectionPicked: () => {
+      picked.count += 1;
+    },
+    runKey: (key, arg) => runs.push([key.id, arg]),
   });
   await view.load();
   view.shown();
@@ -162,6 +170,9 @@ async function shownView(
     anchors,
     handed,
     move,
+    runs,
+    logs,
+    picked,
     sheet: asFake(view.sheet),
   };
 }
@@ -412,4 +423,73 @@ describe('createSettingsView', () => {
 
     expect(findAll(sheet, 'settings-box')).toHaveLength(1);
   });
+
+  it.each([
+    {
+      where: 'outside its box',
+      inBox: false,
+      runs: [['settings.moveToRow', 'p.name']],
+    },
+    { where: 'inside its box', inBox: true, runs: [] },
+  ])(
+    'rowClick_InsideBoxOrOutside_RunsMoveToRowOnlyOutside: $where',
+    async ({ inBox, runs: expected }) => {
+      vi.stubGlobal('Element', FakeElement);
+      const { view, sheet, runs } = await shownView();
+      view.commands.edit();
+      await settle();
+      const [row] = findAll(sheet, 'settings-row');
+      const target = inBox ? only(row, 'settings-box') : row;
+
+      row.fire('click', { target });
+
+      expect(runs).toEqual(expected);
+    },
+  );
+
+  it.each([
+    { name: 'a box open', opensBox: true, key: 'p.mode' },
+    { name: 'an unknown key', opensBox: false, key: 'p.gone' },
+  ])(
+    'moveToRow_BoxOpenOrUnknownKey_LeavesTheCursor: $name',
+    async ({ opensBox, key }) => {
+      const { view, sheet, logs } = await shownView();
+      if (opensBox) {
+        view.commands.edit();
+        await settle();
+      }
+      const logsBefore = logs.length;
+
+      view.moveToRow(key);
+
+      const cursorRows = findAll(sheet, 'settings-row').filter((row) =>
+        row.classList.contains('is-selected'),
+      );
+      expect(cursorRows.map((row) => row.textContent)).toEqual([
+        expect.stringContaining('Name'),
+      ]);
+      expect(logs.slice(logsBefore)).toEqual(opensBox ? [] : [`no row ${key}`]);
+    },
+  );
+
+  it.each([
+    { name: 'a held index', index: 1, opened: 'section keymap', picks: 1 },
+    {
+      name: 'an index with no section',
+      index: 9,
+      opened: 'no section 9',
+      picks: 0,
+    },
+  ])(
+    'openSectionAt_Index_OpensAndCallsSectionPicked: $name',
+    async ({ index, opened, picks }) => {
+      const { view, logs, picked } = await shownView();
+      const logsBefore = logs.length;
+
+      view.openSectionAt(index);
+
+      expect(logs.slice(logsBefore)).toContain(opened);
+      expect(picked.count).toBe(picks);
+    },
+  );
 });

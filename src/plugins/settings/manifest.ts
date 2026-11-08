@@ -3,7 +3,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // Settings mode: every setting and key bind the user config holds, browsed by
 // section and edited in place, each edit written to the user's
 // `settings.json` or `keymap.json` layer. `show` runs in main so the app menu
-// accelerator `Cmd+,` reaches it.
+// accelerator `Cmd+,` reaches it. `moveToRow` and `openSectionAt` are the
+// clicks on a row and a section, each naming its target, so neither has a key.
 export const settingsManifest = definePlugin({
   id: 'settings',
   dependsOn: { main: [], page: [] },
@@ -40,6 +41,18 @@ export const settingsManifest = definePlugin({
     pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
     pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
     pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    moveToRow: {
+      label: 'move the cursor to this row',
+      group: 'settings',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    openSectionAt: {
+      label: 'open this section',
+      group: 'settings',
+      runsIn: 'page',
+      arg: 'number',
+    },
   },
   scopes: {
     sections: 'In settings sections',

@@ -13,6 +13,7 @@ import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createBaseKit,
+  keyRunner,
   kitCommandsOf,
   type OwnerKitServices,
   ownerBaseKitDeps,
@@ -210,6 +211,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         paths: services.paths,
         toast: services.toast,
         openExternal: services.openExternal,
+        runKey: keyRunner(api.commands, log),
         drops: api.drops,
         starred,
         now: () => services.clock.now(),
@@ -558,6 +560,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       view.commands[command]();
     };
 
+    // The view a click's command names, which acts whether or not it is the
+    // active one; null, logged, for a view that is gone.
+    const viewNamed = (viewId: string, short: string): DocsView | null => {
+      const view =
+        viewId === machineViewId ? machineView : addedViews.get(viewId)?.view;
+      if (view === undefined) {
+        log(`${short} for unknown view ${viewId} ignored`);
+        return null;
+      }
+      return view;
+    };
+
     // The core logs the side bar's hiding and showing.
     const showMode = () => {
       if (!mode.isShown()) {
@@ -620,6 +634,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           }
           view.editSectionAt(arg.anchor);
         },
+        switchTreeView: ({ arg }) =>
+          viewNamed(arg.viewId, 'switchTreeView')?.switchTreeView(),
+        openNode: ({ arg }) =>
+          viewNamed(arg.viewId, 'openNode')?.openNode(arg.nodeId),
+        followLink: ({ arg: { viewId, ...link } }) =>
+          viewNamed(viewId, 'followLink')?.followLink(link),
+        openListRow: ({ arg }) =>
+          viewNamed(arg.viewId, 'openListRow')?.openListRow(arg.entryId),
+        createMain: ({ arg }) =>
+          viewNamed(arg.viewId, 'createMain')?.createMain(),
+        answerConfirm: ({ arg }) =>
+          viewNamed(arg.viewId, 'answerConfirm')?.answerConfirm(arg.answer),
         prevSection: onActiveView('prevSection'),
         nextSection: onActiveView('nextSection'),
         historyBack: onActiveView('historyBack'),

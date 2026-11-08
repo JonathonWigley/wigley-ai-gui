@@ -216,7 +216,8 @@ function drawTicket(parent, ticket, kit) {
 }
 
 // A session holder with a row is a link-styled click that selects the row and
-// takes no focus; any other holder is plain text.
+// takes no focus; any other holder is plain text. The runner is made here, as
+// the part builds, so a bad command throws then.
 /**
  * @param {HTMLElement} parent
  * @param {import('../layout').HolderInput} holder
@@ -224,13 +225,13 @@ function drawTicket(parent, ticket, kit) {
  */
 function drawHolder(parent, holder, kit) {
   const element = kit.el(parent, 'span', 'unity-pool-holder', holder.label);
-  const select = holder.select;
-  if (select === null) {
+  if (holder.sessionId === null) {
     return;
   }
+  const showSession = kit.command('unity-pool.selectHolder', holder.sessionId);
   element.classList.add('is-link');
   element.addEventListener('mousedown', (event) => event.preventDefault());
-  element.addEventListener('click', () => select());
+  element.addEventListener('click', () => showSession());
 }
 
 export default layout;

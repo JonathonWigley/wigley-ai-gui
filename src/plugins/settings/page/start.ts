@@ -9,7 +9,10 @@ import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
 import { readSettingsLayout } from './layout/read-layout';
 import { createSettingsView } from './settings-view';
-import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 
 type SettingsApi = PageApi<typeof settingsManifest, SettingsChannel>;
 
@@ -49,6 +52,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       sectionShown: (title) => mode.setContext({ title: TITLE, detail: title }),
       // A section opened from the side bar closes its overlay.
       sectionPicked: () => mode.picked(),
+      runKey: keyRunner(api.commands, log),
     });
 
     // `isSideBarShown`, `sectionShown` and `sectionPicked` read `mode` only
@@ -94,7 +98,12 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     };
 
     return {
-      commands: { showMode, ...view.commands },
+      commands: {
+        showMode,
+        ...view.commands,
+        moveToRow: ({ arg }) => view.moveToRow(arg),
+        openSectionAt: ({ arg }) => view.openSectionAt(arg),
+      },
     };
   },
 };

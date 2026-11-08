@@ -61,6 +61,8 @@ export interface TreeViewDeps {
   openWikiLink(link: TreeWikiLink, focusDoc: boolean): void;
   // A click on the `sidebarSwitch`.
   switchView(): void;
+  // A click on the row of the node `nodeId`.
+  rowClicked(nodeId: string): void;
   // Pushes `docs.box` while the filter box is open.
   pushBoxScope(): PushedScope;
   // Runs once an accepted or cancelled filter box, or one holding focus through
@@ -146,6 +148,9 @@ export interface TreeView {
   // empty tree.
   top(): void;
   bottom(): void;
+  // A row's click: selects the row of `nodeId`, focuses the pane, then opens
+  // the row as `l` does; logs and selects nothing when no row shows the node.
+  openNode(nodeId: string): void;
   // The shown view's selected row's node, or null when no row is selected.
   selected(): TreeNode | null;
   // The selected row's node in `view`, shown or not, or null when no row is
@@ -452,12 +457,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     for (const part of placing) {
       part.placeIfLeftOut(item);
     }
-    rowAction(item, () => {
-      const slot = shownSlot();
-      slot.state = { ...slot.state, selectedId: row.node.id };
-      pane.focus();
-      view.open();
-    });
+    rowAction(item, () => deps.rowClicked(row.node.id));
     const isSelected = row.node.id === shownSlot().state.selectedId;
     item.classList.toggle('is-selected', isSelected);
     item.classList.toggle('is-cursor', isSelected && hasFocus);
@@ -621,6 +621,16 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     open: () => actOnSelected('open'),
     close: () => actOnSelected('close'),
     toggle: () => actOnSelected('toggle'),
+    openNode(nodeId) {
+      if (!rows.some((row) => row.node.id === nodeId)) {
+        deps.log(`no row ${nodeId}`);
+        return;
+      }
+      const slot = shownSlot();
+      slot.state = { ...slot.state, selectedId: nodeId };
+      pane.focus();
+      view.open();
+    },
     selected: () => selectedRow()?.node ?? null,
     selectedIn(shown) {
       const slot = slots[shown];

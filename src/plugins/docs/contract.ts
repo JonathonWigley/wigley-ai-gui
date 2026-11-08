@@ -274,6 +274,42 @@ export const docsEditSectionAtCommand: CommandKey<
   'docs.editSectionAt'
 > = { id: 'docs.editSectionAt' };
 
+// A click in the docs view `viewId`, each acting in that view.
+export const docsOpenNodeCommand: CommandKey<
+  { viewId: string; nodeId: string },
+  'docs.openNode'
+> = { id: 'docs.openNode' };
+
+// A link's own data: `href` for a rendered link, else `docPath` and `docLine`
+// ('' for none); `title` is its text.
+export type DocsLinkClick = {
+  viewId: string;
+  href: string;
+  docPath: string;
+  docLine: string;
+  title: string;
+};
+
+export const docsFollowLinkCommand: CommandKey<
+  DocsLinkClick,
+  'docs.followLink'
+> = { id: 'docs.followLink' };
+
+export const docsSwitchTreeViewCommand: CommandKey<
+  { viewId: string },
+  'docs.switchTreeView'
+> = { id: 'docs.switchTreeView' };
+
+export const docsOpenListRowCommand: CommandKey<
+  { viewId: string; entryId: string },
+  'docs.openListRow'
+> = { id: 'docs.openListRow' };
+
+export const docsCreateMainCommand: CommandKey<
+  { viewId: string },
+  'docs.createMain'
+> = { id: 'docs.createMain' };
+
 export const docsPageKey: DependencyKey<DocsPageExports, 'page', 'docs'> = {
   id: 'docs',
   process: 'page',

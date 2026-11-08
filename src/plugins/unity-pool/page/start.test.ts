@@ -54,9 +54,11 @@ const UNHELD_CLONE: PoolClone = {
 };
 
 // The part on the harness, over fakes that file each handle with
-// `consumer.track` as the real views do. `invoke` answers main's channel.
+// `consumer.track` as the real views do. `invoke` answers main's channel, and
+// `activated` takes each row id the sessions fake is asked to activate.
 function startOnHarness(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
+  activated: string[] = [],
 ) {
   return startPagePart(unityPoolPagePart, {
     invoke,
@@ -65,7 +67,9 @@ function startOnHarness(
         sessionsPageKey,
         (consumer) =>
           ({
-            activate() {},
+            activate(sessionId: string) {
+              activated.push(sessionId);
+            },
             addRowPart: () => consumer.track({ dispose() {} }),
           }) as unknown as SessionsPageExports,
       ),
@@ -179,6 +183,49 @@ describe('unityPoolPagePart', () => {
     runs(harness.started().commands);
 
     expect(runsSent).toEqual(sent);
+  });
+
+  it('selectHolder_RunsActivateWithTheRow', async () => {
+    const activated: string[] = [];
+    const harness = startOnHarness(() => Promise.resolve(null), activated);
+    const panels: HTMLElement[] = [];
+    const drawsDefault: Layout = {
+      panel(parent, input, kit) {
+        const drawn = defaultLayout.panel(parent, input, kit);
+        panels.push(drawn.element);
+        return drawn;
+      },
+    };
+    harness.showLayouts({
+      layouts: new Map<string, Layout>([
+        ['default', defaultLayout],
+        ['drawsDefault', drawsDefault],
+      ]),
+      user: 'drawsDefault',
+    });
+    const claimed: PoolClone = {
+      ...UNHELD_CLONE,
+      claim: {
+        kind: 'agent',
+        session: 'host-1',
+        row: ROW_ID,
+        since: 0,
+        renewedAt: 0,
+      },
+    };
+    harness.state.publish(unityPoolSnapshotSlot).set({
+      pools: [{ pool: 'p', updatedAt: 0, clones: [claimed], queue: [] }],
+    });
+    harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
+    harness.state.publish(sessionsActiveSlot).set(ROW_ID);
+    harness.emit('core.pageReady', null);
+    const holder = panels
+      .at(-1)
+      ?.querySelector<HTMLElement>('.unity-pool-holder.is-link');
+
+    holder?.click();
+
+    await vi.waitFor(() => expect(activated).toEqual([ROW_ID]));
   });
 
   it('run_RejectedCall_ShowsItsError', async () => {

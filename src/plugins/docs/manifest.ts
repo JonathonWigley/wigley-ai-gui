@@ -60,6 +60,47 @@ export const docsManifest = definePlugin({
       group: 'view',
       runsIn: 'page',
     },
+    // The commands below with a `viewId` are the clicks of one docs view: a
+    // click acts in the view that drew what it clicked, the active one or not.
+    switchTreeView: {
+      label: 'switch this tree between the wiki and All pages',
+      group: 'view',
+      runsIn: 'page',
+      arg: { viewId: 'string' },
+    },
+    openNode: {
+      label: 'open this row',
+      group: 'tree',
+      runsIn: 'page',
+      arg: { viewId: 'string', nodeId: 'string' },
+    },
+    // `href` is a rendered link's own; a section link, an On this page or
+    // Linked from row and a Recent changes page name `docPath` instead, and
+    // `docLine` the 1-based line or ''. `title` is the link's text.
+    followLink: {
+      label: 'follow this link',
+      group: 'doc',
+      runsIn: 'page',
+      arg: {
+        viewId: 'string',
+        href: 'string',
+        docPath: 'string',
+        docLine: 'string',
+        title: 'string',
+      },
+    },
+    openListRow: {
+      label: 'open this list row',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', entryId: 'string' },
+    },
+    createMain: {
+      label: 'create the Main page',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string' },
+    },
     backToTree: { label: 'back to the tree', group: 'focus', runsIn: 'page' },
     scrollDown: { label: 'scroll down', group: 'doc', runsIn: 'page' },
     scrollUp: { label: 'scroll up', group: 'doc', runsIn: 'page' },
@@ -126,6 +167,14 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     confirmNo: { label: 'keep it', group: 'confirm', runsIn: 'page' },
+    // A Trash button's click: the prompt of the view that drew it takes
+    // `answer`, `yes` or `no`; the keys answer the active view's.
+    answerConfirm: {
+      label: 'answer this Trash prompt',
+      group: 'confirm',
+      runsIn: 'page',
+      arg: { viewId: 'string', answer: 'string' },
+    },
   },
   scopes: {
     tree: 'In the docs tree',

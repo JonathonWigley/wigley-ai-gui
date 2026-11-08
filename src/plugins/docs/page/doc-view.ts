@@ -27,6 +27,7 @@ import { rowAction } from '../../../shared/page/ui/row';
 import {
   type DocsChannel,
   docsEditSectionAtCommand,
+  type DocsLinkClick,
   type IndexEntry,
   type IndexLink,
 } from '../contract';
@@ -109,6 +110,9 @@ export interface DocTarget {
   fragment: string | null;
 }
 
+// A link a click follows, by `docs.followLink`'s fields but its view.
+export type DocLink = Omit<DocsLinkClick, 'viewId'>;
+
 export interface DocViewDeps {
   viewId: string;
   channel: PageChannel<DocsChannel>;
@@ -146,6 +150,13 @@ export interface DocViewDeps {
   openListEntry(entryId: string): void;
   // Creates the Main page the empty Main page offers.
   createMain(): void;
+  // A click on a link: one in the rendered body, an On this page or Linked
+  // from row, or a Recent changes page.
+  linkClicked(link: DocLink): void;
+  // A click on a list page's row, by its entry id.
+  listRowClicked(entryId: string): void;
+  // A click on the empty Main page's `create it` offer.
+  mainOfferClicked(): void;
   // Acts on a `wiki:` or `wigley:` link in the rendered body with the link's
   // text; false when it is no link this view acts on.
   followWikiLink(href: string, title: string): boolean;
@@ -235,6 +246,14 @@ export interface DocView {
   // click asks: refused while the open editor holds unsaved edits, and a clean
   // editor closes first.
   editSectionAt(anchor: string): void;
+  // Follows `link` from the shown doc as its click asks: an external link
+  // opens in the browser, a heading or a place in the shown file moves within
+  // it, another file opens, and a `wiki:` or `wigley:` link goes to
+  // `followWikiLink`; logs and does nothing while no doc shows.
+  followLink(link: DocLink): void;
+  // Moves the shown list page's cursor to the row of `entryId` and opens it, as
+  // the row's click asks; logs and does nothing when no shown row holds it.
+  openListRow(entryId: string): void;
   // Scrolls to the next or previous heading in the file's order, logging where
   // it landed or why it stayed.
   moveSection(direction: 1 | -1): void;
@@ -463,7 +482,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   anchors.push(
     deps.anchor(mainHint, 'edit', { scope: 'doc', label: 'create it' }),
   );
-  rowAction(mainHint, () => deps.createMain());
+  rowAction(mainHint, () => deps.mainOfferClicked());
   const emptySlot = partSlot();
   const frameSlot = partSlot();
   const headerSlot = partSlot();
@@ -489,17 +508,30 @@ export function createDocView(deps: DocViewDeps): DocView {
     paths: deps.paths,
     homeDir: deps.homeDir,
     log: deps.log,
-    moveToLine: (line) => moveWithinDoc(line, null),
-    followLink: (path, line) => deps.followFile(path, line, null),
+    moveToLine: (line) =>
+      deps.linkClicked({
+        href: '',
+        docPath: shown?.target.path ?? '',
+        docLine: String(line),
+        title: '',
+      }),
+    followLink: (path, line) =>
+      deps.linkClicked({
+        href: '',
+        docPath: path,
+        docLine: String(line),
+        title: '',
+      }),
   });
   const body = element('div', 'md docs-body');
   const bodyMount = createMarkdownMount(deps.markdown, deps.log);
-  body.addEventListener('click', followLink);
+  body.addEventListener('click', linkClicked);
   const editorBox = element('div', 'docs-editor');
   const listPane = createListPane({
     slot: pageSlot,
     parts,
     openEntry: (entryId) => deps.openListEntry(entryId),
+    rowClicked: (entryId) => deps.listRowClicked(entryId),
   });
   pane.addEventListener('focusin', () => listPane.setFocused(true));
   pane.addEventListener('focusout', (event) => {
@@ -784,7 +816,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     drawnMainEmpty = null;
   };
 
-  // A recent page's link: outside the body, so `followLink` does not hear it.
+  // A recent page's link: outside the body, so `linkClicked` does not hear it.
   const recentPageLink = (
     parent: HTMLElement,
     title: string,
@@ -795,7 +827,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     link.title = deps.paths.tilde(path, deps.homeDir);
     link.addEventListener('click', (event) => {
       event.preventDefault();
-      deps.followFile(path, null, null);
+      deps.linkClicked({ href: '', docPath: path, docLine: '', title });
     });
     parent.append(link);
     return link;
@@ -1050,27 +1082,47 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
   };
 
-  // Where `anchor` leads: a section link holds its target, any other its href.
-  const linkTargetOf = (anchor: HTMLElement, fromFile: string): LinkTarget => {
-    const { docPath, docLine, href } = anchor.dataset;
-    return docPath === undefined
-      ? resolveLink(href ?? '', fromFile, deps.homeDir, deps.paths)
-      : {
-          type: 'file',
-          path: docPath,
-          line: docLine === undefined ? null : Number(docLine),
-          fragment: null,
-        };
+  // Where `link` leads: one naming a doc holds its target, any other its href;
+  // null for a line that is no whole number.
+  const linkTargetOf = (link: DocLink, fromFile: string): LinkTarget | null => {
+    if (link.docPath === '') {
+      return resolveLink(link.href, fromFile, deps.homeDir, deps.paths);
+    }
+    const line = link.docLine === '' ? null : Number(link.docLine);
+    return line === null || Number.isInteger(line)
+      ? { type: 'file', path: link.docPath, line, fragment: null }
+      : null;
   };
 
-  function followLink(event: MouseEvent) {
+  // A section link holds its target in `data-doc-path` and `data-doc-line`,
+  // any other link its `data-href`.
+  function linkClicked(event: MouseEvent) {
     const anchor = (event.target as Element).closest<HTMLElement>('a.md-link');
     if (anchor === null || shown === null) {
       return;
     }
     event.preventDefault();
+    const { docPath, docLine, href } = anchor.dataset;
+    deps.linkClicked({
+      href: href ?? '',
+      docPath: docPath ?? '',
+      docLine: docLine ?? '',
+      title: anchor.textContent ?? '',
+    });
+  }
+
+  function followLink(link: DocLink) {
+    const linkText = link.docPath === '' ? link.href : link.docPath;
+    if (shown === null) {
+      deps.log(`no doc open for link ${linkText}`);
+      return;
+    }
     const fromFile = shown.target.path;
-    const target = linkTargetOf(anchor, fromFile);
+    const target = linkTargetOf(link, fromFile);
+    if (target === null) {
+      deps.log(`no line ${link.docLine} for link ${linkText}`);
+      return;
+    }
     switch (target.type) {
       case 'external':
         deps
@@ -1089,7 +1141,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         }
         break;
       case 'unsupported':
-        if (!deps.followWikiLink(target.href, anchor.textContent ?? '')) {
+        if (!deps.followWikiLink(target.href, link.title)) {
           deps.toast(`This link does not open here: ${target.href}`, 'info');
         }
         break;
@@ -1954,6 +2006,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       );
     },
     editSectionAt: (anchor) => clickSection(anchor),
+    followLink,
+    openListRow(entryId) {
+      if (!listPane.openRow(entryId)) {
+        deps.log(`no list row ${entryId}`);
+      }
+    },
     editSection() {
       const doc = shown;
       if (doc === null || refuseReadOnly(doc)) {

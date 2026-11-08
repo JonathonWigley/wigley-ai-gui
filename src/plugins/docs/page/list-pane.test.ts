@@ -43,13 +43,23 @@ function setUp() {
   const slot = asHtml(document.createElement('div') as unknown as FakeElement);
   const { parts } = fakeDocsParts(() => withUser(defaultLayout, plainRows));
   const openEntry = vi.fn();
-  const pane = createListPane({ slot, parts, openEntry });
+  // A click runs `docs.openListRow`, whose handler reaches `openRow`.
+  const clicked: string[] = [];
+  const pane = createListPane({
+    slot,
+    parts,
+    openEntry,
+    rowClicked: (entryId) => {
+      clicked.push(entryId);
+      pane.openRow(entryId);
+    },
+  });
   const rows = () => findAll(asFake(slot), ROW);
   const cursor = () =>
     rows()
       .filter((row) => row.classList.contains('is-selected'))
       .map((row) => row.textContent);
-  return { slot, pane, openEntry, rows, cursor };
+  return { slot, pane, openEntry, clicked, rows, cursor };
 }
 
 describe('createListPane', () => {
@@ -99,7 +109,12 @@ describe('createListPane', () => {
     const slot = asHtml(
       document.createElement('div') as unknown as FakeElement,
     );
-    const pane = createListPane({ slot, parts, openEntry: vi.fn() });
+    const pane = createListPane({
+      slot,
+      parts,
+      openEntry: vi.fn(),
+      rowClicked: () => undefined,
+    });
     pane.show(THREE_ROWS);
 
     expect(() => pane.dispose()).toThrow('row gone');
@@ -164,16 +179,28 @@ describe('createListPane', () => {
     expect(openEntry.mock.calls).toEqual([['b']]);
   });
 
-  it('click_SetsTheCursorAndOpens', () => {
-    const { pane, openEntry, rows, cursor } = setUp();
+  it('click_RunsItsCommandWhichSetsTheCursorAndOpens', () => {
+    const { pane, openEntry, clicked, rows, cursor } = setUp();
     pane.show(THREE_ROWS);
 
     rows()[2].click();
 
-    expect({ opened: openEntry.mock.calls, cursor: cursor() }).toEqual({
-      opened: [['c']],
-      cursor: ['c'],
-    });
+    expect({ clicked, opened: openEntry.mock.calls, cursor: cursor() }).toEqual(
+      { clicked: ['c'], opened: [['c']], cursor: ['c'] },
+    );
+  });
+
+  it('openRow_NoShownRow_ReturnsFalseAndKeepsTheCursor', () => {
+    const { pane, openEntry, cursor } = setUp();
+    pane.show(THREE_ROWS);
+
+    const isOpened = pane.openRow('gone');
+
+    expect({
+      isOpened,
+      opened: openEntry.mock.calls,
+      cursor: cursor(),
+    }).toEqual({ isOpened: false, opened: [], cursor: ['a'] });
   });
 
   it('setFocused_TogglesIsCursorOnTheCursorRow', () => {

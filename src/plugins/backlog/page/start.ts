@@ -9,7 +9,10 @@ import type { BacklogLayout } from '../layouts/layout';
 import { backlogManifest } from '../manifest';
 import { createBacklogView } from './backlog-view';
 import { readBacklogLayout } from './layout/read-layout';
-import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 
 type BacklogApi = PageApi<typeof backlogManifest, BacklogChannel>;
 
@@ -58,6 +61,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
         }
       },
       homePicked: () => mode.picked(),
+      runKey: keyRunner(api.commands, services.log),
       homeShown: (home) =>
         mode.setContext(
           home === null
@@ -110,7 +114,12 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
     };
 
     return {
-      commands: { showMode, ...view.commands },
+      commands: {
+        showMode,
+        ...view.commands,
+        openHomeRow: ({ arg }) => view.openHomeRow(arg),
+        selectRow: ({ arg }) => view.selectRow(arg),
+      },
       dispose: () => view.dispose(),
     };
   },

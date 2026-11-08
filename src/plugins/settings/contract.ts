@@ -1,6 +1,7 @@
 // The settings plugin's channel between its main and page parts: the user
 // config's schema, reads and guarded layer writes, served from main.
 
+import type { CommandKey } from '../../contracts/commands';
 import type { UserKeymap } from '../../contracts/keymap';
 import type { ChannelShape } from '../../contracts/plugin';
 import type {
@@ -30,3 +31,17 @@ export interface SettingsChannel extends ChannelShape {
     show: null;
   };
 }
+
+// Moves the cursor to the row `arg` keys and focuses the rows, as a click on
+// the row does.
+export const settingsMoveToRowCommand: CommandKey<
+  string,
+  'settings.moveToRow'
+> = { id: 'settings.moveToRow' };
+
+// Opens the section at index `arg` of the side bar's list, as a click on it
+// does.
+export const settingsOpenSectionAtCommand: CommandKey<
+  number,
+  'settings.openSectionAt'
+> = { id: 'settings.openSectionAt' };

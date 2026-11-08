@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
@@ -38,7 +39,11 @@ import {
 import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
-import type { SettingsChannel } from '../contract';
+import {
+  type SettingsChannel,
+  settingsMoveToRowCommand,
+  settingsOpenSectionAtCommand,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   AdvancedRowInput,
@@ -204,6 +209,9 @@ export interface SettingsViewDeps {
   sectionShown(title: string): void;
   // Hears each section the user opens from the side bar, by click or Enter.
   sectionPicked(): void;
+  // Runs the command `key` with `arg`, as a click does: a row's click runs
+  // `settings.moveToRow` and a section's `settings.openSectionAt`.
+  runKey<A>(key: CommandKey<A>, arg: A): void;
 }
 
 export type SettingsCommand =
@@ -248,6 +256,13 @@ export interface SettingsView {
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
   commands: Record<SettingsCommand, () => void>;
+  // The cursor moves to the row `key` keys and the rows take focus, unless a
+  // box is open; a key no row holds logs `no row <key>`.
+  moveToRow(key: string): void;
+  // Opens the section at `index` with the side bar's cursor and focus on it,
+  // then tells `sectionPicked`; an index no section holds logs
+  // `no section <index>`.
+  openSectionAt(index: number): void;
 }
 
 // The cursor prompt's label for each action it shows.
@@ -320,12 +335,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
           rollback,
         ),
       ),
-    clicked: (index) => {
-      sectionsCursor = index;
-      focusSections();
-      openSection(index);
-      deps.sectionPicked();
-    },
+    clicked: (index) => deps.runKey(settingsOpenSectionAtCommand, index),
   });
   const rowsSheet = sheet();
   rowsSheet.classList.add('settings-sheet');
@@ -482,8 +492,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     (draw: EntryDraw<I>, parent: HTMLElement, rollback: RollbackDeps) =>
       buildEntry(draw, parent, input, 'rows', services, rollback);
 
-  // Draws `row` into `parent`; a click on it outside its box moves the
-  // cursor to it.
+  // Draws `row` into `parent`; a click on it outside its box runs
+  // `settings.moveToRow` with its key.
   const drawRowEntry = (row: SettingsRow, parent: HTMLElement) => {
     const drawn = drawSettingsRow(row.draw, parent);
     entryDisposes.push(drawn.dispose);
@@ -492,9 +502,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       const isInBox =
         event.target instanceof Element &&
         event.target.closest('.settings-box') !== null;
-      if (!isInBox && openBox === null) {
-        setCursor(row.key);
-        focusRows();
+      if (!isInBox) {
+        deps.runKey(settingsMoveToRowCommand, row.key);
       }
     });
   };
@@ -1094,5 +1103,26 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     },
     sideBarOpenedOver: focusSections,
     commands,
+    moveToRow(key) {
+      if (openBox !== null) {
+        return;
+      }
+      if (!rows.some((row) => row.key === key)) {
+        log(`no row ${key}`);
+        return;
+      }
+      setCursor(key);
+      focusRows();
+    },
+    openSectionAt(index) {
+      if (sectionList()[index] === undefined) {
+        log(`no section ${index}`);
+        return;
+      }
+      sectionsCursor = index;
+      focusSections();
+      openSection(index);
+      deps.sectionPicked();
+    },
   };
 }

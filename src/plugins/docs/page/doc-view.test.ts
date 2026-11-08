@@ -25,6 +25,7 @@ import type {
 import {
   createDocView,
   type DocDetail,
+  type DocLink,
   type DocTarget,
   type DocView,
   type DocViewDeps,
@@ -138,6 +139,8 @@ function docViewOver(
   const writes: [string, number[]][] = [];
   const docWrites: { text: string; expected: string | null }[] = [];
   const anchored: Record<string, HTMLElement> = {};
+  // Each click's command and arg; start.ts sends each to the view it names.
+  const clicks: unknown[][] = [];
   const targets: RecordedTarget[] = [];
   const io = {
     writeBytes: async (): Promise<unknown> => ({ type: 'written' }),
@@ -213,6 +216,18 @@ function docViewOver(
     followPlace: () => undefined,
     openListEntry: () => undefined,
     createMain: () => undefined,
+    linkClicked: (link: DocLink) => {
+      clicks.push(['followLink', link]);
+      view?.followLink(link);
+    },
+    listRowClicked: (entryId: string) => {
+      clicks.push(['openListRow', entryId]);
+      view?.openListRow(entryId);
+    },
+    mainOfferClicked: () => {
+      clicks.push(['createMain']);
+      deps.createMain();
+    },
     followWikiLink: () => false,
     pushConflictScope: fakePushedScope,
     anchor: (anchoring: HTMLElement, command: string) => {
@@ -235,6 +250,7 @@ function docViewOver(
     docWrites,
     targets,
     anchored,
+    clicks,
     io,
   };
 }
@@ -2742,10 +2758,12 @@ describe('createDocView', () => {
       }).toEqual({ parts, isUnderTheBody: true });
     });
 
-    it('pageLink_Click_FollowsTheFile', () => {
-      const { view, deps } = pageView();
+    // Recent changes draws under the Main page's body, so a doc is open.
+    it('pageLink_Click_RunsFollowLinkWhichFollowsTheFile', async () => {
+      const { view, deps, clicks } = pageView();
       const followFile = vi.fn();
       deps.followFile = followFile;
+      await view.open(target(null));
       view.setRecentChanges({
         rows: [
           {
@@ -2759,7 +2777,190 @@ describe('createDocView', () => {
 
       onlyIn(view, 'docs-recent-page').click();
 
-      expect(followFile.mock.calls).toEqual([['/home/one.md', null, null]]);
+      expect({ clicks, followed: followFile.mock.calls }).toEqual({
+        clicks: [
+          [
+            'followLink',
+            { href: '', docPath: '/home/one.md', docLine: '', title: 'One' },
+          ],
+        ],
+        followed: [['/home/one.md', null, null]],
+      });
+    });
+
+    // `followLink` as `docs.followLink`'s handler reaches it, with no click.
+    it.each<{
+      name: string;
+      link: Partial<DocLink>;
+      opened: unknown[];
+      followed: unknown[];
+      toasts: string[];
+    }>([
+      {
+        name: 'external',
+        link: { href: 'https://example.invalid/x' },
+        opened: [['https://example.invalid/x']],
+        followed: [],
+        toasts: [],
+      },
+      {
+        name: 'missing heading',
+        link: { href: '#gone' },
+        opened: [],
+        followed: [],
+        toasts: ['No heading #gone in this doc'],
+      },
+      {
+        name: 'file',
+        link: { href: 'other.md' },
+        opened: [],
+        followed: [['/home/other.md', null, null]],
+        toasts: [],
+      },
+      {
+        name: 'doc path',
+        link: { docPath: '/home/other.md', docLine: '4' },
+        opened: [],
+        followed: [['/home/other.md', 4, null]],
+        toasts: [],
+      },
+      {
+        name: 'unsupported',
+        link: { href: 'wiki:kind/skill', title: 'Skills' },
+        opened: [],
+        followed: [],
+        toasts: ['This link does not open here: wiki:kind/skill'],
+      },
+    ])(
+      'followLink_ByLinkKind_ActsAsTheLinkMeans $name',
+      async ({ link, opened, followed, toasts }) => {
+        vi.stubGlobal('CSS', { escape: (text: string) => text });
+        const shown = pageView();
+        const openExternal = vi.fn(async () => undefined);
+        const followFile = vi.fn();
+        Object.assign(shown.deps, { openExternal, followFile });
+        await shown.view.open(target(null));
+
+        shown.view.followLink({
+          href: '',
+          docPath: '',
+          docLine: '',
+          title: '',
+          ...link,
+        });
+
+        expect({
+          opened: openExternal.mock.calls,
+          followed: followFile.mock.calls,
+          toasts: shown.toasts,
+        }).toEqual({ opened, followed, toasts });
+      },
+    );
+
+    it.each<{ name: string; isOpen: boolean; docLine: string; log: string }>([
+      {
+        name: 'no doc open',
+        isOpen: false,
+        docLine: '4',
+        log: 'no doc open for link /home/other.md',
+      },
+      {
+        name: 'a line that is no number',
+        isOpen: true,
+        docLine: 'x',
+        log: 'no line x for link /home/other.md',
+      },
+    ])(
+      'followLink_NoDocOrBadLine_LogsAndFollowsNothing $name',
+      async ({ isOpen, docLine, log }) => {
+        const shown = pageView();
+        const logs: string[] = [];
+        const followFile = vi.fn();
+        Object.assign(shown.deps, {
+          followFile,
+          log: (line: string) => logs.push(line),
+        });
+        if (isOpen) {
+          await shown.view.open(target(null));
+          logs.length = 0;
+        }
+
+        shown.view.followLink({
+          href: '',
+          docPath: OTHER_DOC,
+          docLine,
+          title: '',
+        });
+
+        expect({ logs, followed: followFile.mock.calls }).toEqual({
+          logs: [log],
+          followed: [],
+        });
+      },
+    );
+
+    it('linkClick_OutsideALink_CallsNothing', async () => {
+      const { view, clicks } = pageView();
+      await view.open(target(null));
+
+      findAll(asFake(view.element), 'docs-body')[0].fire('click', {
+        target: { closest: () => null },
+      });
+
+      expect(clicks).toEqual([]);
+    });
+
+    it('linkClick_SectionLink_RunsFollowLinkWithItsData', async () => {
+      const { view, clicks } = pageView();
+      await view.open(target(null));
+
+      findAll(asFake(view.element), 'docs-body')[0].fire('click', {
+        target: {
+          closest: () => ({
+            dataset: { docPath: OTHER_DOC, docLine: '9' },
+            textContent: 'Other',
+          }),
+        },
+      });
+
+      expect(clicks).toEqual([
+        [
+          'followLink',
+          { href: '', docPath: OTHER_DOC, docLine: '9', title: 'Other' },
+        ],
+      ]);
+    });
+
+    it('mainOfferClick_RunsCreateMain', () => {
+      const { view, deps, clicks } = pageView();
+      const createMain = vi.fn();
+      deps.createMain = createMain;
+      view.showPage({ type: 'mainEmpty', path: '~/Main.md' });
+
+      findAll(asFake(view.element), 'docs-main-hint')[0].click();
+
+      expect({ clicks, created: createMain.mock.calls.length }).toEqual({
+        clicks: [['createMain']],
+        created: 1,
+      });
+    });
+
+    it('openListRow_NoShownRow_LogsAndOpensNothing', () => {
+      const { view, deps } = pageView();
+      const logs: string[] = [];
+      const openListEntry = vi.fn();
+      Object.assign(deps, {
+        openListEntry,
+        log: (line: string) => logs.push(line),
+      });
+      view.showPage(list(['a', 'b']));
+
+      view.openListRow('gone');
+
+      expect({ logs, opened: openListEntry.mock.calls }).toEqual({
+        logs: ['no list row gone'],
+        opened: [],
+      });
     });
 
     it.each([

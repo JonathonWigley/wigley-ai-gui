@@ -292,6 +292,7 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     openHeading: () => undefined,
     openWikiLink: () => undefined,
     switchView: () => undefined,
+    rowClicked: () => undefined,
     pushBoxScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,

@@ -9,6 +9,7 @@ import type {
   PageChannel,
   PageServices,
   PluginAreas,
+  PageStart,
   PushedScope,
   ShownLayouts,
 } from '../../../contracts/plugin';
@@ -113,7 +114,7 @@ export interface NotePopupDeps {
 }
 
 export interface NotePopup {
-  commands: Record<NotesPageCommand, () => void>;
+  commands: PageStart<typeof notesManifest>['commands'];
   // Draws every part again with `shown`, keeping the boxes, their text and
   // focus, an open picker and an open markup session.
   setLayouts(shown: ShownLayouts<Layout>): void;
@@ -361,7 +362,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
             isSelected: position - 1 === state.imageIndex,
           };
         },
-        removeImageAt: (index) => void removeImageAt(index),
       },
     );
   };
@@ -373,7 +373,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         text:
           session === null ? null : sessionChipText(session, paths, homeDir),
       },
-      () => removeSession(),
+      session?.sessionId ?? null,
     );
   };
 
@@ -1225,7 +1225,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     }
   };
 
-  const commands: Record<NotesPageCommand, () => void> = {
+  const commands: PageStart<typeof notesManifest>['commands'] = {
     open() {
       if (phase === 'open') {
         close();
@@ -1290,6 +1290,15 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     pickerList: () => picker.leaveFilter(),
     confirmYes: () => void confirmDiscard(),
     confirmNo: keepDraft,
+    pickColour: ({ arg }) => markupView.pickColourByName(arg),
+    removeImageAt: ({ arg }) => void removeImageAt(arg),
+    removeSession: ({ arg }) => {
+      if (store.get().fields.session?.sessionId === arg) {
+        removeSession();
+      } else {
+        log(`session ${arg} not attached`);
+      }
+    },
   };
   return {
     commands,

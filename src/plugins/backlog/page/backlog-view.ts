@@ -1,5 +1,5 @@
 import type { Timers } from '../../../contracts/ambient';
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandId, CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
@@ -55,7 +55,13 @@ import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { BacklogChannel, BacklogEdit, BacklogHome } from '../contract';
+import {
+  type BacklogChannel,
+  type BacklogEdit,
+  type BacklogHome,
+  backlogOpenHomeRowCommand,
+  backlogSelectRowCommand,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   BacklogLayout,
@@ -115,10 +121,11 @@ type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 
 type BacklogPushedScope = 'box' | 'confirm';
 
-// Every page command but `showMode`, which the page part runs itself.
+// Every page command but `showMode`, which the page part runs itself, and
+// the row clicks, which take an arg.
 export type BacklogCommand = Exclude<
   CommandsRunIn<typeof backlogManifest, 'page'>,
-  'showMode'
+  'showMode' | 'openHomeRow' | 'selectRow'
 >;
 
 // The list split's limits in CSS pixels: the list's opening and least widths,
@@ -169,6 +176,9 @@ export interface BacklogViewDeps {
   revealSideBar(): void;
   // Hears each home the user opens from the side bar, by click or key.
   homePicked(): void;
+  // Runs the command `key` with `arg`, as a click does: a home row's click
+  // runs `backlog.openHomeRow` and an item row's `backlog.selectRow`.
+  runKey<A>(key: CommandKey<A>, arg: A): void;
   // The open home, for the title bar; null with none open.
   homeShown(home: BacklogHome | null): void;
 }
@@ -198,6 +208,12 @@ export interface BacklogView {
   // Ends the list split's observer and `window` listeners.
   dispose(): void;
   commands: Record<BacklogCommand, () => void>;
+  // Opens the home at `root`, then tells `homePicked`; a root no home holds
+  // logs `no home <root>` and changes nothing.
+  openHomeRow(root: string): void;
+  // Selects the row `key` keys and focuses the items; a key no shown row holds
+  // logs `no row <key>` and changes nothing.
+  selectRow(key: string): void;
 }
 
 export function createBacklogView(deps: BacklogViewDeps): BacklogView {
@@ -559,10 +575,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       );
       homeRowDraws.push(drawn);
       const root = drawn.built.element;
-      rowAction(root, () => {
-        dispatch({ type: 'openHome', root: home.root });
-        deps.homePicked();
-      });
+      rowAction(root, () => deps.runKey(backlogOpenHomeRowCommand, home.root));
       root.classList.toggle('is-selected', home.root === state.openRoot);
       root.classList.toggle(
         'is-cursor',
@@ -697,10 +710,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       const drawn = drawRow(shown, actions);
       rowDraws.push(drawn);
       const root = drawn.built.element;
-      rowAction(root, () => {
-        dispatch({ type: 'select', key: shown.key });
-        dispatch({ type: 'focus', focus: 'items' });
-      });
+      rowAction(root, () => deps.runKey(backlogSelectRowCommand, shown.key));
       const isSelected = shown.key === state.selectedKey;
       const isCursor =
         isSelected && state.focus === 'items' && filterScope === null;
@@ -1340,6 +1350,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       split.dispose();
     },
     commands,
+    openHomeRow(root) {
+      if (!orderedHomes(store.get()).some((home) => home.root === root)) {
+        deps.log(`no home ${root}`);
+        return;
+      }
+      dispatch({ type: 'openHome', root });
+      deps.homePicked();
+    },
+    selectRow(key) {
+      if (!visibleRows(store.get(), matcher).some((row) => row.key === key)) {
+        deps.log(`no row ${key}`);
+        return;
+      }
+      dispatch({ type: 'select', key });
+      dispatch({ type: 'focus', focus: 'items' });
+    },
   };
 }
 

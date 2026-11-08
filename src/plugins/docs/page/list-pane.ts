@@ -10,6 +10,8 @@ export interface ListPaneDeps {
   slot: HTMLElement;
   parts: DocsParts;
   openEntry(entryId: string): void;
+  // A click on the row of `entryId`.
+  rowClicked(entryId: string): void;
 }
 
 // A generated list page and its row cursor, which is an entry id kept per place
@@ -25,6 +27,9 @@ export interface ListPane {
   // Steps the cursor through every row in group order, stopping at both ends.
   move(by: 1 | -1): void;
   openCursor(): void;
+  // A row's click: moves the cursor to the row of `entryId` and opens it; false,
+  // doing nothing, when no shown row holds it.
+  openRow(entryId: string): boolean;
   // Whether the page holds focus: the cursor's row shows `is-cursor` while so.
   setFocused(isFocused: boolean): void;
   dispose(): void;
@@ -88,11 +93,7 @@ export function createListPane(deps: ListPaneDeps): ListPane {
           row,
           (kit) => kit,
         );
-        rowAction(part.element, () => {
-          setCursor(content, entryId);
-          markCursor();
-          deps.openEntry(entryId);
-        });
+        rowAction(part.element, () => deps.rowClicked(entryId));
         rows.push({ entryId, part });
       });
     });
@@ -151,6 +152,15 @@ export function createListPane(deps: ListPaneDeps): ListPane {
       if (cursor !== null) {
         deps.openEntry(cursor);
       }
+    },
+    openRow(entryId) {
+      if (shown === null || !rows.some((row) => row.entryId === entryId)) {
+        return false;
+      }
+      setCursor(shown, entryId);
+      markCursor();
+      deps.openEntry(entryId);
+      return true;
     },
     setFocused(isFocused) {
       hasFocus = isFocused;

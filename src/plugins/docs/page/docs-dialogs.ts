@@ -14,6 +14,7 @@ import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { qualify } from '../../../shared/plugin-manifests';
 import type {
   CreateKind,
   CreatePlace,
@@ -29,6 +30,7 @@ import {
   completions,
 } from '../path-completion';
 import type { DocsKit } from '../layouts/layout';
+import { docsManifest } from '../manifest';
 import {
   type DocChangeRecord,
   noPlaceText,
@@ -290,26 +292,29 @@ interface Confirm {
   redraw(): void;
 }
 
-// A Trash answer: a button whose click runs `onClick` and which holds the
-// key hint of `command`, appended to `parent`.
+// A Trash answer: a button whose click runs `answer`, a `docs.answerConfirm`
+// runner, and which holds the key hint of `command`, appended to `parent`.
 function answerButton(
   kit: DocsKit,
   parent: HTMLElement,
   command: 'confirmYes' | 'confirmNo',
   label: string,
   variant: ButtonVariant | undefined,
-  onClick: () => void,
+  answer: () => void,
 ): HTMLButtonElement {
   const hint = kit.keyHint(parent, command);
-  const button = textButton(label, onClick, { variant, hint });
+  const button = textButton(label, answer, { variant, hint });
   parent.append(button);
   return button;
 }
 
+// A click answers through `docs.answerConfirm` for the view `viewId`, so the
+// prompt that drew the button takes it.
 function createConfirm(
   pushScope: () => PushedScope,
   closed: () => void,
   parts: DocsParts,
+  viewId: string,
 ): Confirm {
   const dialog = createDialog('Move to the Trash');
 
@@ -356,7 +361,10 @@ function createConfirm(
             pick === 'yes' ? 'confirmYes' : 'confirmNo',
             label,
             variant,
-            () => answer(pick),
+            kit.command(qualify(docsManifest.id, 'answerConfirm'), {
+              viewId,
+              answer: pick,
+            }),
           ),
       };
     });
@@ -408,6 +416,8 @@ const CREATE_KIND_TITLES: Record<CreateKind, string> = {
 };
 
 export interface DocsDialogsDeps {
+  // The view the dialogs belong to, which a Trash button's click names.
+  viewId: string;
   channel: PageChannel<DocsChannel>;
   homeDir: string;
   paths: Paths;
@@ -502,6 +512,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     () => deps.pushScope('confirm'),
     deps.dialogClosed,
     parts,
+    deps.viewId,
   );
 
   // The picker places the row, appends a trailing element the row left out,

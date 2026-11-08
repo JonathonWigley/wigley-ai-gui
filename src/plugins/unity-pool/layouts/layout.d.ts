@@ -7,9 +7,9 @@
 //
 // The app keeps:
 // - the row part and the right-bar slot, contributed while the shown session has a pool and removed when it has none;
-// - the clicks: a holder's `select` selects its row, and an action's button runs the action's `command` with its
-//   `arg`, which runs `unity-pool hold|release` through main, the clone's `action.running` true until the result
-//   lands in its `result`;
+// - the clicks: a holder's click runs `unity-pool.selectHolder` with its `sessionId`, which selects its row, and an
+//   action's button runs the action's `command` with its `arg`, which runs `unity-pool hold|release` through main, the
+//   clone's `action.running` true until the result lands in its `result`;
 // - no keys and no focus: the panel is mouse-driven and its buttons never take focus;
 // - every redraw: on each pool change, each change of the shown session or its rows, each action result, and once a
 //   minute for the times.
@@ -23,14 +23,15 @@ export interface RowBadgeInput {
   queued: boolean;
 }
 
-// Who holds a clone. `kind` 'session' is a session with a side-bar row, whose click `select` selects that row;
-// 'user' is a hold the user made; 'agent' is a session the app has no row for. `idleMs` is the time since the
-// claim's last renewal, null for a hold, a handoff or a stranded mark.
+// Who holds a clone. `kind` 'session' is a session with a side-bar row, whose id `sessionId` holds:
+// `kit.command('unity-pool.selectHolder', sessionId)` selects that row. 'user' is a hold the user made and 'agent' a
+// session the app has no row for, each with a null `sessionId`. `idleMs` is the time since the claim's last renewal,
+// null for a hold, a handoff or a stranded mark.
 export interface HolderInput {
   kind: 'session' | 'user' | 'agent';
   label: string;
   idleMs: number | null;
-  select: (() => void) | null;
+  sessionId: string | null;
 }
 
 // One clone of the pool. `branch` reads `detached` on a detached HEAD and `unknown` for a clone never probed;

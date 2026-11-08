@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
@@ -19,6 +20,11 @@ import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
   type DocsChannel,
+  docsCreateMainCommand,
+  docsFollowLinkCommand,
+  docsOpenListRowCommand,
+  docsOpenNodeCommand,
+  docsSwitchTreeViewCommand,
   type IndexContext,
   type IndexDocument,
   type IndexEntry,
@@ -45,6 +51,7 @@ import {
 import { parseWikiTarget } from '../wiki-main';
 import {
   type DocDetail,
+  type DocLink,
   type DocTarget,
   type DocView,
   createDocView,
@@ -180,6 +187,16 @@ export interface DocsView {
   // Opens the section whose heading carries `anchor` in the doc pane, as its
   // `edit` control's click asks.
   editSectionAt(anchor: string): void;
+  // The view's clicks, each run by a command that names this view: a tree row
+  // opens, a link is followed, a list page's row opens, the tree's switch
+  // switches, and the empty Main page's offer creates it. `answerConfirm` gives
+  // the open Trash prompt `yes` or `no`, and logs any other answer.
+  openNode(nodeId: string): void;
+  followLink(link: DocLink): void;
+  openListRow(entryId: string): void;
+  switchTreeView(): void;
+  createMain(): void;
+  answerConfirm(answer: string): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
@@ -232,6 +249,8 @@ export interface DocsViewDeps {
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
   openExternal(url: string): Promise<void>;
+  // Runs a command by its key, logging a run that throws: each click runs one.
+  runKey<A>(key: CommandKey<A>, arg: A): void;
   // Where the doc pane's editor registers its drop target.
   drops: Pick<PageDrops, 'addTarget'>;
   // The star set every docs view shares; each view redraws on its toggles.
@@ -553,7 +572,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     openWikiLink: (link: TreeWikiLink, focusesDoc: boolean) =>
       openWikiLink(link, focusesDoc),
-    switchView: () => toggleWikiView(),
+    switchView: () =>
+      deps.runKey(docsSwitchTreeViewCommand, { viewId: deps.viewId }),
+    rowClicked: (nodeId) =>
+      deps.runKey(docsOpenNodeCommand, { viewId: deps.viewId, nodeId }),
     pushBoxScope: () => deps.pushScope('box'),
     filterClosed: () => {
       focused = 'tree';
@@ -630,6 +652,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     openListEntry: (entryId) => void openListEntry(entryId),
     createMain: () => void createMain(),
+    linkClicked: (link) =>
+      deps.runKey(docsFollowLinkCommand, { viewId: deps.viewId, ...link }),
+    listRowClicked: (entryId) =>
+      deps.runKey(docsOpenListRowCommand, { viewId: deps.viewId, entryId }),
+    mainOfferClicked: () =>
+      deps.runKey(docsCreateMainCommand, { viewId: deps.viewId }),
     followWikiLink: (href, title) => followWikiLink(href, title),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
@@ -750,6 +778,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const dialogs = createDocsDialogs({
+    viewId: deps.viewId,
     channel: deps.channel,
     homeDir: deps.homeDir,
     paths: deps.paths,
@@ -1508,6 +1537,20 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       })();
     },
     editSectionAt: (anchor) => doc.editSectionAt(anchor),
+    openNode: (nodeId) => tree.openNode(nodeId),
+    followLink: (link) => doc.followLink(link),
+    openListRow: (entryId) => doc.openListRow(entryId),
+    switchTreeView: () => toggleWikiView(),
+    createMain: () => void createMain(),
+    answerConfirm(answer) {
+      if (answer === 'yes') {
+        dialogs.confirmYes();
+      } else if (answer === 'no') {
+        dialogs.confirmNo();
+      } else {
+        log(`no trash answer ${answer}`);
+      }
+    },
     openMain() {
       if (wikiMain === null) {
         return;

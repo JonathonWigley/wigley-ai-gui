@@ -2,6 +2,7 @@
 // features home's follow-ups, plans and features, read through the docs
 // index, and the follow-up writes and commit the main part makes.
 
+import type { CommandKey } from '../../contracts/commands';
 import type {
   ChannelShape,
   DependencyKey,
@@ -116,6 +117,17 @@ export interface BacklogMainExports {
     images: readonly Uint8Array[],
   ): Promise<BacklogWriteResult>;
 }
+
+// Opens the home whose root is `arg`, as a click on its side bar row does.
+export const backlogOpenHomeRowCommand: CommandKey<
+  string,
+  'backlog.openHomeRow'
+> = { id: 'backlog.openHomeRow' };
+
+// Selects the list row whose key is `arg` and focuses the items, as a click on
+// the row does.
+export const backlogSelectRowCommand: CommandKey<string, 'backlog.selectRow'> =
+  { id: 'backlog.selectRow' };
 
 export const backlogMainKey: DependencyKey<
   BacklogMainExports,

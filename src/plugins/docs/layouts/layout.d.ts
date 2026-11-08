@@ -178,7 +178,8 @@ export interface ConfirmDialogInput {
 export interface ConfirmKit extends DocsKit {
   // The dialog's actions row. The app empties it before each draw.
   actions(): HTMLElement;
-  // A button whose click answers `pick` and which holds `pick`'s key anchor (`confirmYes` / `confirmNo`).
+  // A button whose click runs `docs.answerConfirm` with `pick` for this view, and which holds `pick`'s key anchor
+  // (`confirmYes` / `confirmNo`).
   answer(
     parent: HTMLElement,
     pick: 'yes' | 'no',

@@ -20,6 +20,30 @@ import {
 import { type DocsPageExports, sessionSourceId } from '../contract';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
+import type { DocsView } from './docs-view';
+
+// Each click method a docs view ran, by its view id: a click's command must
+// reach the view its arg names.
+const viewCalls = vi.hoisted(() => [] as [string, string, unknown][]);
+
+vi.mock('./docs-view', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./docs-view')>();
+  const clickMethods = ['openNode', 'followLink', 'answerConfirm'] as const;
+  return {
+    ...original,
+    createDocsView: (deps: Parameters<typeof original.createDocsView>[0]) => {
+      const view: DocsView = original.createDocsView(deps);
+      for (const method of clickMethods) {
+        const real = view[method] as (arg: never) => void;
+        view[method] = ((arg: never) => {
+          viewCalls.push([deps.viewId, method, arg]);
+          real(arg);
+        }) as never;
+      }
+      return view;
+    },
+  };
+});
 
 const projectRow = (sessionId: string) => ({
   sessionId,
@@ -316,6 +340,72 @@ describe('docs page part lifecycle', () => {
     expect(harness.counts().observers - observersOfNone).toBe(
       (observersOfBoth - observersOfNone) / 2,
     );
+    await harness.stop();
+  });
+
+  it.each([
+    {
+      command: 'openNode' as const,
+      arg: { nodeId: 'entry:x' },
+      reached: 'entry:x',
+    },
+    {
+      command: 'followLink' as const,
+      arg: { href: 'a.md', docPath: '', docLine: '', title: 'A' },
+      reached: { href: 'a.md', docPath: '', docLine: '', title: 'A' },
+    },
+    {
+      command: 'answerConfirm' as const,
+      arg: { answer: 'yes' },
+      reached: 'yes',
+    },
+  ])(
+    'clickCommand_ViewIdOfAnAddedView_ActsOnThatView ($command)',
+    async ({ command, arg, reached }) => {
+      const { harness, exportsTo } = startDocsPage();
+      exportsTo(createRegistrations()).addView('extra', {
+        isVisible: () => false,
+      });
+      harness.state.publish(coreModeSlot).set('docs.docs');
+      viewCalls.length = 0;
+      const run = harness.started().commands[command] as (context: {
+        arg: unknown;
+      }) => void;
+
+      run({ arg: { viewId: 'view:1', ...arg } });
+
+      expect(viewCalls).toEqual([['view:1', command, reached]]);
+      await harness.stop();
+    },
+  );
+
+  it('clickCommand_UnknownView_LogsAndActsOnNoView', async () => {
+    const { harness } = startDocsPage();
+    viewCalls.length = 0;
+
+    harness.started().commands.openNode({
+      arg: { viewId: 'view:9', nodeId: 'entry:x' },
+    });
+
+    expect({
+      calls: viewCalls,
+      logged: harness.logs.some(
+        ({ message }) => message === 'openNode for unknown view view:9 ignored',
+      ),
+    }).toEqual({ calls: [], logged: true });
+    await harness.stop();
+  });
+
+  it('answerConfirm_UnknownAnswer_LogsAndAnswersNothing', async () => {
+    const { harness } = startDocsPage();
+
+    harness.started().commands.answerConfirm({
+      arg: { viewId: 'machine', answer: 'maybe' },
+    });
+
+    expect(
+      harness.logs.filter(({ message }) => message.includes('trash answer')),
+    ).toEqual([expect.objectContaining({ message: 'no trash answer maybe' })]);
     await harness.stop();
   });
 
