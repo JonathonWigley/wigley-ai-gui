@@ -628,8 +628,9 @@ export interface KeyHints {
 // ever ends, is waited on only until a time cap after `core.pageReady`, when
 // the restores settle with the count still pending logged. Until they settle,
 // a part cannot tell a restore's key base change from the user's: the user's
-// moves before then leave notes' restored popup open. `onSettled` calls its listener once they settle, or at
-// once when they already have, until its `dispose`.
+// moves before then leave notes' restored popup open. `onSettled` calls its
+// listener once they settle, or at once when they already have, until its
+// `dispose`.
 export interface PageRestores {
   track(restore: Promise<unknown>): void;
   onSettled(listener: () => void): Disposable;
