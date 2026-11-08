@@ -378,12 +378,16 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
       allow: () => undefined,
       deny: () => undefined,
       openImages: () => undefined,
+      expanderClicked: (entryId, place) => list.toggleExpander(entryId, place),
     },
     log,
     toast: (text) => toasts.push(text),
     timers,
     clock,
     pullBack: (queuedId) => pulled.push(queuedId),
+    // As the click's commands do in the app.
+    runClicked: (runId) => list.toggleRun(runId),
+    stopClicked: (stopId) => list.moveFocusTo(stopId),
     turnLine: element('li', TURN_LINE_CLASS),
   });
   const held = new Map<string, ChatEntry>();
@@ -535,6 +539,27 @@ describe('entry list', () => {
     expect(logs).toEqual(row.logs);
     expect(toasts).toEqual(row.toasts);
     expect(disposed).toEqual(row.disposedAnchors);
+  });
+
+  it('moveFocusTo_StopNotInOrder_LeavesTheFocus', () => {
+    const { list, put } = setUpList(defaultShown());
+    [user('u1'), notice('n1')].forEach(put);
+    list.move(-1);
+    const before = list.focused();
+
+    const moved = list.moveFocusTo('no-such-stop');
+
+    expect(moved).toBe(false);
+    expect(list.focused()).toEqual(before);
+    expect(list.moveFocusTo('n1')).toBe(true);
+    expect(list.focused()).toEqual({ kind: 'entry', entry: notice('n1') });
+  });
+
+  it('toggleExpander_EntryWithNoSlot_GivesNothing', () => {
+    const { list, put } = setUpList(defaultShown());
+    put(user('u1'));
+
+    expect(list.toggleExpander('gone', 0)).toBe('nothing');
   });
 });
 

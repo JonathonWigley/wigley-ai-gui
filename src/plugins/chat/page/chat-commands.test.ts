@@ -5,9 +5,26 @@ import {
   MAIN_AGENT_ID,
   type SessionControl,
 } from '../../../contracts/agent';
+import type { CommandArgShape, CommandKey } from '../../../contracts/commands';
 import type { ScrollStep, TextEditor } from '../../../contracts/editor';
+import type { CommandDecl } from '../../../contracts/plugin';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
-import type { ChatSessionState, SlashCommandContext } from '../contract';
+import { checkCommandArg } from '../../../shared/command-args';
+import { defaultKeymap } from '../../keymap';
+import {
+  chatAllowEntryCommand,
+  chatDenyEntryCommand,
+  chatMoveFocusCommand,
+  chatOpenImageCommand,
+  chatPullBackMessageCommand,
+  chatRemoveImageAtCommand,
+  type ChatSessionState,
+  chatToggleExpanderCommand,
+  chatToggleRunCommand,
+  chatToggleSectionCommand,
+  type SlashCommandContext,
+} from '../contract';
+import { chatManifest } from '../manifest';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import {
@@ -175,20 +192,24 @@ function box(text: string) {
 // `invoked` records each call to chat main, `opened` each picker request,
 // `viewed` each image viewer opening, `revealed` each session the tabs
 // reveal, `marked` each session the tabs mark sent, `toasts` each toast and
-// `toastTones` its tone, `allowed` each permission entry allowed and `clipboard`
+// `toastTones` its tone, `allowed` each permission entry allowed,
+// `answered` each allow or deny with its session and entry, and `clipboard`
 // each clipboard write. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
 // commands send matches. Every clipboard write rejects with `clipboardFailure`
-// when one is given. `close` removes the session from the tabs.
+// when one is given. `others` are held sessions whose tabs are not visible.
+// `close` removes the shown session from the tabs.
 function setUp(
   shown: ChatSession,
   refusal?: Error,
   visible = true,
   slashCommands: SlashCommands = createSlashCommands(),
   clipboardFailure?: Error,
+  others: readonly ChatSession[] = [],
 ) {
   const allowed: string[] = [];
+  const answered: [string, string, string][] = [];
   const clipboard: string[] = [];
   const invoked: unknown[][] = [];
   const opened: PickerRequest<unknown>[] = [];
@@ -204,7 +225,9 @@ function setUp(
     markSent: (sessionId: string) => marked.push(sessionId),
     visibleSessionId: () => (visible ? shown.sessionId : null),
     session: (sessionId: string) =>
-      isOpen && sessionId === shown.sessionId ? shown : undefined,
+      isOpen && sessionId === shown.sessionId
+        ? shown
+        : others.find((other) => other.sessionId === sessionId),
     sessionOfEditor: () => undefined,
   } as unknown as ChatTabs;
   const picker = {
@@ -223,8 +246,13 @@ function setUp(
       },
     } as unknown as ChatCommandDeps['channel'],
     permissions: {
-      allow: (_session, entry) => allowed.push(entry.id),
-      deny: () => undefined,
+      allow: (answeredIn, entry) => {
+        allowed.push(entry.id);
+        answered.push(['allow', answeredIn.sessionId, entry.id]);
+      },
+      deny: (answeredIn, entry) => {
+        answered.push(['deny', answeredIn.sessionId, entry.id]);
+      },
     },
     reasonBox: {} as ReasonBox,
     confirm: {} as CloseConfirm,
@@ -252,6 +280,7 @@ function setUp(
     handlers: chatCommandHandlers(deps),
     deps,
     allowed,
+    answered,
     clipboard,
     invoked,
     revealed,
@@ -1213,4 +1242,291 @@ describe('chat commands', () => {
     expect(run.invoked).toEqual([]);
     expect(shown.attachments.images()).toEqual([png]);
   });
+  // A held session other than the shown one, whose tab is not visible; its
+  // entries record each `moveFocusTo` in `moved`.
+  function otherSession(stateFields: Partial<ChatSessionState> = {}) {
+    const other = session(true, undefined, {
+      sessionId: 'row-2',
+      ...stateFields,
+    });
+    const moved: string[] = [];
+    Object.assign(other.entries, {
+      moveFocusTo: (stopId: string) => moved.push(stopId) > 0,
+    });
+    return Object.assign(other, { sessionId: 'row-2', name: 'other', moved });
+  }
+
+  const userWithImages = { ...userEntry, images: [png, jpeg, gif] };
+
+  it.each<{
+    command: string;
+    fields: Partial<ChatSessionState>;
+    act(handlers: ReturnType<typeof setUp>['handlers']): unknown;
+    effect(
+      run: ReturnType<typeof setUp>,
+      other: ReturnType<typeof otherSession>,
+    ): unknown;
+    expected: unknown;
+  }>([
+    {
+      command: 'allowEntry',
+      fields: { entries: [pendingPermission] },
+      act: (handlers) =>
+        handlers.allowEntry({
+          arg: { sessionId: 'row-2', entryId: 'permission-1' },
+        }),
+      effect: (run) => run.answered,
+      expected: [['allow', 'row-2', 'permission-1']],
+    },
+    {
+      command: 'denyEntry',
+      fields: { entries: [pendingPermission] },
+      act: (handlers) =>
+        handlers.denyEntry({
+          arg: { sessionId: 'row-2', entryId: 'permission-1' },
+        }),
+      effect: (run) => run.answered,
+      expected: [['deny', 'row-2', 'permission-1']],
+    },
+    {
+      command: 'removeImageAt',
+      fields: {},
+      act: (handlers) =>
+        handlers.removeImageAt({ arg: { sessionId: 'row-2', index: 0 } }),
+      effect: (_run, other) => other.attachments.images(),
+      expected: [jpeg],
+    },
+    {
+      command: 'pullBackMessage',
+      fields: {},
+      act: (handlers) =>
+        handlers.pullBackMessage({
+          arg: { sessionId: 'row-2', queuedId: 'q-1' },
+        }),
+      effect: (run) => run.invoked,
+      expected: [['pullBack', 'row-2', 'q-1']],
+    },
+    {
+      command: 'openImage',
+      fields: { entries: [userWithImages] },
+      act: (handlers) =>
+        handlers.openImage({
+          arg: { sessionId: 'row-2', entryId: 'entry-1', index: 2 },
+        }),
+      effect: (run) => run.viewed,
+      expected: [{ images: [png, jpeg, gif], index: 2 }],
+    },
+    {
+      command: 'moveFocus',
+      fields: {},
+      act: (handlers) =>
+        handlers.moveFocus({ arg: { sessionId: 'row-2', stopId: 'stop-1' } }),
+      effect: (_run, other) => other.moved,
+      expected: ['stop-1'],
+    },
+  ])(
+    'clickCommand_ArgNamesAnotherSession_ActsOnThatSession: $command',
+    ({ fields, act, effect, expected }) => {
+      const other = otherSession(fields);
+      other.attachments.add(png);
+      other.attachments.add(jpeg);
+      const shown = session(true, undefined, { entries: [pendingPermission] });
+      shown.attachments.add(gif);
+      const run = setUp(shown, undefined, true, undefined, undefined, [other]);
+
+      act(run.handlers);
+
+      expect(effect(run, other)).toEqual(expected);
+      expect(shown.attachments.images()).toEqual([gif]);
+    },
+  );
+
+  it('allowEntry_RangeOpen_AllowsThatEntryAndCopiesNothing', async () => {
+    const shown = session(true, undefined, { entries: [pendingPermission] });
+    Object.assign(shown.entries, {
+      isRangeOpen: () => true,
+      selectedSource: () => ({ text: 'copied', blockCount: 1 }),
+    });
+    const run = setUp(shown);
+
+    run.handlers.allowEntry({
+      arg: { sessionId: 'row-1', entryId: 'permission-1' },
+    });
+    await flush();
+
+    expect(run.allowed).toEqual(['permission-1']);
+    expect(run.clipboard).toEqual([]);
+  });
+
+  it('denyEntry_NewerOfTwoPending_OpensTheReasonBoxForIt', () => {
+    const newer = { ...pendingPermission, id: 'permission-2', at: 2000 };
+    const shown = session(true, undefined, {
+      entries: [pendingPermission, newer],
+    });
+    const run = setUp(shown);
+
+    run.handlers.denyEntry({
+      arg: { sessionId: 'row-1', entryId: 'permission-2' },
+    });
+
+    expect(run.answered).toEqual([['deny', 'row-1', 'permission-2']]);
+  });
+
+  it('openImage_UserEntry_OpensItsImagesAtTheIndex', () => {
+    const shown = session(true, undefined, { entries: [userWithImages] });
+    const run = setUp(shown);
+
+    run.handlers.openImage({
+      arg: { sessionId: 'row-1', entryId: 'entry-1', index: 1 },
+    });
+
+    expect(run.viewed).toEqual([{ images: [png, jpeg, gif], index: 1 }]);
+  });
+
+  const answeredPermission: ChatEntry = {
+    ...pendingPermission,
+    answer: { allowed: true, reason: null },
+  };
+
+  it.each<{
+    case: string;
+    entries: ChatEntry[];
+    act(handlers: ReturnType<typeof setUp>['handlers']): unknown;
+    logs: string[];
+  }>([
+    {
+      case: 'unknown session',
+      entries: [pendingPermission],
+      act: (handlers) =>
+        handlers.allowEntry({
+          arg: { sessionId: 'gone', entryId: 'permission-1' },
+        }),
+      logs: ['allowEntry for unknown session gone ignored'],
+    },
+    {
+      case: 'answered permission',
+      entries: [answeredPermission],
+      act: (handlers) =>
+        handlers.allowEntry({
+          arg: { sessionId: 'row-1', entryId: 'permission-1' },
+        }),
+      logs: ['no pending permission permission-1 in app'],
+    },
+    {
+      case: 'entry not a permission',
+      entries: [userEntry],
+      act: (handlers) =>
+        handlers.denyEntry({ arg: { sessionId: 'row-1', entryId: 'entry-1' } }),
+      logs: ['no pending permission entry-1 in app'],
+    },
+    {
+      case: 'entry not a user entry',
+      entries: [pendingPermission],
+      act: (handlers) =>
+        handlers.openImage({
+          arg: { sessionId: 'row-1', entryId: 'permission-1', index: 0 },
+        }),
+      logs: ['no image 0 in entry permission-1'],
+    },
+    {
+      case: 'no image at the index',
+      entries: [{ ...userEntry, images: [png] }],
+      act: (handlers) =>
+        handlers.openImage({
+          arg: { sessionId: 'row-1', entryId: 'entry-1', index: 1 },
+        }),
+      logs: ['no image 1 in entry entry-1'],
+    },
+  ])(
+    'clickCommand_TargetGone_LogsAndActsOnNothing: $case',
+    ({ entries, act, logs }) => {
+      const run = setUp(session(true, undefined, { entries }));
+
+      act(run.handlers);
+
+      expect(run.logs).toEqual(logs);
+      expect(run.answered).toEqual([]);
+      expect(run.viewed).toEqual([]);
+    },
+  );
+});
+
+// A click command's row: its key, the arg shape its manifest declares, an arg
+// of the key's type and a value the shape refuses.
+function row<A>(
+  key: CommandKey<A>,
+  shape: CommandArgShape,
+  valid: A,
+  invalid: unknown,
+) {
+  return { id: key.id, shape, valid, invalid };
+}
+
+describe('chat click commands', () => {
+  it.each([
+    row(
+      chatAllowEntryCommand,
+      { sessionId: 'string', entryId: 'string' },
+      { sessionId: 's', entryId: 'e' },
+      { sessionId: 's' },
+    ),
+    row(
+      chatDenyEntryCommand,
+      { sessionId: 'string', entryId: 'string' },
+      { sessionId: 's', entryId: 'e' },
+      { sessionId: 's', entryId: 1 },
+    ),
+    row(
+      chatRemoveImageAtCommand,
+      { sessionId: 'string', index: 'number' },
+      { sessionId: 's', index: 1 },
+      { sessionId: 's', index: '1' },
+    ),
+    row(
+      chatToggleRunCommand,
+      { sessionId: 'string', runId: 'string' },
+      { sessionId: 's', runId: 'r' },
+      'r',
+    ),
+    row(
+      chatToggleExpanderCommand,
+      { sessionId: 'string', entryId: 'string', place: 'number' },
+      { sessionId: 's', entryId: 'e', place: 1 },
+      { sessionId: 's', entryId: 'e' },
+    ),
+    row(
+      chatPullBackMessageCommand,
+      { sessionId: 'string', queuedId: 'string' },
+      { sessionId: 's', queuedId: 'q' },
+      { queuedId: 'q' },
+    ),
+    row(chatToggleSectionCommand, 'string', 'part', 1),
+    row(
+      chatOpenImageCommand,
+      { sessionId: 'string', entryId: 'string', index: 'number' },
+      { sessionId: 's', entryId: 'e', index: 0 },
+      { sessionId: 's', entryId: 'e', index: '0' },
+    ),
+    row(
+      chatMoveFocusCommand,
+      { sessionId: 'string', stopId: 'string' },
+      { sessionId: 's', stopId: 'x' },
+      undefined,
+    ),
+  ])(
+    'clickCommands_Manifest_DeclareTheirArgAndNoBind: $id',
+    ({ id, shape, valid, invalid }) => {
+      const declarations = new Map<string, CommandDecl>(
+        Object.entries(chatManifest.commands),
+      );
+      const declared = declarations.get(id.slice('chat.'.length))?.arg;
+
+      expect(declared).toEqual(shape);
+      expect(checkCommandArg(id, declared, valid)).toBeNull();
+      expect(checkCommandArg(id, declared, invalid)).not.toBeNull();
+      expect(defaultKeymap.binds.filter((bind) => bind.command === id)).toEqual(
+        [],
+      );
+    },
+  );
 });

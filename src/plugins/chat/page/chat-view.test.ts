@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
+import type { CommandKey } from '../../../contracts/commands';
 import type { TextEditor } from '../../../contracts/editor';
 import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
@@ -31,15 +32,24 @@ import {
 } from '../contract';
 import { createChatLayouts, type SurfaceKitDeps } from './chat-layouts';
 import { type ChatViewDeps, mountChatView } from './chat-view';
+import type { PermissionEntry } from './chat-state';
+import type { ComposerPieces } from './composer-kit';
+import type { EntryListDeps } from './entry-list';
 import { createSideSections } from './side-sections';
 
 // Each call the view makes to a tab's entry list that draws it, by method name.
 const listCalls = vi.hoisted(() => [] as string[]);
+// What the last tab's `createEntryList` and `createComposerSurface` received.
+const built = vi.hoisted(() => ({
+  entryList: null as EntryListDeps | null,
+  composer: null as ComposerPieces | null,
+}));
 vi.mock('./entry-list', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./entry-list')>();
   return {
     ...actual,
     createEntryList(...args: Parameters<typeof actual.createEntryList>) {
+      built.entryList = args[0];
       const list = actual.createEntryList(...args);
       return {
         ...list,
@@ -56,6 +66,18 @@ vi.mock('./entry-list', async (importOriginal) => {
           list.rebuild(...call);
         },
       };
+    },
+  };
+});
+vi.mock('./composer-kit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./composer-kit')>();
+  return {
+    ...actual,
+    createComposerSurface(
+      ...args: Parameters<typeof actual.createComposerSurface>
+    ) {
+      built.composer = args[1];
+      return actual.createComposerSurface(...args);
     },
   };
 });
@@ -117,6 +139,7 @@ function mounted(
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
+  const keyRuns: [string, unknown][] = [];
   const toasts: [string, string][] = [];
   const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
@@ -239,10 +262,13 @@ function mounted(
       parts: sideParts,
       uiState: { get: () => undefined, set: noEvent },
       timers: { set: () => 0, clear: noEvent },
+      toggleClicked: noEvent,
       log,
     }),
     ...kit,
     run: noEvent,
+    runKey: (key: CommandKey<unknown>, arg: unknown) =>
+      keyRuns.push([key.id, arg]),
     clock: { now: () => 5000 },
     timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
@@ -268,6 +294,7 @@ function mounted(
     sideParts,
     composerParts,
     invoked,
+    keyRuns,
     logs,
     toasts,
     activities,
@@ -944,5 +971,79 @@ describe('mountChatView slots', () => {
     view.setInfo('row-1', { activity: 'idle' });
 
     expect(view.activities.at(-1)).toBe(word);
+  });
+});
+
+describe('mountChatView click sites', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const PERMISSION: PermissionEntry = {
+    kind: 'permission',
+    id: 'p1',
+    at: 1000,
+    toolName: 'Bash',
+    input: {},
+    answer: null,
+    raw: [],
+  };
+
+  it.each<{
+    site: string;
+    click(list: EntryListDeps, composer: ComposerPieces): void;
+    run: [string, unknown];
+  }>([
+    {
+      site: 'Allow once',
+      click: (list) => list.kit.allow(PERMISSION),
+      run: ['chat.allowEntry', { sessionId: 'row-2', entryId: 'p1' }],
+    },
+    {
+      site: 'Deny',
+      click: (list) => list.kit.deny(PERMISSION),
+      run: ['chat.denyEntry', { sessionId: 'row-2', entryId: 'p1' }],
+    },
+    {
+      site: 'thumbnail',
+      click: (list) => list.kit.openImages('u1', 2),
+      run: ['chat.openImage', { sessionId: 'row-2', entryId: 'u1', index: 2 }],
+    },
+    {
+      site: 'expander head',
+      click: (list) => list.kit.expanderClicked('a1', 1),
+      run: [
+        'chat.toggleExpander',
+        { sessionId: 'row-2', entryId: 'a1', place: 1 },
+      ],
+    },
+    {
+      site: 'activity line',
+      click: (list) => list.runClicked('activity:t1'),
+      run: ['chat.toggleRun', { sessionId: 'row-2', runId: 'activity:t1' }],
+    },
+    {
+      site: 'list click',
+      click: (list) => list.stopClicked('n1'),
+      run: ['chat.moveFocus', { sessionId: 'row-2', stopId: 'n1' }],
+    },
+    {
+      site: 'pending row',
+      click: (list) => list.pullBack('q1'),
+      run: ['chat.pullBackMessage', { sessionId: 'row-2', queuedId: 'q1' }],
+    },
+    {
+      site: 'image remove',
+      click: (_list, composer) => composer.removeImage(3),
+      run: ['chat.removeImageAt', { sessionId: 'row-2', index: 3 }],
+    },
+  ])('clickSites_RunTheirCommandWithTheirArg: $site', ({ click, run }) => {
+    const view = mounted();
+    view.open(stateOf([], { sessionId: 'row-2' }));
+
+    click(built.entryList!, built.composer!);
+
+    expect(view.keyRuns).toEqual([run]);
   });
 });

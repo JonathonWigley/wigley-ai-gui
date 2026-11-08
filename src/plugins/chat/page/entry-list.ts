@@ -35,7 +35,12 @@ import {
   listRows,
   rowStops,
 } from './activity-runs';
-import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
+import {
+  createEntryKit,
+  type EntryKit,
+  type KitDeps,
+  type ToggleResult,
+} from './chat-kit';
 import {
   type ChatLayouts,
   type ChatPartDraws,
@@ -71,8 +76,10 @@ import { resultStepCount } from './working-turn';
 // rows are built with, and say whether runs, steps and results show at all;
 // `toastedKinds` the kinds whose failed draw has toasted since they were
 // shown, shared by every session's list. `timers` and `clock` tick a live
-// activity line's time. `pullBack` is what a click on a pending row calls
-// with its message's id. `turnLine` is the element the list keeps as its row after
+// activity line's time. A click calls `pullBack` on a pending row with its
+// message's id, `runClicked` on an activity line with its run's id, and
+// `stopClicked` with the stop it lands on, unless it is one the cursor leaves
+// (see `EntryList`). `turnLine` is the element the list keeps as its row after
 // the last entry; its owner draws and hides it.
 export interface EntryListDeps {
   layouts: ChatLayouts;
@@ -83,10 +90,10 @@ export interface EntryListDeps {
   timers: Timers;
   clock: Clock;
   pullBack(queuedId: string): void;
+  runClicked(runId: string): void;
+  stopClicked(stopId: string): void;
   turnLine: HTMLElement;
 }
-
-export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
 // What the entry cursor is on: an entry (for a block stop, the entry holding the
 // block), a run's activity line, or a pending row.
@@ -125,9 +132,9 @@ export interface TranscriptScroll extends ContentScroll {
 // too tall to fit, and with no such stop to the nearest that overlaps the band.
 // So a run that overflows moves a following cursor off its line. `latest` makes
 // the same move, since a list already at its bottom fires no scroll. A plain click
-// moves the cursor to the block or slot under it without scrolling; a click
-// ending a text selection, on a link, control or pending row, or on what has no
-// stop leaves it.
+// hands `stopClicked` the block or slot under it, which `moveFocusTo` moves the
+// cursor to without scrolling; a click ending a text selection, on a link,
+// control or pending row, or on what has no slot hands it nothing.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
@@ -200,6 +207,16 @@ export interface EntryList {
   // an entry, opens every expander when any is closed, else closes them all.
   // Null with no focused stop, or on a pending row, which toggles nothing.
   toggleFocused(): { stop: ListStop; result: ToggleResult } | null;
+  // Opens run `runId`'s activity line when closed, else closes it, moving a
+  // focus on one of its steps to its line; `nothing` for a run the list does
+  // not hold.
+  toggleRun(runId: string): ToggleResult;
+  // Toggles entry `entryId`'s expander at creation-order `place`; `nothing`
+  // for an entry with no slot or a place no expander holds.
+  toggleExpander(entryId: string, place: number): ToggleResult;
+  // Moves the cursor to `stopId` without scrolling; false, the focus left as
+  // it was, when `stopId` is no stop now, as a slot whose blocks are its stops.
+  moveFocusTo(stopId: string): boolean;
   // Stops following the list's size, scrolls, clicks and the tick, disposes every
   // entry's kit, every activity line and every pending row, and forgets the open
   // runs; the list's owner calls it when it drops the list.
@@ -515,7 +532,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     const held = runSlots.get(row.runId);
     if (held === undefined) {
       const created = buildRunSlot(row, input, activity, () =>
-        toggleRun(row.runId),
+        deps.runClicked(row.runId),
       );
       runSlots.set(row.runId, created);
       observeSlot(created.element);
@@ -631,7 +648,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   list.addEventListener('scroll', onListScroll);
 
   // The stop a click on `target` lands on: its block, else its slot; a slot with
-  // blocks has no stop of its own, so `order` refuses its padding.
+  // blocks has no stop of its own, so `moveFocusTo` refuses its padding.
   const stopIdOfTarget = (target: Element) => {
     const hit = target.closest('.chat-entry-slot');
     const slotId = [...slots, ...runSlots].find(
@@ -654,9 +671,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return;
     }
     const stopId = stopIdOfTarget(target);
-    if (stopId !== null && order.includes(stopId)) {
-      focus = focusStop(focus, order, stopId);
-      drawFocus('marks');
+    if (stopId !== null) {
+      deps.stopClicked(stopId);
     }
   };
   list.addEventListener('click', onListClick);
@@ -823,6 +839,17 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const opens = expanders.isAnyClosed();
       expanders.setAllOpen(opens);
       return { stop, result: opens ? 'expanded' : 'collapsed' };
+    },
+    toggleRun: (runId) => (runSlots.has(runId) ? toggleRun(runId) : 'nothing'),
+    toggleExpander: (entryId, place) =>
+      slots.get(entryId)?.kit.expanders.toggle(place) ?? 'nothing',
+    moveFocusTo(stopId) {
+      if (!order.includes(stopId)) {
+        return false;
+      }
+      focus = focusStop(focus, order, stopId);
+      drawFocus('marks');
+      return true;
     },
     dispose() {
       list.removeEventListener('scroll', onListScroll);

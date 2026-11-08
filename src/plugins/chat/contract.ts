@@ -10,6 +10,7 @@ import type {
   SessionControl,
   UserMessage,
 } from '../../contracts/agent';
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -646,3 +647,61 @@ export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {
   id: 'chat',
   process: 'page',
 };
+
+// The commands a click runs on what it landed on, each naming the session whose
+// Chat tab holds it. A key on the focused item runs its own command instead.
+
+// Allows the pending permission entry `entryId`, as its Allow once does.
+export const chatAllowEntryCommand: CommandKey<
+  { sessionId: string; entryId: string },
+  'chat.allowEntry'
+> = { id: 'chat.allowEntry' };
+
+// Opens the reason box for the pending permission entry `entryId`.
+export const chatDenyEntryCommand: CommandKey<
+  { sessionId: string; entryId: string },
+  'chat.denyEntry'
+> = { id: 'chat.denyEntry' };
+
+// Removes the attached image at `index`.
+export const chatRemoveImageAtCommand: CommandKey<
+  { sessionId: string; index: number },
+  'chat.removeImageAt'
+> = { id: 'chat.removeImageAt' };
+
+// Opens or closes the activity line of run `runId`.
+export const chatToggleRunCommand: CommandKey<
+  { sessionId: string; runId: string },
+  'chat.toggleRun'
+> = { id: 'chat.toggleRun' };
+
+// Opens or closes entry `entryId`'s expander at creation-order `place`.
+export const chatToggleExpanderCommand: CommandKey<
+  { sessionId: string; entryId: string; place: number },
+  'chat.toggleExpander'
+> = { id: 'chat.toggleExpander' };
+
+// Pulls the pending message `queuedId` back into the box.
+export const chatPullBackMessageCommand: CommandKey<
+  { sessionId: string; queuedId: string },
+  'chat.pullBackMessage'
+> = { id: 'chat.pullBackMessage' };
+
+// Collapses or expands the session hub section of the side part with this id,
+// in every tab.
+export const chatToggleSectionCommand: CommandKey<
+  string,
+  'chat.toggleSection'
+> = { id: 'chat.toggleSection' };
+
+// Opens the image viewer on user entry `entryId`'s images at `index`.
+export const chatOpenImageCommand: CommandKey<
+  { sessionId: string; entryId: string; index: number },
+  'chat.openImage'
+> = { id: 'chat.openImage' };
+
+// Moves the entry cursor to stop `stopId`.
+export const chatMoveFocusCommand: CommandKey<
+  { sessionId: string; stopId: string },
+  'chat.moveFocus'
+> = { id: 'chat.moveFocus' };

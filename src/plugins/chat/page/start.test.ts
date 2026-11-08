@@ -3,7 +3,7 @@ import { coreScopeSlot } from '../../../contracts/core-state';
 import type { EditorHost } from '../../../contracts/editor';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
   noCounts,
@@ -62,11 +62,13 @@ const SESSION: ChatSessionState = {
 
 // Chat's page part on the part harness, over a sessions fake that files each tab
 // with `consumer.track`, as its view does. `destroyEditor` is
-// each editor's `destroy`, and `setActivity` the fake's row activity call.
+// each editor's `destroy`, `setActivity` the fake's row activity call, and
+// `tabAdded` hears each added tab's element.
 function startChatPage(
   destroyEditor: () => void = () => undefined,
   isTabVisible: () => boolean = () => false,
   setActivity: SessionsPageExports['setActivity'] = () => undefined,
+  tabAdded: (element: HTMLElement) => void = () => undefined,
 ) {
   return startPagePart(chatPagePart, {
     invoke: () => Promise.resolve(),
@@ -87,12 +89,14 @@ function startChatPage(
         sessionsPageKey,
         (consumer) =>
           ({
-            addTab: () =>
-              consumer.track({
+            addTab: (_sessionId: string, tab: { element: HTMLElement }) => {
+              tabAdded(tab.element);
+              return consumer.track({
                 dispose() {},
                 select() {},
                 isVisible: isTabVisible,
-              }),
+              });
+            },
             addRowPart: () => consumer.track({ dispose() {} }),
             activate() {},
             setActivity,
@@ -125,6 +129,13 @@ function loadSessions(
   }
   harness.emit('core.pageReady', null);
   return session;
+}
+
+// Lets a command run's settling handlers go.
+async function flushRuns() {
+  for (let turn = 0; turn < 5; turn++) {
+    await Promise.resolve();
+  }
 }
 
 beforeEach(() => {
@@ -240,6 +251,27 @@ describe('chat page part', () => {
     isTabVisible = false;
     scope.set('another.view');
     expect(leave).toHaveBeenCalledOnce();
+    await harness.stop();
+  });
+
+  it('sectionHead_Click_RunsToggleSectionAndCollapsesThePart', async () => {
+    const tabs: HTMLElement[] = [];
+    const harness = startChatPage(
+      () => undefined,
+      () => false,
+      () => undefined,
+      (element) => tabs.push(element),
+    );
+    loadSessions(harness, [SESSION]);
+    const [head] = findAll(asFake(tabs[0]), 'chat-side-section-head');
+
+    head.click();
+    await flushRuns();
+
+    expect(harness.logs).toContainEqual({
+      source: 'chat',
+      message: 'section Main agent collapsed',
+    });
     await harness.stop();
   });
 

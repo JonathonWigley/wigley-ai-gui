@@ -31,10 +31,12 @@ export interface CollapsibleCard {
   setOpen(open: boolean): void;
 }
 
-// A card, or a plain row, whose head toggles its body. Each opening builds the
+// A card, or a plain row, whose head toggles its body; with `headClicked`, a
+// click on the head calls it in place of toggling. Each opening builds the
 // body afresh from `body()`; closing drops it.
 export function createCollapsibleCard(
   options: CollapsibleCardOptions,
+  headClicked?: () => void,
 ): CollapsibleCard {
   let open = false;
   let shownBody: HTMLElement | null = null;
@@ -43,8 +45,10 @@ export function createCollapsibleCard(
   if (options.plain === true) {
     root.classList.add('ui-collapsible--plain');
   }
-  const head = button('ui-collapsible-head', '', () =>
-    collapsible.setOpen(!open),
+  const head = button(
+    'ui-collapsible-head',
+    '',
+    headClicked ?? (() => collapsible.setOpen(!open)),
   );
   let chevron = icon('chevron-right');
   head.append(chevron);

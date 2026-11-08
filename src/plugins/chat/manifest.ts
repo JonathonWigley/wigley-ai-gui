@@ -48,6 +48,24 @@ export const chatManifest = definePlugin({
       group: 'box',
       runsIn: 'page',
     },
+    removeImageAt: {
+      label: 'remove this attached image',
+      group: 'box',
+      runsIn: 'page',
+      arg: { sessionId: 'string', index: 'number' },
+    },
+    pullBackMessage: {
+      label: 'pull back this pending message',
+      group: 'box',
+      runsIn: 'page',
+      arg: { sessionId: 'string', queuedId: 'string' },
+    },
+    openImage: {
+      label: 'open this image',
+      group: 'image',
+      runsIn: 'page',
+      arg: { sessionId: 'string', entryId: 'string', index: 'number' },
+    },
     nextImage: { label: 'next image', group: 'image', runsIn: 'page' },
     prevImage: { label: 'previous image', group: 'image', runsIn: 'page' },
     closeImage: { label: 'close the image', group: 'image', runsIn: 'page' },
@@ -97,6 +115,24 @@ export const chatManifest = definePlugin({
       group: 'entries',
       runsIn: 'page',
     },
+    toggleRun: {
+      label: 'expand or collapse this activity line',
+      group: 'entries',
+      runsIn: 'page',
+      arg: { sessionId: 'string', runId: 'string' },
+    },
+    toggleExpander: {
+      label: 'expand or collapse this part of the entry',
+      group: 'entries',
+      runsIn: 'page',
+      arg: { sessionId: 'string', entryId: 'string', place: 'number' },
+    },
+    moveFocus: {
+      label: 'move the cursor to this stop',
+      group: 'entries',
+      runsIn: 'page',
+      arg: { sessionId: 'string', stopId: 'string' },
+    },
     allowOrCopy: {
       label: 'allow the tool once, or copy',
       group: 'permissions',
@@ -106,6 +142,18 @@ export const chatManifest = definePlugin({
       label: 'deny the tool, with a reason',
       group: 'permissions',
       runsIn: 'page',
+    },
+    allowEntry: {
+      label: 'allow this tool once',
+      group: 'permissions',
+      runsIn: 'page',
+      arg: { sessionId: 'string', entryId: 'string' },
+    },
+    denyEntry: {
+      label: 'deny this tool, with a reason',
+      group: 'permissions',
+      runsIn: 'page',
+      arg: { sessionId: 'string', entryId: 'string' },
     },
     submitReason: {
       label: 'send the denial',
@@ -166,6 +214,12 @@ export const chatManifest = definePlugin({
       label: 'hide or show the session hub',
       group: 'view',
       runsIn: 'page',
+    },
+    toggleSection: {
+      label: 'collapse or expand this session hub section',
+      group: 'view',
+      runsIn: 'page',
+      arg: 'string',
     },
     openPreview: {
       label: 'open the chat layout preview',

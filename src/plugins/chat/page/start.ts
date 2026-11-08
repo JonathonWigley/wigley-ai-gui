@@ -27,6 +27,7 @@ import {
   chatSessionSlot,
   type ChatSidePart,
   type ChatStatusPart,
+  chatToggleSectionCommand,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -54,7 +55,10 @@ import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
-import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 
 type ChatApi = PageApi<
   typeof chatManifest,
@@ -105,6 +109,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
     const run = (command: string) => api.commands.run(command);
+    const runKey = keyRunner(api.commands, services.log);
     const layouts = createChatLayouts(services.log);
     // What every surface's layout kit reads.
     const partDeps = {
@@ -177,6 +182,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       parts: sideParts,
       uiState: services.uiState,
       timers: services.timers,
+      toggleClicked: (partId) => runKey(chatToggleSectionCommand, partId),
       log: services.log,
     });
     const rowClock = createRowClock({
@@ -217,6 +223,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       markdown: services.markdown,
       keys: api.keys,
       run,
+      runKey,
       commands: partDeps.commands,
       platform: api.platform.os,
       state: api.state.forLayouts,
@@ -225,9 +232,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       statusParts,
       sideParts,
       sideSections,
-      permissions,
       confirm,
-      viewer,
       slashCommands: () => slashCommands.list(),
       completionRows,
       setScope: (scope) => api.keys.setScope(scope),
@@ -318,6 +323,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
         toggleSideParts: () => sideSections.toggleHidden(),
+        toggleSection: ({ arg }) => sideSections.toggleSection(arg),
       },
       exports,
       dispose: () => view.dispose(),

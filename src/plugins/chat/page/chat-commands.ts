@@ -23,7 +23,11 @@ import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import type { WriteClipboard } from './clipboard';
 import type { EntryListStop } from './entry-list';
-import { controlText, oldestPendingPermission } from './chat-state';
+import {
+  controlText,
+  oldestPendingPermission,
+  type PermissionEntry,
+} from './chat-state';
 import type {
   ChatSession,
   ChatTabs,
@@ -99,9 +103,11 @@ type Handler = (context: PageCommandContext) => void;
 
 // Every chat command's handler but the start prompt's (`newSession`,
 // `startNewSession`, `toggleArchive`, `showArchived`) and the session hub's
-// (`toggleSideParts`), by short id. A command acting on a
-// session acts only on the session whose Chat tab is the visible tab, and
-// does nothing while no Chat tab is visible.
+// (`toggleSideParts`, `toggleSection`), by short id. A command whose arg names a
+// session, as a click's does, acts on that session, and only logs for a session
+// no longer held. Any other command acting on a session acts only on the
+// session whose Chat tab is the visible tab, and does nothing while no Chat tab
+// is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<
@@ -111,8 +117,37 @@ export function chatCommandHandlers(
   | 'toggleArchive'
   | 'showArchived'
   | 'toggleSideParts'
+  | 'toggleSection'
 > {
   const { tabs, channel, picker, log } = deps;
+  const inNamedSession =
+    <A extends { readonly sessionId: string }>(
+      short: string,
+      act: (session: ChatSession, arg: A) => void,
+    ) =>
+    ({ arg }: PageCommandContext<A>) => {
+      const session = tabs.session(arg.sessionId);
+      if (session === undefined) {
+        log(`${short} for unknown session ${arg.sessionId} ignored`);
+        return;
+      }
+      act(session, arg);
+    };
+  const withPendingPermission = (
+    short: string,
+    act: (session: ChatSession, entry: PermissionEntry) => void,
+  ) =>
+    inNamedSession<{ readonly sessionId: string; readonly entryId: string }>(
+      short,
+      (session, { entryId }) => {
+        const entry = session.state.entries.find((held) => held.id === entryId);
+        if (entry?.kind !== 'permission' || entry.answer !== null) {
+          log(`no pending permission ${entryId} in ${session.name}`);
+          return;
+        }
+        act(session, entry);
+      },
+    );
   const inSession =
     (
       act: (session: ChatSession, context: PageCommandContext) => void,
@@ -272,6 +307,42 @@ export function chatCommandHandlers(
         return;
       }
       deps.permissions.deny(session, pending);
+    }),
+    // A click on Allow once only allows: it reads no range and copies nothing.
+    allowEntry: withPendingPermission('allowEntry', (session, entry) =>
+      deps.permissions.allow(session, entry),
+    ),
+    denyEntry: withPendingPermission('denyEntry', (session, entry) =>
+      deps.permissions.deny(session, entry),
+    ),
+    removeImageAt: inNamedSession('removeImageAt', (session, { index }) =>
+      session.attachments.removeAt(index),
+    ),
+    toggleRun: inNamedSession('toggleRun', (session, { runId }) => {
+      session.entries.toggleRun(runId);
+    }),
+    toggleExpander: inNamedSession(
+      'toggleExpander',
+      (session, { entryId, place }) => {
+        session.entries.toggleExpander(entryId, place);
+      },
+    ),
+    pullBackMessage: inNamedSession(
+      'pullBackMessage',
+      (session, { queuedId }) => pullBackQueued(deps, session, queuedId),
+    ),
+    openImage: inNamedSession('openImage', (session, { entryId, index }) => {
+      const entry = session.state.entries.find((held) => held.id === entryId);
+      const hasImage =
+        entry?.kind === 'user' && index >= 0 && index < entry.images.length;
+      if (!hasImage) {
+        log(`no image ${index} in entry ${entryId}`);
+        return;
+      }
+      deps.viewer.open(entry.images, index);
+    }),
+    moveFocus: inNamedSession('moveFocus', (session, { stopId }) => {
+      session.entries.moveFocusTo(stopId);
     }),
     submitReason: () => deps.reasonBox.submit(),
     cancelReason: () => deps.reasonBox.cancel(),

@@ -6,7 +6,7 @@ import type {
   ProcessActivity,
   SessionControl,
 } from '../../../contracts/agent';
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandId, CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type {
@@ -31,16 +31,24 @@ import type {
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
-import type {
-  AppSlashCommand,
-  ChatChannel,
-  ChatComposerPart,
-  ChatSessionInfo,
-  ChatSessionState,
-  ChatSidePart,
-  ChatStatusPart,
-  QueuedMessage,
-  ReturnedMessage,
+import {
+  type AppSlashCommand,
+  chatAllowEntryCommand,
+  type ChatChannel,
+  type ChatComposerPart,
+  chatDenyEntryCommand,
+  chatMoveFocusCommand,
+  chatOpenImageCommand,
+  chatPullBackMessageCommand,
+  chatRemoveImageAtCommand,
+  type ChatSessionInfo,
+  type ChatSessionState,
+  type ChatSidePart,
+  type ChatStatusPart,
+  chatToggleExpanderCommand,
+  chatToggleRunCommand,
+  type QueuedMessage,
+  type ReturnedMessage,
 } from '../contract';
 import {
   type AttachReport,
@@ -49,7 +57,7 @@ import {
   createAttachments,
   takeChatFiles,
 } from './attachments';
-import { placeReturned, pullBackQueued } from './chat-commands';
+import { placeReturned } from './chat-commands';
 import type { CloseConfirm } from './chat-dialogs';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
@@ -73,7 +81,6 @@ import {
   createComposerStopHolder,
 } from './composer-stop-holder';
 import { createEntryList, type EntryList } from './entry-list';
-import type { ImageViewer } from './image-viewer';
 import { sessionFactsOf, type SessionFactsSource } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
 import { completionCommands } from './slash-commands';
@@ -131,6 +138,9 @@ export interface ChatSession extends SessionRef {
     | 'selectedSource'
     | 'focused'
     | 'toggleFocused'
+    | 'toggleRun'
+    | 'toggleExpander'
+    | 'moveFocusTo'
     | 'scrollBy'
   >;
   enterStop(): string | null;
@@ -175,14 +185,16 @@ export type ChatTabScope = 'chat';
 // then. `activeTimeListeners`
 // run when a session arrives and on each change of a held session's `activeTime`
 // in `chat.session`, a throw skipping none of them. `run` runs
-// a command, as the composer's chips and send button do; `keys` also anchors
+// a command, as the composer's chips and send button do, and `runKey` the
+// command a click in a tab runs on what it landed on: a permission's Allow once
+// or Deny, a thumbnail, an expander's head, an activity line, a stop, a pending
+// row or an attached image's remove, each naming the tab's session; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder, and with
 // `homeDir` shows that folder in the hub's Session section.
 // `slashCommands` reads the app slash commands registered now, which the `/`
 // completion offers ahead of the agent's, and `completionRows` draws that
-// completion's rows. `viewer` opens a sent message's
-// images full size. `timers` and `clock` tick a live activity line's time and
+// completion's rows. `timers` and `clock` tick a live activity line's time and
 // the activity dock's. `composerParts` holds the parts other plugins draw
 // above every composer, `statusParts` those they draw in every status line;
 // `sideParts` tells when a part beside every `.chat-main` comes or goes, and
@@ -211,14 +223,13 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   ) => void)[];
   editor: EditorHost;
   run(command: CommandId): void;
+  runKey<A>(key: CommandKey<A>, arg: A): void;
   layouts: ChatLayouts;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts' | 'onChanged'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts' | 'onChanged'>;
   sideParts: Pick<PartStore<ChatSidePart>, 'onChanged'>;
   sideSections: Pick<SideSections, 'openTab'>;
-  permissions: PermissionActions;
   confirm: CloseConfirm;
-  viewer: Pick<ImageViewer, 'open'>;
   slashCommands(): AppSlashCommand[];
   completionRows: CompletionRows;
   setScope(scope: ChatTabScope): void;
@@ -724,7 +735,7 @@ function createTab(
   },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
-  const ref: SessionRef = { sessionId: state.sessionId, name };
+  const { sessionId } = state;
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
   const attachments = createAttachments();
@@ -744,9 +755,10 @@ function createTab(
       timers: deps.timers,
     },
     {
-      sessionId: state.sessionId,
+      sessionId,
       box: boxElement,
-      removeImage: (index) => attachments.removeAt(index),
+      removeImage: (index) =>
+        deps.runKey(chatRemoveImageAtCommand, { sessionId, index }),
     },
   );
   const entries = createEntryList({
@@ -758,15 +770,25 @@ function createTab(
       commands: deps.commands,
       platform: deps.platform,
       state: deps.state,
-      allow: (entry) => deps.permissions.allow(ref, entry),
-      deny: (entry) => deps.permissions.deny(ref, entry),
-      openImages: (images, index) => deps.viewer.open(images, index),
+      allow: (entry) =>
+        deps.runKey(chatAllowEntryCommand, { sessionId, entryId: entry.id }),
+      deny: (entry) =>
+        deps.runKey(chatDenyEntryCommand, { sessionId, entryId: entry.id }),
+      openImages: (entryId, index) =>
+        deps.runKey(chatOpenImageCommand, { sessionId, entryId, index }),
+      expanderClicked: (entryId, place) =>
+        deps.runKey(chatToggleExpanderCommand, { sessionId, entryId, place }),
     },
     log: deps.log,
     toast: deps.toast,
     timers: deps.timers,
     clock: deps.clock,
-    pullBack: (queuedId) => pullBackQueued(deps, ref, queuedId),
+    pullBack: (queuedId) =>
+      deps.runKey(chatPullBackMessageCommand, { sessionId, queuedId }),
+    runClicked: (runId) =>
+      deps.runKey(chatToggleRunCommand, { sessionId, runId }),
+    stopClicked: (stopId) =>
+      deps.runKey(chatMoveFocusCommand, { sessionId, stopId }),
     turnLine: composer.turnLineSlot,
   });
   attachments.onChange((images) => composer.drawAttachments(images));

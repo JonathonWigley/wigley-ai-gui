@@ -64,8 +64,24 @@ const HEAVY_FOLD_TESTS = [
 const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
-  // Its main joins paths with `node:path`.
-  chat: { main: NODE_ONLY },
+  chat: {
+    // Its main joins paths with `node:path`.
+    main: NODE_ONLY,
+    sublayers: {
+      // Checks that no default bind names a click's command.
+      'src/plugins/chat/page/chat-commands.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/chat',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/chat/page',
+          'src/plugins/keymap.ts',
+        ],
+        packages: [],
+      },
+    },
+  },
   // Its plugin status hashes files with `node:crypto`.
   docs: { main: NODE_ONLY },
   forms: {
