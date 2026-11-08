@@ -89,11 +89,11 @@ Gate: every registration returns a handle, and every dependency is typed.
 
 All ∥:
 
-- [ ] Every click runs a command [plan]
-- [ ] Workflow stage actions as commands [ready]
-- [ ] Sessions queries and row decorations [plan], then [ ] Sessions stops knowing forms [ready]: the same files,
+- [x] Every click runs a command [plan]
+- [x] Workflow stage actions as commands [ready]
+- [x] Sessions queries and row decorations [plan], then [x] Sessions stops knowing forms [ready]: the same files,
   so run them in sequence or in one plan.
-- [ ] Page state survives a page reload [plan]: reuse the registry's core-held slot.
+- [x] Page state survives a page reload [plan]: reuse the registry's core-held slot.
 
 Checkpoint, after the items above:
 
@@ -137,9 +137,8 @@ record (Wave 0) because they read it:
 
 ## Lane L: layouts everywhere
 
-All ∥, any time. Keep this lane apart from Forms item kinds (Lane E) and Every click runs a command (Wave 3): they
-rewrite the same forms files. Wave 3 also changes `kit.button`, so a layout item running beside it draws no new
-closure button.
+All ∥, any time. Keep this lane apart from Forms item kinds (Lane E): they rewrite the same forms files. A layout
+item draws a button through `kit.button`, which runs a command, and no closure button.
 
 - [ ] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
 - [ ] Dialog frames and confirms through the opener's layout, then [ ] Forms and primer column chrome through their

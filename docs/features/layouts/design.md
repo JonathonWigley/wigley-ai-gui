@@ -170,6 +170,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
 
 ## Decisions
 
+- **A reload keeps the user's chat draft either way.** A layout reload moves chat's box into the redrawn composer; a
+  page reload restores the draft and the attached images from chat's page slots (`chatPlaceSlot`,
+  `chatDraftImagesSlot`).
 - **Core, not per plugin.** The layouts folder is core-owned and the shell is an owner with no plugin data folder, so
   layouts load on their own `wigley-layout:` scheme, not as a host on `wigley-data:`. A plugin never reaches the folder
   through `api.data`.

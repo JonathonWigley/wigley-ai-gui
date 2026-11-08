@@ -171,8 +171,9 @@ export function kitCommandsOf(api: {
   };
 }
 
-// Runs a typed command key from a click: a throw at the call, such as a stale
-// argument, is logged and never leaves the listener.
+// Runs a typed command key for a plugin page, from a click or from the plugin's
+// own code such as the workflow engine's stage actions: a throw at the call,
+// such as a stale argument, is logged and never leaves the caller.
 export function keyRunner(
   commands: Pick<PluginCommands, 'run'>,
   log: PluginLog,

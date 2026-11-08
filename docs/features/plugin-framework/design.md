@@ -72,8 +72,8 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
   list `relay.py` answers when the app is closed lives in wigley-ai-marketplace; A2 leaves that repo alone.
 - A session gets a tab when it first sends a round; the tab stays, showing the session idle between rounds, until
   the session disconnects or the user closes it.
-- A tab is labelled by its project folder, numbered when two sessions share one (`wigley-ai-gui 2`); while a round is open the tab reads `<label> · <round heading> <answered>/<total>`.
-- Cmd+W, `Space ;` and `<Leader>;` (in a box) close the session tab. With a round open they cancel the round and close the session at once, with no confirmation, and the session's own process ends with the row.
+- A session is labelled by its project folder, numbered when two sessions share one (`wigley-ai-gui 2`); while a round is open the session's row tooltip adds `<round heading> <answered>/<total>` after the label, as the row part forms contributes.
+- Cmd+W, `Space ;` and `<Leader>;` (in a box) close the session tab. With a round open that is not being sent they cancel the round and close the session at once, with no confirmation, and the session's own process ends with the row. A round being sent keeps the session.
 
 ## Keymap (plan A2)
 
@@ -170,11 +170,11 @@ and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds
   checked at load. A free-form argument was rejected because every handler would cast. Strings only was rejected
   because the session-and-box sites would pack two values into one string.
 - **Commands run from either process.** The core routes a run to the process that declares the command, so a click and
-  a palette entry have one path. Each plugin's channel bridge for this goes. `intercept` and `onDidRun` work in the
+  a palette entry have one path. Each plugin's channel bridge for this went. `intercept` and `onDidRun` work in the
   process that runs the handler. A handler returns nothing or a promise: a command acts, and a query reads a slot.
 - **The command catalog is a slot.** Runtime commands and binds sit in core slots, one per process, and main merges them
   into the served config. The binds form a layer under the user's `keymap.json`, so the user's binds still win. This
-  is why the registry lands before the command API.
+  is why the registry landed before the command API.
 - **A slot holds a value a late reader wants.** Its change notice replaces any matching event. An event marks a moment
   (turn finished, doc saved). Publishing both for every change was rejected: two paths carry one change.
 - **All slots live in main's memory, page-owned ones included.** The page takes a snapshot before its parts start and a
@@ -195,22 +195,29 @@ and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds
 - **Forms' and primer's rounds stay on their channels.** Their owners' state is mostly live `ask_round` calls, so a slot
   would hold a partial copy.
 - **Every click that changes anything runs a command.** Cursor moves and section collapses count; drags and focus
-  guards do not. A partial sweep would make the standing rule false from the day it lands.
+  guards do not. A partial sweep would have made the standing rule false from the day it landed.
 - **`kit.button` takes a command and an optional argument.** A layout wanting something else writes its own listener by
   hand, knowingly. No layout in the user config folder relied on a closure when this was settled.
 - **A command that needs an argument lists only when a key binds it.** Settings shows one row per bound
   argument, because a row id means nothing in a list. Help and which-key keep one merged line, such as `1–9 pick the
   numbered choice`. `keymap.json` can still bind any of them.
-- **A page reload keeps the user's work and place in every plugin:** chat, forms, primer, docs with its unsaved edits,
-  notes, backlog and settings. Page slots write on each change. The 400 ms autosaves that go to main flush on `pagehide`.
+- **A page reload keeps the user's work and place in every plugin:** chat's draft and images, forms, primer, docs with
+  its unsaved edits, notes, backlog and settings, and sessions' selected tab in each session. Page slots write on each
+  change. The 400 ms autosaves that go to main flush on `pagehide`. Four limits stand: an open markup session in notes
+  or forms does not return (the fields do), box focus and vim insert mode do not return, a Settings row's open edit
+  box loses its typed text (cursor and filter return), and page slots live in main's memory, so an app restart loses
+  them.
 - **The two close seams each have one job.** Main's `addCloseGuard` refuses and returns the reason sessions shows as a
   toast, and it alone holds forms' and primer's open round. A tab's `beforeClose` stays for what the page knows or must
   ask (chat's confirm, docs' unsaved edits, a form being sent). One seam only was rejected: a guard in main cannot wait
   on a dialog, and a guard only on the page would break the rule that main decides.
 - **The user's close key on an open round is one instant act.** Cmd+W, `Space ;` and `<Leader>;` cancel the round and
   close the session with no confirmation, chat's busy confirm included, because the user wants the session gone at once.
-  Main does the cancel and the close in one step, so no second pass can ask again. Docs' unsaved edits and a form already
-  being sent still hold the session, since the first loses work and the second has already left. Another plugin's
-  `closeSession` call never cancels: main refuses it with the guard's reason.
+  Main does the cancel and the close in one step (`closeSession(id, atOnce)` runs each guard's `cancelHold` first), so
+  no second pass can ask again. Only a tab that says `closesAtOnce` makes the key act this way; with no such tab, chat's
+  busy confirm still asks. Docs' unsaved edits and a form already being sent still hold the session, since the first
+  loses work and the second has already left. Another plugin's `closeSession` call never cancels: main refuses it with
+  the guard's reason. The review's Cancel prompt is a different act: it cancels the round and leaves the session open.
 - **Row decoration is the row part.** Row parts and activities landed after the follow-up asked for `setBadge`, so
-  `setStatus` gives way to a row part and `setBadge` is not added.
+  `setStatus` gave way to a row part and `setBadge` is not added. A part's optional `SessionPart.tooltip` joins the
+  row's tooltip, which is how a round's status shows.

@@ -356,8 +356,10 @@ host session id joins that row instead of adding one (a newer relay takes the jo
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
 its rows across a relaunch, re-attaching each one whose process the session host still runs, and after a process
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
-guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
-round; primer: an open primer), since main, not the page, decides.
+guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
+an open primer), since main, not the page, decides. The user's close key ends the hold first: a tab that
+`closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through with no prompt. A close that
+holds nothing at once, such as the review's Cancel prompt, leaves the session open.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes (each with the title help shows over its keys), settings
@@ -397,7 +399,9 @@ round; primer: an open primer), since main, not the page, decides.
   values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
   writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
   `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
-  included, so the value outlives an owner's stop and a page reload, not an app restart. `sessions.activity` clears
+  included, so the value outlives an owner's stop and a page reload, not an app restart. A page plugin keeps what a reload
+  restores — a draft, a selected row, a view — in a `<id>.place` slot it writes as the state changes and reads at
+  start (`chat.place` with `chat.draftImages`, `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). `sessions.activity` clears
   itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
   the first panes are placed. A new start publishes the
   same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
@@ -409,7 +413,8 @@ round; primer: an open primer), since main, not the page, decides.
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
   the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
-  argument as `arg`, checked at load.
+  argument as `arg`, checked at load. A click runs a command too: a layout's `kit.button(parent, label, command, { arg })`
+  and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
   `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`, and the core's own (`core.pageReady`, `CoreEvents`) in
@@ -438,7 +443,8 @@ round; primer: an open primer), since main, not the page, decides.
   moves focus out of or into the side bar there; a window narrowing hides it without telling, so focus survives a
   narrow-and-widen round trip. A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
-  the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
+  the visible one (`shown`) and when it stops (`hidden`), and its plugin sets its key scope
+  there. Sessions emits `tabShown` for each tab told it shows. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
   forms adds a Form tab where a session's round view is created, when the session has no Form tab, chat a Chat tab
@@ -451,7 +457,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage text and the `No workflow` tag), chat's run time and usage's context meter and cache mark are five. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage text and the `No workflow` tag), chat's run time, usage's context meter and cache mark, unity-pool's clone badge, and the tab status that forms and primer draw (`forms.status`, `primer.status`) are among them. A row part's optional `tooltip` joins the row's tooltip. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.

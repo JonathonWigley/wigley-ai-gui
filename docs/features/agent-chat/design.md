@@ -483,8 +483,9 @@ interview on 2026-10-23; this file is the record of both.
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
   and shows as a permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen.
-- **Status**: a row's tab status reads what the chat is doing — working, waiting for a permission — and is empty
-  while idle.
+- **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a
+  permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
+  seen.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
   the row is marked.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands

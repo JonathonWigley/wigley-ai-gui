@@ -36,23 +36,6 @@ Core seams that most items below assume.
   cut save itself: **A quit can lose a session's open run time**). Hold the quit until `stopAll`
   settles, and prove it in a live quit, which a drive run cannot show because it holds the quit itself. The hold
   changes quit latency, which is why it waits here.
-- **Every click runs a command** — *needs a feature plan*: keys always run a command, but about two thirds of
-  pointer actions do not, so a future `commands.intercept` or `onDidRun` misses them. Of 40 click sites sampled, 13
-  run a command, 18 call what a command's handler calls (forms' card kit choose, clear, accept and toggles;
-  chat's Allow and Deny, image remove, entry toggle and queued pull-back; the agent strip's box toggle; visual's
-  expand; help's Close; the list picker's choose; sessions' tab and row select; settings' cursor set), and 9 have no
-  command (docs `followLink` and opening a tree node by id, notes `pickColour`, backlog `openHome` and row select,
-  chat opening the image viewer at an index). The cause: a command takes no target, so "do X to this row" cannot be
-  one. Give commands a target (row, index, href) through the runtime command API (landed: `commands.run(key, arg)`), move each site onto its
-  command, and fold forms' layout action vocabulary (`kit.run({ type })`, `runLayoutAction` in
-  `src/plugins/forms/page/layout/card-kit.ts`) into commands. The activity bar's click calls `ModeHandle.show()`
-  (`src/renderer/shell/shell-chrome.ts`) where it should run the mode's show command. Builds on the runtime command
-  API, which landed.
-- **Page state survives a page reload** — *needs a feature plan*: a core per-plugin page-state slot kept outside the
-  page, which a page reload restores. Chat's draft and its images: a layout reload keeps them (the box moves into the
-  redrawn composer), but a page reload starts the box empty (`docs/features/layouts/design.md`). Forms: focus, review
-  row and view (review, confirm) go into the draft or the slot; pending autosaves flush on `pagehide`; restored rounds
-  do not take over their session again.
 - **Visual reads chat's focused entry through a slot** — *agent-ready*: `ChatPageExports.focusedEntry` and
   `focusedBlock` hand visual an `HTMLElement`, which a plugin from a user folder cannot read across a reload. Publish
   the focused entry's id and the cursor's block as a page slot in chat's `contract.ts`, and let visual find the
@@ -61,6 +44,31 @@ Core seams that most items below assume.
   service, and a row's name outranks its path, so `gui` in the Notes target picker puts `wigley-ai-gui` first. What
   remains is recency: a recently updated target ranks higher. `NoteHome` has no updated time, and "updated" still needs
   a definition (for example the home's latest commit).
+- **Reload keeps an open markup session** — *needs a feature plan*: a page reload returns notes and forms on their
+  fields, but an open markup session in either is gone. It needs a restore path
+  into the live overlay.
+- **Reload keeps box focus and vim insert mode** — *needs a feature plan*: a page reload does not return focus to the
+  box that held it, nor insert mode, because a box's key scope comes from `shown` today.
+- **Reload keeps a Settings row's open edit box** — *needs a feature plan*: after a page reload Settings returns the
+  cursor and the filter, but a row's open edit box closes and the text typed in it goes.
+- **Page state survives an app restart** — *needs a feature plan*: the page `*.place` slots live in main's memory, so
+  an app restart loses chat's draft, forms' place and the rest.
+- **Primer's card focus is lost on a page reload** — *agent-ready*: `PrimerPlace` (`src/plugins/primer/contract.ts`)
+  holds the pane, but the card pane's column (`cardColumn` in `page/primer-state.ts`) is not in it, so a primer left
+  with the card focused returns showing the task card. Add the column to the place and restore it.
+- **A second page reload loses a session's selected tab** — *needs a feature plan*: a tab added late, as forms' is
+  when its round opens, takes its selection back from the saved place only if nothing selected since the load
+  (`tabsAfterRestoredAdd`). A second reload before that tab is added saves the place with the tab the first reload
+  left selected, so the late tab's selection is gone.
+- **Docs keeps only the first tree view's place** — *agent-ready*: a docs view's place holds one tree's expanded
+  ids, selection and filter, the view a new tree shows first (the wiki with `hasWiki`, else All pages)
+  (`page/tree-view.ts`, `place` and `restorePlace`). The other tree view starts over on a page reload. Keep a place
+  per tree view.
+- **The primer self-test fails one step on its own** — *agent-ready*: run alone, the primer self-test fails the step
+  that expects `[sessions] activated Layout preview` after a send (`src/plugins/primer/main/selftest-script.ts`),
+  because the Layout preview session it falls back to is opened by forms' script. It passes as `forms,primer`. Open
+  that session in the primer script, or drop the expectation when forms did not run.
+
 ## Bugs seen in use
 
 Defects seen in a drive run, a transcript or the user's own use.
@@ -68,12 +76,13 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Chat sessions get forms' 240 s deadline, not the relay's 300 s** — *agent-ready*: in a session the app's chat
   started, a round's draft comes back every 240 s (forms' `deadlineSeconds` default), though the wigley plugin entry
   sets `WIGLEY_FORMS_DEADLINE_SECONDS` to `300` and `relay.py` sends it in its hello. Cause: chat opens the row with
-  `deadlineSeconds: null` (`src/plugins/chat/main/chat-sessions.ts`, `sessions.open`), and `connect` joining that
-  owned row (`src/plugins/sessions/main/session-list.ts`, `join`) keeps the row's info and drops the hello's
-  `deadlineSeconds`. Fix: a join takes the hello's `deadlineSeconds` into the owned session's info, as the host id is
-  kept; check that the form service, which reads it once per session in `startSession`
-  (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a row to the session-list join tests: GIVEN
-  an owned row opened with a null deadline WHEN a relay joins with 300 THEN the session's info reads 300.
+  no host record (`src/plugins/chat/main/chat-sessions.ts`, `sessions.open`), and `connect` joining that owned row
+  (`src/plugins/sessions/main/session-list.ts`, `join`) keeps the row's info and drops the hello's host fields, among
+  them `deadline_seconds` (`HOST_DEADLINE_FIELD`, which the form service reads from `info.host`). Fix: a join takes the
+  hello's host fields into the owned session's `info.host`, as the host id is kept; check that the form service, which
+  reads it once per session in `startSession` (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a
+  row to the session-list join tests: GIVEN an owned row opened with no host record WHEN a relay joins with a
+  `deadline_seconds` of 300 THEN the session's `info.host` holds 300.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
@@ -409,17 +418,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   structured setting (chat's profiles, docs' config folders) cannot contribute its editor. A plugin registers a
   control kind with its row editor and its layout part, and the `control` field becomes a string so a new kind does
   not break a user settings layout. The layout name picker (Features) is then one such kind.
-- **Sessions queries and row decorations** — *needs a feature plan*: the `sessions.rows`, `sessions.selection` and
-  `sessions.active` slots show a late plugin the live sessions; still missing are a page `tabShown` event,
-  `SessionTabView.hidden()` beside `shown()`, `setStatus` replaced by a row part (row parts landed and are the row
-  decoration seam; `setStatus` lines overwrite each other), and one job per close seam (`beforeClose` on the page and
-  `addCloseGuard` in main both carry forms' "open round" today; `plugin-framework/design.md` § Commands and state). With it, two tabs' take-overs released
-  out of order must stop giving the session back to the first taker's tab after its take-over ended (pinned by
-  `sessions/page/tabs.test.ts`; only forms takes over today).
-- **Sessions stops knowing forms** — *agent-ready*: `mark(sessionId, { text })` lets the marking plugin word the toast
-  (today "Round from…", `sessions/page/tabs.ts`), the empty-state text is generic or contributed,
-  `SessionRow.marked` is documented generically, and `SessionInfo.deadlineSeconds` moves to an opaque host record
-  forms reads. The layout preview passes a `label` instead of `projectDir: 'Layout preview'`.
 - **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
   reload changes a layout it draws with, and by a card part or review column added or disposed) destroys and
   remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
