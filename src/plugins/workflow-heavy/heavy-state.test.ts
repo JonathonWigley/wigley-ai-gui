@@ -480,6 +480,10 @@ describe('heavyStateOf', () => {
       name: 'a task line with file but no status',
       state: stateWithTask({ wave: 1, text: 'first', done: true, file: null }),
     },
+    {
+      name: 'a task line with neither file nor status',
+      state: stateWithTask({ wave: 1, text: 'first', done: true }),
+    },
   ])('heavyStateOf_BadShape_ReadsEmpty ($name)', ({ state }) => {
     expect(heavyStateOf({ ...newFlow('s1', '/r'), state })).toBe(
       EMPTY_HEAVY_STATE,
@@ -490,10 +494,6 @@ describe('heavyStateOf', () => {
     {
       name: 'a state with progress',
       state: { ...EMPTY_HEAVY_STATE, progress: PROGRESS },
-    },
-    {
-      name: 'a task line saved before file and status',
-      state: stateWithTask({ wave: 1, text: 'first', done: true }),
     },
   ])('heavyStateOf_ValidState_ReadsThatObject ($name)', ({ state }) => {
     expect(heavyStateOf({ ...newFlow('s1', '/r'), state })).toBe(state);

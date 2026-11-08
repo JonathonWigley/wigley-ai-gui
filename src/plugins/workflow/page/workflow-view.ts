@@ -701,7 +701,7 @@ function checklistOf(
 
 // The checklist's groups in order: each with every item done is finished, the
 // first other is the current group, whose open items show `openItemState`
-// unless an item says whether it runs, and the rest are later.
+// unless an item says it is not running, and the rest are later.
 function partitionedGroups(
   groups: readonly ChecklistGroup[],
   openItemState: MarkState,
@@ -736,13 +736,7 @@ function itemState(item: ChecklistItem, openItemState: MarkState): MarkState {
   if (item.done) {
     return 'done';
   }
-  if (item.running === true) {
-    return 'running';
-  }
-  if (item.running === false) {
-    return PENDING;
-  }
-  return openItemState;
+  return item.running === false ? PENDING : openItemState;
 }
 
 function logOnce(

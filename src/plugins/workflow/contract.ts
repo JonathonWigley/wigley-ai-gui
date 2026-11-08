@@ -43,8 +43,8 @@ export const IDLE_STAGE: StageId = 'idle';
 export interface ChecklistItem {
   text: string;
   done: boolean;
-  // Set by a workflow that knows which open items run; left out, an open item
-  // shows the stage's state.
+  // Set by a workflow that knows which open items run: false shows an open item
+  // pending; true or left out, it shows the stage's state.
   running?: boolean;
 }
 

@@ -806,6 +806,27 @@ describe('Heavy over the engine page part', () => {
       ],
     },
     {
+      name: 'make busy, w3.1 and w4.1 in progress',
+      stage: 'make',
+      busy: 'turn',
+      plan: planOf([
+        [3, false, 'in progress'],
+        [3, false],
+        [4, false, 'in progress'],
+      ]),
+      finishedGroups: [],
+      currentGroup: {
+        title: 'Wave 3',
+        items: [
+          { text: 'w3.1', state: 'running' },
+          { text: 'w3.2', state: 'pending' },
+        ],
+      },
+      laterGroups: [
+        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+      ],
+    },
+    {
       name: 'make not busy, w3.1 in progress',
       stage: 'make',
       busy: 'none',
@@ -816,7 +837,7 @@ describe('Heavy over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
-        items: [{ text: 'w3.1', state: 'running' }],
+        items: [{ text: 'w3.1', state: 'paused' }],
       },
       laterGroups: [
         { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
@@ -826,7 +847,7 @@ describe('Heavy over the engine page part', () => {
       name: 'review busy runs no tasks',
       stage: 'review',
       busy: 'turn',
-      plan: planOf([[3, false]]),
+      plan: planOf([[3, false, 'in progress']]),
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',

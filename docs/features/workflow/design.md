@@ -276,7 +276,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   workflow. The section's title is `Plan` for Heavy and `Checklist` for Light and Medium.
   - Heavy's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
     checklist folds finished waves into one row, shows the current wave in full, and shows each later wave as one line.
-    A task whose task document reads `Status: in progress` shows running; every other open task shows pending.
+    A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
   - Light's and Medium's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
   - The trail stays on the strip alone.
