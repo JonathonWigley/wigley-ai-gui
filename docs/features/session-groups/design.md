@@ -34,9 +34,10 @@ the Unity editors apart, and other plugins and log lines use it.
 ## Order
 
 The side bar holds **Favorites** then **Recent**, each a list of project groups, each group a header over its rows,
-then each section a plugin registers (`addSection`) that claims a row, its claimed rows flat with no groups. The default layout draws the Favorites and Recent labels only while a favorite project has an open session or a
-group is dragged; otherwise the groups sit directly under the Sessions header. A plugin section draws only while it
-claims a row, and always with its label.
+then each section a plugin registers (`addSection`) that claims a row, its claimed rows flat with no groups. The
+default layout draws the Favorites and Recent labels only while a favorite project has an open session or a group is
+dragged; otherwise the groups sit directly under the Sessions header. A plugin section draws only while it claims a
+row, and always with its label.
 
 - **Plugin sections** come after Recent, by their `order`, a tie in registration order. A claimed row leaves its
   project group and sits in its section, newest arrival first; a row two sections claim goes to the lower `order`.
@@ -77,9 +78,10 @@ project names), so they last across restarts.
 ## Drawing
 
 The sessions layout gains two parts: `section` (a Favorites or Recent label over the box the app fills with
-groups, both always asked for, though the default layout hides an empty one outside a drag; or a plugin section's label and header part over its rows, asked for only while it claims a row) and `group` (a project header over the box the app
-fills with rows), with a `GroupKit` that draws the star (`favoriteToggle`) and the grip (`dragHandle`, a visual
-cue: the whole header drags). The app keeps the star's click and the drag on each header, through the
+groups, both always asked for, though the default layout hides an empty one outside a drag; or a plugin section's
+label and header part over its rows, asked for only while it claims a row) and `group` (a project header over the box
+the app fills with rows), with a `GroupKit` that draws the star (`favoriteToggle`) and the grip (`dragHandle`, a
+visual cue: the whole header drags). The app keeps the star's click and the drag on each header, through the
 DragReorder primitive (`DESIGN.md` § Primitives).
 
 ## Decisions

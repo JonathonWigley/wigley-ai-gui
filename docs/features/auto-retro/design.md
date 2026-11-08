@@ -27,7 +27,7 @@ user closes a row ──► chat.sessionClosed (reason user, sent true)
               auto-retro queue (plugin data) ──► one run at a time
                           │
                           ▼
-   chat.launch({ projectDir: ~/wigley-agents, profile, unattended: true,
+   chat.launch({ projectDir: <folder setting>, profile, unattended: true,
                  message: "/wigley:retro auto <host ids>" })
                           │
                           ▼
@@ -61,7 +61,8 @@ The sessions plugin draws its side bar as sections: Favorites, Recent, and every
 the sessions page export `addSection`. `auto-retro` registers Retro, always last, which claims the rows it launched.
 A plugin's section shows only while it claims a row.
 
-- Rows sit flat, with no project groups: every retro runs in `~/wigley-agents`.
+- Rows sit flat, with no project groups: every retro runs in the `folder` setting, `~/wigley-agents` by default, the
+  clone that holds the ledger.
 - A row's title is the title of the session it analyzes, and the sessions layout draws a claimed row muted, with a
   dashed accent edge, so it reads apart from the user's own sessions.
 - The header counts the closes still queued (`2 queued`), drawn through the auto-retro layout.

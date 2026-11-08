@@ -1,6 +1,6 @@
 import type { SlotKey } from '../../contracts/state';
 
-// `rows` holds the row id of every retro row launch returned that is still open, in the order the rows joined;
+// `rows` holds the row id of every open retro row, launched or restored, in the order the rows joined;
 // `queued` counts the closes still waiting for their retro.
 export interface AutoRetroState {
   rows: string[];

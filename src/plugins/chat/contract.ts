@@ -406,8 +406,9 @@ export interface ChatAgentEvent {
 
 export type SessionOrigin = 'new' | 'resumed' | 'launched' | 'restored';
 // Why chat closed a row: `user` the sessions plugin's close, `start-failed` a
-// start that threw, `project-closed` `closeSessionsIn`, `finished` a plugin's
-// `close` for a session whose work ended.
+// start that threw, `project-closed` a close of the rows in a project folder
+// (`closeSessionsIn`, and the self-test's cleanup of earlier runs), `finished`
+// a plugin's `close` for a session whose work ended.
 export type SessionCloseReason =
   | 'user'
   | 'start-failed'
@@ -505,9 +506,9 @@ export interface ChatMainEvents extends EventShape {
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
   // selected row as it was. With `unattended` true the row denies each
-  // permission prompt at once and raises no `Turn finished` alert. Resolves to the new row's sessionId; rejects,
-  // opening nothing, on an image chat refuses (with the refusal text), an
-  // unknown profile, or no chat harness.
+  // permission prompt at once and raises no `Turn finished` alert. Resolves
+  // to the new row's sessionId; rejects, opening nothing, on an image chat
+  // refuses (with the refusal text), an unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
   // Chat's profiles, in settings order, read at each call. The first profile
   // is the one a drive `chat.start` takes when it names none, and the only
