@@ -54,6 +54,7 @@ const SESSION: ChatSessionState = {
   returned: [],
   repo: 'p',
   branch: null,
+  worktrees: [],
 };
 
 const notice = (id: string): ChatEntry => ({

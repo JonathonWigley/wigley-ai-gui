@@ -193,8 +193,8 @@ function payloadProblems(payload: PrimerPayload, run: number): string[] {
 
 // Each run ends the session the run before connected, connects
 // `primer-selftest-<run>` in project `primer-selftest`, activates its row so
-// the steps start on its Primer tab whatever session the earlier scripts left
-// selected, and opens the self-test primer there; the script checks the
+// the steps start in its Primer popup whatever session the earlier scripts
+// left selected, and opens the self-test primer there; the script checks the
 // payload that call returns once the steps submit it.
 export function primerSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
@@ -226,7 +226,7 @@ export function primerSelfTestScript(
     groups: [
       {
         name: 'primer',
-        why: "The Primer tab's tasks column selects a task and its items column lists that task's items; needs are set and items toggled from both columns and the item card, ⌃H on the card steps the column it came from, ⌥H and ⌥L move focus between the columns and the card, and the task's boxes are reached from an item card; the agent gets every change back once the review submits.",
+        why: "The Primer popup's tasks column selects a task and its items column lists that task's items; needs are set and items toggled from both columns and the item card, ⌃H on the card steps the column it came from, ⌥H and ⌥L move focus between the columns and the card, and the task's boxes are reached from an item card; the agent gets every change back once the review submits.",
         steps: PRIMER_STEPS,
       },
       {

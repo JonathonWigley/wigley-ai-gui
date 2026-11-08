@@ -37,6 +37,7 @@ import {
 import {
   MAIN_ACTION,
   SIDE_LIST_CLASS,
+  stageTagElement,
   TOGGLE_FINISHED_WAVES,
 } from './layout/workflow-kit';
 
@@ -44,7 +45,9 @@ import {
 // is the flow a session draws (the preview's sample while it shows, else the
 // slot's flow or a new one); `nameOf` names the session in the log; `isPreview` is
 // whether the session shows the preview, which runs nothing. `setRowActivity` sets
-// what the session's row says for its stage, null for nothing.
+// what the session's row says for its stage, null for nothing. `isWorking` is
+// whether the session's row holds a running activity, which the row's title line
+// leaves to the chip's `Working` tag.
 export interface WorkflowViewDeps {
   log: PluginLog;
   clock: Clock;
@@ -55,15 +58,18 @@ export interface WorkflowViewDeps {
   nameOf(sessionId: string): string;
   isPreview(sessionId: string): boolean;
   setRowActivity(sessionId: string, activity: RowActivity | null): void;
+  isWorking(sessionId: string): boolean;
 }
 
 // `chipPart` draws a session's chip under its row, `stripPart` its strip above
 // its Chat composer, each through the `draw` of the flow's workflow, and
 // `sidePartFor` makes one workflow's section of the session hub, which draws a
 // session's side pane only while its flow is of that workflow. A flow with no
-// workflow draws nothing, but for the chip's `No workflow` tag after a missed
-// level; a workflow or stage with no page half does the same and logs its name
-// once. Every held part draws again on `setFlow` for its session and on `redraw`,
+// stage to draw draws nothing, but for the chip's `No workflow` tag after a
+// missed level; a workflow or stage with no page half does the same and logs its
+// name once. While the session `isWorking`, the chip ends on a running `Working`
+// tag unless its stage is running, which its stage tag already says.
+// `activityChanged` draws the session's chip again. Every held part draws again on `setFlow` for its session and on `redraw`,
 // and each second while it shows a countdown, the side pane aside. `setFlow`, and
 // `redraw` for each session with a chip, also set the session's row activity. Each
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
@@ -84,6 +90,7 @@ export interface WorkflowView {
   stripPart: ChatComposerPart;
   sidePartFor(workflow: PageWorkflow): ChatSidePart;
   setFlow(flow: SessionFlow): void;
+  activityChanged(sessionId: string): void;
   forget(sessionId: string): void;
   redraw(): void;
   setSidePaneHidden(hidden: boolean): void;
@@ -113,6 +120,7 @@ interface HeldPart {
 const TICK_MS = 1000;
 const SIDE_PART_ORDER = 20;
 const NO_WORKFLOW_TEXT = 'No workflow';
+const WORKING_TEXT = 'Working';
 const PENDING: MarkState = 'pending';
 
 // Each wrapper outlives none of its builds: a row redraw or a composer draw
@@ -302,15 +310,21 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
     switch (part.kind) {
       case 'chip': {
-        if (flow.workflow === null && flow.missedLevel) {
-          part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
-          return false;
-        }
+        const isWorking = deps.isWorking(part.sessionId);
         if (!drawsStage) {
+          if (flow.workflow === null && flow.missedLevel) {
+            part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
+          }
+          if (isWorking) {
+            part.wrapper.append(workingTag(clock));
+          }
           return false;
         }
         const input = chipInput(workflow, stage, flow);
         part.drawn = workflow.draw.chip(part.wrapper, input, sessionId);
+        if (isWorking && input.status !== 'running') {
+          part.wrapper.append(workingTag(clock));
+        }
         return input.countdown !== null;
       }
       case 'strip': {
@@ -524,6 +538,13 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         drawSession(flow.sessionId);
       }
     },
+    activityChanged(sessionId) {
+      drawEach(
+        [...held].filter(
+          (part) => part.kind === 'chip' && part.sessionId === sessionId,
+        ),
+      );
+    },
     forget(sessionId) {
       loggedLevels.delete(sessionId);
       loggedTrails.delete(sessionId);
@@ -596,6 +617,10 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     },
   };
   return view;
+}
+
+function workingTag(clock: Clock): HTMLElement {
+  return stageTagElement(WORKING_TEXT, 'running', clock);
 }
 
 // The stepper's stages, in order, one per step slot: the slot member that is

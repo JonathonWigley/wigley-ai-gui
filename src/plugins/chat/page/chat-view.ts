@@ -224,10 +224,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   onPageReady(listener: () => void): void;
   paths: Paths;
   homeDir: string;
-  sessions: Pick<
-    SessionsPageExports,
-    'addTab' | 'activate' | 'closeSession' | 'setActivity'
-  >;
+  sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
   activeSessionId(): string | null;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
@@ -284,7 +281,6 @@ interface HeldTab {
   sessionId: string;
   name: string;
   state: ChatSessionState;
-  closeConfirmed: boolean;
   handle: SessionTabHandle | null;
   unseen: Unseen;
   activity: RowActivity | null;
@@ -455,6 +451,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     if (info.repo !== before.repo || info.branch !== before.branch) {
       showBranch(tab, log);
+    }
+    if (!isSameJson(info.worktrees, before.worktrees)) {
+      showWorktrees(tab, log);
     }
     if (!isSameJson(info.compaction, before.compaction)) {
       showCompaction(tab, log);
@@ -678,8 +677,7 @@ function sessionFactsSourceOf(
   deps: Pick<ChatViewDeps, 'homeDir' | 'paths'>,
 ): SessionFactsSource {
   return {
-    input: () =>
-      sessionFactsOf(composerInputOf(tab), tab.state.projectDir, deps),
+    input: () => sessionFactsOf(composerInputOf(tab), tab.state, deps),
     onChanged(listener) {
       // A wrapper per subscription, so each handle removes only its own.
       const wrapped = () => listener();
@@ -759,7 +757,7 @@ function createTab(
   view: {
     isHeld(tab: HeldTab): boolean;
     shown(tab: HeldTab): void;
-    beforeClose(tab: HeldTab, atOnce: boolean): boolean;
+    beforeClose(tab: HeldTab, atOnce: boolean): boolean | Promise<boolean>;
   },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
@@ -833,7 +831,6 @@ function createTab(
     sessionId: state.sessionId,
     name,
     state,
-    closeConfirmed: false,
     handle: null,
     unseen: null,
     activity: null,
@@ -1056,6 +1053,13 @@ function showBranch(tab: HeldTab, log: PluginLog) {
   );
 }
 
+function showWorktrees(tab: HeldTab, log: PluginLog) {
+  drawStatusLine(tab);
+  const { worktrees } = tab.state;
+  const noun = worktrees.length === 1 ? 'worktree' : 'worktrees';
+  log(`${tab.name} wrote in ${noun} ${worktrees.join(', ')}`);
+}
+
 function showCompaction(tab: HeldTab, log: PluginLog) {
   const { compaction } = tab.state;
   drawTurn(tab);
@@ -1096,25 +1100,24 @@ function drawActivity(
 }
 
 // A session closes at once unless Claude is still working on it: then the
-// Chat tab shows and the end-session confirmation asks first. A close another
+// Chat tab shows and the end-session confirmation answers. A close another
 // tab asked to make at once asks nothing.
-function mayClose(tab: HeldTab, deps: ChatViewDeps, atOnce: boolean): boolean {
+function mayClose(
+  tab: HeldTab,
+  deps: ChatViewDeps,
+  atOnce: boolean,
+): boolean | Promise<boolean> {
   if (atOnce) {
     return true;
   }
-  const isBusy =
-    tab.state.running && tab.state.activity !== 'idle' && !tab.closeConfirmed;
+  const isBusy = tab.state.running && tab.state.activity !== 'idle';
   if (!isBusy) {
     return true;
   }
   tab.handle?.select();
   blurFocusedElement();
-  deps.confirm.open(tab.name, () => {
-    tab.closeConfirmed = true;
-    deps.sessions.closeSession(tab.sessionId);
-  });
   deps.log(`closing the session asks to end ${tab.name}`);
-  return false;
+  return deps.confirm.open(tab.name);
 }
 
 // Writes the observed composer's border-box height, rounded, as the unitless

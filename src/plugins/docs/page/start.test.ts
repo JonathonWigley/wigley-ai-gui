@@ -5,18 +5,11 @@ import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
   dataEmitted,
-  fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import {
-  type SessionsPageExports,
-  sessionsPageKey,
-  sessionsRowsSlot,
-  type SessionTabHandle,
-  type SessionTabView,
-} from '../../sessions/contract';
+import { sessionsRowsSlot } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type DocsEdits,
@@ -66,50 +59,6 @@ vi.mock('./docs-view', async (importOriginal) => {
 
 const projectRow = (sessionId: string) =>
   sessionRow(sessionId, { label: sessionId, projectDir: '/p' });
-
-// What throws the next time one is disposed, once.
-interface ThrowsNext {
-  anchor: boolean;
-  tab: boolean;
-}
-
-function disposeThrowingOn(
-  throwsNext: ThrowsNext,
-  part: keyof ThrowsNext,
-): () => void {
-  return () => {
-    if (throwsNext[part]) {
-      throwsNext[part] = false;
-      throw new Error(`${part} gone`);
-    }
-  };
-}
-
-// `tabs` holds each tab's title and `liveTabs` each undisposed tab by session;
-// its handle files under the dependent.
-function fakeSessions(
-  tabs: string[],
-  liveTabs: Map<string, SessionTabView>,
-  throwsNext: ThrowsNext,
-) {
-  const throwFromDispose = disposeThrowingOn(throwsNext, 'tab');
-  return fakeDependency(
-    sessionsPageKey,
-    (consumer) =>
-      ({
-        addTab(sessionId: string, tab: SessionTabView) {
-          tabs.push(tab.title);
-          liveTabs.set(sessionId, tab);
-          return consumer.track({
-            dispose() {
-              liveTabs.delete(sessionId);
-              throwFromDispose();
-            },
-          } as SessionTabHandle);
-        },
-      }) as unknown as SessionsPageExports,
-  );
-}
 
 // A document editor host whose editors hold the text set or typed last.
 function documentEditors(): EditorHost {
@@ -197,11 +146,9 @@ const placeAt = (
 
 function startDocsPage(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
+  anchorDispose?: () => void,
 ) {
   installFocusFakeDom(vi.stubGlobal);
-  const tabs: string[] = [];
-  const liveTabs = new Map<string, SessionTabView>();
-  const throwsNext: ThrowsNext = { anchor: false, tab: false };
   const picker = fakeListPickerService();
   const harness = startPagePart(docsPagePart, {
     services: {
@@ -214,14 +161,13 @@ function startDocsPage(
         ...NO_FENCES,
       },
     },
-    dependencies: [fakeSessions(tabs, liveTabs, throwsNext)],
-    anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
+    anchorDispose,
     firstModeTaken: true,
     invoke,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, tabs, liveTabs, throwsNext, picker };
+  return { harness, exportsTo, picker };
 }
 
 type DocsPage = ReturnType<typeof startDocsPage>;
@@ -248,6 +194,12 @@ async function reloadWith(
   harness.emit('core.pageReady', null);
   return rows;
 }
+
+// The docs view a session's Docs tab adds over that session's source.
+const sessionView = ({ exportsTo }: DocsPage, sessionId: string) =>
+  exportsTo(createRegistrations()).addView(sessionSourceId(sessionId), {
+    isVisible: () => true,
+  });
 
 const openedPaths = ({ harness }: DocsPage) =>
   dataEmitted(harness, 'docs.docOpened').map(
@@ -284,46 +236,6 @@ describe('docs page part lifecycle', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  it.each([
-    { state: 'fresh start', sessionAdded: false, tabCount: 0 },
-    { state: 'one Docs tab held', sessionAdded: true, tabCount: 1 },
-  ])(
-    'stop_LeavesNoLiveRegistration ($state)',
-    async ({ sessionAdded, tabCount }) => {
-      const { harness, tabs } = startDocsPage();
-      if (sessionAdded) {
-        harness.state.publish(sessionsRowsSlot).set('s1', projectRow('s1'));
-        harness.emit('core.pageReady', null);
-      }
-
-      await harness.stop();
-
-      expect(tabs).toHaveLength(tabCount);
-      expect(harness.counts()).toEqual(noCounts);
-    },
-  );
-
-  it.each([
-    { part: 'anchor' as const, error: 'anchor gone' },
-    { part: 'tab' as const, error: 'tab gone' },
-  ])(
-    'stop_OneSessionsTeardownThrows_TearsDownEveryView ($part)',
-    async ({ part, error }) => {
-      const { harness, throwsNext } = startDocsPage();
-      const rows = harness.state.publish(sessionsRowsSlot);
-      for (const sessionId of ['s1', 's2']) {
-        rows.set(sessionId, projectRow(sessionId));
-      }
-      harness.emit('core.pageReady', null);
-      expect(harness.counts().observers).toBeGreaterThan(0);
-      throwsNext[part] = true;
-
-      await expect(harness.stop()).rejects.toThrow(error);
-
-      expect(harness.counts()).toEqual(noCounts);
-    },
-  );
 
   it('start_ModeSlotChanges_TracksDocsModeShown', async () => {
     const { harness } = startDocsPage();
@@ -390,36 +302,12 @@ describe('docs page part lifecycle', () => {
     },
   );
 
-  it('rows_HostChangedOrRemoved_ReachOnlyThatRowsView', async () => {
-    const rebuilt: unknown[] = [];
-    const { harness, liveTabs } = startDocsPage(async (method, ...args) => {
-      if (method === 'rebuildIndex') {
-        rebuilt.push(args[0]);
-      }
-      return method === 'pluginStatus'
-        ? { clones: [] }
-        : { document: null, message: null, title: 'index', canRebuild: false };
-    });
-    const rows = harness.state.publish(sessionsRowsSlot);
-    const observersOfNone = harness.counts().observers;
-    for (const sessionId of ['s1', 's2']) {
-      rows.set(sessionId, projectRow(sessionId));
-    }
-    harness.emit('core.pageReady', null);
-    for (const tab of liveTabs.values()) {
-      tab.shown?.();
-    }
+  it('stop_FreshStart_LeavesNoLiveRegistration', async () => {
+    const { harness } = startDocsPage();
 
-    rows.set('s1', { ...projectRow('s1'), hostSessionId: 'moved' });
-    await vi.waitFor(() => expect(rebuilt).toEqual([sessionSourceId('s1')]));
-
-    const observersOfBoth = harness.counts().observers;
-    rows.delete('s1');
-    expect([...liveTabs.keys()]).toEqual(['s2']);
-    expect(harness.counts().observers - observersOfNone).toBe(
-      (observersOfBoth - observersOfNone) / 2,
-    );
     await harness.stop();
+
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it.each([
@@ -514,7 +402,7 @@ describe('docs page part lifecycle', () => {
     const page = startDocsPage(
       servingIndexOf(['/p/machine.md', '/p/session.md'], []),
     );
-    const { harness, liveTabs } = page;
+    const { harness } = page;
     openByMessage(page, '/p/machine.md');
     await vi.waitFor(() => expect(openedPaths(page)).toHaveLength(1));
     const openedBefore = openedPaths(page).length;
@@ -525,7 +413,7 @@ describe('docs page part lifecycle', () => {
       ['s1'],
     );
     harness.started().commands.showMode({ arg: undefined });
-    liveTabs.get('s1')?.shown?.();
+    sessionView(page, 's1').shown();
 
     await vi.waitFor(() =>
       expect(openedPaths(page).slice(openedBefore).sort()).toEqual([
@@ -563,6 +451,29 @@ describe('docs page part lifecycle', () => {
     },
   );
 
+  // The tab's view outlives the row for a moment: docs and the tab each follow
+  // the rows, in either order.
+  it('rowGone_ItsViewDisposedAfter_WritesThePlaceNoMore', async () => {
+    const page = startDocsPage(servingIndexOf(['/p/open.md'], []));
+    const { harness } = page;
+    const rows = await reloadWith(
+      page,
+      { [sessionSourceId('gone')]: placeAt('/p/open.md') },
+      ['gone'],
+    );
+    const view = sessionView(page, 'gone');
+    view.shown();
+    await vi.waitFor(() => expect(openedPaths(page)).toEqual(['/p/open.md']));
+
+    rows.delete('gone');
+    view.dispose();
+
+    expect([...harness.state.read(docsPlaceSlot, 'test').all().keys()]).toEqual(
+      [],
+    );
+    await harness.stop();
+  });
+
   const restoredEdits = {
     path: '/p/kept.md',
     text: '# Doc\nedited',
@@ -570,20 +481,20 @@ describe('docs page part lifecycle', () => {
   };
 
   it.each([
-    { case: 'tab shown, edits back in the editor', isShown: true },
-    { case: 'tab never shown, restore waiting', isShown: false },
-  ])('restoredEdits_RefuseTheClose ($case)', async ({ isShown }) => {
+    { case: 'view shown, edits back in the editor', isShown: true },
+    { case: 'view never shown, restore waiting', isShown: false },
+  ])('restoredEdits_CountAsUnsaved ($case)', async ({ isShown }) => {
     const page = startDocsPage(servingIndexOf(['/p/kept.md'], []));
-    const { harness, liveTabs } = page;
+    const { harness } = page;
 
     await reloadWith(
       page,
       { [sessionSourceId('s1')]: placeAt('/p/kept.md', restoredEdits) },
       ['s1'],
     );
-    const tab = liveTabs.get('s1');
+    const view = sessionView(page, 's1');
     if (isShown) {
-      tab?.shown?.();
+      view.shown();
       await vi.waitFor(() =>
         expect(
           harness.logs.some(({ message }) =>
@@ -593,7 +504,7 @@ describe('docs page part lifecycle', () => {
       );
     }
 
-    expect(tab?.beforeClose?.(false)).toBe(false);
+    expect(view.hasUnsavedEdits()).toBe(true);
     await harness.stop();
   });
 
@@ -605,7 +516,7 @@ describe('docs page part lifecycle', () => {
     'restoredEdits_OpenFails_ToastsTheDroppedEdits ($case)',
     async ({ path }) => {
       const page = startDocsPage(servingIndexOf(['/p/gone.md'], []));
-      const { harness, liveTabs } = page;
+      const { harness } = page;
 
       await reloadWith(
         page,
@@ -614,7 +525,7 @@ describe('docs page part lifecycle', () => {
         },
         ['s1'],
       );
-      liveTabs.get('s1')?.shown?.();
+      sessionView(page, 's1').shown();
 
       await vi.waitFor(() =>
         expect(
@@ -642,14 +553,14 @@ describe('docs page part lifecycle', () => {
       }
       return serve(method, ...args);
     });
-    const { harness, liveTabs } = page;
+    const { harness } = page;
     const saved = {
       ...placeAt('/p/kept.md', restoredEdits),
       expanded: ['shelf:x'],
     };
 
     await reloadWith(page, { [sessionSourceId('s1')]: saved }, ['s1']);
-    liveTabs.get('s1')?.shown?.();
+    sessionView(page, 's1').shown();
     await vi.waitFor(() => expect(readDocs).toEqual(['/p/kept.md']));
 
     expect(
@@ -662,8 +573,8 @@ describe('docs page part lifecycle', () => {
   });
 
   it.each([
-    { case: 'tab shown', isShown: true, tracked: 1 },
-    { case: 'tab never shown', isShown: false, tracked: 0 },
+    { case: 'view shown', isShown: true, tracked: 1 },
+    { case: 'view never shown', isShown: false, tracked: 0 },
   ])(
     'restoredOpen_TrackedUntilItsDocReadSettles ($case)',
     async ({ isShown, tracked }) => {
@@ -672,7 +583,7 @@ describe('docs page part lifecycle', () => {
       const page = startDocsPage((method, ...args) =>
         method === 'readDoc' ? read.promise : serve(method, ...args),
       );
-      const { harness, liveTabs } = page;
+      const { harness } = page;
       const trackedBefore = harness.restores.length;
 
       await reloadWith(
@@ -680,8 +591,9 @@ describe('docs page part lifecycle', () => {
         { [sessionSourceId('s1')]: placeAt('/p/kept.md') },
         ['s1'],
       );
+      const view = sessionView(page, 's1');
       if (isShown) {
-        liveTabs.get('s1')?.shown?.();
+        view.shown();
       }
       const restores = harness.restores.slice(trackedBefore);
       let settled = 0;
@@ -700,6 +612,46 @@ describe('docs page part lifecycle', () => {
         0,
         tracked,
       ]);
+      await harness.stop();
+    },
+  );
+
+  it.each([
+    { state: 'before its first show', isShown: false, rebuilt: [] },
+    { state: 'after its first show', isShown: true, rebuilt: ['source'] },
+  ])(
+    'sourceReplaced_AddedView_RebuildsOnlyOnceShown ($state)',
+    async ({ isShown, rebuilt }) => {
+      const invoked: unknown[][] = [];
+      const { harness, exportsTo } = startDocsPage(async (method, ...args) => {
+        invoked.push([method, ...args]);
+        return method === 'pluginStatus'
+          ? { clones: [] }
+          : {
+              document: null,
+              message: null,
+              title: 'index',
+              canRebuild: false,
+            };
+      });
+      const view = exportsTo(createRegistrations()).addView('source', {
+        isVisible: () => true,
+      });
+      if (isShown) {
+        view.shown();
+        await vi.waitFor(() =>
+          expect(invoked).toContainEqual(['loadIndex', 'source']),
+        );
+      }
+
+      view.sourceReplaced();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        invoked
+          .filter(([method]) => method === 'rebuildIndex')
+          .map(([, sourceId]) => sourceId),
+      ).toEqual(rebuilt);
       await harness.stop();
     },
   );
@@ -742,15 +694,37 @@ describe('docs page part lifecycle', () => {
     expect(picker.created).toHaveLength(1);
   });
 
-  it('exports_ConsumerDisposed_DisposesItsView', () => {
-    const { harness, exportsTo } = startDocsPage();
-    const consumer = createRegistrations();
-    const observersBefore = harness.counts().observers;
-    exportsTo(consumer).addView('extra', { isVisible: () => false });
-    expect(harness.counts().observers).toBeGreaterThan(observersBefore);
+  it.each([
+    { state: 'no dispose throws', error: null },
+    { state: 'one anchor dispose throws', error: 'anchor gone' },
+  ])(
+    'exports_ConsumerDisposed_DisposesEveryView ($state)',
+    async ({ error }) => {
+      let isAnchorThrowOwed = false;
+      const { harness, exportsTo } = startDocsPage(undefined, () => {
+        if (isAnchorThrowOwed) {
+          isAnchorThrowOwed = false;
+          throw new Error('anchor gone');
+        }
+      });
+      const consumer = createRegistrations();
+      const observersBefore = harness.counts().observers;
+      for (const sourceId of ['s1', 's2']) {
+        exportsTo(consumer).addView(sourceId, { isVisible: () => false });
+      }
+      expect(harness.counts().observers).toBeGreaterThan(observersBefore);
+      isAnchorThrowOwed = error !== null;
 
-    consumer.dispose();
+      const disposing = () => consumer.dispose();
 
-    expect(harness.counts().observers).toBe(observersBefore);
-  });
+      if (error === null) {
+        expect(disposing).not.toThrow();
+      } else {
+        expect(disposing).toThrow(error);
+      }
+      expect(harness.counts().observers).toBe(observersBefore);
+      await harness.stop();
+      expect(harness.counts()).toEqual(noCounts);
+    },
+  );
 });

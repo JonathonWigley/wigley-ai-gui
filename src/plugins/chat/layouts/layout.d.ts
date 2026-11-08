@@ -206,6 +206,12 @@ export interface RowClockInput {
   isRunning: boolean;
 }
 
+// `name` is the session's profile: the name chat's profiles setting gives its config folder, else the folder's last
+// segment.
+export interface RowProfileInput {
+  name: string;
+}
+
 // One session hub section's frame: `summary` is the text its part set, null for none; `collapsed` holds while its body
 // is hidden.
 export interface SideSectionInput {
@@ -399,7 +405,7 @@ export interface AttachmentsKit extends BaseKit {
 // One row of a list chat opens, by list: the start prompt's Folder, Profile and Session steps, the Controls list and a
 // control's choices. A recent folder's `path` is spelled as the row shows it, the home folder as `~`; a control's
 // `value` as its chip shows it. A `section` row sits under a heading: `title` is its name, `detail` the rest of its
-// line, and `at` the time `detail` spells.
+// line (the section's note on the row first, when it has one), and `at` the time `detail` spells.
 export type PickerItemInput =
   | {
       list: 'folder';
@@ -606,6 +612,14 @@ export interface ChatLayout {
     input: RowClockInput,
     kit: BaseKit,
   ): PartView<RowClockInput>;
+  // The session's profile, drawn into the session row's `chat.rowProfile` wrapper; the app orders the wrapper among the
+  // row's parts. The app draws the part again when the layouts or chat's profiles change, and draws nothing for a
+  // session with no config folder.
+  rowProfile?(
+    parent: HTMLElement,
+    input: RowProfileInput,
+    kit: BaseKit,
+  ): PartView<RowProfileInput>;
   // One section's frame in the session hub, drawn into the side part's wrapper. The app sends the input again when the
   // section collapses, expands or its summary changes; a part with no `update` draws again, and the body moves over.
   sideSection?(

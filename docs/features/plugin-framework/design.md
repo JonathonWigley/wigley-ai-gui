@@ -10,6 +10,7 @@
 - **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
+- **Hot reload (Wave 4)** — the closed bridge, core services that stay fixed, live stop, start and restart, the `ready` and `mayStop` hooks, the live enable switch, and quit waiting for every stop.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -66,7 +67,8 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
   until the agent triggers a form; the session's tab then shows the form instead, so a form is self-contained in
   its session (user's words).
 - A `sessions` plugin owns the session list, the tab strip in the main area, and a session-view place other plugins
-  fill: forms fills it while a round is open, chat later.
+  fill: forms fills it while a round is open, chat later. Since the form popup plan, a round and the primer show in a
+  session popup over the session's tabs, not in a tab (`docs/features/session-popups/design.md`).
 - The sessions plugin owns the relay: each relay connection is a session, and plugins contribute MCP tools to it
   (forms contributes `ask_round` and `collect_last_round`; the primer's tools are the named second set). The tool
   list `relay.py` answers when the app is closed lives in wigley-ai-marketplace; A2 leaves that repo alone.
@@ -93,8 +95,8 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
   `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
 - `<C-j>` / `<C-k>` scroll the form and its review a line and `<C-S-j>` / `<C-S-k>` half a page, as in docs, chat
   and the gallery.
-- Folding goes: the fold keys (`za`, `zM`, `zR`) and the collapsible context and "Why recommended" sections are
-  removed; both are always shown.
+- The fold keys `zM` and `zR` do not exist, and a card's context and its choice reasons are always shown.
+  `za` is bound in forms: it opens or closes the cursor's notice line (`forms.toggleNotice`).
 
 ## Keys plugin (plan B)
 
@@ -206,22 +208,74 @@ Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/inten
   argument, because a row id means nothing in a list. Help and which-key keep one merged line, such as `1–9 pick the
   numbered choice`. `keymap.json` can still bind any of them.
 - **A page reload keeps the user's work and place in every plugin:** chat's draft and images, forms, primer, docs with
-  its unsaved edits, notes, backlog and settings, and sessions' selected tab in each session. Page slots write on each
-  change. The 400 ms autosaves that go to main flush on `pagehide`. Limits stand, each a follow-up in `followups.md`:
+  its unsaved edits, notes, backlog and settings, and sessions' selected tab and hidden popups in each session; a
+  round or primer the last page showed comes back in its session popup. Page slots write on each change. The 400 ms autosaves that go to main flush on `pagehide`. Limits stand, each a follow-up in `followups.md`:
   among them, an open markup session in notes or forms does not return (the fields do), box focus and vim insert mode
   do not return, a Settings row's open edit box loses its typed text (cursor and filter return), and page slots live
   in main's memory, so an app restart loses them.
 - **The two close seams each have one job.** Main's `addCloseGuard` refuses and returns the reason sessions shows as a
-  toast, and it alone holds forms' and primer's open round. A tab's `beforeClose` stays for what the page knows or must
-  ask (chat's confirm, docs' unsaved edits, a form being sent). One seam only was rejected: a guard in main cannot wait
+  toast, and it alone holds forms' and primer's open round. A tab's or popup's `beforeClose` stays for what the page
+  knows or must ask (chat's confirm, the Docs tab's unsaved edits, a form being sent). One seam only was rejected: a guard in main cannot wait
   on a dialog, and a guard only on the page would break the rule that main decides.
 - **The user's close key on an open round is one instant act.** Cmd+W, `Space ;` and `<Leader>;` cancel the round and
   close the session with no confirmation, chat's busy confirm included, because the user wants the session gone at once.
   Main does the cancel and the close in one step (`closeSession(id, atOnce)` runs each guard's `cancelHold` first), so
-  no second pass can ask again. Only a tab that says `closesAtOnce` makes the key act this way; with no such tab, chat's
-  busy confirm still asks. Docs' unsaved edits and a form already being sent still hold the session, since the first
+  no second pass can ask again. Only a tab or popup that says `closesAtOnce` makes the key act this way; with none,
+  chat's busy confirm still asks. The Docs tab's unsaved edits and a form already being sent still hold the session, since the first
   loses work and the second has already left. Another plugin's `closeSession` call never cancels: main refuses it with
   the guard's reason. The review's Cancel prompt is a different act: it cancels the round and leaves the session open.
 - **Row decoration is the row part.** Row parts and activities landed after the follow-up asked for `setBadge`, so
   `setStatus` gave way to a row part and `setBadge` is not added. A part's optional `SessionPart.tooltip` joins the
   row's tooltip, which is how a round's status shows.
+
+## Hot reload (Wave 4)
+
+Settled in the 2026-11-07 interview for Wave 4 steps 1 and 2 of `docs/features/intent-alignment/master-plan.md`.
+Plan folder `plan-hot-reload/`. The runtime plugin loader (step 3) gets its own plan once this one lands, because its
+design rests on a reload that has run.
+
+- **The raw bridge is closed.** The preload hands the Bridge over once, through a claim the core takes at start, and
+  no global holds it after that. Layouts, and later the plugins the loader reads from a user folder, reach the app only
+  through the kit and the plugin API, so every call stays inside a contract and its disposal. A sanctioned power-user
+  hook was rejected: reload can undo only what the API tracked, and the kit already covers what a layout needs
+  (`kit.command`, `kit.state.read`). This is not a sandbox. Layouts and plugin data modules still share the page's DOM,
+  as they must to draw. The window states `contextIsolation` and `sandbox` in code, so a changed Electron default cannot
+  open the page.
+- **Core services are not replaceable by a plugin.** Markdown, editor, alerts, the fuzzy matcher and markup stay
+  adapters that the composition root picks. Plugins extend them through seams, such as markdown fences and the
+  picker's layout hooks. Each service is built at one place in its composition root, so the app swaps a service
+  everywhere by changing that one line (the user's condition). A `provides` registry was rejected for now: it adds
+  start order and live swapping that no second provider needs yet, and it can come later behind the same contracts.
+- **A restart takes the dependents with it.** The host stops a plugin's dependents first, then the plugin, then starts
+  the plugin and every dependent it stopped, in start order. So a dependent may keep its view of a provider's exports for
+  its whole run. A stable export proxy was rejected: every export would have to survive a restart, and a registration
+  made through the old run would belong to a provider that is gone.
+- **`ready()` replaces `core.pageReady`.** A part's start may return `ready()`. The host calls it once every part has
+  started at page load, and again after a live start, once the whole restarted set has started. A core slot or a replayed
+  event was rejected: readiness is a phase of the part's lifecycle, so the host that owns the lifecycle calls it, and no
+  part writes its own "already ready?" check.
+- **`mayStop()` refuses a switch-off that would lose work.** A part may return `mayStop()`, which gives a reason while
+  it holds open work (an open round, unsaved doc edits), in the same shape as the close guard. The switch refuses with
+  that reason. A confirm that drops the work, and keeping the work across a switch-off, were rejected: one loses work, and
+  the other keeps slots for a plugin that is off.
+- **Switching off clears a plugin's slots; a restart keeps them.** A plugin switched off has its slots emptied, so a
+  reader does not see stale rows, and each reader's `on` hears the change. A stop and start of the same plugin keeps its
+  slots, so it starts from the last value as before.
+- **The switch runs in main.** One main module compares the disabled list on each config change. It stops page parts
+  before main parts, and starts main parts before page parts, so no page part calls a main handler that has gone. It
+  publishes each plugin's state (on or off, and the plugins that need it) in a core slot. Config's dependency check uses
+  the same rule, so a refused write and a locked switch cannot disagree.
+- **A plugin others need is locked.** Settings shows its switch as locked, with "needed by" naming the plugins that are
+  on and depend on it. The user switches those off first. Switching the dependents off with it was rejected, because
+  `sessions` or `chat` would take 15 or more plugins down in one press.
+- **Settings has a Plugins section.** It shows one row per plugin: the plugin's label, a one-line description, and on
+  or off, set with the picker the boolean settings use. Each manifest declares the label and the description.
+- **The served config follows the running set.** Help, which-key and Settings stop listing a plugin that is off. The
+  lists frozen at start are removed.
+- **Chat switched off works as at quit.** The agent processes go on running in the session host, and their rows close.
+  Chat switched on again joins them again, as after a relaunch.
+- **Quit waits for every stop to settle**, however long that takes, and logs an error after 5 seconds that names each
+  part still stopping. A cap was rejected by the user: a hung stop shows in the log, and quitting past it would cut the
+  save the wait is for.
+- **No reload key yet.** Built-in code does not change while the app runs, so drive actions stop, start and restart a
+  plugin to prove the host. The loader plan adds the reload the user runs.

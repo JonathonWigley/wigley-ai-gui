@@ -7,9 +7,10 @@ import {
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
 import { appended, element } from '../../../../shared/page/dom';
 import { qualify } from '../../../../shared/plugin-manifests';
+import { tag, type TagTone } from '../../../../shared/page/ui/tag';
 import type { PluginManifest } from '../../../../contracts/plugin';
 import { workflowStageActionCommand } from '../../contract';
-import type { MarkState, WorkflowKit } from '../../layouts/layout';
+import type { MarkState, StageStatus, WorkflowKit } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
 
 // The action the main action's button sends `workflow.stageAction`, as
@@ -29,20 +30,47 @@ const MARK_ICONS: Record<MarkState, string> = {
   done: 'pass-filled',
 };
 
+const STAGE_TAG_TONES: Record<StageStatus, TagTone> = {
+  running: 'running',
+  paused: 'neutral',
+  ready: 'neutral',
+  done: 'success',
+};
+
 // Sets the time an element's pulse animation starts from.
 function placePulse(pulsing: HTMLElement, clock: Clock): void {
   pulsing.style.setProperty('--workflow-mark-clock', `${clock.now()}ms`);
 }
 
+// `span.ui-tag.workflow-stage-tag` reading `label`, in the tone of `status`
+// (neutral for none) and carrying it as `data-state`; a running one pulses from
+// `clock`'s time.
+export function stageTagElement(
+  label: string,
+  status: StageStatus | null,
+  clock: Clock,
+): HTMLElement {
+  const stageTag = tag(
+    label,
+    status === null ? 'neutral' : STAGE_TAG_TONES[status],
+  );
+  stageTag.classList.add('workflow-stage-tag');
+  if (status !== null) {
+    stageTag.dataset.state = status;
+  }
+  placePulse(stageTag, clock);
+  return stageTag;
+}
+
 // The kit one part draw builds with: the base kit with no key scope, naming the
 // commands of the drawing plugin of `manifest` by their short names, plus the action
-// button, the stepper, the countdown, the badge, the status mark, the finished
-// groups' fold and the side pane's list. `sessionId` is the session each button
-// runs `workflow.stageAction` for; the main action's button sends `mainAction`, as
-// `<Leader>ww` does. The main action's and the fold's key hints name the engine's
-// commands, every other action's its plugin's. Each anchor it names is recorded in
-// `rollback`. Each status mark and running step carries `clock`'s time, which
-// places its pulse.
+// button, the stepper, the countdown, the badge, the stage tag, the status mark,
+// the finished groups' fold and the side pane's list. `sessionId` is the session
+// each button runs `workflow.stageAction` for; the main action's button sends
+// `mainAction`, as `<Leader>ww` does. The main action's and the fold's key hints
+// name the engine's commands, every other action's its plugin's. Each anchor it
+// names is recorded in `rollback`. Each status mark, stage tag and running step
+// carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
@@ -101,6 +129,15 @@ export function createWorkflowKit(
         `var(--wg-${manifest.id}-badge)`,
       );
       return badge;
+    },
+    stageTag(parent, label, status) {
+      const stageTag = appended(parent, stageTagElement(label, status, clock));
+      if (status === 'done') {
+        stageTag.prepend(
+          base.icon(stageTag, 'check', 'workflow-stage-tag-check'),
+        );
+      }
+      return stageTag;
     },
     statusMark(parent, state) {
       const mark = appended(parent, element('span', 'workflow-mark'));

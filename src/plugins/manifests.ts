@@ -1,18 +1,21 @@
 import type { PluginManifest } from '../contracts/plugin';
 import { agentLinesManifest } from './agent-lines/manifest';
 import { agentSkillsManifest } from './agent-skills/manifest';
+import { contextSourcesManifest } from './context-sources/manifest';
 import { agentStripManifest } from './agent-strip/manifest';
 import { agentsManifest } from './agents/manifest';
 import { autoCompactManifest } from './auto-compact/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
 import { docsManifest } from './docs/manifest';
+import { docsSessionTabManifest } from './docs-session-tab/manifest';
 import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
 import { notesManifest } from './notes/manifest';
 import { primerManifest } from './primer/manifest';
 import { sessionLogManifest } from './session-log/manifest';
+import { sessionStashManifest } from './session-stash/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 import { unityPoolManifest } from './unity-pool/manifest';
@@ -36,13 +39,16 @@ export const builtInManifests = [
   primerManifest,
   chatManifest,
   autoCompactManifest,
+  sessionStashManifest,
   sessionLogManifest,
   agentsManifest,
   agentLinesManifest,
   agentStripManifest,
   agentSkillsManifest,
+  contextSourcesManifest,
   keysManifest,
   docsManifest,
+  docsSessionTabManifest,
   galleryManifest,
   settingsManifest,
   backlogManifest,

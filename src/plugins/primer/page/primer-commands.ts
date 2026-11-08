@@ -557,7 +557,7 @@ function submit(deps: PrimerCommandDeps) {
   finishActivePrimer(deps, 'review', 'submitted');
 }
 
-// Whether the session's tab lets it close, as mayCloseSessionForm decides.
+// Whether the session's popup lets it close, as mayCloseSessionForm decides.
 export function mayClosePrimer(
   deps: Pick<PrimerCommandDeps, 'store' | 'toast' | 'log'>,
   sessionId: string,

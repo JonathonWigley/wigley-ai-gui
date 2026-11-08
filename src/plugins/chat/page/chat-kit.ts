@@ -71,9 +71,10 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
     options: CollapsibleCardOptions,
   ): CollapsibleCard => {
     const place = expanders.length;
-    const built = createCollapsibleCard(options, () =>
-      deps.expanderClicked(current.id, place),
-    );
+    const built = createCollapsibleCard({
+      ...options,
+      onToggle: () => deps.expanderClicked(current.id, place),
+    });
     expanders.push(built);
     parent.append(built.element);
     return built;

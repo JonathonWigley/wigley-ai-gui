@@ -14,8 +14,8 @@ import { RoundError } from './round-error';
 function question(overrides: Record<string, unknown> = {}) {
   return {
     title: 'Naming',
+    summary: 'Which name should win?',
     context: 'Two modules do the same thing under different names.',
-    question: 'Which name should win?',
     choices: ['module_a', 'module_b'],
     recommend: 1,
     rationale: 'module_a is older and already referenced elsewhere.',
@@ -100,8 +100,8 @@ describe('parseRound', () => {
     const round = parseRound({
       heading: 'Naming decisions',
       questions: [
-        question({ title: 'First', question: 'Pick the first name.' }),
-        question({ title: 'Second', question: 'Pick the second name.' }),
+        question({ title: 'First', summary: 'Pick the first name.' }),
+        question({ title: 'Second', summary: 'Pick the second name.' }),
       ],
     });
 
@@ -110,7 +110,7 @@ describe('parseRound', () => {
       'First',
       'Second',
     ]);
-    expect(round.questions[1].question).toBe('Pick the second name.');
+    expect(round.questions[1].summary).toBe('Pick the second name.');
     expect(round.layout).toBeNull();
     expect(round.questions.map((each) => each.layout)).toEqual([null, null]);
   });
@@ -238,34 +238,10 @@ describe('parseRound with notices', () => {
     expect(roundError(args)).toMatch(/notice.*finding.*question/);
   });
 
-  it('accepts fifty notices and refuses fifty-one', () => {
-    const notices = (count: number) =>
-      Array.from({ length: count }, (_, n) => notice({ title: `Fix ${n}` }));
-
-    expect(
-      parseRound({ heading: 'H', notices: notices(50) }).notices,
-    ).toHaveLength(50);
-    expect(roundError({ heading: 'H', notices: notices(51) })).toMatch(
-      /\b51\b.*\b50\b/,
-    );
-  });
-
   it.each(['Dispatched', 'Decided'])('accepts the %s badge', (badge) => {
     const round = parseRound({ heading: 'H', notices: [notice({ badge })] });
 
     expect(round.notices[0].badge).toBe(badge);
-  });
-
-  it('accepts twenty questions and refuses twenty-one', () => {
-    const questions = (count: number) =>
-      Array.from({ length: count }, (_, n) => question({ title: `Q ${n}` }));
-
-    expect(
-      parseRound({ heading: 'H', questions: questions(20) }).questions,
-    ).toHaveLength(20);
-    expect(roundError({ heading: 'H', questions: questions(21) })).toMatch(
-      /\b21\b.*\b20\b/,
-    );
   });
 });
 
@@ -307,18 +283,6 @@ describe('parseRound with findings', () => {
       parseRound({ heading: 'H', questions: [question()], findings: null })
         .findings,
     ).toEqual([]);
-  });
-
-  it('accepts twenty findings and refuses twenty-one', () => {
-    const findings = (count: number) =>
-      Array.from({ length: count }, (_, n) => finding({ title: `F ${n}` }));
-
-    expect(
-      parseRound({ heading: 'H', findings: findings(20) }).findings,
-    ).toHaveLength(20);
-    expect(roundError({ heading: 'H', findings: findings(21) })).toMatch(
-      /\b21\b.*\b20\b/,
-    );
   });
 
   it("numbers a finding's errors from 1", () => {
@@ -1180,11 +1144,9 @@ describe('fingerprint', () => {
     expect(fingerprint(parseRound(args({ overview: 'Other' })))).toBe(base);
   });
 
-  it('changes with the question text', () => {
+  it('changes with the summary', () => {
     const reworded = args({
-      questions: [
-        question({ ...BASE_QUESTION, question: 'Which name loses?' }),
-      ],
+      questions: [question({ ...BASE_QUESTION, summary: 'Which name loses?' })],
     });
 
     expect(fingerprint(parseRound(reworded))).not.toBe(
@@ -1192,9 +1154,18 @@ describe('fingerprint', () => {
     );
   });
 
-  it('hashes a round with no findings as it did before findings existed', () => {
+  it("hashes a legacy question's `question` as its summary twin", () => {
+    const { summary, ...rest } = question(BASE_QUESTION);
+    const legacy = args({ questions: [{ ...rest, question: summary }] });
+
+    expect(fingerprint(parseRound(legacy))).toBe(
+      fingerprint(parseRound(args())),
+    );
+  });
+
+  it('hashes a round with no findings with no findings key', () => {
     expect(fingerprint(parseRound(args({ notices: [] })))).toBe(
-      'af0111ce283d984c9577ca585f844661d2845e3473c03a5a84e49100c0bfb0c0',
+      '56624f6db3c22a5e6fb81207c85d247e1ec9e920364a03263f46d2d6afc00ffb',
     );
   });
 
@@ -1272,7 +1243,7 @@ describe('fingerprint', () => {
     );
   });
 
-  it("equals the Python server's fingerprint for the same round", () => {
+  it("equals Python's json.dumps hash for the same round", () => {
     const round = parseRound({
       heading: 'Ignored heading',
       overview: 'Ignored overview',
@@ -1281,7 +1252,7 @@ describe('fingerprint', () => {
           title: 'Naming été \u{1F680}',
           context:
             'Line one\nline "two"\twith a tab, a backslash \\ and a bell \u0007 and \u2028',
-          question: 'Which name should win?',
+          summary: 'Which name should win?',
           choices: ['module_a', 'module_b — newer'],
           recommend: 2,
           rationale: 'r',
@@ -1294,7 +1265,7 @@ describe('fingerprint', () => {
     });
 
     expect(fingerprint(round)).toBe(
-      '44bca4f5c40f6609e3e30934258689470c680de1b681feff4734ebcb2d5764f7',
+      '58960c3e13b904b5bdbb945f76fd021f79b7c68c104678715b269021f13677a7',
     );
   });
 });

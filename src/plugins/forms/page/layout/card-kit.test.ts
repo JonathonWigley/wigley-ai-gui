@@ -194,22 +194,32 @@ function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   return createCardKit('finding', 1, input, round, 0, deps);
 }
 
-// The kit of a finding of two fix_now choices after two notices, at rail
+// The kit of a round's third finding, of two fix_now choices, at rail
 // position 2; its entries are 1 and 2 (A, B), then 3 and 4 (the headers).
 function laterFindingKit(deps: CardDeps) {
-  const round = findingRound(
-    { choices: [choice('A', 'fix_now'), choice('B', 'fix_now')] },
-    ['Heads up', 'Also'],
-  );
-  const input = findingFormat.cardInput(round.round, 1);
-  return createCardKit('finding', 1, input, round, 2, deps);
+  const presented = presentedRound('r1', {
+    questions: [],
+    findings: [
+      finding('Alpha'),
+      finding('Beta'),
+      finding('Delta', {
+        choices: [choice('A', 'fix_now'), choice('B', 'fix_now')],
+      }),
+    ],
+  });
+  const round = apply(initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
+  const input = findingFormat.cardInput(round.round, 3);
+  return createCardKit('finding', 3, input, round, 2, deps);
 }
 
-// The kit of a round's second item, a question of two choices after one
-// finding, at rail position 1.
-function questionKit(deps: CardDeps) {
+// The kit of a round's second item, a question of two choices recommending
+// choice `recommend`, after one finding, at rail position 1.
+function questionKit(deps: CardDeps, recommend = 1) {
   const presented = presentedRound('r1', {
-    questions: [question('Alpha', { choices: ['one', 'two'], recommend: 1 })],
+    questions: [question('Alpha', { choices: ['one', 'two'], recommend })],
     findings: [finding('Delta')],
   });
   const round = apply(initialState([], presented.sessionId), {
@@ -527,6 +537,68 @@ describe('card kit', () => {
       expect(run.mock.calls).toEqual([ran]);
     },
   );
+
+  it.each([
+    {
+      kind: 'question',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        questionKit(deps, 2).kit.choiceList(parent, 'recommended'),
+      reasonsByEntry: [0, 1],
+      labelsPerReason: 0,
+    },
+    {
+      kind: 'finding',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        findingKit(deps).kit.choiceGroups(parent, 'all'),
+      reasonsByEntry: [1, 1, 1, 0, 0],
+      labelsPerReason: 1,
+    },
+  ])(
+    'choiceReason_LabelByCardKind_$kind',
+    ({ draw, reasonsByEntry, labelsPerReason }) => {
+      const { deps } = fakeCardDeps(createFormsContributions());
+
+      const answer = asFake(draw(deps, asHtml(new FakeElement('div'))));
+
+      const reasons = findAll(answer, 'choice-reason');
+      expect(
+        findAll(answer, 'choice').map(
+          (entry) => findAll(entry, 'choice-reason').length,
+        ),
+      ).toEqual(reasonsByEntry);
+      expect(findAll(answer, 'choice-reason-label')).toHaveLength(
+        reasons.length * labelsPerReason,
+      );
+    },
+  );
+
+  it.each([
+    {
+      kind: 'question',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        questionKit(deps).kit.choiceList(parent, 'none'),
+      firstChild: 'answer-head',
+      headers: 0,
+    },
+    {
+      kind: 'finding',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        findingKit(deps).kit.choiceGroups(parent, 'none'),
+      firstChild: 'ui-section-header',
+      headers: 1,
+    },
+  ])('answerArea_HeaderByCardKind_$kind', ({ draw, firstChild, headers }) => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+
+    const answer = asFake(draw(deps, asHtml(new FakeElement('div'))));
+
+    expect(answer.children[0].classList.contains(firstChild)).toBe(true);
+    expect(
+      answer.children.filter((child) =>
+        child.classList.contains('ui-section-header'),
+      ),
+    ).toHaveLength(headers);
+  });
 
   it('choiceList_CardBuilds_ObtainsEachRunnerBeforeAnyClick', () => {
     const { deps } = fakeCardDeps(createFormsContributions());

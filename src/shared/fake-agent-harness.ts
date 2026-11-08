@@ -9,6 +9,7 @@ import {
   type ChatEntry,
   type ChatImage,
   type CompactionTrigger,
+  type ContextBreakdownAgentEvent,
   type LogInEvents,
   type LogInProcess,
   type PastSession,
@@ -41,7 +42,8 @@ import { typedSkill } from './typed-skill';
 // `/<skill>` message and `turnStarted` for every send that runs a turn, tool
 // and subagent events (`agentReplied` included) beside their entries,
 // `taskStarted` and `taskFinished`
-// for background tasks, `compactionStarted` and one `compactionEnded` for each
+// for background tasks, `contextBreakdown` after `FAKE_CONTEXT_TEXT`'s turn's
+// `usage`, `compactionStarted` and one `compactionEnded` for each
 // compaction (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a
 // turn or a compaction closes or is interrupted, and
 // `sessionEnded` just before each `ended`. A process `attach` resolves opens with
@@ -92,6 +94,8 @@ export const FAKE_COMPACTED_CONTEXT_TOKENS = 24_000;
 // after a compaction.
 export const FAKE_COLD_TEXT = 'fake: cold';
 const FAKE_COLD_CONTEXT_TOKENS = 200_000;
+// A send of this text runs the echo turn, then reports `fakeContextBreakdownEvent` after its `usage`.
+export const FAKE_CONTEXT_TEXT = 'fake: context';
 // A send of this text starts one Bash tool, asks its permission through the
 // harness's `askPermissionsWith` ask, then finishes the tool, allowed or
 // refused, and replies. The turn stays open while the ask waits.
@@ -411,6 +415,52 @@ export function fakeUsageEvent(turn: number, at: number): UsageAgentEvent {
     autocompact: { configured: 300_000, reported: 967_000 },
     cacheExpiresAt: at + 3_600_000,
     spendUsd: 0.25 * turn,
+  };
+}
+
+// The breakdown `FAKE_CONTEXT_TEXT`'s turn reports: 128k of a 1M window, its sources largest first.
+export function fakeContextBreakdownEvent(
+  at: number,
+): ContextBreakdownAgentEvent {
+  const named = (label: string, tokens: number) => ({
+    label,
+    isPath: false,
+    tokens,
+  });
+  return {
+    type: 'contextBreakdown',
+    agentId: MAIN_AGENT_ID,
+    at,
+    totalTokens: 128_000,
+    contextWindow: 1_000_000,
+    autocompactAt: 967_000,
+    deferredTokens: 23_000,
+    sources: [
+      {
+        id: 'messages.attachments',
+        label: 'Attachments',
+        tokens: 73_000,
+        items: [
+          named('prompt_snapshot', 16_000),
+          named('invoked_skills', 10_000),
+        ],
+      },
+      {
+        id: 'messages.tool-results',
+        label: 'Tool results',
+        tokens: 27_000,
+        items: [named('Bash', 13_000), named('Read', 9_000)],
+      },
+      {
+        id: 'memory_files',
+        label: 'Memory files',
+        tokens: 11_000,
+        items: [{ label: '/fake/AGENTS.md', isPath: true, tokens: 11_000 }],
+      },
+      { id: 'skills', label: 'Skills', tokens: 9_000, items: [] },
+      { id: 'system_tools', label: 'System tools', tokens: 6_000, items: [] },
+      { id: 'system_prompt', label: 'System prompt', tokens: 2_000, items: [] },
+    ],
   };
 }
 
@@ -1066,6 +1116,9 @@ function fakeHistory(sessionId: string): ChatEntry[] {
   ];
 }
 
+// The config folder the fake names for a session with no profile.
+export const FAKE_DEFAULT_CONFIG_FOLDER = '~/.fake-agent';
+
 export function createFakeAgentHarness(
   clock: Clock,
   files: Pick<Files, 'write' | 'trash'>,
@@ -1215,6 +1268,10 @@ export function createFakeAgentHarness(
           : { ...usage, contextTokens: FAKE_COMPACTED_CONTEXT_TOKENS },
       );
     };
+    const emitContextTurnUsage: EmitTurnUsage = (usageTurn) => {
+      emitTurnUsage(usageTurn);
+      events.agentEvent(fakeContextBreakdownEvent(clock.now()));
+    };
     const emitColdTurnUsage: EmitTurnUsage = (usageTurn) => {
       const at = clock.now();
       emitMainUsage({
@@ -1222,6 +1279,13 @@ export function createFakeAgentHarness(
         contextTokens: FAKE_COLD_CONTEXT_TOKENS,
         cacheExpiresAt: at,
       });
+    };
+
+    const echoTurnUsage = (text: string): EmitTurnUsage => {
+      if (text === FAKE_COLD_TEXT) {
+        return emitColdTurnUsage;
+      }
+      return text === FAKE_CONTEXT_TEXT ? emitContextTurnUsage : emitTurnUsage;
     };
 
     const openNewCompaction = (
@@ -1695,7 +1759,7 @@ export function createFakeAgentHarness(
             emitEchoTurn(
               events,
               emitEntry,
-              text === FAKE_COLD_TEXT ? emitColdTurnUsage : emitTurnUsage,
+              echoTurnUsage(text),
               clock,
               sentTurn,
               text,
@@ -1977,6 +2041,7 @@ export function createFakeAgentHarness(
       });
       return () => release();
     },
+    configFolder: (profileDir) => profileDir ?? FAKE_DEFAULT_CONFIG_FOLDER,
     async accountStatus(profileDir) {
       return statusOf(profileDir);
     },

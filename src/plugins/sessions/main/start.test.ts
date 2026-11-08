@@ -212,7 +212,11 @@ function startSessionsPart(
     log?: (message: string) => void;
     send?: (message: string, payload: unknown) => void;
     originRepoName?: (projectDir: string) => Promise<string | null>;
-    agentHarnesses?: { id: string; sessionName: unknown }[];
+    agentHarnesses?: {
+      id: string;
+      sessionName: unknown;
+      configFolder: unknown;
+    }[];
     state?: SlotStore;
   } = {},
 ) {
@@ -309,7 +313,9 @@ describe('sessions main part', () => {
       const sessionName = vi.fn(async () => null);
       const exports = viewOf(
         startSessionsPart(30, {
-          agentHarnesses: [{ id: 'claude', sessionName }],
+          agentHarnesses: [
+            { id: 'claude', sessionName, configFolder: () => '/resolved' },
+          ],
         }),
       );
       const { session } = exports.connect({

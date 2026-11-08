@@ -11,7 +11,9 @@ export function defaultSettingsFor(programs: PlatformPrograms): Settings {
     keySequenceTimeoutMs: 1000,
     claude: { command: programs.claude },
     shell: { layout: 'default' },
-    plugins: { disabled: ['agent-lines', 'usage-tab-line'] },
+    plugins: {
+      disabled: ['agent-lines', 'usage-tab-line', 'docs-session-tab'],
+    },
   };
 }
 

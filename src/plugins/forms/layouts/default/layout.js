@@ -12,8 +12,13 @@
 // - notice card: `textBox` (the comment box is appended at the end) and
 //   `contributedParts` (appended after it)
 // - rail: `entry` (a rail without entries scrolls nothing into view)
+// - notices pane: `line` (each line left out is appended at the end of the
+//   pane)
 // - review: `roundNote` (appended at the end of the pane), and every other
 //   part, which then draws nothing
+//
+// The question card draws no section labels: the summary is its headline, and
+// the context, the choices and the rationale follow with no label.
 
 // A notice's badge tone; a badge not listed here is neutral.
 /** @type {Record<string, import('../layout').TagTone>} */
@@ -29,8 +34,8 @@ const layout = {
     question(parent, input, kit) {
       const card = kit.card(parent, 'item question');
       kit.itemHead(card, 'Question');
-      kit.section(card, 'Question', input.question);
-      kit.section(card, 'Context', input.context);
+      kit.inlineMarkdown(card, input.summary, 'item-summary');
+      kit.markdown(card, input.context, 'context-body md');
       const answer = kit.choiceList(card, 'recommended');
       kit.answerControls(answer);
       return { element: card };
@@ -46,12 +51,11 @@ const layout = {
       kit.answerControls(answer);
       return { element: card };
     },
+    // The body of the notice's line: the line's head draws the badge and the
+    // title.
     notice(parent, input, kit) {
-      const card = kit.card(parent, 'item notice');
-      const head = kit.el(card, 'header', 'item-head');
-      kit.tag(head, 'Notice');
-      kit.tag(head, input.badge, NOTICE_TONES[input.badge] ?? 'neutral');
-      kit.section(card, 'Context', input.context);
+      const card = kit.el(parent, 'div', 'item notice');
+      kit.markdown(card, input.context, 'context-body md');
       kit.textBox(card, 'comment');
       return { element: card };
     },
@@ -64,6 +68,17 @@ const layout = {
       kit.entry(list, item.position);
     }
     return { element: nav };
+  },
+  notices(parent, input, kit) {
+    const pane = kit.el(parent, 'section', 'notices');
+    const list = kit.el(pane, 'div', 'notice-lines');
+    for (const notice of input.notices) {
+      const head = kit.line(list, notice.index);
+      kit.tag(head, notice.badge, NOTICE_TONES[notice.badge] ?? 'neutral');
+      const title = kit.el(head, 'span', 'notice-line-title', notice.title);
+      title.title = notice.title;
+    }
+    return { element: pane };
   },
   review(parent, input, kit) {
     const pane = kit.el(parent, 'div', 'review-pane');

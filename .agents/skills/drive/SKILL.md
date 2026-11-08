@@ -42,7 +42,8 @@ start one whenever a check needs it.
    row; a `sessions.connect` session is never reused. To put a round and a primer on one row, run
    `sessions.open '{"sessionId":"s"}'` first, then both open actions with `"sessionId":"s"`. The
    second of the two opens logs `[sessions] newer relay took over session <id>`; that line is
-   expected there.
+   expected there. A second open of the same round in a session where it was already submitted
+   replays the stored answers and shows nothing, so pass a different `round`.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). `setting <name> <json value>` takes the
@@ -79,6 +80,9 @@ the session host and re-attaches them. The docs fixture survives a `restart` as 
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
 keeps the Docs tree's "Claude pending" chip on screen long enough to see; default 0).
+A drive run starts with the default settings, so `docs-session-tab` is off and no session shows a Docs tab. A
+Docs-tab check first runs `setting plugins.disabled '["agent-lines","usage-tab-line"]'` (the default list without
+`docs-session-tab`), then `restart`, because turning a plugin on takes effect on the next app start.
 `docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and
 opens the doc at that line, or toasts that the machine index does not list it. `line` is a
 positive whole number, or the command rejects with `line must be a positive whole number`. A

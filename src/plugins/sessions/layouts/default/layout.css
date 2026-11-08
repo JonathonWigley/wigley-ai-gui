@@ -1,5 +1,5 @@
-/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, the tab bar and
-   the empty text. */
+/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, the tab bar, the
+   empty text, the session popup and its hidden bar. */
 
 /* A pane fills its slot; its body shows the session's frame or the empty
    text in one cell, and its focus edges sit on its sides. */
@@ -19,7 +19,8 @@
   min-height: 0;
 }
 
-/* The inset the up and down edge prompts leave free in their pane's sheet. */
+/* The inset the edge prompts leave free: the up one in their pane's sheet, the
+   down one under its frame. */
 .session-pane {
   --session-edge-inset: var(--wg-space-6);
 }
@@ -342,33 +343,6 @@
   white-space: nowrap;
 }
 
-/* A running activity's label takes the running colour and pulses: it reports
-   the agent at work. Its cycle is `duration-pulse`, not the transition
-   durations, which pulse fast enough to read as flashing. Under reduced motion
-   it is static. */
-@keyframes session-activity-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.6;
-  }
-}
-
-.session-row-activity--running {
-  color: var(--wg-status-running);
-  animation: session-activity-pulse var(--wg-duration-pulse) ease-in-out
-    infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-row-activity--running {
-    animation: none;
-  }
-}
-
 /* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W` and the
    pane controls at the bar's end. The bar takes the strip's margin, so the
    strip sits flush between its prompts; only the strip and the bar parts
@@ -413,6 +387,79 @@
 .sessions-empty {
   display: grid;
   place-content: center;
+}
+
+/* A session popup: an L2 sheet raised over the session's tabs, its top edge at
+   `sessions.popup-top` down the popup layer, `radius-lg` on its top corners,
+   no shadow. It slides up from below while open (`is-open`) and down out of
+   sight when hidden, then takes no paint. On add it starts below and slides up
+   once (`is-entering`). Its body fills it, so the plugin's element fills the
+   sheet. */
+.session-popup {
+  position: absolute;
+  inset: var(--wg-sessions-popup-top) 0 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  border-radius: var(--wg-radius-lg) var(--wg-radius-lg) 0 0;
+  background: var(--wg-sheet-background);
+  transform: translateY(100%);
+  visibility: hidden;
+  transition:
+    transform var(--wg-duration-slow) var(--wg-ease-in),
+    visibility 0s linear var(--wg-duration-slow);
+}
+
+.session-popup.is-open {
+  transform: translateY(0);
+  visibility: visible;
+  transition:
+    transform var(--wg-duration-slow) var(--wg-ease-out),
+    visibility 0s;
+}
+
+@starting-style {
+  .session-popup.is-open.is-entering {
+    transform: translateY(100%);
+  }
+}
+
+.session-popup-body {
+  height: 100%;
+  min-height: 0;
+}
+
+/* The hidden popups' bar: a slim row at the frame's bottom, one entry per
+   hidden popup (its icon and status), then the toggle key at its end. */
+.session-popup-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  margin: 0 var(--wg-sheet-gutter) var(--wg-sheet-gutter);
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+.session-popup-bar-entry {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  padding: var(--wg-space-0_5) var(--wg-space-1_5);
+  border-radius: var(--wg-radius-md);
+}
+
+.session-popup-bar-entry:hover {
+  background: var(--wg-button-ghost-hover);
+  color: var(--wg-fg);
+}
+
+.session-popup-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The rename dialog: why a title was refused under its box, then the hint. */

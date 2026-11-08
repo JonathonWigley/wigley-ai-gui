@@ -29,7 +29,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - The side bar lists repos, each with its features homes. A repo normally has one home; a stray second home (an
   in-repo `docs/features/` and a `~/wigley-features/<repo>/`) shows as its own group and edits, but is never a
   create target while the repo has a home in git. A home that is a linked git worktree's (`git worktree add`)
-  own `docs/features/` is not listed: it is a second checkout of a clone's own home.
+  own `docs/features/` is not listed: it is a second checkout of a clone's own home. Its plans' progress still counts
+  (§ Plans and features).
 - The content sheet shows the selected home's follow-up list, plans and features, with a detail pane on the right.
 - Keys, all checked against Docs mode's keys and `docs/keymap.md`:
 
@@ -104,7 +105,11 @@ plan is written from them. A decision here stands unless the user changes it.
 ## Plans and features
 
 - A plan shows its name, feature, progress (checked of total), target and written date; a primed feature shows its
-  slug and progress. Opening one renders `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a
+  slug and progress.
+- A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
+  plan's newest copy across the clone and its git worktrees (`src/shared/plan-copies.ts`), as Heavy's checklist reads
+  them, so a run in a worktree shows in Backlog too, at its next load. The count is the boxes under `## Tasks`, not the docs index's
+  count of every checkbox in the file. Opening one renders `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a
   key to open the file in Docs mode for hand edits.
 
 ## Git
@@ -121,9 +126,8 @@ plan is written from them. A decision here stands unless the user changes it.
   swept in by an automatic commit.
 - A home is in git only when it is its clone's `docs/features` folder, compared on real paths. Every other home
   (`~/wigley-features/` homes, even under an enclosing repo) is not in git and shows no chip.
-- Git runs behind a `Git` contract with one adapter over ProcessRunner (`src/main/git/`). Its methods are
-  `topLevel`, `isLinkedWorktree`, `hasUpstream`, `changedPaths`, `unpushedPaths`, `upstreamBlobs`, `fetch`, `lastFetch`, `fileAtHead`
-  and `commitPaths`. Docs' plugin statuses move onto it, so the app runs `git` in one place, except the Backlog
+- Git runs behind a `Git` contract with one adapter over ProcessRunner (`src/main/git/`); `src/contracts/git.ts`
+  lists its methods, `worktrees` among them. Docs' plugin statuses move onto it, so the app runs `git` in one place, except the Backlog
   self-test's fixture repo, which runs git through `services.processes`.
 
 ## Seams
@@ -136,6 +140,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - Backlog's main part exports `load` (the homes), `tags` and `fileNote` (the follow-up write with the note's images)
   to the `notes` plugin, so every follow-up and image write in the app other than Docs' create dialog goes through
   Backlog.
+- `src/shared/plan-progress.ts` and `src/shared/plan-copies.ts` are the plan reader Backlog and `workflow-heavy`
+  share, since neither plugin may import the other.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for
   agents and other index readers. Each is tested against the format triage.md gives; a change to the format changes
   both in the same piece of work.

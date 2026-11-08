@@ -85,6 +85,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         returned: [],
         repo: PREVIEW_PROJECT_DIR,
         branch: 'main',
+        worktrees: ['app-session-facts'],
       });
       preview = { owned, slots, noticeCount: 0 };
       for (const event of previewAgentEvents(deps.clock.now())) {

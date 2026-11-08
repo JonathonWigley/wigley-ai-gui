@@ -1,8 +1,8 @@
 // @ts-check
 
 // The built-in Light look: a one-line chip under the session row (the level's
-// badge, then the stage and its status as one tag), the stepper's trail above the
-// composer, and the side pane beside the transcript (the status mark and line,
+// badge, then the stage's tag, coloured and pulsing by its status), the stepper's
+// trail above the composer, and the side pane beside the transcript (the status mark and line,
 // the count, the progress bar and the checklist as one flat list).
 
 /** @typedef {import('../../../workflow/layouts/layout').SideGroupInput} SideGroupInput */
@@ -59,7 +59,7 @@ const layout = {
   chip(parent, input, kit) {
     const chip = kit.el(parent, 'div', 'workflow-chip');
     kit.badge(chip, input.badge, input.workflowLabel);
-    kit.tag(chip, input.statusText, 'accent');
+    kit.stageTag(chip, input.label, input.status);
     return { element: chip };
   },
 

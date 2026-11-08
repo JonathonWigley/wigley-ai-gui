@@ -103,6 +103,7 @@ function stateOf(
     returned,
     repo: 'app',
     branch: 'main',
+    worktrees: [],
     compaction: null,
     ...overrides,
   };
@@ -143,12 +144,7 @@ function mounted(
   const toasts: [string, string][] = [];
   const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
-  const tab = {
-    element: null as FakeElement | null,
-    beforeClose: null as ((atOnce: boolean) => boolean) | null,
-  };
-  // The tab name each end-session confirmation opened for.
-  const confirms: string[] = [];
+  const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
   const sideParts = createPartStore<ChatSidePart>();
   const composerParts = createPartStore<ChatComposerPart>();
@@ -195,6 +191,14 @@ function mounted(
   // What `activeTime` read while `addTab` ran, as a row drawn then reads it.
   const readDuringAddTab: (ActiveTime | null)[] = [];
   let removeSession: (sessionId: string) => void = noEvent;
+  // Each tab's close guard, and each session the end-session confirm opened
+  // for; the confirm answers `confirmAnswer.ended`.
+  const beforeCloses = new Map<
+    string,
+    (atOnce: boolean) => boolean | Promise<boolean>
+  >();
+  const confirmed: string[] = [];
+  const confirmAnswer = { ended: false };
   let activeSessionId: string | null = null;
   const view = mountChatView({
     channel,
@@ -216,22 +220,20 @@ function mounted(
         sessionId: string,
         added: {
           element: HTMLElement;
-          beforeClose(atOnce: boolean): boolean;
+          beforeClose(atOnce: boolean): boolean | Promise<boolean>;
         },
       ) => {
         readDuringAddTab.push(view.activeTime(sessionId));
+        beforeCloses.set(sessionId, added.beforeClose);
         tab.element = asFake(added.element);
-        tab.beforeClose = (atOnce) => added.beforeClose(atOnce);
         tabElements.set(sessionId, tab.element);
         return {
           select: noEvent,
-          takeOver: () => ({ release: noEvent }),
           remove: noEvent,
           isVisible: () => false,
         };
       },
       activate: noEvent,
-      closeSession: noEvent,
       setActivity: (
         _sessionId: string,
         _source: string,
@@ -290,8 +292,15 @@ function mounted(
       writeImages: noEvent,
     }),
     toast: (text: string, tone: string) => toasts.push([text, tone]),
-    confirm: { open: (name: string) => confirms.push(name) },
     visibleSessionRested: noEvent,
+    confirm: {
+      open: (name: string) => {
+        confirmed.push(name);
+        return Promise.resolve(confirmAnswer.ended);
+      },
+      end: noEvent,
+      keep: noEvent,
+    },
   } as unknown as ChatViewDeps);
   const ready = () => {
     pageReady();
@@ -299,6 +308,10 @@ function mounted(
   };
   return {
     view,
+    beforeClose: (sessionId: string, atOnce: boolean) =>
+      beforeCloses.get(sessionId)?.(atOnce),
+    confirmed,
+    confirmAnswer,
     activeTimeCalls,
     readDuringAddTab,
     removeSession: (sessionId: string) => removeSession(sessionId),
@@ -315,7 +328,6 @@ function mounted(
     keyRuns,
     logs,
     toasts,
-    confirms,
     activities,
     writers,
     ready,
@@ -590,6 +602,22 @@ describe('mountChatView session facts source', () => {
     expect(
       mount.logs.some((line) => line.includes('composer update failed')),
     ).toBe(composerRedrawn);
+  });
+
+  it('worktreesWrite_ListenerHearsWorktreeRow', () => {
+    const mount = mounted();
+    mount.open(stateOf([]));
+    const source = mount.view.sessionFactsSource('row-1');
+    const worktreesHeard: (string | undefined)[] = [];
+    source?.onChanged(() =>
+      worktreesHeard.push(
+        source.input().facts.find((fact) => fact.label === 'Worktree')?.value,
+      ),
+    );
+
+    mount.setInfo('row-1', { worktrees: ['app-fix'] });
+
+    expect(worktreesHeard).toEqual(['app-fix']);
   });
 
   it('source_SubscriptionDisposedOrSessionUnheld_HearsNothingAndIsNull', () => {
@@ -918,6 +946,13 @@ describe('mountChatView slots', () => {
       workingDraws: 0,
       clockCalls: 0,
     },
+    {
+      block: 'worktrees',
+      change: { worktrees: ['app-fix'] },
+      lines: ['app wrote in worktree app-fix'],
+      workingDraws: 0,
+      clockCalls: 0,
+    },
   ])(
     'chatView_SessionWrite_RunsOnlyChangedBlock: $block',
     ({ opening, change, lines, workingDraws, clockCalls }) => {
@@ -946,27 +981,6 @@ describe('mountChatView slots', () => {
       expect(view.activeTimeCalls).toHaveLength(clockCalls);
     },
   );
-
-  it.each([
-    {
-      case: 'a plain close of a busy session asks',
-      atOnce: false,
-      mayClose: false,
-      confirms: 1,
-    },
-    {
-      case: 'at_once_close_of_a_busy_session_opens_no_confirm',
-      atOnce: true,
-      mayClose: true,
-      confirms: 0,
-    },
-  ])('chatView_BeforeClose: $case', ({ atOnce, mayClose, confirms }) => {
-    const view = mounted();
-    view.open(stateOf([], { running: true, activity: 'working' }));
-
-    expect(view.tab.beforeClose?.(atOnce)).toBe(mayClose);
-    expect(view.confirms).toHaveLength(confirms);
-  });
 
   it('chatView_ErrorRest_ToastsOnce', () => {
     const view = mounted();
@@ -1085,5 +1099,58 @@ describe('mountChatView click sites', () => {
     click(built.entryList!, built.composer!);
 
     expect(view.keyRuns).toEqual([run]);
+  });
+});
+
+describe('mountChatView close guard', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      case: 'idle',
+      running: false,
+      atOnce: false,
+      ended: false,
+      closes: true,
+      asked: 0,
+    },
+    {
+      case: 'working, user ends it',
+      running: true,
+      atOnce: false,
+      ended: true,
+      closes: true,
+      asked: 1,
+    },
+    {
+      case: 'working, user keeps it',
+      running: true,
+      atOnce: false,
+      ended: false,
+      closes: false,
+      asked: 1,
+    },
+    {
+      case: 'working, closed at once',
+      running: true,
+      atOnce: true,
+      ended: false,
+      closes: true,
+      asked: 0,
+    },
+  ])('beforeClose_EachState_AnswersTheConfirmsAnswer ($case)', async (test) => {
+    const view = mounted();
+    view.pageLoad([
+      stateOf([], { running: test.running, activity: 'working' }),
+    ]);
+    view.confirmAnswer.ended = test.ended;
+
+    const closes = await view.beforeClose('row-1', test.atOnce);
+
+    expect(closes).toBe(test.closes);
+    expect(view.confirmed).toHaveLength(test.asked);
   });
 });

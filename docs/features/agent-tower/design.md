@@ -30,7 +30,8 @@ Built:
 
 Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
 itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted by the Claude adapter and the fake
-harness and read by the workflow plugin (`docs/features/workflow/design.md`).
+harness and read by the workflow plugin (`docs/features/workflow/design.md`); `contextBreakdown` is read by the
+`context-sources` plugin (`docs/features/chat-bar/design.md` § The session hub).
 
 ## Vocabulary
 
@@ -68,6 +69,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `taskFinished` | task id, done or failed | — |
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, one-line summary (started only), success or failure (finished only) | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
+| `contextBreakdown` | agent id (the main agent only), context tokens, context window and autocompact limit (each null when unknown), deferred tokens (loadable, not in context), and the sources in context largest first, each an id, label, tokens and its items (label, tokens, whether the label is a path); after each `get_context_usage` reply | — (the hub's Context section) |
 | `compactionStarted` | trigger: `app` (the app called `compact()`), `manual` (the user sent `/compact`) or `harness` (the harness's own autocompact) | rest begins |
 | `compactionEnded` | trigger, outcome (done, failed or interrupted), context tokens before (null when the harness does not report it, and unless the outcome is done), duration in ms (null when unknown); one for each `compactionStarted`. The after-size is the next `usage` | rest / heal |
 | `userMessage` | — | "message from HQ" |
@@ -90,7 +92,7 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 
 - **Main** hears `chat.agentEvent`, folds each event into the roster of its process's host session id under its row (a
   cleared row's old process ending drops only its own subagents and tasks) with a pure reducer, appends the event as one JSON line
-  to `logs/<host session id>.jsonl` in its plugin data, and sends each changed roster to the page over its channel. A
+  to `logs/<host session id>.jsonl` in its plugin data (all but a `contextBreakdown`, several KB after every turn), and sends each changed roster to the page over its channel. A
   session's `sessionEnded` finishes every subagent still listed: a process that exits or crashes mid-subagent sends no
   `agentFinished`. The Claude adapter finishes a subagent itself on its `task_notification` or its non-launch
   `tool_result`, whichever comes first: on Claude 2.1.316 a subagent runs in the background by default, so its Agent

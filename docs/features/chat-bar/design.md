@@ -83,11 +83,12 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
       ▾ Main agent   2:05     chat: the activity dock
       ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Light and Medium
       ▾ Skills       4        agent-skills: each skill the main agent started
+      ▾ Context  128k · 13%   context-sources: where the main agent's context comes from
       ▾ Session               chat: project, branch, folder, harness, model · effort
 ```
 
 - **A side part** declares a `title` and an `order`. Chat sorts the sections by `order` and draws each one's frame
-  through the chat layout's `sideSection` part. The orders: Main agent 10, Plan 20, Skills 30, Session 40.
+  through the chat layout's `sideSection` part. The orders: Main agent 10, Plan 20, Skills 30, Context 35, Session 40.
 - **A section's frame:** its title, the summary its part sets (the turn's time, `5/7`, the skill count), and a chevron
   that collapses it. A click on the title toggles the section. Collapsed sections are kept in `uiState` by part id and
   apply to every session. A section takes no key and no focus.
@@ -103,8 +104,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.
 - **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
-  session, kept in `uiState` as `hub-width` across a relaunch. No key moves it: `Alt+Shift+h`/`l` stay with the chat panes'
-  dividers.
+  session, kept in `uiState` as `hub-width` across a relaunch. While the hub has the keys `Alt+Shift+h`/`l` move it 24 px; from the
+  transcript, box or strip they stay with the chat panes' dividers and the side bar.
 - **Plan or Checklist:** the section is the workflow plugin's side pane, one section for each workflow, drawn only while
   a session's flow is of that workflow. It is titled `Plan` for Heavy, which draws it from the first read of a plan until
   Dismiss or a new plan, and `Checklist` for Light and Medium, which draw it once the agent has set a checklist
@@ -114,6 +115,16 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   its folder path; the summary counts skills. A subagent's skills stay in the roster and are not listed. A skill's row
   stays through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
   log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
+- **Context:** where the main agent's context comes from, as the harness last reported it (the `contextBreakdown`
+  agent event; Claude's `get_context_usage`, asked at start, after each turn and after a compaction). A stacked bar of
+  the sources, each coloured by its place in the list; under it the context's fill of the window, with a tick where
+  compaction starts and `128k of 1M` / `compacts at 967k` beneath; then one row per source, largest first, with its
+  tokens and its share of the context. Claude's Messages category is split into attachments, tool results, tool calls,
+  agent replies and user messages, each its own source. A click on a source with items (memory files by path with the
+  home as `~`, skills, MCP servers, agents, tools, attachment types) opens or closes them under it, per session, for
+  the page's life. Deferred tools, which are not in context until loaded, are one dim line under the rows. The summary
+  is the total and its share of the window (`128k · 13%`). The section hides until the session's first breakdown; a
+  subagent's context has none.
 - **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
   harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the
   status line.
@@ -134,7 +145,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   `sessions.titleMaxLength` with `…`; the plugin's session instruction asks for 2 to 4 words within that limit. A task has no context or cost. Rows stack under the cards and scroll
   past four rows.
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
-  when the session's process exits. Nothing stays to be closed, so the strip has no close control.
+  when the session's process exits. A background subagent ends at its `task_notification` only once every task it owns
+  has ended, since a subagent waiting on its own shell can be notified before it finishes. A line from a subagent
+  already ended brings its box back, and the box leaves again at the subagent's next end. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the cards scroll sideways; `‹` and `›` buttons at their ends scroll by one card and hide when there
   is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws while the strip shows; a redraw in a hidden tab, or a rebuilt composer, starts the list at the top.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
@@ -197,15 +210,18 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 ## Optional plugins
 
 - The core setting `plugins.disabled` lists plugin ids the plugin host does not start. Its default lists
-  `agent-lines` and `usage-tab-line`. Settings mode shows it.
+  `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it.
 - Turning a plugin off takes effect for its page part on the next page load and for its main part on the next app
   start; turning one on takes effect on the next app start, since a page part never starts without its main part (the
   page reads the union of the setting and main's start list). A plugin that another started plugin depends on cannot
   be disabled: the config check reports it as a config problem and keeps the last good config.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar's working line;
   `agent-strip` draws the strip; `agent-skills` draws the hub's Skills section. All three read the agents roster.
+- `context-sources` keeps each session's last context breakdown in its own slot and draws the hub's Context section.
 - `usage` keeps the polls, the status-bar plan line, the right bar, the context line and the spend status part.
   `usage-tab-line` draws usage's own whole session-line part (context, cache and spend) in each tab bar.
+- `docs` keeps Docs mode, the per-session index sources and the `addView` export. `docs-session-tab` draws each
+  session's Docs tab (a split of tree and page) through sessions' `addTab` and docs' `addView`.
 
 ## Decisions
 
@@ -259,7 +275,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 - **Chat reading usage and agents data itself** — chat would name other plugins; parts keep each plugin drawing what
   it owns.
 - **A leader key or scroll chords for the strip** — the user wanted the strip on the `j`/`k` cursor with `h`/`l`.
-- **Moving the tab-bar line wholesale** — the Form and Primer tabs would lose it with no way back.
+- **Moving the tab-bar line wholesale** — a session with no Chat tab would lose it with no way back.
 - **The hub in the right bar** — only the focused pane's session could show there, and the user wanted every pane's.
 - **A live thinking token count** (`Thinking… ~1.2k tokens`) — the user took the moved dock with nothing new; the count
   stays available from the adapter's `thinking_tokens` events if long thinks feel opaque.

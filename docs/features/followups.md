@@ -53,15 +53,10 @@ Core seams that most items below assume.
   cursor and the filter, but a row's open edit box closes and the text typed in it goes.
 - **A page reload comes back in Sessions mode**: the shown mode (Docs, Settings, Backlog) has no page slot, so a reload
   shows Sessions whichever mode the user was in.
-- **Chat's confirmed close is a plain close**: the end-session confirm's callback (`mayClose` in
-  `src/plugins/chat/page/chat-view.ts`) closes through `sessions.closeSession`, which always sends `atOnce` false. A
-  second press of the close key while the confirm shows does not re-read `closesAtOnce`, so a round opened since the
-  confirm still waits on the guard. `plugin-framework/design.md` words the close key's act as plain here; whether the
-  confirm should re-read it is the user's call.
-- **A saved take over is dropped when its tab is disposed first**: a restored session's tab that disposes before its
-  plugin's restored `takeOver` runs releases the take over the last page saved for it
-  (`session-tabs-view.ts`, `dispose` calls `release`), so the saved record leaves the place and the tab selected before
-  it comes back selected.
+- **Chat's confirmed close keeps its press's `atOnce`**: the end-session confirm (`mayClose` in
+  `src/plugins/chat/page/chat-view.ts`) answers the close it was asked in, and that close goes on with the `atOnce` its
+  press read, so a round opened while the confirm shows still waits on the guard. `plugin-framework/design.md` words the
+  close key's act as plain here; whether the confirm should re-read `closesAtOnce` is the user's call.
 - **Preview sessions lose their title-bar detail**: the Layout and Primer previews carry `projectDir: null`, so
   `publishFocused` in `sessions/page/start.ts` sets the title bar's detail line to null. The line repeated the name
   when the previews had a path, and no replacement detail was chosen.
@@ -74,8 +69,8 @@ Core seams that most items below assume.
   tell a run that did its work from one that did not.
 - **Page state survives an app restart** — *needs a feature plan*: the page `*.place` slots live in main's memory, so
   an app restart loses chat's draft, forms' place and the rest.
-- **A second page reload loses a session's selected tab** — *needs a feature plan*: a tab added late, as forms' is
-  when its round opens, takes its selection back from the saved place only if nothing selected since the load
+- **A second page reload loses a session's selected tab** — *needs a feature plan*: a tab added late, after the
+  session's first tabs, takes its selection back from the saved place only if nothing selected since the load
   (`tabsAfterRestoredAdd`). A second reload before that tab is added saves the place with the tab the first reload
   left selected, so the late tab's selection is gone.
 - **Docs keeps only the first tree view's place** — *agent-ready*: a docs view's place holds one tree's expanded
@@ -412,7 +407,7 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
   `FormBody` / `AnswersPayload` hold `Record<kind, …>` inside and convert at the store and payload edge. On the page
   each kind is a `PageKind` module (items, restore/entry codec, reduce, boxes, kit, card input, review facts, rail
-  order), replacing `RAIL_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `TextTarget`,
+  order), replacing `ANSWERABLE_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `TextTarget`,
   `boxes.ts`, `card-kit.ts` tables, `read-layout.ts`'s `CARD_KINDS`, and the kind branches in `view-model.ts` and
   `round-view.ts`. The AGENTS.md "item kind" checklist shrinks to the module. The tool schema then needs disposable
   tool contributions (landed, plan-foundation-sweeps), and retro reads unknown result keys.
@@ -572,10 +567,8 @@ Duplication and drift with no user-visible defect.
   `docs/features/layouts/design.md` (§ What a layout draws, § The primer's columns).
 - **Fixed texts in layout slots** — *agent-ready*: the layout places a slot and the app writes fixed text or
   elements into it: backlog's and docs' status text (`backlog/page/backlog-view.ts`, `docs/page/tree-view.ts`), the
-  session-form idle state (`emptyState(deps.idleText)` in `src/shared/page/session-form-tabs.ts`; sessions' empty
-  pane already draws through `parts.emptyText`), the cursor-row action prompts (backlog, docs, settings, primer and
-  notes), and the settings edit-box message (`settings/page/row-box.ts`). Pass each as part input, or a `drawIdle`
-  hook on `createSessionFormTabs`, so the layout draws it.
+  cursor-row action prompts (backlog, docs, settings, primer and notes), and the settings edit-box message
+  (`settings/page/row-box.ts`). Pass each as part input so the layout draws it.
 - **Info tone for the on-demand tag** — *agent-ready*: the `on-demand` load-state tag uses the accent tone
   (`CHIP_TONES`, `src/plugins/docs/layouts/default/layout.js`), against DESIGN.md's rule that colour at rest means a
   status; it was `status-info` before docs-browser plan C, and `listed` now reads the same as `not-loaded`. Needs an
@@ -621,17 +614,36 @@ Duplication and drift with no user-visible defect.
   clear when not" has four copies (`grep pendingTick`: `chat/page/row-clock.ts`, `agent-strip/page/agent-strip.ts`,
   `workflow/page/workflow-view.ts`, `agent-lines/page/working-lines.ts`). The `fakeTimers` test helper has eight
   (`grep 'fakeTimers ='`). Give each one home in `src/shared`.
+- **Legacy `question` tolerance in the question format** — *agent-ready*, after 2027-02-06: the form store prunes saved
+  rounds after 90 days (`RETENTION_SECONDS` in `src/shared/agent-forms/form-store.ts`), so by that date none saved before
+  the `question` to `summary` rename remains. Remove `LEGACY_SUMMARY_FIELD` in
+  `src/plugins/forms/main/kinds/question/question-format.ts`, its filter in the missing-field check, the error for both
+  fields present, and the two legacy rows in `question-format.test.ts`.
 
 ## Latent defects and tests
 
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
 
+- **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
+  that session gets its stored answers back from form-service's `replaysLastSubmitted`
+  (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same
+  round twice in one session sees no popup. A drive run passes a different `round` meanwhile
+  (`.agents/skills/drive/SKILL.md`). Decide whether the drive action opens a fresh round on a repeat, or logs the
+  replay.
+- **`forms.openRound` leaves the pane on the previous session** — `forms.openRound` with no `sessionId` connects a
+  `drive-forms-<n>` row through `sessions.mark` without selecting it, so the pane keeps showing the previous session
+  (`src/shared/agent-forms/drive-actions.ts`).
+- **Primer's self-test needs forms' preview session** — run alone (`npm run selftest -- --plugin primer`), the
+  primer's script fails on its 'review and cancel' `alsoExpect`, which waits for
+  `[sessions] activated Layout preview` (`src/plugins/primer/main/selftest-script.ts`). That line needs forms' Layout
+  preview session, so the script passes only with `--plugin forms,primer` (from eb6f544b8). Either drop the wait, or
+  have the script open the session it waits on.
 - **Docs editor-landing issues** — when the docs editor lands: an editor key sequence bound only in other scopes is
   taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in
-  docs.…` while forms binds `<Esc>`; a new round selects its session's Form tab, switching away from a Docs tab
-  mid-edit; and a row removed while its round stays open rebuilds that round's Form tab in a hidden body nothing drops
-  after the round closes.
+  docs.…` while forms binds `<Esc>`. A row removed while its round stays open rebuilds that round's popup in a
+  new frame for the gone session (`addPopup`'s `frameOf`, `src/plugins/sessions/page/session-tabs-view.ts`), and
+  nothing drops that frame after the round closes.
 - **Editor key replay limits** — editor key replay (a broken key sequence replayed into a box through
   `EditorHost.typeInto`, `src/renderer/page-keys.ts`) has three limits only a custom keymap reaches: focus moving
   mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on
@@ -715,12 +727,13 @@ because the earlier items rewrite many of these tests anyway.
   roster ignore `usage`. Choice: keep the bus and let the log skip replays (a marker on the event), or send saved
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
-- **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the docs page hears
-  a row's host id change through `followRows` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
-  shown (`src/plugins/docs/page/start.ts`, `docs-view.ts`). No test pins it: the docs page's `start.test.ts` has no row with a shown tab, and
-  the chat self-test's clear step never shows chat-second's Docs tab. Either give the docs page a test seam with a row
-  for a shown tab (rebuilds) and an unshown one (does nothing), or add a self-test step that shows the Docs tab before
-  the clear and expects a rebuild line after it.
+- **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the
+  `docs-session-tab` part hears a row's host id change through `followRows` and calls `DocsViewHandle.sourceReplaced()`,
+  which rebuilds a session Docs tab that has shown (`src/plugins/docs-session-tab/page/start.ts`, `docs-view.ts`). Two unit tests pin one half each: the
+  `docs-session-tab` part's `start.test.ts` pins that the call reaches the changed row's view, and the docs page's
+  `start.test.ts` pins that `sourceReplaced` rebuilds a view only once shown. No test joins them, and the chat
+  self-test's clear step never shows chat-second's Docs tab. Add a self-test step that shows the Docs tab before the
+  clear and expects a rebuild line after it (the self-test starts every plugin, `docs-session-tab` included).
 - **Shell layout swap failure tests** — *agent-ready*: `mountShell`'s rollback when a layout throws or misses an area,
   and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`), are untested. Plan
   B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would
@@ -783,11 +796,6 @@ because the earlier items rewrite many of these tests anyway.
   It cannot happen until an idle compaction is seen under the app's flags (`docs/features/agent-chat/claude-stream.md`
   § Idle compaction); measure that shape, then treat an unended compaction as busy in both calls. Source session: Claude
   Code c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
-- **Docs tab's first show has no test** — *agent-ready*: `handle.shown` runs `showFirstTime`
-  (`src/plugins/docs/page/start.ts`), which runs `loadIndex` (`docs-view.ts`). The forms self-test used to pin it live
-  through its `y` step, and now presses `R`, because rows draw in no fixed order and an earlier step can pass the Codex
-  row first. `page/start.test.ts` covers the part's lifecycle and no test asserts a first show, so a pin needs a small
-  seam first. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
 - **Chat self-test steps by single presses** — *agent-ready*: rows draw most recent first and rows opened in one
   millisecond tie, so the chat script's single `<A-S-o>` and `<A-S-i>` steps between its two rows may land elsewhere.
   It passes today and was not audited for ties or rows left open. Forms' `stepToRow` and sessions' `stepNextTo` hold
@@ -844,3 +852,9 @@ because the earlier items rewrite many of these tests anyway.
 - **A user layout logs `layout st shown` then `layout default shown`** — *needs a decision*: `layout-loader.ts` loads
   `default` on every load and `show-layouts.ts` logs each one, though the user's layout draws. To decide: log only the
   layout in use, or log the default as loaded.
+- **A terminal session's saved name is read from the app's `CLAUDE_CONFIG_DIR`** — *agent-ready*: a relay sends no
+  config folder when its terminal sets no `CLAUDE_CONFIG_DIR`, and `hostSessionName` (`src/plugins/sessions/main/start.ts`)
+  passes that null to `sessionName`, whose `projectsRoot` falls back to the app's own `CLAUDE_CONFIG_DIR` through
+  `claudeConfigFolder` (`src/main/claude-code/claude-launch.ts`) rather than `~/.claude`. An app started from a
+  personal-profile shell reads a default-profile terminal session's name from the wrong folder. The row's profile tag
+  already resolves null through `AgentHarness.configFolder`, which ignores the app's environment.

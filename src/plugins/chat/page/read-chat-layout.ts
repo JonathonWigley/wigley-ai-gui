@@ -68,6 +68,7 @@ const PART_SET: Record<ChatPartName, true> = {
   closeConfirm: true,
   imageViewer: true,
   rowClock: true,
+  rowProfile: true,
   sideSection: true,
   sessionFacts: true,
 };

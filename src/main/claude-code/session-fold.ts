@@ -32,6 +32,7 @@ import {
   isChoice,
   launchMode,
 } from './claude-controls';
+import { contextBreakdownOf } from './context-breakdown';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import {
   contextUsageOf,
@@ -1155,6 +1156,18 @@ function answerControlResponse(
       settleAfterSize(state, totalTokens, at, effects);
     }
     pushUsage(state, at, effects);
+    const configuredLimit = configuredAutocompactLimit(
+      state.usage.configuredPercent,
+      state.usage.contextWindow,
+    );
+    const breakdown = contextBreakdownOf(
+      response.response,
+      at,
+      configuredLimit,
+    );
+    if (breakdown !== null) {
+      effects.push({ kind: 'agentEvent', event: breakdown });
+    }
     return;
   }
   if (pending.kind === 'appliedSettings') {

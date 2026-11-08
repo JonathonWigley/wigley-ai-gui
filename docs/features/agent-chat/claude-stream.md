@@ -758,9 +758,17 @@ message. The request is
 `control_response` whose `response.response` holds the data.
 
 - `get_context_usage` keys: `agents`, `apiUsage`, `autoCompactThreshold`, `autocompactSource`, `categories` (each
-  `name`, `kind` of `used`, `free`, `buffer` or `deferred`, and `tokens`), `gridRows`, `isAutoCompactEnabled`,
+  `id` (`system_prompt`, `memory_files`, `messages`, …), `name`, `color`, `kind` of `used`, `free`, `buffer` or
+  `deferred`, and `tokens`), `gridRows`, `isAutoCompactEnabled`,
   `maxTokens`, `mcpInstructions`, `mcpTools`, `memoryFiles`, `messageBreakdown`, `model`, `percentage`,
-  `rawMaxTokens`, `skills`, `slashCommands`, `totalTokens`. On Opus, Sonnet and Haiku with
+  `rawMaxTokens`, `skills`, `slashCommands`, `totalTokens`. The `used` categories sum to `totalTokens`. Each category
+  that lists items does so beside it: `memoryFiles` (`path`, `tokens`), `skills.skillFrontmatter` (`name`, `tokens`),
+  `mcpTools` (`serverName`, `tokens`, `isLoaded`; only loaded tools count toward MCP tools), `mcpInstructions`
+  (`serverName`, `tokens`) and `agents` (`agentType`, `tokens`). `messageBreakdown` splits Messages into
+  `toolCallTokens`, `toolResultTokens`, `attachmentTokens`, `assistantMessageTokens`, `userMessageTokens`,
+  `redirectedContextTokens` and `unattributedTokens`, with `toolCallsByType` (`callTokens`, `resultTokens`) and
+  `attachmentsByType`; on 2.1.318, 2026-11-08, its parts summed to 136k against a 127k Messages category, so the adapter
+  scales them to the category (`context-breakdown.ts`). On Opus, Sonnet and Haiku with
   `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=30` set in both the environment and `settings.json`, it reported
   `maxTokens: 1000000`, `rawMaxTokens: 1000000`, `autoCompactThreshold: 967000`, `autocompactSource: "model-default"`:
   the override does not show in this reply.
@@ -995,8 +1003,9 @@ description "read notes" …)`; Explore spawned on the first attempt):
   `<task-notification>` user message appeared. `task_notification` comes 0 ms after the subagent's last line (its last
   `user` tool result). `status` `failed` was not observed. It is not always the subagent's last word: on 2026-11-03 a
   background subagent waiting on its own background shell finished about 80 s before its shell ended, then replied and
-  handed back. The adapter's log shows the finish and the late replies; the raw line was not captured, and the adapter
-  has no other route that finishes a launched subagent.
+  handed back. The adapter's log shows the finish and the late replies; the raw line was not captured. The adapter
+  holds a launched subagent's end until the tasks it owns end, and lists it again on a late line
+  (`docs/features/chat-bar/design.md` § The agent strip).
 - **After the end, the harness runs a turn on the main agent** when the main turn is already over (below):
   `system/init`, `system/status requesting`, an `assistant`, and a `result` whose `origin` is
   `{"kind":"peer","from":"a5d2bf79d0e109653","senderTaskId":"a5d2…","name":"general-purpose","body":"[Subagent hand-back] …","handback":true,"handbackReportText":"spike"}`;
@@ -1364,6 +1373,47 @@ U(Reply with the single word two.) with uuid `…2142`.
 - It runs on the small context: its reply reads 37,422 (`2 + 23957 + 13463`), next to `post_tokens` 8681.
 - This boundary's `compact_metadata` has only the five fields above: `preserved_segment` and `preserved_messages` are
   optional.
+
+### Compaction with a background subagent
+
+Measured on 2.1.318, 2026-11-08, on haiku with `--allowedTools "Agent" "Bash(python3 -c *)"`, one run per variant.
+Turn 1 asks the main agent to launch one background subagent that runs `python3 -c "import time; time.sleep(N)"` and
+replies `PINEAPPLE`, to end its turn at once, and to reply `GOT <word>` when the result arrives. The driver then writes
+`U(/compact)` while the subagent still runs: at turn 1's `result` with N 40, and at the subagent's `Bash` tool_use with
+N 4, so the sleep ends inside the compaction.
+
+```
+N 4
+ 3.62 result success "…ending this turn now…"
+ 4.26 assistant (subagent) tool_use Bash {"command":"python3 -c \"import time; time.sleep(4)\""}
+ 4.26 IN  U(/compact)
+ 4.33 {"type":"system","subtype":"status","status":"compacting"}
+ 9.51 system/task_started  (the subagent's Bash task)
+10.55 system/task_notification  (the Bash task, completed)
+11.61 assistant (subagent) tool_use SubagentHandback {"message":"PINEAPPLE"}
+12.23 system/task_updated  (the subagent, completed)
+12.23 system/task_notification  (the subagent, completed, handback_report PINEAPPLE)
+12.23 {"type":"system","subtype":"background_tasks_changed","tasks":[]}
+13.02 {"type":"system","subtype":"status","status":null,"compact_result":"success"}
+13.02 system/compact_boundary
+13.02 {"type":"result","subtype":"success","result":"","num_turns":0,"local_command":"compact",…}
+14.63 assistant "GOT PINEAPPLE"
+14.65 {"type":"result","subtype":"success","result":"GOT PINEAPPLE","num_turns":1,…}
+14.66 {"type":"result","subtype":"success","result":"","num_turns":0,…}
+```
+
+- **`/compact` runs while a background subagent runs.** The CLI neither refuses it nor waits for the subagent, and the
+  subagent keeps running through it and after it (N 40: the compaction ended at 14.37, the subagent at 49.01).
+- **A subagent's end lines arrive live, mid-compaction.** `task_updated`, `task_notification` and
+  `background_tasks_changed` `[]` print before `compact_boundary`, so the adapter can report `agentFinished` while the
+  compaction still runs.
+- **The notification turn waits for the compaction.** Its model call starts after the `/compact`'s `result`.
+- **The main agent still knows about the pending subagent.** In both variants, the turn after the notification replied
+  `GOT PINEAPPLE`, so the summary kept the instruction given before the compaction.
+- **A notification turn ends on two `result` lines:** one carrying the reply (`num_turns` 1), then an empty one
+  (`num_turns` 0).
+- The subagent's `Bash` call printed its tool_use at 4.26 but started its task only at 9.51, so a subagent's progress
+  may stall for the first seconds of a compaction.
 
 ### /compact with nothing to compact
 

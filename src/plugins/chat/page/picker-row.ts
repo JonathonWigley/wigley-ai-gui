@@ -3,7 +3,7 @@ import type { Paths } from '../../../contracts/paths';
 import type { ChatProfile } from '../contract';
 import type { PickerItemInput } from '../layouts/layout';
 import { valueLabel } from './chat-state';
-import { type SessionItem, sessionTime } from './resume-items';
+import { type SessionItem, sessionTime, withNote } from './resume-items';
 import { type FolderItem, folderSectionDetail } from './start-prompt-items';
 
 // Each list's row input for the `pickerRow` part, spelled as the row shows
@@ -47,7 +47,7 @@ export function sessionRowInput(item: SessionItem): PickerItemInput {
       list: 'session',
       kind: 'section',
       title: item.closed.title,
-      detail: sessionTime(item.closed.at),
+      detail: withNote(item.closed, sessionTime(item.closed.at)),
       at: item.closed.at,
     };
   }

@@ -51,7 +51,7 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
   word-processor copies put a picture beside the text), stays a text paste.
 - A target inserts at its box's cursor without moving focus or changing the vim mode. In visual
   mode the insert replaces the selection and the box drops to normal mode, as vim's `p` does.
-- A pane's own target picks its box: the Chat composer; on a Form or Primer tab the box last
+- A pane's own target picks its box: the Chat composer; in a form popup the box last
   used, else the first. A pane with no box shows the toast `Nothing here takes files`.
 
 ## What a file becomes

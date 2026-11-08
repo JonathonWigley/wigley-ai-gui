@@ -122,6 +122,21 @@ describe('start prompt items', () => {
     ]);
   });
 
+  it('folderItems_SectionRowNote_FollowsTitle', () => {
+    const noted = { ...closedRow('one', 'Fix login'), note: 'after lunch' };
+
+    const [item] = folderItems(
+      [],
+      [{ title: 'Stashed', rows: [noted] }],
+      home,
+      posixPaths,
+    );
+
+    expect(item.label).toBe(
+      'Fix login · after lunch · ai-dev · work · 2026-01-02 10:00',
+    );
+  });
+
   it('folderName_SectionRow_IsEmpty', () => {
     const [section] = folderItems(
       [],

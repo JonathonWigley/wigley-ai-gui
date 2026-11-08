@@ -21,6 +21,7 @@ import {
   type RowActivity,
   type RowActivitySource,
   type SessionPart,
+  type SessionPopupView,
   type SessionRow,
   type SessionsPlace,
   type SessionsState,
@@ -47,8 +48,10 @@ import { rowChanges, stepSession } from './tabs';
 
 // `activate` runs on a row click and `runFavorite` on a star's click, neither
 // while the preview shows; `selectTab` runs on a tab's click; `isModeShown`
-// reads whether Sessions mode shows; `tabsChanged` runs after any change to a session's tabs or their
-// selection; `keys` draws the session, tab and pane
+// reads whether Sessions mode shows; `tabsChanged` runs after any change to a
+// session's tabs or their selection, or to its popups; `popupOpenedFromBar`
+// runs after a click on a hidden popup's bar entry opened it; `keys` draws the
+// session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a press's release or outer pane key included,
@@ -68,6 +71,7 @@ export interface SessionsViewDeps extends Omit<
   selectTab(sessionId: string, tabId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
+  popupOpenedFromBar(sessionId: string, popup: SessionPopupView): void;
   keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   timers: Timers;
   panesChanged(): void;
@@ -80,7 +84,7 @@ export interface SessionsViewDeps extends Omit<
   favorites: ProjectFavorites;
   // Writes `sessionsActivitySlot`, which holds the rows' activities.
   activities: KeyedSlotWriter<RowActivitySource[]>;
-  // Holds `sessionsPlaceSlot`, each session's tab place.
+  // Holds `sessionsPlaceSlot`, each session's place.
   places: KeyedSlotWriter<SessionsPlace>;
 }
 
@@ -294,6 +298,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       drawSidebar();
       deps.tabsChanged();
     },
+    popupOpenedFromBar: deps.popupOpenedFromBar,
   });
   const treeView = createPaneTreeView({
     initialId: 'pane-1',

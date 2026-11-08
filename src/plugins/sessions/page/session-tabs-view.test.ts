@@ -7,12 +7,15 @@ import {
   asHtml,
   FakeElement,
   findAll,
+  FocusFakeElement,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
+  type SessionPopupHandle,
+  type SessionPopupView,
   type SessionsPlace,
   sessionsPlaceSlot,
-  type SessionTabHandle,
   type SessionTabView,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -28,6 +31,17 @@ function tabView(id: string, order?: number): SessionTabView {
     icon: 'comment',
     element: asHtml(new FakeElement('div')),
     order,
+    beforeClose: () => true,
+    shown: () => undefined,
+  };
+}
+
+function popupView(id: string): SessionPopupView {
+  return {
+    id,
+    title: `title ${id}`,
+    icon: 'bell',
+    element: asHtml(new FakeElement('div')),
     beforeClose: () => true,
     shown: () => undefined,
   };
@@ -76,10 +90,9 @@ function viewOverSavedPlace(saved: SessionsPlace) {
     places,
   });
   const selected = () => view.tabs.selectedTabOf('s')?.id;
-  const savedTabIds = () =>
-    places.get('s')?.takeOvers.map((takeOver) => takeOver.tabId);
   const savedSelectedTabId = () => places.get('s')?.selectedTabId;
-  return { view, selected, savedTabIds, savedSelectedTabId };
+  const savedHiddenPopupIds = () => places.get('s')?.hiddenPopupIds;
+  return { view, selected, savedSelectedTabId, savedHiddenPopupIds };
 }
 
 let moves: { element: unknown; to: unknown }[];
@@ -87,6 +100,38 @@ let moves: { element: unknown; to: unknown }[];
 beforeEach(() => {
   ({ moves } = installMarkdownDom(vi.stubGlobal));
 });
+
+// A view showing session `s` in its one pane, counting each `tabsChanged`.
+function popupSetup() {
+  let changes = 0;
+  const setup = sessionsViewSetup(undefined, undefined, undefined, {
+    tabsChanged: () => {
+      changes++;
+    },
+  });
+  setup.view.render(stateOf(['s'], 's'));
+  setup.view.panes.load(setup.view.panes.focusedPaneId(), 's');
+  return { ...setup, changes: () => changes };
+}
+
+// What the frames in `area` show of their popups: the title of each root
+// carrying `is-open`, of each carrying `is-entering`, of each root that is
+// `inert`, and each hidden bar entry's text.
+function popupsShown(area: FakeElement) {
+  const roots = findAll(area, 'session-popup');
+  const titles = (shown: FakeElement[]) =>
+    shown.map((root) => root.attributes.get('aria-label'));
+  return {
+    open: titles(roots.filter((root) => root.classList.contains('is-open'))),
+    entering: titles(
+      roots.filter((root) => root.classList.contains('is-entering')),
+    ),
+    inert: titles(roots.filter((root) => root.inert)),
+    bar: findAll(area, 'session-popup-bar-entry').map(
+      (entry) => entry.textContent,
+    ),
+  };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -206,54 +251,6 @@ describe('session tabs view', () => {
     expect(view.tabs.selectedTabOf('s')?.id).toBe('form');
   });
 
-  it('releases a live takeover when the tab handle is disposed', () => {
-    const { view } = sessionsViewSetup();
-    const a = tabView('a');
-    view.tabs.add('s', a);
-    const handleOfB = view.tabs.add('s', tabView('b'));
-    view.tabs.select('s', 'a');
-    const takeOver = handleOfB.takeOver();
-    expect(view.tabs.selectedTabOf('s')?.id).toBe('b');
-
-    handleOfB.dispose();
-
-    expect(view.tabs.selectedTabOf('s')).toBe(a);
-    expect(view.tabs.tabsOf('s')).toEqual([a]);
-
-    takeOver.release();
-
-    expect(view.tabs.selectedTabOf('s')).toBe(a);
-    expect(view.tabs.tabsOf('s')).toEqual([a]);
-  });
-
-  it('frame take overs follow take over release and tab removal', () => {
-    const { view } = sessionsViewSetup();
-    const selected = () => view.tabs.selectedTabOf('s')?.id;
-    view.tabs.add('s', tabView('chat'));
-    const form = view.tabs.add('s', tabView('form'));
-    const docs = view.tabs.add('s', tabView('docs'));
-    view.tabs.select('s', 'chat');
-
-    const formTake = form.takeOver();
-    docs.takeOver();
-    formTake.release();
-    expect(selected()).toBe('docs');
-    docs.takeOver().release();
-    expect(selected()).toBe('chat');
-
-    const again = form.takeOver();
-    form.takeOver();
-    expect(selected()).toBe('form');
-    again.release();
-    expect(selected()).toBe('chat');
-
-    form.takeOver();
-    docs.takeOver();
-    form.dispose();
-    docs.dispose();
-    expect(selected()).toBe('chat');
-  });
-
   it('a disposed view leaves no pane part or empty text live', () => {
     const { view, pickHint, liveFocusEdges } = viewWithFramedAndEmptyPane();
 
@@ -371,133 +368,310 @@ describe('session tabs view', () => {
     expect(edgeClasses(first)).toEqual(firstEdges);
   });
 
-  it.each([
-    {
-      case: 'the user left the round for chat',
-      selectedTabId: 'chat',
-      selections: 1,
-      afterTakeOver: 'chat',
-      afterRelease: 'chat',
-    },
-    {
-      case: 'the user stayed on the round',
-      selectedTabId: 'form',
-      selections: 0,
-      afterTakeOver: 'form',
-      afterRelease: 'chat',
-    },
-  ])(
-    'restored_take_over_keeps_selection_and_its_release_gives_back_the_saved_tab ($case)',
-    ({ selectedTabId, selections, afterTakeOver, afterRelease }) => {
-      const { view, selected } = viewOverSavedPlace({
-        selectedTabId,
-        selections,
-        takeOvers: [{ tabId: 'form', previousTabId: 'chat', selections: 0 }],
-      });
-      view.tabs.add('s', tabView('chat'));
-      const form = view.tabs.add('s', tabView('form'));
-
-      const taken = form.takeOver({ restored: true });
-      expect(selected()).toBe(afterTakeOver);
-      taken.release();
-
-      expect(selected()).toBe(afterRelease);
-    },
-  );
-
-  it.each([
-    {
-      case: 'the saved place selected another tab',
-      selectedTabId: 'chat',
-      previousTabId: 'docs',
-    },
-    {
-      case: 'only the restored add selected the taking tab',
-      selectedTabId: 'form',
-      previousTabId: 'chat',
-    },
-  ])(
-    'fresh_take_over_replaces_a_stale_saved_record ($case)',
-    ({ selectedTabId, previousTabId }) => {
-      const { view, selected } = viewOverSavedPlace({
-        selectedTabId,
-        selections: 5,
-        takeOvers: [{ tabId: 'form', previousTabId, selections: 0 }],
-      });
-      view.tabs.add('s', tabView('chat'));
-      view.tabs.add('s', tabView('docs'));
-      const form = view.tabs.add('s', tabView('form'));
-
-      const taken = form.takeOver();
-      expect(selected()).toBe('form');
-      taken.release();
-
-      expect(selected()).toBe('chat');
-    },
-  );
-
-  it('restored_take_over_with_no_saved_record_releases_nothing', () => {
-    const { view, selected } = viewOverSavedPlace({
-      selectedTabId: 'chat',
-      selections: 0,
-      takeOvers: [],
-    });
-    view.tabs.add('s', tabView('chat'));
-    const form = view.tabs.add('s', tabView('form'));
-
-    const taken = form.takeOver({ restored: true });
-    view.tabs.select('s', 'form');
-    taken.release();
-
-    expect(selected()).toBe('form');
-  });
-
-  it.each([
-    {
-      case: 'a take over',
-      act: (form: SessionTabHandle) => form.takeOver(),
-    },
-    {
-      case: 'a release',
-      act: (form: SessionTabHandle) =>
-        form.takeOver({ restored: true }).release(),
-    },
-  ])(
-    'saved_record_with_no_tab_drops_at_the_next_take_over_or_release ($case)',
-    ({ act }) => {
-      const { view, savedTabIds } = viewOverSavedPlace({
-        selectedTabId: 'form',
-        selections: 0,
-        takeOvers: [
-          { tabId: 'primer', previousTabId: 'chat', selections: 0 },
-          { tabId: 'form', previousTabId: 'primer', selections: 0 },
-        ],
-      });
-      view.tabs.add('s', tabView('chat'));
-      const form = view.tabs.add('s', tabView('form'));
-      expect(savedTabIds()).toEqual(['primer', 'form']);
-
-      act(form);
-
-      expect(savedTabIds()).not.toContain('primer');
-    },
-  );
-
-  it('late_tab_keeps_its_saved_record_past_the_first_set_tabs', () => {
+  it('late_tab_takes_back_its_saved_selection_and_the_place_keeps_it_until_then', () => {
     const { view, selected, savedSelectedTabId } = viewOverSavedPlace({
       selectedTabId: 'form',
       selections: 0,
-      takeOvers: [{ tabId: 'form', previousTabId: 'chat', selections: 0 }],
+      hiddenPopupIds: [],
     });
     view.tabs.add('s', tabView('chat'));
     view.tabs.add('s', tabView('docs'));
     expect(savedSelectedTabId()).toBe('form');
-    const form = view.tabs.add('s', tabView('form'));
+
+    view.tabs.add('s', tabView('form'));
+
     expect(selected()).toBe('form');
+    expect(savedSelectedTabId()).toBe('form');
+  });
 
-    form.takeOver({ restored: true }).release();
+  it.each([
+    {
+      case: 'a restored popup the place had hidden comes back hidden',
+      id: 'a',
+      restored: true,
+      open: null,
+      saved: ['a'],
+    },
+    {
+      case: 'a new popup with that id opens',
+      id: 'a',
+      restored: false,
+      open: 'title a',
+      saved: [],
+    },
+    {
+      case: 'a restored popup the place had open opens',
+      id: 'b',
+      restored: true,
+      open: 'title b',
+      saved: ['a'],
+    },
+  ])(
+    'savedPlace_PopupAdded_RestoresItsHiddenState ($case)',
+    ({ id, restored, open, saved }) => {
+      const { view, savedHiddenPopupIds } = viewOverSavedPlace({
+        selectedTabId: 'chat',
+        selections: 0,
+        hiddenPopupIds: ['a'],
+      });
+      view.tabs.add('s', tabView('chat'));
+      expect(savedHiddenPopupIds()).toEqual(['a']);
 
-    expect(selected()).toBe('chat');
-    expect(savedSelectedTabId()).toBe('chat');
+      view.tabs.addPopup('s', popupView(id), { restored });
+
+      expect(view.tabs.openPopupOf('s')?.title ?? null).toBe(open);
+      expect(savedHiddenPopupIds()).toEqual(saved);
+    },
+  );
+
+  it('savedPlace_PopupHiddenAndOpened_WritesWhichAreHidden', () => {
+    const { view, savedHiddenPopupIds } = viewOverSavedPlace({
+      selectedTabId: null,
+      selections: 0,
+      hiddenPopupIds: [],
+    });
+    const popup = view.tabs.addPopup('s', popupView('a'));
+
+    popup.hide();
+    const whileHidden = savedHiddenPopupIds();
+    popup.open();
+
+    expect(whileHidden).toEqual(['a']);
+    expect(savedHiddenPopupIds()).toEqual([]);
+  });
+});
+
+describe('session popups', () => {
+  it.each<{ case: string; steps: string[]; open: string[]; bar: string[] }>([
+    {
+      case: 'the last added shows',
+      steps: ['add a', 'add b'],
+      open: ['title b'],
+      bar: [],
+    },
+    {
+      case: 'the top one hidden shows the one under it',
+      steps: ['add a', 'add b', 'hide b'],
+      open: ['title a'],
+      bar: ['title b'],
+    },
+    {
+      case: 'the top one disposed shows the one under it, no bar',
+      steps: ['add a', 'add b', 'dispose b'],
+      open: ['title a'],
+      bar: [],
+    },
+    {
+      case: 'both hidden list newest hidden first',
+      steps: ['add a', 'add b', 'hide b', 'hide a'],
+      open: [],
+      bar: ['title a', 'title b'],
+    },
+    {
+      case: 'a bar entry clicked opens its popup',
+      steps: ['add a', 'add b', 'hide b', 'hide a', 'click b'],
+      open: ['title b'],
+      bar: ['title a'],
+    },
+    {
+      case: 'open lifts a covered popup over the top one',
+      steps: ['add a', 'add b', 'open a'],
+      open: ['title a'],
+      bar: [],
+    },
+    {
+      case: 'a popup added over a hidden one shows',
+      steps: ['add a', 'hide a', 'add b'],
+      open: ['title b'],
+      bar: ['title a'],
+    },
+    {
+      case: 'the toggle hides the top open popup',
+      steps: ['add a', 'add b', 'toggle'],
+      open: ['title a'],
+      bar: ['title b'],
+    },
+    {
+      case: 'the toggle opens the popup hidden last',
+      steps: ['add a', 'add b', 'hide b', 'hide a', 'toggle'],
+      open: ['title a'],
+      bar: ['title b'],
+    },
+  ])('sessionPopups_Steps_ShowTheTopOpenAndBarTheHidden ($case)', (test) => {
+    const { view, area } = popupSetup();
+    const handles = new Map<string, SessionPopupHandle>();
+
+    for (const step of test.steps) {
+      const [verb, id = ''] = step.split(' ');
+      if (verb === 'add') {
+        handles.set(id, view.tabs.addPopup('s', popupView(id)));
+      } else if (verb === 'hide') {
+        handles.get(id)!.hide();
+      } else if (verb === 'open') {
+        handles.get(id)!.open();
+      } else if (verb === 'dispose') {
+        handles.get(id)!.dispose();
+      } else if (verb === 'toggle') {
+        view.tabs.togglePopup('s');
+      } else {
+        const entries = findAll(area, 'session-popup-bar-entry');
+        entries.find((entry) => entry.textContent === `title ${id}`)!.click();
+      }
+    }
+
+    const shown = popupsShown(area);
+    expect({ open: shown.open, bar: shown.bar }).toEqual({
+      open: test.open,
+      bar: test.bar,
+    });
+    expect(view.tabs.openPopupOf('s')?.title ?? null).toBe(
+      test.open[0] ?? null,
+    );
+  });
+
+  it.each([
+    {
+      case: 'its own transition ends',
+      settle: (root: FakeElement) => root.fire('transitionend'),
+      entering: [],
+      bar: [],
+    },
+    {
+      case: 'its own transition is cancelled',
+      settle: (root: FakeElement) => root.fire('transitioncancel'),
+      entering: [],
+      bar: [],
+    },
+    {
+      case: "a child's transition ends",
+      settle: (root: FakeElement) =>
+        root.fire('transitionend', { target: new FakeElement('div') }),
+      entering: ['title a'],
+      bar: [],
+    },
+    {
+      case: 'it hides first',
+      settle: (_root: FakeElement, handle: SessionPopupHandle) => handle.hide(),
+      entering: [],
+      bar: ['title a'],
+    },
+  ])(
+    'sessionPopups_Added_OpensAtOnceEnteringUntil ($case)',
+    ({ settle, entering, bar }) => {
+      const { view, area } = popupSetup();
+
+      const handle = view.tabs.addPopup('s', popupView('a'));
+      const onAdd = popupsShown(area);
+      settle(findAll(area, 'session-popup')[0]!, handle);
+
+      expect(onAdd).toEqual({
+        open: ['title a'],
+        entering: ['title a'],
+        inert: [],
+        bar: [],
+      });
+      expect({
+        entering: popupsShown(area).entering,
+        bar: popupsShown(area).bar,
+      }).toEqual({ entering, bar });
+    },
+  );
+
+  it('sessionPopups_OpenPopup_HidesTheTabFromIsVisible', () => {
+    const { view } = popupSetup();
+    const tab = view.tabs.add('s', tabView('chat'));
+
+    const popup = view.tabs.addPopup('s', popupView('a'));
+    const whilePopupOpen = [tab.isVisible(), popup.isVisible()];
+    popup.hide();
+
+    expect(whilePopupOpen).toEqual([false, true]);
+    expect([tab.isVisible(), popup.isVisible()]).toEqual([true, false]);
+  });
+
+  it('sessionPopups_Status_NamesItsBarEntry', () => {
+    const { view, area } = popupSetup();
+    const popup = view.tabs.addPopup('s', popupView('a'));
+
+    popup.setStatus('R1');
+    popup.hide();
+
+    expect(popupsShown(area).bar).toEqual(['R1']);
+  });
+
+  it('sessionPopups_SecondPopupWithOneId_Throws', () => {
+    const { view } = popupSetup();
+    view.tabs.addPopup('s', popupView('a'));
+
+    expect(() => view.tabs.addPopup('s', popupView('a'))).toThrow(
+      'already has a popup "a"',
+    );
+  });
+
+  it('sessionPopups_OpenOnTheTopPopup_ChangesNothing', () => {
+    const { view, changes } = popupSetup();
+    const handle = view.tabs.addPopup('s', popupView('a'));
+    const before = changes();
+
+    handle.open();
+
+    expect(changes()).toBe(before);
+  });
+
+  it('sessionPopups_DroppedPopup_HandleDoesNothing', () => {
+    const { view, area, changes } = popupSetup();
+    const handle = view.tabs.addPopup('s', popupView('a'));
+    view.tabs.drop('s');
+    const before = changes();
+
+    handle.hide();
+    handle.open();
+    handle.setStatus('R1');
+    handle.dispose();
+
+    expect(changes()).toBe(before);
+    expect(handle.isVisible()).toBe(false);
+    expect(popupsShown(area).open).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'a box in the tabs loses focus',
+      isInTabs: true,
+      keepsFocus: false,
+    },
+    { case: 'a box elsewhere keeps it', isInTabs: false, keepsFocus: true },
+  ])('sessionPopups_PopupOpens_TakesFocusFromTheTabs ($case)', (test) => {
+    const doc = installFocusFakeDom((name, value) =>
+      vi.stubGlobal(name, value),
+    );
+    const { view } = popupSetup();
+    const chat = tabView('chat');
+    view.tabs.add('s', chat);
+    const box = new FocusFakeElement('textarea');
+    if (test.isInTabs) {
+      asFake(chat.element).append(box);
+    }
+    box.focus();
+
+    view.tabs.addPopup('s', popupView('a'));
+
+    expect(doc.activeElement === box).toBe(test.keepsFocus);
+  });
+
+  it('sessionPopups_LayoutRedraw_MovesTheElementConnectedAndKeepsItOpen', () => {
+    const setup = popupSetup();
+    setup.area.isPageRoot = true;
+    const popup = popupView('a');
+    setup.view.tabs.addPopup('s', popup);
+    moves.length = 0;
+
+    setup.view.setLayouts(withUser<Layout>(defaultLayout, {}));
+
+    const element = asFake(popup.element);
+    expect(element.isConnected).toBe(true);
+    expect(moves).toContainEqual({ element, to: element.parentNode });
+    expect(findAll(setup.area, 'session-popup')).toHaveLength(1);
+    expect(popupsShown(setup.area).open).toEqual(['title a']);
   });
 });

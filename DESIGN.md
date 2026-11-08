@@ -63,12 +63,12 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
   L0 backdrop: crust with two faint washes, seen only through L1
 ```
 
-| Layer       | What lives here                                                                    | Material                                                                                              |
-| ----------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| L0 backdrop | The window itself                                                                  | `--wg-window-background` with `--wg-window-ambient`                                                   |
-| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
-| L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs                    | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
-| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                         | The `material-floating` class                                                                         |
+| Layer       | What lives here                                                                          | Material                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| L0 backdrop | The window itself                                                                        | `--wg-window-background` with `--wg-window-ambient`                                                   |
+| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header       | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
+| L2 content  | the session popup (forms, primer), chat transcript, docs, editors, the forms rail, diffs | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
+| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                               | The `material-floating` class                                                                         |
 
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
@@ -131,8 +131,10 @@ means something.
 | Error / removed        | `status-error`                                                          |                                                                                                                     |
 | Text selection, cursor | `selection-background`, `cursor`, `editor-active-line`                  | Catppuccin convention; the active line's band in a focused document editor                                          |
 | Changed sections       | `diff-inserted-mark`, `diff-removed-mark`, `diff-changed-mark` (peach)  | The mark on an inserted, removed or changed section in rendered markdown                                            |
+| Data series            | a plugin's `series-<n>` tokens (`context-sources.series-1` … `-10`)     | One series of a chart, named in its legend; never the accent's, a link's or a status's hue                          |
 
-- **One accent does brand work.** Any other colour on screen at rest must mean a status.
+- **One accent does brand work.** Any other colour on screen at rest must mean a status, or name a data series
+  its legend labels.
 - **Status colours only where status exists**, and as small marks at full strength (dots, icons,
   2px indicators, text). A larger area takes the `*-tint` token (10–18% alpha). A pastel as a large
   fill is too loud.
@@ -182,21 +184,21 @@ means something.
   column; `220px` on the `session-row-foot` container moves a session row's end group to a line of its own; `800px` tightens content padding; `680px` lays the side bar
   over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
-  least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
+  least width (the primer popup's card column `320px`, every other pane `160px` or more): a narrowing
   split gives up its start pane's width down to its least width first, then stacks at any window width.
 
 ## Motion
 
 - **Durations:** `duration-fast` (hover, press), `duration-base` (small things opening and
   closing), `duration-slow` (panels, sheets, the composer), `duration-pulse` (one cycle of a looping
-  agent-state pulse, such as a session row's Working label; slow enough to read as breathing, not flashing).
+  agent-state pulse, such as a session row's running stage tag; slow enough to read as breathing, not flashing).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
-  session row's pulsing Working label, a tool step settling from running to done). Content does not animate in, and nothing moves on its
+  session row's pulsing running stage or Working tag, a tool step settling from running to done). Content does not animate in, and nothing moves on its
   own.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
   `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator and the
-  pulsing Working label are static.
+  pulsing stage and Working tags are static.
 - **A floating panel fades in on open** (`openFloatingPanel`) over `duration-base`; showing a page
   or mode that holds an open panel does not fade it again, and closing is instant.
 
@@ -236,7 +238,7 @@ The keyboard is first; the mouse works everywhere.
     hides when there is nothing else to move to. A split handle's resize prompt `⌥⇧H ◂ ▸ ⌥⇧L`
     (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
   - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
-    (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
+    (`s star  r rename  d trash`): at the row's end in Docs and the Sessions list, and in Settings and Backlog, where it
     wraps when the row has no room; on a line of its own under the label in Primer; in a column of
     its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
@@ -354,10 +356,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
-  tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
+  tree, the primer popup's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
+  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `fg-tertiary` text for Done, and nothing for Working, which the workflow chip's tag says; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
   plugins' row parts on one line, the context bar, the run time and the cache mark at its end in slots of fixed least width, so the bars line up from row to row, gone while empty. On a footer narrower than `220px` (the side bar near its least width) that end group, the parts ordered 2 and later, moves to a line of its own `space-0_5` under the rest, keeping its slots, its bar filling the free room; a row with no part ahead of that group keeps its one line's height. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
@@ -392,6 +394,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with no profile it holds a muted `No profiles` line. A meter's percent is never narrower than `100%`, so the meters
   line up from row to row. In the status line and the details, the 5h and Week rows always show; any other row (a
   model-scoped limit) shows only while used, and extra usage only while on and spent.
+- **Profile:** every session row whose harness the app runs opens its row parts' line with a neutral Tag naming its
+  profile: the name chat's profiles setting gives the session's config folder (`work`, `personal`), else the folder's
+  last segment. A session with no config folder of its own counts as its harness's default folder.
 - **Unity pool:** a session row holding a pool clone carries a neutral Tag, `Unity 3`, in its row parts' line, and
   one waiting in a pool's queue an `attention` Tag, `Unity: queued 2nd`; one Tag per pool. While the shown session is
   in a pool, the right bar holds the pool panel after the usage details: a section header `Unity pool · <pool>`, a
@@ -408,10 +413,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
   `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
-- **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
+- **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
+  (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token
+  (`15%` of the frame's body), the tab under it dimmed by the `scrim`. It slides up on open and down on hide over
+  `duration-slow`; hidden, a slim bar at the frame's bottom names it (`docs/features/session-popups/design.md`).
+- **Forms:** the rail is the start pane of a split in the session popup's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
-- **Primer:** the Primer tab is three columns, tasks | items | card: tasks and items open `240px` wide and the card takes the rest. The
+- **Primer:** the primer popup is three columns, tasks | items | card: tasks and items open `240px` wide and the card takes the rest. The
   tasks column holds the feature row and the tasks, grouped under section headers (Primer, Every feature, Extra
   tasks), each task row carrying its need as a Tag and its included items as a count. The items column lists the
   selected task's items as rows with a ToggleMark, or an empty state on the feature row and on a task with no items.
@@ -470,7 +479,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   a chat entry's first visual only. The full-size overlay sits over the `scrim` with `space-8` padding: the overlay
   body fills it, a `radius-lg` sheet on `transcript-background` that scrolls a visual taller than the window, with the
   count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
-- **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
+- **Docs:** in Docs mode the tree is the side bar; in the optional `docs-session-tab` plugin's session Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
   page and Linked from and sticks while the article scrolls.
@@ -482,9 +491,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Light's, Medium's or Heavy's
   own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
   or H) in the plugin token `--wg-workflow-light-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
-  or `--wg-workflow-heavy-badge` (`status-warning`), then the stage and its status as an accent Tag, unless the row's
-  label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
-  workflow started draws one error Tag, `No workflow`, in `status-error`. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+  or `--wg-workflow-heavy-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
+  `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
+  row's label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
+  workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
+  activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
+  pulsing, unless its stage tag is already running. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status
@@ -504,7 +516,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
 - **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and
-  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the right bar and the session hub by drag alone; the app keeps the sizes.
+  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the right bar by drag alone, and the session hub by drag and, while it has the keys, by
+  `Alt+Shift+h`/`Alt+Shift+l`; the app keeps the sizes.
 
 ## Icons and copy
 

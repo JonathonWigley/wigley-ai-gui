@@ -63,6 +63,15 @@ async function hostSessionName(
   return harness.sessionName(sessionId, projectDir, info.profileDir ?? null);
 }
 
+// The session's config folder as its harness resolves it; null when the app
+// runs no such harness.
+function configFolder(api: SessionsApi, info: SessionInfo): string | null {
+  const harness = api.services.agentHarnesses.find(
+    (candidate) => candidate.id === info.harness,
+  );
+  return harness?.configFolder(info.profileDir ?? null) ?? null;
+}
+
 function createList(api: SessionsApi): SessionList {
   const list = createSessionList({
     randomHex: api.services.randomHex,
@@ -74,6 +83,7 @@ function createList(api: SessionsApi): SessionList {
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
     projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
+    configFolder: (info) => configFolder(api, info),
   });
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId, atOnce) =>

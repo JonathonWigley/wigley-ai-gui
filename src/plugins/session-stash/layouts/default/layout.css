@@ -1,0 +1,23 @@
+/* The default session-stash look: the stash dialog's session name over the note box, then the hint. */
+
+[data-layout-owner='session-stash'][data-layout='default'].session-stash-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='session-stash'][data-layout='default']
+  .session-stash-session,
+[data-layout-owner='session-stash'][data-layout='default'] .session-stash-hint {
+  margin: 0;
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='session-stash'][data-layout='default']
+  .session-stash-session {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='session-stash'][data-layout='default'] .session-stash-hint {
+  color: var(--wg-fg-tertiary);
+}

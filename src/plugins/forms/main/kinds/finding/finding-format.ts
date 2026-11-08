@@ -39,8 +39,6 @@ import {
 } from './finding-text';
 import { isJsonObject, type JsonObject } from '../../../../../shared/json';
 
-const MAX_FINDINGS = 20;
-
 // The fewest choices any origin takes.
 const MIN_SOLUTIONS = Math.min(
   ...FINDING_ORIGINS.map((origin) => FINDING_ORIGIN_RULES[origin].minChoices),
@@ -108,8 +106,8 @@ const SEVERITY_CARDS = orList([
 
 const FINDINGS_DESCRIPTION =
   "Review findings and deferred items that need the user's decision — one " +
-  'object per finding. Each draws as its own card after the notices and ' +
-  'before the questions; its origin sets the card and the fields it takes. ' +
+  'object per finding. Each draws as its own card before the ' +
+  'questions; its origin sets the card and the fields it takes. ' +
   'A finding missing a field its origin requires, or carrying one its ' +
   'origin forbids, fails the call with an error naming each. A finding ' +
   'already fixed or decided goes in notices instead; an open decision that ' +
@@ -532,10 +530,8 @@ function actionReasonsContent(
 export const findingFormat: AnswerableFormat<Finding> = {
   argsKey: 'findings',
   noun: 'finding',
-  maxItems: MAX_FINDINGS,
   arraySchema: {
     type: 'array',
-    maxItems: MAX_FINDINGS,
     items: {
       type: 'object',
       additionalProperties: false,

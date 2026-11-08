@@ -13,6 +13,7 @@ import {
   followRows,
   sessionsActiveSlot,
   sessionsPageKey,
+  sessionsActivitySlot,
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
@@ -67,6 +68,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     const chat = api.dependency(chatPageKey);
     const rows = api.state.read(sessionsRowsSlot);
+    const activities = api.state.read(sessionsActivitySlot);
     const flows = api.state.read(workflowFlowsSlot);
     const workflows = new Map<WorkflowId, PageWorkflow>();
 
@@ -89,6 +91,10 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       isPreview,
       setRowActivity: (sessionId, activity) =>
         sessions.setActivity(sessionId, workflowManifest.id, activity),
+      isWorking: (sessionId) =>
+        (activities.get(sessionId) ?? []).some(
+          ({ activity }) => activity.tone === 'running',
+        ),
     });
     view.setSidePaneHidden(services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true);
 
@@ -182,6 +188,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
           drawFlow(flow);
         }
       });
+      activities.on((sessionId) => view.activityChanged(sessionId));
       for (const flow of flows.all().values()) {
         drawFlow(flow);
       }

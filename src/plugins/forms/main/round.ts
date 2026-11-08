@@ -66,12 +66,6 @@ function parseItems<Item>(format: ItemFormat<Item>, raw: unknown): Item[] {
       `ask_round's ${format.argsKey} must be a list of objects.`,
     );
   }
-  if (raw.length > format.maxItems) {
-    throw new RoundError(
-      `ask_round got ${raw.length} ${format.argsKey}; the maximum is ` +
-        `${format.maxItems}. Split the round.`,
-    );
-  }
   const noun = capitalised(format.noun);
   return raw.map((item, i) => format.parse(item, `${noun} ${i + 1}: `));
 }
@@ -479,7 +473,8 @@ const FINGERPRINT_LISTS = {
 // layouts, keyed by each kind's ask_round field, never the heading, overview
 // or round layout, which a re-send may change and still match the open round.
 // An empty list joins only for a kind the Python server's fingerprint holds,
-// so a round it could send hashes the same and its saved rounds match.
+// so a round it could send with no questions hashes the same and its saved
+// rounds match.
 export function fingerprint(round: Round): string {
   const content: Record<string, PythonJsonValue> = {};
   for (const kind of ITEM_KINDS) {

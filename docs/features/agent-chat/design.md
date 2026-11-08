@@ -6,7 +6,7 @@
 - **Vocabulary** — the terms the code and plans use.
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
-- **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
+- **Sessions and tabs** — owned sessions, joining the relay, the attention mark.
 - **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys, starting a session from an agent.
 - **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A to F each land.
@@ -15,8 +15,8 @@
 ## Intent
 
 The user starts Claude Code sessions from the app, chats with them, and never switches to a terminal: when a
-session's agent sends a forms round, the session's tab swaps to the form in place, and submitting (or cancelling)
-swaps back to the chat. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
+session's agent sends a forms round, the form slides up over the session's tabs in a popup, and submitting (or
+cancelling) closes it onto the chat again. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
 interview on 2026-10-23; this file is the record of both.
 
 ## Vocabulary
@@ -25,8 +25,10 @@ interview on 2026-10-23; this file is the record of both.
   next ones). Its seam is `AgentHarness` in `src/contracts/agent.ts`; each harness is one **harness adapter**.
 - **Agent process** — one running session of a harness, started by the app: one `claude` child process.
 - **Chat entry** — one item in a session's chat, in the app's own shape: a user message, an assistant message,
-  thinking, a tool call (with its result and the id of the agent that made it: `main` for the session's own agent,
-  else the subagent's id the agent events use), a permission request, a turn result, a notice, or a raw entry. Every entry
+  thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw entry. An assistant
+  message, thinking and a tool call carry the id of the agent that made them: `main` for the session's own agent, else
+  the subagent's id the agent events use. The transcript draws only the main agent's assistant messages and thinking; a
+  subagent's text shows nowhere, and its tool calls show in its strip box (`docs/features/chat-bar/design.md`). Every entry
   carries the raw harness events it was built from. Of Claude's stream events it keeps only a text or thinking block's
   `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
   event already holds what it carries. Every entry carries `at`, the epoch milliseconds it first appeared; a later
@@ -50,7 +52,6 @@ interview on 2026-10-23; this file is the record of both.
   (its process still running in the session host) and after its process ends on its own, resting until the next message starts the process again, until the user
   closes the row (§ Saved sessions). A
   **connected session** is one a relay connection brought (a terminal session), as today.
-- **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
   agent. Any plugin registers one through chat's page exports. Chat registers `/login`, `/logout` and `/status`, the
   terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands), and `/clear` with Claude's
@@ -89,7 +90,7 @@ interview on 2026-10-23; this file is the record of both.
           (link, paste-code box) ─► process ends ─► accountStatus confirms ─► dialog closes + toast
  claude stdout ─► adapter ─► ChatEntry added / updated ─► chat channel ─► Chat tab, drawn by the chat layout
  tool needs approval ─► permission_prompt tool call ─► permission entry ─► y / n ─► tool result to claude
- agent calls ask_round ─► forms ─► Form tab takeOver() ─► user answers ─► submit ─► release() ─► Chat tab
+ agent calls ask_round ─► forms ─► round popup over the tabs ─► user answers ─► submit ─► popup disposed ─► Chat tab shows
  turn ends, window unfocused or session not on screen ─► alert + sessions.mark(row)
  row closed ─► confirm while a turn runs ─► AgentProcess.end() ─► row gone
 ```
@@ -179,10 +180,9 @@ interview on 2026-10-23; this file is the record of both.
   session's row ends it (chat ends the process), after the Chat tab's confirm while a turn runs.
 - `markRound` becomes `mark`: one attention mark per row, raised by forms for a round and by chat for a finished
   turn.
-- `SessionTabHandle.takeOver()` selects the tab and returns a release; the release reselects the tab that was
-  selected before, unless the user selected another tab since. Forms takes over when a round opens (where it calls
-  `select()` today) and releases when the round leaves. A round for a session not on screen takes over inside that
-  session and marks its row; the user's current session stays on screen.
+- A round opens as a popup over its session's tabs (`addPopup`, `../session-popups/design.md`), which replaced the
+  tab take-over (`SessionTabHandle.takeOver()`, removed): the selected tab never changes. A round for a session not on
+  screen opens its popup inside that session and marks its row; the user's current session stays on screen.
 - `MainServices.window` gains `isFocused()`, for the turn-finished alert.
 - Kept as they are: the relay protocol and `relay.py`, the endpoint files, the MCP adapter, forms' round logic.
 
@@ -449,7 +449,7 @@ interview on 2026-10-23; this file is the record of both.
   tool calls are refused, and a late hello for the old id is refused rather than adding a row. The new process's relay
   joins the same row by the new id. Chat's saved record (with nothing sent yet), the session's docs source
   (`sessions.hostSessionChanged` disposes it and adds it again, and the page's `followRows` `hostChanged` rebuilds a
-  Docs tab that has shown) and the notes page's session (read from the row in `sessions.rows`) follow the new id, so a later
+  session Docs tab that has shown) and the notes page's session (read from the row in `sessions.rows`) follow the new id, so a later
   resume reopens only the conversation after the clear; the earlier one stays in the past-sessions list. A resting row
   clears the same way, with no process to end, starting its fresh process; a start that fails leaves it resting under
   the new id. A clear for an unknown session, or after chat stops, logs `clear for unknown session <id> ignored` or
@@ -559,7 +559,7 @@ interview on 2026-10-23; this file is the record of both.
 ## Plans
 
 - **Plan A — the loop** (landed 2026-10-20, its plan folder closed): the spike, the harness seam with the Claude and fake adapters, ACP removal,
-  owned sessions, take over and `mark`, the shared layout machinery, the chat plugin with its default layout,
+  owned sessions, take over (since replaced by popups) and `mark`, the shared layout machinery, the chat plugin with its default layout,
   permission cards, controls, alerts, and the start prompt with profiles and recent folders.
 - **Plan B — resume and completion** (landed, its plan folder closing): resume with history, archive, slash
   completion.

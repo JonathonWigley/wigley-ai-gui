@@ -8,6 +8,7 @@ describe('readLayout', () => {
     { case: 'an empty layout', layout: {} },
     { case: 'only a finding card', layout: { cards: { finding: card } } },
     { case: 'only a rail', layout: { rail: card } },
+    { case: 'only a notices pane', layout: { notices: card } },
     {
       case: 'every card kind and a head',
       layout: {
@@ -50,6 +51,11 @@ describe('readLayout', () => {
       case: 'a rail that is not a function',
       module: { default: { rail: 'left' } },
       names: 'rail',
+    },
+    {
+      case: 'a notices pane that is not a function',
+      module: { default: { notices: 'list' } },
+      names: 'notices',
     },
     {
       case: 'a review that is not a function',

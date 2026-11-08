@@ -133,7 +133,6 @@ function setup(
   };
   const handlers = primerCommandHandlers(deps);
   const focusTarget = primerFocusTarget(deps);
-  // Each Primer tab the guard selected, and each session it selected.
   const run = (
     command: PrimerCommand,
     context: Partial<PageCommandContext<any>> = {},

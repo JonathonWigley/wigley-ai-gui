@@ -6,7 +6,8 @@ import { FORMATS, ITEM_KINDS } from './kinds/formats';
 const ASK_ROUND_DESCRIPTION =
   'Ask the user a whole round of interview questions and review findings in ' +
   'the wigley-ai-gui app and wait for the answers. Send every item whose ' +
-  'prerequisites are already settled in one call. The app draws the ' +
+  "prerequisites are already settled in one call. How each item's text is " +
+  'worded: ~/wigley-agents/forms.md. The app draws the ' +
   "not-applicable control, the Notes box, the round note and the Don't ask " +
   'me this control by itself — do not ' +
   'describe them as questions or choices. Use ' +
@@ -25,9 +26,10 @@ const ASK_ROUND_DESCRIPTION =
   "with an action's label. Use 'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +
-  'opened: each one draws as its own card before the findings and ' +
-  "questions, badged 'Applied', 'Dispatched' or 'Decided', with only a " +
-  'comment box — no choices and nothing to decide. Never bundle a decided ' +
+  "opened: each one draws as one line on the round's notices page, after " +
+  "every finding and question, badged 'Applied', 'Dispatched' or 'Decided', " +
+  'and opens to its context and one comment box — no choices and nothing to ' +
+  'decide. Never bundle a decided ' +
   'fix into a question or a finding. A round and each item may name a ' +
   "layout in 'layout', a folder in the app's forms layouts folder: an " +
   "item's layout draws its card, the round's draws the rest, and the " +
@@ -81,7 +83,8 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
 
 // The two wigley-forms tools as MCP tools/list publishes them. ask_round's item
 // lists come from the same formats parseRound validates with, so the schema
-// and the validator never disagree.
+// and the validator agree, but for one case: the validator still reads a
+// question's legacy `question` as its summary.
 export const FORMS_TOOLS: ToolDefinition[] = [
   {
     name: 'ask_round',

@@ -5,7 +5,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // Its keys act in every scope; `idle` is the base scope while the focused pane
 // shows no tab, `picker` is pushed while the list picker asks which session a
 // new pane shows, and `rename` while the rename dialog shows. `layout` names
-// the layout the side bar, the panes and the tab bars draw with.
+// the layout the side bar, the panes, the tab bars and the session popups draw
+// with; `popup-top` places a session popup's top edge down its frame's body.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
   dependsOn: { main: [], page: [] },
@@ -43,6 +44,11 @@ export const sessionsManifest = definePlugin({
     },
     renameSession: {
       label: 'rename the session',
+      group: 'sessions',
+      runsIn: 'page',
+    },
+    togglePopup: {
+      label: "hide or show the session's popup",
       group: 'sessions',
       runsIn: 'page',
     },
@@ -120,7 +126,7 @@ export const sessionsManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The sessions layout Sessions mode's side bar, panes and tab bars draw in: a folder name in sessions' layouts folder, or default.",
+        "The sessions layout Sessions mode's side bar, panes, tab bars, session popups and their hidden bar draw in: a folder name in sessions' layouts folder, or default.",
     },
     titleMaxLength: {
       label: 'Title length',
@@ -128,5 +134,7 @@ export const sessionsManifest = definePlugin({
         'The most characters a session title may hold; longer titles from the agent or the rename dialog are refused, and a first-message title is cut.',
     },
   },
-  themeTokens: {},
+  themeTokens: {
+    'popup-top': { kind: 'raw', default: '15%' },
+  },
 });

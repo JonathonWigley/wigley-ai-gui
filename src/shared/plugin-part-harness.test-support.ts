@@ -262,6 +262,8 @@ interface HarnessWorld {
   state: SlotStore;
   commandRuns: HarnessCommandRun[];
   commands: RuntimeCommands<any>;
+  // Every command the harness's manifests declare, as the served config holds.
+  declared: Readonly<Record<CommandId, CommandInfo>>;
 }
 
 interface Scheduler {
@@ -436,6 +438,7 @@ function createWorld(
     emitted: [],
     state: store,
     commandRuns,
+    declared,
     commands: createRuntimeCommands<any>({
       process,
       registry,
@@ -1267,20 +1270,6 @@ function fakePageChannelOn(
   return register(listeners.add(listener as (data: unknown) => void));
 }
 
-// A command `manifest` declares, by its qualified id: a part's kit checks its own
-// commands exist as it starts.
-function ownCommand(
-  manifest: PluginManifest,
-  id: string,
-): CommandInfo | undefined {
-  const prefix = `${manifest.id}.`;
-  const short = id.startsWith(prefix) ? id.slice(prefix.length) : '';
-  const declared = Object.hasOwn(manifest.commands, short)
-    ? manifest.commands[short]
-    : undefined;
-  return declared && { ...declared, id, plugin: manifest.id };
-}
-
 function fakePageApi(
   manifest: PluginManifest,
   context: PartContext,
@@ -1340,7 +1329,10 @@ function fakePageApi(
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
       label: (id) => id,
-      command: (id) => ownCommand(manifest, id),
+      // Any command the harness's manifests declare, as the served config
+      // holds; a fake dependency's commands stay absent.
+      command: (id) =>
+        Object.hasOwn(world.declared, id) ? world.declared[id] : undefined,
       scopes: [],
       bind: pluginCommands.bind,
       keysFor: (command, scope, where, arg) =>
@@ -1554,11 +1546,12 @@ function countingFrames(counts: PartCounts) {
   };
 }
 
-// A copy, so `vi.unstubAllGlobals` restores the existing `document` untouched. A
-// test reads `document` after `startPagePart`, never the object
-// `installFocusFakeDom` returned.
-function copyOfDocument(): object {
-  const existing = (globalThis as { document?: object }).document;
+// A copy of the global `name` as a test stubbed it, its prototype's members
+// included, so `vi.unstubAllGlobals` restores the existing one untouched. A
+// test reads `document` and `window` after `startPagePart`, never the objects
+// `installFocusFakeDom` stubbed.
+function copyOfGlobal(name: 'document' | 'window'): object {
+  const existing = (globalThis as { document?: object; window?: object })[name];
   return existing === undefined
     ? {}
     : Object.create(
@@ -1574,10 +1567,13 @@ function stubPageGlobals(counts: PartCounts) {
   const documentTarget = countingEventTarget(counts);
   const frames = countingFrames(counts);
   const Observer = countingObserverClass(counts);
-  vi.stubGlobal('window', { ...windowTarget.members, ...frames });
+  vi.stubGlobal(
+    'window',
+    Object.assign(copyOfGlobal('window'), windowTarget.members, frames),
+  );
   vi.stubGlobal(
     'document',
-    Object.assign(copyOfDocument(), documentTarget.members),
+    Object.assign(copyOfGlobal('document'), documentTarget.members),
   );
   vi.stubGlobal('ResizeObserver', Observer);
   vi.stubGlobal('MutationObserver', Observer);

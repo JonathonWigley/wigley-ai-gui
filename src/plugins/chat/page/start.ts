@@ -59,6 +59,7 @@ import { createMainAgentPart } from './main-agent-part';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
 import { createRowClock } from './row-clock';
+import { createRowProfile } from './row-profile';
 import { createSessionPart } from './session-part';
 import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
@@ -119,6 +120,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       );
     const sessions = api.dependency(sessionsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
+    const chatSessions = api.state.read(chatSessionSlot);
     const active = api.state.read(sessionsActiveSlot);
     const placeWriter = api.state.publish(chatPlaceSlot);
     const imagesWriter = api.state.publish(chatDraftImagesSlot);
@@ -256,7 +258,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const view = mountChatView({
       channel: api.channel,
       slots: {
-        session: api.state.read(chatSessionSlot),
+        session: chatSessions,
         entries: api.state.read(chatEntriesSlot),
         controls: api.state.read(chatControlsSlot),
         commands: api.state.read(chatCommandsSlot),
@@ -318,6 +320,19 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       placeOf,
     });
     sessions.addRowPart(rowClock.part);
+    const rowProfile = createRowProfile({
+      layouts,
+      kit: partDeps,
+      paths: services.paths,
+      homeDir: services.homeDir,
+      log: services.log,
+      profiles: () => api.settings().profiles,
+      heldProfile: (sessionId) => chatSessions.get(sessionId)?.profile ?? null,
+      profileDirOf: (sessionId) => rows.get(sessionId)?.profileDir ?? null,
+    });
+    sessions.addRowPart(rowProfile.part);
+    api.onSettingsChanged(() => rowProfile.profilesChanged());
+    chatSessions.on((sessionId) => rowProfile.changed(sessionId));
     sideParts.add(
       createMainAgentPart({
         surfaceOf: (sessionId) => view.composerOf(sessionId),

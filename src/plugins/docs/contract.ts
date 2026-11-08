@@ -168,7 +168,7 @@ export const MACHINE_SOURCE_ID = 'machine';
 const SESSION_SOURCE_PREFIX = 'session:';
 
 // The id the docs main part registers a session's index under, by the
-// session row's id; that session's Docs tab shows it.
+// session row's id; the `docs-session-tab` plugin's Docs tab shows it.
 export function sessionSourceId(sessionId: string): string {
   return `${SESSION_SOURCE_PREFIX}${sessionId}`;
 }
@@ -258,12 +258,19 @@ export interface DocsPageEvents extends EventShape {
 // One docs view `addView` handed out: `element` holds its tree and doc in a
 // split. `shown` runs each time the caller shows the element (the view's
 // first show reads its index); `hasUnsavedEdits` is the caller's close guard;
-// `dispose` takes the view out of the docs plugin.
+// `sourceReplaced` tells the view its source was registered again, rebuilding
+// its index once it has shown and doing nothing before; `dispose` takes the
+// view out of the docs plugin.
 export interface DocsViewHandle extends Disposable {
   element: HTMLElement;
   shown(): void;
   hasUnsavedEdits(): boolean;
+  sourceReplaced(): void;
 }
+
+// The toast a docs view, or a caller's close guard over one, shows when
+// unsaved edits refuse a change.
+export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
 
 // The docs page part's exports. `addView` builds a docs view over the index
 // source registered as `sourceId`, its keys active while `isVisible`, filed
@@ -479,7 +486,8 @@ export interface DocsPlace {
 }
 
 // Each docs view's place, by the source id the view shows: `MACHINE_SOURCE_ID`
-// for Docs mode's, `sessionSourceId(sessionId)` for a session's Docs tab.
+// for Docs mode's, `sessionSourceId(sessionId)` for the `docs-session-tab`
+// plugin's Docs tab in that session.
 export const docsPlaceSlot: KeyedSlotKey<DocsPlace, 'page', 'docs'> = {
   id: 'docs.place',
   process: 'page',

@@ -81,8 +81,9 @@ export interface QueuedMessage extends UserMessage {
   holdReason: string | null;
 }
 
-// A compaction running in a session. `reason` is the send gate's reason for a
-// compaction a hold started; null for any other.
+// A compaction running in a session. `reason` is the reason of an app
+// compaction, the send gate's for a hold's or the caller's for chat main's
+// `compact`; null for any other.
 export interface SessionCompaction {
   trigger: CompactionTrigger;
   reason: string | null;
@@ -110,12 +111,14 @@ export interface SendGateVerdict {
 // the write go on.
 export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
-// A saved session a resume section lists.
+// A saved session a resume section lists. `note` is the section's word about
+// the session, drawn after its title.
 export interface ResumeSectionRow {
   hostSessionId: string;
   projectDir: string;
   profile: string;
   title: string;
+  note?: string;
   at: number;
 }
 
@@ -127,8 +130,10 @@ export interface ResumeSectionRows {
 
 // A titled list of saved sessions at the top of the start prompt. `rows` is in
 // list order: the last row sits next to the cursor. `isResumable` is false for
-// a session chat holds, one open in the app on another row, and an archived one.
-// The start prompt waits for `rows`, so a section that never settles holds it.
+// a session chat holds, one open in the app on another row, an archived one,
+// and one an earlier section listed: chat asks the sections one at a time, in
+// registration order, so a section's cap counts only sessions it shows. The
+// start prompt waits for `rows`, so a section that never settles holds it.
 export interface ResumeSection {
   title: string;
   rows(
@@ -172,6 +177,10 @@ export interface ChatSessionInfo {
   // The clone's checked-out branch, or its short commit on a detached HEAD;
   // null outside a clone, and until the first read.
   branch: string | null;
+  // The git worktrees the session's agents wrote files in, by name, in the
+  // order of their first write (`worktreeNameOf` in main). Kept after the
+  // worktree is removed; [] until a write lands in one.
+  worktrees: string[];
 }
 
 // What the slots add up to for one session.
@@ -516,6 +525,14 @@ export interface ChatMainExports {
   // running process keeps what it started with. Disposing the handle removes the
   // reader.
   addIdleCompactThreshold(read: () => number | null): Disposable;
+  // Compacts an idle session chat holds (trigger `app`), its dock showing
+  // `reason` from the call until the compaction ends; messages sent meanwhile
+  // queue behind it, and a working stretch that ran only it raises no
+  // `Turn finished` alert. True when it started one. False, logged, starting
+  // nothing, for a session chat does not hold, one whose process is not
+  // running or still attaching, one not idle, one with a compaction running or
+  // a hold up, or when the harness refuses.
+  compact(sessionId: string, reason: string): boolean;
   // Sections show at the top of the start prompt in registration order. One
   // whose `rows` fails is logged and left out. Disposing the handle removes the
   // section.

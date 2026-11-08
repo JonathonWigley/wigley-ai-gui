@@ -1,17 +1,12 @@
-/* A session's Form tab holds its round views and the idle state. */
+/* A session's form popup holds its round views. */
 .form-tab {
   height: 100%;
 }
 
-.form-tab > .ui-empty {
-  height: 100%;
-  align-content: center;
-}
-
-/* :where() scopes these rules to the Form tab and adds no specificity, so a
+/* :where() scopes these rules to the form popup and adds no specificity, so a
    layout's own layout.css overrides them. */
 
-/* A round fills its session's Form tab: a split with the rail in its start
+/* A round fills its session's form popup: a split with the rail in its start
    pane, on the sheet colour, and the round's main column in its end pane. */
 :where(.form-tab) .round {
   height: 100%;
@@ -147,6 +142,11 @@
   border-top: 1px solid var(--wg-border-default);
   margin-top: var(--wg-space-4);
   padding-top: var(--wg-space-3);
+}
+
+:where(.form-tab) .answer-head {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Choices: rows split by hairlines, each reason inline under its choice. */
@@ -443,6 +443,47 @@
 :where(.form-tab) .review-row.is-cursor {
   background: var(--wg-list-active-background);
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+/* Notices: a line's head is the slot the layout draws into, in place of the
+   collapsible's summary. */
+:where(.form-tab) .notice-line-head {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+:where(.form-tab) .notice-line-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.form-tab)
+  .notice-line
+  > .ui-collapsible-head
+  > .ui-collapsible-summary {
+  display: none;
+}
+
+/* Under the chevron: the leading head is no status dot. */
+:where(.form-tab)
+  .notice-line.ui-collapsible--plain.ui-collapsible--leading
+  > .ui-collapsible-body {
+  padding-left: calc(var(--wg-space-2) * 2 + var(--wg-icon-size));
+}
+
+:where(.form-tab) .notice-line.is-cursor {
+  background: var(--wg-list-active-background);
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+:where(.form-tab) .notice-line-prompt {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 :where(.form-tab) .review-row[data-status='untouched'] .review-answer {

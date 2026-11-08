@@ -17,7 +17,7 @@ export interface FormSend {
 // What the lifecycle reads of one open form; a plugin's form state extends it.
 export interface SessionForm extends DraftRevisions {
   formId: string;
-  // The session whose tab the form fills.
+  // The session whose popup the form fills.
   sessionId: string;
   label: string;
   // Set from the send until main's close removes the form or the send fails;
@@ -191,7 +191,7 @@ export function paneView<FormView extends string>(
   return view === 'confirm' ? state.confirmReturnView : view;
 }
 
-// The view the session's tab draws its form in, focused or not: the active
+// The view the session's popup draws its form in, focused or not: the active
 // session's in `paneView`, every other session's in `formView`, the view it
 // opens in once its session is active; 'idle' for a session with no form.
 export function sessionPaneView<FormView extends string>(
@@ -286,7 +286,7 @@ function applyLifecycle<
 }
 
 // A form for the focused session becomes active; any other waits in the
-// background, drawn in its own tab. A form already open stays as it is.
+// background, drawn in its own popup. A form already open stays as it is.
 function showForm<Form extends SessionForm, FormView extends string>(
   state: SessionFormsState<Form, FormView>,
   shown: Form,
@@ -379,7 +379,7 @@ export function formClosesAtOnce<Form extends SessionForm>(
 }
 
 // A form being sent keeps its session, so the answers on their way are not
-// cancelled: the tab logs and toasts the send. Any other session may close;
+// cancelled: the popup logs and toasts the send. Any other session may close;
 // main's close guard refuses an open form's plain close with its reason.
 export function mayCloseSessionForm<Form extends SessionForm>(
   deps: Pick<SessionFormCommandDeps<Form>, 'store' | 'words' | 'toast' | 'log'>,

@@ -1,6 +1,7 @@
 import type { MainPart } from '../contracts/plugin';
 import { agentLinesMainPart } from './agent-lines/main/start';
 import { agentSkillsMainPart } from './agent-skills/main/start';
+import { contextSourcesMainPart } from './context-sources/main/start';
 import { agentStripMainPart } from './agent-strip/main/start';
 import { agentsMainPart } from './agents/main/start';
 import { autoCompactMainPart } from './auto-compact/main/start';
@@ -13,6 +14,7 @@ import { keysMainPart } from './keys/main/start';
 import { notesMainPart } from './notes/main/start';
 import { primerMainPart } from './primer/main/start';
 import { sessionLogMainPart } from './session-log/main/start';
+import { sessionStashMainPart } from './session-stash/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
 import { unityPoolMainPart } from './unity-pool/main/start';
@@ -33,11 +35,14 @@ export const mainParts: readonly MainPart[] = [
   primerMainPart,
   chatMainPart,
   autoCompactMainPart,
+  // Before session-log, so chat lists Stashed above Recently closed.
+  sessionStashMainPart,
   sessionLogMainPart,
   agentsMainPart,
   agentLinesMainPart,
   agentStripMainPart,
   agentSkillsMainPart,
+  contextSourcesMainPart,
   docsMainPart,
   settingsMainPart,
   backlogMainPart,

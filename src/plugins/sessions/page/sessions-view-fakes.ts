@@ -59,27 +59,30 @@ function fakeKitServices() {
 }
 
 // The sessions parts alone, over the fake services `sessionsViewSetup` uses and
-// no row or bar parts, for a part the view does not draw. Runs under
+// no row or bar parts, for a part the view does not draw, with the anchors its
+// kits drew. Runs under
 // `installFakeDom`.
 export function sessionsPartsSetup() {
-  const { logged, services } = fakeKitServices();
+  const { anchors, logged, services } = fakeKitServices();
   const parts = createSessionsParts({
     ...services,
     rowParts: createPartStore(),
     barParts: createPartStore(),
   });
-  return { parts, logged };
+  return { parts, logged, anchors };
 }
 
 // What `sessionsViewSetup` runs on beyond its stores: `uiState` holds the
 // favorites and recency stamps, `clock` stamps them, a fixed time unless handed
 // in, so rows keep main's order, `timers` never runs a timer unless handed in,
-// and `places` holds the sessions' tab places, a new empty slot unless handed in.
+// `places` holds the sessions' places, a new empty slot unless handed in, and
+// `tabsChanged` runs on each change to a session's tabs or popups.
 export interface SessionsViewOptions {
   uiState?: UiState;
   clock?: Clock;
   timers?: Timers;
   places?: KeyedSlotWriter<SessionsPlace>;
+  tabsChanged?: () => void;
 }
 
 // A sessions view over fake keys that record each anchor, a log that records
@@ -99,6 +102,7 @@ export function sessionsViewSetup(
     clock = { now: () => 0 },
     timers = { set: () => 0, clear: () => undefined },
     places = createSlotStore(() => undefined).publish(sessionsPlaceSlot),
+    tabsChanged = () => undefined,
   }: SessionsViewOptions = {},
 ) {
   const { anchors, logged, services } = fakeKitServices();
@@ -119,7 +123,8 @@ export function sessionsViewSetup(
       view.tabs.select(sessionId, tab);
     },
     isModeShown: () => true,
-    tabsChanged: () => undefined,
+    tabsChanged,
+    popupOpenedFromBar: () => undefined,
     timers,
     panesChanged: () => undefined,
     paneFocused: () => undefined,

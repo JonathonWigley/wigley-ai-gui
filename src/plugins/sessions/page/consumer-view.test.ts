@@ -5,6 +5,7 @@ import {
   NEEDS_YOU_ACTIVITY,
   type RowActivity,
   type SessionPart,
+  type SessionPopupView,
   type SessionsPageExports,
   type SessionTabView,
 } from '../contract';
@@ -15,15 +16,23 @@ import { sessionsPageView } from './consumer-view';
 function fakeExports() {
   const removed = createListeners<string>();
   const activities: [string, string, RowActivity | null][] = [];
-  const disposes = { tab: 0, rowPart: 0, barPart: 0 };
+  const disposes = { tab: 0, popup: 0, rowPart: 0, barPart: 0 };
   const exports: SessionsPageExports = {
     cutToTitleLimit: (text) => text,
     addTab: () => ({
       select: () => undefined,
-      takeOver: () => ({ release: () => undefined }),
       isVisible: () => false,
       dispose: () => {
         disposes.tab++;
+      },
+    }),
+    addPopup: () => ({
+      setStatus: () => undefined,
+      open: () => undefined,
+      hide: () => undefined,
+      isVisible: () => false,
+      dispose: () => {
+        disposes.popup++;
       },
     }),
     addRowPart: () => ({
@@ -37,7 +46,8 @@ function fakeExports() {
       },
     }),
     activate: () => undefined,
-    closeSession: () => undefined,
+    closeSession: () => Promise.resolve(true),
+    shownSessionId: () => null,
     setActivity: (sessionId, sourceId, activity) =>
       activities.push([sessionId, sourceId, activity]),
   };
@@ -45,18 +55,19 @@ function fakeExports() {
 }
 
 describe('sessionsPageView', () => {
-  it('disposes the tabs and parts a consumer added when its registrations dispose', () => {
+  it('disposes the tabs, popups and parts a consumer added when its registrations dispose', () => {
     const { exports, disposes, removed } = fakeExports();
     const consumer = createRegistrations();
     const view = sessionsPageView(exports, consumer, removed.add);
     const part: SessionPart = { id: 'part', build: () => ({}) };
 
     view.addTab('s1', { id: 'tab' } as SessionTabView);
+    view.addPopup('s1', { id: 'popup' } as SessionPopupView);
     view.addRowPart(part);
     view.addBarPart(part);
     consumer.dispose();
 
-    expect(disposes).toEqual({ tab: 1, rowPart: 1, barPart: 1 });
+    expect(disposes).toEqual({ tab: 1, popup: 1, rowPart: 1, barPart: 1 });
   });
 
   it('clears each activity the consumer still holds when its registrations dispose', () => {
@@ -73,20 +84,22 @@ describe('sessionsPageView', () => {
     expect(activities.slice(setBefore)).toEqual([['s1', 'src', null]]);
   });
 
-  it("forgets a removed session's tabs, keeping another session's and a tab added again", () => {
+  it("forgets a removed session's tabs and popups, keeping another session's and a tab added again", () => {
     const { exports, disposes, removed } = fakeExports();
     const consumer = createRegistrations();
     const view = sessionsPageView(exports, consumer, removed.add);
 
     view.addTab('s1', { id: 'tab-a' } as SessionTabView);
     view.addTab('s1', { id: 'tab-b' } as SessionTabView);
+    view.addPopup('s1', { id: 'popup-a' } as SessionPopupView);
     view.addTab('s2', { id: 'tab-c' } as SessionTabView);
+    view.addPopup('s2', { id: 'popup-b' } as SessionPopupView);
     removed.tell('s1');
-    expect(disposes.tab).toBe(2);
+    expect(disposes).toMatchObject({ tab: 2, popup: 1 });
 
     view.addTab('s1', { id: 'tab-d' } as SessionTabView);
     consumer.dispose();
-    expect(disposes.tab).toBe(4);
+    expect(disposes).toMatchObject({ tab: 4, popup: 2 });
   });
 
   it("forgets a removed session's activities, keeping another session's", () => {

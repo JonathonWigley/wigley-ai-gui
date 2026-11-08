@@ -1,14 +1,16 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // Browses and edits every agent doc on the machine through the docs index:
-// Docs mode over the machine's index and a Docs tab in each session over that
-// session's. `scriptPath` names the `docs_index.py` to run; empty, the script
-// is found through the wigley plugin's install in each Claude config folder.
+// Docs mode over the machine's index, and an index source per session that
+// an `addView` caller shows (the `docs-session-tab` plugin). `scriptPath`
+// names the `docs_index.py` to run; empty, the script is found through the
+// wigley plugin's install in each Claude config folder. The page reads the
+// session rows so a session source's place leaves with its row.
 // `recentChangesLimit` caps the commits the Main page's Recent changes lists.
 export const docsManifest = definePlugin({
   id: 'docs',
-  dependsOn: { main: ['sessions'], page: ['sessions'] },
-  reads: { main: [], page: [] },
+  dependsOn: { main: ['sessions'], page: [] },
+  reads: { main: [], page: ['sessions'] },
   commands: {
     showMode: {
       label: 'docs (again: toggle the tree)',

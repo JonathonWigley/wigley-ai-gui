@@ -23,8 +23,9 @@ export type AnswerableKind = Exclude<ItemKind, 'notice'>;
 
 export interface Question {
   title: string;
+  // The card's headline: what the user is asked to decide, and why now.
+  summary: string;
   context: string;
-  question: string;
   choices: string[];
   // 1-based.
   recommend: number;
@@ -103,6 +104,13 @@ export const formsToggleDontAskAtCommand: CommandKey<
   number,
   'forms.toggleDontAskAt'
 > = { id: 'forms.toggleDontAskAt' };
+
+// Moves the line cursor onto the 1-based notice, which focuses the notices
+// stop, then opens or closes that line, as a click on the line's head does.
+export const formsToggleNoticeAtCommand: CommandKey<
+  number,
+  'forms.toggleNoticeAt'
+> = { id: 'forms.toggleNoticeAt' };
 
 // Focuses the item at the rail position, and nothing more.
 export const formsFocusItemCommand: CommandKey<number, 'forms.focusItem'> = {

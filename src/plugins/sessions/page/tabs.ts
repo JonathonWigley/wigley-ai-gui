@@ -5,7 +5,6 @@ import type {
   SessionsPlace,
   SessionsState,
   SessionTabView,
-  TakeOver,
 } from '../contract';
 
 // The id `step` places away from `selectedId` in `ids`, wrapping at both
@@ -70,8 +69,8 @@ export function hasOtherTab(
 }
 
 // A session's tab ids in strip order, the selected one's id, and how many times
-// `tabsAfterSelect` changed the selection: a take over and its release select
-// without counting, so a release can tell whether a tab was selected since.
+// `tabsAfterSelect` changed the selection: a restored add selects without
+// counting, so a later add can tell whether the user picked a tab since.
 export interface TabsState {
   tabIds: readonly string[];
   selectedTabId: string | null;
@@ -155,66 +154,6 @@ export function tabsAfterRestoredAdd(
     : tabs;
 }
 
-// The take overs whose tab the session still holds: a saved one whose tab never
-// came back, its round ended while no page ran, drops.
-export function takeOversWithLiveTabs(
-  takeOvers: readonly TakeOver[],
-  tabIds: readonly string[],
-): TakeOver[] {
-  return takeOvers.filter((takeOver) => tabIds.includes(takeOver.tabId));
-}
-
-// The tabs with `tabId` selected, and the take over remembering the tab
-// selected before it, null when none was.
-export function tabsAfterTakeOver(
-  tabs: TabsState,
-  tabId: string,
-): { tabs: TabsState; takeOver: TakeOver } {
-  return {
-    tabs: tabsWithSelected(tabs, tabId),
-    takeOver: {
-      tabId,
-      previousTabId: tabs.selectedTabId,
-      selections: tabs.selections,
-    },
-  };
-}
-
-// The tabs with the remembered tab selected again when no `tabsAfterSelect`
-// changed the selection since the take over, the taking tab is still
-// selected (another take over may hold the session) and the remembered tab
-// is still present; otherwise the same value. A user who left the taking tab
-// and came back keeps it.
-export function tabsAfterRelease(
-  tabs: TabsState,
-  takeOver: TakeOver,
-): TabsState {
-  const { tabId, previousTabId, selections } = takeOver;
-  const isUnmovedSince = tabs.selections === selections;
-  const isTakingTabSelected = tabs.selectedTabId === tabId;
-  const isPreviousTabPresent =
-    previousTabId !== null && tabs.tabIds.includes(previousTabId);
-  return isUnmovedSince && isTakingTabSelected && isPreviousTabPresent
-    ? tabsWithSelected(tabs, previousTabId)
-    : tabs;
-}
-
-// The take overs still held once `released` gives its tab back: every other
-// one, each that remembered `released`'s tab now remembering the tab
-// `released` remembered, so a later release skips the tab that left.
-export function takeOversAfterRelease(
-  live: readonly TakeOver[],
-  released: TakeOver,
-): TakeOver[] {
-  return live
-    .filter((takeOver) => takeOver.tabId !== released.tabId)
-    .map((takeOver) =>
-      takeOver.previousTabId === released.tabId
-        ? { ...takeOver, previousTabId: released.previousTabId }
-        : takeOver,
-    );
-}
-
 // The harness as a row shows it; nothing when the relay did not say.
 export function harnessText(harness: Harness | null): string {
   switch (harness) {
@@ -282,37 +221,62 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
   );
 }
 
-// Asks each view in order whether its session may close, stopping at the
-// first that says no; `atOnce` is the close key's word that a tab asked for
-// the session to close at once.
-export function mayClose(
-  views: readonly Pick<SessionTabView, 'beforeClose'>[],
+// Asks each of the session's views whether it may close, stopping at the
+// first that says no; `atOnce` is the close key's word that a view asked for
+// the session to close at once. `viewsNow` is read again after each answer, so
+// a view added while one was asking (a form popup a round adds under chat's
+// confirm) is asked too; each view is asked once.
+export async function mayClose(
+  viewsNow: () => readonly Pick<SessionTabView, 'beforeClose'>[],
   atOnce: boolean,
-): boolean {
-  return views.every((view) => view.beforeClose(atOnce));
+): Promise<boolean> {
+  const asked = new Set<Pick<SessionTabView, 'beforeClose'>>();
+  for (
+    let view = viewsNow().find((next) => !asked.has(next));
+    view !== undefined;
+    view = viewsNow().find((next) => !asked.has(next))
+  ) {
+    asked.add(view);
+    if (!(await view.beforeClose(atOnce))) {
+      return false;
+    }
+  }
+  return true;
 }
 
-// Whether the close key closes the session at once: any tab says so.
+// Whether the close key closes the session at once: any of its tabs or popups
+// says so.
 export function closesAtOnce(
   views: readonly Pick<SessionTabView, 'closesAtOnce'>[],
 ): boolean {
   return views.some((view) => view.closesAtOnce?.() === true);
 }
 
-// What Sessions mode shows: the selected tab of the selected session; `'none'`
-// while the mode shows no tab; null while the mode is hidden.
-export type VisibleTab = { sessionId: string; tabId: string } | 'none' | null;
+// What Sessions mode shows: the top open popup of the focused pane's session,
+// else that session's selected tab; `'none'` while the mode shows neither;
+// null while the mode is hidden.
+export type VisibleTab =
+  | { kind: 'tab'; sessionId: string; tabId: string }
+  | { kind: 'popup'; sessionId: string; popupId: string }
+  | 'none'
+  | null;
 
+// `popupId` is the session's top open popup, null for none; it wins over the
+// selected tab.
 export function visibleTab(
   isModeShown: boolean,
-  selectedSessionId: string | null,
-  selectedTabId: string | null,
+  sessionId: string | null,
+  tabId: string | null,
+  popupId: string | null,
 ): VisibleTab {
   if (!isModeShown) {
     return null;
   }
-  return selectedSessionId !== null && selectedTabId !== null
-    ? { sessionId: selectedSessionId, tabId: selectedTabId }
+  if (sessionId !== null && popupId !== null) {
+    return { kind: 'popup', sessionId, popupId };
+  }
+  return sessionId !== null && tabId !== null
+    ? { kind: 'tab', sessionId, tabId }
     : 'none';
 }
 
@@ -323,7 +287,14 @@ export function isSameVisibleTab(a: VisibleTab, b: VisibleTab): boolean {
     typeof b === 'object' &&
     b !== null
   ) {
-    return a.sessionId === b.sessionId && a.tabId === b.tabId;
+    return a.sessionId === b.sessionId && surfaceId(a) === surfaceId(b);
   }
   return a === b;
+}
+
+// The visible surface's kind and id, so a tab and a popup sharing an id differ.
+function surfaceId(visible: Exclude<VisibleTab, 'none' | null>): string {
+  return visible.kind === 'tab'
+    ? `tab:${visible.tabId}`
+    : `popup:${visible.popupId}`;
 }

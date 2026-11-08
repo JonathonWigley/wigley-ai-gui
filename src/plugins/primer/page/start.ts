@@ -48,7 +48,7 @@ import {
 } from './primer-events';
 import { buildBody, initialState, primerPlace } from './primer-state';
 import { createPrimerStore, type PrimerStore } from './primer-store';
-import { mountPrimerTab } from './primer-view';
+import { mountPrimerPopups } from './primer-view';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type PrimerApi = PageApi<
@@ -118,7 +118,7 @@ function listenForPrimers(
     }),
   );
   let isStopped = false;
-  // A restored form's tab and take over can move the key base.
+  // A restored primer's popup can move the key base.
   const openFormsRead = api.channel
     .invoke('openForms')
     .then((primers) => {
@@ -139,13 +139,13 @@ function listenForPrimers(
   };
 }
 
-// Shows each agent primer in its session's Primer tab and sends the user's
+// Shows each agent primer in its session's primer popup and sends the user's
 // edits back to main: drafts as the edits pause, the finish on send or cancel.
-// While a Primer tab is the visible tab, the key scope, the resize keys'
-// split and the focus keys' panes follow the primer view.
-// A session with an open primer closes only through the cancel prompt. Every
-// store change emits the primer page events it makes, each logged as it goes;
-// other plugins read the active primer through the exports. The tab draws
+// While a primer popup is the visible surface, the key scope, the resize keys'
+// split and the focus keys' panes follow the primer view. The close key on a
+// session with an open primer cancels the primer and closes the session at
+// once; a primer being sent keeps its session. Every store change emits the primer page events it makes, each logged as it goes;
+// other plugins read the active primer through the exports. The popup draws
 // through the primer layout `primer.layout` names, redrawing as it or the
 // layout changes. Each open primer's place (`primerPlaceSlot`) and its unsaved
 // edits, saved at once on page hide, outlive a page reload.
@@ -165,7 +165,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       restore: (formId, place) =>
         store.dispatch({ type: 'placeRestored', formId, place }),
     });
-    const view = mountPrimerTab({
+    const view = mountPrimerPopups({
       areas: api.areas,
       sessions,
       closesAtOnce: (sessionId) => formClosesAtOnce(store, sessionId),

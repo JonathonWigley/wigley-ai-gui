@@ -823,6 +823,12 @@ const layout = {
       },
     };
   },
+  // The profile as a neutral tag.
+  rowProfile(parent, input, kit) {
+    const tag = kit.tag(parent, input.name, 'neutral');
+    tag.classList.add('chat-row-profile');
+    return { element: tag };
+  },
   // A session hub section: the head (chevron, title, summary), then the body.
   sideSection(parent, input, kit) {
     const section = el('section', 'chat-side-section');

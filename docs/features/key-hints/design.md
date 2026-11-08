@@ -29,7 +29,7 @@ a glance.
   sessions): the same filter the bar used, so the screen shows exactly the keys that fire now.
 - **Vim's own keys show in help only.** They work the same everywhere and the user knows them
   from nvim, Rider and tmux, so a hint for them is noise. Being vim's own is a property of the key
-  sequence, not the command (`forms.nextItem` is `j` and `⌃L`), so `src/shared/vim-keys.ts` holds a list of
+  sequence, not the command (`primer.nextRow` is `j` and `⌃L`), so `src/shared/vim-keys.ts` holds a list of
   key sequences rather than marking commands.
 - **Views name anchors; the core draws.** One module owns how a hint looks and when it shows, and
   the `keys` plugin owns the on/off setting and the check that every bind has a place. A plugin from outside the repo

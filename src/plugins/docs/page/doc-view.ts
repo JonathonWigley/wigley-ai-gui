@@ -32,6 +32,7 @@ import {
   type DocsLinkClick,
   type IndexEntry,
   type IndexLink,
+  UNSAVED_TEXT,
 } from '../contract';
 import { splitFrontmatter } from '../frontmatter';
 import type { DocHeaderInput, RecentChangesInput } from '../layouts/layout';
@@ -54,7 +55,6 @@ import {
   type ReadOnlyReason,
   readOnlyText,
   topVisibleLine,
-  UNSAVED_TEXT,
 } from './docs-state';
 import {
   hiddenBlockFlags,

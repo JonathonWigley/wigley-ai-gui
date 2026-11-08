@@ -8,7 +8,7 @@ const CHECKER = 'preview-agent-check';
 // reply's model, spend and near-full context; a subagent that finished done
 // with no reply; a running task of the main agent's with a command; and a skill
 // started by the main agent and one by the running subagent, neither a workflow
-// stage's skill. Whatever draws a session's subagents, tasks and skills from
+// stage's skill; and the main agent's context breakdown. Whatever draws a session's subagents, tasks and skills from
 // agent events draws these in the sample's Chat tab.
 export function previewAgentEvents(at: number): AgentEvent[] {
   return [
@@ -89,7 +89,64 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       at - 20_000,
       false,
     ),
+    previewContextBreakdown(at - 1_000),
   ];
+}
+
+// The main agent's context breakdown: sources in every size, one opening into its items, one item a path, and
+// deferred tools.
+function previewContextBreakdown(at: number): AgentEvent {
+  return {
+    type: 'contextBreakdown',
+    agentId: MAIN_AGENT_ID,
+    at,
+    totalTokens: 157_000,
+    contextWindow: 1_000_000,
+    autocompactAt: 300_000,
+    deferredTokens: 23_000,
+    sources: [
+      {
+        id: 'messages.attachments',
+        label: 'Attachments',
+        tokens: 68_000,
+        items: [
+          { label: 'prompt_snapshot', isPath: false, tokens: 15_000 },
+          { label: 'invoked_skills', isPath: false, tokens: 10_000 },
+        ],
+      },
+      {
+        id: 'messages.tool-results',
+        label: 'Tool results',
+        tokens: 25_000,
+        items: [{ label: 'Bash', isPath: false, tokens: 13_000 }],
+      },
+      {
+        id: 'messages.tool-calls',
+        label: 'Tool calls',
+        tokens: 14_000,
+        items: [],
+      },
+      {
+        id: 'memory_files',
+        label: 'Memory files',
+        tokens: 11_000,
+        items: [
+          { label: '/Users/preview/AGENTS.md', isPath: true, tokens: 11_000 },
+        ],
+      },
+      {
+        id: 'messages.replies',
+        label: 'Agent replies',
+        tokens: 11_000,
+        items: [],
+      },
+      { id: 'messages.user', label: 'User messages', tokens: 9_000, items: [] },
+      { id: 'skills', label: 'Skills', tokens: 9_000, items: [] },
+      { id: 'system_tools', label: 'System tools', tokens: 6_000, items: [] },
+      { id: 'system_prompt', label: 'System prompt', tokens: 2_000, items: [] },
+      { id: 'mcp_tools', label: 'MCP tools', tokens: 2_000, items: [] },
+    ],
+  };
 }
 
 // Tool call `n` of `agentId`: its start, and its end when `isFinished`.

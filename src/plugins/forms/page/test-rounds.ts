@@ -15,8 +15,8 @@ export function question(
 ): Question {
   return {
     title,
+    summary: `${title} summary`,
     context: `${title} context`,
-    question: `${title}?`,
     choices: ['first', 'second', 'third'],
     recommend: 2,
     rationale: `${title} rationale`,

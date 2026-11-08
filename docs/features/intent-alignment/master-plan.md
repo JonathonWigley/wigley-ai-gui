@@ -29,7 +29,9 @@ item per feature session.
 When an item lands, tick its box here and remove it from `followups.md`, in the same commit.
 
 Plans: Waves 0, 2 and 3 have landed and their plan folders are gone. The settled design is
-`plugin-framework/design.md` § Commands and state.
+`plugin-framework/design.md` § Commands and state. `docs/features/plugin-framework/plan-hot-reload/` holds Wave 4 steps
+1 and 2, ready to run now that Wave 3 has closed; its settled design is `plugin-framework/design.md` § Hot reload
+(Wave 4). Step 3, the runtime loader, gets its own plan after it.
 
 ## Order
 

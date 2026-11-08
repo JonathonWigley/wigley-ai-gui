@@ -77,6 +77,25 @@ describe('picker row inputs', () => {
       },
     },
     {
+      row: 'a folder section row with a note',
+      input: folderRowInput(
+        {
+          kind: 'section',
+          section: 'Stashed',
+          row: { ...closed, note: 'after lunch' },
+          label: 'Fix login · after lunch · repo · work · time',
+        },
+        posixPaths,
+      ),
+      expected: {
+        list: 'folder',
+        kind: 'section',
+        title: 'Fix login',
+        detail: `after lunch · repo · work · ${sessionTime(AT)}`,
+        at: AT,
+      },
+    },
+    {
       row: 'a profile',
       input: profileRowInput({ name: 'work', configDir: '/home/me/.claude' }),
       expected: {
@@ -109,6 +128,28 @@ describe('picker row inputs', () => {
         kind: 'section',
         title: 'Fix login',
         detail: sessionTime(AT),
+        at: AT,
+      },
+    },
+    {
+      row: 'a session section row with a note',
+      input: sessionRowInput({
+        kind: 'section',
+        section: 'Stashed',
+        row: {
+          hostSessionId: 'h2',
+          title: 'first message',
+          modified: 9,
+          archived: false,
+        },
+        closed: { ...closed, note: 'after lunch' },
+        label: 'Fix login · after lunch · time',
+      }),
+      expected: {
+        list: 'session',
+        kind: 'section',
+        title: 'Fix login',
+        detail: `after lunch · ${sessionTime(AT)}`,
         at: AT,
       },
     },

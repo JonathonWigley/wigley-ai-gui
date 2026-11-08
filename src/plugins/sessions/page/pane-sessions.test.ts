@@ -381,11 +381,12 @@ describe('pane-sessions', () => {
     isFocusInPane: false,
     doesFocusTakeText: false,
     isChatTabShown: false,
+    isPopupOpen: false,
   };
 
   it.each([
     {
-      name: 'a text box the press focused on a Form, Primer or Docs tab',
+      name: 'a text box the press focused in a popup or on a Docs tab',
       facts: { isFocusInPane: true, doesFocusTakeText: true },
       action: 'keep',
     },
@@ -441,6 +442,25 @@ describe('pane-sessions', () => {
       name: 'a selection in the transcript stays with nothing focused',
       facts: { hasSelectionInPane: true, isChatTabShown: true },
       action: 'keep',
+    },
+    {
+      name: 'a focus in the pane stays over an open popup, the Chat tab under it',
+      facts: { isFocusInPane: true, isChatTabShown: true, isPopupOpen: true },
+      action: 'keep',
+    },
+    {
+      name: 'a selection in the pane stays over an open popup',
+      facts: { hasSelectionInPane: true, isPopupOpen: true },
+      action: 'keep',
+    },
+    {
+      name: "the other pane's Chat box lets go over an open popup, no box taking the keys",
+      facts: {
+        doesFocusTakeText: true,
+        isChatTabShown: true,
+        isPopupOpen: true,
+      },
+      action: 'letGo',
     },
   ])('pressedFocusAction: $name', ({ facts, action }) => {
     expect(pressedFocusAction({ ...noFacts, ...facts })).toBe(action);

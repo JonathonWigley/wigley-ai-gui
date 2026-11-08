@@ -210,6 +210,21 @@ const usageEvents = (effects: readonly FoldEffect[]) =>
       ? [effect.event]
       : [],
   );
+const breakdownEvents = (effects: readonly FoldEffect[]) =>
+  effects.flatMap((effect) =>
+    effect.kind === 'agentEvent' && effect.event.type === 'contextBreakdown'
+      ? [effect.event]
+      : [],
+  );
+// A `get_context_usage` reply's data: one used category and its window.
+const CONTEXT_USAGE_DATA = {
+  maxTokens: 1000,
+  autoCompactThreshold: 900,
+  totalTokens: 100,
+  categories: [
+    { id: 'system_prompt', name: 'System prompt', tokens: 100, kind: 'used' },
+  ],
+};
 const compactionEvents = (effects: readonly FoldEffect[]) =>
   effects.flatMap((effect) =>
     effect.kind === 'agentEvent' && effect.event.type.startsWith('compaction')
@@ -1386,6 +1401,55 @@ describe('session-fold', () => {
           spendUsd,
         }),
       ]);
+    },
+  );
+
+  it.each<{
+    case: string;
+    configuredPercent: number | null;
+    response: object;
+    breakdowns: object[];
+  }>([
+    {
+      case: 'a reply',
+      configuredPercent: null,
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-2',
+        response: CONTEXT_USAGE_DATA,
+      },
+      breakdowns: [expect.objectContaining({ at: 3100, autocompactAt: 900 })],
+    },
+    {
+      case: "a reply under the profile's own limit",
+      configuredPercent: 30,
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-2',
+        response: CONTEXT_USAGE_DATA,
+      },
+      breakdowns: [expect.objectContaining({ autocompactAt: 300 })],
+    },
+    {
+      case: 'a failed reply',
+      configuredPercent: null,
+      response: { subtype: 'error', request_id: 'wigley-2', error: 'no' },
+      breakdowns: [],
+    },
+  ])(
+    'foldPipeLine_ContextUsage_SendsItsBreakdown ($case)',
+    ({ configuredPercent, response, breakdowns }) => {
+      const state = foldedState([
+        inLine(contextUsageRequest('wigley-2'), 3000),
+      ]);
+      state.usage = withConfiguredPercent(state.usage, configuredPercent);
+
+      const { effects } = foldPipeLine(
+        state,
+        outLine({ type: 'control_response', response }, 3100),
+      );
+
+      expect(breakdownEvents(effects)).toEqual(breakdowns);
     },
   );
 

@@ -234,6 +234,7 @@ export const defaultKeymap = {
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
     { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
+    { keys: '<Leader>vf', scope: 'any', command: 'sessions.togglePopup' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -242,6 +243,7 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+    { keys: "<Leader>'", scope: 'any', command: 'session-stash.stash' },
     { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
     { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
     { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
@@ -304,15 +306,25 @@ export const defaultKeymap = {
       scope: 'sessions.rename',
       command: 'sessions.renameCancel',
     },
+    {
+      keys: '<CR>',
+      scope: 'session-stash.note',
+      command: 'session-stash.noteAccept',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'session-stash.note',
+      command: 'session-stash.noteCancel',
+    },
 
     // ── Help ───────────────────────────────────────────────────────────────
     { keys: '<Leader>?', scope: 'any', command: 'keys.toggleHelp' },
     { keys: '<Esc>', scope: 'keys.help', command: 'keys.closeHelp' },
 
     // ── Forms ──────────────────────────────────────────────────────────────
-    { keys: 'j', scope: 'forms.forms', command: 'forms.nextItem' },
+    { keys: 'j', scope: 'forms.forms', command: 'forms.nextLine' },
     { keys: '<C-l>', scope: 'forms.forms', command: 'forms.nextItem' },
-    { keys: 'k', scope: 'forms.forms', command: 'forms.prevItem' },
+    { keys: 'k', scope: 'forms.forms', command: 'forms.prevLine' },
     { keys: '<C-h>', scope: 'forms.forms', command: 'forms.prevItem' },
     { keys: '<C-j>', scope: 'forms.forms', command: 'forms.lineDown' },
     { keys: '<C-k>', scope: 'forms.forms', command: 'forms.lineUp' },
@@ -324,6 +336,8 @@ export const defaultKeymap = {
     { keys: 'x', scope: 'forms.forms', command: 'forms.toggleNotApplicable' },
     { keys: 'd', scope: 'forms.forms', command: 'forms.toggleDontAsk' },
     { keys: 'a', scope: 'forms.forms', command: 'forms.editNotes' },
+    { keys: 'o', scope: 'forms.forms', command: 'forms.editNotes' },
+    { keys: 'za', scope: 'forms.forms', command: 'forms.toggleNotice' },
     {
       keys: '<CR>',
       scope: 'forms.forms',

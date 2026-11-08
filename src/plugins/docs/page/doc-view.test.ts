@@ -13,7 +13,11 @@ import {
   ScrollerFakeElement,
   ShrinkingScrollerFakeElement,
 } from '../../../shared/page/test-dom';
-import { docsEditSectionAtCommand, type IndexEntry } from '../contract';
+import {
+  docsEditSectionAtCommand,
+  type IndexEntry,
+  UNSAVED_TEXT,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   DocHeaderInput,
@@ -32,7 +36,7 @@ import {
   type DocViewDeps,
 } from './doc-view';
 import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
-import { readOnlyText, UNSAVED_TEXT } from './docs-state';
+import { readOnlyText } from './docs-state';
 import type { ListPageContent } from './list-page';
 import {
   fencePlaceholder,

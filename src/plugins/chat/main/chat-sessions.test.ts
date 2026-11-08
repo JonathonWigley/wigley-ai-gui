@@ -694,6 +694,7 @@ describe('createChatSessions', () => {
         sessionId: 'uuid-1',
         projectDir: PROJECT_DIR,
         harness: 'claude',
+        profileDir: '~/.claude-personal',
       },
     ]);
     expect(test.harness.processes.map((process) => process.request)).toEqual([
@@ -726,6 +727,7 @@ describe('createChatSessions', () => {
         returned: [],
         repo: 'app',
         branch: null,
+        worktrees: [],
       },
     ]);
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -897,6 +899,7 @@ describe('createChatSessions', () => {
         sessionId: hostId,
         projectDir: '/w/app',
         harness: 'claude',
+        profileDir: '~/.claude',
       },
     ]);
     const [state] = test.sent('sessionStarted');
@@ -1626,6 +1629,25 @@ describe('createChatSessions', () => {
     ]);
     expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
+  });
+
+  it('fileWritten_InWorktrees_ListsEachWorktreeOnceInWriteOrder', async () => {
+    const test = await started();
+    for (const [agentId, path] of [
+      [MAIN_AGENT_ID, '/Users/u/dev/.worktrees/app-fix/src/a.ts'],
+      [MAIN_AGENT_ID, '/Users/u/dev/app/src/b.ts'],
+      ['subagent-1', '/Users/u/dev/.worktrees/docs-fix/README.md'],
+      ['subagent-1', '/Users/u/dev/.worktrees/app-fix/src/c.ts'],
+    ]) {
+      test.process.events.agentEvent({
+        type: 'fileWritten',
+        at: 0,
+        agentId,
+        path,
+      });
+    }
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['app-fix', 'docs-fix']);
   });
 
   it('processExit_BackgroundWorkRunning_ClearsBackground', async () => {
@@ -6762,6 +6784,190 @@ function emittedOf<K extends Emitted['event']>(
   );
 }
 
+describe('createChatSessions compact', () => {
+  const REASON = 'auto · agents running · 214k';
+
+  it('compact_IdleSession_ShowsItsReasonFromTheCallToTheEnd', async () => {
+    const test = await started({ clockNow: 1500 });
+    test.harness.holdCompactions();
+
+    expect(test.chat.compact(ROW_ID, REASON)).toBe(true);
+
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+    expect(test.chat.sessions()[0].compaction).toEqual({
+      trigger: 'app',
+      reason: REASON,
+      startedAt: 1500,
+    });
+    await flush();
+    expect(test.chat.sessions()[0].compaction?.reason).toBe(REASON);
+    test.harness.releaseCompactions();
+    await flush();
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+  });
+
+  it.each<{
+    given: string;
+    sessionId?: string;
+    act(test: Awaited<ReturnType<typeof started>>): Promise<void> | void;
+    logged: string;
+  }>([
+    {
+      given: 'a session chat does not hold',
+      sessionId: 'row-9',
+      act: () => undefined,
+      logged: 'compact for session row-9 ignored: not held',
+    },
+    {
+      given: 'a resting session',
+      act: async (test) => {
+        test.process.events.ended({ code: 0, error: null });
+        await flush();
+      },
+      logged: 'compact for session row-1 ignored: no running process',
+    },
+    {
+      given: 'a turn running',
+      act: (test) => test.activity('working'),
+      logged: 'compact for session row-1 ignored: not idle',
+    },
+    {
+      given: 'a compaction running',
+      act: (test) =>
+        test.process.events.agentEvent(compactionStartedEvent('manual')),
+      logged: 'compact for session row-1 ignored: a compaction runs',
+    },
+    {
+      given: 'a hold up',
+      act: async (test) => {
+        test.harness.holdCompactions();
+        test.chat.addSendGate(answerA);
+        await test.chat.send(ROW_ID, IDLE_SEND);
+      },
+      logged: 'compact for session row-1 ignored: a hold is up',
+    },
+  ])('compact_Refused_StartsNothing: $given', async (row) => {
+    const test = await started();
+    await row.act(test);
+    const before = test.chat.sessions()[0].compaction;
+    const calls = test.process.calls.filter(
+      (call) => call.method === 'compact',
+    ).length;
+
+    expect(test.chat.compact(row.sessionId ?? ROW_ID, REASON)).toBe(false);
+
+    expect(test.logged).toContain(row.logged);
+    expect(test.chat.sessions()[0].compaction).toEqual(before);
+    expect(
+      test.process.calls.filter((call) => call.method === 'compact').length,
+    ).toBe(calls);
+  });
+
+  it('compact_FromATurnFinishedListener_ItsIdleAnnouncesNothing', async () => {
+    const test = await started();
+    test.harness.holdCompactions();
+    test.setFocused(false);
+    const { events } = test.process;
+    let compacted = false;
+    test.setOnEmit((emitted) => {
+      if (emitted.event === 'turnFinished' && !compacted) {
+        compacted = test.chat.compact(ROW_ID, REASON);
+      }
+    });
+
+    test.activity('working');
+    events.agentEvent({
+      type: 'agentSpawned',
+      at: 0,
+      agentId: 'agent-1',
+      parentAgentId: MAIN_AGENT_ID,
+      agentType: 'general-purpose',
+      description: 'review',
+      name: 'review',
+      model: null,
+      effort: null,
+    });
+    test.activity('idle');
+    await flush();
+    events.agentEvent({
+      type: 'agentFinished',
+      at: 0,
+      agentId: 'agent-1',
+      outcome: 'done',
+    });
+    test.harness.releaseCompactions();
+    await flush();
+
+    expect(compacted).toBe(true);
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(test.chat.sessions()[0].activity).toBe('idle');
+    expect(test.announced).toEqual([]);
+  });
+
+  it('compact_HarnessThrows_ReturnsFalseAndShowsNothing', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const test = setUp({
+      harnesses: [
+        {
+          ...fake,
+          start: (request, events) => ({
+            ...fake.start(request, events),
+            compact: () => {
+              throw new Error('refused');
+            },
+          }),
+        },
+      ],
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    test.setFocused(false);
+
+    expect(test.chat.compact(ROW_ID, REASON)).toBe(false);
+
+    expect(test.logged).toContain('compaction not started in row-1: refused');
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    fake.processes[0].events.activity('working');
+    fake.processes[0].events.activity('idle');
+    expect(test.announced).toHaveLength(1);
+  });
+
+  it('compact_MessageSentDuringIt_QueuesUntilItsEnd', async () => {
+    const test = await started();
+    test.harness.holdCompactions();
+    test.chat.compact(ROW_ID, REASON);
+
+    await test.chat.send(ROW_ID, LATER);
+
+    expect(test.chat.sessions()[0].queued.map((row) => row.text)).toEqual([
+      'later',
+    ]);
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+    test.harness.releaseCompactions();
+    await flush();
+    expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
+  });
+
+  it('compact_StretchRanOnlyIt_NoTurnFinishedAlert', async () => {
+    const test = await started();
+    test.setFocused(false);
+
+    test.chat.compact(ROW_ID, REASON);
+    await flush();
+
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(test.chat.sessions()[0].activity).toBe('idle');
+    expect(test.announced).toEqual([]);
+    test.activity('working');
+    test.activity('idle');
+    expect(test.announced).toHaveLength(1);
+  });
+});
+
 const AGENT_TITLES: SessionTitles = {
   user: null,
   agent: 'agent title',
@@ -7485,6 +7691,25 @@ describe('createChatSessions resume sections', () => {
     expect(await test.chat.resumeSections()).toEqual([
       { title: 'slow', rows: [slow] },
       { title: 'quick', rows: [quick] },
+    ]);
+  });
+
+  it('resumeSections_LaterSection_RefusesSessionsAnEarlierOneListed', async () => {
+    const test = setUp();
+    const ids = ['host-a', 'host-b', 'host-c'];
+    test.chat.addResumeSection({
+      title: 'first',
+      rows: () => Promise.resolve([rowFor('host-b')]),
+    });
+    test.chat.addResumeSection({
+      title: 'capped',
+      rows: (isResumable) =>
+        Promise.resolve(ids.filter(isResumable).slice(-2).map(rowFor)),
+    });
+
+    expect(await test.chat.resumeSections()).toEqual([
+      { title: 'first', rows: [rowFor('host-b')] },
+      { title: 'capped', rows: [rowFor('host-a'), rowFor('host-c')] },
     ]);
   });
 });

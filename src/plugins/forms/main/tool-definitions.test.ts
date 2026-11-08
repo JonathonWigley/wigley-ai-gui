@@ -4,7 +4,7 @@ import { RoundError } from './round-error';
 import { FORMS_TOOLS } from './tool-definitions';
 
 interface ArraySchema {
-  maxItems: number;
+  maxItems?: number;
   items: { required: string[] };
 }
 
@@ -45,23 +45,21 @@ describe('FORMS_TOOLS ask_round schema', () => {
       argsKey: 'questions',
       item: {
         title: 'Naming',
+        summary: 'Which name should win?',
         context: 'Two modules do the same thing.',
-        question: 'Which name should win?',
         choices: ['module_a', 'module_b'],
         recommend: 2,
         rationale: 'module_b is referenced elsewhere.',
       },
     },
   ])(
-    'publishes the $argsKey required fields and cap that parseRound enforces',
+    'publishes the $argsKey required fields that parseRound enforces, and no item cap',
     ({ argsKey, item }) => {
       const schema = itemListSchema(argsKey);
-      const atCap = Array.from({ length: schema.maxItems }, () => item);
+      const many = Array.from({ length: 61 }, () => item);
 
-      expect(() => parseRound(roundWith(argsKey, atCap))).not.toThrow();
-      expect(() => parseRound(roundWith(argsKey, [...atCap, item]))).toThrow(
-        RoundError,
-      );
+      expect(schema.maxItems).toBeUndefined();
+      expect(() => parseRound(roundWith(argsKey, many))).not.toThrow();
       expect(() =>
         parseRound(roundWith(argsKey, [{ ...item, unpublished: 1 }])),
       ).toThrow(RoundError);

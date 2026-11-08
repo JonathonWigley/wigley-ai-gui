@@ -26,7 +26,6 @@ export interface ItemFormat<Item> {
   readonly argsKey: string;
   // Singular, lower case: 'notice' | 'finding' | 'question'.
   readonly noun: string;
-  readonly maxItems: number;
   // The JSON Schema of the argsKey field.
   readonly arraySchema: Record<string, unknown>;
   // Throws a RoundError whose message starts with `where`.

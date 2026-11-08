@@ -74,8 +74,8 @@ export interface SessionInfo {
   projectDir: string | null;
   // Null when the relay did not say, or named a harness the app does not know.
   harness: Harness | null;
-  // A connected session's harness config folder, as `AgentStart` holds one, which
-  // a form source has no use for; absent for the harness default.
+  // The session's harness config folder, as `AgentStart` holds one, which a form
+  // source has no use for; absent for the harness default.
   profileDir?: string;
   // Every relay hello field sessions does not read, as the host sent it, for
   // the plugins that know the host; absent when there are none.
@@ -304,6 +304,9 @@ export interface SessionRow {
   projectDir: string | null;
   hostSessionId: string | null;
   titles: SessionTitles;
+  // The session's config folder as its harness resolves it, fixed at connect;
+  // null when the app runs no such harness.
+  profileDir: string | null;
 }
 
 export interface SessionsState {
@@ -334,16 +337,18 @@ export interface SessionsChannel extends ChannelShape {
 // A tab a plugin adds to a session. The tab bar draws its `icon`, a Codicon
 // name, with `title` as its tooltip and accessible name. `closesAtOnce` true
 // means the user's close key ends what this tab holds with no prompt; left
-// out, it is false. `beforeClose` returns whether the session may close now,
-// false keeping it, for what only the page knows or must ask; `atOnce` is true
-// when the user's close key runs while any of the session's tabs closes at
-// once. `shown` runs each time this tab becomes the visible tab: the selected
-// tab of the focused chat pane's session while Sessions mode shows. Its plugin
-// sets its base key scope there. `hidden` runs when it stops being the visible
-// tab, the mode hiding included, before the next tab's `shown`; a tab removed
-// first gets none. `shown` may run inside `addTab`, before its handle returns,
-// so it must not read that handle. `order` places the tab in the strip, as
-// `addTab` says.
+// out, it is false. `beforeClose` answers whether the session may close now,
+// false keeping it, for what only the page knows or must ask; a promise
+// answers once the tab has asked the user (chat's end-session confirm).
+// `atOnce` is true when the user's close key runs while any of the session's
+// tabs or popups closes at once. `shown` runs each time this tab becomes the
+// visible tab: the selected tab of the focused chat pane's session while
+// Sessions mode shows and that session has no open popup. Its plugin sets its
+// base key scope there. `hidden` runs when it stops being the visible tab, the
+// mode hiding or a popup opening over it included, before the next surface's
+// `shown`; a tab removed first gets none. `shown` may run inside `addTab`,
+// before its handle returns, so it must not read that handle. `order` places
+// the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;
@@ -351,46 +356,59 @@ export interface SessionTabView {
   element: HTMLElement;
   order?: number;
   closesAtOnce?(): boolean;
-  beforeClose(atOnce: boolean): boolean;
+  beforeClose(atOnce: boolean): boolean | Promise<boolean>;
   shown(): void;
   hidden?(): void;
 }
 
 // `select` selects the tab inside its session, never changing the selected
-// session. `takeOver` selects the tab inside its session and returns a
-// release; the release selects the tab selected before the take over, unless
-// a tab was selected since (by the user or `select`, even back to this one),
-// another tab's take over holds the session, or that tab is gone. A tab holds
-// one take over: taking over again keeps the first, while one the last page
-// saved (`sessionsPlaceSlot`) is replaced. A release hands each later take over
-// that remembered this tab the tab this one remembered, so chat selected, then
-// form and docs taking over, then form and docs releasing, shows chat. A
-// `restored` take over, of a form the last page already showed, selects nothing
-// and adopts the take over the last page saved for this tab, so its release
-// gives back what the first take over took; with none saved its release does
-// nothing. `isVisible` reads, at the moment of the call, whether this tab is the
-// visible tab. `dispose` releases the latest take over this handle gave out,
-// then removes the tab. Each call on a tab already dropped does nothing.
+// session. `isVisible` reads, at the moment of the call, whether this tab is
+// the visible tab. `dispose` removes the tab. Each call on a tab already
+// dropped does nothing.
 export interface SessionTabHandle extends Disposable {
   select(): void;
-  takeOver(options?: { restored?: boolean }): { release(): void };
   isVisible(): boolean;
 }
 
-// A tab taking over its session, the tab selected when it took over, and
-// the session's tab `selections` count then.
-export interface TakeOver {
-  tabId: string;
-  previousTabId: string | null;
-  selections: number;
+// A popup a plugin opens over a session's tabs while it has something for the
+// user. The layout's `popup` part frames `element`; `title` and `icon`, a
+// Codicon name, name it in the session's hidden bar. `beforeClose` answers
+// whether the session may close now, false keeping it, asked after the tabs';
+// `closesAtOnce` and `atOnce` are a tab's.
+// `shown` runs each time this popup becomes the visible surface: the top open
+// popup of the focused chat pane's session while Sessions mode shows. Its
+// plugin sets its base key scope there and may move focus into the popup;
+// sessions focuses nothing. `shown` may run inside `addPopup`, before its
+// handle returns, so it must not read that handle.
+export interface SessionPopupView {
+  id: string;
+  title: string;
+  icon: string;
+  element: HTMLElement;
+  closesAtOnce?(): boolean;
+  beforeClose(atOnce: boolean): boolean | Promise<boolean>;
+  shown(): void;
 }
 
-// A session's tab place, as a page reload finds it: the selected tab, how many
-// times the user's picks changed the selection, and the take overs its tabs hold.
+// `setStatus` sets its entry's text in the session's hidden bar. `open` makes
+// it the session's top open popup, and does nothing while it already is; `hide`
+// hides it, the bar listing it. `isVisible` reads, at the moment of the call,
+// whether this popup is the visible surface. `dispose` removes it. Each call
+// on a popup already dropped does nothing.
+export interface SessionPopupHandle extends Disposable {
+  setStatus(status: string): void;
+  open(): void;
+  hide(): void;
+  isVisible(): boolean;
+}
+
+// A session's place, as a page reload finds it: the selected tab, how many
+// times the user's picks changed the selection, and the ids of its hidden
+// popups.
 export interface SessionsPlace {
   selectedTabId: string | null;
   selections: number;
-  takeOvers: TakeOver[];
+  hiddenPopupIds: string[];
 }
 
 // A part another plugin draws for every session on a sessions surface: under
@@ -448,6 +466,13 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // with none; a tie keeps add order. A tab added before its session's row waits
 // for the row. A session's tabs drop when its row leaves, and
 // `sessionsRowsSlot`'s notice says so.
+// `addPopup` attaches the popup's element before returning and opens it: it
+// becomes the session's top open popup, over whichever popups were open or
+// hidden. A `restored` popup, one whose content the last page showed, comes
+// back hidden instead when the last page's place (`sessionsPlaceSlot`) had it
+// hidden. It throws on a popup id the session already holds. A popup added
+// before its session's row waits for the row, and a session's popups drop with
+// its row, as its tabs do.
 // `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
@@ -464,16 +489,28 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // activities, and every page load starts with none.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
+  addPopup(
+    sessionId: string,
+    popup: SessionPopupView,
+    options?: { restored?: boolean },
+  ): SessionPopupHandle;
   // The text cut to `sessions.titleMaxLength` with an ellipsis when longer, for
   // another plugin's short title.
   cutToTitleLimit(text: string): string;
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
   activate(sessionId: string): void;
-  // Asks each of the session's tabs `beforeClose(false)`, then asks main to
-  // close it, which a close guard refuses with the reason the page toasts;
-  // never cancels what a guard holds, as the user's close key does.
-  closeSession(sessionId: string): void;
+  // Asks each of the session's tabs `beforeClose(false)` in turn, then its
+  // popups, waiting on a promise's answer and asking too a tab or popup added
+  // meanwhile, then asks main to close it, which a close guard refuses with the
+  // reason the page toasts; never cancels what a guard holds, as the user's
+  // close key does. Resolves to true once the row closed; false when a tab, a
+  // popup or main kept it, or the ask to main failed (logged).
+  closeSession(sessionId: string): Promise<boolean>;
+  // The focused pane's session while Sessions mode shows, the session the
+  // close and rename keys act on; null while the mode is hidden or the pane is
+  // empty.
+  shownSessionId(): string | null;
   setActivity(
     sessionId: string,
     sourceId: string,
@@ -510,9 +547,10 @@ export const sessionsActivitySlot: KeyedSlotKey<
   'sessions'
 > = { id: 'sessions.activity', process: 'page', kind: 'keyed' };
 
-// Each session's tab place, by the session id, written on each change to its
-// tabs, their selection or their take overs; a row leaving deletes its key, and
-// `core.pageReady` deletes the keys of rows that ended while no page ran.
+// Each session's place, by the session id, written on each change to its tabs,
+// their selection or which of its popups are hidden; a row leaving deletes its
+// key, and `core.pageReady` deletes the keys of rows that ended while no page
+// ran.
 export const sessionsPlaceSlot: KeyedSlotKey<
   SessionsPlace,
   'page',

@@ -143,6 +143,7 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
     case 'userMessage':
     case 'sessionStarted':
     case 'usage':
+    case 'contextBreakdown':
     case 'compactionStarted':
     case 'compactionEnded':
     case 'fileWritten':

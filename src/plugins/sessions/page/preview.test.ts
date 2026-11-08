@@ -45,7 +45,6 @@ function activityLabel(row: FakeElement): {
   for (const className of [
     'ui-tag--attention',
     'ui-tag--error',
-    'session-row-activity--running',
     'session-row-activity--success',
   ]) {
     const text = cellText(row, className);
@@ -240,15 +239,12 @@ describe('session rows', () => {
       expected: null,
     },
     {
-      case: 'working',
+      case: 'working, which the workflow chip says',
       agent: null,
       marked: false,
       activity: WORKING,
       label: 'New Chat',
-      expected: {
-        className: 'session-row-activity--running',
-        text: 'Working',
-      },
+      expected: null,
     },
     {
       case: 'done',
@@ -267,15 +263,12 @@ describe('session rows', () => {
       expected: { className: 'ui-tag--error', text: 'Error' },
     },
     {
-      case: 'marked with an activity',
+      case: 'marked while working',
       agent: null,
       marked: true,
       activity: WORKING,
       label: 'New Chat',
-      expected: {
-        className: 'session-row-activity--running',
-        text: 'Working',
-      },
+      expected: null,
     },
     {
       case: 'marked alone',
@@ -419,12 +412,12 @@ describe('session rows', () => {
     const { view, sideBar } = sessionsViewSetup();
     view.render(stateOf([], null));
 
-    view.setActivity('s1', 'chat', WORKING);
+    view.setActivity('s1', 'chat', { word: 'error', tone: 'error', rank: 30 });
     view.render(stateOf(['s1'], 's1'));
 
     expect(activityLabel(drawnRows(sideBar)[0])).toEqual({
-      className: 'session-row-activity--running',
-      text: 'Working',
+      className: 'ui-tag--error',
+      text: 'Error',
     });
   });
 

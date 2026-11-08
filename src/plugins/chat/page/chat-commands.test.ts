@@ -124,6 +124,7 @@ function session(
     returned: [],
     repo: 'app',
     branch: 'main',
+    worktrees: [],
     ...stateFields,
   };
   const entries = {

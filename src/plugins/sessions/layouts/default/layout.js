@@ -6,15 +6,18 @@
 // grip) over its rows,
 // each row a compact card of two lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
-// activity, a needs you label while `marked`, a status edge for an
+// activity, a needs you label while `marked` (a running activity draws no
+// label: the workflow chip's tag in the footer says it), a status edge for an
 // activity with an emphasis, and its on-screen mark,
 // over a footer line, wrapped only on a narrow row, holding other plugins' row parts
 // (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
-// close prompt and pane controls, each tab's icon with no label, and the
-// rename dialog's title box over why a title was refused and the hint, in the
-// class names its `layout.css` styles.
+// close prompt and pane controls, each tab's icon with no label, each session
+// popup's sheet around its body, the hidden popups' bar (each entry's icon and
+// status, or its title with no status, then the toggle key), and the rename
+// dialog's title box over why a title was refused and the hint, in the class
+// names its `layout.css` styles.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
 
@@ -95,7 +98,7 @@ const layout = {
     element.classList.toggle('is-on-screen', input.onScreen);
     const activity =
       input.activity ?? (input.marked ? MARKED_ROW_ACTIVITY : null);
-    if (activity !== null) {
+    if (activity !== null && activity.tone !== 'running') {
       drawActivityLabel(kit.rowTrailing(element), activity, kit);
       if (activity.emphasis !== null) {
         element.classList.add(`session-row-edge--${activity.tone}`);
@@ -164,6 +167,31 @@ const layout = {
       kit.pickHint(text);
     }
     return { element };
+  },
+
+  popup(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-popup');
+    element.setAttribute('aria-label', input.title);
+    const body = kit.el(element, 'div', 'session-popup-body');
+    return { element, body };
+  },
+
+  popupBar(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-popup-bar');
+    const entries = input.entries.map((entry) => {
+      const drawn = kit.el(element, 'div', 'session-popup-bar-entry');
+      drawn.title = entry.title;
+      kit.icon(drawn, entry.icon, 'session-popup-bar-icon');
+      kit.el(
+        drawn,
+        'span',
+        'session-popup-bar-text',
+        entry.status === '' ? entry.title : entry.status,
+      );
+      return drawn;
+    });
+    kit.toggleHint(element);
+    return { element, entries };
   },
 
   renameDialog(parent, input, kit) {

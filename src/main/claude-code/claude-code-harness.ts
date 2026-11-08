@@ -31,7 +31,12 @@ import {
   loadAgentDefinitions,
 } from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
-import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
+import {
+  claudeConfigFolder,
+  claudeEnv,
+  claudeLaunch,
+  defaultConfigFolder,
+} from './claude-launch';
 import {
   controlMessage,
   controlOf,
@@ -1139,6 +1144,10 @@ export function createClaudeCodeHarness(
         projectsFolder(deps, projectDir, profileDir),
         sessionId,
       ),
+    configFolder: (profileDir) =>
+      profileDir === null
+        ? defaultConfigFolder(deps.homeDir, deps.paths)
+        : deps.paths.expandTilde(profileDir, deps.homeDir),
     accountStatus: (profileDir) => readAuthStatus(deps, profileDir),
     logIn: (profileDir, events) => startLogIn(deps, profileDir, events),
     logOut: (profileDir) => logOut(deps, profileDir),

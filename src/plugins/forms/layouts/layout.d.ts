@@ -15,13 +15,15 @@ export interface RoundInfo {
 export interface QuestionCard {
   label: string;
   title: string;
-  question: string;
+  summary: string;
   context: string;
   choices: string[];
   recommend: number;
   rationale: string;
   round: RoundInfo;
 }
+// The body of the notice's line on the notices pane. It draws under the line's head, so it need not draw the badge or
+// the title.
 export interface NoticeCard {
   label: string;
   title: string;
@@ -114,9 +116,9 @@ export interface AnswerKit extends Kit {
   answerControls(parent: HTMLElement): HTMLElement;
 }
 export interface QuestionKit extends AnswerKit {
-  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `answerControls` may be
-  // appended to. 'recommended' and 'all': the rationale as 'Why recommended' under the recommended choice; 'none': no
-  // reason. A blank rationale draws nothing.
+  // `div.answer` holding the Clear button row and `ol.choices`, with no label; returns the `div.answer`, which
+  // `answerControls` may be appended to. 'recommended' and 'all': the rationale under the recommended choice, with no
+  // label; 'none': no reason. A blank rationale draws nothing.
   choiceList(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',
@@ -156,14 +158,16 @@ export interface LayoutCards {
     kit: QuestionKit,
   ): LayoutCard;
   finding(parent: HTMLElement, input: FindingCard, kit: FindingKit): LayoutCard;
+  // The body of the notice's line on the notices pane, drawn under the line's head, so it need not draw the badge or
+  // the title.
   notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
 }
 
-// One item as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
-// its rail number, as `F1` or `2`.
+// One stop as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
+// its rail number, as `F1`, `2`, or `N` for the notices stop, the last entry when the round has notices.
 export interface RailEntryInput {
   position: number;
-  kind: 'question' | 'finding' | 'notice';
+  kind: 'question' | 'finding' | 'notices';
   label: string;
   title: string;
 }
@@ -182,6 +186,19 @@ export interface ReviewRowInput {
 export interface ReviewInput {
   round: RoundInfo;
   rows: ReviewRowInput[];
+}
+
+// One notice as the notices pane lists it. `index` is its 1-based place among the notices, which `NoticesKit.line`
+// takes; `label` is the notice's own number, as `N1` (the rail shows only the `N` stop).
+export interface NoticeLineInput {
+  index: number;
+  label: string;
+  title: string;
+  badge: string;
+}
+export interface NoticesInput {
+  round: RoundInfo;
+  notices: NoticeLineInput[];
 }
 
 // `element` is the pane's own node, appended to `parent` before the pane mounts any text box. The app shows and hides
@@ -221,6 +238,17 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   cancelButton(parent: HTMLElement): HTMLButtonElement;
 }
 
+// The notices pane's parts.
+export interface NoticesKit extends FormsBaseKit {
+  // Draws the line for notice `index` (its chevron, its open state, its hidden body holding the notice's
+  // `cards.notice`, and the cursor mark), appends it to `parent`, and returns the line's head for the layout to draw
+  // into. Call it on an attached `parent`. Each line draws once; a line the pane leaves out is appended at the end of
+  // the pane. The app owns the click, which runs `forms.toggleNoticeAt` with `index`, the open state and the cursor. The head sits inside the line's toggle button, so
+  // a click on it toggles the line: draw nothing interactive there. On each update the app appends the toggle key's
+  // prompt (`span.notice-line-prompt`) to the end of the cursor line's head.
+  line(parent: HTMLElement, index: number): HTMLElement;
+}
+
 // A layout defines only the cards and panes it changes. Each card comes from the first layout defining its kind among
 // the item's `layout`, the round's `layout`, the `forms.layout` setting and `default`; each pane the same way without
 // the item. A card or pane that throws, or returns no element appended to `parent`, is drawn by `default` instead.
@@ -233,6 +261,13 @@ export interface Layout {
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
+  // The round's one notices page, the last stop after every finding and question, shown in place of the cards while
+  // its stop is focused, built once per round.
+  notices?(
+    parent: HTMLElement,
+    input: NoticesInput,
+    kit: NoticesKit,
+  ): LayoutPane;
 }
 
 // The built-in `default` layout, which defines every card and pane but the head.
@@ -240,4 +275,9 @@ export interface CompleteLayout extends Layout {
   cards: LayoutCards;
   rail(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   review(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
+  notices(
+    parent: HTMLElement,
+    input: NoticesInput,
+    kit: NoticesKit,
+  ): LayoutPane;
 }

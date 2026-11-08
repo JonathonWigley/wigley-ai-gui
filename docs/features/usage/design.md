@@ -207,7 +207,7 @@ contributes to it through `api.areas.rightBar`.
 - **The session line is a part, never chat input.** Usage draws the context line into chat's `addComposerPart` and the
   spend into its `addStatusPart` (`docs/features/chat-bar/design.md`) and, through the optional `usage-tab-line`
   plugin, the whole line into sessions' `addBarPart`, so neither chat nor sessions knows usage. The tab-bar copy is for a user who
-  wants the line on every tab, Form and Primer included.
+  wants the line on every tab, a session with no Chat tab included.
 - **A new right bar shell area** rather than a floating panel or a Sessions-only pane: it serves the next plugin and
   covers nothing.
 - **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
@@ -235,5 +235,5 @@ contributes to it through `api.areas.rightBar`.
   would be a cycle, and each later readout would edit chat's layout contract.
 - **A global data store or data buckets any plugin reads** — a second sharing mechanism beside `dependsOn` exports
   and events.
-- **The session line only in the Chat composer** — it would hide while a Form or Primer tab shows; the user took it
+- **The session line only in the Chat composer** — it would hide while a form popup hides the chat; the user took it
   as the default with the tab-bar line one switch away.

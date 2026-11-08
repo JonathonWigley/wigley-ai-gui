@@ -2,10 +2,11 @@ import type { Disposable, Registrations } from '../../../contracts/disposable';
 import { createRegistrations } from '../../../shared/registrations';
 import type { SessionsPageExports } from '../contract';
 
-// One dependent's view of sessions' page exports: every tab and part it adds is
-// filed under its registrations, and their disposal clears each activity it
-// still holds. A session `onSessionRemoved` names leaves the store: its tabs'
-// handles and its activities, which sessions has already dropped.
+// One dependent's view of sessions' page exports: every tab, popup and part it
+// adds is filed under its registrations, and their disposal clears each
+// activity it still holds. A session `onSessionRemoved` names leaves the store:
+// its tabs' and popups' handles and its activities, which sessions has already
+// dropped.
 export function sessionsPageView(
   exports: SessionsPageExports,
   consumer: Registrations,
@@ -22,12 +23,18 @@ export function sessionsPageView(
       heldActivities.clear();
     },
   });
-  // One store entry per session, so its tab handles leave together.
-  const sessionTabs = new Map<string, Registrations & Disposable>();
+  // One store entry per session, so its tab and popup handles leave together.
+  const sessionHandles = new Map<string, Registrations & Disposable>();
+  const handlesOf = (sessionId: string) => {
+    const handles =
+      sessionHandles.get(sessionId) ?? consumer.track(createRegistrations());
+    sessionHandles.set(sessionId, handles);
+    return handles;
+  };
   consumer.track(
     onSessionRemoved((sessionId) => {
-      sessionTabs.get(sessionId)?.dispose();
-      sessionTabs.delete(sessionId);
+      sessionHandles.get(sessionId)?.dispose();
+      sessionHandles.delete(sessionId);
       for (const [key, [heldSessionId]] of heldActivities) {
         if (heldSessionId === sessionId) {
           heldActivities.delete(key);
@@ -37,12 +44,10 @@ export function sessionsPageView(
   );
   return {
     ...exports,
-    addTab(sessionId, tab) {
-      const tabs =
-        sessionTabs.get(sessionId) ?? consumer.track(createRegistrations());
-      sessionTabs.set(sessionId, tabs);
-      return tabs.track(exports.addTab(sessionId, tab));
-    },
+    addTab: (sessionId, tab) =>
+      handlesOf(sessionId).track(exports.addTab(sessionId, tab)),
+    addPopup: (sessionId, popup) =>
+      handlesOf(sessionId).track(exports.addPopup(sessionId, popup)),
     addRowPart: (part) => consumer.track(exports.addRowPart(part)),
     addBarPart: (part) => consumer.track(exports.addBarPart(part)),
     setActivity(sessionId, sourceId, activity) {

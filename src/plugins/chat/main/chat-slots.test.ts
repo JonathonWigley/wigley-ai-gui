@@ -48,6 +48,7 @@ const STATE: ChatSessionState = {
   returned: [],
   repo: 'p',
   branch: null,
+  worktrees: [],
 };
 
 // Chat's slots over a real store; `changes` holds each write in order.

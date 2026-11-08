@@ -1,15 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FormsReviewColumn } from '../../contract';
-import type { Layout, ReviewKit } from '../../layouts/layout';
+import defaultLayout from '../../layouts/default/layout.js';
+import type { Layout, RailInput, ReviewKit } from '../../layouts/layout';
 import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import { apply, type FormsState, initialState } from '../form-state';
+import {
+  apply,
+  type FormsState,
+  initialState,
+  type RoundState,
+} from '../form-state';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../../manifest';
-import { presentedRound } from '../test-rounds';
-import { buildRailPane, buildReviewPane, type PaneDeps } from './layout-panes';
+import type { CardDeps } from '../kinds/item-format';
+import { notice, presentedRound, question } from '../test-rounds';
+import {
+  buildNoticesPane,
+  buildRailPane,
+  buildReviewPane,
+  type PaneDeps,
+} from './layout-panes';
+import type { LayoutPick } from './layout-resolver';
 import {
   asFake,
   asHtml,
@@ -60,6 +73,23 @@ function fakePaneDeps(contributions: FormsContributions) {
     recordMount: () => {},
   };
   return { deps, keysFor, anchor, log, run };
+}
+
+// Card deps over the pane deps' boxes, keys and log.
+function fakeCardDeps(deps: PaneDeps): CardDeps {
+  return {
+    markdown: deps.markdown,
+    mountBox: deps.mountBox,
+    destroyBox: deps.destroyBox,
+    keys: deps.keys,
+    platform: deps.platform,
+    log: deps.log,
+    commands: deps.commands,
+    contributions: createFormsContributions(),
+    state: deps.state,
+    recordAnchor: () => {},
+    recordMount: () => {},
+  };
 }
 
 // A review drawing only row 0 into its `ul`; `onKit` sees the kit as it
@@ -244,12 +274,13 @@ describe('review pane', () => {
   });
 });
 
-// A layout's pane drawn into a fresh parent, with its deps.
+// A layout's pane drawn into a fresh parent over `state`'s first round, with
+// its deps.
 function drawPane(
   build: typeof buildRailPane | typeof buildReviewPane,
   layout: Layout,
+  state: FormsState = openRound(),
 ) {
-  const state = openRound();
   const { deps, log, run } = fakePaneDeps(createFormsContributions());
   const parent = new FakeElement('div');
   const pane = build(
@@ -259,6 +290,51 @@ function drawPane(
     deps,
   );
   return { pane, parent, deps, log, run };
+}
+
+const DEFAULT_PICK: LayoutPick = { name: 'default', layout: defaultLayout };
+
+// Round r1, one question and two notices (N1 Decided, N2 Applied), open and
+// active in the forms view.
+function noticesState(): FormsState {
+  const presented = presentedRound('r1', {
+    questions: [question('Alpha')],
+    notices: [{ ...notice('Heads up'), badge: 'Decided' }, notice('Also')],
+  });
+  return apply(initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  });
+}
+
+// The notices pane drawn with `pick` into a fresh parent over `round` (by
+// default the first round of noticesState), each body with `bodyPicks`.
+function drawNoticesPane(
+  pick: LayoutPick,
+  options: {
+    round?: RoundState;
+    bodyPicks?: LayoutPick[];
+  } = {},
+) {
+  const state = noticesState();
+  const round = options.round ?? state.forms[0];
+  const { deps, log, run } = fakePaneDeps(createFormsContributions());
+  const parent = new FakeElement('div');
+  const pane = buildNoticesPane(
+    pick,
+    options.bodyPicks ?? [DEFAULT_PICK, DEFAULT_PICK],
+    asHtml(parent),
+    round,
+    1,
+    deps,
+    fakeCardDeps(deps),
+  );
+  return { pane, parent, deps, log, run, round };
+}
+
+// The notices pane's lines, in order.
+function noticeLines(pane: { element: HTMLElement }) {
+  return findAll(asFake(pane.element), 'notice-line');
 }
 
 // A review that appends a stray node and mounts the round note, then throws.
@@ -285,16 +361,61 @@ describe('panes', () => {
     expect(deps.destroyBox).toHaveBeenCalledWith({ field: 'note' });
   });
 
-  it('railPane_PickedDraws_MarksItWithItsLayout', () => {
-    const { pane, log } = drawPane(buildRailPane, {
-      rail: (parent, _input, kit) => ({
-        element: kit.el(parent, 'nav', 'rail'),
-      }),
-    });
+  it.each([
+    {
+      pane: 'rail',
+      draw: () =>
+        drawPane(buildRailPane, {
+          rail: (parent, _input, kit) => ({
+            element: kit.el(parent, 'nav', 'rail'),
+          }),
+        }),
+    },
+    {
+      pane: 'notices',
+      draw: () =>
+        drawNoticesPane({
+          name: 'test',
+          layout: {
+            notices: (parent, _input, kit) => ({
+              element: kit.el(parent, 'section', 'notices'),
+            }),
+          },
+        }),
+    },
+  ])('pane_PickedDraws_MarksItWithItsLayout_$pane', ({ draw }) => {
+    const { pane, log } = draw();
 
     expect(log).not.toHaveBeenCalled();
     expect(pane.element.dataset.layout).toBe('test');
     expect(pane.element.dataset.layoutOwner).toBe('forms');
+  });
+
+  it('railPane_NoticesStop_EntryIsLastWithItsLabelAndTitle', () => {
+    const inputs: RailInput[] = [];
+    const presented = presentedRound('r1', {
+      questions: [question('Alpha')],
+      notices: [notice('Heads up'), notice('Also')],
+    });
+    const state = initialState([presented], presented.sessionId);
+
+    drawPane(
+      buildRailPane,
+      {
+        rail: (parent, input, kit) => {
+          inputs.push(input);
+          return { element: kit.el(parent, 'nav', 'rail') };
+        },
+      },
+      state,
+    );
+
+    expect(inputs[0].items.at(-1)).toEqual({
+      position: 1,
+      kind: 'notices',
+      label: 'N',
+      title: 'Notices · 2',
+    });
   });
 
   it('reviewPane_NoteLeftOut_AppendsItToThePane', () => {
@@ -350,5 +471,208 @@ describe('panes', () => {
 
     expect(log).toHaveBeenCalledWith(expect.stringContaining(String(row)));
     expect(pane.element.dataset.layout).toBe('default');
+  });
+});
+
+describe('notices pane', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { open: [false, false], hidden: [true, true] },
+    { open: [false, true], hidden: [true, false] },
+  ])(
+    'noticesPane_Default_DrawsBadgeAndTitlePerLineWithHiddenBodies_$open',
+    ({ open, hidden }) => {
+      const round = { ...noticesState().forms[0], openNotices: open };
+
+      const { pane } = drawNoticesPane(DEFAULT_PICK, { round });
+
+      const lines = noticeLines(pane);
+      expect(
+        lines.map((line) => [
+          findAll(line, 'ui-tag')[0]?.textContent,
+          findAll(line, 'notice-line-title')[0]?.textContent,
+          findAll(line, 'notice-line-title')[0]?.title,
+        ]),
+      ).toEqual([
+        ['Decided', 'Heads up', 'Heads up'],
+        ['Applied', 'Also', 'Also'],
+      ]);
+      expect(
+        findAll(asFake(pane.element), 'ui-collapsible-body').map(
+          (body) => body.hidden,
+        ),
+      ).toEqual(hidden);
+    },
+  );
+
+  it.each([
+    { case: 'index 0', index: 0, twice: false },
+    { case: 'index 1.5', index: 1.5, twice: false },
+    { case: 'index 3', index: 3, twice: false },
+    { case: 'line 1 twice', index: 1, twice: true },
+  ])('noticesKit_BadLine_$case_FallsBackToDefault', ({ index, twice }) => {
+    const { pane, log } = drawNoticesPane({
+      name: 'test',
+      layout: {
+        notices(parent, _input, kit) {
+          const section = kit.el(parent, 'section', 'notices');
+          kit.line(section, index);
+          if (twice) {
+            kit.line(section, index);
+          }
+          return { element: section };
+        },
+      },
+    });
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(String(index)));
+    expect(pane.element.dataset.layout).toBe('default');
+  });
+
+  it('noticesPane_Throws_DestroysEachBodysBoxOnce', () => {
+    const { pane, deps, log } = drawNoticesPane({
+      name: 'test',
+      layout: {
+        notices(parent, _input, kit) {
+          kit.line(kit.el(parent, 'section', 'notices'), 1);
+          throw new Error('boom');
+        },
+      },
+    });
+
+    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
+    expect(deps.destroyBox).toHaveBeenCalledWith({
+      field: 'comment',
+      notice: 1,
+    });
+    expect(log).toHaveBeenCalledWith('layout test notices failed: boom');
+    expect(pane.element.dataset.layout).toBe('default');
+    expect(noticeLines(pane)).toHaveLength(2);
+    for (const target of [1, 2]) {
+      expect(deps.mountBox).toHaveBeenCalledWith(
+        expect.anything(),
+        { field: 'comment', notice: target },
+        expect.any(String),
+      );
+    }
+  });
+
+  it('noticesPane_LineLeftOut_AppendsItAtTheEnd', () => {
+    const { pane, deps } = drawNoticesPane({
+      name: 'test',
+      layout: {
+        notices(parent, _input, kit) {
+          const section = kit.el(parent, 'section', 'notices');
+          kit.line(kit.el(section, 'div', 'mine'), 1);
+          return { element: section };
+        },
+      },
+    });
+
+    const lines = noticeLines(pane);
+    expect(lines).toHaveLength(2);
+    expect(asFake(pane.element).children.at(-1)).toBe(lines[1]);
+    const title = findAll(lines[1], 'notice-line-title')[0];
+    expect([title?.textContent, title?.title]).toEqual(['Also', 'Also']);
+    expect(deps.mountBox).toHaveBeenCalledWith(
+      expect.anything(),
+      { field: 'comment', notice: 2 },
+      expect.any(String),
+    );
+  });
+
+  it('noticesPane_BodyPicks_DrawEachBodyWithItsOwnPick', () => {
+    const mine: Layout = {
+      cards: {
+        notice: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'mine-notice'),
+        }),
+      },
+    };
+
+    const { pane } = drawNoticesPane(DEFAULT_PICK, {
+      bodyPicks: [DEFAULT_PICK, { name: 'mine', layout: mine }],
+    });
+
+    expect(
+      findAll(asFake(pane.element), 'notice-line-body').map(
+        (body) => body.children[0]?.dataset.layout,
+      ),
+    ).toEqual(['default', 'mine']);
+  });
+
+  it.each([
+    {
+      case: 'line 1 open, cursor moves to line 2',
+      updates: [{ openNotices: [true, false], noticeLine: 2 }],
+      open: [true, false],
+      cursor: [false, true],
+      scrolled: [2],
+    },
+    {
+      case: 'line 2 open, cursor stays on line 1',
+      updates: [{ openNotices: [false, true], noticeLine: 1 }],
+      open: [false, true],
+      cursor: [true, false],
+      scrolled: [],
+    },
+    {
+      case: 'cursor unchanged on a second update',
+      updates: [{ noticeLine: 2 }, { noticeLine: 2 }],
+      open: [false, false],
+      cursor: [false, true],
+      scrolled: [2],
+    },
+  ])('noticesPane_Update_$case', ({ updates, open, cursor, scrolled }) => {
+    const built = { ...noticesState().forms[0], noticeLine: 1 };
+    const { pane } = drawNoticesPane(DEFAULT_PICK, { round: built });
+    const lines = noticeLines(pane);
+    const scrolls: number[] = [];
+    lines.forEach((line, i) => {
+      vi.spyOn(line, 'scrollIntoView').mockImplementation(() => {
+        scrolls.push(i + 1);
+      });
+    });
+
+    for (const update of updates) {
+      pane.update({ ...built, ...update });
+    }
+
+    expect(lines.map((line) => line.classList.contains('is-open'))).toEqual(
+      open,
+    );
+    expect(lines.map((line) => line.classList.contains('is-cursor'))).toEqual(
+      cursor,
+    );
+    expect(scrolls).toEqual(scrolled);
+  });
+
+  it('noticesPane_Update_CursorLineHoldsTheTogglePrompt', () => {
+    const built = { ...noticesState().forms[0], noticeLine: 1 };
+    const { pane, deps } = drawNoticesPane(DEFAULT_PICK, { round: built });
+
+    pane.update({ ...built, noticeLine: 2 });
+
+    const lines = noticeLines(pane);
+    expect(
+      lines.map((line) => findAll(line, 'notice-line-prompt').length),
+    ).toEqual([0, 1]);
+    expect(deps.keys.anchor).toHaveBeenCalledWith(
+      findAll(lines[1], 'notice-line-prompt')[0],
+      'forms.toggleNotice',
+      { scope: 'forms.forms', label: 'toggle' },
+    );
+  });
+
+  it('noticesLine_HeadClick_RunsToggleNoticeAt', () => {
+    const { pane, run } = drawNoticesPane(DEFAULT_PICK);
+
+    findAll(noticeLines(pane)[1], 'ui-collapsible-head')[0].click();
+
+    expect(run.mock.calls).toEqual([['forms.toggleNoticeAt', 2]]);
   });
 });

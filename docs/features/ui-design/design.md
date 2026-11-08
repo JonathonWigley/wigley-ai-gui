@@ -41,8 +41,8 @@ Three plans in this folder, run in order. Each one leaves a working app.
    mode, the self-test screenshots, the style check (`scripts/check-styles.mts`), and
    `@fontsource/jetbrains-mono`.
 3. **Plan C — surfaces.** Landed: every existing surface rebuilt on the primitives (chrome, floating
-   surfaces, Sessions, the Form tab with its rail as a split, Chat with the floating composer, Docs
-   with its tree in the side bar and in a session's Docs tab), the key changes below, the editor's
+   surfaces, Sessions, the session popup (form) with its rail as a split, Chat with the floating composer, Docs
+   with its tree in the side bar and in a session's Docs tab, later moved to the optional `docs-session-tab` plugin), the key changes below, the editor's
    active-line band, and the style check judging every file. The agent ran every live check the drive
    run (`npm run drive`) reaches in agent-drive's final verification; the two it could not reach
    are in [followups.md](../followups.md).
@@ -176,8 +176,9 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 |---|---|---|
 | Title bar, activity bar, side bar, tab strips, status bar | L1 chrome | glass |
 | Sessions list | L1, side bar slot | |
-| Session tab content (Form, Chat, Docs) | L2 sheet | tabs sit on the sheet's top edge |
-| Forms rail | L2 | the left pane of a split inside the Form tab |
+| Session tab content (Chat, Docs) | L2 sheet | tabs sit on the sheet's top edge |
+| Session popup (round, primer) | L2 sheet | raised over the tabs under the `scrim`, no shadow (`../session-popups/design.md`) |
+| Forms rail | L2 | the left pane of a split inside the session popup |
 | Chat transcript | L2 | user turns as tinted blocks; tool calls as collapsible cards with a status dot |
 | Chat composer | L3 | floating glass, radius 14, 12px inset; entries scroll beneath it; holds the editor, the session controls as chips, and send |
 | Docs mode tree | L1, side bar slot | the docs view hands back its tree and doc as two parts |

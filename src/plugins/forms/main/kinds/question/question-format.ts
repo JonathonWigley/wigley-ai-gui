@@ -12,36 +12,42 @@ import {
 import type { AnswerableFormat } from '../item-format';
 import { isJsonObject } from '../../../../../shared/json';
 
-const MAX_QUESTIONS = 20;
-
 const QUESTION_FIELDS = [
   'title',
+  'summary',
   'context',
-  'question',
   'choices',
   'recommend',
   'rationale',
 ];
-const QUESTION_KNOWN_FIELDS = [...QUESTION_FIELDS, 'layout'];
+// The summary's old name, read so rounds saved before the rename still load.
+const LEGACY_SUMMARY_FIELD = 'question';
+const QUESTION_KNOWN_FIELDS = [
+  ...QUESTION_FIELDS,
+  LEGACY_SUMMARY_FIELD,
+  'layout',
+];
 
 const QUESTIONS_DESCRIPTION =
   'Open decisions that are not review findings — one object per question. ' +
-  'Each draws as its own card after the findings: the question, its ' +
-  'context, then the choices, the recommended one with its rationale under ' +
-  'it.';
+  'Each draws as its own card after the findings and before the notices ' +
+  'page: the summary, the context, then the choices with the rationale ' +
+  'under the recommended one. The card draws no section labels.';
+
+const QUESTION_SUMMARY_DESCRIPTION =
+  'One or two plain sentences: what the user is asked to decide, and why ' +
+  "it needs deciding now. It is the card's headline, drawn first, so it " +
+  'stands alone; the context does not repeat it. Inline markdown.';
 
 const QUESTION_CONTEXT_DESCRIPTION =
-  'Why the question is being asked, and everything the user needs to ' +
-  'answer it. Markdown. Open with the quick ' +
-  'read: a plain bullet list of the facts the decision rests on. When the ' +
-  'question is about concrete changes (a diff to review, edits to approve), ' +
-  'open instead with a `:::changes` block (one line per change, starting ' +
-  '`+` added, `~` changed or `x` removed) for a few changes, or a `:::tree` ' +
-  'block (the same lines, indented two spaces per level, grouped by place) ' +
-  'when changes span several places. Put the full text in a `:::details ' +
-  'Full text` block. Close each block with a line holding only `:::`. Each ' +
-  'line says what the user gets in plain words, never the markup or symbol ' +
-  'behind it.';
+  'The rundown: what the user needs to know to answer, in a few short ' +
+  'paragraphs of plain prose with no headings and no labelled parts. Add a ' +
+  'visual only when the question is about a shape, such as a flow or a ' +
+  'layout. Put the evidence last, in a `:::details Sources` block. A ' +
+  'question about concrete changes opens instead with a `:::changes` block ' +
+  'for a few changes, or a `:::tree` block when they span several places. ' +
+  'Close each block with a line holding only `:::`. Markdown. Wording: ' +
+  '~/wigley-agents/forms.md § Questions.';
 
 function parseChoices(raw: unknown, where: string): string[] {
   if (!Array.isArray(raw)) {
@@ -68,11 +74,21 @@ function parseQuestion(item: unknown, where: string): Question {
   if (!isJsonObject(item)) {
     throw new RoundError(`${where}each question must be an object.`);
   }
-  const missing = fieldsMissing(item, QUESTION_FIELDS);
+  const hasSummary = Object.hasOwn(item, 'summary');
+  const hasLegacySummary = Object.hasOwn(item, LEGACY_SUMMARY_FIELD);
+  if (hasSummary && hasLegacySummary) {
+    throw new RoundError(
+      `${where}has both summary and question. Send summary alone: ` +
+        `question is its old name.`,
+    );
+  }
+  const missing = fieldsMissing(item, QUESTION_FIELDS).filter(
+    (field) => !(field === 'summary' && hasLegacySummary),
+  );
   if (missing.length > 0) {
     throw new RoundError(
       `${where}missing ${missing.join(', ')}. All six fields are ` +
-        `required: title, context, question, choices, recommend, rationale.`,
+        `required: title, summary, context, choices, recommend, rationale.`,
     );
   }
   const extra = fieldsOutside(item, QUESTION_KNOWN_FIELDS);
@@ -84,8 +100,12 @@ function parseQuestion(item: unknown, where: string): Question {
     );
   }
   const title = requireText(item.title, 'title', where);
+  const summary = requireText(
+    hasSummary ? item.summary : item[LEGACY_SUMMARY_FIELD],
+    'summary',
+    where,
+  );
   const context = requireText(item.context, 'context', where);
-  const question = requireText(item.question, 'question', where);
   const rationale = requireText(item.rationale, 'rationale', where);
   const choices = parseChoices(item.choices, where);
   const recommend = parseRecommend(
@@ -96,16 +116,14 @@ function parseQuestion(item: unknown, where: string): Question {
     where,
   );
   const layout = parseLayoutField(item, where);
-  return { title, context, question, choices, recommend, rationale, layout };
+  return { title, summary, context, choices, recommend, rationale, layout };
 }
 
 export const questionFormat: AnswerableFormat<Question> = {
   argsKey: 'questions',
   noun: 'question',
-  maxItems: MAX_QUESTIONS,
   arraySchema: {
     type: 'array',
-    maxItems: MAX_QUESTIONS,
     items: {
       type: 'object',
       additionalProperties: false,
@@ -113,16 +131,17 @@ export const questionFormat: AnswerableFormat<Question> = {
       properties: {
         title: {
           type: 'string',
-          description: 'A short name for the decision.',
+          description:
+            "A short name for the decision. It is the item's name in the " +
+            'rail, and the card does not draw it.',
+        },
+        summary: {
+          type: 'string',
+          description: QUESTION_SUMMARY_DESCRIPTION,
         },
         context: {
           type: 'string',
           description: QUESTION_CONTEXT_DESCRIPTION,
-        },
-        question: {
-          type: 'string',
-          description:
-            'What is being decided, in one plain sentence. Markdown.',
         },
         choices: {
           type: 'array',
@@ -141,7 +160,10 @@ export const questionFormat: AnswerableFormat<Question> = {
         },
         rationale: {
           type: 'string',
-          description: 'Why that one is recommended.',
+          description:
+            'Why the recommended choice, in a sentence or two. It draws ' +
+            'under that choice with no label, so it reads on from the ' +
+            'choice and does not repeat it.',
         },
         layout: ITEM_LAYOUT_SCHEMA,
       },
@@ -151,8 +173,8 @@ export const questionFormat: AnswerableFormat<Question> = {
   parse: parseQuestion,
   fingerprintContent: (question) => ({
     title: question.title,
+    summary: question.summary,
     context: question.context,
-    question: question.question,
     choices: question.choices,
     recommend: question.recommend,
     rationale: question.rationale,

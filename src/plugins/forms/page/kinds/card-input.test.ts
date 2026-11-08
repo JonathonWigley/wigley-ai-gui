@@ -11,7 +11,7 @@ import { noticeFormat } from './notice/notice-card';
 import { questionFormat } from './question/question-card';
 
 describe('cardInput', () => {
-  it('questionCardInput_CarriesRationaleAndRound', () => {
+  it('questionCardInput_CarriesSummaryRationaleAndRound', () => {
     const { round } = presentedRound('r1', {
       questions: [
         question('Alpha'),
@@ -27,6 +27,7 @@ describe('cardInput', () => {
     const input = questionFormat.cardInput(round, 2);
 
     expect(input.label).toBe('2');
+    expect(input.summary).toBe('Beta summary');
     expect(input.choices).toEqual(['keep', 'drop']);
     expect(input.recommend).toBe(1);
     expect(input.rationale).toBe('keeping is cheaper');
