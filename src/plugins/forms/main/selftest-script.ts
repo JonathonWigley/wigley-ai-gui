@@ -667,11 +667,21 @@ const PANE_RESIZE_STEPS: SelfTestStep[] = [
 const SECOND_SESSION_STEPS: SelfTestStep[] = [
   { ...stepToRow('<A-S-o>', 'selftest 2'), checksFit: true },
   {
-    keys: ['<A-o>'],
-    expect: '[sessions] showed Docs tab in selftest 2',
+    keys: [' ', 'v', 'f'],
+    expect: '[sessions] hid Form popup in selftest 2',
+    alsoExpect: [/^\[docs\] Docs tab shown$/],
     checksFit: true,
   },
-  { keys: ['<A-o>'], expect: '[sessions] showed Form tab in selftest 2' },
+  {
+    keys: ['<A-o>'],
+    expect: '[sessions] no other tab in selftest 2',
+    screenshot: 'popup-hidden',
+    why: 'The sessions scope, not the hidden round, holds the keys.',
+  },
+  {
+    keys: [' ', 'v', 'f'],
+    expect: '[sessions] opened Form popup in selftest 2',
+  },
   {
     keys: ['<D-w>'],
     expect:
@@ -1392,12 +1402,12 @@ export function formsSelfTestScript(
       },
       {
         name: 'pane resize',
-        why: "The core's resize commands run from their default binds Option+Shift+l and Option+Shift+h on the Form tab.",
+        why: "The core's resize commands run from their default binds Option+Shift+l and Option+Shift+h in the round's popup.",
         steps: PANE_RESIZE_STEPS,
       },
       {
         name: 'second session',
-        why: 'The second session cycles its Form and Docs tabs, keeps its round when its cancel prompt is dismissed, and Option+p finds its untouched question.',
+        why: "The second session hides and shows its round's popup over its Docs tab, keeps its round when its cancel prompt is dismissed, and Option+p finds its untouched question.",
         steps: SECOND_SESSION_STEPS,
       },
       {
