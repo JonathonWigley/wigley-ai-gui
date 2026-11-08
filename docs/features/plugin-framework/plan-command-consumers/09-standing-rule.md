@@ -1,6 +1,6 @@
 # 09 — Standing rule in AGENTS.md
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 08
 Plan: [plan.md](plan.md)

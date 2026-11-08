@@ -1,6 +1,6 @@
 # 08 — Work and place survive a page reload
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -174,3 +174,5 @@ Done when: every key in the table is in its `contract.ts`; each plugin's manifes
 Commit: one commit for the group.
 
 ## Proof
+
+Commit a5771d49 · proof: Grep: all nine place slot keys in their contract.ts and published from start.ts/sessions-view.ts; sessionIdOfSource, takeOversWithLiveTabs, tabsAfterRestoredAdd, placeWrites, pruneKeys, onPageHide present; forms, primer and notes pass onPageHide to autosave. Typecheck exit 0, lint 0 warnings (lead run). Workers: 08a 2038 tests (shared/page, forms, primer, sessions) and forms,primer + sessions self-tests pass; 08b 3068 tests (chat, docs, notes, backlog, settings) and their filtered self-test pass. Diff (67 files, +2671) left to the review by size. · concerns: 08a: primer cardColumn not in PrimerPlace (card focus lost on reload); a double reload before forms' late tab loses its selection; a tab disposed before its restored take over releases a saved record; AGENTS.md :124 and :215 stale (to task 09); new shared file session-form-places.ts; TakeOver, PrimerPane, TaskRow moved into contracts. 08b: chat stringifies its place on every drawFocus incl. scroll; settings sectionsCursor not clamped on restore; docs tree place covers only the view's initial tree view; files beyond the list (chat entry-focus.ts+test, chat-view.test.ts, docs-parts.test.ts); EntryFocus, BacklogFocus, NOTE_FIELDS/NoteField moved into contracts.
