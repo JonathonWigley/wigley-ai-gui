@@ -97,7 +97,7 @@ All ∥:
 
 Checkpoint, after the items above:
 
-- [ ] Add the standing rule to the AGENTS.md Intent: every user action runs as a command, and every state change a
+- [x] Add the standing rule to the AGENTS.md Intent: every user action runs as a command, and every state change a
   plugin owns is published as an event or slot typed in its `contract.ts`.
 
 ## Wave 4: plugin hot reload

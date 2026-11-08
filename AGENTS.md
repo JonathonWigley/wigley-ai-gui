@@ -2,7 +2,7 @@
 
 **Contents**
 
-- **Intent** — what every change is judged by: everything a plugin, everything drawn through a layout, everything hot reloads, macOS and Windows now,
+- **Intent** — what every change is judged by: everything a plugin, every action a command, everything drawn through a layout, everything hot reloads, macOS and Windows now,
   any agent harness or model later, one user and no backwards compatibility.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, registration, shell area, mode, session tab, key, event, setting,
@@ -46,6 +46,10 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   is something a plugin can hook into, extend or replace, and a built-in plugin has no more reach than one loaded
   from a user folder would. A closed list, switch or union that a new plugin would have to edit is an extension
   point waiting to become a registration.
+- **Every action is a command, shared state is published.** Every user action runs as a command, and every state
+  change another plugin reads or a page reload keeps is published as an event or slot typed in its `contract.ts`, so
+  a plugin can hook, bind or read what the app itself does. A view's private draw state stays in the view. Drags and
+  focus guards stay plain listeners, and a layout wanting something else writes its own listener knowingly.
 - **Everything draws through a layout.** Every surface — each plugin's views, the overlays and dialogs, the shell
   chrome — draws through a user-editable layout, so any part of the app's look changes by editing a layout file,
   without a rebuild. A new view or surface ships with its layout contract and its `default` layout
@@ -133,9 +137,12 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
                  reader skeleton) and `test-layouts.ts` (the test helpers owners share) and
                  `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot)), the reducer store, autosave,
-                 editor boxes, the confirm prompt, the session form tab helper, the session form status line, and the
+                 editor boxes, the confirm prompt, the session form tab helper, the session form status line, the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
-                 events queue)
+                 events queue), and the page place slots' helpers (`place-slot.ts`: `placeWrites`, which drops a write
+                 equal to the last, and `pruneKeys`, which deletes the keys of rows or forms that ended while no page
+                 ran; `page-hide.ts`: `onPageHide`, which hears the page's teardown; `session-form-places.ts`: the
+                 place follow, restore and prune that forms and the primer share)
                  → imported only by src/renderer and plugins' page/ parts
     pane-tree/   the pane tree: panes as leaves of nested splits, kept as proportions (`pane-tree.ts`: split, close,
                  the pane toward a direction, focus, swap and nudge → pure), and its view (`pane-tree-view.ts`: a slot
@@ -211,8 +218,9 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
-  sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active` and
-                 `sessions.activity` slots and `followRows`), session-title.ts (the title rules main and page share), main/ (the
+  sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active`,
+                 `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
+                 count and take overs, and `followRows`), session-title.ts (the title rules main and page share), main/ (the
                  session list — rows, their titles and origin-repo project names, the selected session, written to the `rows` and `selection` slots, tool routing — the
                  `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
