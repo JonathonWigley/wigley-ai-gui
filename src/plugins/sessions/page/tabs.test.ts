@@ -221,7 +221,7 @@ describe('tabs', () => {
     },
   );
 
-  it('tabsAfterSelect selects a present tab, counting it, and returns the same value for an absent one', () => {
+  it('tabsAfterSelect selects a present tab, counting it, and returns the same value for an absent or selected one', () => {
     const tabs: TabsState = {
       tabIds: ['a', 'b'],
       selectedTabId: 'a',
@@ -234,6 +234,7 @@ describe('tabs', () => {
       selections: 3,
     });
     expect(tabsAfterSelect(tabs, 'x')).toBe(tabs);
+    expect(tabsAfterSelect(tabs, 'a')).toBe(tabs);
   });
 
   it.each<{
