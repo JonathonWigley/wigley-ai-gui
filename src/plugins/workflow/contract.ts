@@ -80,7 +80,7 @@ export type WorkflowSignal =
   // Also from a sessionEnded of the flow's current host session (a crash
   // mid-turn).
   | { type: 'turnEnded' }
-  // From agentSpawned with parentAgentId MAIN_AGENT_ID.
+  // From agentSpawned of any agent, a subagent's own included.
   | { type: 'subagentStarted'; agentId: string }
   // From agentFinished for an id in runningSubagents.
   | { type: 'subagentFinished'; agentId: string }
@@ -121,9 +121,9 @@ export interface MainWorkflow {
   fixCycles?(flow: SessionFlow): number;
 }
 
-// A flow is busy while a turn runs or a main-agent subagent runs (a skill may
-// dispatch in the background, and its results arrive in turns with no user
-// message).
+// A flow is busy while a turn runs or a subagent at any depth runs (a skill
+// may dispatch in the background, and its results arrive in turns with no
+// user message).
 export function isBusy(flow: SessionFlow): boolean {
   return flow.turnRunning || flow.runningSubagents.length > 0;
 }

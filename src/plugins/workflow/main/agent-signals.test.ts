@@ -138,7 +138,7 @@ const ROWS: {
     expected: [{ type: 'subagentStarted', agentId: 'a1' }],
   },
   {
-    name: "a subagent's own agentSpawned gives nothing",
+    name: "a subagent's own agentSpawned starts a subagent",
     event: {
       type: 'agentSpawned',
       at: 1,
@@ -152,7 +152,7 @@ const ROWS: {
     },
     flow: running('a1'),
     fromCurrentHost: true,
-    expected: [],
+    expected: [{ type: 'subagentStarted', agentId: 'a2' }],
   },
   {
     name: 'agentFinished of a running subagent finishes it',

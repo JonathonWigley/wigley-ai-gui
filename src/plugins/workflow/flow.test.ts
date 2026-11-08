@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentEvent } from '../../contracts/agent';
 import {
   checklistCount,
   isBusy,
@@ -9,6 +10,7 @@ import {
   type WorkflowSignal,
 } from './contract';
 import { foldFlow, markMissedLevel, newFlow } from './flow';
+import { signalOf } from './main/agent-signals';
 
 function flowWith(fields: Partial<SessionFlow>): SessionFlow {
   return { ...newFlow('s1', '/r'), ...fields };
@@ -433,5 +435,49 @@ describe('isBusy', () => {
     },
   ])('$name → $expected', ({ fields, expected }) => {
     expect(isBusy(flowWith(fields))).toBe(expected);
+  });
+});
+
+describe('nested subagents', () => {
+  function spawned(agentId: string, parentAgentId: string): AgentEvent {
+    return {
+      type: 'agentSpawned',
+      at: 1,
+      agentId,
+      parentAgentId,
+      agentType: 'worker',
+      description: 'd',
+      name: 'worker',
+      model: null,
+      effort: null,
+    };
+  }
+
+  function finished(agentId: string): AgentEvent {
+    return { type: 'agentFinished', at: 2, agentId, outcome: 'done' };
+  }
+
+  function foldEvent(flow: SessionFlow, event: AgentEvent): SessionFlow {
+    return signalOf(event, flow, true).reduce(
+      (folded, signal) => foldFlow(folded, signal, []),
+      flow,
+    );
+  }
+
+  it('nestedSubagents_SpawnAndFinish_BusyUntilTheLastEnds', () => {
+    let flow = flowWith({});
+    for (const event of [
+      spawned('a1', 'main'),
+      spawned('a2', 'a1'),
+      finished('a2'),
+    ]) {
+      flow = foldEvent(flow, event);
+    }
+    expect(flow.runningSubagents).toEqual(['a1']);
+    expect(isBusy(flow)).toBe(true);
+
+    flow = foldEvent(flow, finished('a1'));
+    expect(flow.runningSubagents).toEqual([]);
+    expect(isBusy(flow)).toBe(false);
   });
 });
