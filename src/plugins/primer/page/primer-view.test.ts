@@ -8,11 +8,7 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import type {
-  CommandArg,
-  CommandArgShape,
-  CommandId,
-} from '../../../contracts/commands';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { CommandHandler } from '../../../contracts/plugin';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
@@ -49,6 +45,7 @@ import { mountPrimerTab } from './primer-view';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -94,10 +91,6 @@ interface RegisteredTarget {
 }
 
 type PrimerCommand = keyof ReturnType<typeof primerCommandHandlers>;
-
-const PRIMER_COMMANDS: Readonly<
-  Record<string, { label: string; arg?: CommandArgShape }>
-> = primerManifest.commands;
 
 // The short name of primer command `id`, as the handlers key it.
 function primerShort(id: CommandId): PrimerCommand {
@@ -217,19 +210,12 @@ function primerTabSetup(
       keysFor: () => null,
     },
     run: () => undefined,
-    commands: {
-      exists: () => true,
-      argShape: (id) =>
-        id.startsWith('primer.')
-          ? PRIMER_COMMANDS[primerShort(id)]?.arg
-          : undefined,
-      run: (id, arg) => {
-        ran.push([id, arg]);
-        if (id.startsWith('primer.')) {
-          void (handlers[primerShort(id)] as CommandHandler)({ arg });
-        }
-      },
-    },
+    commands: fakeKitCommandsOf(primerManifest, (id, arg) => {
+      ran.push([id, arg]);
+      if (id.startsWith('primer.')) {
+        void (handlers[primerShort(id)] as CommandHandler)({ arg });
+      }
+    }),
     platform: 'macos',
     state: noLayoutState,
     uiState: {

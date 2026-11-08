@@ -14,7 +14,8 @@ import { apply, initialState, type RoundState } from '../form-state';
 import { findingFormat } from '../kinds/finding/finding-card';
 import { questionFormat } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
-import { fakeFormsKitCommands } from '../fake-kit-commands.test-support';
+import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
+import { formsManifest } from '../../manifest';
 import { finding, notice, presentedRound, question } from '../test-rounds';
 import {
   baseKitDepsFor,
@@ -179,7 +180,7 @@ function fakeCardDeps(contributions: FormsContributions) {
     platform: 'macos',
     state: noLayoutState,
     log,
-    commands: fakeFormsKitCommands(run, ['demo.run']),
+    commands: fakeKitCommandsOf(formsManifest, run, ['demo.run']),
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},

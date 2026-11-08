@@ -13,7 +13,8 @@ import {
 import { FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
 import { apply, type FormsAction, initialState } from './form-state';
-import { fakeFormsKitCommands } from './fake-kit-commands.test-support';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
+import { formsManifest } from '../manifest';
 import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
@@ -145,7 +146,7 @@ function formTabSetup(
       anchor: () => ({ dispose: () => undefined }),
     },
     run: () => undefined,
-    commands: fakeFormsKitCommands(),
+    commands: fakeKitCommandsOf(formsManifest),
     contributions: createFormsContributions(),
     platform: 'macos',
     state: noLayoutState,

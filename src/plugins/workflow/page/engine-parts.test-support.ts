@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { PluginManifest } from '../../../contracts/plugin';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import {
   type RecordedAnchor,
   recordingAnchors,
@@ -21,7 +22,6 @@ import {
   type WorkflowKit,
   type WorkflowPageExports,
   workflowPageKey,
-  workflowStageActionCommand,
 } from '../contract';
 import { workflowManifest } from '../manifest';
 import { createWorkflowKit } from './layout/workflow-kit';
@@ -82,16 +82,9 @@ export function testWorkflowKit(
         ...NO_FENCES,
       },
       keys,
-      commands: {
-        exists: () => true,
-        argShape: (id) =>
-          id === workflowStageActionCommand.id
-            ? workflowManifest.commands.stageAction.arg
-            : undefined,
-        run: (id, arg) => {
-          runs.push({ id, arg });
-        },
-      },
+      commands: fakeKitCommandsOf(workflowManifest, (id, arg) => {
+        runs.push({ id, arg });
+      }),
       platform: 'macos',
       state: noLayoutState,
     },

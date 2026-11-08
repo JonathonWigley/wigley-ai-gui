@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  PluginCommands,
-} from '../../../contracts/plugin';
-import { definePlugin } from '../../../shared/define-plugin';
+import type { PluginCommands } from '../../../contracts/plugin';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   fakeDependency,
   noCounts,
+  probePart,
   startPagePart,
   type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
@@ -78,33 +74,6 @@ function holdsPart<T>(consumer: Registrations, parts: Set<T>, part: T) {
   return consumer.track({ dispose: () => parts.delete(part) });
 }
 
-const probeManifest = definePlugin({
-  id: 'probe',
-  dependsOn: { main: [], page: [] },
-  reads: { main: [], page: [] },
-  commands: {},
-  scopes: {},
-  settings: {},
-  settingInfo: {},
-  themeTokens: {},
-});
-
-// A page part that hands the test its `commands`, as another plugin holds them,
-// and records each run its process hears in `runs`.
-function probePart(
-  held: { commands: PluginCommands | null },
-  runs: [string, unknown][],
-): PagePart {
-  return {
-    manifest: probeManifest,
-    start(api: PageApi<typeof probeManifest, never>) {
-      held.commands = api.commands;
-      api.commands.onDidRun((id, arg) => runs.push([id, arg]));
-      return { commands: {} };
-    },
-  } as unknown as PagePart;
-}
-
 // Workflow's page part over fakes that file each part they take under it, as
 // sessions' and chat's views do. `commands` is another plugin's, and `runs` holds
 // each run its process heard.
@@ -116,7 +85,7 @@ function startWorkflow() {
   const probe: { commands: PluginCommands | null } = { commands: null };
   const runs: [string, unknown][] = [];
   const harness = startPagePart(workflowPagePart, {
-    parts: [probePart(probe, runs)],
+    parts: [probePart(runs, probe)],
     dependencies: [
       fakeDependency(
         sessionsPageKey,

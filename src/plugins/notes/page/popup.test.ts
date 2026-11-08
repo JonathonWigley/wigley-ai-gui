@@ -39,10 +39,11 @@ import type {
 import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { fakeNotesKitCommands } from './notes-page-fakes';
+import { notesManifest } from '../manifest';
 import { createNotePopup, type NotePopup } from './popup';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -389,7 +390,7 @@ async function openPopup(
         return { dispose: () => undefined };
       },
     },
-    commands: fakeNotesKitCommands((id, arg) => {
+    commands: fakeKitCommandsOf(notesManifest, (id, arg) => {
       ran.push([id, arg]);
       const handler = (
         popup.commands as Record<string, (context: { arg: unknown }) => void>

@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
-  PageApi,
   PagePart,
   PluginCommands,
   ShownLayouts,
 } from '../contracts/plugin';
-import { definePlugin } from '../shared/define-plugin';
 import { withUser } from '../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../shared/page/markdown-mount.test-support';
 import {
@@ -16,6 +14,8 @@ import {
 } from '../shared/page/test-dom';
 import {
   fakeDependency,
+  probePart,
+  providerManifest,
   startPagePart,
 } from '../shared/plugin-part-harness.test-support';
 import {
@@ -179,45 +179,9 @@ function rowOf(sessionId: string): SessionRow {
 // does.
 function providerPart(id: string, exports: unknown): PagePart {
   return {
-    manifest: definePlugin({
-      id,
-      dependsOn: { main: [], page: [] },
-      reads: { main: [], page: [] },
-      commands: {},
-      scopes: {},
-      settings: {},
-      settingInfo: {},
-      themeTokens: {},
-    }),
+    manifest: providerManifest(id),
     start: () => ({ commands: {}, exports: () => exports }),
-  } as unknown as PagePart;
-}
-
-const probeManifest = definePlugin({
-  id: 'probe',
-  dependsOn: { main: [], page: [] },
-  reads: { main: [], page: [] },
-  commands: {},
-  scopes: {},
-  settings: {},
-  settingInfo: {},
-  themeTokens: {},
-});
-
-// A page part that hands the test its `commands`, as another plugin holds them,
-// and records each run its process hears in `runs`.
-function probePart(
-  held: { commands: PluginCommands | null },
-  runs: [string, unknown][],
-): PagePart {
-  return {
-    manifest: probeManifest,
-    start(api: PageApi<typeof probeManifest, never>) {
-      held.commands = api.commands;
-      api.commands.onDidRun((id, arg) => runs.push([id, arg]));
-      return { commands: {} };
-    },
-  } as unknown as PagePart;
+  };
 }
 
 // The real engine page part, its live timers' handles held in `live`.
@@ -297,7 +261,7 @@ function setUp() {
       providerPart(sessionsPageKey.id, sessions),
       providerPart(chatPageKey.id, chat),
       countingEngineTimers(engineTimers),
-      probePart(probe, runs),
+      probePart(runs, probe),
     ],
     dependencies: [
       fakeDependency(

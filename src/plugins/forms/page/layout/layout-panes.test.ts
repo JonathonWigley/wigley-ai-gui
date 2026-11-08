@@ -6,7 +6,8 @@ import {
   type FormsContributions,
 } from '../contributions';
 import { apply, type FormsState, initialState } from '../form-state';
-import { fakeFormsKitCommands } from '../fake-kit-commands.test-support';
+import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
+import { formsManifest } from '../../manifest';
 import { presentedRound } from '../test-rounds';
 import { buildRailPane, buildReviewPane, type PaneDeps } from './layout-panes';
 import {
@@ -53,7 +54,7 @@ function fakePaneDeps(contributions: FormsContributions) {
     run: vi.fn(),
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
-    commands: fakeFormsKitCommands(run),
+    commands: fakeKitCommandsOf(formsManifest, run),
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},

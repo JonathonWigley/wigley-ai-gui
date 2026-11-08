@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  PageApi,
-  PageCommandContext,
-  PagePart,
-} from '../../../contracts/plugin';
-import { definePlugin } from '../../../shared/define-plugin';
+import type { PageCommandContext } from '../../../contracts/plugin';
 import { fakeVisualFrames } from '../../../shared/page/fake-visual-frames';
 import {
   asFake,
@@ -15,33 +10,11 @@ import {
 import {
   fakeDependency,
   noCounts,
+  probePart,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
 import { visualPagePart } from './start';
-
-const runListenerManifest = definePlugin({
-  id: 'run-listener',
-  dependsOn: { main: [], page: [] },
-  reads: { main: [], page: [] },
-  commands: {},
-  scopes: {},
-  settings: {},
-  settingInfo: {},
-  themeTokens: {},
-});
-
-// A page part that records each command run its process hears, with its arg,
-// in `runs`.
-function runListenerPart(runs: [string, unknown][]): PagePart {
-  return {
-    manifest: runListenerManifest,
-    start(api: PageApi<typeof runListenerManifest, never>) {
-      api.commands.onDidRun((id, arg) => runs.push([id, arg]));
-      return { commands: {} };
-    },
-  } as unknown as PagePart;
-}
 
 // The part on the harness, over fake frames and a chat whose focused entry is
 // `entry`, with the harness's own markdown, which records the fence as the page
@@ -52,7 +25,7 @@ function startOnHarness() {
   const runs: [string, unknown][] = [];
   const harness = startPagePart(visualPagePart, {
     services: { visualFrames: frames },
-    parts: [runListenerPart(runs)],
+    parts: [probePart(runs)],
     dependencies: [
       fakeDependency(
         chatPageKey,

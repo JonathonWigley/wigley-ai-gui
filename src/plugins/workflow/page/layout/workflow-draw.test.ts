@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShowLayoutOptions } from '../../../../contracts/plugin';
 import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 import {
@@ -17,7 +18,6 @@ import type {
   PagePluginApi,
   WorkflowDrawOptions,
 } from '../../contract';
-import { workflowStageActionCommand } from '../../contract';
 import { workflowManifest } from '../../manifest';
 import { readWorkflowLayout } from './read-workflow-layout';
 import { createWorkflowDraw } from './workflow-draw';
@@ -57,14 +57,7 @@ function setUp() {
           ...NO_FENCES,
         },
         keys: recordingAnchors().keys,
-        commands: {
-          exists: () => true,
-          argShape: (id) =>
-            id === workflowStageActionCommand.id
-              ? workflowManifest.commands.stageAction.arg
-              : undefined,
-          run: () => undefined,
-        },
+        commands: fakeKitCommandsOf(workflowManifest),
         platform: 'macos',
         state: noLayoutState,
       },

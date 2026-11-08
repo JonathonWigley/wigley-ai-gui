@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PagePart, PluginCommands } from '../../../contracts/plugin';
 import {
   asHtml,
   FakeElement,
@@ -7,11 +8,13 @@ import {
 import {
   fakeDependency,
   noCounts,
+  probePart,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { agentsRostersSlot, type Roster } from '../../agents/contract';
 import { sessionsPageKey } from '../../sessions/contract';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
+import { agentStripToggleBoxAtCommand } from '../contract';
 import { agentStripPagePart } from './start';
 
 const SESSION = 's1';
@@ -49,9 +52,11 @@ const RUNNING: Roster = {
 
 // The part on the harness, over fakes that file each handle with
 // `consumer.track` as the real views do; chat's builds the composer part into a
-// wrapper at once, and disposes it with its handle.
-function startOnHarness() {
+// wrapper at once, and disposes it with its handle. `parts` are real parts
+// started beside it.
+function startOnHarness(parts: readonly PagePart[] = []) {
   return startPagePart(agentStripPagePart, {
+    parts,
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -111,5 +116,21 @@ describe('agentStripPagePart', () => {
     harness.emit('core.pageReady', null);
 
     expect(harness.counts().observers).toBe(1);
+  });
+
+  it('toggleBoxAt_RunByAnotherPart_OpensThatBox', async () => {
+    const held: { commands: PluginCommands | null } = { commands: null };
+    const harness = startOnHarness([probePart([], held)]);
+    harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
+    harness.emit('core.pageReady', null);
+
+    await held.commands!.run(agentStripToggleBoxAtCommand, {
+      sessionId: SESSION,
+      key: 't1',
+    });
+
+    expect(harness.logs.map(({ message }) => message)).toContain(
+      `opened box 2 in ${SESSION}`,
+    );
   });
 });

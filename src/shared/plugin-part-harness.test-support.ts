@@ -41,6 +41,7 @@ import type {
   PagePart,
   PageServices,
   PageStart,
+  PluginCommands,
   PluginManifest,
   PluginState,
   ProcessName,
@@ -567,7 +568,9 @@ function requireNoFakeIsReal(
   }
 }
 
-function providerManifest(id: string): PluginManifest {
+// The manifest of a plugin `id` that declares nothing, as a provider part or a
+// stub stands under.
+export function providerManifest(id: string): PluginManifest {
   return {
     id,
     dependsOn: { main: [], page: [] },
@@ -577,6 +580,23 @@ function providerManifest(id: string): PluginManifest {
     settings: {},
     settingInfo: {},
     themeTokens: {},
+  };
+}
+
+// A page part of plugin `probe` that records each command run its process
+// hears, with its arg, in `runs`, and hands `held` its `commands`, as another
+// plugin holds them.
+export function probePart(
+  runs: [string, unknown][],
+  held: { commands: PluginCommands | null } = { commands: null },
+): PagePart {
+  return {
+    manifest: providerManifest('probe'),
+    start(api) {
+      held.commands = api.commands;
+      api.commands.onDidRun((id, arg) => runs.push([id, arg]));
+      return { commands: {} };
+    },
   };
 }
 

@@ -88,28 +88,60 @@ describe('whichKeyModel', () => {
     ]);
   });
 
-  it('whichKeyModel_DigitRun_MergesToRange', () => {
-    const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    const map = keymap(
-      digits.map((digit) => ({
+  const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+  const choose = (id: string): CommandInfo => ({
+    id,
+    plugin: 'forms',
+    label: 'pick a choice',
+    group: 'choices',
+    runsIn: 'page',
+    arg: 'number',
+  });
+
+  it.each([
+    {
+      case: 'over nine commands',
+      binds: DIGITS.map((digit) => ({
         keys: [' ', digit],
         scope: 's',
         command: `jumpTo${digit}`,
       })),
-    );
+      lookup: command,
+      shown: 'go to question',
+    },
+    {
+      case: 'over one command bound nine times, each with its own arg',
+      binds: DIGITS.map((digit) => ({
+        keys: [' ', digit],
+        scope: 's',
+        command: 'forms.choose',
+        arg: Number(digit),
+      })),
+      lookup: choose,
+      shown: 'pick a choice',
+    },
+  ] as {
+    case: string;
+    binds: PageBind[];
+    lookup: (id: string) => CommandInfo | undefined;
+    shown: string;
+  }[])(
+    'whichKeyModel_DigitRun_PrintsOneRangeLine $case',
+    ({ binds, lookup, shown }) => {
+      const model = whichKeyModel(
+        { where: 'page', keys: [' '], scope: 's' },
+        keymap(binds),
+        lookup,
+        () => shown,
+        'macos',
+      );
 
-    const model = whichKeyModel(
-      { where: 'page', keys: [' '], scope: 's' },
-      map,
-      command,
-      () => 'go to question',
-      'macos',
-    );
-
-    expect(model?.entries).toEqual([
-      { keys: '1–9', label: 'go to question', kind: 'command' },
-    ]);
-  });
+      expect(model?.entries).toEqual([
+        { keys: '1–9', label: shown, kind: 'command' },
+      ]);
+    },
+  );
 
   it('whichKeyModel_Editor_ReadsLeaderTokens', () => {
     const map = keymap(
@@ -248,38 +280,6 @@ describe('whichKeyModel', () => {
 
     expect(model?.entries).toEqual([
       { keys: 'k', label: '+panes', kind: 'prefix' },
-    ]);
-  });
-
-  it('whichKeyModel_FormsChooseDigits_OneMergedLine', () => {
-    const scope = 'forms.forms';
-    const map = keymap(
-      ['1', '2', '3'].map((digit) => ({
-        keys: [' ', digit],
-        scope,
-        command: 'forms.choose',
-        arg: Number(digit),
-      })),
-    );
-    const choose = (id: string): CommandInfo => ({
-      id,
-      plugin: 'forms',
-      label: 'pick a choice',
-      group: 'choices',
-      runsIn: 'page',
-      arg: 'number',
-    });
-
-    const model = whichKeyModel(
-      { where: 'page', keys: [' '], scope },
-      map,
-      choose,
-      () => 'pick a choice',
-      'macos',
-    );
-
-    expect(model?.entries).toEqual([
-      { keys: '1–3', label: 'pick a choice', kind: 'command' },
     ]);
   });
 });
