@@ -1,6 +1,7 @@
 // The workflow plugin's records, its workflow and stage extension points and its
 // flows slot.
 
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -336,18 +337,29 @@ export interface Drawn {
   dispose(): void;
 }
 
-// Runs a command of the drawing plugin, by its short id, for the session the part
-// draws.
-export type RunCommand = (command: string) => void;
+// The session a stage action runs for, and the action: `mainAction`,
+// `toggleFinishedWaves`, or the short command id of a stage's action.
+export interface StageActionArg {
+  sessionId: string;
+  action: string;
+}
+
+// Runs a stage action for a session through the engine's gate, as every stage
+// button, fold and stage key does.
+export const workflowStageActionCommand: CommandKey<
+  StageActionArg,
+  'workflow.stageAction'
+> = { id: 'workflow.stageAction' };
 
 // One workflow plugin's parts: each draws into `parent` with the plugin's layouts
-// as last shown, falling back to its `default` on a throw. No part takes a key
-// scope. `sideTitle` is the title of the workflow's side part.
+// as last shown, falling back to its `default` on a throw, its buttons running
+// `workflow.stageAction` for `sessionId`. No part takes a key scope. `sideTitle` is
+// the title of the workflow's side part.
 export interface WorkflowDraw {
   sideTitle: string;
-  chip(parent: HTMLElement, input: ChipInput, run: RunCommand): Drawn;
-  strip(parent: HTMLElement, input: StripInput, run: RunCommand): Drawn;
-  sidePane(parent: HTMLElement, input: SidePaneInput, run: RunCommand): Drawn;
+  chip(parent: HTMLElement, input: ChipInput, sessionId: string): Drawn;
+  strip(parent: HTMLElement, input: StripInput, sessionId: string): Drawn;
+  sidePane(parent: HTMLElement, input: SidePaneInput, sessionId: string): Drawn;
 }
 
 // A workflow's page half.
@@ -362,7 +374,8 @@ export interface PageWorkflow {
   draw: WorkflowDraw;
   // Left out: `defaultChecklist`.
   checklist?(flow: SessionFlow): ChecklistView | null;
-  // Runs one of its stages' action commands; a reject is logged and toasted.
+  // Runs one of its stages' action commands for the session `workflow.stageAction`
+  // names, after the engine's gate; a reject is logged and toasted.
   runAction(
     sessionId: string,
     command: string,
@@ -396,16 +409,13 @@ export interface WorkflowDrawOptions {
 }
 
 // `addWorkflow` throws on an id already added. `createWorkflowDraw` shows the
-// plugin's layouts through its `api`, which owns the show's life. `runCommand` runs
-// a command for a session through the flow's workflow, logging when there is
-// nothing to run.
+// plugin's layouts through its `api`, which owns the show's life.
 export interface WorkflowPageExports {
   addWorkflow(workflow: PageWorkflow): Disposable;
   createWorkflowDraw(
     api: PagePluginApi,
     options: WorkflowDrawOptions,
   ): WorkflowDraw;
-  runCommand(sessionId: string, command: string): Promise<void>;
 }
 
 export const workflowPageKey: DependencyKey<

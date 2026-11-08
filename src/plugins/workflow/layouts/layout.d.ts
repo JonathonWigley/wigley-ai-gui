@@ -124,8 +124,9 @@ export interface ActionButtonOptions {
 export interface WorkflowKit extends BaseKit {
   // `button.ui-button` with the action's label, disabled while the action cannot run. Its variant is
   // `options.variant`, else `primary` for the main action and `secondary` for the rest. It draws the action's key
-  // inside it (`Space w w` on the main action) unless `options.anchor` is false. A click runs the action for the
-  // session the part draws and goes no further, so a chip's button does not also select its row.
+  // inside it (`Space w w` on the main action) unless `options.anchor` is false. A click runs `workflow.stageAction`
+  // with the session the part draws and the action (`mainAction` for the main one), and goes no further, so a chip's
+  // button does not also select its row.
   actionButton(
     parent: HTMLElement,
     action: ActionInput,
@@ -144,7 +145,8 @@ export interface WorkflowKit extends BaseKit {
   // and a redraw of a showing mark never jumps the pulse.
   statusMark(parent: HTMLElement, state: MarkState): HTMLElement;
   // `button.workflow-finished-fold` reading `▸ <text>`, or `▾ <text>` while `open`, with `aria-expanded` and the key of
-  // `workflow.toggleFinishedWaves`. A click opens or folds the finished groups of the session the part draws.
+  // `workflow.toggleFinishedWaves`. A click runs `workflow.stageAction` with the session the part draws and
+  // `toggleFinishedWaves`, which opens or folds that session's finished groups.
   finishedFold(
     parent: HTMLElement,
     text: string,

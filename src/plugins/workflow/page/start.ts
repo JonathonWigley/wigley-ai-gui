@@ -21,6 +21,7 @@ import {
   workflowFlowsSlot,
   type WorkflowId,
   type WorkflowPageExports,
+  workflowStageActionCommand,
 } from '../contract';
 import { newFlow } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -30,7 +31,10 @@ import {
 } from './layout/workflow-draw';
 import { createPreview } from './preview-steps';
 import { createWorkflowView } from './workflow-view';
-import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 
 type WorkflowApi = PageApi<
   typeof workflowManifest,
@@ -50,7 +54,8 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // `workflow.flows`, drawing the one flow each notice names, leaving a deleted flow
 // drawn until its row leaves and drawing no flow whose row has left, and holds the
 // page half of each workflow, which `addWorkflow` extends; each workflow takes one
-// side part. Each engine command runs on the selected session; each button on the
+// side part. `stageAction` runs the view's gate for the session and action its arg
+// names; each engine key runs it on the selected session, each button on the
 // session it draws. `toggleSidePane` shows or hides the pane in every session, kept
 // in `uiState`. `openPreview` steps chat's preview session through every workflow's
 // samples (`createPreview`).
@@ -182,13 +187,14 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       }
     });
 
+    const runKey = keyRunner(api.commands, log);
     const runOnSelected = (command: SessionCommand) => () => {
       const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;
       }
-      void view.runFor(sessionId, command);
+      runKey(workflowStageActionCommand, { sessionId, action: command });
     };
     const toggleSidePane = () => {
       const isHidden = services.uiState.get(SIDE_PANE_HIDDEN_KEY) !== true;
@@ -202,13 +208,13 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         mainAction: runOnSelected('mainAction'),
         toggleSidePane,
         toggleFinishedWaves: runOnSelected('toggleFinishedWaves'),
+        stageAction: ({ arg }) => view.runFor(arg.sessionId, arg.action),
         openPreview: () => preview.press(),
       },
       exports: (consumer): WorkflowPageExports => ({
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
         createWorkflowDraw: (pluginApi, options) =>
           createWorkflowDraw(drawDeps, pluginApi, options),
-        runCommand: view.runFor,
       }),
     };
   },

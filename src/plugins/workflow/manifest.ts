@@ -5,7 +5,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // and in a side pane beside the transcript, with the main action on `<Leader>ww`.
 // Main folds the agent events and the steps `set_workflow_step` reports into each
 // session's flow. Each workflow is its own plugin, which names its stages, its
-// layouts and its commands.
+// layouts and its commands. `stageAction` runs a stage action for the session its
+// arg names, as every stage button, fold and stage key does, so it has no key.
 export const workflowManifest = definePlugin({
   id: 'workflow',
   dependsOn: {
@@ -28,6 +29,12 @@ export const workflowManifest = definePlugin({
       label: 'open or fold finished waves',
       group: 'workflow',
       runsIn: 'page',
+    },
+    stageAction: {
+      label: 'run a stage action for a session',
+      group: 'workflow',
+      runsIn: 'page',
+      arg: { sessionId: 'string', action: 'string' },
     },
     openPreview: {
       label: 'show the workflow layout preview',

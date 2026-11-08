@@ -17,6 +17,8 @@ import type {
   PagePluginApi,
   WorkflowDrawOptions,
 } from '../../contract';
+import { workflowStageActionCommand } from '../../contract';
+import { workflowManifest } from '../../manifest';
 import { readWorkflowLayout } from './read-workflow-layout';
 import { createWorkflowDraw } from './workflow-draw';
 
@@ -57,7 +59,10 @@ function setUp() {
         keys: recordingAnchors().keys,
         commands: {
           exists: () => true,
-          argShape: () => undefined,
+          argShape: (id) =>
+            id === workflowStageActionCommand.id
+              ? workflowManifest.commands.stageAction.arg
+              : undefined,
           run: () => undefined,
         },
         platform: 'macos',
@@ -101,7 +106,7 @@ describe('createWorkflowDraw', () => {
       ]),
       user: 'mine',
     });
-    draw.chip(asHtml(parent), CHIP_INPUT, () => undefined);
+    draw.chip(asHtml(parent), CHIP_INPUT, 's1');
 
     expect(redraw).toHaveBeenCalledTimes(1);
     expect(findAll(parent, 'x')).toHaveLength(1);
@@ -110,11 +115,7 @@ describe('createWorkflowDraw', () => {
   it('Draw_Root_CarriesOwner', () => {
     const { draw } = setUp();
 
-    const drawn = draw.chip(
-      asHtml(new FakeElement('div')),
-      CHIP_INPUT,
-      () => undefined,
-    );
+    const drawn = draw.chip(asHtml(new FakeElement('div')), CHIP_INPUT, 's1');
 
     expect(asFake(drawn.element).dataset.layoutOwner).toBe('workflow-light');
   });
@@ -127,7 +128,7 @@ describe('createWorkflowDraw', () => {
     const { draw } = setUp();
     const parent = new FakeElement('div');
 
-    draw.chip(asHtml(parent), CHIP_INPUT, () => undefined).dispose();
+    draw.chip(asHtml(parent), CHIP_INPUT, 's1').dispose();
 
     expect(parent.children).toEqual([]);
   });

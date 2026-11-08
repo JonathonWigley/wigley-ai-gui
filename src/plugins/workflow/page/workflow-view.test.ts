@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  asFake,
   asHtml,
   FakeElement,
   findAll,
@@ -16,6 +17,7 @@ import type {
   StageActionSpec,
   StripInput,
   WorkflowDraw,
+  WorkflowKit,
 } from '../contract';
 import { newFlow } from '../flow';
 import { createStageList } from '../stage-list';
@@ -662,8 +664,56 @@ describe('workflow view over several workflows', () => {
 describe('workflow kit', () => {
   const LIGHT = { id: 'workflow-light', commands: {} };
 
-  // The kit under the manifest `workflow-light`, and the anchors it names.
-  const lightKit = () => testWorkflowKit(LIGHT, NOW);
+  // The kit under the manifest `workflow-light` for session `b`, the anchors it
+  // names and the commands its clicks run.
+  const lightKit = () => testWorkflowKit(LIGHT, NOW, 'b');
+
+  it.each<{
+    case: string;
+    draw: (kit: WorkflowKit, parent: HTMLElement) => HTMLElement;
+    action: string;
+  }>([
+    {
+      case: 'main action',
+      draw: (kit, parent) =>
+        kit.actionButton(parent, {
+          command: 'go',
+          label: 'Go',
+          enabled: true,
+          main: true,
+        }),
+      action: 'mainAction',
+    },
+    {
+      case: 'other action',
+      draw: (kit, parent) =>
+        kit.actionButton(parent, {
+          command: 'go',
+          label: 'Go',
+          enabled: true,
+          main: false,
+        }),
+      action: 'go',
+    },
+    {
+      case: 'fold',
+      draw: (kit, parent) => kit.finishedFold(parent, 'x', false),
+      action: 'toggleFinishedWaves',
+    },
+  ])(
+    'button_Click_RunsStageActionForTheKitsSession $case',
+    ({ draw, action }) => {
+      const { kit, runs } = lightKit();
+
+      asFake(draw(kit, asHtml(new FakeElement('div')))).fire('click', {
+        stopPropagation: () => undefined,
+      });
+
+      expect(runs).toEqual([
+        { id: 'workflow.stageAction', arg: { sessionId: 'b', action } },
+      ]);
+    },
+  );
 
   it.each<{ state: MarkState; icon: string }>([
     { state: 'pending', icon: 'codicon-circle-large' },

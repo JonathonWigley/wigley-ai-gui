@@ -145,8 +145,11 @@ signal through the flow's current workflow alone (`foldFlow(flow, signal, workfl
 checklist, the workflow's state and that workflow's stages in order, the first entry rule that answers wins, and the flow
 keeps its stage when none answers. Two workflows may hold a stage with one id or one `reportedAs`.
 
-Each action names a command of the owner plugin: `workflow-heavy`'s commands are `HEAVY_COMMANDS`, which its manifest
-joins, so a key and a button run the same command. Light and Medium declare none.
+Each action names a command of the owner plugin, which its key runs: `workflow-heavy`'s commands are `HEAVY_COMMANDS`,
+which its manifest joins. A button, a fold and a key all run the engine's `workflow.stageAction` with the session and
+the action (`{ sessionId, action }`: the action's short id, `mainAction` or `toggleFinishedWaves`), so one intercept on
+it sees every stage action of every workflow. The engine's gate (`runFor`) checks the action, and the flow's workflow
+runs it through its `runAction`. Light and Medium declare none.
 
 To change a workflow:
 
@@ -306,9 +309,11 @@ The layout preview opens on `<Leader>zlw`.
 
 - **Build on what landed.** The clear, the agent events and the row parts have their own plans and docs; the flow
   reads their exports and events and keeps no second copy.
-- **Actions are commands of the owner plugin.** A stage's buttons run commands its own plugin declares, so they take a key,
-  a palette entry and an intercept like any command, and the engine holds no closed switch of stage actions. The engine
-  then names no stage or skill, and a new workflow adds its actions without an engine edit.
+- **The engine owns one command for every stage action; the level owns the actions.** Every stage button, fold and key
+  runs `workflow.stageAction`, so one intercept or listener sees every stage action, and each action's key stays a
+  command its own plugin declares, with its bind and Settings row. The flow's workflow runs the action through its
+  `runAction`, so the engine holds no closed switch of stage actions, names no stage or skill, and a new workflow adds its
+  actions without an engine edit.
 - **The user presses, unless the setting is on.** Clear throws away the interview's conversation, so the default
   waits for the user, and the auto-start counts down with a Cancel.
 - **Cancel is `ww`, not Esc.** The strip is a part inside the Chat tab and holds no key scope, and Esc already leaves
