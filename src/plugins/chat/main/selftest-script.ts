@@ -973,7 +973,7 @@ function chatRound(run: number) {
       {
         title: 'Back to chat',
         context: `Run ${run}: submitted untouched.`,
-        question: 'Pick one.',
+        summary: 'Pick one.',
         choices: ['Yes', 'No'],
         recommend: 1,
         rationale: 'Yes is the default.',

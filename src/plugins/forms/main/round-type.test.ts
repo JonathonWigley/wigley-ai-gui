@@ -36,8 +36,8 @@ const SESSION: AgentFormOwnerInfo = {
 function question(overrides: Record<string, unknown> = {}) {
   return {
     title: 'Naming',
+    summary: 'Which name should win?',
     context: 'Two modules do the same thing under different names.',
-    question: 'Which name should win?',
     choices: ['module_a', 'module_b'],
     recommend: 1,
     rationale: 'module_a is older and already referenced elsewhere.',
@@ -55,7 +55,7 @@ const PLACEMENT_ARGS = {
   heading: 'Placement decisions',
   overview: 'Tidying modules. This round: places.',
   questions: [
-    question({ title: 'Placement', question: 'Where should it live?' }),
+    question({ title: 'Placement', summary: 'Where should it live?' }),
   ],
 };
 

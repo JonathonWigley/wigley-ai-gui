@@ -28,8 +28,8 @@ import { finding, nit } from './test-rounds';
 function question(title: string, choiceCount = 3): Question {
   return {
     title,
+    summary: `${title}?`,
     context: `${title} context`,
-    question: `${title}?`,
     choices: Array.from(
       { length: choiceCount },
       (_, i) => `${title} choice ${i + 1}`,

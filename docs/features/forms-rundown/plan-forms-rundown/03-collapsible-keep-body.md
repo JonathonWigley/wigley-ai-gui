@@ -1,6 +1,6 @@
 # 03 — Collapsible keep-body option
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -79,3 +79,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 31cacc80 · proof: diff read: keepBody and onToggle in CollapsibleCardOptions as Produces pins, default path unchanged; worker typecheck, lint (own files), card and chat-kit tests pass · concerns: worker ran oxfmt on its two files to pass the format check

@@ -45,8 +45,8 @@ describe('FORMS_TOOLS ask_round schema', () => {
       argsKey: 'questions',
       item: {
         title: 'Naming',
+        summary: 'Which name should win?',
         context: 'Two modules do the same thing.',
-        question: 'Which name should win?',
         choices: ['module_a', 'module_b'],
         recommend: 2,
         rationale: 'module_b is referenced elsewhere.',

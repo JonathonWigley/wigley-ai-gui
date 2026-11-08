@@ -473,7 +473,8 @@ const FINGERPRINT_LISTS = {
 // layouts, keyed by each kind's ask_round field, never the heading, overview
 // or round layout, which a re-send may change and still match the open round.
 // An empty list joins only for a kind the Python server's fingerprint holds,
-// so a round it could send hashes the same and its saved rounds match.
+// so a round it could send with no questions hashes the same and its saved
+// rounds match.
 export function fingerprint(round: Round): string {
   const content: Record<string, PythonJsonValue> = {};
   for (const kind of ITEM_KINDS) {

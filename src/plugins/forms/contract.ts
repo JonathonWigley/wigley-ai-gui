@@ -22,8 +22,9 @@ export type AnswerableKind = Exclude<ItemKind, 'notice'>;
 
 export interface Question {
   title: string;
+  // The card's headline: what the user is asked to decide, and why now.
+  summary: string;
   context: string;
-  question: string;
   choices: string[];
   // 1-based.
   recommend: number;
