@@ -487,6 +487,19 @@ describe('createPlanWatch', () => {
       failed: W_PLAN_DIR,
     },
     {
+      name: 'a copy watch failed past the reopen bound, then a check',
+      act: async (
+        subject: ReturnType<typeof trackedFiles>,
+        _files: MemoryFiles,
+        watch: PlanWatch,
+      ) => {
+        await failTimes(subject, W_PLAN_DIR, MAX_WATCH_REOPENS + 1);
+        watch.check('s1');
+      },
+      open: [GIT_FOLDER, WORKTREES_FOLDER, PLAN_DIR, W_PLAN_DIR],
+      failed: W_PLAN_DIR,
+    },
+    {
       name: 'a copy watch failed past the bound, a change heard between',
       act: async (
         subject: ReturnType<typeof trackedFiles>,
@@ -513,7 +526,7 @@ describe('createPlanWatch', () => {
       watch.follow('s1', PLAN_DIR);
       await settled();
 
-      await act(subject, files);
+      await act(subject, files, watch);
       await settled();
 
       const errorLogs = logs.filter((line) => line.includes('watcher failed'));
