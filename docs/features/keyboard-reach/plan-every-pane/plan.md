@@ -225,7 +225,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Chat mouse-only items](07-chat-items.md) — after 06
 
 ### Wave 8
-- [ ] [In-pane key consistency](08-in-pane-consistency.md) — after 04, 05
+- [x] [In-pane key consistency](08-in-pane-consistency.md) — after 04, 05
 
 ### Wave 9
 - [ ] [Doc re-read](09-doc-re-read.md) — after 01–08
@@ -245,12 +245,14 @@ Review base: 1a938e2f
 - 05 · bb601a25 · diff read (Produces present), typecheck pass; worker ran settings/backlog/keymap tests (291 pass), lint pass, selftest --plugin settings and --plugin backlog pass · concerns: Backlog focusMain ends with syncFocus(always) not render(true): an unchanged state sets no scope again (no path found where that matters); pick-comment prose edits beyond Produces
 - 06 · 42915d04 · diff read (Produces present, one deps.setScope in takeKeys), typecheck pass; worker ran chat-view/side-sections tests (108 pass), lint pass, selftest --plugin chat,sessions pass (301) · concerns: unity-pool selftest not run after the hub joined the chain; focusedEntry/focusedBlock return the transcript cursor during a hub turn; isAtHub stays set when another plugin sets the base scope until chat next takes keys; a hub key finding no section hands keys to the transcript
 - 07 · cb0c7f2d · diff read (Produces present), typecheck pass; worker ran 7 test files (477 pass), lint pass, selftest --plugin chat,agent-strip pass · concerns: test-dom.ts and chat default layout.test.ts edited outside Files; x hint placement unchecked until Task 10's whole run; images fixture polls chat.sessions every 20ms up to 10s
+- 08 · 5a4594e2 4e4ea888 · diff read per half (Produces present, no pickerPick/pickerClose left in src), typecheck pass each; workers ran the touched tests (all pass; 08a's slip also ran the whole vitest suite, 10358 pass), lint pass, filtered selftests settings, chat, sessions, backlog, docs, notes, forms, primer pass · concerns: page-api filter-hint test has a branch inside its table; theme picker has one row, so its j/G/gg steps move nothing; keys start test vi.mocks help-view for the whole file; primer review-cursor ring not looked at; stale line numbers in the task doc (sessions start.ts:805, backlog-view.ts:343); past plan doc plan-command-consumers/01 still names pickerPick
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 - SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
 - PagePartHarness gains mode(id), picks, setSideBarShown, scope(), outerPanes() · why: start.test needs them · consumers: 04, 05, 06 tests · group 03
 - 04: DocsView.focusDoc() landed as DocsView.focusMain() (column when it held the keys last and is in sight, else the doc); no other consumer
 - 06: SectionCursor gains leave() (blurs the holder) and enter() focuses it; FakeElement gains hasLayoutBox and getClientRects(); chat-commands.ts, chat.css, editor contract and vim host edited beyond plan.md's File Structure row
+- 08: Scroller exported from content-scroll.ts; primer-state.ts gains reviewEntries(primer), shared by the review rows and reviewInput
 ### Rulings
 - Alt+j/k between stops calls the left stop's left before the next stop's focus — left runs on every end of a turn — harmless if wrong · group 01 · group 01
 - every return to main writes area=main and calls left before focusMain (unlike entering, written after the hook) so a focusin during focusMain finds main already holding — double focusMain if wrong · group 01 · group 01
@@ -271,5 +273,7 @@ Review base: 1a938e2f
 - 07: fixture start order chat-second, chat-images, chat-selftest (list is newest-started first); attachments step 1 is <A-S-o>, step 7 <A-S-i> · group 07
 - 07: the viewer's counter and x hint share a new div.chat-image-viewer-line flex row · group 07
 - 08: lead split the Batch into two sequential dispatches — (a) the list-picker key set, then (b)-(e) — since both halves share keymap.ts and the manifests and one worker would read past the sizing point; one commit per dispatch
+- 08: .ui-picker-key margin-inline-start auto; down/up no-ops while the picker is closed; cancel label becomes close in four pickers · group 08
+- 08: backlog detail-and-tag-picker group gains j → selected Plain item before gg (side bar keys leaves the cursor on the first row) · group 08
 ### Review rounds
 ### Test gate

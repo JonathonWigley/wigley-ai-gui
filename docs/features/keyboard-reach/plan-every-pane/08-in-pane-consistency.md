@@ -1,6 +1,6 @@
 # 08 — In-pane key consistency
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 8 · Depends on: 04, 05
 Plan: [plan.md](plan.md)
@@ -344,3 +344,5 @@ runtime and visual checks are Task 10's (Final verification).
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 5a4594e2 4e4ea888 · proof: diff read per half (Produces present, no pickerPick/pickerClose left in src), typecheck pass each; workers ran the touched tests (all pass; 08a's slip also ran the whole vitest suite, 10358 pass), lint pass, filtered selftests settings, chat, sessions, backlog, docs, notes, forms, primer pass · concerns: page-api filter-hint test has a branch inside its table; theme picker has one row, so its j/G/gg steps move nothing; keys start test vi.mocks help-view for the whole file; primer review-cursor ring not looked at; stale line numbers in the task doc (sessions start.ts:805, backlog-view.ts:343); past plan doc plan-command-consumers/01 still names pickerPick
