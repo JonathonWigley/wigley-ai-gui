@@ -133,7 +133,7 @@ function startWithRows(sessionIds: readonly string[]) {
   for (const sessionId of sessionIds) {
     rows.set(sessionId, projectRow(sessionId));
   }
-  harness.emit('core.pageReady', null);
+  harness.ready();
   return { harness, rows, seen };
 }
 

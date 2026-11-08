@@ -1,11 +1,9 @@
 import './sessions.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { PaneDirection } from '../../../contracts/panes';
 import type {
   PageApi,
   PageCommandContext,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -85,8 +83,7 @@ import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 type SessionsApi = PageApi<
   typeof sessionsManifest,
   SessionsChannel,
-  SessionsPageEvents,
-  QualifiedEvents<'core', CoreEvents>
+  SessionsPageEvents
 >;
 
 // The uiState key holding the chat panes: the pane tree and each pane's
@@ -213,13 +210,13 @@ function createExports(
 // plugins add. The side bar's selected row, the title bar and `sessions.active`
 // follow the focused pane's session; main owns the rows and keeps a
 // selection of its own, which the page keeps in step through `activate`, its
-// own echoes changing nothing when they come back. The first state is read on
-// `core.pageReady`, and each notice of the rows or the selection applies after
+// own echoes changing nothing when they come back. The first state is read at
+// `ready`, and each notice of the rows or the selection applies after
 // it. A selection naming no row is mid-operation: main deleted that row and its
 // selection write follows, so the state that settles it places the panes, and
 // the focus and the visible tab follow in a microtask, after every reader heard
 // the notice. Each session's place (`sessionsPlaceSlot`) outlives a reload:
-// a row leaving deletes it, and `core.pageReady` first deletes the places of rows
+// a row leaving deletes it, and `ready` first deletes the places of rows
 // that ended while no page ran. Activating a session
 // focuses the pane showing it, or loads it into the focused pane; closing one
 // asks main, and a pane whose session leaves closes, the last pane staying.
@@ -290,10 +287,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
     rows.on(applyNotice);
     selection.on(applyNotice);
-    api.events.on('core.pageReady', () => {
-      pruneKeys(places, (sessionId) => rows.all().has(sessionId));
-      apply(currentState());
-    });
     // After `applyNotice`, so the row's frame is dropped before its place goes.
     followRows(rows, { removed: (sessionId) => places.delete(sessionId) });
 
@@ -1028,6 +1021,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         sessionsPageView(exports, consumer, (listener) =>
           followRows(rows, { removed: listener }),
         ),
+      ready() {
+        pruneKeys(places, (sessionId) => rows.all().has(sessionId));
+        apply(currentState());
+      },
       dispose: () => view.dispose(),
     };
   },

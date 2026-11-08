@@ -61,10 +61,3 @@ export const coreRuntimePageSlot: SlotKey<RuntimeCatalog, 'page', 'core'> = {
   process: 'page',
   kind: 'value',
 };
-
-// `pageReady` is emitted once per page load on the page bus, after each page part
-// has started and heard the current config. A part hears it by naming
-// `QualifiedEvents<'core', CoreEvents>` in its `Heard`, with no `dependsOn` entry.
-export interface CoreEvents {
-  pageReady: null;
-}

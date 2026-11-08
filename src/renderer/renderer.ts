@@ -361,7 +361,7 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  startPlugins(
+  const pageHost = startPlugins(
     pageParts,
     'page',
     (part, context) => {
@@ -451,8 +451,8 @@ async function start() {
     applyPush(heldPush);
     heldPush = null;
   }
-  bus.emit(qualify('core', 'pageReady'), null);
-  restores.pageReady();
+  pageHost.ready();
+  restores.partsReady();
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
   document.body.dataset.ready = 'true';

@@ -983,6 +983,7 @@ function createWindow(
     ...(mainCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
     started: true,
   });
+  mainHost.ready();
   // The layouts service closes after every part's registrations, even when a
   // part's stop rejects.
   onQuit(async () => {

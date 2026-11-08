@@ -1,12 +1,11 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
-import { type CoreEvents, coreModeSlot } from '../../../contracts/core-state';
+import { coreModeSlot } from '../../../contracts/core-state';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
   PagePart,
-  QualifiedEvents,
   ShownLayouts,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
@@ -55,12 +54,7 @@ import type { DocsScope } from './layout/docs-parts';
 import { readDocsLayout } from './layout/read-layout';
 import { createStarredDocs } from './starred-docs';
 
-type DocsApi = PageApi<
-  typeof docsManifest,
-  DocsChannel,
-  DocsPageEvents,
-  QualifiedEvents<'core', CoreEvents>
->;
+type DocsApi = PageApi<typeof docsManifest, DocsChannel, DocsPageEvents>;
 
 // A view `addView` handed out.
 interface AddedView {
@@ -442,19 +436,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       };
     };
 
-    // A session source's place leaves with its row, and one whose row ended
-    // while no page ran is pruned; the prune waits for the page mirror to hold
-    // the rows.
-    api.events.on('core.pageReady', () => {
-      pruneKeys(placeWriter, (sourceId) => {
-        const sessionId = sessionIdOfSource(sourceId);
-        return sessionId === null || rows.all().has(sessionId);
-      });
-      followRows(rows, {
-        removed: (sessionId) => placeWriter.delete(sessionSourceId(sessionId)),
-      });
-    });
-
     const addedViewOf = (view: DocsView): AddedView | undefined =>
       [...addedViews.values()].find((added) => added.view === view);
 
@@ -649,6 +630,19 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           consumer.track(addView(sourceId, options)),
         openDoc: (path, line) => openDoc(path, line ?? null),
       }),
+      ready() {
+        // A session source's place leaves with its row, and one whose row ended
+        // while no page ran is pruned; the prune waits for the page mirror to
+        // hold the rows.
+        pruneKeys(placeWriter, (sourceId) => {
+          const sessionId = sessionIdOfSource(sourceId);
+          return sessionId === null || rows.all().has(sessionId);
+        });
+        followRows(rows, {
+          removed: (sessionId) =>
+            placeWriter.delete(sessionSourceId(sessionId)),
+        });
+      },
       dispose() {
         callEach<() => void>(
           [

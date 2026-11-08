@@ -178,7 +178,6 @@ function mounted(
     writers.returned.set(state.sessionId, returned);
     writers.session.set(state.sessionId, info);
   };
-  let pageReady: () => void = noEvent;
   const layouts = createChatLayouts(log);
   const kit = {
     markdown: {},
@@ -209,9 +208,6 @@ function mounted(
       commands: store.read(chatCommandsSlot, 'chat'),
       queued: store.read(chatQueuedSlot, 'chat'),
       returned: store.read(chatReturnedSlot, 'chat'),
-    },
-    onPageReady: (listener: () => void) => {
-      pageReady = listener;
     },
     paths: posixPaths,
     homeDir: '/w',
@@ -302,9 +298,13 @@ function mounted(
       keep: noEvent,
     },
   } as unknown as ChatViewDeps);
+  // The page is ready once, however many sessions `open` writes after it.
+  let isReady = false;
   const ready = () => {
-    pageReady();
-    pageReady = noEvent;
+    if (!isReady) {
+      isReady = true;
+      view.ready();
+    }
   };
   return {
     view,

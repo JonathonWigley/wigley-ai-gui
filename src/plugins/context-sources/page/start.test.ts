@@ -87,12 +87,12 @@ describe('contextSourcesPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('pageReady_BreakdownWrittenBefore_DrawsIt', () => {
+  it('ready_BreakdownWrittenBefore_DrawsIt', () => {
     const { harness, sectionSummaries } = startOnHarness();
     harness.state.publish(contextBreakdownsSlot).set(SESSION, BREAKDOWN);
     expect(sectionSummaries).toEqual([null]);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(sectionSummaries).toEqual([null, '10k · 10%']);
   });

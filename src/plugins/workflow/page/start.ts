@@ -1,11 +1,9 @@
 import './workflow.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
@@ -37,12 +35,7 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 
-type WorkflowApi = PageApi<
-  typeof workflowManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type WorkflowApi = PageApi<typeof workflowManifest, ChannelShape>;
 
 // The engine's commands a key runs on the selected session.
 type SessionCommand = 'mainAction' | 'toggleFinishedWaves';
@@ -174,26 +167,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       }
     };
 
-    api.events.on('core.pageReady', () => {
-      followRows(rows, {
-        added: ({ sessionId, hostSessionId }) =>
-          preview.sessionAdded(sessionId, hostSessionId),
-        removed(sessionId) {
-          preview.sessionRemoved(sessionId);
-          view.forget(sessionId);
-        },
-      });
-      flows.on((_sessionId, flow) => {
-        if (flow !== undefined) {
-          drawFlow(flow);
-        }
-      });
-      activities.on((sessionId) => view.activityChanged(sessionId));
-      for (const flow of flows.all().values()) {
-        drawFlow(flow);
-      }
-    });
-
     const runKey = keyRunner(api.commands, log);
     const runOnSelected = (command: SessionCommand) => () => {
       const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
@@ -223,6 +196,25 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         createWorkflowDraw: (pluginApi, options) =>
           createWorkflowDraw(drawDeps, pluginApi, options),
       }),
+      ready() {
+        followRows(rows, {
+          added: ({ sessionId, hostSessionId }) =>
+            preview.sessionAdded(sessionId, hostSessionId),
+          removed(sessionId) {
+            preview.sessionRemoved(sessionId);
+            view.forget(sessionId);
+          },
+        });
+        flows.on((_sessionId, flow) => {
+          if (flow !== undefined) {
+            drawFlow(flow);
+          }
+        });
+        activities.on((sessionId) => view.activityChanged(sessionId));
+        for (const flow of flows.all().values()) {
+          drawFlow(flow);
+        }
+      },
     };
   },
 };

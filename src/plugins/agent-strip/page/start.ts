@@ -1,11 +1,9 @@
 import './agent-strip.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PageCommandContext,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
@@ -25,12 +23,7 @@ import { createAgentStrip } from './agent-strip';
 import { readAgentStripLayout } from './layout/read-agent-strip-layout';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type AgentStripApi = PageApi<
-  typeof agentStripManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type AgentStripApi = PageApi<typeof agentStripManifest, ChannelShape>;
 
 // Draws each Chat tab's agent strip above its composer box through chat's
 // composer parts and the `agent-strip.layout` layout, reading `agents.rosters`,
@@ -64,12 +57,6 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
     chat.addComposerPart(strip.part);
 
     followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });
-    api.events.on('core.pageReady', () => {
-      rosters.on((sessionId) => strip.rosterUpdated(sessionId));
-      callEach([...rosters.all().keys()], (sessionId) =>
-        strip.rosterUpdated(sessionId),
-      );
-    });
 
     api.layouts.show<Layout>({
       defaultLayout,
@@ -91,6 +78,12 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
           arg,
         }: PageCommandContext<{ sessionId: string; key: string }>) =>
           strip.toggleBoxAt(arg.sessionId, arg.key),
+      },
+      ready() {
+        rosters.on((sessionId) => strip.rosterUpdated(sessionId));
+        callEach([...rosters.all().keys()], (sessionId) =>
+          strip.rosterUpdated(sessionId),
+        );
       },
     };
   },

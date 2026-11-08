@@ -1,12 +1,8 @@
 import '../../../shared/page/markdown.css';
 import './chat.css';
-import { type CoreEvents, coreScopeSlot } from '../../../contracts/core-state';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { ChatImage } from '../../../contracts/agent';
 import { createPartStore } from '../../../shared/page/contributed-parts';
@@ -70,12 +66,7 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 
-type ChatApi = PageApi<
-  typeof chatManifest,
-  ChatChannel,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 
 // Shows each chat session main holds in its session's Chat tab: the entries
 // under a floating composer holding the message box, the controls as chips
@@ -265,11 +256,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         queued: api.state.read(chatQueuedSlot),
         returned: api.state.read(chatReturnedSlot),
       },
-      onPageReady: (listener) =>
-        void api.events.on('core.pageReady', () => {
-          pruneEndedPlaces();
-          listener();
-        }),
       paths: services.paths,
       homeDir: services.homeDir,
       sessions,
@@ -411,6 +397,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         toggleSection: ({ arg }) => sideSections.toggleSection(arg),
       },
       exports,
+      ready() {
+        pruneEndedPlaces();
+        view.ready();
+      },
       dispose: () => view.dispose(),
     };
   },

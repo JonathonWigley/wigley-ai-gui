@@ -1,10 +1,8 @@
 import './agent-lines.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
@@ -21,12 +19,7 @@ import { readAgentLinesLayout } from './layout/read-agent-lines-layout';
 import { createWorkingLines } from './working-lines';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type AgentLinesApi = PageApi<
-  typeof agentLinesManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type AgentLinesApi = PageApi<typeof agentLinesManifest, ChannelShape>;
 
 // Draws a working line under each session's row while it runs any subagent
 // or task, through sessions' row parts and the `agent-lines.layout` layout.
@@ -56,14 +49,6 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
     sessions.addRowPart(lines.part);
 
     followRows(rows, { removed: (sessionId) => lines.forget(sessionId) });
-    api.events.on('core.pageReady', () => {
-      rosters.on((sessionId, roster) =>
-        lines.setRoster(sessionId, roster ?? EMPTY_ROSTER),
-      );
-      callEach([...rosters.all()], ([sessionId, roster]) =>
-        lines.setRoster(sessionId, roster),
-      );
-    });
 
     api.layouts.show<Layout>({
       defaultLayout,
@@ -73,6 +58,16 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
       setLayouts: (shown) => lines.setLayouts(shown),
     });
 
-    return { commands: {} };
+    return {
+      commands: {},
+      ready() {
+        rosters.on((sessionId, roster) =>
+          lines.setRoster(sessionId, roster ?? EMPTY_ROSTER),
+        );
+        callEach([...rosters.all()], ([sessionId, roster]) =>
+          lines.setRoster(sessionId, roster),
+        );
+      },
+    };
   },
 };

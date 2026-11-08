@@ -1,11 +1,9 @@
 import './usage.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
@@ -45,12 +43,7 @@ import {
 } from './usage-view-model';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type UsageApi = PageApi<
-  typeof usageManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type UsageApi = PageApi<typeof usageManifest, ChannelShape>;
 
 // The `uiState` key holding `true` while the details are open.
 const DETAILS_OPEN_KEY = 'details-open';
@@ -65,7 +58,7 @@ const REDRAW_MS = 60_000;
 // the whole session line as a part for a tab bar; every part it made redraws
 // with the page's own until the dependent that asked for it stops. Reads
 // `usage.snapshot` and `sessions.active` for the shown session, and redraws all
-// at `core.pageReady`, on each change of either, on each layouts set and once a
+// at `ready`, on each change of either, on each layouts set and once a
 // minute for the countdowns; reads `sessions.rows` for each session's name in the
 // log and to forget a removed session's lines. Draws nothing while the slot holds
 // no snapshot. Logs the status line's
@@ -230,10 +223,6 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       services.log('details hidden');
     };
 
-    api.events.on('core.pageReady', () => {
-      usage.on(() => redraw());
-      redraw();
-    });
     active.on(() => redraw());
     followRows(rows, { removed: (sessionId) => lineParts.forget(sessionId) });
     const tick = () => {
@@ -267,6 +256,10 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
             closeDetails();
           }
         },
+      },
+      ready() {
+        usage.on(() => redraw());
+        redraw();
       },
       exports: (consumer) =>
         ({

@@ -1,10 +1,5 @@
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
@@ -50,12 +45,7 @@ import {
   rowBadges,
 } from './pool-view-model';
 
-type UnityPoolApi = PageApi<
-  typeof unityPoolManifest,
-  UnityPoolChannel,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type UnityPoolApi = PageApi<typeof unityPoolManifest, UnityPoolChannel>;
 
 const REDRAW_MS = 60_000;
 // After usage's details, which take the default order 0.
@@ -83,7 +73,7 @@ interface HeldWrapper {
 // session's folder's origin name once per folder while any pool exists. A
 // holder's click selects its row through `sessions.activate`. Hold and Release
 // run through main, one at a time per clone, each clone's last
-// result kept until the page reloads. Redraws all at `core.pageReady`, on each of
+// result kept until the page reloads. Redraws all at `ready`, on each of
 // those, on each layouts set and once a minute for the times. Logs each row's badges and the
 // panel's showing, hiding and counts when they change, and a Hold or Release
 // whose call to main fails; main logs every run it answers.
@@ -349,10 +339,6 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       },
     });
 
-    api.events.on('core.pageReady', () => {
-      poolSnapshot.on(() => redraw());
-      redraw();
-    });
     followRows(rows, {
       removed: (sessionId) => loggedBadges.delete(sessionId),
     });
@@ -380,6 +366,10 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         hold: ({ arg }) => runAction(arg.pool, 'hold', arg.clone),
         release: ({ arg }) => runAction(arg.pool, 'release', arg.clone),
         selectHolder: ({ arg }) => sessions.activate(arg),
+      },
+      ready() {
+        poolSnapshot.on(() => redraw());
+        redraw();
       },
       dispose() {
         isDisposed = true;

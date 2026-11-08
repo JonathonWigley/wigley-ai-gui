@@ -1,9 +1,7 @@
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import {
@@ -24,8 +22,7 @@ import { docsSessionTabManifest } from '../manifest';
 type DocsSessionTabApi = PageApi<
   typeof docsSessionTabManifest,
   ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
+  Record<never, never>
 >;
 
 interface SessionDocs {
@@ -87,18 +84,17 @@ export const docsSessionTabPagePart: PagePart<typeof docsSessionTabManifest> = {
       disposeSessionDocs(held);
     };
 
-    api.events.on('core.pageReady', () => {
-      followRows(api.state.read(sessionsRowsSlot), {
-        added: addSessionDocs,
-        removed: removeSessionDocs,
-        // Main replaces a session's index source when its host id changes.
-        hostChanged: ({ sessionId }) =>
-          sessionDocs.get(sessionId)?.view.sourceReplaced(),
-      });
-    });
-
     return {
       commands: {},
+      ready() {
+        followRows(api.state.read(sessionsRowsSlot), {
+          added: addSessionDocs,
+          removed: removeSessionDocs,
+          // Main replaces a session's index source when its host id changes.
+          hostChanged: ({ sessionId }) =>
+            sessionDocs.get(sessionId)?.view.sourceReplaced(),
+        });
+      },
       dispose() {
         const held = [...sessionDocs.values()];
         sessionDocs.clear();

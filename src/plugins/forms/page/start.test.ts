@@ -93,7 +93,7 @@ async function startOverOpenRounds(open: { forms: OpenForm[] }) {
     await settle();
   };
   selection.set(open.forms[0].sessionId);
-  harness.emit('core.pageReady', null);
+  harness.ready();
   await settle();
   const reload = async (
     duringRead: (
@@ -105,7 +105,7 @@ async function startOverOpenRounds(open: { forms: OpenForm[] }) {
     const trackedBefore = harness.restores.length;
     await harness.restart();
     const tracked = harness.restores.slice(trackedBefore);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     await settle();
     await duringRead(tracked);
     read.resolve();
@@ -257,7 +257,7 @@ describe('forms page part', () => {
       .publish(sessionsRowsSlot)
       .set(sessionId, sessionRow(sessionId));
     harness.state.publish(sessionsSelectionSlot).set(sessionId);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     await settle();
     const { commands } = harness.started();
     commands.openReview({} as PageCommandContext);

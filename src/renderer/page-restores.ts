@@ -1,7 +1,7 @@
 import type { Timers } from '../contracts/ambient';
 import type { PageRestores } from '../contracts/plugin';
 
-// The latest the restores settle after `core.pageReady`: well past a docs index
+// The latest the restores settle after every part's `ready()` ran: well past a docs index
 // rebuild, which can take seconds.
 export const RESTORES_CAP_MS = 30_000;
 
@@ -10,16 +10,16 @@ export interface PageRestoresDeps {
   log(message: string): void;
 }
 
-// The page load's one `PageRestores`. The composition root calls `pageReady`
-// once `core.pageReady` has been emitted, after which the restores settle as
+// The page load's one `PageRestores`. The composition root calls `partsReady`
+// once every part's `ready()` ran, after which the restores settle as
 // soon as no tracked restore is pending, or at `RESTORES_CAP_MS` after it,
 // logging the count still pending.
 export interface PageRestoresHost extends PageRestores {
-  pageReady(): void;
+  partsReady(): void;
 }
 
 export function createPageRestores(deps: PageRestoresDeps): PageRestoresHost {
-  let isPageReady = false;
+  let arePartsReady = false;
   let isSettled = false;
   let pending = 0;
   let cap: number | null = null;
@@ -37,7 +37,7 @@ export function createPageRestores(deps: PageRestoresDeps): PageRestoresHost {
     }
   };
   const settleWhenIdle = () => {
-    if (isPageReady && pending === 0 && !isSettled) {
+    if (arePartsReady && pending === 0 && !isSettled) {
       settle();
     }
   };
@@ -68,8 +68,8 @@ export function createPageRestores(deps: PageRestoresDeps): PageRestoresHost {
       listeners.add(listener);
       return { dispose: () => listeners.delete(listener) };
     },
-    pageReady() {
-      isPageReady = true;
+    partsReady() {
+      arePartsReady = true;
       settleWhenIdle();
       if (!isSettled) {
         cap = deps.timers.set(settleAtCap, RESTORES_CAP_MS);

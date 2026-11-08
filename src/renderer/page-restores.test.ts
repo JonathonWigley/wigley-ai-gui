@@ -52,7 +52,7 @@ describe('page restores', () => {
       name: 'nothing tracked',
       tracked: 0,
       finished: 0,
-      pageReady: true,
+      partsReady: true,
       capPassed: false,
       settled: true,
       logged: [],
@@ -61,7 +61,7 @@ describe('page restores', () => {
       name: 'one of two pending',
       tracked: 2,
       finished: 1,
-      pageReady: true,
+      partsReady: true,
       capPassed: false,
       settled: false,
       logged: [],
@@ -70,7 +70,7 @@ describe('page restores', () => {
       name: 'one of two pending past the cap',
       tracked: 2,
       finished: 1,
-      pageReady: true,
+      partsReady: true,
       capPassed: true,
       settled: true,
       logged: [
@@ -81,23 +81,23 @@ describe('page restores', () => {
       name: 'both settled, one rejected, then the cap passes',
       tracked: 2,
       finished: 2,
-      pageReady: true,
+      partsReady: true,
       capPassed: true,
       settled: true,
       logged: [],
     },
     {
-      name: 'both settled, before page ready',
+      name: 'both settled, before parts ready',
       tracked: 2,
       finished: 2,
-      pageReady: false,
+      partsReady: false,
       capPassed: false,
       settled: false,
       logged: [],
     },
   ])(
-    'onSettled_FiresOncePageReadyAndNoTrackedRestorePendingOrAtTheCap: $name',
-    async ({ tracked, finished, pageReady, capPassed, settled, logged }) => {
+    'onSettled_FiresOncePartsReadyAndNoTrackedRestorePendingOrAtTheCap: $name',
+    async ({ tracked, finished, partsReady, capPassed, settled, logged }) => {
       const setup = startRestores();
       const { restores } = setup;
       const first = Promise.withResolvers<void>();
@@ -114,8 +114,8 @@ describe('page restores', () => {
       if (finished >= 2) {
         second.reject(new Error('read failed'));
       }
-      if (pageReady) {
-        restores.pageReady();
+      if (partsReady) {
+        restores.partsReady();
       }
       await settle();
       if (capPassed) {
@@ -138,7 +138,7 @@ describe('page restores', () => {
         restores.track(inner.promise);
       }),
     );
-    restores.pageReady();
+    restores.partsReady();
 
     outer.resolve();
     await settle();
@@ -151,7 +151,7 @@ describe('page restores', () => {
 
   it('track_AfterSettled_IsNotWaitedOn', async () => {
     const { restores } = startRestores();
-    restores.pageReady();
+    restores.partsReady();
 
     restores.track(new Promise(() => undefined));
 

@@ -94,7 +94,7 @@ describe('usagePagePart', () => {
   it('stop_RemovesTheDrawnLineAndDetails', async () => {
     const harness = startOnHarness();
     harness.started().commands.toggleDetails({ arg: undefined });
-    harness.emit('core.pageReady', null);
+    harness.ready();
     harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
     const remove = vi.spyOn(FakeElement.prototype, 'remove');
 
@@ -134,7 +134,7 @@ describe('usagePagePart', () => {
       .build(wrapper(), 's1');
 
     consumerA.dispose();
-    harness.emit('core.pageReady', null);
+    harness.ready();
     harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
 
     expect(loggedByA).toEqual([]);
@@ -144,7 +144,7 @@ describe('usagePagePart', () => {
   it.each<{ name: string; written: UsageSnapshot | null; draws: boolean }>([
     { name: 'no snapshot', written: null, draws: false },
     { name: 'the empty snapshot', written: EMPTY_SNAPSHOT, draws: true },
-  ])('pageReady_DrawsTheZeroLine: $name', ({ written, draws }) => {
+  ])('ready_DrawsTheZeroLine: $name', ({ written, draws }) => {
     const harness = startOnHarness();
     if (written !== null) {
       harness.state.publish(usageSnapshotSlot).set(written);
@@ -153,7 +153,7 @@ describe('usagePagePart', () => {
       harness.logs.filter(({ message }) => message.startsWith('status line'));
     expect(statusLines()).toEqual([]);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(statusLines()).toHaveLength(draws ? 1 : 0);
   });

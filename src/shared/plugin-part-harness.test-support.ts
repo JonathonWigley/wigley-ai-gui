@@ -133,9 +133,11 @@ export interface HarnessCommandRun {
   arg: unknown;
 }
 
-// `started` throws while the part is stopped. `restart` stops a started part and
+// `started` throws while the part is stopped. `ready` calls every started
+// part's `ready`, the real parts' and the part under test's, in start order, as
+// a page load does once its parts start. `restart` stops a started part and
 // starts it again on a new host with the same fakes and the same counts, so what
-// a leaky `dispose` left stays counted. `advance` runs the due timers in due
+// a leaky `dispose` left stays counted, and calls no `ready`. `advance` runs the due timers in due
 // order, the clock reading each one's due time, and ends `ms` later. `emitted`
 // holds what any started part emitted, in order, under its qualified name; it
 // outlives the stop, so a test reads there what a late read emitted. `state` is
@@ -147,6 +149,7 @@ export interface HarnessCommandRun {
 // order, under its qualified id.
 export interface PartHarness<Started> {
   started(): Started;
+  ready(): void;
   counts(): PartCounts;
   advance(ms: number): void;
   emit(qualifiedEvent: string, data: unknown): void;
@@ -278,6 +281,7 @@ interface Scheduler {
 interface HostedStart {
   commands: object;
   exports?(consumer: Registrations): unknown;
+  ready?(): void;
   dispose?(): void | Promise<void>;
 }
 
@@ -289,6 +293,7 @@ interface HostedPart {
 interface PartLifecycle<Started> {
   start(): void;
   started(): Started;
+  ready(): void;
   stop(): Promise<void>;
   restart(): Promise<void>;
 }
@@ -654,6 +659,7 @@ function partLifecycle<Started>(
       return {
         commands: started.commands,
         exports: (consumer) => started.exports?.(consumerView(consumer)),
+        ready: () => started.ready?.(),
         dispose: () => started.dispose?.(),
       };
     },
@@ -669,6 +675,12 @@ function partLifecycle<Started>(
   const hosted = [...fakes, ...stubs, ...reals, underTest];
   let host: PluginHost<HostedStart> | null = null;
 
+  const runningHost = () => {
+    if (host === null) {
+      throw new Error(`part harness: ${underTest.manifest.id} is stopped`);
+    }
+    return host;
+  };
   const lifecycle: PartLifecycle<Started> = {
     start() {
       host = startPlugins(hosted, process, (part, context) => {
@@ -691,10 +703,10 @@ function partLifecycle<Started>(
       });
     },
     started() {
-      if (host === null) {
-        throw new Error(`part harness: ${underTest.manifest.id} is stopped`);
-      }
-      return host.started.get(underTest.manifest.id) as Started;
+      return runningHost().started.get(underTest.manifest.id) as Started;
+    },
+    ready() {
+      runningHost().ready();
     },
     async stop() {
       const stopping = host;
@@ -716,6 +728,7 @@ function baseHarness<Started>(
 ): PartHarness<Started> {
   return {
     started: lifecycle.started,
+    ready: lifecycle.ready,
     counts: () => ({ ...counts }),
     advance: world.scheduler.advance,
     emit: world.bus.emit,

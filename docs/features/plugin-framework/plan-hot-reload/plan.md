@@ -313,5 +313,6 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - Restores stay per page load: a page part a restart or switch-on starts live gets no new restore window (track ignored, onSettled at once) — a switched-on plugin's slots were cleared so it has nothing to restore, and restart is drive-only — re-arming restores per live start would be a later design change; task 13 checks a live restart leaves notes' popup unmoved · lead
 - Staleness check (reports/staleness.md) briefs: task 05 also renames PageRestoresHost.pageReady and its test table and renderer call, rewords the PageRestores comment and the sessionsPlaceSlot comment, and chat's ready keeps Wave 3's pruneEndedPlaces; task 08's PluginSwitchDeps carries timers and exports PLUGIN_RETRY_MS, the switch wiring sits before createWindow's live-only return and selfTestFor is passed in; task 11 also rewords AGENTS.md's restores sentence naming core.pageReady · lead
 - hand-built test manifests take label = id and description 'A test plugin.' · group 04 · group 04
+- Task 05 runs as one opus-medium worker though typed Parallel — removing CoreEvents compiles only once every part moves — one longer dispatch · lead
 ### Review rounds
 ### Test gate

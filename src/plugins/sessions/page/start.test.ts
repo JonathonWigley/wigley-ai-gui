@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   PageApi,
   PagePart,
   PluginManifest,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
@@ -146,7 +144,7 @@ async function startApplied(
     rows.set(sessionId, hostRow(sessionId));
   }
   selection.set(selected);
-  harness.emit('core.pageReady', null);
+  harness.ready();
   await settle();
   const active = harness.state.read(sessionsActiveSlot, 'test');
   const activeNotices: (string | null | undefined)[] = [];
@@ -351,7 +349,7 @@ describe('sessions page part', () => {
   it('row_gone_during_reload_prunes_the_sessions_place', () => {
     const { state, harness } = startOverSavedPlaces(['s-live']);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(placeKeys(state)).toEqual(['s-live']);
   });
@@ -361,7 +359,7 @@ describe('sessions page part', () => {
 
     expect(placeKeys(state)).toEqual(['s-live', 's-gone']);
     rowsWriter.set('s-live', sessionRow('s-live'));
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(placeKeys(state)).toEqual(['s-live']);
   });
@@ -377,7 +375,7 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
-  it('pageReady_AppliesOnceFromTheStore', async () => {
+  it('ready_AppliesOnceFromTheStore', async () => {
     const uiState = fakeUiState();
     const written = vi.spyOn(uiState, 'set');
     const harness = startPagePart(sessionsPagePart, {
@@ -388,7 +386,7 @@ describe('sessions page part', () => {
     await settle();
     expect(written).not.toHaveBeenCalled();
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
     await settle();
 
     expect(harness.state.read(sessionsActiveSlot, 'test').get()).toBe('s1');
@@ -418,7 +416,7 @@ describe('sessions page part', () => {
       throwsFirstApply: true,
     },
   ])(
-    'pageReady_TracksOnlyTheRestoreUntilItsFocusFollows ($case)',
+    'ready_TracksOnlyTheRestoreUntilItsFocusFollows ($case)',
     async ({ firstSelection, throwsFirstApply }) => {
       const uiState = fakeUiState();
       if (throwsFirstApply) {
@@ -435,9 +433,9 @@ describe('sessions page part', () => {
       const selection = harness.state.publish(sessionsSelectionSlot);
       selection.set(firstSelection);
 
-      harness.emit('core.pageReady', null);
+      harness.ready();
       if (throwsFirstApply) {
-        harness.emit('core.pageReady', null);
+        harness.ready();
       }
       const [restore] = harness.restores;
       selection.set('s1');
@@ -453,7 +451,7 @@ describe('sessions page part', () => {
     },
   );
 
-  it('pageReady_SessionsAppliesBeforeAReaderAdded', async () => {
+  it('ready_SessionsAppliesBeforeAReaderAdded', async () => {
     // A row part's builds, then what they held as each `added` arrived.
     const drawn: string[] = [];
     const drawnWhenAdded: string[][] = [];
@@ -463,14 +461,7 @@ describe('sessions page part', () => {
         id: 'reader',
         dependsOn: { main: [], page: ['sessions'] },
       },
-      start(
-        api: PageApi<
-          PluginManifest,
-          never,
-          Record<never, never>,
-          QualifiedEvents<'core', CoreEvents>
-        >,
-      ) {
+      start(api: PageApi<PluginManifest, never>) {
         api.dependency(sessionsPageKey).addRowPart({
           id: 'reader.row',
           build(_parent, sessionId) {
@@ -478,12 +469,14 @@ describe('sessions page part', () => {
             return {};
           },
         });
-        api.events.on('core.pageReady', () => {
-          followRows(api.state.read(sessionsRowsSlot), {
-            added: () => drawnWhenAdded.push([...drawn]),
-          });
-        });
-        return { commands: {} };
+        return {
+          commands: {},
+          ready() {
+            followRows(api.state.read(sessionsRowsSlot), {
+              added: () => drawnWhenAdded.push([...drawn]),
+            });
+          },
+        };
       },
     } as unknown as PagePart<PluginManifest>;
     const harness = startPagePart(reader, {
@@ -493,7 +486,7 @@ describe('sessions page part', () => {
     harness.state.publish(sessionsRowsSlot).set('s1', hostRow('s1'));
     harness.state.publish(sessionsSelectionSlot).set('s1');
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(drawnWhenAdded).toHaveLength(1);
     expect(drawnWhenAdded[0]).toContain('s1');

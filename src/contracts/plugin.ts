@@ -623,13 +623,13 @@ export interface KeyHints {
 // A page load's restores: what the parts put back from their place slots. A
 // part hands `track` each restore that settles after its `start` returns (a doc
 // reopened through main), and a restore started inside a tracked one is tracked
-// before that one settles. The restores have settled once `core.pageReady` has
-// been emitted and no tracked restore is pending: a restore nobody tracked is
+// before that one settles. The restores have settled once every part's
+// `ready()` ran and no tracked restore is pending: a restore nobody tracked is
 // not waited on, nor one tracked after they settled. A tracked restore can wait
 // on main: docs' restored open waits on its view's index read, and on a rebuild
 // when that index does not list the doc, so the restores can settle seconds
-// after `core.pageReady`. A restore main never answers, or one no later step
-// ever ends, is waited on only until a time cap after `core.pageReady`, when
+// after every part's `ready()` ran. A restore main never answers, or one no
+// later step ever ends, is waited on only until a time cap after that, when
 // the restores settle with the count still pending logged. Until they settle,
 // a part cannot tell a restore's key base change from the user's: the user's
 // moves before then leave notes' restored popup open. `onSettled` calls its

@@ -61,7 +61,7 @@ async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
     await settle();
   };
   selection.set(open.forms[0].sessionId);
-  harness.emit('core.pageReady', null);
+  harness.ready();
   await settle();
   const reload = async (
     duringRead: (
@@ -73,7 +73,7 @@ async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
     const trackedBefore = harness.restores.length;
     await harness.restart();
     const tracked = harness.restores.slice(trackedBefore);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     await settle();
     await duringRead(tracked);
     read.resolve();
@@ -275,7 +275,7 @@ describe('primer page part', () => {
       .publish(sessionsRowsSlot)
       .set(primer.sessionId, sessionRow(primer.sessionId));
     harness.state.publish(sessionsSelectionSlot).set(primer.sessionId);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     await settle();
     const { commands } = harness.started();
     commands.openReview({} as PageCommandContext);

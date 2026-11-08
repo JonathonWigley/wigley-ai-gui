@@ -89,7 +89,7 @@ describe('agentStripPagePart', () => {
   it('stop_LeavesNoLiveRegistration', async () => {
     const harness = startOnHarness();
     harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     expect(harness.counts().registrations).toBeGreaterThan(0);
     expect(harness.counts().observers).toBe(1);
     expect(harness.counts().timers).toBe(1);
@@ -108,12 +108,12 @@ describe('agentStripPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('pageReady_RosterWrittenBefore_DrawsIt', () => {
+  it('ready_RosterWrittenBefore_DrawsIt', () => {
     const harness = startOnHarness();
     harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
     expect(harness.counts().observers).toBe(0);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(harness.counts().observers).toBe(1);
   });
@@ -122,7 +122,7 @@ describe('agentStripPagePart', () => {
     const held: { commands: PluginCommands | null } = { commands: null };
     const harness = startOnHarness([probePart([], held)]);
     harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     await held.commands!.run(agentStripToggleBoxAtCommand, {
       sessionId: SESSION,

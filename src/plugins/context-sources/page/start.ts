@@ -1,9 +1,7 @@
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
@@ -20,8 +18,7 @@ import { createContextSection } from './context-section';
 type ContextSourcesApi = PageApi<
   typeof contextSourcesManifest,
   ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
+  Record<never, never>
 >;
 
 // Draws the session hub's Context section through chat's side parts and the `context-sources.layout` layout. Reads
@@ -50,12 +47,6 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
     chat.addSidePart(section.part);
 
     followRows(rows, { removed: (sessionId) => section.forget(sessionId) });
-    api.events.on('core.pageReady', () => {
-      breakdowns.on((sessionId) => section.breakdownUpdated(sessionId));
-      callEach([...breakdowns.all().keys()], (sessionId) =>
-        section.breakdownUpdated(sessionId),
-      );
-    });
 
     api.layouts.show<Layout>({
       defaultLayout,
@@ -65,6 +56,14 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
       setLayouts: (shown) => section.setLayouts(shown),
     });
 
-    return { commands: {} };
+    return {
+      commands: {},
+      ready() {
+        breakdowns.on((sessionId) => section.breakdownUpdated(sessionId));
+        callEach([...breakdowns.all().keys()], (sessionId) =>
+          section.breakdownUpdated(sessionId),
+        );
+      },
+    };
   },
 };

@@ -127,8 +127,8 @@ describe('unityPoolPagePart', () => {
   });
 
   it.each([
-    { name: 'written before core.pageReady', writesFirst: true },
-    { name: 'written after core.pageReady', writesFirst: false },
+    { name: 'written before ready', writesFirst: true },
+    { name: 'written after ready', writesFirst: false },
   ])('pools_ReachThePanel: $name', ({ writesFirst }) => {
     const harness = startOnHarness(() => Promise.resolve(null));
     const panels = captureLayout(harness);
@@ -139,7 +139,7 @@ describe('unityPoolPagePart', () => {
     if (writesFirst) {
       pools.set(SNAPSHOT);
     }
-    harness.emit('core.pageReady', null);
+    harness.ready();
     if (!writesFirst) {
       pools.set(SNAPSHOT);
     }
@@ -214,7 +214,7 @@ describe('unityPoolPagePart', () => {
     });
     harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
     harness.state.publish(sessionsActiveSlot).set(ROW_ID);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     const holder = panels
       .at(-1)
       ?.querySelector<HTMLElement>('.unity-pool-holder.is-link');
@@ -231,7 +231,7 @@ describe('unityPoolPagePart', () => {
     );
     const panels = captureLayout(harness);
     harness.state.publish(unityPoolSnapshotSlot).set(SNAPSHOT);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     harness.state.publish(sessionsActiveSlot).set(ROW_ID);
     harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
     await vi.waitFor(() => expect(panels.length).toBeGreaterThan(0));

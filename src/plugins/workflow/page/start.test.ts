@@ -226,7 +226,7 @@ describe('workflow page part', () => {
     });
   }
 
-  // A harness past `core.pageReady` whose slots held rows and flows of s1, s2 and
+  // A harness past `ready` whose slots held rows and flows of s1, s2 and
   // s3 before it, and the flow of `gone`, which has no row.
   function startWithThreeFlows() {
     const harness = startWorkflow().harness;
@@ -237,11 +237,11 @@ describe('workflow page part', () => {
       flows.set(sessionId, newFlow(sessionId, '/r'));
     }
     flows.set('gone', newFlow('gone', '/r'));
-    harness.emit('core.pageReady', null);
+    harness.ready();
     return { harness, rows, flows };
   }
 
-  it('pageReady_DrawsEachFlowTheSlotHolds', () => {
+  it('ready_DrawsEachFlowTheSlotHolds', () => {
     startWithThreeFlows();
 
     expect(drawn.setFlow).toEqual(['s1', 's2', 's3']);
@@ -289,7 +289,7 @@ describe('workflow page part', () => {
   it('AddWorkflow_Sorts', () => {
     const { harness, exportsFor, composerParts } = startWorkflow();
     harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
-    harness.emit('core.pageReady', null);
+    harness.ready();
     const { workflow, strips } = stubLight([
       stageOf('later', 20),
       stageOf('first', 10),
@@ -321,7 +321,7 @@ describe('workflow page part', () => {
     );
   });
 
-  // The engine past `core.pageReady` holding the workflow `light`, whose stage
+  // The engine past `ready` holding the workflow `light`, whose stage
   // `build` holds the action `go`, with rows `a` and `b`, `a` selected and `b`'s
   // flow in `build`. `ran` holds each `runAction` call.
   function startWithLightAction() {
@@ -353,7 +353,7 @@ describe('workflow page part', () => {
       stage: 'build',
     };
     harness.state.publish(workflowFlowsSlot).set('b', flowOfB);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     return { ...started, ran, flowOfB };
   }
 

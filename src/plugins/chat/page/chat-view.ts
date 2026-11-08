@@ -170,6 +170,7 @@ export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
+  ready(): void;
   // Ends every held tab; no tab starts after it.
   dispose(): void;
   composerOf(sessionId: string): ComposerSurface | null;
@@ -194,8 +195,8 @@ export type ChatTabScope = 'chat';
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in; `sessions` also takes each
 // row's activity, and `activeSessionId` names the focused pane's session.
-// `slots` holds chat's slots, and `onPageReady` hears that every page part has
-// started: the view reads the sessions already held and follows the slots from
+// `slots` holds chat's slots, and `ready`, which the host calls once every page
+// part has started, reads the sessions already held and follows the slots from
 // then. `activeTimeListeners`
 // run when a session arrives and on each change of a held session's `activeTime`
 // in `chat.session`, a throw skipping none of them. `run` runs
@@ -221,7 +222,6 @@ export type ChatTabScope = 'chat';
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   slots: ChatSlotReaders;
-  onPageReady(listener: () => void): void;
   paths: Paths;
   homeDir: string;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
@@ -474,51 +474,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     });
 
-  // Reads the sessions already held, then follows the slots.
-  deps.onPageReady(() => {
-    try {
-      callEach([...slots.session.all().values()], add);
-    } catch (error) {
-      log(`chat session arrival failed: ${errorText(error)}`);
-    }
-    slots.session.on((sessionId, info) => {
-      if (info === undefined) {
-        return;
-      }
-      const tab = tabs.get(sessionId);
-      if (tab === undefined) {
-        add(info);
-      } else {
-        applyInfo(tab, info);
-      }
-    });
-    slots.entries.on((sessionId, change) => {
-      const tab = tabs.get(sessionId);
-      if (tab === undefined || change.kind === 'delete') {
-        return;
-      }
-      if (change.kind === 'put') {
-        putEntry(tab, change.item, log);
-      } else {
-        replaceEntries(tab, change.items, log);
-      }
-    });
-    followKeyed(slots.controls, (tab, controls) =>
-      setControls(tab, controls, log),
-    );
-    followKeyed(slots.commands, (tab, commands) => {
-      tab.state = { ...tab.state, commands };
-    });
-    followKeyed(slots.queued, (tab, queued) => {
-      tab.state = { ...tab.state, queued };
-      tab.entries.setQueued(queued);
-      log(`${queued.length} pending message(s) in ${tab.name}`);
-    });
-    followKeyed(slots.returned, (tab, returned) => {
-      tab.state = { ...tab.state, returned };
-      placeNewReturned(tab, returned);
-    });
-  });
   // `running: false` reached `chat.session` first, with its draws.
   channel.on('sessionRested', ({ sessionId, error }) => {
     const tab = tabs.get(sessionId);
@@ -605,6 +560,51 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
     markSent: clearUnseen,
+    // Reads the sessions already held, then follows the slots.
+    ready() {
+      try {
+        callEach([...slots.session.all().values()], add);
+      } catch (error) {
+        log(`chat session arrival failed: ${errorText(error)}`);
+      }
+      slots.session.on((sessionId, info) => {
+        if (info === undefined) {
+          return;
+        }
+        const tab = tabs.get(sessionId);
+        if (tab === undefined) {
+          add(info);
+        } else {
+          applyInfo(tab, info);
+        }
+      });
+      slots.entries.on((sessionId, change) => {
+        const tab = tabs.get(sessionId);
+        if (tab === undefined || change.kind === 'delete') {
+          return;
+        }
+        if (change.kind === 'put') {
+          putEntry(tab, change.item, log);
+        } else {
+          replaceEntries(tab, change.items, log);
+        }
+      });
+      followKeyed(slots.controls, (tab, controls) =>
+        setControls(tab, controls, log),
+      );
+      followKeyed(slots.commands, (tab, commands) => {
+        tab.state = { ...tab.state, commands };
+      });
+      followKeyed(slots.queued, (tab, queued) => {
+        tab.state = { ...tab.state, queued };
+        tab.entries.setQueued(queued);
+        log(`${queued.length} pending message(s) in ${tab.name}`);
+      });
+      followKeyed(slots.returned, (tab, returned) => {
+        tab.state = { ...tab.state, returned };
+        placeNewReturned(tab, returned);
+      });
+    },
     dispose() {
       isDisposed = true;
       const held = [...tabs.values()];

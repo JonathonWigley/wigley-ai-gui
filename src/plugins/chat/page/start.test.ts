@@ -166,7 +166,7 @@ function loadSessions(
     returnedSlot.set(state.sessionId, returned);
     session.set(state.sessionId, info);
   }
-  harness.emit('core.pageReady', null);
+  harness.ready();
   return session;
 }
 
@@ -368,7 +368,7 @@ describe('chat page part', () => {
     harness.started().commands.prevEntry({ arg: undefined });
 
     await reloadWith(harness, {}, { s1: [PNG] });
-    harness.emit('core.pageReady', null);
+    harness.ready();
     const info = session.get('s1') as ChatSessionInfo;
     session.set('s1', { ...info, running: true });
 
@@ -408,7 +408,7 @@ describe('chat page part', () => {
     );
     harness.state.publish(sessionsRowsSlot).set('s1', ROW);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(placeKeys(harness)).toEqual({ places: ['s1'], images: ['s1'] });
     await harness.stop();

@@ -289,7 +289,7 @@ function setUp() {
   for (const sessionId of ['a', 'b', 's1']) {
     rows.set(sessionId, rowOf(sessionId));
   }
-  heavy.emit('core.pageReady', null);
+  heavy.ready();
   heavy.advance(NOW);
   const put = (flow: SessionFlow) => flows.set(flow.sessionId, flow);
   const stageAction = (sessionId: string, action: string) =>

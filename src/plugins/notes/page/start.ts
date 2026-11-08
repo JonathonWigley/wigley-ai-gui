@@ -1,13 +1,8 @@
 import './notes.css';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { onPageHide } from '../../../shared/page/page-hide';
 import { placeWrites } from '../../../shared/page/place-slot';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { KeyedSlotReader, SlotReader } from '../../../contracts/state';
 import {
   followRows,
@@ -29,12 +24,7 @@ import { readNotesLayout } from './layout/read-notes-layout';
 import { createNotePopup, type NotePopupDeps } from './popup';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type NotesApi = PageApi<
-  typeof notesManifest,
-  NotesChannel,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type NotesApi = PageApi<typeof notesManifest, NotesChannel>;
 
 // A row with no host session id can be neither attached nor named.
 function noteSessionOf(row: SessionRow | undefined): NoteSession | null {
@@ -81,15 +71,6 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       restoresSettled = true;
     });
 
-    api.events.on('core.pageReady', () => {
-      followRows(rows, {
-        added: ({ hostSessionId }) =>
-          services.log(`session ${hostSessionId ?? 'none'} listed`),
-        hostChanged: ({ hostSessionId }) =>
-          services.log(`session moved to ${hostSessionId ?? 'none'}`),
-      });
-    });
-
     const popup = createNotePopup({
       channel: api.channel,
       services,
@@ -118,6 +99,17 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => popup.setLayouts(shown),
     });
-    return { commands: popup.commands, dispose: () => popup.dispose() };
+    return {
+      commands: popup.commands,
+      ready() {
+        followRows(rows, {
+          added: ({ hostSessionId }) =>
+            services.log(`session ${hostSessionId ?? 'none'} listed`),
+          hostChanged: ({ hostSessionId }) =>
+            services.log(`session moved to ${hostSessionId ?? 'none'}`),
+        });
+      },
+      dispose: () => popup.dispose(),
+    };
   },
 };

@@ -81,13 +81,13 @@ describe('agentLinesPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('pageReady_RosterWrittenBefore_DrawsItAndHearsTheNext', () => {
+  it('ready_RosterWrittenBefore_DrawsItAndHearsTheNext', () => {
     const harness = startOnHarness();
     const rosters = harness.state.publish(agentsRostersSlot);
     rosters.set(SESSION, RUNNING);
     expect(harness.counts().timers).toBe(0);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
     expect(harness.counts().timers).toBe(1);
 
     rosters.delete(SESSION);

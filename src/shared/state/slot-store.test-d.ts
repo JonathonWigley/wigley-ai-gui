@@ -2,16 +2,10 @@
 // `@ts-expect-error` must fail to compile.
 import { describe, expectTypeOf, it } from 'vitest';
 import {
-  type CoreEvents,
   coreModeSlot,
   coreWindowFocusedSlot,
 } from '../../contracts/core-state';
-import type {
-  ChannelShape,
-  MainApi,
-  PageApi,
-  QualifiedEvents,
-} from '../../contracts/plugin';
+import type { ChannelShape, MainApi, PageApi } from '../../contracts/plugin';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import { definePlugin } from '../define-plugin';
 
@@ -30,12 +24,6 @@ const manifest = definePlugin({
 
 declare const api: MainApi<typeof manifest, ChannelShape>;
 declare const pageApi: PageApi<typeof manifest, ChannelShape>;
-declare const hearingPageApi: PageApi<
-  typeof manifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
 
 declare function ownKey<V>(): SlotKey<V, 'main', 'p'>;
 declare const own: SlotKey<number, 'main', 'p'>;
@@ -102,9 +90,6 @@ describe('PluginState', () => {
       pageApi.state.publish(coreModeSlot);
       // @ts-expect-error -- a core key is the core's to publish
       api.state.publish(coreWindowFocusedSlot);
-      hearingPageApi.events.on('core.pageReady', (data) =>
-        expectTypeOf(data).toEqualTypeOf<null>(),
-      );
     };
     return typeChecksOnly;
   });

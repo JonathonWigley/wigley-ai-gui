@@ -79,12 +79,12 @@ describe('agentSkillsPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('pageReady_RosterWrittenBefore_DrawsIt', () => {
+  it('ready_RosterWrittenBefore_DrawsIt', () => {
     const { harness, sectionSummaries } = startOnHarness();
     harness.state.publish(agentsRostersSlot).set(SESSION, ROSTER);
     expect(sectionSummaries).toEqual([null]);
 
-    harness.emit('core.pageReady', null);
+    harness.ready();
 
     expect(sectionSummaries).toEqual([null, '1']);
   });
