@@ -69,7 +69,11 @@ mark at the line's end:
   bar shrinks to nothing, the used tokens staying whole (under the default layout `usage.rowLine` shrinks, its bar
   the only part of it that can). On a footer narrower than `220px` (a side bar under about 243px) the default layout
   moves the end group — the parts ordered 2 and later: meter, clock, cache — to a line of its own under the rest,
-  its bar filling that line's free room. The fixed slots alone (clock 50px, meter at its least 38px, cache 16px, two
+  its bar filling that line's free room. The break before the group is a full-width flex item, so it forms a line
+  even on a row with no part ahead of it; the gap between the lines is each part's top margin, which the holder takes
+  back once, rather than `row-gap`, so that empty line adds no height and two lines sit one gap apart. CSS cannot
+  read a part's `order`, so a `:has()` guard on the break would have to name the end group's part ids in sessions'
+  layout. The fixed slots alone (clock 50px, meter at its least 38px, cache 16px, two
   gaps) take about 116px, so at `SIDE_BAR_MIN` (160, a 137px footer) the `No workflow` tag and the working line had
   no room beside them and were cut off. The container is `div.session-row-foot`, which the row's grid sizes;
   `div.session-row-parts` cannot be one, as `container-type: inline-size` gives it no intrinsic width. Above `220px`

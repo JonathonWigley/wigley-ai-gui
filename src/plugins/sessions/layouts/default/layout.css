@@ -259,9 +259,17 @@
    full-width item ordered ahead of the group's parts. Usage's `usage.css`
    repeats this breakpoint, so its context bar fills that line. */
 @container session-row-foot (width < 220px) {
+  /* The break always forms a flex line, empty on a row with no part ahead of
+     it, so the gap is each part's top margin, which the holder takes back once:
+     an empty first line then adds no height, and the lines sit one gap apart. */
   .session-row-parts {
     flex-wrap: wrap;
-    row-gap: var(--wg-space-0_5);
+    row-gap: 0;
+    margin-block-start: calc(-1 * var(--wg-space-0_5));
+  }
+
+  .session-row-parts > .session-row-part {
+    margin-block-start: var(--wg-space-0_5);
   }
 
   .session-row-parts::before {
