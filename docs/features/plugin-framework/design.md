@@ -162,8 +162,8 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
 
 ## Commands and state (Waves 2 and 3)
 
-Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Waves 0
-and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds Wave 3.
+Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Waves 0,
+2 and 3 have landed and their plan folders are gone.
 
 - **One argument per command.** A manifest declares it as a number, a string or a small record of those. Plugin code
   runs an argument command through a typed `CommandKey` from `contract.ts`, and a `keymap.json` bind carries an `arg`
@@ -198,6 +198,10 @@ and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds
   guards do not. A partial sweep would have made the standing rule false from the day it landed.
 - **`kit.button` takes a command and an optional argument.** A layout wanting something else writes its own listener by
   hand, knowingly. No layout in the user config folder relied on a closure when this was settled.
+- **A click that behaves differently by what it hits is one command per behaviour.** An argument has no optional
+  fields (`checkCommandArg` checks every field of a record), so an absent field is `''` or `0`. Docs' Recent rows
+  reopen the shown doc while a section link scrolls within it, so `docs.openRecentPage` and `docs.openDocAt` stay two
+  commands. One command whose behaviour hangs on an absent field was rejected: the argument check cannot express it.
 - **A command that needs an argument lists only when a key binds it.** Settings shows one row per bound
   argument, because a row id means nothing in a list. Help and which-key keep one merged line, such as `1–9 pick the
   numbered choice`. `keymap.json` can still bind any of them.

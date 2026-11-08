@@ -28,9 +28,8 @@ item per feature session.
 
 When an item lands, tick its box here and remove it from `followups.md`, in the same commit.
 
-Plans: Waves 0 and 2 have landed and their plan folder is gone.
-`docs/features/plugin-framework/plan-command-consumers/` holds Wave 3. The settled design is `plugin-framework/design.md` § Commands and
-state.
+Plans: Waves 0, 2 and 3 have landed and their plan folders are gone. The settled design is
+`plugin-framework/design.md` § Commands and state.
 
 ## Order
 
@@ -87,7 +86,7 @@ Gate: every registration returns a handle, and every dependency is typed.
 
 ## Wave 3: consumers
 
-All ∥:
+All landed (∥):
 
 - [x] Every click runs a command [plan]
 - [x] Workflow stage actions as commands [ready]
