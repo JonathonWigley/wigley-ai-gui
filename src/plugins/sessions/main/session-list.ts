@@ -7,20 +7,22 @@ import type { KeyedSlotWriter, SlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { createListeners } from '../../../shared/listeners';
-import type {
-  AgentSession,
-  ConnectedSession,
-  OwnedSession,
-  SessionInfo,
-  SessionsMainEvents,
-  SessionsMainExports,
-  SessionRow,
-  SessionsState,
-  SessionTitles,
-  ToolCallContext,
-  ToolDefinition,
-  ToolResult,
-  ToolSession,
+import {
+  type AgentSession,
+  type ConnectedSession,
+  type OwnedSession,
+  type SessionInfo,
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  type SessionRow,
+  type SessionsState,
+  type SessionTitles,
+  type ToolCallContext,
+  type ToolCallGuard,
+  type ToolDefinition,
+  type ToolResult,
+  type ToolSession,
+  textResult,
 } from '../contract';
 import { normalizedTitle, titleProblem } from '../session-title';
 
@@ -210,20 +212,11 @@ function startToolSessions(
   return { toolSessions, toolRoutes };
 }
 
-function routeCall(
-  entry: SessionEntry,
-  name: string,
-  args: unknown,
-  context: ToolCallContext,
-): Promise<ToolResult> {
-  const toolSession = entry.toolRoutes.get(name);
-  if (toolSession === undefined) {
-    const names = [...entry.toolRoutes.keys()];
-    return Promise.reject(
-      new Error(`Unknown tool: ${name}. Valid tools are ${names.join(', ')}.`),
-    );
-  }
-  return toolSession.call(name, args, context);
+function unknownToolError(entry: SessionEntry, name: string): Error {
+  const names = [...entry.toolRoutes.keys()];
+  return new Error(
+    `Unknown tool: ${name}. Valid tools are ${names.join(', ')}.`,
+  );
 }
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
@@ -261,6 +254,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // Each registration its own object, so one function added twice is two.
   const closeGuards = new Set<{ mayClose(sessionId: string): boolean }>();
   const toolNames = new Set<string>();
+  // Each contributed tool name's main-agent-only mark.
+  const toolFlags = new Map<string, boolean>();
+  // Each registration its own object, so one function added twice is two.
+  const toolCallGuards = new Set<{ guard: ToolCallGuard }>();
   const toolsChanged = createListeners<void>();
   const entries = new Map<string, SessionEntry>();
   const { rows, selection } = deps;
@@ -426,6 +423,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     contributions.splice(contributions.indexOf(contribution), 1);
     for (const tool of contribution.tools) {
       toolNames.delete(tool.name);
+      toolFlags.delete(tool.name);
     }
     callEach([...entries.values()], (entry) => {
       const toolSession = entry.toolSessions.get(contribution);
@@ -435,6 +433,48 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       toolSession?.end();
     });
+  };
+
+  // Asks each guard registered when the call came, in order, then calls the
+  // tool's handler; `SessionsMainExports.addToolCallGuard` states the rules.
+  // The ended and abort checks follow only a guard wait: with no guard the
+  // handler is called in the same tick.
+  const routeCall = async (
+    entry: SessionEntry,
+    name: string,
+    args: unknown,
+    context: ToolCallContext,
+  ): Promise<ToolResult> => {
+    if (!entry.toolRoutes.has(name)) {
+      throw unknownToolError(entry, name);
+    }
+    const call = {
+      sessionId: entry.session.id,
+      tool: name,
+      toolUseId: context.toolUseId,
+      mainAgentOnly: toolFlags.get(name) ?? false,
+    };
+    const registrations = [...toolCallGuards];
+    for (const registration of registrations) {
+      if (!toolCallGuards.has(registration)) {
+        continue;
+      }
+      const verdict = await registration.guard(call);
+      if (verdict.kind === 'skip') {
+        return textResult(verdict.text);
+      }
+    }
+    if (registrations.length > 0) {
+      if (!entries.has(entry.session.id)) {
+        throw new Error('Session ended');
+      }
+      context.signal.throwIfAborted();
+    }
+    const toolSession = entry.toolRoutes.get(name);
+    if (toolSession === undefined) {
+      throw unknownToolError(entry, name);
+    }
+    return toolSession.call(name, args, context);
   };
 
   // Changes `sessionId` inside the session's one info object, so every holder
@@ -551,7 +591,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   };
 
   return {
-    contributeTools(tools, start) {
+    contributeTools(tools, start, options) {
       const namesInThisContribution = new Set<string>();
       for (const tool of tools) {
         if (toolNames.has(tool.name)) {
@@ -574,6 +614,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       );
       for (const tool of tools) {
         toolNames.add(tool.name);
+        toolFlags.set(tool.name, options?.mainAgentOnly === true);
       }
       contributions.push(contribution);
       for (const [entry, toolSession] of started) {
@@ -730,6 +771,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       return {
         dispose: () => {
           closeGuards.delete(guard);
+        },
+      };
+    },
+    addToolCallGuard(guard) {
+      const registration = { guard };
+      toolCallGuards.add(registration);
+      return {
+        dispose: () => {
+          toolCallGuards.delete(registration);
         },
       };
     },

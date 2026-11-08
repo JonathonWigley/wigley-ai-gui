@@ -21,6 +21,7 @@ import {
 } from '../../../shared/state/slot-store';
 import {
   type ConnectedSession,
+  type GuardedToolCall,
   type OwnedSession,
   RELAY_PROTOCOL,
   type RelayHello,
@@ -399,6 +400,11 @@ describe('sessions main part', () => {
       harness: 'claude',
     });
     const context = { toolUseId: null, signal: new AbortController().signal };
+    const guarded: GuardedToolCall[] = [];
+    exports.addToolCallGuard(async (call) => {
+      guarded.push(call);
+      return { kind: 'run' };
+    });
 
     const overLimit = await connected.call(
       SET_SESSION_TITLE_TOOL.name,
@@ -414,6 +420,10 @@ describe('sessions main part', () => {
     expect(overLimit.content[0]?.text).toContain('the limit is 10');
     expect(stored.isError ?? false).toBe(false);
     expect(exports.titles(connected.session.id)?.agent).toBe('Titles');
+    expect(guarded.map((call) => [call.tool, call.mainAgentOnly])).toEqual([
+      [SET_SESSION_TITLE_TOOL.name, true],
+      [SET_SESSION_TITLE_TOOL.name, true],
+    ]);
     expect(() =>
       exports.contributeTools(
         [SET_SESSION_TITLE_TOOL],
@@ -436,9 +446,17 @@ describe('sessions main part', () => {
     dependentView.contributeTools([ASK_TOOL], ask.start);
     const ownedId = dependentView.open(hostInfo('host-owned')).session.id;
     const connectedId = dependentView.connect(hostInfo('host-dep')).session.id;
+    const guard = vi.fn(async () => ({ kind: 'run' }) as const);
+    dependentView.addToolCallGuard(guard);
 
     dependent.dispose();
+    await hostOne.call(
+      SET_SESSION_TITLE_TOOL.name,
+      { title: 'Titles' },
+      CONTEXT,
+    );
 
+    expect(guard).not.toHaveBeenCalled();
     expect(ask.ends()).toBe(3);
     await expect(hostOne.call('ask', {}, CONTEXT)).rejects.toThrow(
       'Unknown tool: ask. Valid tools are set_session_title.',

@@ -4,6 +4,7 @@ import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentSession,
   type ConnectedSession,
+  type GuardedToolCall,
   type Harness,
   type OwnedSession,
   type SessionInfo,
@@ -12,6 +13,8 @@ import {
   type SessionsState,
   type SessionTitles,
   type ToolCallContext,
+  type ToolCallGuard,
+  type ToolCallVerdict,
   type ToolDefinition,
   type ToolResult,
   type ToolSession,
@@ -234,6 +237,8 @@ describe('createSessionList', () => {
     const { list } = setUp();
     list.contributeTools([tool('a')], fakeContribution().start);
     const connected = list.connect(info('/work/x'));
+    const guard = vi.fn<ToolCallGuard>(async () => ({ kind: 'run' }));
+    list.addToolCallGuard(guard);
 
     await expect(
       connected.call(
@@ -245,7 +250,305 @@ describe('createSessionList', () => {
         },
       ),
     ).rejects.toThrow('Unknown tool: zz. Valid tools are a.');
+    expect(guard).not.toHaveBeenCalled();
   });
+
+  // `guards` lists each registration by its guard's label, a label listed
+  // twice registering one function twice. `held` is the first guard, which
+  // waits until `whileHeld` has run.
+  it.each<{
+    case: string;
+    guards: string[];
+    answers: Record<string, ToolCallVerdict | Error>;
+    disposedBefore?: number[];
+    held?: string;
+    whileHeld?(held: {
+      contribution: Disposable;
+      connected: ConnectedSession;
+      abort: AbortController;
+      registrations: Disposable[];
+    }): void;
+    result: { resolves: ToolResult } | { rejects: string };
+    handlerCalls: number;
+    asked: string[];
+  }>([
+    {
+      case: 'no guard',
+      guards: [],
+      answers: {},
+      result: { resolves: RESULT },
+      handlerCalls: 1,
+      asked: [],
+    },
+    {
+      case: 'one skip',
+      guards: ['g1'],
+      answers: { g1: { kind: 'skip', text: 'no change' } },
+      result: { resolves: { content: [{ type: 'text', text: 'no change' }] } },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'run then skip',
+      guards: ['g1', 'g2'],
+      answers: {
+        g1: { kind: 'run' },
+        g2: { kind: 'skip', text: 'second says no' },
+      },
+      result: {
+        resolves: { content: [{ type: 'text', text: 'second says no' }] },
+      },
+      handlerCalls: 0,
+      asked: ['g1', 'g2'],
+    },
+    {
+      case: 'skip first',
+      guards: ['g1', 'g2'],
+      answers: { g1: { kind: 'skip', text: 'first says no' }, g2: { kind: 'run' } },
+      result: {
+        resolves: { content: [{ type: 'text', text: 'first says no' }] },
+      },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'a guard rejects',
+      guards: ['g1', 'g2'],
+      answers: { g1: new Error('guard failed'), g2: { kind: 'run' } },
+      result: { rejects: 'guard failed' },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'a disposed guard',
+      guards: ['g1', 'g2'],
+      answers: { g1: { kind: 'skip', text: 'gone' }, g2: { kind: 'run' } },
+      disposedBefore: [0],
+      result: { resolves: RESULT },
+      handlerCalls: 1,
+      asked: ['g2'],
+    },
+    {
+      case: 'the contribution disposed during a guard',
+      guards: ['g1'],
+      answers: { g1: { kind: 'run' } },
+      held: 'g1',
+      whileHeld: ({ contribution }) => contribution.dispose(),
+      result: { rejects: 'Unknown tool: a' },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'a guard disposed during its own answer',
+      guards: ['g1', 'g2'],
+      answers: { g1: { kind: 'skip', text: 'still decides' }, g2: { kind: 'run' } },
+      held: 'g1',
+      whileHeld: ({ registrations }) => registrations[0].dispose(),
+      result: {
+        resolves: { content: [{ type: 'text', text: 'still decides' }] },
+      },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'the session ended during a guard',
+      guards: ['g1'],
+      answers: { g1: { kind: 'run' } },
+      held: 'g1',
+      whileHeld: ({ connected }) => connected.end(),
+      result: { rejects: 'Session ended' },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'the signal aborted during a guard',
+      guards: ['g1'],
+      answers: { g1: { kind: 'run' } },
+      held: 'g1',
+      whileHeld: ({ abort }) => abort.abort(new Error('call aborted')),
+      result: { rejects: 'call aborted' },
+      handlerCalls: 0,
+      asked: ['g1'],
+    },
+    {
+      case: 'one guard added twice',
+      guards: ['g1', 'g1'],
+      answers: { g1: { kind: 'run' } },
+      result: { resolves: RESULT },
+      handlerCalls: 1,
+      asked: ['g1', 'g1'],
+    },
+  ])(
+    'routeCall_ToolCallGuards_$case',
+    async ({
+      guards,
+      answers,
+      disposedBefore = [],
+      held,
+      whileHeld,
+      result,
+      handlerCalls,
+      asked,
+    }) => {
+      const { list } = setUp();
+      const handler = fakeContribution();
+      const contribution = list.contributeTools([tool('a')], handler.start);
+      const connected = list.connect(info('/work/x'));
+      const askedLabels: string[] = [];
+      const release = deferred<void>();
+      const guardOf = new Map<string, ToolCallGuard>(
+        [...new Set(guards)].map((label) => [
+          label,
+          async () => {
+            askedLabels.push(label);
+            if (label === held) {
+              await release.promise;
+            }
+            const answer = answers[label];
+            if (answer instanceof Error) {
+              throw answer;
+            }
+            return answer;
+          },
+        ]),
+      );
+      const registrations = guards.map((label) =>
+        list.addToolCallGuard(guardOf.get(label) as ToolCallGuard),
+      );
+      for (const index of disposedBefore) {
+        registrations[index].dispose();
+      }
+      const abort = new AbortController();
+
+      const call = connected.call(
+        'a',
+        {},
+        { toolUseId: null, signal: abort.signal },
+      );
+      whileHeld?.({ contribution, connected, abort, registrations });
+      release.resolve();
+
+      if ('rejects' in result) {
+        await expect(call).rejects.toThrow(result.rejects);
+      } else {
+        expect(await call).toStrictEqual(result.resolves);
+      }
+      expect(handler.calls).toHaveLength(handlerCalls);
+      expect(askedLabels).toEqual(asked);
+    },
+  );
+
+  it.each<{
+    case: string;
+    contribute(list: SessionList, call: ToolSession['call']): void;
+    caller(list: SessionList): ConnectedSession;
+    toolUseId: string | null;
+    seen: GuardedToolCall;
+  }>([
+    {
+      case: 'a main-agent-only contribution',
+      contribute: (list, call) =>
+        list.contributeTools([tool('a')], () => ({ call, end() {} }), {
+          mainAgentOnly: true,
+        }),
+      caller: (list) => list.connect(info('/work/x')),
+      toolUseId: 't1',
+      seen: {
+        sessionId: '00000001',
+        tool: 'a',
+        toolUseId: 't1',
+        mainAgentOnly: true,
+      },
+    },
+    {
+      case: 'a contribution with no options',
+      contribute: (list, call) =>
+        list.contributeTools([tool('a')], () => ({ call, end() {} })),
+      caller: (list) => list.connect(info('/work/x')),
+      toolUseId: null,
+      seen: {
+        sessionId: '00000001',
+        tool: 'a',
+        toolUseId: null,
+        mainAgentOnly: false,
+      },
+    },
+    {
+      case: 'main-agent-only disposed, then contributed with no options',
+      contribute: (list, call) => {
+        list
+          .contributeTools([tool('a')], () => ({ call, end() {} }), {
+            mainAgentOnly: true,
+          })
+          .dispose();
+        list.contributeTools([tool('a')], () => ({ call, end() {} }));
+      },
+      caller: (list) => list.connect(info('/work/x')),
+      toolUseId: 't1',
+      seen: {
+        sessionId: '00000001',
+        tool: 'a',
+        toolUseId: 't1',
+        mainAgentOnly: false,
+      },
+    },
+    {
+      case: 'the second of two connected sessions',
+      contribute: (list, call) =>
+        list.contributeTools([tool('a')], () => ({ call, end() {} }), {
+          mainAgentOnly: true,
+        }),
+      caller: (list) => {
+        list.connect(info('/work/x'));
+        return list.connect(info('/work/y'));
+      },
+      toolUseId: 't2',
+      seen: {
+        sessionId: '00000002',
+        tool: 'a',
+        toolUseId: 't2',
+        mainAgentOnly: true,
+      },
+    },
+    {
+      case: 'a relay joined to an owned session',
+      contribute: (list, call) =>
+        list.contributeTools([tool('a')], () => ({ call, end() {} }), {
+          mainAgentOnly: true,
+        }),
+      caller: (list) => {
+        list.connect(info('/work/x'));
+        list.open(owned('h1'));
+        return list.connect(owned('h1'));
+      },
+      toolUseId: 't3',
+      seen: {
+        sessionId: '00000002',
+        tool: 'a',
+        toolUseId: 't3',
+        mainAgentOnly: true,
+      },
+    },
+  ])(
+    'routeCall_GuardSeesTheCall_$case',
+    async ({ contribute, caller, toolUseId, seen }) => {
+      const { list } = setUp();
+      contribute(list, async () => RESULT);
+      const calls: GuardedToolCall[] = [];
+      list.addToolCallGuard(async (call) => {
+        calls.push(call);
+        return { kind: 'run' };
+      });
+
+      await caller(list).call(
+        'a',
+        {},
+        { toolUseId, signal: new AbortController().signal },
+      );
+
+      expect(calls).toEqual([seen]);
+    },
+  );
 
   it('throws on a tool name two contributions share', () => {
     const { list } = setUp();
