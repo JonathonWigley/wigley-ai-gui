@@ -1,6 +1,6 @@
 # 04 — Manifests declare a label and a description
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -86,3 +86,5 @@ Done when: `npm run typecheck` passes; `grep -c "^  label: '" src/plugins/*/mani
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 8df51989 · proof: diff read (only label/description lines in 25 manifests); typecheck 0, lint 0; 04-1's 12 test files 425 pass · concerns: apostrophe descriptions double-quoted per oxfmt

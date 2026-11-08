@@ -1,6 +1,6 @@
 # 05 — `ready()` replaces `core.pageReady`
 
-Status: not started
+Status: in progress
 Type: Parallel
 Wave: 3 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)

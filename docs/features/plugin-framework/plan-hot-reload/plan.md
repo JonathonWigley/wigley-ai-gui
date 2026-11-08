@@ -269,7 +269,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [Slot store clears an owner](03-slot-clear.md)
 
 ### Wave 2
-- [ ] [Manifests declare a label and a description](04-manifest-identity.md) — after 02
+- [x] [Manifests declare a label and a description](04-manifest-identity.md) — after 02
 
 ### Wave 3
 - [ ] [`ready()` replaces `core.pageReady`](05-ready-hook.md) — after 01, 02, 04 (both edit `plugin-part-harness.test-support.ts` and `slot-store.test-d.ts`)
@@ -302,6 +302,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 01 · 2c61751d · diff read; worker typecheck 0, lint 0, bridge-claim + preload tests 10 pass; window.wigley grep prints the claim line and the bridge.ts comment alone · concerns: none
 - 03 · d1d1fd0a · diff read; worker typecheck 0, slot-store, slot-holder, page-state, chat-sessions, session-list tests pass · concerns: SlotHolder.clearOwner cannot see page writers, so task 08 must stop page parts before clearing; two tests outside the file list narrowed SlotChange and now skip cleared
 - 02 · 4e2cfd84 · diff read; typecheck 0, lint 0 on the wave 1 tree; plugin-host + page tests and the wave 1 files 663 pass · concerns: stale prose outside scope: PagePart/MainPart comments in contracts/plugin.ts say start once / every page load; AGENTS.md disabled-plugin and stop(id) bullets (task 11); design.md says a restart starts in start order, code follows plan.md parts order (task 12)
+- 04 · 8df51989 · diff read (only label/description lines in 25 manifests); typecheck 0, lint 0; 04-1's 12 test files 425 pass · concerns: apostrophe descriptions double-quoted per oxfmt
 ### Contract changes
 ### Rulings
 - Branch hot-reload is cut from command-consumers e784f07e (Wave 3, in final review), with the plan commits cherry-picked from main — the user's word to start before Wave 3 lands — once Wave 3 lands, rebase onto main and re-check any review fix that touched a Consumes · lead
@@ -311,5 +312,6 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - once stopAll began, start throws Plugin host is stopping even when every named id would be ignored or is started — simplest reading of the rule — a caller may see a throw for a no-op start · group 02 · group 02
 - Restores stay per page load: a page part a restart or switch-on starts live gets no new restore window (track ignored, onSettled at once) — a switched-on plugin's slots were cleared so it has nothing to restore, and restart is drive-only — re-arming restores per live start would be a later design change; task 13 checks a live restart leaves notes' popup unmoved · lead
 - Staleness check (reports/staleness.md) briefs: task 05 also renames PageRestoresHost.pageReady and its test table and renderer call, rewords the PageRestores comment and the sessionsPlaceSlot comment, and chat's ready keeps Wave 3's pruneEndedPlaces; task 08's PluginSwitchDeps carries timers and exports PLUGIN_RETRY_MS, the switch wiring sits before createWindow's live-only return and selfTestFor is passed in; task 11 also rewords AGENTS.md's restores sentence naming core.pageReady · lead
+- hand-built test manifests take label = id and description 'A test plugin.' · group 04 · group 04
 ### Review rounds
 ### Test gate
