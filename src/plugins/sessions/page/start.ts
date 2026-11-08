@@ -151,7 +151,7 @@ function createExports(
     addBarPart: (part) => barParts.add(part),
     activate,
     async closeSession(sessionId) {
-      if (!(await mayClose(view.tabs.tabsOf(sessionId)))) {
+      if (!(await mayClose(() => view.tabs.tabsOf(sessionId)))) {
         return false;
       }
       try {

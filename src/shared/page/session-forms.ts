@@ -4,6 +4,7 @@ import type {
   AgentFormEndKind,
 } from '../../contracts/agent-forms';
 import type { PluginLog } from '../../contracts/log';
+import type { Disposable } from '../../contracts/disposable';
 import type { ToastTone } from '../../contracts/plugin';
 import { errorText } from '../error-text';
 import { type DraftRevisions, finishSave, startSave } from './autosave';
@@ -414,25 +415,100 @@ export interface SessionFormCommandDeps<Form extends SessionForm> {
   log: PluginLog;
 }
 
-// `showForm` selects the session's form tab; `activate` selects the session.
+// Whether a close still waits on the form's cancel prompt: the prompt shows
+// for it, asking to close its session, or the cancel it asked is sending.
+function isCloseWaiting(
+  state: SessionFormsState<SessionForm, string>,
+  formId: string,
+): boolean {
+  const form = formById(state, formId);
+  if (form === undefined) {
+    return false;
+  }
+  if (form.sending !== null) {
+    return form.sending.closesSession;
+  }
+  return (
+    state.view === 'confirm' &&
+    state.confirmClosesSession &&
+    state.activeFormId === formId
+  );
+}
+
+// The answers a form's cancel prompt owes the session closes that opened it,
+// by form id. `wait` is the answer for the form's prompt, one promise however
+// many closes wait: true once `closing` says the cancel it asked closed the
+// form, false once the prompt goes another way (kept, dismissed as the session
+// changes, the form closed without it). `dispose` answers every wait false.
+export interface SessionCloseAnswers extends Disposable {
+  wait(formId: string): Promise<boolean>;
+  closing(formId: string): void;
+}
+
+export function createSessionCloseAnswers(store: {
+  get(): SessionFormsState<SessionForm, string>;
+  subscribe(listener: () => void): Disposable;
+}): SessionCloseAnswers {
+  const waits = new Map<
+    string,
+    { answer: Promise<boolean>; settle(closes: boolean): void }
+  >();
+  const settle = (formId: string, closes: boolean) => {
+    waits.get(formId)?.settle(closes);
+    waits.delete(formId);
+  };
+  const subscription = store.subscribe(() => {
+    for (const formId of waits.keys()) {
+      if (!isCloseWaiting(store.get(), formId)) {
+        settle(formId, false);
+      }
+    }
+  });
+  return {
+    wait(formId) {
+      const held = waits.get(formId);
+      if (held !== undefined) {
+        return held.answer;
+      }
+      let settleWith: (closes: boolean) => void = () => undefined;
+      const answer = new Promise<boolean>((resolve) => {
+        settleWith = resolve;
+      });
+      waits.set(formId, { answer, settle: settleWith });
+      return answer;
+    },
+    closing: (formId) => settle(formId, true),
+    dispose() {
+      subscription.dispose();
+      for (const formId of waits.keys()) {
+        settle(formId, false);
+      }
+    },
+  };
+}
+
+// `showForm` selects the session's form tab; `activate` selects the session;
+// `closeAnswers` holds the prompt's answer to the close.
 export interface GuardSessionCloseDeps<
   Form extends SessionForm,
 > extends SessionFormCommandDeps<Form> {
   showForm(sessionId: string): void;
   activate(sessionId: string): void;
+  closeAnswers: Pick<SessionCloseAnswers, 'wait'>;
 }
 
 // A session closes only once its form is gone: with its form active it
 // selects the session's form tab, so the confirm scope's keys are in force,
-// and asks to cancel the form; confirming closes the session. A form open in
-// the background keeps its session with no prompt: the guard logs the
-// refusal, toasts why, and selects the session. A form being sent, active or
-// not, keeps its session: the guard logs and toasts the send, and selects
-// nothing.
+// and asks to cancel the form, answering with the prompt's answer: true once
+// the confirmed cancel closed the form, false once the user keeps it. A close
+// while the prompt already asks waits on the same answer. A form open in the
+// background keeps its session with no prompt: the guard logs the refusal,
+// toasts why, and selects the session. A form being sent, active or not,
+// keeps its session: the guard logs and toasts the send, and selects nothing.
 export function guardSessionClose<Form extends SessionForm>(
   deps: GuardSessionCloseDeps<Form>,
   sessionId: string,
-): boolean {
+): boolean | Promise<boolean> {
   const { store, words } = deps;
   const form = formOfSession(store.get(), sessionId);
   if (form === undefined) {
@@ -450,12 +526,15 @@ export function guardSessionClose<Form extends SessionForm>(
     return false;
   }
   deps.showForm(sessionId);
-  const wasConfirm = store.get().view === 'confirm';
+  const wasWaiting = isCloseWaiting(store.get(), form.formId);
   store.dispatch({ type: 'askClose', sessionId });
-  if (!wasConfirm && store.get().view === 'confirm') {
+  if (!isCloseWaiting(store.get(), form.formId)) {
+    return false;
+  }
+  if (!wasWaiting) {
     deps.log(`closing the session asks to cancel ${form.label}`);
   }
-  return false;
+  return deps.closeAnswers.wait(form.formId);
 }
 
 // `finish` hands the finished form to main and rejects with the reason when
@@ -499,11 +578,12 @@ export function finishActiveForm<Form extends SessionForm, Body>(
 export interface CloseFormFromMainDeps<
   Form extends SessionForm,
 > extends SessionFormCommandDeps<Form> {
-  closeSession(sessionId: string): void;
+  closeAnswers: Pick<SessionCloseAnswers, 'closing'>;
 }
 
-// Closes a form main closed. A form the page was sending closes its session
-// when the close prompt asked the cancel, whoever closed the form. Only a
+// Closes a form main closed. A form the page was sending answers the close
+// that asked its cancel true, whoever closed the form, so that close goes on
+// to main. Only a
 // form the page's finish closed logs and toasts its send; one main closed on
 // its own stays quiet, since main dropped those edits, and its send is failed
 // first, so its finish event says `closed`.
@@ -515,6 +595,9 @@ export function closeFormFromMain<Form extends SessionForm>(
   const { words } = deps;
   const form = formById(deps.store.get(), formId);
   const sending = form?.sending ?? null;
+  if (sending?.closesSession === true) {
+    deps.closeAnswers.closing(formId);
+  }
   if (!closed.byFinish && sending !== null) {
     deps.store.dispatch({ type: 'sendFailed', formId });
   }
@@ -531,9 +614,6 @@ export function closeFormFromMain<Form extends SessionForm>(
         : `${capitalized(words.noun)} cancelled: ${form.label}`,
       isSubmit ? 'success' : 'info',
     );
-  }
-  if (sending.closesSession) {
-    deps.closeSession(form.sessionId);
   }
 }
 

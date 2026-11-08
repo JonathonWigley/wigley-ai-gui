@@ -242,7 +242,6 @@ function primerTabSetup(
     store,
     boxes,
     finish: () => Promise.resolve(),
-    closeSession: () => undefined,
     scrollPrimer: () => null,
     openPreview: () => Promise.resolve(),
     toast: () => undefined,

@@ -21,6 +21,7 @@ import {
   closeFormFromMain,
   finishActiveForm,
   guardSessionClose,
+  type SessionCloseAnswers,
   type SessionFormWords,
 } from '../../../shared/page/session-forms';
 import type { FormsView, RoundEnd } from '../contract';
@@ -54,7 +55,6 @@ export interface FormsCommandDeps {
   // Hands the finished round to main; rejects with the reason when main keeps
   // the round open.
   finish(roundId: string, end: RoundEnd): Promise<void>;
-  closeSession(sessionId: string): void;
   layouts: LayoutCommandChannel;
   // Scrolls the active round's main column by `step`, down for 1 and up for
   // -1; null when no round is shown to scroll.
@@ -341,18 +341,23 @@ function jumpToUnanswered(
   }
 }
 
-// `showForm` selects the session's Form tab; `activate` selects the session.
+// `showForm` selects the session's Form tab; `activate` selects the session;
+// `closeAnswers` holds the cancel prompt's answer to the close.
 export interface GuardCloseDeps extends Pick<
   FormsCommandDeps,
   'store' | 'toast' | 'log'
 > {
   showForm(sessionId: string): void;
   activate(sessionId: string): void;
+  closeAnswers: Pick<SessionCloseAnswers, 'wait'>;
 }
 
 // A session closes only once its round is gone, as guardSessionClose keeps
 // it.
-export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
+export function guardClose(
+  deps: GuardCloseDeps,
+  sessionId: string,
+): boolean | Promise<boolean> {
   return guardSessionClose({ ...deps, words: ROUND_WORDS }, sessionId);
 }
 
@@ -369,10 +374,12 @@ function finishActiveRound(
   );
 }
 
-export type CloseRoundFromMainDeps = Pick<
+export interface CloseRoundFromMainDeps extends Pick<
   FormsCommandDeps,
-  'store' | 'closeSession' | 'toast' | 'log'
->;
+  'store' | 'toast' | 'log'
+> {
+  closeAnswers: Pick<SessionCloseAnswers, 'closing'>;
+}
 
 // Closes a round main closed, as closeFormFromMain closes it.
 export function closeRoundFromMain(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionsState } from '../contract';
+import type { SessionsState, SessionTabView } from '../contract';
 import {
   hasOtherSession,
   hasOtherTab,
@@ -471,24 +471,75 @@ describe('tabs', () => {
     expect(showsNoSelectionText(stateOf(['a'], 'a'))).toBe(false);
   });
 
-  it('mayClose stops at the first guard that keeps the session', async () => {
-    const calls: number[] = [];
-    const guards = (answers: (boolean | Promise<boolean>)[]) =>
-      answers.map((answer, i) => ({
-        beforeClose: () => {
-          calls.push(i);
-          return answer;
-        },
-      }));
+  it.each<{
+    case: string;
+    answers: (boolean | Promise<boolean>)[];
+    closes: boolean;
+    asked: number[];
+  }>([
+    { case: 'no tabs', answers: [], closes: true, asked: [] },
+    {
+      case: 'every tab agrees',
+      answers: [true, true],
+      closes: true,
+      asked: [0, 1],
+    },
+    {
+      case: 'a tab keeps it',
+      answers: [true, false, true],
+      closes: false,
+      asked: [0, 1],
+    },
+    {
+      case: 'a promise keeps it',
+      answers: [Promise.resolve(false), true],
+      closes: false,
+      asked: [0],
+    },
+    {
+      case: 'a promise agrees',
+      answers: [Promise.resolve(true), true],
+      closes: true,
+      asked: [0, 1],
+    },
+  ])('mayClose_EachAnswer_StopsAtTheFirstNo ($case)', async (test) => {
+    const asked: number[] = [];
+    const views = test.answers.map((answer, index) => ({
+      beforeClose: () => {
+        asked.push(index);
+        return answer;
+      },
+    }));
 
-    expect(await mayClose(guards([true, false, true]))).toBe(false);
-    expect(calls).toEqual([0, 1]);
-    expect(await mayClose([])).toBe(true);
-    expect(await mayClose(guards([true, true]))).toBe(true);
-    calls.length = 0;
-    expect(await mayClose(guards([Promise.resolve(false), true]))).toBe(false);
-    expect(calls).toEqual([0]);
-    expect(await mayClose(guards([Promise.resolve(true), true]))).toBe(true);
+    expect(await mayClose(() => views)).toBe(test.closes);
+    expect(asked).toEqual(test.asked);
+  });
+
+  it('mayClose_TabAddedWhileOneAsks_AsksItOnce', async () => {
+    const asked: string[] = [];
+    let answerConfirm: (ended: boolean) => void = () => undefined;
+    const added = {
+      beforeClose: () => {
+        asked.push('form');
+        return false;
+      },
+    };
+    const confirm = {
+      beforeClose: () => {
+        asked.push('chat');
+        return new Promise<boolean>((resolve) => {
+          answerConfirm = resolve;
+        });
+      },
+    };
+    const views: Pick<SessionTabView, 'beforeClose'>[] = [confirm];
+
+    const closing = mayClose(() => views);
+    views.push(added);
+    answerConfirm(true);
+
+    expect(await closing).toBe(false);
+    expect(asked).toEqual(['chat', 'form']);
   });
 
   it('visibleTab is null while the mode is hidden, none with no tab, else the selected tab', () => {

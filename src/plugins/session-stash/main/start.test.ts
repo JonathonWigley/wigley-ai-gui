@@ -99,6 +99,15 @@ describe('sessionStashMainPart', () => {
       hosts: [],
     },
     {
+      given: 'a page reloaded while the close confirm was open',
+      run: (part: ReturnType<typeof startPart>) => {
+        part.harness.invoke('stash', { sessionId: 's1', note: 'n' });
+        part.harness.invoke('forgetKept');
+        part.harness.emit('chat.sessionClosed', closedEvent('s1'));
+      },
+      hosts: [],
+    },
+    {
       given: 'a session chat does not own',
       run: (part: ReturnType<typeof startPart>) => {
         expect(

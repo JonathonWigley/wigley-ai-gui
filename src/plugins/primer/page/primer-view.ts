@@ -128,7 +128,8 @@ import {
 } from './primer-state';
 import type { PrimerStore } from './primer-store';
 
-// `beforeClose` answers whether a session may close now. `setScope` sets the
+// `beforeClose` answers whether a session may close, at once or once its
+// cancel prompt is answered. `setScope` sets the
 // key scope to `scopeOf` the state while a Primer tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors
 // each key hint the view and its layout draw and reads the keys a layout asks
@@ -141,7 +142,7 @@ import type { PrimerStore } from './primer-store';
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
-  beforeClose(sessionId: string): boolean;
+  beforeClose(sessionId: string): boolean | Promise<boolean>;
   setScope(scope: PrimerScopeName): void;
   // Hands the resize keys the split of the focused pane, and the focus keys
   // the primer's panes; both called after each setScope.

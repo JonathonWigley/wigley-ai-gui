@@ -7,12 +7,16 @@ import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
-import { activeForm, formById } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  createSessionCloseAnswers,
+  formById,
+  type SessionCloseAnswers,
+} from '../../../shared/page/session-forms';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import {
   followRows,
   sessionsActiveSlot,
-  type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
@@ -78,22 +82,14 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
 function listenForRounds(
   api: FormsApi,
   store: FormsStore,
-  sessions: SessionsPageExports,
+  closeAnswers: SessionCloseAnswers,
 ): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (form) =>
     store.dispatch({ type: 'formShown', form: presentedRoundOf(form) }),
   );
   api.channel.on('formClosed', (closed) =>
-    closeRoundFromMain(
-      {
-        store,
-        closeSession: (sessionId) => void sessions.closeSession(sessionId),
-        toast,
-        log,
-      },
-      closed,
-    ),
+    closeRoundFromMain({ store, closeAnswers, toast, log }, closed),
   );
   api.state.read(sessionsActiveSlot).on((sessionId) =>
     store.dispatch({
@@ -138,6 +134,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
       apply,
     );
+    const closeAnswers = createSessionCloseAnswers(store);
     const boxes = createBoxes(api, store);
     const contributions = createFormsContributions();
     const view = mountFormsView({
@@ -151,6 +148,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
             log: services.log,
             showForm: (formSessionId) => view.showForm(formSessionId),
             activate: (activeSessionId) => sessions.activate(activeSessionId),
+            closeAnswers,
           },
           sessionId,
         ),
@@ -192,7 +190,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const roundsRead = listenForRounds(api, store, sessions);
+    const roundsRead = listenForRounds(api, store, closeAnswers);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,
@@ -219,6 +217,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       }),
       dispose() {
         roundsRead.dispose();
+        closeAnswers.dispose();
         autosave.dispose();
         layoutRefresh.dispose();
         view.dispose();
@@ -227,7 +226,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         store,
         boxes,
         finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
-        closeSession: (sessionId) => void sessions.closeSession(sessionId),
         layouts: {
           openPreview: () => api.channel.invoke('openPreview'),
         },

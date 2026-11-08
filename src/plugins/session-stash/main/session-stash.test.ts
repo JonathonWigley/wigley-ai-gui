@@ -144,6 +144,17 @@ describe('createSessionStash', () => {
       logged: ['stash dropped: s1 stayed open'],
     },
     {
+      given: 'a page that started again before the close',
+      run: (test: ReturnType<typeof setUp>) => {
+        test.stash.request({ sessionId: 's1', note: 'n' });
+        test.stash.request({ sessionId: 's2', note: null });
+        test.stash.forgetKept();
+        test.stash.forgetKept();
+        test.stash.closed(closed('s1'));
+      },
+      logged: ['stash dropped: 2 kept when the page started'],
+    },
+    {
       given: 'a session chat does not own',
       run: (test: ReturnType<typeof setUp>) => {
         expect(test.stash.request({ sessionId: 'terminal', note: 'n' })).toBe(

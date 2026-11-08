@@ -50,7 +50,8 @@ import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { createRoundView, type RoundView } from './round-view';
 import { sessionTitle } from './view-model';
 
-// `beforeClose` answers whether a session may close now. `setScope` sets the
+// `beforeClose` answers whether a session may close, at once or once its
+// cancel prompt is answered. `setScope` sets the
 // key scope to the forms view while a Form tab is the visible tab, and
 // `setResizeTarget` then sets the divider the resize keys move: the shown
 // round's split, or null while idle. `pushConfirmScope` lays the cancel
@@ -63,7 +64,7 @@ import { sessionTitle } from './view-model';
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
-  beforeClose(sessionId: string): boolean;
+  beforeClose(sessionId: string): boolean | Promise<boolean>;
   setScope(view: FormsState['view']): void;
   setResizeTarget(target: ResizeTarget | null): void;
   pushConfirmScope(): PushedScope;

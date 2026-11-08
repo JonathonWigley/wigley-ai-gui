@@ -8,11 +8,14 @@ import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
-import { activeForm } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  createSessionCloseAnswers,
+  type SessionCloseAnswers,
+} from '../../../shared/page/session-forms';
 import {
   followRows,
   sessionsActiveSlot,
-  type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
@@ -83,22 +86,14 @@ function createBoxes(
 function listenForPrimers(
   api: PrimerApi,
   store: PrimerStore,
-  sessions: SessionsPageExports,
+  closeAnswers: SessionCloseAnswers,
 ): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (primer) =>
     store.dispatch({ type: 'formShown', form: primer }),
   );
   api.channel.on('formClosed', (closed) =>
-    closePrimerFromMain(
-      {
-        store,
-        closeSession: (sessionId) => void sessions.closeSession(sessionId),
-        toast,
-        log,
-      },
-      closed,
-    ),
+    closePrimerFromMain({ store, closeAnswers, toast, log }, closed),
   );
   api.state.read(sessionsActiveSlot).on((sessionId) =>
     store.dispatch({
@@ -142,6 +137,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     const store = createPrimerStore(
       initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
     );
+    const closeAnswers = createSessionCloseAnswers(store);
     const boxes = createBoxes(api, store);
     const view = mountPrimerTab({
       areas: api.areas,
@@ -154,6 +150,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
             log: services.log,
             showPrimer: (primerSessionId) => view.showPrimer(primerSessionId),
             activate: (activeSessionId) => sessions.activate(activeSessionId),
+            closeAnswers,
           },
           sessionId,
         ),
@@ -213,7 +210,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const primersRead = listenForPrimers(api, store, sessions);
+    const primersRead = listenForPrimers(api, store, closeAnswers);
     const exports: PrimerPageExports = {
       activePrimer() {
         const primer = activeForm(store.get());
@@ -224,6 +221,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       exports: () => exports,
       dispose() {
         primersRead.dispose();
+        closeAnswers.dispose();
         autosave.dispose();
         view.dispose();
       },
@@ -231,7 +229,6 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         store,
         boxes,
         finish: (primerId, end) => api.channel.invoke('finish', primerId, end),
-        closeSession: (sessionId) => void sessions.closeSession(sessionId),
         scrollPrimer: (step, direction) => view.scrollBy(step, direction),
         openPreview: () => api.channel.invoke('openPreview'),
         toast: services.toast,

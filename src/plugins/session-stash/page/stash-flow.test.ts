@@ -2,9 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { ToastTone } from '../../../contracts/plugin';
 import { REFUSED_TOAST, stashSession } from './stash-flow';
 
-// Flow deps whose ask answers `kept` (or rejects when it is an Error) and
-// whose close answers `closed`, recording every call in order.
-function flowSetup(kept: boolean | Error, closed: boolean) {
+// Flow deps whose ask answers `kept` (or rejects when it is an Error), whose
+// close answers `closed` (once `closing` resolves, when handed in) and whose
+// drop rejects with `dropFailure` when one is handed in, recording every call
+// in order.
+function flowSetup(
+  kept: boolean | Error,
+  closed: boolean,
+  options: { closing?: Promise<void>; dropFailure?: Error } = {},
+) {
   const calls: string[] = [];
   const logged: string[] = [];
   const toasts: [string, ToastTone][] = [];
@@ -18,9 +24,13 @@ function flowSetup(kept: boolean | Error, closed: boolean) {
     },
     drop: async (sessionId: string) => {
       calls.push(`drop ${sessionId}`);
+      if (options.dropFailure !== undefined) {
+        throw options.dropFailure;
+      }
     },
     closeSession: async (sessionId: string) => {
       calls.push(`close ${sessionId}`);
+      await options.closing;
       return closed;
     },
     log: (message: string) => {
@@ -75,5 +85,36 @@ describe('stashSession', () => {
     expect(calls).toEqual(test.calls);
     expect(logged).toEqual(test.logged);
     expect(toasts).toEqual(test.toasts);
+  });
+
+  it('stashSession_DropFails_LogsTheDrop', async () => {
+    const { deps, calls, logged } = flowSetup(true, false, {
+      dropFailure: new Error('main gone'),
+    });
+
+    await stashSession(deps, { sessionId: 's1', note: 'n' }, 'gamma');
+
+    expect(calls).toEqual(['ask', 'close s1', 'drop s1']);
+    expect(logged).toEqual(['stash drop not sent for gamma: main gone']);
+  });
+
+  it('stashSession_CloseWaitsOnAPrompt_DropsNothingWhileItWaits', async () => {
+    let answerPrompt: () => void = () => undefined;
+    const closing = new Promise<void>((resolve) => {
+      answerPrompt = resolve;
+    });
+    const { deps, calls } = flowSetup(true, true, { closing });
+
+    const stashing = stashSession(
+      deps,
+      { sessionId: 's1', note: 'n' },
+      'gamma',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(['ask', 'close s1']);
+    answerPrompt();
+    await stashing;
+
+    expect(calls).toEqual(['ask', 'close s1']);
   });
 });

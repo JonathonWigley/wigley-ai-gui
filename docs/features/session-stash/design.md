@@ -24,8 +24,10 @@ know nothing of it.
   changing under the dialog does.
 - **The stash.** Enter closes the dialog and hands main `{ sessionId, note }` over the plugin's channel, so main holds
   the note before the close's event fires. It then awaits sessions' `closeSession`, the normal close: a session mid-turn
-  asks chat's end-session confirm first. A close that does not land — the confirm answered no, a tab's `beforeClose` or a
-  main close guard keeping the row — tells main to drop the note and logs `stash dropped: <name> stayed open`.
+  asks chat's end-session confirm first, and a session holding an open round or primer asks its cancel prompt, the
+  close waiting on the answer. A close that does not land — a confirm or cancel prompt answered no, a tab's
+  `beforeClose` or a main close guard keeping the row — tells main to drop the note and logs `stash dropped: <name>
+  stayed open`. A drop that fails to reach main logs `stash drop not sent for <name>: <error>`.
 - **Only sessions the app started.** Main refuses a session chat does not own (`chat.profileOf` is null, such as a
   terminal row): the page toasts `Only sessions the app started can be stashed`, logs it, and leaves the row open.
 - **What main records.** Main keeps each asked stash in memory, by session id, until that session's
@@ -37,7 +39,8 @@ know nothing of it.
   - any other reason: it drops the asked stash.
 
   A message sent while the confirm is open changes nothing: only the close's outcome decides, so ending the session
-  still stashes it and keeping it drops the note.
+  still stashes it and keeping it drops the note. The page part has main forget every kept note as it starts, so a
+  reload while a confirm is open leaves no note for a later plain close to write.
 - **Where it lists.** The Stashed resume section, registered through chat's `addResumeSection`, at the top of the
   start prompt's Folder step and, filtered to the folder and profile, its Session step. Every stash lists, uncapped,
   oldest first, so the newest sits next to the cursor; one chat holds open or archived does not list. Chat asks the
@@ -58,7 +61,7 @@ know nothing of it.
   by registration, so `session-stash`'s main part starts before `session-log`'s (`src/plugins/main.ts`).
 - **The record is written at the close, not at the key.** The confirm mid-turn can be turned down, and only the close
   event carries the titles and `sent` the record needs. Sessions' `closeSession` resolves to whether the row closed, so
-  the page learns a kept close and drops the note; main cannot tell a declined confirm from a close still waiting. The asked stash lives in memory only: a quit between the key
+  the page learns a kept close and drops the note; main cannot tell a declined confirm from a close still waiting, and a reloaded page clears what it can no longer drop. The asked stash lives in memory only: a quit between the key
   and the close loses it, and nothing half-written is left on disk.
 - **The normal close.** Stashing reuses `closeSession`, so every close guard and chat's confirm apply unchanged.
 - **No un-stash key.** Archiving with `x` in the start prompt already hides a stash, and resuming removes it.

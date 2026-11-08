@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activeForm } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  createSessionCloseAnswers,
+} from '../../../shared/page/session-forms';
 import type { AgentFormEnd } from '../../../contracts/agent-forms';
 import type {
   ContentScroll,
@@ -84,9 +87,10 @@ function setup(
   let previewFailure: Error | null = null;
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
+  // Each session close the guard's answer let through.
   const closedSessions: string[] = [];
+  const closeAnswers = createSessionCloseAnswers(store);
   const log = (message: string) => logs.push(message);
-  const closeSession = (sessionId: string) => closedSessions.push(sessionId);
   const toast = (text: string, tone: ToastTone) => {
     toasts.push(text);
     toastTones.push(tone);
@@ -114,7 +118,6 @@ function setup(
         ? Promise.resolve()
         : Promise.reject(finishFailure);
     },
-    closeSession,
     scrollPrimer: (step, direction) => {
       scrolls.push([step, direction]);
       return scrollResult;
@@ -176,20 +179,32 @@ function setup(
     // Main's formClosed for `primerId` reaching the page.
     closeFromMain: (primerId: string, byFinish = true) =>
       closePrimerFromMain(
-        { store, closeSession, toast, log },
+        { store, closeAnswers, toast, log },
         { formId: primerId, byFinish },
       ),
-    guardClose: (sessionId: string) =>
-      guardClose(
+    // The guard's answer; a prompt's later true answer lands in
+    // `closedSessions`.
+    guardClose: (sessionId: string) => {
+      const answer = guardClose(
         {
           store,
           toast,
           log,
           showPrimer: (id) => shownPrimers.push(id),
           activate: (id) => activated.push(id),
+          closeAnswers,
         },
         sessionId,
-      ),
+      );
+      if (answer instanceof Promise) {
+        void answer.then((closes) => {
+          if (closes) {
+            closedSessions.push(sessionId);
+          }
+        });
+      }
+      return answer;
+    },
     // Focuses a box as the user clicking into it would, outside any command.
     setActive: (box: PrimerBox) => {
       active = box;
@@ -741,7 +756,7 @@ describe('guardClose', () => {
     expect(activated).toEqual(['p2-session']);
   });
 
-  it('asks to cancel the active primer, and confirming closes its session', () => {
+  it('asks to cancel the active primer, and confirming closes its session', async () => {
     const {
       run,
       store,
@@ -752,14 +767,25 @@ describe('guardClose', () => {
       closeFromMain,
     } = setup();
 
-    expect(guardClose('p1-session')).toBe(false);
+    const answer = guardClose('p1-session');
     expect(shownPrimers).toEqual(['p1-session']);
     expect(store.get().view).toBe('confirm');
     expect(logs).toEqual(['closing the session asks to cancel project · p1']);
     run('confirmCancel');
     closeFromMain('p1');
 
+    expect(await answer).toBe(true);
     expect(closedSessions).toEqual(['p1-session']);
+  });
+
+  it('answers the close false when the user keeps the primer', async () => {
+    const { run, closedSessions, guardClose } = setup();
+    const answer = guardClose('p1-session');
+
+    run('dismissConfirm');
+
+    expect(await answer).toBe(false);
+    expect(closedSessions).toEqual([]);
   });
 
   it('lets a session with no primer close', () => {

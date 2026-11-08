@@ -112,7 +112,7 @@ Every task uses these names exactly. This plan consumes the names in `plan-comma
 
 `plugin-framework` page reload slots (task 08): each plugin's page slot is a `SlotKey<…, 'page', '<id>'>`, or a `KeyedSlotKey` where the place is per session or per form, named `<id>PlaceSlot`, declared in that plugin's `contract.ts`.
 
-Close guard (task 07): `addCloseGuard(mayClose: (sessionId: string) => string | null, cancelHold?: (sessionId: string) => void): Disposable`: a string refuses, and it is the toast sessions shows. `cancelHold` ends what holds the session when the user's close key asks. Tab seams: `SessionTabView.closesAtOnce?(): boolean` and `beforeClose(atOnce: boolean): boolean`.
+Close guard (task 07): `addCloseGuard(mayClose: (sessionId: string) => string | null, cancelHold?: (sessionId: string) => void): Disposable`: a string refuses, and it is the toast sessions shows. `cancelHold` ends what holds the session when the user's close key asks. Tab seams: `SessionTabView.closesAtOnce?(): boolean` and `beforeClose(atOnce: boolean): boolean | Promise<boolean>`, a promise for a tab that asks the user (chat's end-session confirm).
 
 A click on one item and a key on the focused item run two commands: the key's has no `arg`, the click's names the item. Shared list-picker row clicks are task 01's (`picker.chooseRow`, `picker.cancel`).
 

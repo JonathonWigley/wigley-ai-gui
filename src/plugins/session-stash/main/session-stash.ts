@@ -17,7 +17,8 @@ export interface SessionStashDeps {
 // The stash flow over chat's events. `request` keeps a note for a session chat
 // owns in memory until its close and returns true; for any other session it
 // keeps nothing, logs the refusal and returns false. `drop` forgets a kept note
-// whose close did not happen. `closed` writes the stash of a kept session the
+// whose close did not happen; `forgetKept` forgets every kept note, for a page
+// that started again. `closed` writes the stash of a kept session the
 // user closed after sending it a message, and drops the kept note of any close.
 // `opened` removes the stash of a session resumed from the start prompt.
 // `rows` is the Stashed section's rows: the resumable stashes, newest last. A
@@ -25,6 +26,7 @@ export interface SessionStashDeps {
 export interface SessionStash {
   request(request: StashRequest): boolean;
   drop(sessionId: string): void;
+  forgetKept(): void;
   closed(closed: ChatMainEvents['sessionClosed']): void;
   opened(opened: ChatMainEvents['sessionOpened']): void;
   rows(
@@ -73,6 +75,12 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
     drop(sessionId) {
       if (pending.delete(sessionId)) {
         log(`stash dropped: ${sessionId} stayed open`);
+      }
+    },
+    forgetKept() {
+      if (pending.size > 0) {
+        log(`stash dropped: ${pending.size} kept when the page started`);
+        pending.clear();
       }
     },
     closed(closed) {

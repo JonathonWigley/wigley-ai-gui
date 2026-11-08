@@ -8,7 +8,7 @@ export interface FormTabView {
   // A Codicon name.
   icon: string;
   element: HTMLElement;
-  beforeClose(): boolean;
+  beforeClose(): boolean | Promise<boolean>;
   shown(): void;
 }
 
@@ -31,7 +31,7 @@ export interface SessionFormTabsDeps {
   className: string;
   // The idle state's line while the session has no open form.
   idleText: string;
-  beforeClose(sessionId: string): boolean;
+  beforeClose(sessionId: string): boolean | Promise<boolean>;
   // Runs each time one of these tabs becomes the visible tab.
   shown(): void;
   // Called when a session's form starts or stops showing, so the host can tell the session's row.

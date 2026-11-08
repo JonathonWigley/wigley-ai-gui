@@ -1,5 +1,6 @@
 import './session-stash.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { errorText } from '../../../shared/error-text';
 import {
   editableTitle,
   sessionsPageKey,
@@ -24,7 +25,8 @@ type SessionStashApi = PageApi<
 // Sessions mode shows, as sessions' close key acts. Its accept runs
 // `stashSession`: main keeps the note, then sessions' `closeSession` asks what
 // any close asks (chat's end-session confirm mid-turn), main writes the stash
-// once the close lands, and a kept close drops the note.
+// once the close lands, and a kept close drops the note. Starting, it has main
+// forget the notes an earlier page kept there.
 export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
   manifest: sessionStashManifest,
   start(api: SessionStashApi) {
@@ -53,6 +55,11 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
       }
       return editableTitle(row.titles) || row.label;
     };
+
+    // A page that reloaded can no longer drop a note it asked for.
+    void api.channel
+      .invoke('forgetKept')
+      .catch((error) => log(`kept stashes not forgotten: ${errorText(error)}`));
 
     const flow: StashFlowDeps = {
       ask: (request) => api.channel.invoke('stash', request),

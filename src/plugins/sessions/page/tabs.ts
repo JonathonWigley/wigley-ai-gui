@@ -256,12 +256,20 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
   );
 }
 
-// Asks each view in order whether its session may close, stopping at the
-// first that says no.
+// Asks each of the session's views whether it may close, stopping at the
+// first that says no. `viewsNow` is read again after each answer, so a view
+// added while one was asking (a Form tab a round adds under chat's confirm)
+// is asked too; each view is asked once.
 export async function mayClose(
-  views: readonly Pick<SessionTabView, 'beforeClose'>[],
+  viewsNow: () => readonly Pick<SessionTabView, 'beforeClose'>[],
 ): Promise<boolean> {
-  for (const view of views) {
+  const asked = new Set<Pick<SessionTabView, 'beforeClose'>>();
+  for (
+    let view = viewsNow().find((next) => !asked.has(next));
+    view !== undefined;
+    view = viewsNow().find((next) => !asked.has(next))
+  ) {
+    asked.add(view);
     if (!(await view.beforeClose())) {
       return false;
     }
