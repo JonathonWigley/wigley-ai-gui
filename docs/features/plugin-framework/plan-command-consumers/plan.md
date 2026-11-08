@@ -136,7 +136,7 @@ Each sweep task lists the commands it adds under Produces, each as `<plugin>.<sh
 
 ### Wave 2
 - [x] [Sweep: forms and primer](02-sweep-forms-primer.md) — after 01
-- [ ] [Sweep: chat](03-sweep-chat.md) — after 01
+- [x] [Sweep: chat](03-sweep-chat.md) — after 01
 - [x] [Sweep: agent-strip, visual, keys, shell](04-sweep-small.md) — after 01
 - [ ] [Sweep: docs, notes, backlog, settings, unity-pool](05-sweep-views.md) — after 01
 
@@ -166,6 +166,7 @@ Review base: 69550804
 - 01 · 84ca8726 · diff read (Produces present: button/command with arg, KitCommands.run(id,arg?), kitCommandsOf, keyRunner, commandArgLabel, CommandRow.label, picker.chooseRow/cancel, registerPickerCommands); typecheck 0; lint clean; worker: vitest 9974 pass, selftest unity-pool/docs/settings pass · concerns: settings rowsPerArg compares args with isSameJson (key-order blind); page-api picker run voids router.run, a sync throw would escape the click; 14 start.ts swaps covered by typecheck/vitest only; one blocked npx call (nothing downloaded); lint:fix reformatted run files only
 - 04 · eeeb3d9d · diff read (six commands with args present: agent-strip.toggleBoxAt, visual.expand, sessions.selectRow/selectTab/favoriteProjectAt, core modes.show); worker: vitest 862 pass in touched areas, selftest agent-strip+sessions pass, lint clean in its files; whole-tree typecheck deferred to the Wave 2 end (peer workers in flight) · concerns: SessionsViewDeps gains selectTab beyond the plan; plugin-part-harness gains PagePartHarness.picked; one blocked npx call (local vitest, nothing downloaded); visual and keys have no self-test script
 - 02 · 39302cc7 · diff read (eight forms *At/focus/rail/review commands with args, three primer commands, Kit.run and LayoutAction gone, Kit.position present); worker: typecheck clean in forms/primer, 883 forms+primer tests pass, selftest forms and forms,primer pass; whole-tree typecheck at the Wave 2 end · concerns: primer self-test alone fails one step that needs forms' Layout preview session (pre-existing ordering); Don't ask click now acts on the clicked item (intended); primer card mark goes through handler's boxIn wrapping; one blocked npx --no-install tsc (local, nothing downloaded); followups.md:47 stale (names kit.run, runLayoutAction) — for task 10
+- 03 · e00e6b00 · diff read (nine chat click commands with session-naming args, runKey wiring, card.ts headClicked); worker: typecheck clean in chat, layer and style checks clean, 1532 chat tests pass, selftest chat 23/23 pass; whole-tree typecheck at the Wave 2 end · concerns: check-layers.mts gains a chat sublayer so chat-commands.test.ts imports src/plugins/keymap.ts (outside the Files list); shared card.ts gains an optional headClicked param
 ### Contract changes
 ### Rulings
 - Review base is 69550804, not c3a76bdb: the Docs wiki merge landed on main between preflight and the first dispatch. Tasks 05 and 08 re-grep the docs plugin, which that merge rewrote (main-page, list-page, list-pane, section-edit, wiki-main-source, tree-view).

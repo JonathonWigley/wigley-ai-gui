@@ -1,6 +1,6 @@
 # 03 — Sweep: chat
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -203,3 +203,4 @@ One commit: `Chat: every click runs a command, with an arg naming what was click
 
 ## Proof
 
+Commit e00e6b00 · proof: diff read (nine chat click commands with session-naming args, runKey wiring, card.ts headClicked); worker: typecheck clean in chat, layer and style checks clean, 1532 chat tests pass, selftest chat 23/23 pass; whole-tree typecheck at the Wave 2 end · concerns: check-layers.mts gains a chat sublayer so chat-commands.test.ts imports src/plugins/keymap.ts (outside the Files list); shared card.ts gains an optional headClicked param
