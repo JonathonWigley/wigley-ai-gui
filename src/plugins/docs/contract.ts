@@ -291,20 +291,28 @@ export const docsOpenNodeCommand: CommandKey<
   'docs.openNode'
 > = { id: 'docs.openNode' };
 
-// A link's own data: `href` for a rendered link, else `docPath` and `docLine`
-// ('' for none); `title` is its text.
-export type DocsLinkClick = {
-  viewId: string;
-  href: string;
-  docPath: string;
-  docLine: string;
-  title: string;
-};
+// A rendered link's `href` and its text.
+export type DocsLinkClick = { viewId: string; href: string; title: string };
 
 export const docsFollowLinkCommand: CommandKey<
   DocsLinkClick,
   'docs.followLink'
 > = { id: 'docs.followLink' };
+
+// A place in a doc a section link or an On this page or Linked from row names:
+// `path` at the 1-based `line`, 0 for its top.
+export type DocsDocAtClick = { viewId: string; path: string; line: number };
+
+export const docsOpenDocAtCommand: CommandKey<
+  DocsDocAtClick,
+  'docs.openDocAt'
+> = { id: 'docs.openDocAt' };
+
+// A Recent changes page's click: the doc at `path`, read again when shown.
+export const docsOpenRecentPageCommand: CommandKey<
+  { viewId: string; path: string },
+  'docs.openRecentPage'
+> = { id: 'docs.openRecentPage' };
 
 export const docsSwitchTreeViewCommand: CommandKey<
   { viewId: string },

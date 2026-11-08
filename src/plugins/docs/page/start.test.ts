@@ -39,6 +39,8 @@ vi.mock('./docs-view', async (importOriginal) => {
   const clickMethods = [
     'openNode',
     'followLink',
+    'openDocAt',
+    'openRecentPage',
     'answerConfirm',
     'switchTreeView',
     'openListRow',
@@ -436,8 +438,18 @@ describe('docs page part lifecycle', () => {
     },
     {
       command: 'followLink' as const,
-      arg: { href: 'a.md', docPath: '', docLine: '', title: 'A' },
-      reached: { href: 'a.md', docPath: '', docLine: '', title: 'A' },
+      arg: { href: 'a.md', title: 'A' },
+      reached: { href: 'a.md', title: 'A' },
+    },
+    {
+      command: 'openDocAt' as const,
+      arg: { path: '/p/a.md', line: 4 },
+      reached: { path: '/p/a.md', line: 4 },
+    },
+    {
+      command: 'openRecentPage' as const,
+      arg: { path: '/p/a.md' },
+      reached: '/p/a.md',
     },
     {
       command: 'answerConfirm' as const,
@@ -592,6 +604,40 @@ describe('docs page part lifecycle', () => {
     expect(tab?.beforeClose?.(false)).toBe(false);
     await harness.stop();
   });
+
+  // `/p/gone.md`'s read throws; `/p/unlisted.md` is no indexed doc.
+  it.each([
+    { case: 'read failed', path: '/p/gone.md' },
+    { case: 'not indexed', path: '/p/unlisted.md' },
+  ])(
+    'restoredEdits_OpenFails_ToastsTheDroppedEdits ($case)',
+    async ({ path }) => {
+      const page = startDocsPage(servingIndexOf(['/p/gone.md'], []));
+      const { harness, liveTabs } = page;
+
+      await reloadWith(
+        page,
+        {
+          [sessionSourceId('s1')]: placeAt(path, { ...restoredEdits, path }),
+        },
+        ['s1'],
+      );
+      liveTabs.get('s1')?.shown?.();
+
+      await vi.waitFor(() =>
+        expect(
+          harness.logs.filter(({ message }) =>
+            message.includes('edits not restored'),
+          ),
+        ).toEqual([
+          expect.objectContaining({
+            message: `toast error: Unsaved edits not restored: ${path}`,
+          }),
+        ]),
+      );
+      await harness.stop();
+    },
+  );
 
   it('restorePending_TreeDraws_KeepsTheLastPagesPlace', async () => {
     const readDocs: unknown[] = [];

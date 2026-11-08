@@ -674,6 +674,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           viewNamed(arg.viewId, 'openNode')?.openNode(arg.nodeId),
         followLink: ({ arg: { viewId, ...link } }) =>
           viewNamed(viewId, 'followLink')?.followLink(link),
+        openDocAt: ({ arg: { viewId, ...at } }) =>
+          viewNamed(viewId, 'openDocAt')?.openDocAt(at),
+        openRecentPage: ({ arg }) =>
+          viewNamed(arg.viewId, 'openRecentPage')?.openRecentPage(arg.path),
         openListRow: ({ arg }) =>
           viewNamed(arg.viewId, 'openListRow')?.openListRow(arg.entryId),
         createMain: ({ arg }) =>

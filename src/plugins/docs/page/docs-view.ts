@@ -22,8 +22,10 @@ import {
   type DocsChannel,
   docsCreateMainCommand,
   docsFollowLinkCommand,
+  docsOpenDocAtCommand,
   docsOpenListRowCommand,
   docsOpenNodeCommand,
+  docsOpenRecentPageCommand,
   docsSwitchTreeViewCommand,
   type DocsPlace,
   type IndexContext,
@@ -51,6 +53,7 @@ import {
 } from '../tree';
 import { parseWikiTarget } from '../wiki-main';
 import {
+  type DocAt,
   type DocDetail,
   type DocLink,
   type DocTarget,
@@ -185,8 +188,8 @@ export interface DocsView {
   // tree, and the open doc through `openDoc`'s path, its unsaved edits back in
   // its editor once it opens. Until that open settles no place is written, so
   // a place not restored yet stays in the slot, and its edits count as unsaved
-  // (`unsavedPath`); a doc the index no longer lists
-  // toasts as `openDoc` does.
+  // (`unsavedPath`); a doc the index no longer lists toasts as `openDoc` does,
+  // and an open that fails toasts that its edits were not restored.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
@@ -196,11 +199,14 @@ export interface DocsView {
   // `edit` control's click asks.
   editSectionAt(anchor: string): void;
   // The view's clicks, each run by a command that names this view: a tree row
-  // opens, a link is followed, a list page's row opens, the tree's switch
-  // switches, and the empty Main page's offer creates it. `answerConfirm` gives
+  // opens, a link is followed, a place in a doc or a Recent changes page opens,
+  // a list page's row opens, the tree's switch switches, and the empty Main
+  // page's offer creates it. `answerConfirm` gives
   // the open Trash prompt `yes` or `no`, and logs any other answer.
   openNode(nodeId: string): void;
   followLink(link: DocLink): void;
+  openDocAt(at: DocAt): void;
+  openRecentPage(path: string): void;
   openListRow(entryId: string): void;
   switchTreeView(): void;
   createMain(): void;
@@ -671,6 +677,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     createMain: () => void createMain(),
     linkClicked: (link) =>
       deps.runKey(docsFollowLinkCommand, { viewId: deps.viewId, ...link }),
+    docAtClicked: (at) =>
+      deps.runKey(docsOpenDocAtCommand, { viewId: deps.viewId, ...at }),
+    recentPageClicked: (path) =>
+      deps.runKey(docsOpenRecentPageCommand, { viewId: deps.viewId, path }),
     listRowClicked: (entryId) =>
       deps.runKey(docsOpenListRowCommand, { viewId: deps.viewId, entryId }),
     mainOfferClicked: () =>
@@ -1583,13 +1593,23 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       const number = ++askedOpens;
       isDocAsked = true;
       restoring = place;
+      const toastEditsDropped = () => {
+        if (edits !== null) {
+          toast(`Unsaved edits not restored: ${edits.path}`, 'error');
+        }
+      };
       openOnceRead(openPath, null, number)
         .then((opened) => {
-          if (opened && edits !== null) {
+          if (!opened) {
+            toastEditsDropped();
+          } else if (edits !== null) {
             doc.restoreEdits(edits);
           }
         })
-        .catch((error) => log(`place not restored: ${errorText(error)}`))
+        .catch((error) => {
+          log(`place not restored: ${errorText(error)}`);
+          toastEditsDropped();
+        })
         .finally(() => {
           restoring = null;
         });
@@ -1597,6 +1617,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     editSectionAt: (anchor) => doc.editSectionAt(anchor),
     openNode: (nodeId) => tree.openNode(nodeId),
     followLink: (link) => doc.followLink(link),
+    openDocAt: (at) => doc.openDocAt(at),
+    openRecentPage: (path) => doc.openRecentPage(path),
     openListRow: (entryId) => doc.openListRow(entryId),
     switchTreeView: () => toggleWikiView(),
     createMain: () => void createMain(),

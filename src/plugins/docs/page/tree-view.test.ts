@@ -556,7 +556,7 @@ describe('createTreeView', () => {
     expect(tree.selectedIn('all')).toEqual(page('both'));
   });
 
-  it.each([
+  const views = [
     {
       name: 'wiki',
       hasWiki: true,
@@ -569,15 +569,30 @@ describe('createTreeView', () => {
       setTree: (tree: TreeView, nodes: TreeNode[]) =>
         tree.setTree(nodes, NOTHING, NO_HEADINGS, true),
     },
-  ])(
-    'restored_place_holds_until_and_through_the_first_tree: $name',
-    ({ hasWiki, setTree }) => {
-      const { tree, titles, selected } = wikiSetUp({ hasWiki });
-      const restored = {
-        expanded: ['shelf:Two'],
+  ];
+
+  // A saved selection naming no row of the first tree falls back to its first
+  // row.
+  it.each(
+    views.flatMap((view) => [
+      {
+        ...view,
         selectedId: 'entry:e:b',
-        filter: '',
-      };
+        selected: ['b'],
+        selectedAfter: 'entry:e:b',
+      },
+      {
+        ...view,
+        selectedId: 'entry:e:gone',
+        selected: ['One'],
+        selectedAfter: 'shelf:One',
+      },
+    ]),
+  )(
+    'restored_place_holds_until_and_through_the_first_tree: $name $selectedId',
+    ({ hasWiki, setTree, selectedId, selected: selects, selectedAfter }) => {
+      const { tree, titles, selected } = wikiSetUp({ hasWiki });
+      const restored = { expanded: ['shelf:Two'], selectedId, filter: '' };
       tree.restorePlace(restored);
       // A tree with no rows draws, and reports its place, before the rows come.
       setTree(tree, []);
@@ -586,10 +601,10 @@ describe('createTreeView', () => {
       setTree(tree, [shelf('One', [page('a')]), shelf('Two', [page('b')])]);
 
       expect(titles()).toEqual(['One', 'Two', 'b']);
-      expect(selected()).toEqual(['b']);
+      expect(selected()).toEqual(selects);
       expect({ placeBeforeRows, placeAfter: tree.place() }).toEqual({
         placeBeforeRows: restored,
-        placeAfter: restored,
+        placeAfter: { ...restored, selectedId: selectedAfter },
       });
     },
   );

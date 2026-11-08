@@ -555,19 +555,23 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   };
 
   // The first tree with rows in `slot`: takes a reloaded page's state, else
-  // expands its default groups and selects its first row.
+  // expands its default groups; selects its first row unless the reloaded
+  // state's selection names one.
   const openFirstTree = (slot: ViewSlot) => {
     slot.hasRows = true;
-    if (slot.restored !== null) {
-      slot.state = slot.restored;
-      slot.restored = null;
-      return;
-    }
-    slot.state = { ...slot.state, expanded: defaultExpandedIds(slot.tree) };
-    slot.state = {
+    const { restored } = slot;
+    slot.restored = null;
+    slot.state = restored ?? {
       ...slot.state,
-      selectedId: rowsOf(slot)[0]?.node.id ?? null,
+      expanded: defaultExpandedIds(slot.tree),
     };
+    const shownRows = rowsOf(slot);
+    const selectsARow =
+      restored !== null &&
+      shownRows.some((row) => row.node.id === restored.selectedId);
+    if (!selectsARow) {
+      slot.state = { ...slot.state, selectedId: shownRows[0]?.node.id ?? null };
+    }
   };
 
   // Pops the box's scope; `refocus` returns focus to the tree.

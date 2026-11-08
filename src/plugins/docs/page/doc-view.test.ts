@@ -24,6 +24,7 @@ import type {
 } from '../layouts/layout';
 import {
   createDocView,
+  type DocAt,
   type DocDetail,
   type DocLink,
   type DocTarget,
@@ -222,6 +223,14 @@ function docViewOver(
     linkClicked: (link: DocLink) => {
       clicks.push(['followLink', link]);
       view?.followLink(link);
+    },
+    docAtClicked: (at: DocAt) => {
+      clicks.push(['openDocAt', at]);
+      view?.openDocAt(at);
+    },
+    recentPageClicked: (path: string) => {
+      clicks.push(['openRecentPage', path]);
+      view?.openRecentPage(path);
     },
     listRowClicked: (entryId: string) => {
       clicks.push(['openListRow', entryId]);
@@ -1959,7 +1968,7 @@ describe('createDocView', () => {
       { docLine: '12', line: 12 },
       { docLine: undefined, line: null },
     ])(
-      'followLink_DataDocPath_FollowsItsPathAndLine $docLine',
+      'linkClick_DataDocPath_FollowsItsPathAndLine $docLine',
       async ({ docLine, line }) => {
         const { view, deps } = await sectionDoc(TWO_SECTIONS);
         const followFile = vi.spyOn(deps, 'followFile');
@@ -1973,7 +1982,7 @@ describe('createDocView', () => {
       },
     );
 
-    it('followLink_SamePathLink_ScrollsAndReadsNothing', async () => {
+    it('linkClick_SamePathLink_ScrollsAndReadsNothing', async () => {
       const { view, deps, editors } = await pinnedSectionEditor();
       const invoke = vi.spyOn(deps.channel, 'invoke');
 
@@ -2795,35 +2804,37 @@ describe('createDocView', () => {
       }).toEqual({ parts, isUnderTheBody: true });
     });
 
-    // Recent changes draws under the Main page's body, so a doc is open.
-    it('pageLink_Click_RunsFollowLinkWhichFollowsTheFile', async () => {
-      const { view, deps, clicks } = pageView();
-      const followFile = vi.fn();
-      deps.followFile = followFile;
-      await view.open(target(null));
-      view.setRecentChanges({
-        rows: [
-          {
-            sha: 'abc',
-            subject: 'subject',
-            time: { text: '3h', title: 'then' },
-            pages: [{ title: 'One', path: '/home/one.md' }],
-          },
-        ],
-      });
-
-      onlyIn(view, 'docs-recent-page').click();
-
-      expect({ clicks, followed: followFile.mock.calls }).toEqual({
-        clicks: [
-          [
-            'followLink',
-            { href: '', docPath: '/home/one.md', docLine: '', title: 'One' },
+    // Recent changes draws under the Main page's body, so a doc is open. A
+    // page naming the shown doc opens it again rather than scrolling in it.
+    it.each([
+      { name: 'another doc', path: '/home/one.md' },
+      { name: 'the shown doc', path: '/home/notes.md' },
+    ])(
+      'pageLink_Click_RunsOpenRecentPageWhichFollowsTheFile $name',
+      async ({ path }) => {
+        const { view, deps, clicks } = pageView();
+        const followFile = vi.fn();
+        deps.followFile = followFile;
+        await view.open(target(null));
+        view.setRecentChanges({
+          rows: [
+            {
+              sha: 'abc',
+              subject: 'subject',
+              time: { text: '3h', title: 'then' },
+              pages: [{ title: 'One', path }],
+            },
           ],
-        ],
-        followed: [['/home/one.md', null, null]],
-      });
-    });
+        });
+
+        onlyIn(view, 'docs-recent-page').click();
+
+        expect({ clicks, followed: followFile.mock.calls }).toEqual({
+          clicks: [['openRecentPage', path]],
+          followed: [[path, null, null]],
+        });
+      },
+    );
 
     // `followLink` as `docs.followLink`'s handler reaches it, with no click.
     it.each<{
@@ -2855,13 +2866,6 @@ describe('createDocView', () => {
         toasts: [],
       },
       {
-        name: 'doc path',
-        link: { docPath: '/home/other.md', docLine: '4' },
-        opened: [],
-        followed: [['/home/other.md', 4, null]],
-        toasts: [],
-      },
-      {
         name: 'unsupported',
         link: { href: 'wiki:kind/skill', title: 'Skills' },
         opened: [],
@@ -2878,13 +2882,7 @@ describe('createDocView', () => {
         Object.assign(shown.deps, { openExternal, followFile });
         await shown.view.open(target(null));
 
-        shown.view.followLink({
-          href: '',
-          docPath: '',
-          docLine: '',
-          title: '',
-          ...link,
-        });
+        shown.view.followLink({ href: '', title: '', ...link });
 
         expect({
           opened: openExternal.mock.calls,
@@ -2894,22 +2892,40 @@ describe('createDocView', () => {
       },
     );
 
-    it.each<{ name: string; isOpen: boolean; docLine: string; log: string }>([
+    // `openDocAt` as `docs.openDocAt`'s handler reaches it, with no click.
+    it.each([
+      { name: 'a line', line: 4, followed: [['/home/other.md', 4, null]] },
+      { name: 'its top', line: 0, followed: [['/home/other.md', null, null]] },
+    ])(
+      'openDocAt_OtherDoc_FollowsItsFile $name',
+      async ({ line, followed }) => {
+        const shown = pageView();
+        const followFile = vi.fn();
+        shown.deps.followFile = followFile;
+        await shown.view.open(target(null));
+
+        shown.view.openDocAt({ path: '/home/other.md', line });
+
+        expect(followFile.mock.calls).toEqual(followed);
+      },
+    );
+
+    it.each<{ name: string; isOpen: boolean; line: number; log: string }>([
       {
         name: 'no doc open',
         isOpen: false,
-        docLine: '4',
+        line: 4,
         log: 'no doc open for link /home/other.md',
       },
       {
-        name: 'a line that is no number',
+        name: 'a line that is no whole number',
         isOpen: true,
-        docLine: 'x',
-        log: 'no line x for link /home/other.md',
+        line: 2.5,
+        log: 'no line 2.5 for link /home/other.md',
       },
     ])(
-      'followLink_NoDocOrBadLine_LogsAndFollowsNothing $name',
-      async ({ isOpen, docLine, log }) => {
+      'openDocAt_NoDocOrBadLine_LogsAndFollowsNothing $name',
+      async ({ isOpen, line, log }) => {
         const shown = pageView();
         const logs: string[] = [];
         const followFile = vi.fn();
@@ -2922,12 +2938,7 @@ describe('createDocView', () => {
           logs.length = 0;
         }
 
-        shown.view.followLink({
-          href: '',
-          docPath: OTHER_DOC,
-          docLine,
-          title: '',
-        });
+        shown.view.openDocAt({ path: OTHER_DOC, line });
 
         expect({ logs, followed: followFile.mock.calls }).toEqual({
           logs: [log],
@@ -2947,7 +2958,7 @@ describe('createDocView', () => {
       expect(clicks).toEqual([]);
     });
 
-    it('linkClick_SectionLink_RunsFollowLinkWithItsData', async () => {
+    it('linkClick_SectionLink_RunsOpenDocAtWithItsPlace', async () => {
       const { view, clicks } = pageView();
       await view.open(target(null));
 
@@ -2960,12 +2971,7 @@ describe('createDocView', () => {
         },
       });
 
-      expect(clicks).toEqual([
-        [
-          'followLink',
-          { href: '', docPath: OTHER_DOC, docLine: '9', title: 'Other' },
-        ],
-      ]);
+      expect(clicks).toEqual([['openDocAt', { path: OTHER_DOC, line: 9 }]]);
     });
 
     it('mainOfferClick_RunsCreateMain', () => {

@@ -26,6 +26,7 @@ import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import {
   type DocsChannel,
+  type DocsDocAtClick,
   type DocsEdits,
   docsEditSectionAtCommand,
   type DocsLinkClick,
@@ -114,6 +115,9 @@ export interface DocTarget {
 // A link a click follows, by `docs.followLink`'s fields but its view.
 export type DocLink = Omit<DocsLinkClick, 'viewId'>;
 
+// A place a click goes to, by `docs.openDocAt`'s fields but its view.
+export type DocAt = Omit<DocsDocAtClick, 'viewId'>;
+
 export interface DocViewDeps {
   viewId: string;
   channel: PageChannel<DocsChannel>;
@@ -151,9 +155,12 @@ export interface DocViewDeps {
   openListEntry(entryId: string): void;
   // Creates the Main page the empty Main page offers.
   createMain(): void;
-  // A click on a link: one in the rendered body, an On this page or Linked
-  // from row, or a Recent changes page.
+  // A click on a rendered link in the body.
   linkClicked(link: DocLink): void;
+  // A click on a section link or an On this page or Linked from row.
+  docAtClicked(at: DocAt): void;
+  // A click on a Recent changes page.
+  recentPageClicked(path: string): void;
   // A click on a list page's row, by its entry id.
   listRowClicked(entryId: string): void;
   // A click on the empty Main page's `create it` offer.
@@ -255,6 +262,13 @@ export interface DocView {
   // it, another file opens, and a `wiki:` or `wigley:` link goes to
   // `followWikiLink`; logs and does nothing while no doc shows.
   followLink(link: DocLink): void;
+  // Goes to `at` as a section link or an On this page or Linked from row asks:
+  // a place in the shown file moves within it, another file opens; logs and
+  // does nothing while no doc shows or for a line that is no whole number.
+  openDocAt(at: DocAt): void;
+  // Opens the doc at `path` from its top, as a Recent changes page's click
+  // asks, reading the shown doc again too.
+  openRecentPage(path: string): void;
   // Moves the shown list page's cursor to the row of `entryId` and opens it, as
   // the row's click asks; logs and does nothing when no shown row holds it.
   openListRow(entryId: string): void;
@@ -521,19 +535,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     homeDir: deps.homeDir,
     log: deps.log,
     moveToLine: (line) =>
-      deps.linkClicked({
-        href: '',
-        docPath: shown?.target.path ?? '',
-        docLine: String(line),
-        title: '',
-      }),
-    followLink: (path, line) =>
-      deps.linkClicked({
-        href: '',
-        docPath: path,
-        docLine: String(line),
-        title: '',
-      }),
+      deps.docAtClicked({ path: shown?.target.path ?? '', line }),
+    followLink: (path, line) => deps.docAtClicked({ path, line }),
   });
   const body = element('div', 'md docs-body');
   const bodyMount = createMarkdownMount(deps.markdown, deps.log);
@@ -839,7 +842,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     link.title = deps.paths.tilde(path, deps.homeDir);
     link.addEventListener('click', (event) => {
       event.preventDefault();
-      deps.linkClicked({ href: '', docPath: path, docLine: '', title });
+      deps.recentPageClicked(path);
     });
     parent.append(link);
     return link;
@@ -1094,18 +1097,6 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
   };
 
-  // Where `link` leads: one naming a doc holds its target, any other its href;
-  // null for a line that is no whole number.
-  const linkTargetOf = (link: DocLink, fromFile: string): LinkTarget | null => {
-    if (link.docPath === '') {
-      return resolveLink(link.href, fromFile, deps.homeDir, deps.paths);
-    }
-    const line = link.docLine === '' ? null : Number(link.docLine);
-    return line === null || Number.isInteger(line)
-      ? { type: 'file', path: link.docPath, line, fragment: null }
-      : null;
-  };
-
   // A section link holds its target in `data-doc-path` and `data-doc-line`,
   // any other link its `data-href`.
   function linkClicked(event: MouseEvent) {
@@ -1115,26 +1106,48 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     event.preventDefault();
     const { docPath, docLine, href } = anchor.dataset;
-    deps.linkClicked({
-      href: href ?? '',
-      docPath: docPath ?? '',
-      docLine: docLine ?? '',
-      title: anchor.textContent ?? '',
-    });
+    if (docPath === undefined) {
+      deps.linkClicked({ href: href ?? '', title: anchor.textContent ?? '' });
+    } else {
+      const line = docLine === undefined ? 0 : Number(docLine);
+      deps.docAtClicked({ path: docPath, line });
+    }
+  }
+
+  // A file target moves within the shown doc, else opens its file.
+  const followFileTarget = (
+    target: Extract<LinkTarget, { type: 'file' }>,
+    fromFile: string,
+  ) => {
+    if (deps.paths.samePath(target.path, fromFile)) {
+      moveWithinDoc(target.line, target.fragment);
+    } else {
+      deps.followFile(target.path, target.line, target.fragment);
+    }
+  };
+
+  function openDocAt({ path, line }: DocAt) {
+    if (shown === null) {
+      deps.log(`no doc open for link ${path}`);
+      return;
+    }
+    if (!Number.isInteger(line) || line < 0) {
+      deps.log(`no line ${line} for link ${path}`);
+      return;
+    }
+    followFileTarget(
+      { type: 'file', path, line: line === 0 ? null : line, fragment: null },
+      shown.target.path,
+    );
   }
 
   function followLink(link: DocLink) {
-    const linkText = link.docPath === '' ? link.href : link.docPath;
     if (shown === null) {
-      deps.log(`no doc open for link ${linkText}`);
+      deps.log(`no doc open for link ${link.href}`);
       return;
     }
     const fromFile = shown.target.path;
-    const target = linkTargetOf(link, fromFile);
-    if (target === null) {
-      deps.log(`no line ${link.docLine} for link ${linkText}`);
-      return;
-    }
+    const target = resolveLink(link.href, fromFile, deps.homeDir, deps.paths);
     switch (target.type) {
       case 'external':
         deps
@@ -1146,11 +1159,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         moveWithinDoc(null, target.fragment);
         break;
       case 'file':
-        if (deps.paths.samePath(target.path, fromFile)) {
-          moveWithinDoc(target.line, target.fragment);
-        } else {
-          deps.followFile(target.path, target.line, target.fragment);
-        }
+        followFileTarget(target, fromFile);
         break;
       case 'unsupported':
         if (!deps.followWikiLink(target.href, link.title)) {
@@ -2030,6 +2039,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     },
     editSectionAt: (anchor) => clickSection(anchor),
     followLink,
+    openDocAt,
+    openRecentPage: (path) => deps.followFile(path, null, null),
     openListRow(entryId) {
       if (!listPane.openRow(entryId)) {
         deps.log(`no list row ${entryId}`);

@@ -74,20 +74,24 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
       arg: { viewId: 'string', nodeId: 'string' },
     },
-    // `href` is a rendered link's own; a section link, an On this page or
-    // Linked from row and a Recent changes page name `docPath` instead, and
-    // `docLine` the 1-based line or ''. `title` is the link's text.
     followLink: {
       label: 'follow this link',
       group: 'doc',
       runsIn: 'page',
-      arg: {
-        viewId: 'string',
-        href: 'string',
-        docPath: 'string',
-        docLine: 'string',
-        title: 'string',
-      },
+      arg: { viewId: 'string', href: 'string', title: 'string' },
+    },
+    // `line` is 1-based, 0 for the doc's top.
+    openDocAt: {
+      label: 'go to this place',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', path: 'string', line: 'number' },
+    },
+    openRecentPage: {
+      label: 'open this recent page',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', path: 'string' },
     },
     openListRow: {
       label: 'open this list row',
