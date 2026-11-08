@@ -214,7 +214,7 @@ digest.py --projects                                     default $CLAUDE_CONFIG_
 - [x] [The auto-retro plugin](04-auto-retro-plugin.md) — after 02, 03
 
 ### Wave 3
-- [ ] [Doc re-read](05-doc-re-read.md) — after 01, 04
+- [x] [Doc re-read](05-doc-re-read.md) — after 01, 04
 
 ### Wave 4
 - [ ] [Final verification](06-final-verification.md) — after 05
@@ -228,6 +228,7 @@ Review base: 946a8cda
 - 02 · fb6ba21b · diff read; Produces present (LaunchRequest.unattended, finished, isUserClose, close, SavedSession.unattended, UNATTENDED_REASON); typecheck clean outside sessions/ (03 in flight); 5 test files 534 pass; oxfmt clean on touched folders · concerns: selftest-script.ts:1185 also closes with project-closed, not named by the new SessionCloseReason comment; npm run lint fails on docs/keymap.md formatting, untouched since 3e3c2fcb (pre-existing)
 - 03 · b82a3403 · diff read; Produces present (SidebarSection, SectionPart, addSection, SectionInput.kind/id, SessionRowInput.section, SectionKit.headerPart, RowClaim/ClaimedSection, sidebarSections sections arg, SessionsParts.section header); typecheck 0 errors; sessions tests 573 pass; lint clean but pre-existing docs/keymap.md format · concerns: headerPart returns a detached div when header build throws; claims failures log per order computation (orderedRows, moveFavorite too), not only per draw; accent-edge rule doubles the class to outrank hover specificity; status edge sits beside the dashed edge, unverified live; no user sessions layout and no layout setting
 - 04 · ae33390d · diff read; Produces present (AutoRetroState, autoRetroStateSlot, autoRetroManifest, RetroItem/RetroQueue/QueueEvent/nextQueue/parseQueue/EMPTY_QUEUE, QUEUE_FILE/createQueueFile, DEFAULT_SETTLE_SECONDS/RESTORE_WAIT_MS/isRetroDone, both parts, layout.d.ts, readAutoRetroLayout); typecheck 0; auto-retro + layout-contracts tests 51 pass; lint clean but pre-existing docs/keymap.md · concerns: no test catches the settle timer restarting on each repeated done value; until the queue loads after a restart the slot still holds the previous start's row ids; header look left to 06
+- 05 · GUI 23aa5b52, marketplace bf06bb2 · diff read in both repos; SKILL.md lock/runs/draft text checked against ledger.py; session-groups plugin-section claims checked against sidebar-order.ts; check_manifests --against origin/main and check_pointers pass on 1.22.0 · concerns: auto-retro/design.md 'a click opens the row's Chat tab' untraced (06's drive checks it); SKILL.md step 10's cancelled branch says go to step 11 before it says commit step 9's drafts
 ### Contract changes
 ### Rulings
 - Two-repo run: the Review base above is the GUI worktree's tip; the marketplace worktree's review base is 00b90b5 (its tip at preflight, one docs-ahead commit past the plan's 1dbe437) — plan.py takes one sha · lead

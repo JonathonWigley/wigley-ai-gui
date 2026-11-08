@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 01, 04
 Plan: [plan.md](plan.md)
@@ -41,3 +41,7 @@ then run `python3 scripts/check_manifests.py --against origin/main` from the mar
 Done when: each doc above was read whole against the code, and each fix is committed in its repo with the message
 "Doc re-read for auto-retro: <what changed>", or the task's Proof says no line changed.
 Commit:    one commit per repo that changed; the marketplace always gets one, for the bump
+
+## Proof
+
+Commit GUI 23aa5b52, marketplace bf06bb2 · proof: diff read in both repos; SKILL.md lock/runs/draft text checked against ledger.py; session-groups plugin-section claims checked against sidebar-order.ts; check_manifests --against origin/main and check_pointers pass on 1.22.0 · concerns: auto-retro/design.md 'a click opens the row's Chat tab' untraced (06's drive checks it); SKILL.md step 10's cancelled branch says go to step 11 before it says commit step 9's drafts
