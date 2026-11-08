@@ -165,5 +165,8 @@ Review base: aed38a35
 - Drive fix 09ac737d: hidden-bar click logs 'opened <title> popup in <label>' via popupOpenedFromBar, as the toggle does · group 06
 - Pre-existing, to follow-ups: re-opening an already-submitted default round in a session replays its answers and shows nothing, silently (form-service replaysLastSubmitted); forms.openRound with no sessionId connects a row without selecting it (sessions.mark); drive skill could say to pass a different round for a second open in one session · group 06
 ### Review rounds
+- Round 1, aed38a35..3346ecbd, 5 lanes: NEEDS FIXES. 3 Important (press focus outside pane under popup; first-open slide/inert via rAF; other plans built on removed interfaces), 7 Minor. Recommended picks taken per AGENTS § Review; all dispatched in 3 workers by file. Report /tmp/claude-form-popup/review-3346ecbd.md
+- Round 1 fixes: 08740a92 (docs), bb40db59 (sessions), 0102fa19 (forms, primer, docs). Re-review cycle 1 (correctness) over those: PASS with 3 Minor (comment widths, stale inset comment, untested let-go wiring), fixed in 6a2b5100.
+- Re-review cycle 2 (correctness) over 6a2b5100: NEEDS FIXES, 2 Minor. Orphaned harness comment lead-applied in bd7f195c; harness test name and missing rule rows dispatched as fix now (recommended pick, last cycle, no further re-review).
 ### Test gate
 - Picked per writing-tests § Picking tests for a gate over aed38a35..HEAD (sessions, forms, primer, chat, docs, docs-session-tab, settings, shared/page): npm test 10094 passed, no type errors; npm run selftest -- --plugin sessions,forms,primer,chat,docs all passed (docs-session-tab has no self-test script; its unit tests ran in npm test).
