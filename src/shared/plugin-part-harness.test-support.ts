@@ -1214,8 +1214,6 @@ function fakePageChannelOn(
   return register(listeners.add(listener as (data: unknown) => void));
 }
 
-// A command `manifest` declares, by its qualified id: a part's kit checks its own
-// commands exist as it starts.
 function fakePageApi(
   manifest: PluginManifest,
   context: PartContext,
@@ -1271,6 +1269,8 @@ function fakePageApi(
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
       label: (id) => id,
+      // Any command the harness's manifests declare, as the served config
+      // holds; a fake dependency's commands stay absent.
       command: (id) =>
         Object.hasOwn(world.declared, id) ? world.declared[id] : undefined,
       scopes: [],
