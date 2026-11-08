@@ -208,10 +208,10 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Shared plan reader](01-shared-plan-reader.md)
-- [ ] [Main-agent-only tool calls in sessions](03-main-agent-only-tools.md)
-- [ ] [Nested subagents keep a session busy](04-nested-subagents-busy.md)
-- [ ] [Subagent lines in the decoder](05-subagent-lines-in-decoder.md)
+- [x] [Shared plan reader](01-shared-plan-reader.md)
+- [x] [Main-agent-only tool calls in sessions](03-main-agent-only-tools.md)
+- [x] [Nested subagents keep a session busy](04-nested-subagents-busy.md)
+- [x] [Subagent lines in the decoder](05-subagent-lines-in-decoder.md)
 
 ### Wave 2
 - [ ] [Worktree list and plan copies](02-worktree-list-and-plan-copies.md) — after 01
@@ -229,10 +229,21 @@ Boundary rules:
 
 ## Run log
 
-Review base:
+Review base: 9980e669
 
 ### Groups
+- 04 · 44417ebc · diff read: signalOf gives subagentStarted for every agentSpawned; flow + agent-signals tests pass (54); full typecheck deferred to wave end while peers edit · concerns: none (typecheck failures seen were other wave-1 workers' in-progress edits)
+- 03 · 65341284 · diff read: GuardedToolCall, ToolCallVerdict, ToolCallGuard, ContributeToolsOptions, addToolCallGuard present in sessions contract; three tools marked mainAgentOnly; sessions+workflow tests pass (222); full typecheck at wave end · concerns: routeCall moved into createSessionList's closure (reads toolFlags and guards)
+- 01 · dde8194a · diff read: TaskStatus, TASK_STATUSES, PlanTaskLine (file, status), PlanProgress, readPlanProgress(planText, taskTexts), readTaskStatus in src/shared/plan-progress.ts; plan-reader.ts gone; heavy + plan-progress tests pass (472); check-layers clean for its files · concerns: git mv staged the renames; oxfmt not yet run (lint gate at wave end); test helpers UNLINKED/linked() instead of literal rows
+- 04 fix · 97f9d4ff · layer check passes for workflow files; tests pass (54) · concerns: none
+- 05 · 9c23d58b · diff read: agentId on assistant/thinking entries; transcript skips subagent text; held ends, hand-back end, relisting in stream-decoder; follow-up removed; decoder/chat/agents tests pass; typecheck clean for its files · concerns: activity-runs.test.ts also needed agentId (not in Files); a subagent stream_event text block could show the dock as writing (decoder-only case); oxfmt not run
 ### Contract changes
 ### Rulings
+- Ended/aborted checks after the guard wait run only when a guard was registered at call time; with none the handler runs same-tick as before — Decisions call these checks new to the guard wait — once chat's guard lands every call takes the checks · group 03 · group 03
+- A skip resolves the call even if the session ended, the signal aborted or the contribution was disposed during the guard wait — first skip wins precedes the checks — a cancelled call returns success text instead of rejecting · group 03 · group 03
+- check-layers: only the stages sublayer gained src/shared; root/main/page already get it from layer-rules — none if lint agrees · group 01 · group 01
+- Task 04's nested-subagents test lives in main/agent-signals.test.ts (fix 97f9d4ff), not flow.test.ts as its Tests line says — the root may not import main/ — none · lead
+- A relisted subagent's agentReplied is rebuilt from kept model/context, so its contextWindow is the model's current window — matches later replies — a window learned off-roster shows one event early · group 05 · group 05
+- isDockStep keeps raw steps (no agentId) and main-agent steps — raw carries no agentId — none · group 05 · group 05
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 04 — Nested subagents keep a session busy
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -68,3 +68,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 44417ebc · proof: diff read: signalOf gives subagentStarted for every agentSpawned; flow + agent-signals tests pass (54); full typecheck deferred to wave end while peers edit · concerns: none (typecheck failures seen were other wave-1 workers' in-progress edits)

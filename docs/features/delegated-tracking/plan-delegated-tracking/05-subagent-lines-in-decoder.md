@@ -1,6 +1,6 @@
 # 05 — Subagent lines in the decoder
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -227,3 +227,4 @@ Commit:    one commit for the group, with the follow-up's removal from `docs/fea
 
 ## Proof
 
+Commit 9c23d58b · proof: diff read: agentId on assistant/thinking entries; transcript skips subagent text; held ends, hand-back end, relisting in stream-decoder; follow-up removed; decoder/chat/agents tests pass; typecheck clean for its files · concerns: activity-runs.test.ts also needed agentId (not in Files); a subagent stream_event text block could show the dock as writing (decoder-only case); oxfmt not run

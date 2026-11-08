@@ -1,6 +1,6 @@
 # 02 — Worktree list and plan copies
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 03 — Main-agent-only tool calls in sessions
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -138,3 +138,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 65341284 · proof: diff read: GuardedToolCall, ToolCallVerdict, ToolCallGuard, ContributeToolsOptions, addToolCallGuard present in sessions contract; three tools marked mainAgentOnly; sessions+workflow tests pass (222); full typecheck at wave end · concerns: routeCall moved into createSessionList's closure (reads toolFlags and guards)

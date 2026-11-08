@@ -1,6 +1,6 @@
 # 01 — Shared plan reader
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -133,3 +133,5 @@ Done when: `npm test` passes and `npm run lint` passes (it runs `scripts/check-l
 Commit:    one commit for the group
 
 ## Proof
+
+Commit dde8194a · proof: diff read: TaskStatus, TASK_STATUSES, PlanTaskLine (file, status), PlanProgress, readPlanProgress(planText, taskTexts), readTaskStatus in src/shared/plan-progress.ts; plan-reader.ts gone; heavy + plan-progress tests pass (472); check-layers clean for its files · concerns: git mv staged the renames; oxfmt not yet run (lint gate at wave end); test helpers UNLINKED/linked() instead of literal rows
