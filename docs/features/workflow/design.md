@@ -257,12 +257,15 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   edge on the card, one step under the solid Tag of an `urgent` Needs you. Its rank sits above chat's done and below chat's working, so a running turn, an error and a waiting round still
   take the label.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, L, M or H,
-  in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the label and status as
-  one accent tag (`Make · running`), unless the row label says it, and Heavy's countdown. On a row too narrow for it, usage's
+  in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the stage's label as
+  one tag toned by its status (`running`, pulsing, while running; `success` with a check when done; neutral while
+  paused or ready), unless the row label says it, and Heavy's countdown. The row's own label shows no Working: this tag
+  says it. On a row too narrow for it, usage's
   bar shrinks away first, then the tag ellipsizes. A user layout can also draw the
   progress and the main action's button, which the chip's input carries. Idle draws no stage. A session in no workflow
   draws the **`No workflow`** tag, an error Tag in `--wg-status-error`, once a live turn with agent work has ended with no
-  level skill started, and nothing before.
+  level skill started, and nothing before. A chip with no stage to draw (no workflow, or idle) adds a running
+  `Working` tag, pulsing, while the flow is busy (a turn or a subagent running).
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the trail, the countdown and the main
   action. A stage outside the stepper keeps the status mark and line, since the trail does not show it. Once a plan is
   read the side pane holds the detail and the other actions, so a hidden pane leaves the trail, the main action and the

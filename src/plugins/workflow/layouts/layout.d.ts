@@ -137,6 +137,14 @@ export interface WorkflowKit extends BaseKit {
   stepper(parent: HTMLElement, steps: readonly StepInput[]): HTMLElement;
   // `span.workflow-badge` reading `letter`, titled `label`, in the colour of the drawing plugin's `badge` theme token.
   badge(parent: HTMLElement, letter: string, label: string): HTMLElement;
+  // `span.ui-tag.workflow-stage-tag` reading `label`, carrying `status` as `data-state`: in `status-running` and
+  // pulsing while running, `success` opening on a check when done, neutral while paused, ready or with no status. A
+  // redraw of a showing tag never jumps the pulse.
+  stageTag(
+    parent: HTMLElement,
+    label: string,
+    status: StageStatus | null,
+  ): HTMLElement;
   // `span.workflow-countdown` reading `text`, in tabular numerals.
   countdown(parent: HTMLElement, text: string): HTMLElement;
   // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark, a filled

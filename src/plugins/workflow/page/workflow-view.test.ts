@@ -320,11 +320,13 @@ describe('workflow view', () => {
 
 describe('workflow view over several workflows', () => {
   it.each([
-    { missedLevel: false, chip: [] },
-    { missedLevel: true, chip: ['No workflow'] },
+    { missedLevel: false, turnRunning: false, chip: [] },
+    { missedLevel: true, turnRunning: false, chip: ['No workflow'] },
+    { missedLevel: false, turnRunning: true, chip: ['Working'] },
+    { missedLevel: true, turnRunning: true, chip: ['No workflow', 'Working'] },
   ])(
-    'Draw_NullWorkflow missedLevel $missedLevel',
-    ({ missedLevel, chip: chipTexts }) => {
+    'Draw_NullWorkflow missedLevel $missedLevel turnRunning $turnRunning',
+    ({ missedLevel, turnRunning, chip: chipTexts }) => {
       const { view, put, sidePart, rowActivities } = setUp();
       const chip = new FakeElement('div');
       const strip = new FakeElement('div');
@@ -334,12 +336,15 @@ describe('workflow view over several workflows', () => {
       view.stripPart.build(asHtml(strip), 'a');
       sidePart.build(asHtml(pane), 'a', section);
 
-      put({ ...newFlow('a', '/p'), missedLevel });
+      put({ ...newFlow('a', '/p'), missedLevel, turnRunning });
 
       expect(chip.children.map((child) => child.textContent)).toEqual(
         chipTexts,
       );
-      expect(findAll(chip, 'ui-tag--error')).toHaveLength(chipTexts.length);
+      expect(findAll(chip, 'ui-tag--error')).toHaveLength(missedLevel ? 1 : 0);
+      expect(findAll(chip, 'ui-tag--running')).toHaveLength(
+        turnRunning ? 1 : 0,
+      );
       expect(strip.children).toHaveLength(0);
       expect(pane.children).toHaveLength(0);
       expect(section.summaries.at(-1)).toBeNull();

@@ -1,7 +1,7 @@
 /* The workflow parts the kit draws: the stepper's trail of step words, the status
    marks, the side pane's list and the fold over it, the countdown and the level's
-   badge, whose colour the kit sets from the drawing plugin's token, and the row
-   wrapper around a chip. Each workflow plugin's default layout styles its own chip,
+   badge, whose colour the kit sets from the drawing plugin's token, the stage
+   tag, and the row wrapper around a chip. Each workflow plugin's default layout styles its own chip,
    strip and side pane in its `layout.css`. */
 
 .workflow-stepper {
@@ -76,7 +76,7 @@
   align-items: center;
 }
 
-/* A running mark or step word reports the agent at work, so it loops at
+/* A running mark, stage tag or step word reports the agent at work, so it loops at
    `duration-pulse`. Each draw builds a new element, so the clock starts its
    animation where the last one had it, and a redraw of a showing element never
    jumps the pulse. One drawn out of view starts when it shows, so its next draw
@@ -94,6 +94,7 @@
 }
 
 .workflow-mark[data-state='running'],
+.workflow-stage-tag[data-state='running'],
 .workflow-step[data-state='running'] .workflow-step-label {
   animation: workflow-mark-pulse var(--wg-duration-pulse) ease-in-out infinite;
   animation-delay: calc(var(--workflow-mark-clock) * -1);
@@ -101,9 +102,18 @@
 
 @media (prefers-reduced-motion: reduce) {
   .workflow-mark[data-state='running'],
+  .workflow-stage-tag[data-state='running'],
   .workflow-step[data-state='running'] .workflow-step-label {
     animation: none;
   }
+}
+
+/* Beats the icon primitive's size, so the check leaves the tag's height alone. */
+.ui-tag .workflow-stage-tag-check.codicon {
+  margin-inline-end: var(--wg-space-0_5);
+  font-size: var(--wg-text-11);
+  line-height: var(--wg-leading-tight);
+  vertical-align: text-bottom;
 }
 
 /* Two rows at least while the list holds that much, its own height below that,

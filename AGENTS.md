@@ -322,8 +322,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
-                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the `No workflow` tag is the exception to
-                 the layout rule: the engine draws it with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
+                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the `No workflow` and `Working` tags of a chip with no stage are the exception to
+                 the layout rule: the engine draws them with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
   workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan
                  folders, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
@@ -467,12 +467,12 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage text and the `No workflow` tag), chat's run time and profile and usage's context meter and cache mark are six. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage tag, and the `No workflow` and `Working` tags), chat's run time and profile and usage's context meter and cache mark are six. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
 - **A row activity** is the short state a session's row shows beside its title — a label holding its word (working,
-  needs you, done, error, ready to make, closed), also in the row's tooltip. A page plugin sets one per session under its own source id through the
+  needs you, done, error, ready to make, closed), also in the row's tooltip; the default layout leaves working off the title line, since the workflow chip's tag says it. A page plugin sets one per session under its own source id through the
   `sessions` page export `setActivity`, and the row shows the highest rank, so a new state is a registration in the
   plugin that knows it, never an edit to sessions. One that sets an `emphasis` also asks the row to catch the eye at a
   scan of the list: `raised` for a state the user may come to when ready, `urgent` for one blocked on the user. A **session title** has three sources (user, agent, first message) kept on the row;

@@ -6,7 +6,8 @@
 // grip) over its rows,
 // each row a compact card of two lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
-// activity, a needs you label while `marked`, a status edge for an
+// activity, a needs you label while `marked` (a running activity draws no
+// label: the workflow chip's tag in the footer says it), a status edge for an
 // activity with an emphasis, and its on-screen mark,
 // over a footer line that never wraps, holding other plugins' row parts
 // (`contributedParts`); its status shows only in the row's tooltip,
@@ -95,7 +96,7 @@ const layout = {
     element.classList.toggle('is-on-screen', input.onScreen);
     const activity =
       input.activity ?? (input.marked ? MARKED_ROW_ACTIVITY : null);
-    if (activity !== null) {
+    if (activity !== null && activity.tone !== 'running') {
       drawActivityLabel(kit.rowTrailing(element), activity, kit);
       if (activity.emphasis !== null) {
         element.classList.add(`session-row-edge--${activity.tone}`);

@@ -19,6 +19,7 @@ import {
   defaultChecklist,
   type Drawn,
   IDLE_STAGE,
+  isBusy,
   type MarkState,
   type PageStage,
   type PageWorkflow,
@@ -38,6 +39,7 @@ import {
 import {
   MAIN_ACTION,
   SIDE_LIST_CLASS,
+  stageTagElement,
   TOGGLE_FINISHED_WAVES,
 } from './layout/workflow-kit';
 
@@ -62,9 +64,9 @@ export interface WorkflowViewDeps {
 // its Chat composer, each through the `draw` of the flow's workflow, and
 // `sidePartFor` makes one workflow's section of the session hub, which draws a
 // session's side pane only while its flow is of that workflow. A flow with no
-// workflow draws nothing, but for the chip's `No workflow` tag after a missed
-// level; a workflow or stage with no page half does the same and logs its name
-// once. Every held part draws again on `setFlow` for its session and on `redraw`,
+// stage to draw draws nothing, but for the chip's `No workflow` tag after a
+// missed level and its `Working` tag while busy; a workflow or stage with no page
+// half does the same and logs its name once. Every held part draws again on `setFlow` for its session and on `redraw`,
 // and each second while it shows a countdown, the side pane aside. `setFlow`, and
 // `redraw` for each session with a chip, also set the session's row activity. Each
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
@@ -113,6 +115,7 @@ interface HeldPart {
 const TICK_MS = 1000;
 const SIDE_PART_ORDER = 20;
 const NO_WORKFLOW_TEXT = 'No workflow';
+const WORKING_TEXT = 'Working';
 const PENDING: MarkState = 'pending';
 
 // Each wrapper outlives none of its builds: a row redraw or a composer draw
@@ -307,11 +310,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
     switch (part.kind) {
       case 'chip': {
-        if (flow.workflow === null && flow.missedLevel) {
-          part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
-          return false;
-        }
         if (!drawsStage) {
+          drawStagelessChip(part.wrapper, flow, clock);
           return false;
         }
         const input = chipInput(workflow, stage, flow);
@@ -605,6 +605,21 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
 
 // The stepper's stages, in order, one per step slot: the slot member that is
 // `stage`, otherwise the slot's last.
+// A chip with no stage to draw: the `No workflow` tag after a missed level,
+// then a running `Working` stage tag while the flow is busy.
+function drawStagelessChip(
+  wrapper: HTMLElement,
+  flow: SessionFlow,
+  clock: Clock,
+): void {
+  if (flow.workflow === null && flow.missedLevel) {
+    wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
+  }
+  if (isBusy(flow)) {
+    wrapper.append(stageTagElement(WORKING_TEXT, 'running', clock));
+  }
+}
+
 function stepperStages(
   stages: readonly PageStage[],
   stage: PageStage,

@@ -191,7 +191,7 @@ means something.
 
 - **Durations:** `duration-fast` (hover, press), `duration-base` (small things opening and
   closing), `duration-slow` (panels, sheets, the composer), `duration-pulse` (one cycle of a looping
-  agent-state pulse, such as a session row's Working label; slow enough to read as breathing, not flashing).
+  agent-state pulse, such as a session row's running stage tag; slow enough to read as breathing, not flashing).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
   session row's pulsing Working label, a tool step settling from running to done). Content does not animate in, and nothing moves on its
@@ -359,7 +359,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   tree, the primer popup's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
+  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `fg-tertiary` text for Done, and nothing for Working, which the workflow chip's tag says; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
   plugins' row parts on one line that never wraps, the context bar, the run time and the cache mark at its end in slots of fixed least width, so the bars line up from row to row, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
@@ -491,9 +491,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Light's, Medium's or Heavy's
   own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
   or H) in the plugin token `--wg-workflow-light-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
-  or `--wg-workflow-heavy-badge` (`status-warning`), then the stage and its status as an accent Tag, unless the row's
-  label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes; a session that finished a turn with no
-  workflow started draws one error Tag, `No workflow`, in `status-error`. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+  or `--wg-workflow-heavy-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
+  `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
+  row's label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes; a session that finished a turn with no
+  workflow started draws one error Tag, `No workflow`, in `status-error`, and a session with no stage to draw takes a
+  running `Working` Tag, pulsing, while its turn or subagents run. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status

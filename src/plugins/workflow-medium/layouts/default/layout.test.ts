@@ -97,7 +97,8 @@ describe('Medium default layout', () => {
     expect(badge.classList.contains('workflow-badge')).toBe(true);
     expect(badge.textContent).toBe('M');
     expect(badge.title).toBe('Medium');
-    expect(tag.textContent).toBe('Build · running');
+    expect(tag.textContent).toBe('Build');
+    expect(tag.dataset.state).toBe('running');
   });
 
   it('strip_DrawsTheSteps', () => {

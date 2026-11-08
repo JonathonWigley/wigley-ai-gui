@@ -314,33 +314,6 @@
   white-space: nowrap;
 }
 
-/* A running activity's label takes the running colour and pulses: it reports
-   the agent at work. Its cycle is `duration-pulse`, not the transition
-   durations, which pulse fast enough to read as flashing. Under reduced motion
-   it is static. */
-@keyframes session-activity-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.6;
-  }
-}
-
-.session-row-activity--running {
-  color: var(--wg-status-running);
-  animation: session-activity-pulse var(--wg-duration-pulse) ease-in-out
-    infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-row-activity--running {
-    animation: none;
-  }
-}
-
 /* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W` and the
    pane controls at the bar's end. The bar takes the strip's margin, so the
    strip sits flush between its prompts; only the strip and the bar parts

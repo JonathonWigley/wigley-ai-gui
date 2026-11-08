@@ -58,6 +58,8 @@ function fakeKit(): WorkflowKit {
       part(parent, `action:${action.label}`) as HTMLButtonElement,
     tag: (parent, text) => part(parent, `tag:${text}`),
     badge: (parent, letter, label) => part(parent, `badge:${letter}:${label}`),
+    stageTag: (parent, label, status) =>
+      part(parent, `stage:${label}:${status}`),
     meter: (parent, percent) => part(parent, `meter:${percent}`),
     statusMark: (parent, state) => part(parent, `mark:${state}`),
     sideList: (parent) => part(parent, 'list'),
@@ -142,12 +144,12 @@ function withoutBadge(parts: string[]): string[] {
 }
 
 describe('default layout chip', () => {
-  it('chip_RunningStage_TagReadsTheStatusText', () => {
+  it('chip_RunningStage_TagReadsTheStageAndItsStatus', () => {
     const parent = new FakeElement('parent');
 
     const chip = layout.chip(asHtml(parent), chipInput(), fakeKit());
 
-    expect(withoutBadge(drawn(chip))).toEqual(['tag:Make · running']);
+    expect(withoutBadge(drawn(chip))).toEqual(['stage:Make:running']);
   });
 
   it('chip_StateOnRowLabel_DrawsOnlyTheCountdown', () => {
@@ -163,7 +165,7 @@ describe('default layout chip', () => {
   });
 
   it.each([
-    { onRowLabel: false, parts: ['badge:H:Heavy', 'tag:Make · running'] },
+    { onRowLabel: false, parts: ['badge:H:Heavy', 'stage:Make:running'] },
     { onRowLabel: true, parts: ['badge:H:Heavy'] },
   ])(
     'chip_DrawsTheBadgeFirst onRowLabel $onRowLabel',
