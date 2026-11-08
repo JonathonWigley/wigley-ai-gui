@@ -159,9 +159,10 @@ export interface ConfirmBodyKit extends BacklogKit {
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `homes`, `list` and `detail` panes are
 // drawn into app-owned containers once per layout set, the `editor` pane on each editor open and again on a layout
-// set while it is open; rows and entries on every render, one call per item. Kit scopes: `homes` and `list` and
-// their rows `backlog.list`, `detail` and its entries `backlog.detail`, `editor` `backlog.editor`, `pickerRow`
-// `backlog.picker`, `confirmBody` `backlog.confirm`.
+// set while it is open; rows and entries on every render, one call per item. Kit scopes: `homes` and its repo headers
+// and home rows `backlog.homes`, `list` and its rows `backlog.list`, `detail` and its entries `backlog.detail`,
+// `editor` `backlog.editor`, `pickerRow` `backlog.picker`, `confirmBody` `backlog.confirm`. A user layout's `homes`
+// part draws the `rescan` and `commit` hints itself: `R` and `C` are not vim keys.
 export interface BacklogLayout {
   homes?(parent: HTMLElement, kit: HomesKit): BacklogPane;
   list?(parent: HTMLElement, kit: ListKit): BacklogPane;

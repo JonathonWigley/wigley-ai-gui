@@ -167,7 +167,8 @@ export interface BacklogViewDeps {
   isShown(): boolean;
   // Opens the mode's side bar when it is hidden.
   revealSideBar(): void;
-  // Hears each home the user opens from the side bar, by click or key.
+  // Hears each home the user picks from the side bar, by click or Enter; `l`
+  // opens one without picking it.
   homePicked(): void;
   // The open home, for the title bar; null with none open.
   homeShown(home: BacklogHome | null): void;
@@ -180,7 +181,9 @@ export interface BacklogViewDeps {
 // row, picker row and prompt body through the layout picked for that part.
 // It draws with `default` until the first `setLayouts`. `load` reads the
 // homes; `reload` reads them again (the channel's `changed`); `shown` sets the
-// scope and focus where the keys were left.
+// scope and focus where the keys were left. Each change of the pane holding
+// the keys logs `homes focused`, `list focused`, `detail focused` or `editor
+// focused`.
 export interface BacklogView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -191,8 +194,11 @@ export interface BacklogView {
   sideBarHidden(): void;
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
-  // Main takes the keys back: from the homes to the rows, else the scope,
-  // targets and DOM focus of the pane that had them, the editor's included.
+  // The core's area chain reached the side bar: focus moves to the homes, the
+  // cursor on the open home; an open editor keeps it.
+  focusSideBar(): void;
+  // Main takes the keys back: an open editor takes the DOM focus again, else
+  // main's last pane, the list or the detail, takes focus.
   focusMain(): void;
   // Draws every pane, the rows, an open picker's rows and the prompts' bodies
   // again with `shown`, keeping an open editor's draft and focused box, an
@@ -306,12 +312,21 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     timers: deps.timers,
   });
   split.element.classList.add('backlog-split');
-  // The list and the detail, for the focus keys; the homes and an open
-  // editor take no move.
+  // The focus keys: between the list and the detail, and right out of the
+  // homes into main; left of the list the core reaches the side bar. An open
+  // editor holds the keys, so it takes every move and moves nothing.
   const focusTarget: FocusTarget = {
     move(direction) {
       const state = store.get();
-      const to = state.editor === null ? paneTo(state.focus, direction) : null;
+      if (state.editor !== null) {
+        deps.log('pane keys ignored: the editor is open');
+        return true;
+      }
+      if (state.focus === 'homes' && direction === 'right') {
+        focusMain();
+        return true;
+      }
+      const to = paneTo(state.focus, direction);
       if (to === null) {
         return false;
       }
@@ -390,6 +405,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   let shownSelectedKey: string | null = null;
   let shownOpenRoot: string | null = null;
   let shownFocus: string | null = null;
+  // Main's pane that last held the keys, which `focusMain` focuses again.
+  let lastMainFocus: 'items' | 'detail' = 'items';
   let shownDetailKey: string | null = null;
   // The detail's scroll as the last pane draw found it, which the detail body
   // draws again at; null once that draw is done.
@@ -407,7 +424,14 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     if (state.editor !== null) {
       return 'editor';
     }
-    return state.focus === 'detail' ? 'detail' : 'list';
+    switch (state.focus) {
+      case 'homes':
+        return 'homes';
+      case 'items':
+        return 'list';
+      case 'detail':
+        return 'detail';
+    }
   };
 
   // Draws the three panes again. The lists move to the new panes and keep
@@ -420,7 +444,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       const statusSlot = appSlot(status, 'status', rollback);
       const rowsSlot = appSlot(homesList, 'homeRows', rollback);
       const pane = homes(into, {
-        ...kitFor('list', rollback),
+        ...kitFor('homes', rollback),
         status: statusSlot.place,
         homeRows: rowsSlot.place,
       });
@@ -538,7 +562,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
             element: repoHeader(
               into,
               { repo: home.repo },
-              kitFor('list', rollback),
+              kitFor('homes', rollback),
             ),
           })),
         );
@@ -556,7 +580,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
               isCreateTarget: home.isCreateTarget,
               uncommitted: home.uncommitted,
             },
-            kitFor('list', rollback),
+            kitFor('homes', rollback),
           ),
         }),
       );
@@ -877,13 +901,18 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
   };
 
-  // Moves the DOM focus to the pane the keys act on, when that changed.
+  // Moves the DOM focus to the pane the keys act on, when that changed, and
+  // logs the pane that took them.
   const syncFocus = (state: BacklogState, always: boolean) => {
     const focus = state.editor === null ? state.focus : 'editor';
-    if (!deps.isShown() || (!always && focus === shownFocus)) {
+    const isChanged = focus !== shownFocus;
+    if (!deps.isShown() || (!always && !isChanged)) {
       return;
     }
     shownFocus = focus;
+    if (isChanged) {
+      deps.log(`${PANE_NAMES[focus]} focused`);
+    }
     switch (focus) {
       case 'homes':
         homesPane.focus();
@@ -923,6 +952,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     deletePrompt.settleOwedDismiss();
     discardPrompt.settleOwedDismiss();
     const state = store.get();
+    if (state.focus !== 'homes') {
+      lastMainFocus = state.focus;
+    }
     drawHomes(state);
     drawRows(state);
     syncEditor(state);
@@ -941,6 +973,18 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
   drawPanes();
   store.subscribe(() => render());
+
+  // Main's last pane takes the keys, the list when the detail refuses them
+  // with no row selected; an open editor takes the DOM focus again.
+  const focusMain = () => {
+    if (store.get().editor === null) {
+      dispatch({ type: 'focus', focus: lastMainFocus });
+      if (store.get().focus !== lastMainFocus) {
+        dispatch({ type: 'focus', focus: 'items' });
+      }
+    }
+    syncFocus(store.get(), true);
+  };
 
   // ── Reads and writes ───────────────────────────────────────────────────
   // A read overtaken by a later one is dropped.
@@ -1197,13 +1241,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     listUp: listMove('up'),
     listTop: listMove('top'),
     listBottom: listMove('bottom'),
-    open() {
-      const wasOnHomes = store.get().focus === 'homes';
-      dispatch({ type: 'open' });
-      if (wasOnHomes) {
-        deps.homePicked();
-      }
-    },
+    open: () => dispatch({ type: 'open' }),
     toggle() {
       const wasOnHomes = store.get().focus === 'homes';
       dispatch({ type: 'toggle' });
@@ -1322,13 +1360,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         dispatch({ type: 'focus', focus: 'homes' });
       }
     },
-    focusMain() {
-      if (store.get().focus === 'homes') {
-        dispatch({ type: 'focus', focus: 'items' });
-      } else {
-        render(true);
+    focusSideBar() {
+      if (store.get().editor === null) {
+        dispatch({ type: 'focusHomes' });
       }
     },
+    focusMain,
     setLayouts(next) {
       parts.setLayouts(next);
       keepFocusedBox(followupEditor.boxes, FOLLOWUP_FORM_ID, () => {
@@ -1352,6 +1389,14 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     commands,
   };
 }
+
+// The name each pane that takes the keys logs under.
+const PANE_NAMES: Record<BacklogFocus | 'editor', string> = {
+  homes: 'homes',
+  items: 'list',
+  detail: 'detail',
+  editor: 'editor',
+};
 
 // The pane a focus move toward `direction` reaches from `from`: right from the
 // list to the detail, left back; null for every other move.

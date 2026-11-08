@@ -101,6 +101,10 @@ function chevron(row, isExpanded, kit) {
 const layout = {
   homes(parent, kit) {
     const root = paneRoot(parent, kit);
+    const header = kit.el(root, 'div', 'backlog-homes-header');
+    const keys = kit.el(header, 'span', 'backlog-list-keys');
+    hint(keys, kit, 'rescan', 'rescan');
+    hint(keys, kit, 'commit', 'commit');
     kit.status(root);
     kit.homeRows(root);
     return { element: root };

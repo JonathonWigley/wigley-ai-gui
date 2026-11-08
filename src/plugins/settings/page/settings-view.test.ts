@@ -95,18 +95,16 @@ function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
 
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
-// named, and `handed`: each scope set and each focus target handed over, in
-// order. The side bar shows unless `isSideBarShown` is false.
-async function shownView(
-  isSideBarShown = true,
-  schema = SCHEMA,
-  keymap: UserKeymap | null = null,
-) {
+// named, `handed`: each scope set and each focus target handed over, in
+// order, `logged`: each line logged, and `picked`: each `sectionPicked`.
+async function shownView(schema = SCHEMA, keymap: UserKeymap | null = null) {
   const { channel, written, writtenKeymaps } = fakeChannel(schema, keymap);
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
   const { anchors, keys } = recordingAnchors();
   const handed: (string | FocusTarget)[] = [];
+  const logged: string[] = [];
+  const picked = vi.fn();
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
@@ -125,11 +123,10 @@ async function shownView(
       argShape: () => undefined,
       run: () => undefined,
     },
-    log: () => undefined,
+    log: (line) => logged.push(line),
     toast: () => undefined,
     setScope: (scope) => handed.push(scope),
     setFocusTarget: (target) => handed.push(target),
-    isSideBarShown: () => isSideBarShown,
     pushScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,
@@ -142,7 +139,7 @@ async function shownView(
     }),
     anchor,
     sectionShown: () => undefined,
-    sectionPicked: () => undefined,
+    sectionPicked: picked,
   });
   await view.load();
   view.shown();
@@ -161,6 +158,8 @@ async function shownView(
     writtenKeymaps,
     anchors,
     handed,
+    logged,
+    picked,
     move,
     sheet: asFake(view.sheet),
   };
@@ -196,55 +195,18 @@ describe('createSettingsView', () => {
   });
 
   it.each([
-    {
-      from: 'rows',
-      direction: 'left',
-      bar: true,
-      after: 'sections',
-      moved: true,
-    },
-    {
-      from: 'rows',
-      direction: 'left',
-      bar: false,
-      after: 'rows',
-      moved: false,
-    },
-    {
-      from: 'sections',
-      direction: 'right',
-      bar: true,
-      after: 'rows',
-      moved: true,
-    },
-    {
-      from: 'rows',
-      direction: 'right',
-      bar: true,
-      after: 'rows',
-      moved: false,
-    },
-    {
-      from: 'sections',
-      direction: 'left',
-      bar: true,
-      after: 'sections',
-      moved: false,
-    },
-    { from: 'rows', direction: 'up', bar: true, after: 'rows', moved: false },
-    {
-      from: 'sections',
-      direction: 'down',
-      bar: true,
-      after: 'sections',
-      moved: false,
-    },
+    { from: 'sections', direction: 'right', after: 'rows', moved: true },
+    { from: 'rows', direction: 'left', after: 'rows', moved: false },
+    { from: 'rows', direction: 'right', after: 'rows', moved: false },
+    { from: 'sections', direction: 'left', after: 'sections', moved: false },
+    { from: 'rows', direction: 'up', after: 'rows', moved: false },
+    { from: 'sections', direction: 'down', after: 'sections', moved: false },
   ] as const)(
-    'focusTarget_MovesBetweenSectionsAndRows: $from $direction, side bar $bar',
-    async ({ from, direction, bar, after, moved }) => {
-      const { view, handed, move } = await shownView(bar);
+    'focusTarget_MovesBetweenSectionsAndRows: $from $direction',
+    async ({ from, direction, after, moved }) => {
+      const { view, handed, move } = await shownView();
       if (from === 'sections') {
-        move('left');
+        view.focusSideBar();
       }
       const handedBefore = handed.length;
       const pane = { sections: view.sideBar, rows: view.sheet };
@@ -257,6 +219,43 @@ describe('createSettingsView', () => {
       );
     },
   );
+
+  it.each([
+    { command: 'open', focused: 'sheet', pickedCount: 1 },
+    { command: 'openKeepingFocus', focused: 'sideBar', pickedCount: 0 },
+  ] as const)(
+    'sectionKeys_OpenTheSection: $command',
+    async ({ command, focused, pickedCount }) => {
+      const { view, logged, picked } = await shownView();
+      view.focusSideBar();
+      view.commands.down();
+
+      const loggedBefore = logged.length;
+
+      view.commands[command]();
+
+      expect(logged.slice(loggedBefore)).toContain('section keymap');
+      expect(fakeDocument.activeElement).toBe(asFake(view[focused]));
+      expect(picked).toHaveBeenCalledTimes(pickedCount);
+    },
+  );
+
+  it('focusSideBarThenFocusMain_MovesAndLogsOnce', async () => {
+    const { view, handed, logged } = await shownView();
+    const handedBefore = handed.length;
+    const loggedBefore = logged.length;
+
+    view.focusSideBar();
+    view.focusSideBar();
+    view.focusMain();
+
+    expect(
+      logged.slice(loggedBefore).filter((line) => line.endsWith(' focused')),
+    ).toEqual(['sections focused', 'rows focused']);
+    expect(
+      handed.slice(handedBefore).filter((each) => typeof each === 'string'),
+    ).toEqual(['sections', 'sections', 'rows']);
+  });
 
   it('a layout reload keeps the open row box', async () => {
     const { view, sheet } = await shownView();
@@ -366,7 +365,6 @@ describe('createSettingsView', () => {
       arg,
     });
     const { view, writtenKeymaps } = await shownView(
-      true,
       { ...SCHEMA, sections: [], commands: { [command.id]: command } },
       { binds: [bind('a', 1), bind('b', 2), bind('c', 3)] },
     );
@@ -393,7 +391,7 @@ describe('createSettingsView', () => {
       label: 'Last',
       description: 'Last',
     };
-    const { view, sheet } = await shownView(true, {
+    const { view, sheet } = await shownView({
       ...SCHEMA,
       sections: [{ ...section, leaves: [...section.leaves, last] }],
     });

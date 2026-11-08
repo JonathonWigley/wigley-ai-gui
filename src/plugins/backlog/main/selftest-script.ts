@@ -66,6 +66,11 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: 'The side bar lists the git home and the list-shaped home.',
     },
     { keys: ['g', 'g', 'l'], expect: openedGitHome },
+    {
+      keys: ['Enter'],
+      expect: '[backlog] list focused',
+      why: 'l opened the home and kept focus on the homes; Enter on the open home focuses its list.',
+    },
     { keys: ['j'], expect: '[backlog] selected Plain item' },
     {
       keys: ['j'],
@@ -149,7 +154,7 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   ];
   const outsideChange: SelfTestStep[] = [
     {
-      keys: ['h', 'j', 'l'],
+      keys: ['h', 'j', 'Enter'],
       expect: `[backlog] opened selftest-repo ${shown('wigley-features/selftest-repo')}`,
     },
     {
@@ -164,7 +169,7 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
   ];
   const commit: SelfTestStep[] = [
-    { keys: ['h', 'k', 'l'], expect: openedGitHome },
+    { keys: ['h', 'k', 'Enter'], expect: openedGitHome },
     {
       keys: ['C'],
       expect: `[backlog] committed ${gitHome}`,
@@ -179,6 +184,42 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: "Enter expands the plan's task rows.",
     },
     { keys: ['j'], expect: '[backlog] selected Second task' },
+  ];
+  const sideBarKeys: SelfTestStep[] = [
+    {
+      keys: ['<A-h>'],
+      expect: '[backlog] homes focused',
+      why: "Option+h at the list's left edge reaches the homes through the mode's focusSideBar.",
+    },
+    { keys: ['<A-l>'], expect: '[backlog] list focused' },
+    { keys: ['<A-l>'], expect: '[backlog] detail focused' },
+    { keys: ['<A-h>'], expect: '[backlog] list focused' },
+    { keys: ['h'], expect: '[backlog] homes focused' },
+    {
+      keys: ['<A-l>'],
+      expect: '[backlog] list focused',
+      why: 'h left the homes holding the keys with the area at main, so the view steps out of them.',
+    },
+    {
+      keys: ['h', 'j', 'l'],
+      expect: `[backlog] opened selftest-repo ${shown('wigley-features/selftest-repo')}`,
+    },
+    {
+      keys: ['k', 'Enter'],
+      expect: openedGitHome,
+      alsoExpect: [/^\[backlog\] list focused$/],
+      why: 'l kept focus on the homes, so k moved the homes cursor back to the git home.',
+    },
+    { keys: ['a'], expect: '[backlog] editor open create' },
+    {
+      keys: ['<A-h>'],
+      expect: '[backlog] pane keys ignored: the editor is open',
+    },
+    {
+      keys: ['Escape', 'Escape', 'Escape'],
+      expect: '[backlog] editor closed',
+      why: 'Esc leaves insert mode, then the box, then cancels the unchanged editor.',
+    },
   ];
   return [
     {
@@ -220,6 +261,11 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       name: 'plan',
       why: 'Selecting the plan shows it, Enter expands its task rows, and j selects them.',
       steps: plan,
+    },
+    {
+      name: 'side bar keys',
+      why: 'Option+h and Option+l move between the list, the homes and the detail; h still reaches the homes and Option+l steps out of them; l on a home opens it keeping focus and Enter opens it focusing the list; the open editor ignores the pane keys.',
+      steps: sideBarKeys,
     },
   ];
 }

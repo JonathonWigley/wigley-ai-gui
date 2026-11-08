@@ -1,10 +1,10 @@
 /* The default layout's homes pane, list pane, detail head and editor pane. */
 
-/* The default homes pane's tracks: the load's status line, then each repo's
-   header over its homes. */
+/* The default homes pane's tracks: its header of keys, the load's status
+   line, then each repo's header over its homes. */
 .backlog-homes > .backlog-pane {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
 }
@@ -22,7 +22,9 @@
   min-width: 0;
 }
 
-/* The keys that act on the open home, then the edge prompt to the detail. */
+/* The keys that act on the open home, then the edge prompt to the detail;
+   on the homes, the keys that act on the cursor home. */
+.backlog-homes-header,
 .backlog-list-header {
   align-items: baseline;
   display: flex;

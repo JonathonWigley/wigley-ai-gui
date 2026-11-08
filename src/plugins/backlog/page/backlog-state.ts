@@ -87,6 +87,7 @@ export type BacklogAction =
   | { type: 'open' }
   | { type: 'toggle' }
   | { type: 'back' }
+  | { type: 'focusHomes' }
   | { type: 'focus'; focus: BacklogFocus }
   | { type: 'openHome'; root: string }
   | { type: 'select'; key: string }
@@ -386,7 +387,9 @@ export function backlogReducer(
     case 'toggle':
       return toggle(state, matcher);
     case 'back':
-      return back(state);
+      return state.focus === 'items' ? focusHomes(state) : state;
+    case 'focusHomes':
+      return focusHomes(state);
     case 'focus':
       return focusOn(state, action.focus, matcher);
     case 'openHome':
@@ -646,16 +649,26 @@ function expandablePath(row: BacklogRow): string | null {
   return row.kind === 'feature' ? row.feature.path : null;
 }
 
-// `l`: on the homes, opens the cursor home. On a row: a collapsed plan or
-// feature expands, an expanded one steps to its first task, and any other
-// row, or one with no tasks, moves focus to the detail.
+// Opens the side bar's cursor home with focus on its rows.
+function openCursorHome(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogState {
+  const home = orderedHomes(state)[state.homeCursor];
+  return home === undefined ? state : openHomeAt(state, home.root, matcher);
+}
+
+// `l`: on the homes, opens the cursor home, focus staying on the homes. On a
+// row: a collapsed plan or feature expands, an expanded one steps to its
+// first task, and any other row, or one with no tasks, moves focus to the
+// detail.
 function openOrStepIn(
   state: BacklogState,
   matcher: FuzzyMatcher,
 ): BacklogState {
   if (state.focus === 'homes') {
-    const home = orderedHomes(state)[state.homeCursor];
-    return home === undefined ? state : openHomeAt(state, home.root, matcher);
+    const opened = openCursorHome(state, matcher);
+    return opened === state ? state : { ...opened, focus: 'homes' };
   }
   const row = selectedRow(state, matcher);
   if (state.focus !== 'items' || row === null) {
@@ -682,11 +695,12 @@ function hasNoTasks(row: BacklogRow): boolean {
   return row.kind === 'feature' && row.feature.tasks.length === 0;
 }
 
-// Enter: on the homes, opens the cursor home. On a plan or feature, expands
-// or collapses its task rows; on any other row, moves focus to the detail.
+// Enter: on the homes, opens the cursor home and focuses its rows. On a plan
+// or feature, expands or collapses its task rows; on any other row, moves
+// focus to the detail.
 function toggle(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
   if (state.focus === 'homes') {
-    return openOrStepIn(state, matcher);
+    return openCursorHome(state, matcher);
   }
   const row = selectedRow(state, matcher);
   if (state.focus !== 'items' || row === null) {
@@ -699,9 +713,10 @@ function toggle(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
   return setExpanded(state, path, !state.expanded.includes(path));
 }
 
-// `h` from the rows returns focus to the homes, the cursor on the open home.
-function back(state: BacklogState): BacklogState {
-  if (state.focus !== 'items') {
+// Focus moves to the homes from the rows or the detail, the cursor on the
+// open home.
+function focusHomes(state: BacklogState): BacklogState {
+  if (state.focus === 'homes') {
     return state;
   }
   const index = orderedHomes(state).findIndex(

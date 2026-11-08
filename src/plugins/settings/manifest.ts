@@ -24,6 +24,11 @@ export const settingsManifest = definePlugin({
       group: 'settings',
       runsIn: 'page',
     },
+    openKeepingFocus: {
+      label: 'open the section, keep focus',
+      group: 'settings',
+      runsIn: 'page',
+    },
     edit: { label: 'edit the row', group: 'settings', runsIn: 'page' },
     reset: { label: 'reset to the default', group: 'settings', runsIn: 'page' },
     addBind: { label: 'add a key', group: 'settings', runsIn: 'page' },

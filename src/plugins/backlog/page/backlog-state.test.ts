@@ -456,7 +456,11 @@ describe('backlogReducer', () => {
       read: read(home(ROOT, [item('One')]), home(other, [item('Two')])),
     });
 
-    const inItems = run(loaded, { type: 'move', to: 'down' }, { type: 'open' });
+    const inItems = run(
+      loaded,
+      { type: 'move', to: 'down' },
+      { type: 'toggle' },
+    );
     const backInHomes = run(inItems, { type: 'back' });
 
     expect(inItems).toMatchObject({ focus: 'items', openRoot: other });
@@ -467,6 +471,56 @@ describe('backlogReducer', () => {
       homeCursor: 1,
     });
   });
+
+  it.each([
+    { action: 'open', focus: 'homes' },
+    { action: 'toggle', focus: 'items' },
+  ] as const)(
+    'backlogReducer_KeyOnHomes_OpensTheCursorHome: $action',
+    ({ action, focus }) => {
+      const other = '/home/other/docs/features';
+      const onSecondHome = run(
+        initialBacklogState(),
+        {
+          type: 'loaded',
+          read: read(home(ROOT, [item('One')]), home(other, [item('Two')])),
+        },
+        { type: 'move', to: 'down' },
+      );
+
+      const after = run(onSecondHome, { type: action });
+
+      expect(after).toMatchObject({ focus, openRoot: other, homeCursor: 1 });
+    },
+  );
+
+  // From the homes the cursor stays where it was moved; from main it moves
+  // to the open home.
+  it.each([
+    { from: 'items', steps: [], homeCursor: 1 },
+    {
+      from: 'detail',
+      steps: [{ type: 'focus', focus: 'detail' }],
+      homeCursor: 1,
+    },
+    { from: 'homes', steps: [{ type: 'back' }], homeCursor: 0 },
+  ] as const)(
+    'backlogReducer_FocusHomes_FromItemsOrDetail: $from',
+    ({ from, steps, homeCursor }) => {
+      const other = '/home/other/docs/features';
+      const state = run(
+        opened(home(ROOT, [item('One')]), home(other, [item('Two')])),
+        { type: 'openHome', root: other },
+        ...steps,
+      );
+      const cursorOnFirst = { ...state, homeCursor: 0 };
+
+      const after = run(cursorOnFirst, { type: 'focusHomes' });
+
+      expect(cursorOnFirst.focus).toBe(from);
+      expect(after).toMatchObject({ focus: 'homes', homeCursor });
+    },
+  );
 
   it('backlogReducer_ToggleOnPlan_ExpandsTaskRowsUnderItThenCollapses', () => {
     const state = run(

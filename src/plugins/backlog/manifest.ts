@@ -87,6 +87,7 @@ export const backlogManifest = definePlugin({
     confirmNo: { label: 'keep it', group: 'confirm', runsIn: 'page' },
   },
   scopes: {
+    homes: 'In the backlog homes',
     list: 'In the backlog list',
     detail: 'In a backlog detail',
     editor: 'In the follow-up editor',

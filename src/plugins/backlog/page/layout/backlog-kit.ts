@@ -9,7 +9,7 @@ import { backlogManifest } from '../../manifest';
 
 // The base scopes the view sets; the box, confirm and picker scopes are
 // pushed over them.
-export type BacklogBaseScope = 'list' | 'detail' | 'editor';
+export type BacklogBaseScope = 'homes' | 'list' | 'detail' | 'editor';
 
 // The scopes a part's keys fire in: a base scope for the panes and their rows,
 // a pushed one for the picker's rows and the prompts' bodies.

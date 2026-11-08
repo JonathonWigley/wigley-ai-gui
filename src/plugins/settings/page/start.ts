@@ -41,7 +41,6 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       toast: services.toast,
       setScope: (scope) => api.keys.setScope(scope),
       setFocusTarget: (target) => api.panes.setFocusTarget(target),
-      isSideBarShown: () => mode.sideBarShown(),
       pushScope: (scope) => api.keys.pushScope(scope),
       picker: services.picker,
       anchor: (element, command, scope, label) =>
@@ -54,7 +53,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       sectionPicked: () => mode.picked(),
     });
 
-    // `isSideBarShown`, `sectionShown` and `sectionPicked` read `mode` only
+    // `sectionShown` and `sectionPicked` read `mode` only
     // once the mode shows, after `add`: Settings mode is never the first mode
     // added. Focus leaves the side bar as it hides and moves to it as it opens
     // over the rows.
@@ -71,6 +70,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       hidden: () => undefined,
       sideBarHidden: () => view.sideBarHidden(),
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
+      focusSideBar: () => view.focusSideBar(),
       focusMain: () => view.focusMain(),
     });
 

@@ -212,6 +212,7 @@ export const defaultKeymap = {
         'docs.tree',
         'docs.doc',
         'docs.aside',
+        'backlog.homes',
         'backlog.list',
         'backlog.detail',
         'settings.sections',
@@ -613,6 +614,11 @@ export const defaultKeymap = {
     { keys: 'r', scope: 'settings.rows', command: 'settings.reset' },
     { keys: 'a', scope: 'settings.rows', command: 'settings.addBind' },
     { keys: 'd', scope: 'settings.rows', command: 'settings.removeBind' },
+    {
+      keys: 'l',
+      scope: 'settings.sections',
+      command: 'settings.openKeepingFocus',
+    },
     { keys: '<CR>', scope: 'settings.box', command: 'settings.boxAccept' },
     { keys: '<Esc>', scope: 'settings.box', command: 'settings.boxCancel' },
     { keys: 'j', scope: 'settings.picker', command: 'settings.pickerDown' },
@@ -629,12 +635,18 @@ export const defaultKeymap = {
     },
 
     // ── Backlog ────────────────────────────────────────────────────────────
-    { keys: 'j', scope: 'backlog.list', command: 'backlog.listDown' },
-    { keys: 'k', scope: 'backlog.list', command: 'backlog.listUp' },
-    { keys: 'gg', scope: 'backlog.list', command: 'backlog.listTop' },
-    { keys: 'G', scope: 'backlog.list', command: 'backlog.listBottom' },
-    { keys: 'l', scope: 'backlog.list', command: 'backlog.open' },
-    { keys: '<CR>', scope: 'backlog.list', command: 'backlog.toggle' },
+    // The homes share the list's moves and its repo keys.
+    ...(['backlog.homes', 'backlog.list'] as const).flatMap((scope) => [
+      { keys: 'j', scope, command: 'backlog.listDown' as const },
+      { keys: 'k', scope, command: 'backlog.listUp' as const },
+      { keys: 'gg', scope, command: 'backlog.listTop' as const },
+      { keys: 'G', scope, command: 'backlog.listBottom' as const },
+      { keys: 'l', scope, command: 'backlog.open' as const },
+      { keys: '<CR>', scope, command: 'backlog.toggle' as const },
+      // Uppercase, so the one step out of the app is never a lowercase slip.
+      { keys: 'C', scope, command: 'backlog.commit' as const },
+      { keys: 'R', scope, command: 'backlog.rescan' as const },
+    ]),
     { keys: 'h', scope: 'backlog.list', command: 'backlog.back' },
     { keys: '/', scope: 'backlog.list', command: 'backlog.filter' },
     { keys: 'a', scope: 'backlog.list', command: 'backlog.create' },
@@ -642,17 +654,17 @@ export const defaultKeymap = {
     { keys: 'd', scope: 'backlog.list', command: 'backlog.delete' },
     { keys: 't', scope: 'backlog.list', command: 'backlog.toggleAgentReady' },
     { keys: 'T', scope: 'backlog.list', command: 'backlog.pickTag' },
-    // Uppercase, so the one step out of the app is never a lowercase slip.
-    { keys: 'C', scope: 'backlog.list', command: 'backlog.commit' },
-    { keys: 'R', scope: 'backlog.list', command: 'backlog.rescan' },
     { keys: 'o', scope: 'backlog.list', command: 'backlog.openInDocs' },
-    // The list's scroll keys scroll the detail shown beside it.
-    ...(['backlog.list', 'backlog.detail'] as const).flatMap((scope) => [
-      { keys: '<C-j>', scope, command: 'backlog.lineDown' as const },
-      { keys: '<C-k>', scope, command: 'backlog.lineUp' as const },
-      { keys: '<C-S-j>', scope, command: 'backlog.halfPageDown' as const },
-      { keys: '<C-S-k>', scope, command: 'backlog.halfPageUp' as const },
-    ]),
+    // The homes' and the list's scroll keys scroll the detail shown beside
+    // them.
+    ...(['backlog.homes', 'backlog.list', 'backlog.detail'] as const).flatMap(
+      (scope) => [
+        { keys: '<C-j>', scope, command: 'backlog.lineDown' as const },
+        { keys: '<C-k>', scope, command: 'backlog.lineUp' as const },
+        { keys: '<C-S-j>', scope, command: 'backlog.halfPageDown' as const },
+        { keys: '<C-S-k>', scope, command: 'backlog.halfPageUp' as const },
+      ],
+    ),
     { keys: 'j', scope: 'backlog.detail', command: 'backlog.lineDown' },
     { keys: 'k', scope: 'backlog.detail', command: 'backlog.lineUp' },
     { keys: 'o', scope: 'backlog.detail', command: 'backlog.openInDocs' },

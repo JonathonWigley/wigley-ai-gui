@@ -33,6 +33,26 @@ const STALE_TIMEOUT_MS = 900;
 const SIDE_BAR_STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', ','], expect: '[page] side bar hidden' },
   { keys: [' ', 'k', ','], expect: '[page] side bar shown' },
+  {
+    keys: ['<A-h>'],
+    expect: '[settings] sections focused',
+    why: "Option+h at the rows' left edge reaches the side bar through the mode's focusSideBar.",
+  },
+  { keys: ['<A-l>'], expect: '[settings] rows focused' },
+  { keys: ['<A-h>', 'G', 'l'], expect: '[settings] section keymap' },
+  {
+    keys: ['g', 'g', 'Enter'],
+    expect: '[settings] section core',
+    alsoExpect: [/^\[settings\] rows focused$/],
+    why: 'l kept focus in the sections, so G and gg moved the sections cursor; Enter opens Core and focuses its rows.',
+  },
+  { keys: [' ', 'k', ','], expect: '[page] side bar hidden' },
+  {
+    keys: ['<A-h>'],
+    expect: '[page] no pane left',
+    why: 'A hidden side bar is no stop.',
+  },
+  { keys: [' ', 'k', ','], expect: '[page] side bar shown' },
 ];
 
 const NUMBER_BOX_STEPS: SelfTestStep[] = [
@@ -142,7 +162,7 @@ const DISABLED_PLUGINS_STEPS: SelfTestStep[] = [
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'side bar',
-    why: 'Space k , hides the side bar, focusing the rows, and shows it again.',
+    why: 'Space k , hides the side bar, focusing the rows, and shows it again; Option+h and Option+l move between the rows and the sections, Enter on a section opens it and focuses the rows, l opens it keeping focus, and with the side bar hidden Option+h stays put.',
     steps: SIDE_BAR_STEPS,
   },
   {

@@ -135,9 +135,12 @@ type ScopeCall =
 // open and its first follow-up selected. `calls` logs every `setScope`,
 // `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
 // the core's focus key toward `direction` on the last focus target set.
-// `targets` holds every drop target the view registered.
+// `targets` holds every drop target the view registered, `logged` every line
+// logged, and `homePicked` counts the homes picked.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
+  const logged: string[] = [];
+  const homePicked = vi.fn();
   const targets: DropTarget[] = [];
   let focusTarget: FocusTarget | null = null;
   const { host, created } = fakeEditorHost();
@@ -162,7 +165,7 @@ async function backlogSetup() {
     homeDir: '/home',
     uiState: { get: () => undefined, set: () => undefined },
     timers: { set: () => 0, clear: () => undefined },
-    log: () => undefined,
+    log: (line) => logged.push(line),
     toast: () => undefined,
     drops: {
       addTarget: (target) => {
@@ -205,18 +208,30 @@ async function backlogSetup() {
     run: () => undefined,
     isShown: () => true,
     revealSideBar: () => undefined,
-    homePicked: () => undefined,
+    homePicked,
     homeShown: () => undefined,
   });
   const sheet = asFake(view.sheet);
   sheet.isPageRoot = true;
   view.load();
   await settle();
-  view.commands.open();
+  view.commands.toggle();
   await settle();
+  homePicked.mockClear();
   const move = (direction: PaneDirection) =>
     focusTarget?.move(direction) ?? false;
-  return { view, created, anchors, overlays, sheet, calls, move, targets };
+  return {
+    view,
+    created,
+    anchors,
+    overlays,
+    sheet,
+    calls,
+    logged,
+    homePicked,
+    move,
+    targets,
+  };
 }
 
 function withUser(layout: BacklogLayout) {
@@ -456,7 +471,7 @@ describe('backlog pane targets', () => {
       name: 'sideBarOpenedOver',
       run: (setup) => setup.view.sideBarOpenedOver(),
       last: [
-        ['setScope', 'list'],
+        ['setScope', 'homes'],
         ['setResizeTarget', null],
         ['setFocusTarget', 'target'],
       ],
@@ -484,7 +499,8 @@ describe('backlog pane targets', () => {
     { from: 'detail', direction: 'left', scope: 'list', moved: true },
     { from: 'list', direction: 'left', scope: 'list', moved: false },
     { from: 'detail', direction: 'right', scope: 'detail', moved: false },
-    { from: 'homes', direction: 'right', scope: 'list', moved: false },
+    { from: 'homes', direction: 'right', scope: 'list', moved: true },
+    { from: 'homes', direction: 'left', scope: 'homes', moved: false },
     { from: 'list', direction: 'up', scope: 'list', moved: false },
     { from: 'detail', direction: 'down', scope: 'detail', moved: false },
   ])(
@@ -504,6 +520,62 @@ describe('backlog pane targets', () => {
       expect(result).toBe(moved);
       expect(scopes.at(-1)?.[1]).toBe(scope);
       expect(setup.calls.length > before).toBe(moved);
+    },
+  );
+
+  it('focusTarget_EditorOpen_IgnoresEveryMove', async () => {
+    const setup = await backlogSetup();
+    setup.view.commands.create();
+    const before = setup.calls.length;
+    const loggedBefore = setup.logged.length;
+    const directions: PaneDirection[] = ['left', 'right', 'up', 'down'];
+
+    const results = directions.map((direction) => setup.move(direction));
+
+    expect(results).toEqual([true, true, true, true]);
+    expect(setup.calls.slice(before)).toEqual([]);
+    expect(setup.logged.slice(loggedBefore)).toEqual(
+      directions.map(() => 'pane keys ignored: the editor is open'),
+    );
+  });
+
+  it.each<{
+    last: string;
+    run(setup: Awaited<ReturnType<typeof backlogSetup>>): void;
+  }>([
+    {
+      last: 'list',
+      run: (setup) => {
+        setup.move('right');
+        setup.move('left');
+      },
+    },
+    { last: 'detail', run: (setup) => setup.move('right') },
+  ])('focusMain_ReturnsToMainsLastPane: $last', async ({ last, run }) => {
+    const setup = await backlogSetup();
+    run(setup);
+
+    setup.view.focusSideBar();
+    const scopeOnHomes = setup.calls.at(-3);
+    setup.view.focusMain();
+
+    const scopes = setup.calls.filter((call) => call[0] === 'setScope');
+    expect(scopeOnHomes).toEqual(['setScope', 'homes']);
+    expect(scopes.at(-1)?.[1]).toBe(last);
+  });
+
+  it.each([
+    { command: 'open', picked: 0 },
+    { command: 'toggle', picked: 1 },
+  ] as const)(
+    'homeKeys_PickClosesOverlayOnlyOnEnter: $command',
+    async ({ command, picked }) => {
+      const setup = await backlogSetup();
+      setup.view.sideBarOpenedOver();
+
+      setup.view.commands[command]();
+
+      expect(setup.homePicked).toHaveBeenCalledTimes(picked);
     },
   );
 });

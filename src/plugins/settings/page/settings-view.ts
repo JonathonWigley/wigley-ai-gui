@@ -186,9 +186,6 @@ export interface SettingsViewDeps {
   // rows; the view calls it after each `setScope`, since a change of the set
   // scope drops it.
   setFocusTarget(target: FocusTarget): void;
-  // True while the side bar lies beside or over the rows: the focus keys
-  // move to the sections only then.
-  isSideBarShown(): boolean;
   pushScope(scope: 'box'): PushedScope;
   picker: ListPickerService;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
@@ -202,7 +199,8 @@ export interface SettingsViewDeps {
   ): Disposable;
   // The open section's title, for the title bar.
   sectionShown(title: string): void;
-  // Hears each section the user opens from the side bar, by click or Enter.
+  // Hears each section the user picks from the side bar, by click or Enter;
+  // `l` opens one without picking it.
   sectionPicked(): void;
 }
 
@@ -212,6 +210,7 @@ export type SettingsCommand =
   | 'top'
   | 'bottom'
   | 'open'
+  | 'openKeepingFocus'
   | 'edit'
   | 'reset'
   | 'addBind'
@@ -232,7 +231,8 @@ export type SettingsCommand =
 // `setLayouts`. `load` reads the schema and both files; `reread` reads the
 // files again and redraws (the channel's `changed`); `shown` runs as the mode
 // shows: the first time it opens the first section with focus on the side
-// bar, and each time it sets the scope where focus was left. The keys show
+// bar, and each time it sets the scope where focus was left. Each change of
+// focus logs `sections focused` or `rows focused`. The keys show
 // where they act: the cursor row's actions in its layout's `rowActions` slot.
 // `setLayouts` draws everything again in the new layouts, keeping the cursor,
 // the open section, the focus side, an open box or filter and an open picker.
@@ -247,6 +247,8 @@ export interface SettingsView {
   sideBarHidden(): void;
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
+  // The core's area chain reached the side bar: focus moves to the sections.
+  focusSideBar(): void;
   // Main takes the keys back: focus moves to the rows.
   focusMain(): void;
   commands: Record<SettingsCommand, () => void>;
@@ -623,21 +625,23 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       deps.toast(errorText(error), 'error');
     });
 
-  // `right` from the sections focuses the rows and `left` from the rows the
-  // sections while the side bar shows; every other move leaves focus where it
-  // is.
+  // `right` from the sections focuses the rows; every other move leaves focus
+  // where it is, so the core reaches the side bar from the rows' left edge.
   const focusTarget: FocusTarget = {
     move(direction) {
       if (focus === 'sections' && direction === 'right') {
         focusRows();
         return true;
       }
-      if (focus === 'rows' && direction === 'left' && deps.isSideBarShown()) {
-        focusSections();
-        return true;
-      }
       return false;
     },
+  };
+
+  const setFocus = (next: 'sections' | 'rows') => {
+    if (focus !== next) {
+      log(`${next} focused`);
+    }
+    focus = next;
   };
 
   // Each focus change closes an open filter first: `setScope` leaves the
@@ -647,7 +651,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       logFilter();
       closeFilter();
     }
-    focus = 'rows';
+    setFocus('rows');
     deps.setScope('rows');
     deps.setFocusTarget(focusTarget);
     rowsSheet.focus();
@@ -659,7 +663,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       logFilter();
       closeFilter();
     }
-    focus = 'sections';
+    setFocus('sections');
     deps.setScope('sections');
     deps.setFocusTarget(focusTarget);
     sections.element.focus();
@@ -1013,9 +1017,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       if (focus === 'sections') {
         openSection(sectionsCursor);
         deps.sectionPicked();
+        focusRows();
         return;
       }
       runQuietly('open', true)();
+    },
+    openKeepingFocus() {
+      if (focus === 'sections') {
+        openSection(sectionsCursor);
+      }
     },
     edit: runQuietly('edit', true),
     reset: runQuietly('reset', false),
@@ -1095,6 +1105,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       }
     },
     sideBarOpenedOver: focusSections,
+    focusSideBar: focusSections,
     focusMain: focusRows,
     commands,
   };
