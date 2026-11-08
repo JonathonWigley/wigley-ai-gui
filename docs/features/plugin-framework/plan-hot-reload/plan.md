@@ -342,3 +342,4 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - vitest whole suite after task 11 (HEAD 44e39dda): 539 files, 10378 tests passed, no type errors; filtered self-tests and drive checks are task 13's
 - filtered self-tests at 8916ae71, one run each: settings, forms, primer, docs, backlog, agent-lines, agent-skills, agent-strip, chat, notes, sessions, unity-pool, usage, workflow-heavy, workflow-light, workflow-medium — all passed first run (logs /tmp/claude-hot-reload/selftest/<id>.log)
 - after the task 13 fixes (22daf095): vitest whole suite 539 files, 10382 tests passed, no type errors; lint clean; fix workers re-ran self-tests settings, sessions, chat — all passed
+- After review round 1 fixes (adf91312): typecheck, lint clean; whole Vitest 535 files 10407 tests pass; filtered self-tests settings, sessions, chat, notes, docs, forms, primer pass
