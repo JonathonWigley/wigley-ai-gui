@@ -758,7 +758,8 @@ message. The request is
 `control_response` whose `response.response` holds the data.
 
 - `get_context_usage` keys: `agents`, `apiUsage`, `autoCompactThreshold`, `autocompactSource`, `categories` (each
-  `name`, `kind` of `used`, `free`, `buffer` or `deferred`, and `tokens`), `gridRows`, `isAutoCompactEnabled`,
+  `id` (`system_prompt`, `memory_files`, `messages`, …), `name`, `color`, `kind` of `used`, `free`, `buffer` or
+  `deferred`, and `tokens`), `gridRows`, `isAutoCompactEnabled`,
   `maxTokens`, `mcpInstructions`, `mcpTools`, `memoryFiles`, `messageBreakdown`, `model`, `percentage`,
   `rawMaxTokens`, `skills`, `slashCommands`, `totalTokens`. The `used` categories sum to `totalTokens`. Each category
   that lists items does so beside it: `memoryFiles` (`path`, `tokens`), `skills.skillFrontmatter` (`name`, `tokens`),

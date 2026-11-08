@@ -1156,7 +1156,15 @@ function answerControlResponse(
       settleAfterSize(state, totalTokens, at, effects);
     }
     pushUsage(state, at, effects);
-    const breakdown = contextBreakdownOf(response.response, at);
+    const configuredLimit = configuredAutocompactLimit(
+      state.usage.configuredPercent,
+      state.usage.contextWindow,
+    );
+    const breakdown = contextBreakdownOf(
+      response.response,
+      at,
+      configuredLimit,
+    );
     if (breakdown !== null) {
       effects.push({ kind: 'agentEvent', event: breakdown });
     }

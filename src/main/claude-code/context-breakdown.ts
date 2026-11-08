@@ -151,11 +151,13 @@ function splitMessages(source: ContextSource, reply: Json): ContextSource[] {
 }
 
 // The `contextBreakdown` event a `get_context_usage` reply's data makes: each `used` category a source, Messages split
-// into its parts, `deferred` categories counted apart, and `free` and `buffer` left out. Null when the reply has no
-// categories.
+// into its parts, `deferred` categories counted apart, and `free` and `buffer` left out. `configuredLimit` is the
+// profile's own autocompact limit, which the reply does not show; the reply's limit stands when it is null. Null when
+// the reply has no categories.
 export function contextBreakdownOf(
   reply: Json,
   at: number,
+  configuredLimit: number | null,
 ): ContextBreakdownAgentEvent | null {
   const categories = asArray(reply.categories).map(asJson);
   if (categories.length === 0) {
@@ -164,14 +166,14 @@ export function contextBreakdownOf(
   const sources: ContextSource[] = [];
   let deferredTokens = 0;
   for (const category of categories) {
-    const id = asString(category.id);
+    const id = asString(category.id) || asString(category.name);
     const tokens = numberOr0(category.tokens);
     if (category.kind === 'deferred') {
       deferredTokens += tokens;
     } else if (category.kind === 'used') {
       const source = {
         id,
-        label: asString(category.name) || id,
+        label: asString(category.name),
         tokens,
         items: categoryItems(id, reply),
       };
@@ -187,7 +189,7 @@ export function contextBreakdownOf(
     at,
     totalTokens: numberOrNull(reply.totalTokens) ?? sum,
     contextWindow: numberOrNull(reply.maxTokens),
-    autocompactAt: numberOrNull(reply.autoCompactThreshold),
+    autocompactAt: configuredLimit ?? numberOrNull(reply.autoCompactThreshold),
     deferredTokens,
     sources: byTokens(sources),
   };

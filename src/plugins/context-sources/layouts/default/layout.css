@@ -55,8 +55,8 @@
   display: flex;
   justify-content: space-between;
   gap: var(--wg-space-2);
-  font-family: var(--wg-font-mono);
   font-size: var(--wg-text-11);
+  font-variant-numeric: tabular-nums;
   color: var(--wg-fg-tertiary);
 }
 
@@ -108,7 +108,6 @@
 [data-layout-owner='context-sources'][data-layout='default']
   .context-sources-share {
   flex: none;
-  font-family: var(--wg-font-mono);
   font-size: var(--wg-text-11);
   font-variant-numeric: tabular-nums;
   text-align: end;
@@ -181,4 +180,54 @@
 [data-layout-owner='context-sources'][data-layout='default']
   [data-position='10'] {
   background: var(--wg-border-strong);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='1'] {
+  background: var(--wg-context-sources-series-1);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='2'] {
+  background: var(--wg-context-sources-series-2);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='3'] {
+  background: var(--wg-context-sources-series-3);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='4'] {
+  background: var(--wg-context-sources-series-4);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='5'] {
+  background: var(--wg-context-sources-series-5);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='6'] {
+  background: var(--wg-context-sources-series-6);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='7'] {
+  background: var(--wg-context-sources-series-7);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='8'] {
+  background: var(--wg-context-sources-series-8);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='9'] {
+  background: var(--wg-context-sources-series-9);
+}
+
+[data-layout-owner='context-sources'][data-layout='default']
+  [data-position='10'] {
+  background: var(--wg-context-sources-series-10);
 }

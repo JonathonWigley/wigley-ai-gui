@@ -373,6 +373,24 @@ describe('agentsMainPart', () => {
     );
   });
 
+  it('agentLog_ContextBreakdown_NoLogWritten', async () => {
+    const agents = startAgentsPart();
+
+    agents.agentEvent({
+      type: 'contextBreakdown',
+      agentId: 'main',
+      at: 0,
+      totalTokens: 10,
+      contextWindow: null,
+      autocompactAt: null,
+      deferredTokens: 0,
+      sources: [],
+    });
+    await settled();
+
+    expect(await agents.data.list('logs')).toEqual([]);
+  });
+
   it.each([
     {
       given: 'the chat preview host',

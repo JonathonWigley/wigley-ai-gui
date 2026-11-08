@@ -131,8 +131,10 @@ means something.
 | Error / removed        | `status-error`                                                          |                                                                                                                     |
 | Text selection, cursor | `selection-background`, `cursor`, `editor-active-line`                  | Catppuccin convention; the active line's band in a focused document editor                                          |
 | Changed sections       | `diff-inserted-mark`, `diff-removed-mark`, `diff-changed-mark` (peach)  | The mark on an inserted, removed or changed section in rendered markdown                                            |
+| Data series            | a plugin's `series-<n>` tokens (`context-sources.series-1` … `-10`)     | One series of a chart, named in its legend; never the accent's, a link's or a status's hue                          |
 
-- **One accent does brand work.** Any other colour on screen at rest must mean a status.
+- **One accent does brand work.** Any other colour on screen at rest must mean a status, or name a data series
+  its legend labels.
 - **Status colours only where status exists**, and as small marks at full strength (dots, icons,
   2px indicators, text). A larger area takes the `*-tint` token (10–18% alpha). A pastel as a large
   fill is too loud.

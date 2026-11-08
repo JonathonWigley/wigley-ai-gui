@@ -60,7 +60,7 @@ const REPLY = {
 
 describe('contextBreakdownOf', () => {
   it('reply_MakesUsedCategoriesSourcesLargestFirst_SplitsMessages_CountsDeferred', () => {
-    const event = contextBreakdownOf(REPLY, AT);
+    const event = contextBreakdownOf(REPLY, AT, null);
 
     expect(event).toEqual({
       type: 'contextBreakdown',
@@ -129,7 +129,7 @@ describe('contextBreakdownOf', () => {
     ],
     ['no breakdown', undefined],
   ])('messages_%s_SourcesStillSumToTotal', (_case, messageBreakdown) => {
-    const event = contextBreakdownOf({ ...REPLY, messageBreakdown }, AT);
+    const event = contextBreakdownOf({ ...REPLY, messageBreakdown }, AT, null);
 
     const sum = event?.sources.reduce((total, { tokens }) => total + tokens, 0);
     expect(sum).toBe(1600);
@@ -139,6 +139,7 @@ describe('contextBreakdownOf', () => {
     const event = contextBreakdownOf(
       { ...REPLY, messageBreakdown: undefined },
       AT,
+      null,
     );
 
     expect(event?.sources[0]).toEqual({
@@ -149,7 +150,27 @@ describe('contextBreakdownOf', () => {
     });
   });
 
+  it.each([
+    ['no configured limit', null, 9000],
+    ['a configured limit', 3000, 3000],
+  ])('autocompactAt_%s_IsThatLimit', (_case, configured, autocompactAt) => {
+    expect(contextBreakdownOf(REPLY, AT, configured)?.autocompactAt).toBe(
+      autocompactAt,
+    );
+  });
+
+  it('categoryWithNoId_TakesItsNameAsId', () => {
+    const reply = {
+      totalTokens: 10,
+      categories: [{ name: 'Hooks', tokens: 10, kind: 'used' }],
+    };
+
+    expect(contextBreakdownOf(reply, AT, null)?.sources).toEqual([
+      { id: 'Hooks', label: 'Hooks', tokens: 10, items: [] },
+    ]);
+  });
+
   it('noCategories_IsNull', () => {
-    expect(contextBreakdownOf({ totalTokens: 5 }, AT)).toBeNull();
+    expect(contextBreakdownOf({ totalTokens: 5 }, AT, null)).toBeNull();
   });
 });

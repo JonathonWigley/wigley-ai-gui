@@ -92,7 +92,7 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 
 - **Main** hears `chat.agentEvent`, folds each event into the roster of its process's host session id under its row (a
   cleared row's old process ending drops only its own subagents and tasks) with a pure reducer, appends the event as one JSON line
-  to `logs/<host session id>.jsonl` in its plugin data, and sends each changed roster to the page over its channel. A
+  to `logs/<host session id>.jsonl` in its plugin data (all but a `contextBreakdown`, several KB after every turn), and sends each changed roster to the page over its channel. A
   session's `sessionEnded` finishes every subagent still listed: a process that exits or crashes mid-subagent sends no
   `agentFinished`. The Claude adapter finishes a subagent itself on its `task_notification` or its non-launch
   `tool_result`, whichever comes first: on Claude 2.1.316 a subagent runs in the background by default, so its Agent

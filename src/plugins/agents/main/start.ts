@@ -43,8 +43,9 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
   };
 }
 
-// Hears chat's agent events: logs each in plugin data (all but replayed events
-// and the chat layout preview's sample events) and folds it, replayed or not,
+// Hears chat's agent events: logs each in plugin data (all but replayed events,
+// the chat layout preview's sample events and context breakdowns, each several
+// KB after every turn, which context-sources keeps the last of) and folds it, replayed or not,
 // into the roster of its process's host session id, writing `agents.rosters` for
 // each row whose roster changed: every host id's subagents, tasks and skills in
 // the row, each list in fold order. A host id's roster is dropped once it lists no
@@ -83,7 +84,8 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
       'chat.agentEvent',
       ({ sessionId, hostSessionId, event, replayed }) => {
         const isPreviewHost = hostSessionId === CHAT_PREVIEW_HOST_ID;
-        if (!replayed && !isPreviewHost) {
+        const isBreakdown = event.type === 'contextBreakdown';
+        if (!replayed && !isPreviewHost && !isBreakdown) {
           void agentLog.append(hostSessionId, event);
         }
         const hosts = rosters.get(sessionId) ?? new Map<string, Roster>();

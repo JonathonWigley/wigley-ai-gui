@@ -249,7 +249,8 @@ export interface ContextSource {
 
 // Where the main agent's context comes from, as the harness reports it. `sources` hold only what is in context now,
 // largest first, and sum to `totalTokens`; `deferredTokens` counts what the harness can load on demand and has not
-// (Claude's deferred tools). `contextWindow` and `autocompactAt` are null when the harness reports none.
+// (Claude's deferred tools). `autocompactAt` is the limit compaction runs at, the profile's own when it sets one;
+// `contextWindow` and `autocompactAt` are null when the harness reports none.
 export interface ContextBreakdownAgentEvent {
   type: 'contextBreakdown';
   agentId: string;
