@@ -1,4 +1,5 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Agent sessions: the relay each one connects through, and Sessions mode, its
 // sidebar of session rows beside chat panes, each showing one session's tabs.
@@ -127,10 +128,7 @@ export const sessionsManifest = definePlugin({
       group: 'panes',
       runsIn: 'page',
     },
-    pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },
-    pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
-    pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
-    pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    ...LIST_PICKER_COMMANDS,
     renameAccept: { label: 'rename', group: 'rename', runsIn: 'page' },
     renameCancel: { label: 'cancel', group: 'rename', runsIn: 'page' },
     openPreview: {

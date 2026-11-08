@@ -5,6 +5,7 @@ import type {
   DrawRowInput,
   ListPicker,
 } from '../../contracts/list-picker';
+import type { ListPickerCommand } from '../list-picker-commands';
 import type { PluginLog } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
 import { element } from './dom';
@@ -15,6 +16,7 @@ import './list-picker.css';
 import {
   filterPicker,
   movePicker,
+  movePickerToEdge,
   openPicker,
   type PickerState,
   visibleIndexes,
@@ -29,11 +31,41 @@ export interface ListPickerDeps {
   matcher: FuzzyMatcher;
   // Adds the filter box above the list when given.
   filterEditor?: EditorHost;
+  // The `/ filter` key drawn at the title line's end, ahead of the request's
+  // `headerEnd`; asked on each `open` of a list with a filter editor.
+  filterHint?(): HTMLElement | null;
+}
+
+// Each list picker command run on its method, for a plugin's command handlers.
+export function listPickerCommands(
+  picker: Pick<
+    ListPicker,
+    | 'down'
+    | 'up'
+    | 'top'
+    | 'bottom'
+    | 'choose'
+    | 'cancel'
+    | 'focusFilter'
+    | 'leaveFilter'
+  >,
+): Record<ListPickerCommand, () => void> {
+  return {
+    pickerDown: () => picker.down(),
+    pickerUp: () => picker.up(),
+    pickerTop: () => picker.top(),
+    pickerBottom: () => picker.bottom(),
+    pickerChoose: () => picker.choose(),
+    pickerCancel: () => picker.cancel(),
+    pickerFilter: () => picker.focusFilter(),
+    pickerList: () => picker.leaveFilter(),
+  };
 }
 
 // The open request with its item type erased: the list reads only labels and
 // hands the chosen index back.
 interface OpenRequest {
+  title: string;
   chooseAt(index: number): void;
   cancelled: (() => void) | null;
   cursorEndAt(index: number): HTMLElement | null;
@@ -179,10 +211,13 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     drawnRows.set(index, next);
   };
 
-  // Moves the cursor by `step`, drawing only the rows it left and reached.
-  const moveCursor = (step: 1 | -1) => {
+  // Moves the cursor by `move`, drawing only the rows it left and reached.
+  const moveCursor = (move: (from: PickerState) => PickerState) => {
+    if (request === null) {
+      return;
+    }
     const left = state.cursor;
-    state = movePicker(state, step, deps.matcher);
+    state = move(state);
     if (state.cursor === left) {
       return;
     }
@@ -239,6 +274,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       }
       filter?.setText('');
       request = {
+        title: next.title,
         chooseAt: (index) => next.chosen(next.items[index]),
         cancelled: next.cancelled ?? null,
         cursorEndAt: (index) => next.cursorEnd?.(next.items[index]) ?? null,
@@ -254,8 +290,11 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
         next.name && next.items.map(next.name),
       );
       title.textContent = next.title;
+      const filterHint = filter === null ? null : deps.filterHint?.();
       head.replaceChildren(
-        ...(next.headerEnd ? [title, next.headerEnd] : [title]),
+        ...[title, filterHint, next.headerEnd].filter(
+          (part): part is HTMLElement => part != null,
+        ),
       );
       panel.setAttribute('aria-label', next.title);
       openFloatingPanel(panel, layer);
@@ -266,10 +305,16 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     cursorIndex: () =>
       request === null || state.cursor < 0 ? null : state.cursor,
     down() {
-      moveCursor(1);
+      moveCursor((from) => movePicker(from, 1, deps.matcher));
     },
     up() {
-      moveCursor(-1);
+      moveCursor((from) => movePicker(from, -1, deps.matcher));
+    },
+    top() {
+      moveCursor((from) => movePickerToEdge(from, 'first', deps.matcher));
+    },
+    bottom() {
+      moveCursor((from) => movePickerToEdge(from, 'last', deps.matcher));
     },
     choose() {
       if (request === null || state.cursor < 0) {
@@ -285,12 +330,20 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       hide();
     },
     focusFilter() {
-      if (request !== null) {
-        filter?.focus({ insertAtEnd: true });
+      if (request !== null && filter !== null) {
+        filter.focus({ insertAtEnd: true });
+        deps.log(`picker filter: ${request.title}`);
       }
     },
     leaveFilter() {
-      filter?.blur();
+      if (filter === null) {
+        return;
+      }
+      const boxHeldFocus = filterBox.contains(document.activeElement);
+      filter.blur();
+      if (request !== null && boxHeldFocus) {
+        deps.log(`picker list: ${request.title}`);
+      }
     },
     redraw() {
       if (request !== null) {

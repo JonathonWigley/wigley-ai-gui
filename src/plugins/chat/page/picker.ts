@@ -62,8 +62,8 @@ export interface PickerHandle {
 // `open` returns the request's handle, so its opener can tell whether its
 // own request is still the open one.
 // `focusFilter` types into the filter box, and `leaveFilter` leaves it with
-// the filter kept. The header ends in the open scope's keys (`/ filter`, and
-// `. archived` in `resume`), and in `resume` the cursor row ends in
+// the filter kept. The header ends in `/ filter`, then `. archived` in
+// `resume`, and in `resume` the cursor row ends in
 // `x archive` or `x restore` by its item's archive state. Each row draws
 // through the chat layout's `pickerRow` part and each section heading through
 // `pickerHeading`, their keys in the open scope, and the open list draws again
@@ -76,6 +76,8 @@ export interface Picker {
   cursorIndex(): number | null;
   down(): void;
   up(): void;
+  top(): void;
+  bottom(): void;
   pick(): void;
   close(): void;
   closeSessionBound(): void;
@@ -111,14 +113,10 @@ export function createPicker(deps: PickerDeps): Picker {
     });
     return hint;
   };
-  const resumeHeader = element('span', 'chat-picker-keys');
-  resumeHeader.append(
-    anchored('pickerFilter', 'resume', 'filter'),
-    anchored('showArchived', 'resume', 'archived'),
-  );
-  const headers: Record<PickerScope, HTMLElement> = {
-    picker: anchored('pickerFilter', 'picker', 'filter'),
-    resume: resumeHeader,
+  // The shared picker draws `/ filter` ahead of these.
+  const headers: Record<PickerScope, HTMLElement | null> = {
+    picker: null,
+    resume: anchored('showArchived', 'resume', 'archived'),
   };
   const cursorPrompts: Record<ArchiveState, HTMLElement> = {
     live: anchored('toggleArchive', 'resume', 'archive'),
@@ -176,6 +174,8 @@ export function createPicker(deps: PickerDeps): Picker {
     cursorIndex: () => list.cursorIndex(),
     down: () => list.down(),
     up: () => list.up(),
+    top: () => list.top(),
+    bottom: () => list.bottom(),
     pick: () => list.choose(),
     close: () => list.cancel(),
     closeSessionBound() {

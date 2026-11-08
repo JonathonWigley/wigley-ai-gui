@@ -48,6 +48,7 @@ import type {
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import { createReducerStore } from '../../../shared/page/reducer-store';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -340,7 +341,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   contentSheet.classList.add('backlog-sheet');
   contentSheet.append(split.element);
 
-  const picker = deps.picker.create();
+  const picker = deps.picker.create({ filter: true });
 
   // A prompt's `drawBody`: the layout's `confirmBody` for `kind`, with the
   // prompt's own buttons; each kind's last body draw is disposed as it draws
@@ -1308,10 +1309,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     leaveBox: () => followupEditor.leave(),
     nextField: () => followupEditor.step(1),
     previousField: () => followupEditor.step(-1),
-    pickerDown: () => picker.down(),
-    pickerUp: () => picker.up(),
-    pickerChoose: () => picker.choose(),
-    pickerCancel: () => picker.cancel(),
+    ...listPickerCommands(picker),
     boxAccept() {
       if (filterScope !== null) {
         closeFilter();

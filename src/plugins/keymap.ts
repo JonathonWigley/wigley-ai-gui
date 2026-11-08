@@ -11,6 +11,7 @@ import type {
   PANE_RESIZE_COMMANDS,
 } from '../contracts/panes';
 import type { QualifiedCommandId, QualifiedScopeId } from '../contracts/plugin';
+import type { ListPickerCommand } from '../shared/list-picker-commands';
 import { type builtInManifests, DIGITS } from './manifests';
 
 type BuiltInManifest = (typeof builtInManifests)[number];
@@ -148,36 +149,57 @@ function chatBoxBinds() {
   ];
 }
 
-// The chat's picker and session list each hold the same list keys.
-function chatListPageBinds(scope: 'chat.picker' | 'chat.resume') {
-  return [
-    { keys: 'j', scope, command: 'chat.pickerDown' as const },
-    { keys: 'k', scope, command: 'chat.pickerUp' as const },
-    { keys: '<CR>', scope, command: 'chat.pickerPick' as const },
-    { keys: '<Esc>', scope, command: 'chat.pickerClose' as const },
-    { keys: '/', scope, command: 'chat.pickerFilter' as const },
-  ];
-}
+// Every list picker's scope, each bound to the shared list keys by
+// `listPickerBinds`; a new picker scope joins this list.
+export const LIST_PICKER_SCOPES = [
+  'sessions.picker',
+  'chat.picker',
+  'chat.resume',
+  'docs.picker',
+  'settings.picker',
+  'backlog.picker',
+  'notes.picker',
+] as const;
 
-// `<CR>` picks in insert mode too, so Enter in the filter box picks.
-function chatListBoxBinds(scope: 'chat.picker' | 'chat.resume') {
+type ListPickerScope = (typeof LIST_PICKER_SCOPES)[number];
+
+// The plugin a picker scope belongs to.
+type PickerPlugin<S extends ListPickerScope> = S extends `${infer P}.${string}`
+  ? P
+  : never;
+
+// The shared list keys in one picker scope: `<CR>` chooses in insert mode
+// too, so Enter in the filter box chooses, and Esc in the box's normal mode
+// leaves it for the list.
+function listPickerBinds<S extends ListPickerScope>(scope: S) {
+  const plugin = scope.slice(0, scope.indexOf('.')) as PickerPlugin<S>;
+  const command = <C extends ListPickerCommand>(id: C) =>
+    `${plugin}.${id}` as `${PickerPlugin<S>}.${C}`;
   return [
+    { keys: 'j', scope, command: command('pickerDown') },
+    { keys: 'k', scope, command: command('pickerUp') },
+    { keys: 'gg', scope, command: command('pickerTop') },
+    { keys: 'G', scope, command: command('pickerBottom') },
+    { keys: '<CR>', scope, command: command('pickerChoose') },
+    { keys: 'l', scope, command: command('pickerChoose') },
+    { keys: '/', scope, command: command('pickerFilter') },
+    { keys: '<Esc>', scope, command: command('pickerCancel') },
     {
       keys: '<CR>',
       scope,
-      command: 'chat.pickerPick' as const,
+      command: command('pickerChoose'),
       where: 'box' as const,
     },
     {
       keys: '<CR>',
       scope,
-      command: 'chat.pickerPick' as const,
+      command: command('pickerChoose'),
       mode: 'insert' as const,
     },
     {
       keys: '<Esc>',
       scope,
-      command: 'chat.pickerList' as const,
+      command: command('pickerList'),
       where: 'box' as const,
     },
   ];
@@ -300,18 +322,6 @@ export const defaultKeymap = {
     { keys: '<C-A-j>', scope: 'any', command: 'sessions.swapPaneDown' },
     { keys: '<C-A-k>', scope: 'any', command: 'sessions.swapPaneUp' },
     { keys: '<C-A-l>', scope: 'any', command: 'sessions.swapPaneRight' },
-    { keys: 'j', scope: 'sessions.picker', command: 'sessions.pickerDown' },
-    { keys: 'k', scope: 'sessions.picker', command: 'sessions.pickerUp' },
-    {
-      keys: '<CR>',
-      scope: 'sessions.picker',
-      command: 'sessions.pickerChoose',
-    },
-    {
-      keys: '<Esc>',
-      scope: 'sessions.picker',
-      command: 'sessions.pickerCancel',
-    },
     {
       keys: '<CR>',
       scope: 'sessions.rename',
@@ -435,8 +445,6 @@ export const defaultKeymap = {
     { keys: 'e', scope: 'chat.chat', command: 'chat.pickEffort' },
     { keys: 'o', scope: 'chat.chat', command: 'chat.pickModel' },
     { keys: 'c', scope: 'chat.chat', command: 'chat.pickControl' },
-    ...chatListPageBinds('chat.picker'),
-    ...chatListPageBinds('chat.resume'),
     { keys: 'x', scope: 'chat.resume', command: 'chat.toggleArchive' },
     { keys: '.', scope: 'chat.resume', command: 'chat.showArchived' },
     { keys: '<D-Enter>', scope: 'chat.reason', command: 'chat.submitReason' },
@@ -480,8 +488,6 @@ export const defaultKeymap = {
       command: 'chat.pickControl',
       where: 'box',
     },
-    ...chatListBoxBinds('chat.picker'),
-    ...chatListBoxBinds('chat.resume'),
     {
       keys: '<CR>',
       scope: 'chat.reason',
@@ -628,11 +634,6 @@ export const defaultKeymap = {
     { keys: 'r', scope: 'docs.conflict', command: 'docs.conflictReload' },
     { keys: 'o', scope: 'docs.conflict', command: 'docs.conflictOverwrite' },
     { keys: '<Esc>', scope: 'docs.conflict', command: 'docs.conflictCancel' },
-    { keys: 'j', scope: 'docs.picker', command: 'docs.pickerDown' },
-    { keys: 'k', scope: 'docs.picker', command: 'docs.pickerUp' },
-    { keys: '<CR>', scope: 'docs.picker', command: 'docs.pickerChoose' },
-    { keys: 'l', scope: 'docs.picker', command: 'docs.pickerChoose' },
-    { keys: '<Esc>', scope: 'docs.picker', command: 'docs.pickerCancel' },
     { keys: '<Tab>', scope: 'docs.box', command: 'docs.boxComplete' },
     { keys: '<CR>', scope: 'docs.box', command: 'docs.boxAccept' },
     { keys: '<Esc>', scope: 'docs.box', command: 'docs.boxCancel' },
@@ -661,18 +662,6 @@ export const defaultKeymap = {
     },
     { keys: '<CR>', scope: 'settings.box', command: 'settings.boxAccept' },
     { keys: '<Esc>', scope: 'settings.box', command: 'settings.boxCancel' },
-    { keys: 'j', scope: 'settings.picker', command: 'settings.pickerDown' },
-    { keys: 'k', scope: 'settings.picker', command: 'settings.pickerUp' },
-    {
-      keys: '<CR>',
-      scope: 'settings.picker',
-      command: 'settings.pickerChoose',
-    },
-    {
-      keys: '<Esc>',
-      scope: 'settings.picker',
-      command: 'settings.pickerCancel',
-    },
 
     // ── Backlog ────────────────────────────────────────────────────────────
     // The homes share the list's moves and its repo keys.
@@ -742,11 +731,6 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'backlog.confirm', command: 'backlog.confirmYes' },
     { keys: 'n', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
     { keys: '<Esc>', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
-    { keys: 'j', scope: 'backlog.picker', command: 'backlog.pickerDown' },
-    { keys: 'k', scope: 'backlog.picker', command: 'backlog.pickerUp' },
-    { keys: '<CR>', scope: 'backlog.picker', command: 'backlog.pickerChoose' },
-    { keys: 'l', scope: 'backlog.picker', command: 'backlog.pickerChoose' },
-    { keys: '<Esc>', scope: 'backlog.picker', command: 'backlog.pickerCancel' },
 
     // ── Notes ──────────────────────────────────────────────────────────────
     { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },
@@ -798,33 +782,12 @@ export const defaultKeymap = {
     { keys: 'u', scope: 'notes.markup', command: 'notes.undo' },
     { keys: '<C-r>', scope: 'notes.markup', command: 'notes.redo' },
     { keys: '<Esc>', scope: 'notes.markup', command: 'notes.closeMarkup' },
-    { keys: 'j', scope: 'notes.picker', command: 'notes.pickerDown' },
-    { keys: 'k', scope: 'notes.picker', command: 'notes.pickerUp' },
-    { keys: '<CR>', scope: 'notes.picker', command: 'notes.pickerChoose' },
-    { keys: '<Esc>', scope: 'notes.picker', command: 'notes.pickerCancel' },
-    { keys: '/', scope: 'notes.picker', command: 'notes.pickerFilter' },
-    // `<CR>` picks in insert mode too, so Enter in the filter box picks.
-    {
-      keys: '<CR>',
-      scope: 'notes.picker',
-      command: 'notes.pickerChoose',
-      where: 'box',
-    },
-    {
-      keys: '<CR>',
-      scope: 'notes.picker',
-      command: 'notes.pickerChoose',
-      mode: 'insert',
-    },
-    {
-      keys: '<Esc>',
-      scope: 'notes.picker',
-      command: 'notes.pickerList',
-      where: 'box',
-    },
     { keys: 'y', scope: 'notes.confirm', command: 'notes.confirmYes' },
     { keys: 'n', scope: 'notes.confirm', command: 'notes.confirmNo' },
     { keys: '<Esc>', scope: 'notes.confirm', command: 'notes.confirmNo' },
+
+    // ── List pickers ───────────────────────────────────────────────────────
+    ...LIST_PICKER_SCOPES.flatMap((scope) => listPickerBinds(scope)),
 
     // ── Unity pool ─────────────────────────────────────────────────────────
     { keys: 'j', scope: 'unity-pool.panel', command: 'unity-pool.cursorDown' },

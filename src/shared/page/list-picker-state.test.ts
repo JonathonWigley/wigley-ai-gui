@@ -4,6 +4,7 @@ import { fakeFuzzyMatcher } from '../fake-fuzzy-matcher.test-support';
 import {
   filterPicker,
   movePicker,
+  movePickerToEdge,
   openPicker,
   visibleIndexes,
 } from './list-picker-state';
@@ -169,4 +170,35 @@ describe('picker state', () => {
 
     expect(movePicker(filtered, 1, fakeFuzzyMatcher)).toBe(filtered);
   });
+  const dRanksFirst = scoredMatcher({ 'kept d': 1 });
+
+  it.each([
+    { edge: 'first', filter: '', matcher: fakeFuzzyMatcher, cursor: 0 },
+    { edge: 'last', filter: '', matcher: fakeFuzzyMatcher, cursor: 3 },
+    { edge: 'first', filter: 'kept', matcher: fakeFuzzyMatcher, cursor: 1 },
+    { edge: 'last', filter: 'kept', matcher: fakeFuzzyMatcher, cursor: 3 },
+    { edge: 'first', filter: 'kept', matcher: dRanksFirst, cursor: 3 },
+    { edge: 'last', filter: 'kept', matcher: dRanksFirst, cursor: 1 },
+  ] as const)(
+    'movePickerToEdge_LandsOnTheShownEdge: $edge, filter "$filter", cursor $cursor',
+    ({ edge, filter, matcher, cursor }) => {
+      const rows = ['gone a', 'kept b', 'gone c', 'kept d'];
+      const opened = filterPicker(openPicker(rows, 2), filter, matcher);
+
+      expect(movePickerToEdge(opened, edge, matcher).cursor).toBe(cursor);
+    },
+  );
+
+  it.each(['first', 'last'] as const)(
+    'movePickerToEdge_NothingVisible_Unchanged: %s',
+    (edge) => {
+      const filtered = filterPicker(
+        openPicker(labels, 0),
+        'zzz',
+        fakeFuzzyMatcher,
+      );
+
+      expect(movePickerToEdge(filtered, edge, fakeFuzzyMatcher)).toBe(filtered);
+    },
+  );
 });

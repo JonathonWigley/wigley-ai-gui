@@ -13,6 +13,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { scrollText } from '../../../shared/content-scroll';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import type {
   AppSlashCommand,
   ChatChannel,
@@ -353,12 +354,16 @@ export function chatCommandHandlers(
     copySignInLink: () => deps.signIn.copyLink(),
     endSession: () => deps.confirm.end(),
     keepSession: () => deps.confirm.keep(),
-    pickerDown: () => picker.down(),
-    pickerUp: () => picker.up(),
-    pickerPick: () => picker.pick(),
-    pickerClose: () => picker.close(),
-    pickerFilter: () => picker.focusFilter(),
-    pickerList: () => picker.leaveFilter(),
+    ...listPickerCommands({
+      down: picker.down,
+      up: picker.up,
+      top: picker.top,
+      bottom: picker.bottom,
+      choose: picker.pick,
+      cancel: picker.close,
+      focusFilter: picker.focusFilter,
+      leaveFilter: picker.leaveFilter,
+    }),
     stopAll: () => {
       log('stopping every session');
       void channel.invoke('stopAll').catch((error: unknown) => {

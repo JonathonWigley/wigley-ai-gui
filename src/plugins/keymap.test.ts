@@ -8,7 +8,7 @@ import {
   mergeKeymap,
   withoutPluginBinds,
 } from '../shared/plugin-manifests';
-import { defaultKeymap } from './keymap';
+import { defaultKeymap, LIST_PICKER_SCOPES } from './keymap';
 import { manifests } from './manifests';
 
 // The shipped keymap is the subject here: a clash in it stops the app at
@@ -49,4 +49,40 @@ describe('defaultKeymap', () => {
       defaultKeymap.binds.find((bind) => bind.keys === keys)?.command,
     ).toBe(command);
   });
+  it.each(LIST_PICKER_SCOPES)(
+    'listPickerBinds_%s_BindsTheSharedSet',
+    (scope) => {
+      const plugin = scope.split('.')[0];
+      const inScope = defaultKeymap.binds
+        .filter((bind) => bind.scope === scope)
+        .map((bind) => ({
+          keys: bind.keys,
+          where: 'where' in bind ? bind.where : undefined,
+          mode: 'mode' in bind ? bind.mode : undefined,
+          command: bind.command,
+        }));
+      const page = (keys: string, command: string) => ({
+        keys,
+        where: undefined,
+        mode: undefined,
+        command: `${plugin}.${command}`,
+      });
+
+      expect(inScope).toEqual(
+        expect.arrayContaining([
+          page('j', 'pickerDown'),
+          page('k', 'pickerUp'),
+          page('gg', 'pickerTop'),
+          page('G', 'pickerBottom'),
+          page('<CR>', 'pickerChoose'),
+          page('l', 'pickerChoose'),
+          page('/', 'pickerFilter'),
+          page('<Esc>', 'pickerCancel'),
+          { ...page('<CR>', 'pickerChoose'), where: 'box' },
+          { ...page('<CR>', 'pickerChoose'), mode: 'insert' },
+          { ...page('<Esc>', 'pickerList'), where: 'box' },
+        ]),
+      );
+    },
+  );
 });

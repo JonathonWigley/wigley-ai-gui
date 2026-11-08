@@ -51,3 +51,10 @@
   font-weight: var(--wg-weight-semibold);
   color: var(--wg-fg-secondary);
 }
+
+/* The `/ filter` key, pushed to the title line's end ahead of the request's
+   own header end. */
+.ui-picker-key {
+  display: inline-flex;
+  margin-inline-start: auto;
+}

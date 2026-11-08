@@ -420,13 +420,6 @@
   display: inline-flex;
 }
 
-/* The picker header's keys: `/ filter`, then `. archived` in the resume
-   list. */
-.chat-picker-keys {
-  display: inline-flex;
-  gap: var(--wg-space-3);
-}
-
 /* The deny reason box. */
 .chat-reason-box .cm-editor {
   max-height: calc(var(--wg-space-8) * 6);

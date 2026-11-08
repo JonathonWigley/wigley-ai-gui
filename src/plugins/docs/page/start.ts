@@ -183,7 +183,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // The one list every view opens, contributed under each view's dialogs.
-    const docsPicker = createDocsPicker(services.picker.create());
+    const docsPicker = createDocsPicker(
+      services.picker.create({ filter: true }),
+    );
 
     // `changed` reads the view only once a change is made, after creation.
     // Each scope the view sets is followed by `resizeTarget`, the divider the
@@ -628,8 +630,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         conflictCancel: onActiveView('conflictCancel'),
         pickerDown: onActiveView('pickerDown'),
         pickerUp: onActiveView('pickerUp'),
+        pickerTop: onActiveView('pickerTop'),
+        pickerBottom: onActiveView('pickerBottom'),
         pickerChoose: onActiveView('pickerChoose'),
         pickerCancel: onActiveView('pickerCancel'),
+        pickerFilter: onActiveView('pickerFilter'),
+        pickerList: onActiveView('pickerList'),
         boxComplete: onActiveView('boxComplete'),
         boxAccept: onActiveView('boxAccept'),
         boxCancel: onActiveView('boxCancel'),

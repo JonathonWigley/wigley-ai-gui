@@ -47,6 +47,7 @@ import {
   asFake,
   asHtml,
   FakeElement,
+  findAll,
   installFakeDom,
 } from '../../shared/page/test-dom';
 import { fakePlatform } from '../../shared/platform.test-support';
@@ -802,9 +803,25 @@ describe('createPageApi services.picker', () => {
   };
 
   // A plugin's API over a real scope stack and store, its overlay holding what
-  // the plugin placed and its editor host recording each editor.
+  // the plugin placed, its editor host recording each editor and its anchors
+  // recording each anchor.
   function pickerApi() {
     const scopeStack = createScopeStack('any');
+    const anchored: {
+      element: HTMLElement;
+      command: string;
+      scope: string | undefined;
+    }[] = [];
+    const anchors = {
+      anchor(element: HTMLElement, command: string, options = {}) {
+        anchored.push({
+          element,
+          command,
+          scope: (options as { scope?: string }).scope,
+        });
+        return { dispose: () => {} };
+      },
+    } as unknown as PageApiDeps['anchors'];
     const registrations = createRegistrations();
     const overlay: HTMLElement[] = [];
     const destroyEditor = vi.fn();
@@ -817,6 +834,7 @@ describe('createPageApi services.picker', () => {
       deps({
         scopeStack,
         registrations,
+        anchors,
         areas: {
           overlay: {
             contribute(element: HTMLElement) {
@@ -850,8 +868,47 @@ describe('createPageApi services.picker', () => {
       overlay,
       destroyEditor,
       editorsCreated: () => editorsCreated,
+      anchored,
     };
   }
+
+  it.each([
+    { case: 'with a filter', filter: true },
+    { case: 'with no filter', filter: false },
+  ])('picker_WithFilter_AnchorsOneFilterHintPerScope: $case', ({ filter }) => {
+    const { picker, anchored } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope, filter });
+    const hintIn = () =>
+      findAll(asFake(list.element), 'ui-picker-key')[0] ?? null;
+
+    list.open(REQUEST);
+    const pickerHint = hintIn();
+    list.close();
+    list.open(REQUEST);
+    const pickerHintAgain = hintIn();
+    list.close();
+    scope = 'resume';
+    list.open(REQUEST);
+    const resumeHint = hintIn();
+
+    if (!filter) {
+      expect(anchored).toEqual([]);
+      expect([pickerHint, resumeHint]).toEqual([null, null]);
+      return;
+    }
+    expect(
+      anchored.map(({ command, scope: anchoredIn }) => [command, anchoredIn]),
+    ).toEqual([
+      ['p.pickerFilter', 'p.picker'],
+      ['p.pickerFilter', 'p.resume'],
+    ]);
+    expect(pickerHintAgain).toBe(pickerHint);
+    expect(anchored.map(({ element }) => asFake(element))).toEqual([
+      pickerHint,
+      resumeHint,
+    ]);
+  });
 
   it.each([
     { case: 'the overlay', hasParent: false, inOverlay: 1, inParent: 0 },

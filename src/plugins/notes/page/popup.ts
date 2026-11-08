@@ -16,6 +16,7 @@ import { errorText } from '../../../shared/error-text';
 import { IMAGE_TYPES } from '../../../shared/image-types';
 import { saveState, startAutosave } from '../../../shared/page/autosave';
 import { element } from '../../../shared/page/dom';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { pathOf } from '../../../shared/page/file-drop/file-path';
@@ -592,7 +593,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     filter: true,
     parent: dialog.element,
   });
-  const pickerFilterHint = anchored('pickerFilter', 'picker', 'filter');
 
   const pick = <T>(
     title: PickerRowInput['picker'],
@@ -609,7 +609,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       label,
       name,
       selected,
-      headerEnd: pickerFilterHint,
       drawRow: (list, _item, { label, trailing }) =>
         parts.pickerRow(list, { picker: title, label }, trailing),
       chosen: (item) => {
@@ -1282,12 +1281,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     undo: () => markupView.undo(),
     redo: () => markupView.redo(),
     closeMarkup: () => markupView.close(),
-    pickerDown: () => picker.down(),
-    pickerUp: () => picker.up(),
-    pickerChoose: () => picker.choose(),
-    pickerCancel: () => picker.cancel(),
-    pickerFilter: () => picker.focusFilter(),
-    pickerList: () => picker.leaveFilter(),
+    ...listPickerCommands(picker),
     confirmYes: () => void confirmDiscard(),
     confirmNo: keepDraft,
   };

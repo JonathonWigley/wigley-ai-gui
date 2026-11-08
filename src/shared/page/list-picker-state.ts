@@ -59,6 +59,21 @@ export function movePicker(
   return { ...state, cursor: visible[next] };
 }
 
+// The first or last visible index, in the shown order; the state unchanged
+// when nothing is visible.
+export function movePickerToEdge(
+  state: PickerState,
+  edge: 'first' | 'last',
+  matcher: FuzzyMatcher,
+): PickerState {
+  const visible = visibleIndexes(state, matcher);
+  if (visible.length === 0) {
+    return state;
+  }
+  const cursor = edge === 'first' ? visible[0] : visible[visible.length - 1];
+  return { ...state, cursor };
+}
+
 // With a filter, the cursor goes to the best match, so Enter picks it. With
 // an empty trimmed filter it stays while it is on a row, else goes to the
 // first.

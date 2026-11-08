@@ -33,6 +33,7 @@ import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { keysFor } from '../../shared/keys-for';
+import { element } from '../../shared/page/dom';
 import { createListPicker } from '../../shared/page/list-picker';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
@@ -224,6 +225,7 @@ export function createPageApi(
         matcher: deps.services.fuzzy,
         editor,
         overlay: areas.overlay,
+        anchors: deps.anchors,
         registrations,
       }),
       markdown: trackedMarkdown(deps.services.markdown, registrations),
@@ -263,7 +265,8 @@ function trackedPushedScope(
 
 // One plugin's list pickers. `pushedScopes` is filed ahead of each list's close,
 // because the store disposes in reverse: the close pops the scope it holds, and
-// a second pop throws.
+// a second pop throws. A list with a filter anchors its `/ filter` key to the
+// plugin's `pickerFilter`, one hint per scope it opens in.
 function pluginPicker(
   manifest: PluginManifest,
   deps: {
@@ -272,6 +275,7 @@ function pluginPicker(
     matcher: FuzzyMatcher;
     editor: EditorHost;
     overlay: Area;
+    anchors: Anchors;
     registrations: Registrations;
   },
 ): ListPickerService {
@@ -279,6 +283,22 @@ function pluginPicker(
     create({ scope = 'picker', filter = false, parent } = {}) {
       const scopeName = typeof scope === 'string' ? () => scope : scope;
       requireDeclaredScope(manifest, scopeName());
+      const filterHints = new Map<string, HTMLElement>();
+      const filterHint = () => {
+        const name = scopeName();
+        let hint = filterHints.get(name);
+        if (hint === undefined) {
+          hint = element('span', 'ui-picker-key');
+          deps.registrations.track(
+            deps.anchors.anchor(hint, qualify(manifest.id, 'pickerFilter'), {
+              scope: qualify(manifest.id, name),
+              label: 'filter',
+            }),
+          );
+          filterHints.set(name, hint);
+        }
+        return hint;
+      };
       const pushedScopes = deps.registrations.track(createRegistrations());
       const picker = createListPicker({
         pushScope() {
@@ -292,6 +312,7 @@ function pluginPicker(
         log: deps.log,
         matcher: deps.matcher,
         filterEditor: filter ? deps.editor : undefined,
+        filterHint: filter ? filterHint : undefined,
       });
       if (parent === undefined) {
         deps.overlay.contribute(picker.element);

@@ -1,4 +1,5 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // A popup over any mode that keeps one note draft — target repo, title, body,
 // tags, a session and marked-up images — and sends it to a new or existing
@@ -73,12 +74,7 @@ export const notesManifest = definePlugin({
     undo: { label: 'undo', group: 'markup', runsIn: 'page' },
     redo: { label: 'redo', group: 'markup', runsIn: 'page' },
     closeMarkup: { label: 'back to the note', group: 'markup', runsIn: 'page' },
-    pickerDown: { label: 'next line', group: 'picker', runsIn: 'page' },
-    pickerUp: { label: 'previous line', group: 'picker', runsIn: 'page' },
-    pickerChoose: { label: 'pick', group: 'picker', runsIn: 'page' },
-    pickerCancel: { label: 'close', group: 'picker', runsIn: 'page' },
-    pickerFilter: { label: 'filter', group: 'picker', runsIn: 'page' },
-    pickerList: { label: 'back to the list', group: 'picker', runsIn: 'page' },
+    ...LIST_PICKER_COMMANDS,
     confirmYes: {
       label: 'yes, discard the draft',
       group: 'confirm',

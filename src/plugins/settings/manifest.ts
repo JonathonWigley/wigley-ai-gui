@@ -1,4 +1,5 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Settings mode: every setting and key bind the user config holds, browsed by
 // section and edited in place, each edit written to the user's
@@ -41,10 +42,7 @@ export const settingsManifest = definePlugin({
     },
     boxAccept: { label: 'save the value', group: 'box', runsIn: 'page' },
     boxCancel: { label: 'cancel the edit', group: 'box', runsIn: 'page' },
-    pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },
-    pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
-    pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
-    pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    ...LIST_PICKER_COMMANDS,
   },
   scopes: {
     sections: 'In settings sections',

@@ -1,4 +1,5 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Backlog mode: every features home's follow-ups (create, edit, delete, tags),
 // plans and primed features (read-only), grouped by repo. `tags` is the list
@@ -73,10 +74,7 @@ export const backlogManifest = definePlugin({
     leaveBox: { label: 'leave the box', group: 'editor', runsIn: 'page' },
     nextField: { label: 'next field', group: 'editor', runsIn: 'page' },
     previousField: { label: 'previous field', group: 'editor', runsIn: 'page' },
-    pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },
-    pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
-    pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
-    pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    ...LIST_PICKER_COMMANDS,
     boxAccept: { label: 'accept', group: 'box', runsIn: 'page' },
     boxCancel: { label: 'cancel', group: 'box', runsIn: 'page' },
     confirmYes: {

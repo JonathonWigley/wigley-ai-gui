@@ -12,6 +12,7 @@ import {
   type PartStore,
 } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import {
   leafIds,
   type PaneTree,
@@ -802,7 +803,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const openPreview = previewToggle(mode, view, log);
 
-    const picker = api.services.picker.create();
+    const picker = api.services.picker.create({ filter: true });
 
     // Acts on the focused pane's session, as `closeSession` does.
     const renameSession = () => {
@@ -983,10 +984,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         swapPaneRight: paneKey(() => swapPane('right')),
         swapPaneUp: paneKey(() => swapPane('up')),
         swapPaneDown: paneKey(() => swapPane('down')),
-        pickerDown: () => picker.down(),
-        pickerUp: () => picker.up(),
-        pickerChoose: () => picker.choose(),
-        pickerCancel: () => picker.cancel(),
+        ...listPickerCommands(picker),
         renameSession,
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),

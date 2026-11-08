@@ -1,4 +1,5 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 import type { ChatProfile } from './contract';
 
 // Each profile names a Claude config folder; a leading `~/` means the home
@@ -156,12 +157,7 @@ export const chatManifest = definePlugin({
       group: 'confirm',
       runsIn: 'page',
     },
-    pickerDown: { label: 'next line', group: 'picker', runsIn: 'page' },
-    pickerUp: { label: 'previous line', group: 'picker', runsIn: 'page' },
-    pickerPick: { label: 'pick', group: 'picker', runsIn: 'page' },
-    pickerClose: { label: 'close', group: 'picker', runsIn: 'page' },
-    pickerFilter: { label: 'filter', group: 'picker', runsIn: 'page' },
-    pickerList: { label: 'back to the list', group: 'picker', runsIn: 'page' },
+    ...LIST_PICKER_COMMANDS,
     toggleArchive: {
       label: 'archive or restore the session',
       group: 'picker',

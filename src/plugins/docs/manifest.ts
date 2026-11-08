@@ -1,4 +1,5 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Browses and edits every agent doc on the machine through the docs index:
 // Docs mode over the machine's index and a Docs tab in each session over that
@@ -99,10 +100,7 @@ export const docsManifest = definePlugin({
       group: 'conflict',
       runsIn: 'page',
     },
-    pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },
-    pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
-    pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
-    pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    ...LIST_PICKER_COMMANDS,
     boxComplete: { label: 'complete the path', group: 'box', runsIn: 'page' },
     boxAccept: { label: 'accept', group: 'box', runsIn: 'page' },
     boxCancel: { label: 'cancel', group: 'box', runsIn: 'page' },

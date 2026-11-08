@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../contracts/editor';
 import type { ListPickerRequest } from '../../contracts/list-picker';
 import { fakeFuzzyMatcher } from '../fake-fuzzy-matcher.test-support';
-import { createListPicker } from './list-picker';
+import type { ListPickerCommand } from '../list-picker-commands';
+import { createListPicker, listPickerCommands } from './list-picker';
 import {
   asFake,
   asHtml,
@@ -27,33 +28,43 @@ function pickerSetup() {
 }
 
 // A picker over a filter editor whose `type` sets the filter text as typing
-// it would.
-function filteredPickerSetup() {
+// it would, and whose `focus` and `blur` move the document's focus into and
+// out of the filter box. `filterHint` draws at the title line's end when
+// given.
+function filteredPickerSetup(filterHint?: () => HTMLElement | null) {
   let events: EditorEvents | null = null;
+  const focusable = document as unknown as { activeElement: unknown };
   const filterEditor = {
-    create: (_parent: HTMLElement, _doc: string, heard: EditorEvents) => {
+    create: (parent: HTMLElement, _doc: string, heard: EditorEvents) => {
       events = heard;
       return {
         text: () => '',
         setText: () => undefined,
-        focus: () => undefined,
-        blur: () => undefined,
+        focus: () => {
+          focusable.activeElement = parent;
+        },
+        blur: () => {
+          focusable.activeElement = null;
+        },
         destroy: () => undefined,
       };
     },
   } as unknown as EditorHost;
+  const log = vi.fn();
   const picker = createListPicker({
     pushScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
-    log: vi.fn(),
+    log,
     matcher: fakeFuzzyMatcher,
     filterEditor,
+    filterHint,
   });
   return {
     picker,
+    log,
     layer: asFake(picker.element),
     type: (text: string) => events?.changed(text),
   };
@@ -467,5 +478,119 @@ describe('list picker', () => {
     picker.close();
     expect(disposed.slice(2)).toEqual(['A#3', 'B#4']);
     expect(made).toHaveLength(4);
+  });
+  it('open_FilterHint_DrawsBeforeHeaderEnd', () => {
+    const hint = new FakeElement('span');
+    const end = new FakeElement('span');
+    const { picker, layer } = filteredPickerSetup(() => asHtml(hint));
+
+    picker.open(request({ headerEnd: asHtml(end) }));
+
+    const [title, ...rest] = head(layer).children;
+    expect(title.classList.contains('ui-picker-title')).toBe(true);
+    expect(rest).toEqual([hint, end]);
+  });
+
+  it.each([
+    { move: 'bottom', from: 0, cursor: 'three', redrawn: ['one', 'three'] },
+    { move: 'top', from: 2, cursor: 'one', redrawn: ['three', 'one'] },
+  ] as const)(
+    'topBottom_MoveTheCursorRow: $move',
+    ({ move, from, cursor, redrawn }) => {
+      const { picker, layer } = pickerSetup();
+      const { drawRow, made } = owningRows();
+      picker.open(request({ drawRow, selected: from }));
+
+      picker[move]();
+
+      expect(made.slice(3).map((name) => name.split('#')[0])).toEqual(redrawn);
+      expect(findAll(layer, 'is-cursor').map((row) => row.textContent)).toEqual(
+        [cursor],
+      );
+    },
+  );
+
+  it('topBottom_Closed_DoNothing', () => {
+    const { picker } = pickerSetup();
+    picker.open(request({ selected: 1 }));
+    picker.close();
+
+    picker.bottom();
+
+    expect(picker.cursorIndex()).toBeNull();
+  });
+
+  it.each([
+    ['pickerDown', 'down'],
+    ['pickerUp', 'up'],
+    ['pickerTop', 'top'],
+    ['pickerBottom', 'bottom'],
+    ['pickerChoose', 'choose'],
+    ['pickerCancel', 'cancel'],
+    ['pickerFilter', 'focusFilter'],
+    ['pickerList', 'leaveFilter'],
+  ] as const)(
+    'listPickerCommands_EachId_RunsItsMethod: %s',
+    (id: ListPickerCommand, method) => {
+      const calls: string[] = [];
+      const record = (name: string) => () => {
+        calls.push(name);
+      };
+      const commands = listPickerCommands({
+        down: record('down'),
+        up: record('up'),
+        top: record('top'),
+        bottom: record('bottom'),
+        choose: record('choose'),
+        cancel: record('cancel'),
+        focusFilter: record('focusFilter'),
+        leaveFilter: record('leaveFilter'),
+      });
+
+      commands[id]();
+
+      expect(calls).toEqual([method]);
+    },
+  );
+
+  it('focusFilter_OpenWithFilter_LogsPickerFilter', () => {
+    const { picker, log } = filteredPickerSetup();
+    picker.open(request({ title: 'Theme' }));
+
+    picker.focusFilter();
+
+    expect(log).toHaveBeenLastCalledWith('picker filter: Theme');
+  });
+
+  it('leaveFilter_FromTheBox_LogsPickerList', () => {
+    const { picker, log } = filteredPickerSetup();
+    picker.open(request({ title: 'Theme' }));
+    picker.leaveFilter();
+    expect(log).not.toHaveBeenCalledWith('picker list: Theme');
+
+    picker.focusFilter();
+    picker.leaveFilter();
+
+    expect(log).toHaveBeenLastCalledWith('picker list: Theme');
+  });
+
+  it('focusAndLeaveFilter_NoFilterEditor_LogNothing', () => {
+    const log = vi.fn();
+    const picker = createListPicker({
+      pushScope: () => ({
+        pop: () => undefined,
+        dispose: () => undefined,
+        onBaseChanged: () => ({ dispose: () => undefined }),
+      }),
+      log,
+      matcher: fakeFuzzyMatcher,
+    });
+    picker.open(request({ title: 'Theme' }));
+    log.mockClear();
+
+    picker.focusFilter();
+    picker.leaveFilter();
+
+    expect(log).not.toHaveBeenCalled();
   });
 });

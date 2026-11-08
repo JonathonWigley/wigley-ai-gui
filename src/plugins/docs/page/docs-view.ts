@@ -17,6 +17,7 @@ import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import {
   type DocsChannel,
   type IndexContext,
@@ -128,8 +129,12 @@ export interface DocsViewCommands {
   conflictCancel(): void;
   pickerDown(): void;
   pickerUp(): void;
+  pickerTop(): void;
+  pickerBottom(): void;
   pickerChoose(): void;
   pickerCancel(): void;
+  pickerFilter(): void;
+  pickerList(): void;
   boxComplete(): void;
   boxAccept(): void;
   boxCancel(): void;
@@ -1447,10 +1452,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     conflictReload: () => doc.conflictReload(),
     conflictOverwrite: () => doc.conflictOverwrite(),
     conflictCancel: () => doc.conflictCancel(),
-    pickerDown: () => picker.down(),
-    pickerUp: () => picker.up(),
-    pickerChoose: () => picker.choose(),
-    pickerCancel: () => picker.cancel(),
+    ...listPickerCommands(picker),
     boxComplete: () => dialogs.boxComplete(),
     boxAccept: () =>
       dialogs.isBoxOpen() ? dialogs.boxAccept() : tree.acceptFilter(),

@@ -22,6 +22,7 @@ import type {
 } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
+import type { ListPickerCommand } from '../../../shared/list-picker-commands';
 import { element } from '../../../shared/page/dom';
 import type {
   KitCommands,
@@ -35,6 +36,7 @@ import {
   createLayoutParts,
   type LayoutParts,
 } from '../../../shared/page/layout-host/layout-parts';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
@@ -219,10 +221,7 @@ export type SettingsCommand =
   | 'clearFilter'
   | 'boxAccept'
   | 'boxCancel'
-  | 'pickerDown'
-  | 'pickerUp'
-  | 'pickerChoose'
-  | 'pickerCancel';
+  | ListPickerCommand;
 
 // Settings mode's view: the sections for the side bar, the open section's
 // rows in the sheet, the one box or picker open over them, and the reads and
@@ -359,7 +358,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const filterBox = textBoxInput('settings-box-input');
   filterFrame.append(filterBox);
 
-  const picker = deps.picker.create();
+  const picker = deps.picker.create({ filter: true });
 
   let schema: UserConfigSchema | null = null;
   let latest: UserConfigRead | null = null;
@@ -1065,10 +1064,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         closeBox(openBox.box);
       }
     },
-    pickerDown: () => picker.down(),
-    pickerUp: () => picker.up(),
-    pickerChoose: () => picker.choose(),
-    pickerCancel: () => picker.cancel(),
+    ...listPickerCommands(picker),
   };
 
   return {

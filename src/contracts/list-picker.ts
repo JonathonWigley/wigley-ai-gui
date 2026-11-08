@@ -65,10 +65,13 @@ export interface DrawnPickerRow {
 // and its `cursorEnd` at the trailing end of the cursor row only, moved there
 // on each draw.
 // With a filter editor, `focusFilter` types into the filter box above the
-// list and `leaveFilter` leaves it with the filter kept; without one both do
-// nothing. A request's `drawRow` draws each row; the picker sets the row's
+// list and logs `picker filter: <title>`, and `leaveFilter` leaves it with the
+// filter kept, logging `picker list: <title>` when the box held focus; without
+// one both do nothing. A request's `drawRow` draws each row; the picker sets the row's
 // title, `is-selected` and `is-cursor`, and the click that chooses its item.
-// A cursor move draws only the row the cursor left and the row it reached.
+// A cursor move draws only the row the cursor left and the row it reached;
+// `top` and `bottom` move it to the first and last visible row, in the shown
+// order, and do nothing while closed or with no row visible.
 // A request's `section` adds headings between the rows while no filter is
 // typed; the cursor and `cursorIndex` count items only.
 export interface ListPicker {
@@ -82,6 +85,8 @@ export interface ListPicker {
   cursorIndex(): number | null;
   down(): void;
   up(): void;
+  top(): void;
+  bottom(): void;
   choose(): void;
   cancel(): void;
   close(): void;
@@ -96,7 +101,8 @@ export interface ListPickerOptions {
   // The owner's short scope pushed while the list shows, read at each push.
   // Default `picker`.
   scope?: string | (() => string);
-  // Adds the filter box above the list, on the plugin's editor service.
+  // Adds the filter box above the list, on the plugin's editor service, and
+  // the `/ filter` key at the title line's end, ahead of `headerEnd`.
   // Default false.
   filter?: boolean;
   // The element the list goes in. Default: the window's overlay.

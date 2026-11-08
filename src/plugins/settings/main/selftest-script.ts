@@ -112,6 +112,21 @@ const THEME_PICKER_STEPS: SelfTestStep[] = [
     expect: '[settings] filter "theme" first row theme',
   },
   { keys: ['Enter'], expect: '[settings] picker shown: Theme' },
+  { keys: ['j'], expect: '[page] j ran settings.pickerDown' },
+  { keys: ['G'], expect: '[page] G ran settings.pickerBottom' },
+  { keys: ['g', 'g'], expect: '[page] gg ran settings.pickerTop' },
+  {
+    keys: ['/'],
+    expect: '[settings] picker filter: Theme',
+    checksFit: true,
+    screenshot: 'theme-picker-filter',
+    why: 'The shared filter box shows above the list and the title line ends in / filter.',
+  },
+  {
+    keys: ['Escape', 'Escape'],
+    expect: '[settings] picker list: Theme',
+    why: "The first Esc leaves the filter box's insert mode, the second returns to the list.",
+  },
 ];
 
 const KEYMAP_STEPS: SelfTestStep[] = [
@@ -131,9 +146,9 @@ const KEYMAP_STEPS: SelfTestStep[] = [
     expect: '[settings] picker shown: Scope',
   },
   {
-    keys: ['Enter'],
+    keys: ['l'],
     expect: '[config] applied a new config',
-    why: 'Enter picks the preselected scope, writing keymap.json. The step waits for the apply that follows the write, since the page keys it rebuilds drop a pending key sequence.',
+    why: 'l picks the preselected scope as Enter does, writing keymap.json. The step waits for the apply that follows the write, since the page keys it rebuilds drop a pending key sequence.',
   },
   { keys: ['d'], expect: '[settings] picker shown: Key to remove' },
   {
@@ -177,7 +192,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'theme picker',
-    why: 'Filtering Core to the Theme row, Enter shows the theme picker.',
+    why: 'Filtering Core to the Theme row, Enter shows the theme picker. The picker takes the shared list keys: j, G, gg, / and Esc back to the list.',
     steps: THEME_PICKER_STEPS,
   },
   {
