@@ -28,12 +28,12 @@ it in the report.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
-tools, receiving agents' review rounds and feature primers and showing each in its agent session's Form or Primer tab
+tools, receiving agents' review rounds and feature primers and showing each in a popup over its agent session's tabs
 for the user to answer; and it
 browses and edits every agent doc on the machine through the docs index, as a wiki over the user's own pages and as a tree of all of them (`docs_index.py`, `plugins/wigley/scripts/docs-index/`
 in wigley-ai-marketplace, whose README states the index schema). It also starts Claude Code sessions itself and
-chats with them in each session's Chat tab, a round from that session swapping in over the chat and back
-(`docs/features/agent-chat/design.md`).
+chats with them in each session's Chat tab, a round from that session sliding up over the chat in a popup that hides and shows
+(`docs/features/agent-chat/design.md`, `docs/features/session-popups/design.md`).
 
 ## Intent
 
@@ -133,7 +133,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
                  reader skeleton) and `test-layouts.ts` (the test helpers owners share) and
                  `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot)), the reducer store, autosave,
-                 editor boxes, the confirm prompt, the session form tab helper, the session form status line, and the
+                 editor boxes, the confirm prompt, the session form popup helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
                  → imported only by src/renderer and plugins' page/ parts
@@ -218,10 +218,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
                  sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
-                 shared list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add,
+                 shared list picker's `picker` scope, each session's tabs and popups (`addTab`, `addPopup`, the hidden bar), the row and bar parts other plugins add,
                  each row's activities, the rename dialog, and the layout preview rows),
-                 layouts/ (the sessions Layout contract and the built-in `default` layout);
-                 `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
+                 layouts/ (the sessions Layout contract and the built-in `default` layout, with the `popup` and `popupBar` parts);
+                 `docs/features/session-popups/design.md`, `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview, and writes the `agents.rosters`
@@ -250,19 +250,19 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
-                 round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
+                 round), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
-                 page/ (the Primer tab: the tasks, items and card columns, the feature, task and item cards, and
+                 page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
                  the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files, the log behind Recent changes), page/ (one docs view per source — the machine view's wiki sidebar built
                  from `~/wigley-agents/wiki/Main.md`, its Main and list pages, and the tree under Starred, Mine and
-                 Third-party roots by the index's `owner`, the only sidebar of a session's Docs tab, rendered page with its status chips, right column and section editing, document editor (takes dropped and pasted files as relative links) —
+                 Third-party roots by the index's `owner`, the only sidebar of a session's docs view, rendered page with its status chips, right column and section editing, document editor (takes dropped and pasted files as relative links) —
                  shown as Docs mode over the machine's index, its sidebar in the side
-                 bar, and as a split of tree and page in each view `addView` hands out, each session's Docs tab
-                 among them), layouts/ (the docs Layout contract and the built-in `default` layout);
+                 bar, and as a split of tree and page in each view `addView` hands out, the `docs-session-tab` plugin's
+                 session tab among them), layouts/ (the docs Layout contract and the built-in `default` layout);
                  `docs/features/docs-browser/design.md`, `docs/features/docs-wiki/design.md`
   backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
                  read through docs' index and written through its guard, file watching, each in-repo home's
@@ -303,6 +303,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
                  usage's own session-line part through a usage page export, so the line has one look); in
                  `plugins.disabled` by default
+  docs-session-tab/ page/ only (each session's Docs tab through sessions' `addTab`, a split of tree and page built
+                 through docs' `addView`); in `plugins.disabled` by default; `docs/features/docs-browser/design.md`
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow, run through the
                  rules of the flow's current workflow alone), main/ (the engine: hears `chat.agentEvent` and the sessions
                  events, keeps each session's flow in its plugin data and writes it to the `workflow.flows` slot, contributes
@@ -438,13 +440,18 @@ round; primer: an open primer), since main, not the page, decides.
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
-  forms adds a Form tab where a session's round view is created, when the session has no Form tab, chat a Chat tab
-  to each session it starts, and docs a Docs tab to each session when it connects. A tab that
-  needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
-  before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
+  chat adds a Chat tab to each session it starts, and the `docs-session-tab` plugin (disabled by default) a Docs tab to each
+  session when it connects. A session's tabs drop when its row leaves, closed by the user or ended, and
   each plugin forgets the session when its row leaves the `sessions.rows` slot (`followRows`); the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`. A tab names its Codicon (`icon`), and
   the tab bar draws it with the title as its tooltip.
+- **A session popup** is a surface that slides up over a session's tabs while a plugin has something for the user,
+  added through the `sessions` page export `addPopup` (`SessionPopupView` in, `SessionPopupHandle` out; one per id per
+  session). Forms adds one for a session's rounds and primer for its primer, through the shared
+  `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>vf`
+  (`sessions.togglePopup`, scope `any`) hides and shows it; hidden, it leaves a bar at the bottom of the session's frame.
+  An open popup is the visible surface and holds the key scope, and its `beforeClose` joins the tabs' close guards.
+  The sessions layout draws it through the `popup` and `popupBar` parts (`docs/features/session-popups/design.md`).
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export

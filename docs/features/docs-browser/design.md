@@ -22,7 +22,7 @@ its All pages view.
 - **A — layout** (landed): modes as a core extension point, the sessions sidebar in place of the tab strip,
   tabs inside a session, scoped editor binds, the relay hello's `harness` field (wigley-ai-marketplace).
 - **B — docs** (landed): the core `files` and `processes` services, the markdown document render and code
-  highlighter, the document editor, the `docs` plugin (Docs mode and each session's Docs tab), and the docs index's
+  highlighter, the document editor, the `docs` plugin (Docs mode and the `addView` export) and the `docs-session-tab` plugin (each session's Docs tab, disabled by default), and the docs index's
   `claudeConfigDirs` (wigley-ai-marketplace).
 - **C — ownership and plugin-source status** (landed): the docs index's `owner`, marketplace clones and merged
   installs (schema 3, wigley-ai-marketplace); the Mine and Third-party tree, read-only third-party docs and the git
@@ -61,16 +61,16 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   its heading and `answered/total`; an accent dot for a round not yet opened.
 - The sidebar is 16rem wide. The window's minimum width stays 420 px: below 680 px the sidebar hides itself, and
   `Space k s` draws it over the content until pressed again or the window widens.
-- **Session tabs**: each session holds tabs other plugins add. A Docs tab appears when the session connects (plan B
-  adds it), a Form tab on its first round; both stay while the session's row does. A row leaves when the session
+- **Session tabs**: each session holds tabs other plugins add. The `docs-session-tab` plugin (disabled by default; plan B
+  first added the tab inside `docs`) adds a Docs tab when the session connects, and it stays while the session's row does. A round or primer is a popup over the tabs, not a tab (`../session-popups/design.md`). A row leaves when the session
   ends or the user closes it; a closed row comes back with the session's next round, and its plugins add its tabs
-  again. Tabs inside a session are not closable. A Form tab with no open round shows the idle text. A tab's plugin
+  again. Tabs inside a session are not closable. A tab's plugin
   sets its key scope each time the tab becomes the visible one, and a hidden view keeps no scope.
 - Keys: `Option+Shift+o` / `Option+Shift+i` (`<A-S-o>`, `<A-S-i>`) move to the next / previous session;
   `Option+o` / `Option+i` (`<A-o>`, `<A-i>`) move to the next / previous tab inside the selected session. Cmd+W,
   `Space ;` and `<Leader>;` close the selected session's sidebar entry, as they closed its tab before; an open
   round is cancelled with it, with no confirmation.
-- A new round in Sessions mode selects its session and its Form tab, as today. A round arriving while Docs mode shows
+- A new round in Sessions mode selects its session and opens its popup over the tabs. A round arriving while Docs mode shows
   leaves Docs in place: a toast names the session and the key (`Space k s`), and the sidebar row gets its Needs you label.
   Sessions decides this (it owns activation and reads which mode shows); forms stays unaware of modes.
 - **Harness**: the relay hello gains an optional `harness` field, `claude` when `CLAUDECODE=1`, else `codex`
@@ -196,7 +196,7 @@ From the design review; each named by the `wigley:codebase-design` term behind i
 - **Editor binds get a scope** (seam), like page binds, and do nothing outside it. Today forms' editor binds
   (`<Esc>` → leave box, every `<Leader>` bind) run in every vim editor. Plan A.
 - **Session tabs** (seam): sessions exports `addTab` (replacing `fill`) and publishes sessions arriving and leaving on
-  the page; forms adds its Form tab, docs a Docs tab per session. The pattern mirrors main's `contributeTools`.
+  the page; `docs-session-tab` adds a Docs tab per session, and forms a popup through `addPopup`. The pattern mirrors main's `contributeTools`.
 - **Markdown** (seam): the markdown service gains a document render with links and highlighted code; `block` and
   `inline` keep literal links. The highlighter reaches the markdown adapter through its own contract, so markdown-it
   and CodeMirror each stay behind one adapter folder.

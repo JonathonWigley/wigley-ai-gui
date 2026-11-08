@@ -18,7 +18,7 @@ without opening each.
 
 Built, in `src/plugins/sessions/` (titles, the tool, the dialog, row activities), `src/plugins/chat/` (saved
 titles, the instruction, chat's activities), `src/plugins/forms/` and `src/plugins/primer/` (the needs you
-activity), `src/shared/page/session-form-tabs.ts` and `src/plugins/keymap.ts`.
+activity), `src/shared/page/session-form-popups.ts` and `src/plugins/keymap.ts`.
 
 ## Titles
 

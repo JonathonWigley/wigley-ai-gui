@@ -113,7 +113,7 @@ newest first. `docs.recentChangesLimit` caps the rows and defaults to 10. The hi
 
 ## Session Docs tabs
 
-A session's Docs tab keeps its tree of the docs that session loaded, because that is the tab's purpose.
+A session's Docs tab (the `docs-session-tab` plugin, disabled by default) keeps its tree of the docs that session loaded, because that is the tab's purpose.
 It gains the new article page, section editing, links and back and forward through the shared view.
 It holds no wiki: `Space v w` toasts `A session's Docs tab keeps its own tree`, and `gh` shows the
 Main page in Docs mode. Its right column usually stays folded, since the tab is narrow.

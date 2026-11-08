@@ -197,7 +197,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 ## Optional plugins
 
 - The core setting `plugins.disabled` lists plugin ids the plugin host does not start. Its default lists
-  `agent-lines` and `usage-tab-line`. Settings mode shows it.
+  `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it.
 - Turning a plugin off takes effect for its page part on the next page load and for its main part on the next app
   start; turning one on takes effect on the next app start, since a page part never starts without its main part (the
   page reads the union of the setting and main's start list). A plugin that another started plugin depends on cannot
@@ -206,6 +206,8 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   `agent-strip` draws the strip; `agent-skills` draws the hub's Skills section. All three read the agents roster.
 - `usage` keeps the polls, the status-bar plan line, the right bar, the context line and the spend status part.
   `usage-tab-line` draws usage's own whole session-line part (context, cache and spend) in each tab bar.
+- `docs` keeps Docs mode, the per-session index sources and the `addView` export. `docs-session-tab` draws each
+  session's Docs tab (a split of tree and page) through sessions' `addTab` and docs' `addView`.
 
 ## Decisions
 
@@ -259,7 +261,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 - **Chat reading usage and agents data itself** — chat would name other plugins; parts keep each plugin drawing what
   it owns.
 - **A leader key or scroll chords for the strip** — the user wanted the strip on the `j`/`k` cursor with `h`/`l`.
-- **Moving the tab-bar line wholesale** — the Form and Primer tabs would lose it with no way back.
+- **Moving the tab-bar line wholesale** — a session with no Chat tab would lose it with no way back.
 - **The hub in the right bar** — only the focused pane's session could show there, and the user wanted every pane's.
 - **A live thinking token count** (`Thinking… ~1.2k tokens`) — the user took the moved dock with nothing new; the count
   stays available from the adapter's `thinking_tokens` events if long thinks feel opaque.

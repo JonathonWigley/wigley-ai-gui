@@ -5,7 +5,7 @@
 - **Intent** — what the port is for and what a good outcome looks like.
 - **Shape** — the shared agent form lifecycle, the primer plugin, and the flow between them.
 - **Saved primers** — the file format and why it changed.
-- **The Primer tab** — the tasks, items and card columns, the review pane, page events and exports.
+- **The primer popup** — the tasks, items and card columns, the review pane, page events and exports.
 - **Keys** — every primer bind and its scope.
 - **Alerts** — the per-source open count.
 - **Out of scope** — what this work leaves alone.
@@ -15,10 +15,10 @@
 The `wigley:feature-primer` skill sends the user a primer: the feature's name, slug, spec and summary, and a list of
 task entries the user marks as needed or not and edits. It used to be a separate Python MCP server (`wigley-primer`)
 with a browser form. It now runs in the app as the `primer` plugin, behind the `wigley-forms` server's
-`open_primer` and `collect_last_primer` tools, and its tab follows `DESIGN.md` and the plugin structure like every
+`open_primer` and `collect_last_primer` tools, and its popup follows `DESIGN.md` and the plugin structure like every
 other view. A good outcome: the primer behaves like a round in every lifecycle respect (one open per session,
-deadline to draft, re-attach, hand-back, pre-fill, close guard), because it runs on the same code, and the Primer tab
-reads and keys like the Form tab.
+deadline to draft, re-attach, hand-back, pre-fill, close guard), because it runs on the same code, and the primer popup
+reads and keys like the round popup.
 
 The tool contract, the payload and the outcomes are stated once, in wigley-ai-marketplace
 `plugins/wigley/scripts/forms/README.md` § The feature primer.
@@ -35,7 +35,7 @@ The tool contract, the payload and the outcomes are stated once, in wigley-ai-ma
                                        │ hand-back, pre-fill, saved files
                          ┌─────────────┴──────────────┐
                 folder store                    channel presenter
-     ~/.agents/wigley-primer/primers/      formShown / formClosed ──▶ primer page: Primer tab
+     ~/.agents/wigley-primer/primers/      formShown / formClosed ──▶ primer page: popup
                                            openForms / draft / finish ◀── (tasks, items, card, review)
 ```
 
@@ -66,9 +66,9 @@ A saved primer uses the saved-round format (`id`, `fingerprint`, `args`, `body`,
 Old files are not migrated: the app reads only files in the new format and reports an unreadable one once, as forms
 does.
 
-## The Primer tab
+## The primer popup
 
-The tab draws through the primer's layout (`src/plugins/primer/layouts/`, the `primer.layout` setting;
+The popup draws through the primer's layout (`src/plugins/primer/layouts/`, the `primer.layout` setting;
 `docs/features/layouts/design.md`): the layout draws the feature, task and item cards and the tasks, items and review panes,
 and the app keeps the selection, keys, boxes, splits and scrolling. `Space z l p` opens a sample primer for
 iterating a layout in place.
@@ -76,7 +76,7 @@ iterating a layout in place.
 - **Three columns**, tasks | items | card, built as two nested Splits: tasks | (items | card). The tasks and items
   columns open `240px` wide and keep their widths in `uiState` (`primer.tasks-width`, `primer.items-width`; the
   tasks column opens from the old `primer.primer-rail-width` when only that is stored). Each column's least width
-  is `160px`, the card's `320px`, so the outer split's end pane holds at least `480px`. A tab narrower than
+  is `160px`, the card's `320px`, so the outer split's end pane holds at least `480px`. A popup narrower than
   `640px` (about a `950px` window with the side bar beside it) stacks the tasks column over the items and card; an
   end pane narrower than `480px` stacks the items column over the card. There is no other narrow layout. Each
   split's handle shows the resize prompt `⌥⇧H ◂ ▸ ⌥⇧L` while the pointer is over it, while a drag runs and for a
@@ -110,9 +110,9 @@ iterating a layout in place.
 - Autosave sends a draft `autosaveDelayMs` (manifest setting, default 400) after the last edit; the deadline
   (`deadlineSeconds`, default 240) is the forms default.
 - **Page events:** `primerShown`, `needChanged`, `primerFinished`. **Page export:** `activePrimer`.
-- The tab is shown, swapped in over the chat and back, and alerted the same way the Form tab is, through the shared
-  session form tab helper in `src/shared/page/`.
-- Every open primer draws in its session's Primer tab, its pane focused or not; an unfocused one draws in the primer
+- The popup is shown, hidden and alerted the same way a round's is, through the shared session form popup helper
+  `src/shared/page/session-form-popups.ts` (`docs/features/session-popups/design.md`).
+- Every open primer draws in its session's primer popup, its pane focused or not; an unfocused one draws in the primer
   view and takes no keys until its pane is focused. Keys, scopes and the review and cancel prompt act on the focused
   session's primer alone.
 

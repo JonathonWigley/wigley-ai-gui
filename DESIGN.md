@@ -67,7 +67,7 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 | ----------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | L0 backdrop | The window itself                                                                  | `--wg-window-background` with `--wg-window-ambient`                                                   |
 | L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
-| L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs                    | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
+| L2 content  | the session popup (forms, primer), chat transcript, docs, editors, the forms rail, diffs                    | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
 | L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                         | The `material-floating` class                                                                         |
 
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
@@ -182,7 +182,7 @@ means something.
   column; `800px` tightens content padding; `680px` lays the side bar
   over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
-  least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
+  least width (the primer popup's card column `320px`, every other pane `160px` or more): a narrowing
   split gives up its start pane's width down to its least width first, then stacks at any window width.
 
 ## Motion
@@ -354,7 +354,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
-  tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
+  tree, the primer popup's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
   `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
@@ -411,10 +411,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
   `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
-- **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
+- **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
+  (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token
+  (`15%` of the frame's body), the tab under it dimmed by the `scrim`. It slides up on open and down on hide over
+  `duration-slow`; hidden, a slim bar at the frame's bottom names it (`docs/features/session-popups/design.md`).
+- **Forms:** the rail is the start pane of a split in the session popup's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
-- **Primer:** the Primer tab is three columns, tasks | items | card: tasks and items open `240px` wide and the card takes the rest. The
+- **Primer:** the primer popup is three columns, tasks | items | card: tasks and items open `240px` wide and the card takes the rest. The
   tasks column holds the feature row and the tasks, grouped under section headers (Primer, Every feature, Extra
   tasks), each task row carrying its need as a Tag and its included items as a count. The items column lists the
   selected task's items as rows with a ToggleMark, or an empty state on the feature row and on a task with no items.
@@ -473,7 +477,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   a chat entry's first visual only. The full-size overlay sits over the `scrim` with `space-8` padding: the overlay
   body fills it, a `radius-lg` sheet on `transcript-background` that scrolls a visual taller than the window, with the
   count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
-- **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
+- **Docs:** in Docs mode the tree is the side bar; in the optional `docs-session-tab` plugin's session Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
   page and Linked from and sticks while the article scrolls.
