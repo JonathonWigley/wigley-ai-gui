@@ -720,6 +720,7 @@ describe('createChatSessions', () => {
         returned: [],
         repo: 'app',
         branch: null,
+        worktrees: [],
       },
     ]);
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -1603,6 +1604,25 @@ describe('createChatSessions', () => {
     ]);
     expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
+  });
+
+  it('fileWritten_InWorktrees_ListsEachWorktreeOnceInWriteOrder', async () => {
+    const test = await started();
+    for (const path of [
+      '/Users/u/dev/.worktrees/app-fix/src/a.ts',
+      '/Users/u/dev/app/src/b.ts',
+      '/Users/u/dev/.worktrees/docs-fix/README.md',
+      '/Users/u/dev/.worktrees/app-fix/src/c.ts',
+    ]) {
+      test.process.events.agentEvent({
+        type: 'fileWritten',
+        at: 0,
+        agentId: MAIN_AGENT_ID,
+        path,
+      });
+    }
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['app-fix', 'docs-fix']);
   });
 
   it('processExit_BackgroundWorkRunning_ClearsBackground', async () => {

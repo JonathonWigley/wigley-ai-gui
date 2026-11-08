@@ -83,6 +83,7 @@ import {
   readPermissionRequest,
 } from './permission-tool';
 import type { RecentFolders } from './recent-folders';
+import { worktreeNameOf } from './worktree-name';
 
 export const TURN_FINISHED_TITLE = 'Turn finished';
 
@@ -1245,6 +1246,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
         if (isLiveEvent) {
           trackBackground(session, event);
+          if (event.type === 'fileWritten') {
+            noteWorktree(session, event.path);
+          }
         }
         const endsALiveTurn = isLiveEvent && event.type === 'turnEnded';
         if (endsALiveTurn && !replay.isReplaying) {
@@ -1400,6 +1404,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         returned: [],
         repo: path.basename(projectDir),
         branch: null,
+        worktrees: [],
       }),
       owned,
       hostId,
@@ -1486,6 +1491,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const returned = records.flatMap((record) => record.returned);
     if (returned.length > 0) {
       returnToBox(session, returned);
+    }
+  }
+
+  // Adds the worktree holding `filePath` to the row's worktrees, when it is in
+  // one the row does not list yet.
+  function noteWorktree(session: HeldSession, filePath: string) {
+    const name = worktreeNameOf(filePath);
+    const { worktrees } = session.slots.info();
+    if (name !== null && !worktrees.includes(name)) {
+      session.slots.setInfo({ worktrees: [...worktrees, name] });
     }
   }
 

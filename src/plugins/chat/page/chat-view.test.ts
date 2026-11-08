@@ -81,6 +81,7 @@ function stateOf(
     returned,
     repo: 'app',
     branch: 'main',
+    worktrees: [],
     compaction: null,
     ...overrides,
   };

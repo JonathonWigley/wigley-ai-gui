@@ -30,15 +30,25 @@ interface DrawnFacts {
 }
 
 // The Session section's rows, from chat's own state: the repo, the branch when
-// there is one, the folder with the home folder as `~`, the harness, and the model
-// and effort when the session declares a model control.
+// there is one, the folder with the home folder as `~`, the worktrees the agents
+// wrote in when there are any, the harness, and the model and effort when the
+// session declares a model control.
 export function sessionFactsOf(
   input: ComposerInput,
-  projectDir: string,
+  place: { projectDir: string; worktrees: readonly string[] },
   deps: { homeDir: string; paths: Paths },
 ): SessionFactsInput {
   const branch: SessionFactInput[] =
     input.branch === null ? [] : [{ label: 'Branch', value: input.branch }];
+  const worktrees: SessionFactInput[] =
+    place.worktrees.length === 0
+      ? []
+      : [
+          {
+            label: place.worktrees.length === 1 ? 'Worktree' : 'Worktrees',
+            value: place.worktrees.join(', '),
+          },
+        ];
   const model: SessionFactInput[] =
     input.modelEffort === null
       ? []
@@ -49,8 +59,9 @@ export function sessionFactsOf(
       ...branch,
       {
         label: 'Folder',
-        value: displayPath(projectDir, deps.homeDir, deps.paths),
+        value: displayPath(place.projectDir, deps.homeDir, deps.paths),
       },
+      ...worktrees,
       { label: 'Harness', value: CHAT_HARNESS_ID },
       ...model,
     ],

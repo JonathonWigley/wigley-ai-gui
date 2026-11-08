@@ -102,6 +102,7 @@ describe('sessionFactsOf', () => {
   it.each<{
     case: string;
     input: ComposerInput;
+    worktrees?: string[];
     facts: SessionFactsInput['facts'];
   }>([
     {
@@ -146,12 +147,40 @@ describe('sessionFactsOf', () => {
         { label: 'Model', value: 'Opus 5 · high' },
       ],
     },
-  ])('sessionFactsOf_$case', ({ input, facts }) => {
+    {
+      case: 'OneWorktree_WorktreeRowAfterFolder',
+      input: composerInput('main', null),
+      worktrees: ['app-fix'],
+      facts: [
+        { label: 'Project', value: 'app-repo' },
+        { label: 'Branch', value: 'main' },
+        FOLDER,
+        { label: 'Worktree', value: 'app-fix' },
+        HARNESS,
+      ],
+    },
+    {
+      case: 'TwoWorktrees_PluralRowListsBoth',
+      input: composerInput('main', null),
+      worktrees: ['app-fix', 'docs-fix'],
+      facts: [
+        { label: 'Project', value: 'app-repo' },
+        { label: 'Branch', value: 'main' },
+        FOLDER,
+        { label: 'Worktrees', value: 'app-fix, docs-fix' },
+        HARNESS,
+      ],
+    },
+  ])('sessionFactsOf_$case', ({ input, worktrees = [], facts }) => {
     expect(
-      sessionFactsOf(input, `${HOME}/dev/app`, {
-        homeDir: HOME,
-        paths: posixPaths,
-      }),
+      sessionFactsOf(
+        input,
+        { projectDir: `${HOME}/dev/app`, worktrees },
+        {
+          homeDir: HOME,
+          paths: posixPaths,
+        },
+      ),
     ).toEqual({ facts });
   });
 });

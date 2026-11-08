@@ -59,6 +59,7 @@ const SESSION: ChatSessionState = {
   returned: [],
   repo: 'p',
   branch: null,
+  worktrees: [],
 };
 
 // Chat's page part on the part harness, over a sessions fake that files each tab

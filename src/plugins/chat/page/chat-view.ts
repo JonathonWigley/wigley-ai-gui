@@ -423,6 +423,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (info.repo !== before.repo || info.branch !== before.branch) {
       showBranch(tab, log);
     }
+    if (!isSameJson(info.worktrees, before.worktrees)) {
+      showWorktrees(tab, log);
+    }
     if (!isSameJson(info.compaction, before.compaction)) {
       showCompaction(tab, log);
     }
@@ -645,8 +648,7 @@ function sessionFactsSourceOf(
   deps: Pick<ChatViewDeps, 'homeDir' | 'paths'>,
 ): SessionFactsSource {
   return {
-    input: () =>
-      sessionFactsOf(composerInputOf(tab), tab.state.projectDir, deps),
+    input: () => sessionFactsOf(composerInputOf(tab), tab.state, deps),
     onChanged(listener) {
       // A wrapper per subscription, so each handle removes only its own.
       const wrapped = () => listener();
@@ -979,6 +981,11 @@ function showBranch(tab: HeldTab, log: PluginLog) {
       ? `${tab.name} is in ${repo}, no branch`
       : `${tab.name} is in ${repo} on ${branch}`,
   );
+}
+
+function showWorktrees(tab: HeldTab, log: PluginLog) {
+  drawStatusLine(tab);
+  log(`${tab.name} wrote in worktrees ${tab.state.worktrees.join(', ')}`);
 }
 
 function showCompaction(tab: HeldTab, log: PluginLog) {
