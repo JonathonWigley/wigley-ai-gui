@@ -452,14 +452,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     !focus.following ||
     isTallerThanBand(stop.getBoundingClientRect(), visibleBand(list));
 
-  // `marks` draws the marks alone and leaves the scroll.
-  const drawFocus = (
-    scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
-  ) => {
-    drawMarks();
-    if (scroll === 'marks') {
-      return;
-    }
+  const scrollFocus = (scroll: 'follow' | 'slot' | 'bottom' | 'top') => {
     const stop = focus.stopId === null ? undefined : stopElement(focus.stopId);
     if (scroll === 'top') {
       list.scrollTop = 0;
@@ -472,6 +465,17 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       );
     } else if (scroll === 'bottom' || focus.following) {
       scrollToBottom();
+    }
+  };
+
+  // Draws the marks, scrolls by `scroll` (`marks` leaves the scroll), and tells
+  // the owner the place changed.
+  const drawFocus = (
+    scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
+  ) => {
+    drawMarks();
+    if (scroll !== 'marks') {
+      scrollFocus(scroll);
     }
     deps.placeChanged();
   };
@@ -890,18 +894,19 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     focusedBlock: () =>
       focus.stopId === null ? null : (blockOfStop(focus.stopId) ?? null),
     toggleFocused() {
-      dropSavedPlace();
       const stop = focusedStop();
       if (stop === null || stop.kind === 'queued') {
         return null;
       }
       if (stop.kind === 'activity') {
+        dropSavedPlace();
         return { stop, result: toggleRun(stop.runId) };
       }
       const { expanders } = slots.get(stop.entry.id)!.kit;
       if (expanders.count() === 0) {
         return { stop, result: 'nothing' };
       }
+      dropSavedPlace();
       const opens = expanders.isAnyClosed();
       expanders.setAllOpen(opens);
       deps.placeChanged();
@@ -915,11 +920,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return toggleRun(runId);
     },
     toggleExpander(entryId, place) {
-      dropSavedPlace();
       const result = slots.get(entryId)?.kit.expanders.toggle(place);
       if (result === undefined) {
         return 'nothing';
       }
+      dropSavedPlace();
       deps.placeChanged();
       return result;
     },

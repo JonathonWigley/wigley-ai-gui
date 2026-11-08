@@ -335,8 +335,8 @@ function fakeTimers() {
 }
 
 // A list over `shown`, its layouts, logs, toasts, disposed anchors, timers, a
-// clock whose `time` the test sets, and the ids each pending row click pulled
-// back.
+// clock whose `time` the test sets, the ids each pending row click pulled back,
+// and the count of `placeChanged` calls.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';
@@ -351,6 +351,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   layouts.set(shown);
   const { timers, armed, fireAll } = fakeTimers();
   const clock = { time: 1000, now: () => clock.time };
+  const placeChanges = { count: 0 };
   const list = createEntryList({
     layouts,
     toastedKinds: new Set(),
@@ -389,7 +390,9 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     runClicked: (runId) => list.toggleRun(runId),
     stopClicked: (stopId) => list.moveFocusTo(stopId),
     turnLine: element('li', TURN_LINE_CLASS),
-    placeChanged: () => undefined,
+    placeChanged: () => {
+      placeChanges.count++;
+    },
   });
   const held = new Map<string, ChatEntry>();
   const put = (entry: ChatEntry) => {
@@ -407,6 +410,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     fireAll,
     clock,
     layouts,
+    placeChanges,
     put,
     entries,
   };
@@ -1374,6 +1378,48 @@ describe('slots and focus', () => {
       }
 
       expect(scroller.scrollTop).toBe(scrollTop);
+    },
+  );
+
+  // Each move that redraws only the marks, the scroll left as it is.
+  it.each<{
+    name: string;
+    isRangeOpen?: boolean;
+    move: (list: EntryList, scroller: FakeElement) => void;
+  }>([
+    { name: 'a click on a stop', move: (list) => list.moveFocusTo('n1') },
+    { name: 'opening a range', move: (list) => list.toggleRange() },
+    {
+      name: 'cancelling a range',
+      isRangeOpen: true,
+      move: (list) => list.cancelRange(),
+    },
+    {
+      name: 'a wheel scroll up',
+      move: (_list, scroller) => {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      },
+    },
+  ])(
+    'placeChanged_MarksOnlyMove_TellsTheOwner ($name)',
+    ({ isRangeOpen = false, move }) => {
+      const { list, put, placeChanges } = setUpList(defaultShown());
+      const scroller = asFake(list.element) as FakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.scrollHeight = 400;
+      scroller.clientHeight = 100;
+      [notice('n1'), notice('n2'), notice('n3')].forEach(put);
+      if (isRangeOpen) {
+        list.toggleRange();
+      }
+      placeChanges.count = 0;
+
+      move(list, scroller);
+
+      expect(placeChanges.count).toBeGreaterThan(0);
     },
   );
 
