@@ -473,6 +473,106 @@ const TRANSCRIPT_SCROLL_STEPS: SelfTestStep[] = [
   },
 ];
 
+const HUB_ENTERED = '[chat] focused the session hub in chat-selftest';
+const BOX_FOCUSED = '[chat] focused the box in chat-selftest';
+const BACK_ON_ENTRIES = '[chat] cursor back on the entries in chat-selftest';
+const linePattern = (line: string) => new RegExp(`^${escapeRegExp(line)}$`);
+
+// Starts and ends with the transcript holding the keys, the box blurred in
+// normal mode and the hub shown at its default width, every section expanded.
+// The hub hides in a Chat tab under 640 px, so the group runs wide.
+const PANE_KEYS_STEPS: SelfTestStep[] = [
+  {
+    keys: ['<A-l>'],
+    expect: HUB_ENTERED,
+    width: 1400,
+    screenshot: 'hub-cursor',
+  },
+  {
+    keys: ['G'],
+    expect: '[chat] hub cursor on Session',
+    why: "G goes to the last section, chat's Session (order 40).",
+  },
+  {
+    keys: ['j'],
+    expect: '[chat] hub cursor on Session',
+    why: 'j on the last section stays.',
+  },
+  {
+    keys: ['k', 'j'],
+    expect: '[chat] hub cursor on Session',
+    alsoExpect: [/^\[chat\] hub cursor on (?!Session$)/],
+    why: 'k leaves Session for the section above it, j comes back.',
+  },
+  { keys: ['Enter'], expect: '[chat] section Session collapsed' },
+  { keys: ['l'], expect: '[chat] section Session expanded' },
+  {
+    keys: ['<C-j>'],
+    expect: '[page] <C-j> ran chat.hubLineDown',
+    alsoExpect: [
+      /^\[chat\] (scrolled )?the Session section (did not scroll )?down/,
+    ],
+  },
+  {
+    keys: ['<A-S-h>'],
+    expect: '[page] <A-S-h> ran panes.resizePaneLeft',
+    alsoExpect: [/^\[chat\] session hub width 288$/],
+    why: "The hub's divider is the resize target, widening the hub from its 264.",
+  },
+  {
+    keys: ['<A-S-l>'],
+    expect: '[page] <A-S-l> ran panes.resizePaneRight',
+    alsoExpect: [/^\[chat\] session hub width 264$/],
+  },
+  {
+    keys: ['<A-h>'],
+    expect: BACK_ON_ENTRIES,
+    why: 'Alt+h returns to the transcript the hub was entered from.',
+  },
+  { keys: ['<A-j>'], expect: BOX_FOCUSED },
+  { keys: ['<A-k>'], expect: '[chat] left the box' },
+  {
+    keys: ['i', '<A-k>'],
+    expect: '[chat] left the box',
+    alsoExpect: [linePattern(BOX_FOCUSED)],
+    why: 'i enters insert mode, and Alt+k leaves the box from it.',
+  },
+  {
+    keys: ['<A-j>', 'Escape'],
+    expect: '[chat] left the box',
+    alsoExpect: [linePattern(BOX_FOCUSED)],
+    why: 'One Esc leaves the box, so Alt+k had left insert mode.',
+  },
+  {
+    keys: ['<A-j>', '<A-l>'],
+    expect: HUB_ENTERED,
+    alsoExpect: [linePattern(BOX_FOCUSED)],
+  },
+  {
+    keys: ['<A-h>'],
+    expect: BOX_FOCUSED,
+    why: 'Alt+h returns to the box the hub was entered from.',
+  },
+  {
+    keys: ['Escape', '<A-l>', 'Escape'],
+    expect: BACK_ON_ENTRIES,
+    alsoExpect: [linePattern('[chat] left the box'), linePattern(HUB_ENTERED)],
+    why: 'Esc in the hub always goes to the transcript.',
+  },
+  {
+    keys: ['<A-l>', ' ', 'v', 's'],
+    expect: '[chat] session hub hidden',
+    alsoExpect: [linePattern(BACK_ON_ENTRIES)],
+    why: 'Hiding the hub hands its keys to the transcript.',
+  },
+  {
+    keys: [' ', 'v', 's'],
+    expect: '[chat] session hub shown',
+    width: 'start',
+    why: 'The hub shows again for the groups after.',
+  },
+];
+
 const CONTROLS_STEPS: SelfTestStep[] = [
   { keys: ['e'], expect: '[chat] picker shown: Effort', checksFit: true },
   {
@@ -816,6 +916,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'transcript scroll',
     why: 'A thirty-paragraph message makes the transcript taller than the sheet; scrolling half a page or a line up off the bottom stops following, and back onto the bottom follows again.',
     steps: TRANSCRIPT_SCROLL_STEPS,
+  },
+  {
+    name: 'pane keys',
+    why: 'Alt+l and Alt+h move between the transcript or the box and the session hub, returning to the pane they came from; Alt+j and Alt+k move between the transcript and the box, the box leaving insert mode; in the hub G, j and k walk the section heads, Enter and l fold and unfold one, Ctrl+j scrolls it, Alt+Shift+h and l resize the hub, Esc goes back to the transcript, and Space v s hiding the hub hands the keys back.',
+    steps: PANE_KEYS_STEPS,
   },
   {
     name: 'session controls',

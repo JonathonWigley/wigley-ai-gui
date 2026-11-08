@@ -17,6 +17,8 @@ export class FakeElement {
   type = '';
   tabIndex = 0;
   scrollTop = 0;
+  // Whether `getClientRects` reports a layout box.
+  hasLayoutBox = false;
   innerHTML = '';
   private ownText = '';
   private classes = new Set<string>();
@@ -242,6 +244,12 @@ export class FakeElement {
   // layout box reports.
   getBoundingClientRect(): FakeRect {
     return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  }
+
+  // One rect while `hasLayoutBox` is set, else none, as an element with no
+  // layout box (`display: none` on it or an ancestor) reports.
+  getClientRects(): FakeRect[] {
+    return this.hasLayoutBox ? [this.getBoundingClientRect()] : [];
   }
 
   scrollIntoView() {}

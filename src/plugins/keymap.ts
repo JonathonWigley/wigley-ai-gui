@@ -208,6 +208,7 @@ export const defaultKeymap = {
         'sessions.idle',
         'sessions.sidebar',
         'chat.chat',
+        'chat.hub',
         'agent-strip.strip',
         'docs.tree',
         'docs.doc',
@@ -512,6 +513,19 @@ export const defaultKeymap = {
       command: 'chat.copySignInLink',
       where: 'box',
     },
+
+    // ── Session hub ────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'chat.hub', command: 'chat.nextSection' },
+    { keys: 'k', scope: 'chat.hub', command: 'chat.prevSection' },
+    { keys: 'gg', scope: 'chat.hub', command: 'chat.firstSection' },
+    { keys: 'G', scope: 'chat.hub', command: 'chat.lastSection' },
+    { keys: '<CR>', scope: 'chat.hub', command: 'chat.toggleSection' },
+    { keys: 'l', scope: 'chat.hub', command: 'chat.toggleSection' },
+    { keys: '<Esc>', scope: 'chat.hub', command: 'chat.leaveHub' },
+    { keys: '<C-j>', scope: 'chat.hub', command: 'chat.hubLineDown' },
+    { keys: '<C-k>', scope: 'chat.hub', command: 'chat.hubLineUp' },
+    { keys: '<C-S-j>', scope: 'chat.hub', command: 'chat.hubHalfPageDown' },
+    { keys: '<C-S-k>', scope: 'chat.hub', command: 'chat.hubHalfPageUp' },
 
     // ── Agent strip ────────────────────────────────────────────────────────
     // `k` and Esc both hand the cursor back to the entries.

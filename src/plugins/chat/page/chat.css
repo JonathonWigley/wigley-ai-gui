@@ -41,8 +41,10 @@
   width: calc(var(--chat-side-width) * 1px);
 }
 
-/* The hub's drag handle lies centred on its hairline, taking no space. No key
-   resizes the hub, so it shows no resize prompt. */
+/* The hub's drag handle lies centred on its hairline, taking no space. Its
+   resize prompt shows as every split's does, since Alt+Shift+h/l resize the hub
+   while it holds the keys. The hub's holder takes the DOM focus while it holds
+   the keys, and draws no outline: the cursor's head carries the ring. */
 .chat-side-handle {
   bottom: 0;
   left: calc(var(--wg-space-1) / -2 - 1px);
@@ -52,8 +54,8 @@
   z-index: 1;
 }
 
-.chat-side-handle > .ui-split-prompt {
-  display: none;
+.chat-side-parts:focus {
+  outline: none;
 }
 
 .is-side-hidden .chat-side-parts {
@@ -108,6 +110,10 @@
   width: 100%;
 }
 
+.chat-tab.is-at-hub .chat-side-section-head.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
 .chat-side-section-body {
   display: flex;
   flex: 0 1 auto;
@@ -145,8 +151,8 @@
 
 /* The chat's focus exception: the focused block, or the focused entry when it
    has no blocks, draws a left bar, not the ring, and while the box has focus no
-   entry and no box frame is marked; while a composer part's stop holds the
-   cursor no entry is marked either. A range tints each of its stops. */
+   entry and no box frame is marked; while a composer part's stop or the session
+   hub holds the cursor no entry is marked either. A range tints each of its stops. */
 .chat-entry-slot {
   --chat-slot-gutter: var(--wg-space-2);
 
@@ -218,7 +224,10 @@
 .chat-tab.is-box-focused [data-md-lines].is-cursor::before,
 .chat-tab.is-at-stop .chat-entry-slot.is-cursor,
 .chat-tab.is-at-stop [data-md-lines].is-cursor,
-.chat-tab.is-at-stop [data-md-lines].is-cursor::before {
+.chat-tab.is-at-stop [data-md-lines].is-cursor::before,
+.chat-tab.is-at-hub .chat-entry-slot.is-cursor,
+.chat-tab.is-at-hub [data-md-lines].is-cursor,
+.chat-tab.is-at-hub [data-md-lines].is-cursor::before {
   box-shadow: none;
 }
 
@@ -238,7 +247,8 @@
   border-top-color: var(--wg-accent-tint);
 }
 
-.chat-tab:not(.is-box-focused, .is-at-stop) hr[data-md-lines].is-cursor {
+.chat-tab:not(.is-box-focused, .is-at-stop, .is-at-hub)
+  hr[data-md-lines].is-cursor {
   border-top-color: var(--wg-focus-border);
 }
 

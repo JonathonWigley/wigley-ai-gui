@@ -99,7 +99,9 @@ type Handler = (context: PageCommandContext) => void;
 
 // Every chat command's handler but the start prompt's (`newSession`,
 // `startNewSession`, `toggleArchive`, `showArchived`) and the session hub's
-// (`toggleSideParts`), by short id. A command acting on a
+// (`toggleSideParts`, `nextSection`, `prevSection`, `firstSection`,
+// `lastSection`, `toggleSection`, `leaveHub`, `hubLineDown`, `hubLineUp`,
+// `hubHalfPageDown`, `hubHalfPageUp`), by short id. A command acting on a
 // session acts only on the session whose Chat tab is the visible tab, and
 // does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
@@ -111,6 +113,16 @@ export function chatCommandHandlers(
   | 'toggleArchive'
   | 'showArchived'
   | 'toggleSideParts'
+  | 'nextSection'
+  | 'prevSection'
+  | 'firstSection'
+  | 'lastSection'
+  | 'toggleSection'
+  | 'leaveHub'
+  | 'hubLineDown'
+  | 'hubLineUp'
+  | 'hubHalfPageDown'
+  | 'hubHalfPageUp'
 > {
   const { tabs, channel, picker, log } = deps;
   const inSession =

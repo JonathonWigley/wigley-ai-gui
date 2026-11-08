@@ -11,12 +11,17 @@ import {
   FakeElement,
   findAll,
   installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { ChatSidePart, ChatSideSection } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
-import { createSideSections, type SideTab } from './side-sections';
+import {
+  createSideSections,
+  type SectionCursor,
+  type SideTab,
+} from './side-sections';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 const COLLAPSED = 'collapsed-sections';
@@ -473,5 +478,283 @@ describe('createSideSections', () => {
 
     expect(part.disposes).toBe(2);
     expect(root.classList.contains('is-side-hidden')).toBe(false);
+  });
+});
+
+// The heads whose section is in `ids` get a layout box, as a drawn head has,
+// and the holder gets one too.
+function showHeads(root: FakeElement, ids: readonly string[]) {
+  holderOf(root).hasLayoutBox = true;
+  for (const wrapper of findAll(root, 'chat-side-part')) {
+    const head = findAll(wrapper, 'chat-side-section-head')[0];
+    if (head !== undefined) {
+      head.hasLayoutBox = ids.includes(wrapper.dataset.part);
+    }
+  }
+}
+
+// The part ids whose head carries the cursor's mark.
+function markedParts(root: FakeElement): string[] {
+  return findAll(root, 'chat-side-part')
+    .filter((wrapper) =>
+      findAll(wrapper, 'chat-side-section-head').some((head) =>
+        head.classList.contains('is-cursor'),
+      ),
+    )
+    .map((wrapper) => wrapper.dataset.part);
+}
+
+// A layout whose section frame has no update, so each frame change draws a new
+// head.
+const REDRAWN_FRAME: ChatLayout = {
+  sideSection(parent, input, kit) {
+    const section = document.createElement('section');
+    section.className = 'chat-side-section';
+    section.classList.toggle('is-collapsed', input.collapsed);
+    parent.append(section);
+    kit.head(section);
+    kit.body(section);
+    return { element: section };
+  },
+};
+
+describe('the section cursor', () => {
+  beforeEach(() =>
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
+  );
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  type Step = (cursor: SectionCursor) => string | null;
+  const enter: Step = (cursor) => cursor.enter();
+  const down: Step = (cursor) => cursor.move(1);
+  const up: Step = (cursor) => cursor.move(-1);
+  const first: Step = (cursor) => cursor.toEdge('first');
+  const last: Step = (cursor) => cursor.toEdge('last');
+
+  // Four parts in hub order a, b, c, d; b draws a head with no layout box.
+  it.each<{
+    case: string;
+    given: Step[];
+    removes?: string;
+    act: Step;
+    title: string;
+    marked: string;
+  }>([
+    {
+      case: 'enter, first time',
+      given: [],
+      act: enter,
+      title: 'Title a',
+      marked: 'a',
+    },
+    {
+      case: 'move(1) skips the hidden section',
+      given: [enter],
+      act: down,
+      title: 'Title c',
+      marked: 'c',
+    },
+    {
+      case: 'move(-1) skips it back',
+      given: [enter, down],
+      act: up,
+      title: 'Title a',
+      marked: 'a',
+    },
+    {
+      case: 'move(1) on the last stays',
+      given: [enter, last],
+      act: down,
+      title: 'Title d',
+      marked: 'd',
+    },
+    {
+      case: 'move(-1) on the first stays',
+      given: [enter],
+      act: up,
+      title: 'Title a',
+      marked: 'a',
+    },
+    {
+      case: "toEdge('first')",
+      given: [enter, last],
+      act: first,
+      title: 'Title a',
+      marked: 'a',
+    },
+    {
+      case: "toEdge('last')",
+      given: [enter],
+      act: last,
+      title: 'Title d',
+      marked: 'd',
+    },
+    {
+      case: 'enter keeps the cursor',
+      given: [enter, down],
+      act: enter,
+      title: 'Title c',
+      marked: 'c',
+    },
+    {
+      case: "enter with the cursor's section removed",
+      given: [enter, down],
+      removes: 'c',
+      act: enter,
+      title: 'Title a',
+      marked: 'a',
+    },
+    {
+      case: "move(1) with the cursor's section removed",
+      given: [enter, last],
+      removes: 'd',
+      act: down,
+      title: 'Title a',
+      marked: 'a',
+    },
+  ])(
+    'sectionCursor_Walk_StopsAtEndsAndSkipsHiddenSections: $case',
+    ({ given, removes, act, title, marked }) => {
+      const { parts, openTab } = setUp();
+      const added = new Map(
+        ['a', 'b', 'c', 'd'].map((id, index) => [
+          id,
+          parts.add(recordingPart(id, (index + 1) * 10).part),
+        ]),
+      );
+      const { root, side } = openTab();
+      showHeads(root, ['a', 'c', 'd']);
+      for (const step of given) {
+        step(side.cursor);
+      }
+      if (removes !== undefined) {
+        added.get(removes)?.dispose();
+        side.sync();
+      }
+
+      expect(act(side.cursor)).toBe(title);
+      expect(markedParts(root)).toEqual([marked]);
+    },
+  );
+
+  it('sectionCursor_Toggle_FoldsTheCursorsSectionAndKeepsTheMark', () => {
+    const { parts, layouts, uiState, logs, openTab } = setUp();
+    layouts.set(withUser<ChatLayout>(defaultLayout, REDRAWN_FRAME));
+    parts.add(recordingPart('a', 10).part);
+    parts.add(recordingPart('b', 20).part);
+    const { root, side } = openTab();
+    showHeads(root, ['a', 'b']);
+    side.cursor.enter();
+    side.cursor.move(1);
+    const headBefore = findAll(root, 'chat-side-section-head')[1];
+
+    expect(side.cursor.toggle()).toBe('Title b');
+
+    expect(uiState.get(COLLAPSED)).toEqual(['b']);
+    expect(logs).toContain('section Title b collapsed');
+    expect(findAll(root, 'chat-side-section-head')[1]).not.toBe(headBefore);
+    expect(markedParts(root)).toEqual(['b']);
+
+    showHeads(root, ['a', 'b']);
+    side.cursor.toggle();
+
+    expect(uiState.get(COLLAPSED)).toEqual([]);
+    expect(logs).toContain('section Title b expanded');
+    expect(markedParts(root)).toEqual(['b']);
+  });
+
+  it.each<{
+    case: string;
+    hidden: boolean;
+    holderBox: boolean;
+    shownHeads: string[];
+    reachable: boolean;
+  }>([
+    {
+      case: 'hub hidden',
+      hidden: true,
+      holderBox: true,
+      shownHeads: ['a'],
+      reachable: false,
+    },
+    {
+      case: 'holder with no layout box',
+      hidden: false,
+      holderBox: false,
+      shownHeads: ['a'],
+      reachable: false,
+    },
+    {
+      case: 'no head shown',
+      hidden: false,
+      holderBox: true,
+      shownHeads: [],
+      reachable: false,
+    },
+    {
+      case: 'one shown head',
+      hidden: false,
+      holderBox: true,
+      shownHeads: ['a'],
+      reachable: true,
+    },
+  ])(
+    'sectionCursor_IsReachable: $case',
+    ({ hidden, holderBox, shownHeads, reachable }) => {
+      const { parts, openTab } = setUp(fakeUiState({ [HIDDEN]: hidden }));
+      parts.add(recordingPart('a', 10).part);
+      parts.add(recordingPart('b', 20).part);
+      const { root, side } = openTab();
+      showHeads(root, shownHeads);
+      holderOf(root).hasLayoutBox = holderBox;
+
+      expect(side.cursor.isReachable()).toBe(reachable);
+    },
+  );
+
+  it('sectionCursor_ScrollBy_ScrollsTheCursorsBody', () => {
+    vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '18px' }));
+    const { parts, openTab } = setUp();
+    parts.add(recordingPart('a', 10).part);
+    parts.add(recordingPart('b', 20).part);
+    const { root, side } = openTab();
+    showHeads(root, ['a', 'b']);
+    const body = findAll(root, 'chat-side-section-body')[1];
+    Object.assign(body, { scrollHeight: 500, clientHeight: 100 });
+    side.cursor.enter();
+    side.cursor.move(1);
+
+    const scrolled = side.cursor.scrollBy('line', 1);
+
+    expect(scrolled).toEqual({
+      title: 'Title b',
+      scroll: { moved: true, atEnd: false },
+    });
+    expect(body.scrollTop).toBe(18);
+  });
+
+  it('hubDivider_NudgeLeftThenRight_Widens24pxAndReturnsTo264', () => {
+    const { uiState, openTab, logs } = setUp();
+    const { root, side } = openTab();
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 500,
+    });
+    findAll(root, 'chat-side-handle')[0].hasLayoutBox = true;
+
+    expect(side.divider.nudge('left')).toBe(true);
+    expect(holderOf(root).style['--chat-side-width']).toBe('288');
+    expect(uiState.get(WIDTH)).toBe(288);
+    expect(logs).toContain('session hub width 288');
+
+    side.divider.nudge('right');
+
+    expect(holderOf(root).style['--chat-side-width']).toBe('264');
+    expect(logs.at(-1)).toBe('session hub width 264');
   });
 });

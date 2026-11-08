@@ -78,7 +78,8 @@ type ChatApi = PageApi<
 // command's description through the `completionDescription` part while the
 // `chat.completionDescriptions` setting is on; the exports register more
 // commands and row draws, fill a session's box, and add parts above every
-// composer and sections to every tab's session hub, which `toggleSideParts` hides or shows in every tab; chat's own
+// composer and sections to every tab's session hub, which `toggleSideParts` hides or shows in every tab and whose
+// keys (`nextSection` to `hubHalfPageUp`) walk, fold and scroll its sections; chat's own
 // Main agent section holds the activity dock, and its Session section the
 // session's facts. Images
 // pasted or dropped into a Chat tab attach to its next message, other files go
@@ -216,7 +217,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           hostChanged: ({ sessionId }) => listener(sessionId),
         }),
       onScopeChanged: (listener) =>
-        api.state.read(coreScopeSlot).on(() => listener()),
+        api.state.read(coreScopeSlot).on((scope) => listener(scope)),
       activeTimeListeners: [(sessionId) => rowClock.changed(sessionId)],
       editor: services.editor,
       markdown: services.markdown,
@@ -236,6 +237,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       slashCommands: () => slashCommands.list(),
       completionRows,
       setScope: (scope) => api.keys.setScope(scope),
+      setFocusTarget: (target) => api.panes.setFocusTarget(target),
+      setResizeTarget: (target) => api.panes.setResizeTarget(target),
       otherSessionShown: () => {
         closeSessionDialogs();
         viewer.close();
@@ -335,7 +338,20 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         startNewSession: () => startPrompt.openForNewSession(),
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
-        toggleSideParts: () => sideSections.toggleHidden(),
+        toggleSideParts: () => {
+          sideSections.toggleHidden();
+          view.hub.hiddenChanged();
+        },
+        nextSection: () => view.hub.move(1),
+        prevSection: () => view.hub.move(-1),
+        firstSection: () => view.hub.toEdge('first'),
+        lastSection: () => view.hub.toEdge('last'),
+        toggleSection: () => view.hub.toggle(),
+        leaveHub: () => view.hub.leave(),
+        hubLineDown: () => view.hub.scroll('line', 1),
+        hubLineUp: () => view.hub.scroll('line', -1),
+        hubHalfPageDown: () => view.hub.scroll('halfPage', 1),
+        hubHalfPageUp: () => view.hub.scroll('halfPage', -1),
       },
       exports,
       dispose: () => view.dispose(),

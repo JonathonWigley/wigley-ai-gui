@@ -12,14 +12,22 @@ import type { PageDrops } from '../../../contracts/drops';
 import type {
   EditorCompletions,
   EditorHost,
+  ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
 import type { ChatEntryKind } from '../../../contracts/agent';
+import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
+import type {
+  FocusTarget,
+  PaneDirection,
+  ResizeTarget,
+} from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import type { KeyedSlotReader, ListSlotReader } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
+import { scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import type { PartStore } from '../../../shared/page/contributed-parts';
@@ -136,13 +144,31 @@ export interface ChatSession extends SessionRef {
   enterStop(): string | null;
 }
 
+// The session hub's keys, each acting on the visible Chat tab's hub while it
+// holds the keys and logging `no Chat tab shown` with no visible Chat tab.
+// `move` and `toEdge` walk the section heads and `toggle` folds or unfolds the
+// cursor's section; `leave` gives the keys to the transcript, as Esc does;
+// `scroll` scrolls the cursor's section body. `hiddenChanged` runs after the
+// hub is hidden or shown: a hub no longer reachable gives its keys to the
+// transcript. A key that finds no section shown does the same.
+export interface HubKeys {
+  move(by: 1 | -1): void;
+  toEdge(edge: 'first' | 'last'): void;
+  toggle(): void;
+  leave(): void;
+  scroll(step: ScrollStep, direction: 1 | -1): void;
+  hiddenChanged(): void;
+}
+
 // The Chat view with what the commands read: the session a box belongs to,
 // and a held session by id. `markSent` clears the done or error the
 // session's row shows, as a message sent there does. `composerOf` is a held
 // session's composer surface, for the part that places its activity dock.
 // `sessionFactsSource` is a held session's facts for the hub's Session section,
-// read live: `onChanged` fires after each status line draw.
+// read live: `onChanged` fires after each status line draw. `hub` is the
+// session hub's keys.
 export interface ChatTabs extends ChatView {
+  hub: HubKeys;
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
@@ -159,16 +185,19 @@ export interface PermissionActions {
   deny(session: SessionRef, entry: PermissionEntry): void;
 }
 
-// The base scope a shown Chat tab sets.
-export type ChatTabScope = 'chat';
+// The base scopes a Chat tab sets: `chat` for the transcript, the box and a
+// composer part's stop, `hub` while the session hub holds the keys.
+export type ChatTabScope = 'chat' | 'hub';
 
-// `setScope` sets the base scope; `otherSessionShown` runs when the
+// `setScope` sets the base scope, and `setFocusTarget` and `setResizeTarget`
+// hand the core the tab's focus target and the divider the resize keys move
+// after it, since a base scope change drops both; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
 // `visibleSessionRested` runs when the visible Chat tab's process exits;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs,
 // `onActiveChanged` the focused pane's session change and
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
-// the scope keys fire in; `sessions` also takes each
+// the scope keys fire in, with that scope; `sessions` also takes each
 // row's activity, and `activeSessionId` names the focused pane's session.
 // `slots` holds chat's slots, and `onPageReady` hears that every page part has
 // started: the view reads the sessions already held and follows the slots from
@@ -201,7 +230,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
-  onScopeChanged(listener: () => void): void;
+  onScopeChanged(listener: (scope: ViewScope | undefined) => void): void;
   activeTimeListeners: readonly ((
     sessionId: string,
     activeTime: ActiveTime,
@@ -219,6 +248,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   slashCommands(): AppSlashCommand[];
   completionRows: CompletionRows;
   setScope(scope: ChatTabScope): void;
+  setFocusTarget(target: FocusTarget | null): void;
+  setResizeTarget(target: ResizeTarget | null): void;
   otherSessionShown(): void;
   visibleSessionRested(): void;
   log: PluginLog;
@@ -245,7 +276,9 @@ export interface ChatSlotReaders {
 // held. `unseen` is the finished turn the row still shows, and `activity` the
 // activity last set on the row. `stop` holds the composer part holding the
 // tab's entry cursor. `main` holds the entries and the composer; `side` is the
-// tab's session hub. `factsListeners` hear each status line draw.
+// tab's session hub; `isAtHub` is set while the hub holds the keys, and
+// `cameToHub` names the pane the keys came to it from. `focusTarget` moves the
+// focus keys between the tab's panes. `factsListeners` hear each status line draw.
 // `placedReturned` holds each returned message's id once it is handed to the box:
 // `chat.returned` is the whole list, which still names them until main hears
 // `returnedPlaced`.
@@ -261,6 +294,9 @@ interface HeldTab {
   root: HTMLElement;
   main: HTMLElement;
   side: SideTab;
+  isAtHub: boolean;
+  cameToHub: 'box' | 'transcript';
+  focusTarget: FocusTarget;
   entries: EntryList;
   attachments: Attachments;
   composer: ComposerSurface;
@@ -315,6 +351,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.entries.rebuild(tab.state.entries);
       drawComposer(tab);
       tab.side.rebuild();
+      leaveUnreachableHub(tab, deps);
     }
   });
   const drawEveryComposer = () => {
@@ -327,6 +364,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   deps.sideParts.onChanged(() => {
     for (const tab of tabs.values()) {
       tab.side.sync();
+      leaveUnreachableHub(tab, deps);
     }
   });
   let pendingReveal: string | null = null;
@@ -377,7 +415,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       // `otherSessionShown` closes the session's dialogs.
       shown: (shownTab) => {
         shownTab.stop.leave();
-        deps.setScope('chat');
+        takeKeys(shownTab, 'chat', deps);
         askHistory(shownTab, deps);
         if (
           lastShownSessionId !== null &&
@@ -533,21 +571,78 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   deps.onActiveChanged(clearUnseen);
   deps.onSessionHostChanged(clearUnseen);
   // Another tab, pane or mode took the keys; a scope pushed over the visible
-  // tab keeps its stop.
-  deps.onScopeChanged(() => {
+  // tab keeps its stop and its hub, whose ring shows only under the hub's own
+  // scope.
+  deps.onScopeChanged((scope) => {
     for (const tab of tabs.values()) {
-      tab.stop.scopeChanged(tab.handle?.isVisible() === true);
+      const isVisible = tab.handle?.isVisible() === true;
+      tab.stop.scopeChanged(isVisible);
+      if (!isVisible) {
+        tab.isAtHub = false;
+      }
+      tab.root.classList.toggle(
+        'is-at-hub',
+        isVisible && tab.isAtHub && scope === HUB_SCOPE,
+      );
     }
   });
 
   const visibleTab = () =>
     [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);
+  const withVisibleTab = (act: (tab: HeldTab) => void) => {
+    const tab = visibleTab();
+    if (tab === undefined) {
+      log('no Chat tab shown');
+      return;
+    }
+    act(tab);
+  };
+  // Logs the cursor's section, or gives the keys to the transcript when no
+  // section shows.
+  const showHubCursor = (tab: HeldTab, title: string | null) => {
+    if (title === null) {
+      hubToEntries(tab, deps);
+    } else {
+      log(`hub cursor on ${title}`);
+    }
+  };
+  const hub: HubKeys = {
+    move: (by) =>
+      withVisibleTab((tab) => showHubCursor(tab, tab.side.cursor.move(by))),
+    toEdge: (edge) =>
+      withVisibleTab((tab) => showHubCursor(tab, tab.side.cursor.toEdge(edge))),
+    toggle: () =>
+      withVisibleTab((tab) => {
+        if (tab.side.cursor.toggle() === null) {
+          hubToEntries(tab, deps);
+        }
+      }),
+    leave: () => withVisibleTab((tab) => hubToEntries(tab, deps)),
+    scroll: (step, direction) =>
+      withVisibleTab((tab) => {
+        const scrolled = tab.side.cursor.scrollBy(step, direction);
+        if (scrolled === null) {
+          hubToEntries(tab, deps);
+          return;
+        }
+        const what = `the ${scrolled.title} section`;
+        log(scrollText(what, step, direction, scrolled.scroll));
+      }),
+    hiddenChanged() {
+      const tab = visibleTab();
+      if (tab !== undefined) {
+        leaveUnreachableHub(tab, deps);
+      }
+    },
+  };
+
   const asSession = (tab: HeldTab | undefined): ChatSession | undefined =>
     tab === undefined || tab.box === null
       ? undefined
       : sessionOf(tab, tab.box, deps.composerParts);
 
   const view: ChatTabs = {
+    hub,
     reveal(sessionId) {
       if (isDisposed) {
         return;
@@ -658,10 +753,122 @@ function sessionFactsSourceOf(
   };
 }
 
+// What handing over the keys calls.
+type KeysDeps = Pick<
+  ChatViewDeps,
+  'setScope' | 'setFocusTarget' | 'setResizeTarget'
+>;
+
+type PaneDeps = KeysDeps & Pick<ChatViewDeps, 'log'>;
+
+// The hub's scope as the core names it in force.
+const HUB_SCOPE = 'chat.hub';
+
+// Gives the tab the keys in `scope`: the hub flag first, so the scope's
+// listeners read it, then the scope, then the targets its change dropped.
+function takeKeys(tab: HeldTab, scope: ChatTabScope, deps: KeysDeps) {
+  tab.isAtHub = scope === 'hub';
+  deps.setScope(scope);
+  handTargets(tab, deps);
+}
+
+// The tab's focus target, and the hub's divider as the resize target while the
+// hub holds the keys.
+function handTargets(tab: HeldTab, deps: KeysDeps) {
+  deps.setResizeTarget(tab.isAtHub ? tab.side.divider : null);
+  deps.setFocusTarget(tab.focusTarget);
+}
+
 // Chat's scope in force again and the cursor on the stop `G` focuses.
-function cursorToEntries(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
-  deps.setScope('chat');
+function cursorToEntries(tab: HeldTab, deps: KeysDeps) {
+  takeKeys(tab, 'chat', deps);
   tab.entries.latest();
+}
+
+// The focus keys inside one Chat tab: Alt+l from the transcript, the box or a
+// composer part's stop enters the hub while it is reachable, and Alt+h there
+// returns to the box or the transcript the keys came from; Alt+j goes from the
+// transcript or the stop to the box, Alt+k from the box or the stop to the
+// transcript. Every other move returns false.
+function movePane(
+  tab: HeldTab,
+  direction: PaneDirection,
+  deps: PaneDeps,
+): boolean {
+  if (tab.isAtHub) {
+    if (direction !== 'left') {
+      return false;
+    }
+    if (tab.cameToHub === 'box') {
+      focusBox(tab, deps);
+    } else {
+      hubToEntries(tab, deps);
+    }
+    return true;
+  }
+  const isAtStop = tab.stop.holding() !== null;
+  if (direction === 'right') {
+    if (!tab.side.cursor.isReachable()) {
+      return false;
+    }
+    const isFromBox = !isAtStop && tab.isBoxFocused;
+    enterHub(tab, isFromBox ? 'box' : 'transcript', deps);
+    return true;
+  }
+  if (isAtStop && direction === 'up') {
+    tab.stop.leave();
+    cursorToEntries(tab, deps);
+    deps.log(`cursor back on the entries in ${tab.name}`);
+    return true;
+  }
+  const isFromTranscript = isAtStop || !tab.isBoxFocused;
+  if (isFromTranscript && direction === 'down') {
+    tab.stop.leave();
+    focusBox(tab, deps);
+    return true;
+  }
+  if (!isFromTranscript && direction === 'up') {
+    tab.box?.blur({ toNormal: true });
+    takeKeys(tab, 'chat', deps);
+    deps.log('left the box');
+    return true;
+  }
+  return false;
+}
+
+// Focuses the box in the vim mode it was left in, with chat's keys.
+function focusBox(tab: HeldTab, deps: PaneDeps) {
+  takeKeys(tab, 'chat', deps);
+  tab.side.cursor.leave();
+  tab.box?.focus();
+  deps.log(`focused the box in ${tab.name}`);
+}
+
+// Leaves the box in normal mode or the stop, and gives the hub the keys.
+function enterHub(tab: HeldTab, from: 'box' | 'transcript', deps: PaneDeps) {
+  if (from === 'box') {
+    tab.box?.blur({ toNormal: true });
+  }
+  tab.stop.leave();
+  tab.cameToHub = from;
+  takeKeys(tab, 'hub', deps);
+  tab.side.cursor.enter();
+  deps.log(`focused the session hub in ${tab.name}`);
+}
+
+// The hub gives the keys to the transcript, its entry cursor where it was.
+function hubToEntries(tab: HeldTab, deps: PaneDeps) {
+  takeKeys(tab, 'chat', deps);
+  tab.side.cursor.leave();
+  deps.log(`cursor back on the entries in ${tab.name}`);
+}
+
+// A hub holding the keys that can no longer be reached gives them to the
+// transcript.
+function leaveUnreachableHub(tab: HeldTab, deps: PaneDeps) {
+  if (tab.isAtHub && !tab.side.cursor.isReachable()) {
+    hubToEntries(tab, deps);
+  }
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
@@ -705,7 +912,9 @@ function sessionOf(
 // other plugins' parts, the activity line, the attached images' strip, the box
 // and its status line) added to its session, with the box's editor mounted
 // once the element is attached; it is marked `is-at-stop` while a composer part's stop
-// holds the entry cursor, and the box taking focus leaves that part. The
+// holds the entry cursor, and the box taking focus leaves that part, and
+// `is-at-hub` while the hub's own scope is in force on the visible tab; the
+// box taking focus, or a pointer down on the entries, ends the hub's turn. The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
 // before the handle and box are set. Once the box is mounted the tab element is
@@ -784,6 +993,9 @@ function createTab(
     root,
     main,
     side: deps.sideSections.openTab(root, state.sessionId),
+    isAtHub: false,
+    cameToHub: 'transcript',
+    focusTarget: { move: (direction) => movePane(tab, direction, deps) },
     entries,
     attachments,
     composer,
@@ -794,18 +1006,29 @@ function createTab(
       name,
       toEntries: () => cursorToEntries(tab, deps),
       toBox: (how) => {
-        deps.setScope('chat');
+        takeKeys(tab, 'chat', deps);
         tab.box?.focus(
           how === 'insert' ? { insert: true } : { insertAtEnd: true },
         );
       },
-      setChatScope: () => deps.setScope('chat'),
-      changed: (holding) => root.classList.toggle('is-at-stop', holding),
+      setChatScope: () => takeKeys(tab, 'chat', deps),
+      // A part taking the stop has set its own scope, which dropped the targets.
+      changed: (holding) => {
+        root.classList.toggle('is-at-stop', holding);
+        if (holding) {
+          handTargets(tab, deps);
+        }
+      },
       log: deps.log,
     }),
     factsListeners: new Set(),
     placedReturned: new Set(),
   };
+  entries.element.addEventListener('pointerdown', () => {
+    if (tab.isAtHub) {
+      hubToEntries(tab, deps);
+    }
+  });
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
@@ -827,6 +1050,9 @@ function createTab(
       changed: () => undefined,
       focused: () => {
         tab.stop.boxFocused();
+        if (tab.isAtHub) {
+          takeKeys(tab, 'chat', deps);
+        }
         tab.isBoxFocused = true;
         tab.root.classList.add('is-box-focused');
         drawStatusLine(tab);

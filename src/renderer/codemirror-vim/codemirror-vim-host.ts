@@ -10,6 +10,7 @@ import {
 } from '@codemirror/view';
 import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
 import {
+  type BlurOptions,
   type CreateEditorHost,
   type DocumentEditor,
   type DocumentEditorEvents,
@@ -205,6 +206,17 @@ function insertHere(cm: VimEditor) {
   }
   if (!cm.state.vim.insertMode) {
     Vim.handleEx(cm, 'startinsert');
+  }
+}
+
+// Vim's Esc from insert or visual mode: the editor drops to normal mode, the
+// cursor stepping back as Esc leaves insert mode.
+function toNormalMode(cm: VimEditor) {
+  if (cm.state.vim.insertMode) {
+    Vim.exitInsertMode(cm);
+  }
+  if (cm.state.vim.visualMode) {
+    Vim.exitVisualMode(cm);
   }
 }
 
@@ -923,8 +935,11 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
         leaveFocusedEditor(view, hosted);
         focusEditor(view, cm, options);
       },
-      blur: () => {
+      blur: (options?: BlurOptions) => {
         discardUnfinishedInput(cm);
+        if (options?.toNormal === true) {
+          toNormalMode(cm);
+        }
         view.contentDOM.blur();
       },
       destroy: () => {

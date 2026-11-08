@@ -167,6 +167,36 @@ export const chatManifest = definePlugin({
       group: 'view',
       runsIn: 'page',
     },
+    nextSection: { label: 'next section', group: 'hub', runsIn: 'page' },
+    prevSection: { label: 'previous section', group: 'hub', runsIn: 'page' },
+    firstSection: { label: 'first section', group: 'hub', runsIn: 'page' },
+    lastSection: { label: 'last section', group: 'hub', runsIn: 'page' },
+    toggleSection: {
+      label: 'fold or unfold the section',
+      group: 'hub',
+      runsIn: 'page',
+    },
+    leaveHub: { label: 'back to the transcript', group: 'hub', runsIn: 'page' },
+    hubLineDown: {
+      label: 'scroll the section a line down',
+      group: 'hub',
+      runsIn: 'page',
+    },
+    hubLineUp: {
+      label: 'scroll the section a line up',
+      group: 'hub',
+      runsIn: 'page',
+    },
+    hubHalfPageDown: {
+      label: 'scroll the section half a page down',
+      group: 'hub',
+      runsIn: 'page',
+    },
+    hubHalfPageUp: {
+      label: 'scroll the section half a page up',
+      group: 'hub',
+      runsIn: 'page',
+    },
     openPreview: {
       label: 'open the chat layout preview',
       group: 'debug',
@@ -181,6 +211,7 @@ export const chatManifest = definePlugin({
     confirm: 'In the end-session confirmation',
     signIn: 'In the sign-in dialog',
     image: 'In the image viewer',
+    hub: 'In the session hub',
   },
   settings: {
     profiles: DEFAULT_PROFILES,

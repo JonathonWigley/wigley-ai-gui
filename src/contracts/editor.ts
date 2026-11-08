@@ -20,6 +20,12 @@ export interface FocusOptions {
   insert?: boolean;
 }
 
+// `toNormal` drops the editor to vim's normal mode first, from insert or
+// visual, as Esc does there. Without it, the editor keeps its mode.
+export interface BlurOptions {
+  toNormal?: boolean;
+}
+
 // A vim mode, e.g. `insert` or `visual`; `subMode` names a visual mode's kind
 // (`linewise` or `blockwise`) and is empty otherwise.
 export interface VimMode {
@@ -43,7 +49,7 @@ export interface TextEditor {
   // under it); '' at the start of the text.
   charBeforeCursor(): string;
   focus(options?: FocusOptions): void;
-  blur(): void;
+  blur(options?: BlurOptions): void;
   // Removes the editor from the page; the host forgets it.
   destroy(): void;
 }

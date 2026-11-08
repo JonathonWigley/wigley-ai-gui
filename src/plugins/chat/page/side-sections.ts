@@ -1,6 +1,9 @@
 import type { Timers } from '../../../contracts/ambient';
+import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
+import { scrollContent } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import {
   type ContributedPart,
@@ -14,12 +17,12 @@ import {
   type DrawnPart,
   requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
-import { NO_ANCHOR } from '../../../shared/page/ui/key-anchors';
 import {
   createSplitDivider,
   type SplitDivider,
 } from '../../../shared/page/ui/split';
 import type { SplitLimits } from '../../../shared/page/ui/split-width';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import type { ChatSidePart, ChatSideSection } from '../contract';
 import type {
   PartView,
@@ -58,8 +61,36 @@ export interface SideSectionsDeps {
   log: PluginLog;
 }
 
-// One Chat tab's hub.
+// The keyboard cursor on one Chat tab's hub, walking the section heads that
+// show (a head drawn, with a layout box), in hub order. The cursor is kept by
+// part id: a section that no longer shows moves it to the first shown head at
+// the next call. `isReachable` is true while the hub is not hidden, its holder
+// has a layout box and at least one head shows. `enter` focuses the holder and
+// keeps the cursor when its section still shows, else puts it on the first
+// shown head; `leave` blurs the holder when it holds the DOM focus. `move` steps
+// one head, stopping at either end, and `toEdge` goes to the first or last.
+// `toggle` folds or unfolds the cursor's section, as a click on its head does,
+// and `scrollBy` scrolls its body. Each returns the cursor section's title, or
+// null, changing nothing, when no head shows. The cursor's head carries
+// `is-cursor`, a redrawn head included.
+export interface SectionCursor {
+  isReachable(): boolean;
+  enter(): string | null;
+  leave(): void;
+  move(by: 1 | -1): string | null;
+  toEdge(edge: 'first' | 'last'): string | null;
+  toggle(): string | null;
+  scrollBy(
+    step: ScrollStep,
+    direction: 1 | -1,
+  ): { title: string; scroll: ContentScroll } | null;
+}
+
+// One Chat tab's hub. `divider` is the hub's width divider, `cursor` its
+// keyboard cursor.
 export interface SideTab {
+  divider: ResizeTarget;
+  cursor: SectionCursor;
   // Removes the parts no longer held and builds those the tab has not built, at
   // their place by `order`; built parts and their wrappers stay as they are. A
   // part whose build threw stays unbuilt until it is added again or `rebuild`
@@ -74,9 +105,9 @@ export interface SideTab {
 // The session hub of every Chat tab: each side part in a section frame drawn
 // through the chat layout's `sideSection` part, the sections sorted by `order`
 // (equal orders keep add order). A section's collapse, the hub's hide and its
-// width, which a drag on its start edge sets, apply to every tab and session and
-// are kept in `uiState`; a frame change updates the frame in place and never
-// rebuilds the part.
+// width, which a drag on its start edge or a nudge of a tab's `divider` sets,
+// apply to every tab and session and are kept in `uiState`; a frame change
+// updates the frame in place and never rebuilds the part.
 export interface SideSections {
   // Appends the hub's holder to `root`, which takes `is-side-hidden` while the
   // hub is hidden. Builds no part: the caller runs `sync`.
@@ -89,13 +120,16 @@ interface BuiltFrame {
   view: PartView<SideSectionInput>;
 }
 
-// One built part's frame. `body` is what the part draws in, moved into each
-// new draw; `drawn` is null when even the default frame failed, and `body` then
-// sits bare in `wrapper`.
+// One built part's frame in `tab`. `body` is what the part draws in, moved into
+// each new draw; `head` is the last draw's head, null when it drew none;
+// `drawn` is null when even the default frame failed, and `body` then sits bare
+// in `wrapper`.
 interface Frame {
   part: ChatSidePart;
+  tab: OpenTab;
   wrapper: HTMLElement;
   body: HTMLElement;
+  head: HTMLElement | null;
   summary: string | null;
   drawn: DrawnPart<BuiltFrame> | null;
 }
@@ -106,10 +140,13 @@ interface SideBuild {
   remove(): void;
 }
 
+// `cursor` is the part id of the section the hub's cursor is on, null before
+// the first `enter`.
 interface OpenTab {
   root: HTMLElement;
   frames: Map<string, Frame>;
   widthDivider: SplitDivider;
+  cursor: string | null;
 }
 
 export function createSideSections(deps: SideSectionsDeps): SideSections {
@@ -158,17 +195,25 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
     frame.drawn?.dispose();
     frame.drawn?.built.element.remove();
     frame.drawn = null;
+    frame.head = null;
     const input = inputOf(frame);
     try {
       frame.drawn = draws.draw(frame.wrapper, (builder, at, rollback) => {
         const body = appSlot(frame.body, 'body', rollback);
         const kit: SideSectionKit = {
           ...surfaceBaseKit(deps.kit, 'chat', rollback),
-          head: (parent) =>
-            appended(
+          head: (parent) => {
+            const head = appended(
               parent,
               sectionHead(() => toggleCollapsed(frame.part)),
-            ),
+            );
+            head.classList.toggle(
+              'is-cursor',
+              frame.tab.cursor === frame.part.id,
+            );
+            frame.head = head;
+            return head;
+          },
           body: (parent) => body.place(parent),
         };
         const view = builder(at, input, kit);
@@ -195,16 +240,16 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
 
   // `part` as `placeContributedPart` builds it: the frame into the wrapper, then
   // the part into the frame's body.
-  const framedPart = (
-    part: ChatSidePart,
-    frames: Map<string, Frame>,
-  ): ContributedPart => ({
+  const framedPart = (part: ChatSidePart, tab: OpenTab): ContributedPart => ({
     id: part.id,
     build(wrapper, sessionId) {
+      const { frames } = tab;
       const frame: Frame = {
         part,
+        tab,
         wrapper,
         body: element('div', 'chat-side-section-body'),
+        head: null,
         summary: null,
         drawn: null,
       };
@@ -261,10 +306,16 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         },
         show: (width) =>
           holder.style.setProperty('--chat-side-width', String(width)),
-        anchor: NO_ANCHOR,
+        anchor: deps.kit.keys.anchor,
         timers: deps.timers,
       });
-      const opened: OpenTab = { root, frames: new Map(), widthDivider };
+      holder.tabIndex = -1;
+      const opened: OpenTab = {
+        root,
+        frames: new Map(),
+        widthDivider,
+        cursor: null,
+      };
       openTabs.add(opened);
       const builds = new Map<string, SideBuild>();
 
@@ -273,7 +324,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         const wrapper = placeContributedPart(
           holder,
           sessionId,
-          framedPart(part, opened.frames),
+          framedPart(part, opened),
           SIDE_PARTS,
           log,
           { recordBox: (dispose) => disposes.push(dispose) },
@@ -311,6 +362,12 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         builds.clear();
       };
       return {
+        divider: widthDivider,
+        cursor: sectionCursor(opened, holder, {
+          parts: deps.parts,
+          uiState,
+          toggleCollapsed,
+        }),
         sync,
         rebuild() {
           disposeBuilds();
@@ -330,6 +387,119 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         tab.root.classList.toggle('is-side-hidden', isHidden);
       }
       log(`session hub ${isHidden ? 'hidden' : 'shown'}`);
+    },
+  };
+}
+
+// The frames of `tab` whose head shows, in hub order: `parts` sorted as the
+// holder places their wrappers.
+function shownFrames(tab: OpenTab, parts: readonly ChatSidePart[]): Frame[] {
+  return inOrder(parts).flatMap((part) => {
+    const frame = tab.frames.get(part.id);
+    const head = frame?.head ?? null;
+    const isShown =
+      frame !== undefined && head !== null && head.getClientRects().length > 0;
+    return isShown ? [frame] : [];
+  });
+}
+
+function sectionCursor(
+  tab: OpenTab,
+  holder: HTMLElement,
+  deps: {
+    parts: Pick<PartStore<ChatSidePart>, 'parts'>;
+    uiState: UiState;
+    toggleCollapsed(part: ChatSidePart): void;
+  },
+): SectionCursor {
+  const shown = () => shownFrames(tab, deps.parts.parts());
+  // Moves the cursor's mark to `frame` and returns its title.
+  const putOn = (frame: Frame): string => {
+    if (tab.cursor !== null) {
+      tab.frames.get(tab.cursor)?.head?.classList.remove('is-cursor');
+    }
+    tab.cursor = frame.part.id;
+    frame.head?.classList.add('is-cursor');
+    return frame.part.title;
+  };
+  // The shown frames and the cursor's index among them, -1 when its section
+  // no longer shows; null when none shows.
+  const at = (): { frames: Frame[]; index: number } | null => {
+    const frames = shown();
+    if (frames.length === 0) {
+      return null;
+    }
+    const index = frames.findIndex((frame) => frame.part.id === tab.cursor);
+    return { frames, index };
+  };
+  // The cursor's frame, put on the first shown head when its section no
+  // longer shows; null when none shows.
+  const cursorFrame = (): Frame | null => {
+    const found = at();
+    if (found === null) {
+      return null;
+    }
+    const frame = found.frames[Math.max(found.index, 0)];
+    putOn(frame);
+    return frame;
+  };
+  return {
+    isReachable() {
+      const isHidden = deps.uiState.get(HUB_HIDDEN_KEY) === true;
+      const holderHasLayoutBox = holder.getClientRects().length > 0;
+      return !isHidden && holderHasLayoutBox && shown().length > 0;
+    },
+    enter() {
+      const frame = cursorFrame();
+      if (frame === null) {
+        return null;
+      }
+      holder.focus();
+      return frame.part.title;
+    },
+    leave() {
+      if (holder.contains(document.activeElement)) {
+        holder.blur();
+      }
+    },
+    move(by) {
+      const found = at();
+      if (found === null) {
+        return null;
+      }
+      const { frames, index } = found;
+      const next =
+        index < 0 ? 0 : Math.min(Math.max(index + by, 0), frames.length - 1);
+      return putOn(frames[next]);
+    },
+    toEdge(edge) {
+      const frames = shown();
+      if (frames.length === 0) {
+        return null;
+      }
+      return putOn(edge === 'first' ? frames[0] : frames[frames.length - 1]);
+    },
+    toggle() {
+      const frame = cursorFrame();
+      if (frame === null) {
+        return null;
+      }
+      deps.toggleCollapsed(frame.part);
+      return frame.part.title;
+    },
+    scrollBy(step, direction) {
+      const frame = cursorFrame();
+      if (frame === null) {
+        return null;
+      }
+      const { body } = frame;
+      const scroll = scrollContent(
+        body,
+        step,
+        direction,
+        textLineHeightPx(body),
+      );
+      return { title: frame.part.title, scroll };
     },
   };
 }

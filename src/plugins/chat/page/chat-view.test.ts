@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
-import type { TextEditor } from '../../../contracts/editor';
+import type {
+  BlurOptions,
+  EditorEvents,
+  FocusOptions,
+  TextEditor,
+} from '../../../contracts/editor';
+import type {
+  FocusTarget,
+  PaneDirection,
+  ResizeTarget,
+} from '../../../contracts/panes';
 import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import { createSlotStore } from '../../../shared/state/slot-store';
@@ -9,6 +19,7 @@ import {
   type FakeElement,
   findAll,
   installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -25,13 +36,18 @@ import {
   type ChatSessionState,
   chatSessionSlot,
   type ChatSidePart,
+  type ComposerStopExits,
   type QueuedMessage,
   type ReturnedMessage,
   type SessionCompaction,
 } from '../contract';
 import { createChatLayouts, type SurfaceKitDeps } from './chat-layouts';
-import { type ChatViewDeps, mountChatView } from './chat-view';
-import { createSideSections } from './side-sections';
+import {
+  type ChatSession,
+  type ChatViewDeps,
+  mountChatView,
+} from './chat-view';
+import { createSideSections, type SideTab } from './side-sections';
 
 // Each call the view makes to a tab's entry list that draws it, by method name.
 const listCalls = vi.hoisted(() => [] as string[]);
@@ -107,7 +123,12 @@ const returnedTwo: ReturnedMessage = {
 // each call to main, `activities` each row activity word set, and `toasts` each
 // toast. `sideParts` and `composerParts` are the view's part stores, `layouts` its
 // chat layouts, `removeSession` closes a session's tab as the sessions plugin
-// does, and `setActive` names the focused pane's session.
+// does, and `setActive` names the focused pane's session. `keyCalls` records
+// each `setScope`, `setResizeTarget` and `setFocusTarget` in order, and
+// `boxCalls` each `focus` and `blur` on the box with its options, the fake box
+// reporting focus and blur as the editor does. `visible` is what every tab's
+// `isVisible` answers, `show` runs a session's tab's `shown`, `scopeChanged`
+// reports a scope in force, and `sideTabs` holds each tab's hub.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -123,6 +144,12 @@ function mounted(
   const box = { text: null as string | null };
   const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
+  const keyCalls: [string, unknown][] = [];
+  const boxCalls: [string, FocusOptions | BlurOptions | undefined][] = [];
+  const visible = { value: false };
+  const shownBy = new Map<string, () => void>();
+  let scopeChanged: (scope: string | undefined) => void = () => undefined;
+  const sideTabs: SideTab[] = [];
   const sideParts = createPartStore<ChatSidePart>();
   const composerParts = createPartStore<ChatComposerPart>();
   const channel = {
@@ -195,10 +222,12 @@ function mounted(
         added: {
           element: HTMLElement;
           beforeClose: () => boolean | Promise<boolean>;
+          shown: () => void;
         },
       ) => {
         readDuringAddTab.push(view.activeTime(sessionId));
         beforeCloses.set(sessionId, added.beforeClose);
+        shownBy.set(sessionId, added.shown);
         tab.element = asFake(added.element);
         tabElements.set(sessionId, tab.element);
         return {
@@ -206,7 +235,7 @@ function mounted(
           select: noEvent,
           takeOver: () => ({ release: noEvent }),
           remove: noEvent,
-          isVisible: () => false,
+          isVisible: () => visible.value,
         };
       },
       activate: noEvent,
@@ -222,7 +251,9 @@ function mounted(
     },
     onActiveChanged: noEvent,
     onSessionHostChanged: noEvent,
-    onScopeChanged: noEvent,
+    onScopeChanged: (listener: (scope: string | undefined) => void) => {
+      scopeChanged = listener;
+    },
     activeTimeListeners: [
       firstActiveTimeListener,
       (sessionId: string, activeTime: ActiveTime) => {
@@ -230,29 +261,45 @@ function mounted(
       },
     ],
     editor: {
-      create(): TextEditor {
+      create(_element: HTMLElement, _text: string, events: EditorEvents) {
         box.text = '';
         return {
           text: () => box.text,
           setText: (next: string) => {
             box.text = next;
           },
+          focus: (options?: FocusOptions) => {
+            boxCalls.push(['focus', options]);
+            events.focused();
+          },
+          blur: (options?: BlurOptions) => {
+            boxCalls.push(['blur', options]);
+            events.blurred();
+          },
           destroy: noEvent,
         } as unknown as TextEditor;
       },
     },
+    setScope: (scope: string) => keyCalls.push(['setScope', scope]),
+    setResizeTarget: (target: ResizeTarget | null) =>
+      keyCalls.push(['setResizeTarget', target]),
+    setFocusTarget: (target: FocusTarget | null) =>
+      keyCalls.push(['setFocusTarget', target]),
     layouts,
     composerParts,
     statusParts: createPartStore(),
     sideParts,
-    sideSections: createSideSections({
-      layouts,
-      kit,
-      parts: sideParts,
-      uiState: { get: () => undefined, set: noEvent },
-      timers: { set: () => 0, clear: noEvent },
-      log,
-    }),
+    sideSections: recordingSideTabs(
+      createSideSections({
+        layouts,
+        kit,
+        parts: sideParts,
+        uiState: { get: () => undefined, set: noEvent },
+        timers: { set: () => 0, clear: noEvent },
+        log,
+      }),
+      sideTabs,
+    ),
     ...kit,
     run: noEvent,
     clock: { now: () => 5000 },
@@ -275,6 +322,12 @@ function mounted(
   };
   return {
     view,
+    keyCalls,
+    boxCalls,
+    visible,
+    show: (sessionId: string) => shownBy.get(sessionId)?.(),
+    scopeChanged: (scope: string | undefined) => scopeChanged(scope),
+    sideTabs,
     beforeClose: (sessionId: string) => beforeCloses.get(sessionId)?.(),
     confirmed,
     confirmAnswer,
@@ -310,6 +363,20 @@ function mounted(
     },
     rest: (sessionId: string, error: string | null) =>
       listeners.get('sessionRested')?.({ sessionId, error }),
+  };
+}
+
+// `sections` with each tab it opens kept in `opened`.
+function recordingSideTabs(
+  sections: ReturnType<typeof createSideSections>,
+  opened: SideTab[],
+): Pick<ReturnType<typeof createSideSections>, 'openTab'> {
+  return {
+    openTab(root, sessionId) {
+      const side = sections.openTab(root, sessionId);
+      opened.push(side);
+      return side;
+    },
   };
 }
 
@@ -1026,5 +1093,309 @@ describe('mountChatView close guard', () => {
 
     expect(closes).toBe(test.closes);
     expect(view.confirmed).toHaveLength(test.asked);
+  });
+});
+
+describe('mountChatView pane keys', () => {
+  beforeEach(() =>
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
+  );
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  type From =
+    | 'transcript'
+    | 'box'
+    | 'hub from the box'
+    | 'hub from the transcript'
+    | 'strip';
+
+  // The visible Chat tab of `/w/app`, shown, with one hub section whose head
+  // shows and a composer part whose stop takes the cursor on `enterStop`; the
+  // hub's holder has a layout box while `isHubReachable`. `target` is the
+  // focus target the tab handed over when shown, and `stopExits` the exits the
+  // part's last `enter` got.
+  function shownTab(isHubReachable = true) {
+    const mount = mounted();
+    const stopLeaves: string[] = [];
+    let stopExits: ComposerStopExits | null = null;
+    mount.composerParts.add({
+      id: 'strip',
+      build: () => ({}),
+      stop: {
+        enter(_sessionId, exits) {
+          mount.keyCalls.push(['setScope', 'strip.own']);
+          stopExits = exits;
+          return true;
+        },
+        leave: (sessionId) => stopLeaves.push(sessionId),
+      },
+    });
+    mount.open(stateOf([]));
+    mount.sideParts.add({
+      id: 'part',
+      title: 'Part',
+      order: 10,
+      build(parent) {
+        parent.textContent = 'content';
+        return {};
+      },
+    });
+    const root = mount.tab.element as FakeElement;
+    findAll(root, 'chat-side-parts')[0].hasLayoutBox = isHubReachable;
+    for (const head of findAll(root, 'chat-side-section-head')) {
+      head.hasLayoutBox = true;
+    }
+    mount.visible.value = true;
+    mount.show('row-1');
+    // The tab hands one focus target, the same one each time.
+    const focusTarget = mount.keyCalls.findLast(
+      ([call]) => call === 'setFocusTarget',
+    )?.[1] as FocusTarget;
+    const target = () => focusTarget;
+    const session = () => mount.view.session('row-1') as ChatSession;
+    const clear = () => {
+      mount.keyCalls.length = 0;
+      mount.boxCalls.length = 0;
+      mount.logs.length = 0;
+    };
+    const putFocus = (from: From) => {
+      if (from === 'box' || from === 'hub from the box') {
+        session().box.focus();
+      }
+      if (from === 'strip') {
+        session().enterStop();
+      }
+      if (from === 'hub from the box' || from === 'hub from the transcript') {
+        target().move('right');
+      }
+    };
+    return {
+      mount,
+      root,
+      target,
+      session,
+      clear,
+      putFocus,
+      stopLeaves,
+      stopExits: () => stopExits as ComposerStopExits | null,
+    };
+  }
+
+  const FOCUS_BOX = [['focus', undefined]];
+  const BLUR_TO_NORMAL = [['blur', { toNormal: true }]];
+
+  it.each<{
+    from: From;
+    direction: PaneDirection;
+    isHubReachable?: boolean;
+    returned: boolean;
+    scope?: string;
+    line?: string;
+    box?: unknown[][];
+    isBoxFocused?: boolean;
+    leftStop?: boolean;
+  }>([
+    {
+      from: 'transcript',
+      direction: 'right',
+      returned: true,
+      scope: 'hub',
+      line: 'focused the session hub in app',
+    },
+    {
+      from: 'transcript',
+      direction: 'right',
+      isHubReachable: false,
+      returned: false,
+    },
+    {
+      from: 'transcript',
+      direction: 'down',
+      returned: true,
+      scope: 'chat',
+      line: 'focused the box in app',
+      box: FOCUS_BOX,
+      isBoxFocused: true,
+    },
+    { from: 'transcript', direction: 'left', returned: false },
+    { from: 'transcript', direction: 'up', returned: false },
+    {
+      from: 'box',
+      direction: 'up',
+      returned: true,
+      scope: 'chat',
+      line: 'left the box',
+      box: BLUR_TO_NORMAL,
+    },
+    {
+      from: 'box',
+      direction: 'right',
+      returned: true,
+      scope: 'hub',
+      line: 'focused the session hub in app',
+      box: BLUR_TO_NORMAL,
+    },
+    { from: 'box', direction: 'down', returned: false, isBoxFocused: true },
+    { from: 'box', direction: 'left', returned: false, isBoxFocused: true },
+    {
+      from: 'hub from the box',
+      direction: 'left',
+      returned: true,
+      scope: 'chat',
+      line: 'focused the box in app',
+      box: FOCUS_BOX,
+      isBoxFocused: true,
+    },
+    {
+      from: 'hub from the transcript',
+      direction: 'left',
+      returned: true,
+      scope: 'chat',
+      line: 'cursor back on the entries in app',
+    },
+    { from: 'hub from the transcript', direction: 'right', returned: false },
+    { from: 'hub from the transcript', direction: 'up', returned: false },
+    { from: 'hub from the transcript', direction: 'down', returned: false },
+    {
+      from: 'strip',
+      direction: 'down',
+      returned: true,
+      scope: 'chat',
+      line: 'focused the box in app',
+      box: FOCUS_BOX,
+      isBoxFocused: true,
+      leftStop: true,
+    },
+    {
+      from: 'strip',
+      direction: 'up',
+      returned: true,
+      scope: 'chat',
+      line: 'cursor back on the entries in app',
+      leftStop: true,
+    },
+  ])(
+    'chatView_FocusMove_MovesBetweenTheTabsPanes: $from $direction (hub reachable: $isHubReachable)',
+    (row) => {
+      const tab = shownTab(row.isHubReachable ?? true);
+      tab.putFocus(row.from);
+      tab.stopLeaves.length = 0;
+      tab.clear();
+
+      const returned = tab.target().move(row.direction);
+
+      const scopes = tab.mount.keyCalls.filter(([call]) => call === 'setScope');
+      expect({
+        returned,
+        scope: scopes.at(-1)?.[1],
+        line: tab.mount.logs.at(-1),
+        box: tab.mount.boxCalls,
+        isBoxFocused: tab.session().isBoxFocused(),
+        leftStop: tab.stopLeaves.length > 0,
+      }).toEqual({
+        returned: row.returned,
+        scope: row.scope,
+        line: row.line,
+        box: row.box ?? [],
+        isBoxFocused: row.isBoxFocused ?? false,
+        leftStop: row.leftStop ?? false,
+      });
+    },
+  );
+
+  it.each<{
+    case: string;
+    given?: From;
+    act: (tab: ReturnType<typeof shownTab>) => void;
+    scope: string | null;
+    isHubDivider: boolean;
+  }>([
+    {
+      case: 'tab shown',
+      act: (tab) => tab.mount.show('row-1'),
+      scope: 'chat',
+      isHubDivider: false,
+    },
+    {
+      case: 'Esc from the hub',
+      given: 'hub from the transcript',
+      act: (tab) => tab.mount.view.hub.leave(),
+      scope: 'chat',
+      isHubDivider: false,
+    },
+    {
+      case: 'a stop exit to the entries',
+      given: 'strip',
+      act: (tab) => tab.stopExits()?.toEntries(),
+      scope: 'chat',
+      isHubDivider: false,
+    },
+    {
+      case: 'a stop exit to the box',
+      given: 'strip',
+      act: (tab) => tab.stopExits()?.toBox('insert'),
+      scope: 'chat',
+      isHubDivider: false,
+    },
+    {
+      case: 'entering the hub',
+      act: (tab) => tab.target().move('right'),
+      scope: 'hub',
+      isHubDivider: true,
+    },
+    {
+      case: 'a part taking the stop',
+      act: (tab) => tab.session().enterStop(),
+      scope: null,
+      isHubDivider: false,
+    },
+  ])(
+    'chatView_TakingKeys_HandsBothTargetsAfterTheScope: $case',
+    ({ given, act, scope, isHubDivider }) => {
+      const tab = shownTab();
+      if (given !== undefined) {
+        tab.putFocus(given);
+      }
+      const focusTarget = tab.target();
+      const divider = tab.mount.sideTabs[0].divider;
+      tab.clear();
+
+      act(tab);
+
+      const targets = [
+        ['setResizeTarget', isHubDivider ? divider : null],
+        ['setFocusTarget', focusTarget],
+      ];
+      const ownScope = ['setScope', 'strip.own'];
+      expect(tab.mount.keyCalls).toEqual(
+        scope === null
+          ? [ownScope, ...targets]
+          : [['setScope', scope], ...targets],
+      );
+    },
+  );
+
+  it('chatView_HubRing_FollowsTheScopeInForce', () => {
+    const tab = shownTab();
+    const isRinged = () => tab.root.classList.contains('is-at-hub');
+    tab.putFocus('hub from the box');
+
+    tab.mount.scopeChanged('chat.hub');
+    expect(isRinged()).toBe(true);
+    tab.mount.scopeChanged('keys.help');
+    expect(isRinged()).toBe(false);
+    tab.mount.scopeChanged('chat.hub');
+    expect(isRinged()).toBe(true);
+
+    tab.mount.visible.value = false;
+    tab.mount.scopeChanged('sessions.sidebar');
+    expect(isRinged()).toBe(false);
+    tab.mount.visible.value = true;
+    tab.clear();
+
+    expect(tab.target().move('left')).toBe(false);
+    expect(tab.mount.boxCalls).toEqual([]);
   });
 });
