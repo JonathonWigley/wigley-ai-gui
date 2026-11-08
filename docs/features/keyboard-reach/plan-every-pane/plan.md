@@ -125,6 +125,17 @@ Decided by the agent (sent as notices in the round, or in the hand-off reply):
 - `focusMain` is required on every `Mode` and `focusSideBar` is optional, so the compiler reaches every mode.
 - The right bar's `focus` sits on a right-bar-only options type, so other areas' `contribute` stays as it is.
 
+Decided by the lead after the drafts and the cold read (each in its task's rulings):
+
+- The Sessions selected card keeps its hidden prompt line at all times (`DESIGN.md`'s cursor prompt rule).
+- A key move into a Chat tab lands on the transcript in normal mode (from Task 03); a click still focuses the box.
+- The narrow side-bar overlay holds the keys as the side area (`ModesDeps.sideBarOpened`).
+- The right bar's turn ends when the DOM focus leaves it; the core calls the contribution's `left`.
+- The hub resizes by Alt+Shift+h/l only while it holds the keys; a box focus or transcript click ends its turn.
+- Docs `focusMain` returns to the right column when it was the last pane and is still in sight.
+- The Backlog homes bind only their own keys; `h / a i d t T o` are list-only.
+- The unity-pool cursor re-enters on the shown session's holder.
+
 ### Out of scope
 
 - Session popups.
@@ -150,7 +161,7 @@ Existing files modified (by task):
 | `src/plugins/settings/page/{start,settings-view}.ts`, `src/plugins/backlog/page/{start,backlog-view,backlog-state}.ts`, the backlog layout files, `settings`/`backlog` manifests | 05 |
 | `src/plugins/chat/page/{chat-view,start,side-sections,chat-commands}.ts`, `chat.css`, `chat/manifest.ts`, `src/contracts/editor.ts` and `codemirror-vim-host.ts` (`blur(options?: BlurOptions)`), `src/shared/page/test-dom.ts` (`getClientRects`) | 06 |
 | `src/plugins/chat/page/{chat-commands,chat-kit,composer-kit,image-viewer,entry-list}.ts`, `chat/manifest.ts`, `chat/layouts/layout.d.ts`, `chat/layouts/default/layout.{js,css}`, `src/plugins/agent-strip/page/{agent-strip,start}.ts`, `agent-strip/manifest.ts`, `src/shared/fake-agent-harness.ts` | 07 |
-| `src/contracts/list-picker.ts`, `src/shared/page/list-picker{,-state}.ts`, `list-picker.css`, `src/renderer/plugins/page-api.ts`, `src/plugins/keys/{manifest.ts,page/help-view.ts}`, `primer`, `forms`, `gallery` page commands and the primer layout, the docs and backlog scroll commands, the six picker plugins' (`sessions`, `chat`, `docs`, `settings`, `backlog`, `notes`) manifests and views | 08 |
+| `src/plugins/docs/page/doc-view.test.ts` (scroll edges), `src/contracts/list-picker.ts`, `src/shared/page/list-picker{,-state}.ts`, `list-picker.css`, `src/renderer/plugins/page-api.ts`, `src/plugins/keys/{manifest.ts,page/help-view.ts}`, `primer`, `forms`, `gallery` page commands and the primer layout, the docs and backlog scroll commands, the six picker plugins' (`sessions`, `chat`, `docs`, `settings`, `backlog`, `notes`) manifests and views | 08 |
 | `src/plugins/keymap.ts` | every code task |
 | each touched plugin's `main/selftest-script.ts` | the task adding that plugin's keys |
 

@@ -64,6 +64,14 @@ Produces:
 - `ReviewTaskInput.isCursor: boolean` in `src/plugins/primer/layouts/layout.d.ts`; `OpenPrimer.reviewRow: number` in `primer-state.ts`
 - the commands and binds in the tables below
 
+## Cold-read rulings
+
+Lead rulings; each overrides any line below that says otherwise.
+
+- Add `src/plugins/docs/page/doc-view.test.ts` to Files: a `scrollToEdge_$state` table (pane scrolls and logs
+  `edgeText`; list page moves the cursor; editor open logs `<name> did not scroll: the editor is open`), and one
+  `backlog-view.test.ts` row for `scrollEnd` logging `scrolled the detail to the end`.
+
 ## Decisions
 
 ### (a) One list-picker key set

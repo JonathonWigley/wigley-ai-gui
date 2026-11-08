@@ -43,6 +43,25 @@ Produces:
 - Backlog manifest scope `homes: 'In the backlog homes'`
 - `BacklogAction` member `{ type: 'focusHomes' }` in `src/plugins/backlog/page/backlog-state.ts`
 
+## Cold-read rulings
+
+Lead rulings; each overrides any line below that says otherwise.
+
+- **The homes bind only the table below** (j k gg G l CR R C and the four scroll keys). Every other `backlog.list`
+  bind — `h`, `/`, `a`, `i`, `d`, `t`, `T`, `o` — is list-only, since none has a hint in the homes.
+- **Repeat `focusSideBar()` in Settings** re-sets the scope each call (today's `focusSections`); only the log is
+  deduped. The test expects scopes `sections, sections, rows`.
+- Add `homeKeys_PickClosesOverlayOnlyOnEnter: $command` over `open` and `toggle` with focus on the homes:
+  `homePicked` called 0 times for `open`, once for `toggle`.
+- **Homes header track:** `.backlog-homes > .backlog-pane` becomes `grid-template-rows: auto auto minmax(0, 1fr)`,
+  ordered header, status, rows. The `layout.d.ts` comment says a user layout's `homes` part draws the `rescan` and
+  `commit` hints itself.
+- **Overlay over the open editor:** accept the core's side area there. The editor row's rule becomes "any Alt+hjkl
+  logs `pane keys ignored: the editor is open`, except after the overlay opened over the editor, where the side area
+  logs `no pane <direction>` and Alt+l calls `focusMain` (the editor)".
+- **`back` stays** an action: it returns the `focusHomes` result when `focus === 'items'`, else the state; the
+  existing `backlogReducer_OpenHomeThenBack_…` test stays.
+
 ## Decisions
 
 ### Shared rule for both modes

@@ -43,6 +43,27 @@ Produces:
   `bottom(): void`, `openCursor(): AsideRowKind | null`, `reset(): void` (replaces `scrollToTop()`)
 - Manifest scope `aside: "In the doc's right column"` and the commands below, in `src/plugins/docs/manifest.ts`
 
+## Cold-read rulings
+
+Lead rulings; each overrides any line below that says otherwise.
+
+- **Docs `focusMain` returns to main's last pane:** the right column when `focused` was `aside` before the area left
+  and the column is still in sight (ring back on the kept cursor row), else the doc. This covers the right-bar return
+  (Alt+l from the column goes to the right bar; Alt+h comes back to the column). Add a self-test step only where a
+  right-bar stop shows; otherwise a `docs-view`-level unit row.
+- The column logs `right column cursor: <title>` on every press that reaches a row, moved or not.
+- **Ring without fake focus events:** `DocAside.focus()` sets the ring itself; the ring comes off on the root's
+  `focusout`, which the test dispatches by hand (`test-dom.ts` stays as it is). Add, on `doc-aside.test.ts`'s
+  existing `observed()`/`reportWidth` helper, `resize_FocusedColumnLeavesSight_CallsSightLostOnce` (240 → 0 calls
+  once; 0 → 0 and never-in-sight call none) and an `isInSight()` row (hidden root false, width 0 false, width > 0
+  true).
+- **Redraws and clicks:** `show()` re-applies `is-selected`/`is-cursor` to the redrawn row when `root` contains
+  `document.activeElement`; a click on a `section` row behaves as Enter (moves to the line and focuses the doc);
+  `focus()` scrolls the cursor row into view (`block: 'nearest'`).
+- **More self-test steps in `wiki right column`:** from the column `[' ','k','d']` twice (side bar hides, then
+  shows), then `j` still logs `right column cursor: …` (the doc pane's `focusin` doesn't take `aside`, and
+  `treeHidden` keeps the column); one docs dialog opened and closed from the column returns the keys to it.
+
 ## Decisions
 
 ### (a) The tree: side bar in Docs mode, own pane in a session Docs tab
