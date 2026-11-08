@@ -279,7 +279,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [Open work answers `mayStop`](07-may-stop.md) — after 02, 05
 
 ### Wave 5
-- [ ] [The plugin switch](08-plugin-switch.md) — after 03, 04, 06, 07
+- [x] [The plugin switch](08-plugin-switch.md) — after 03, 04, 06, 07
 
 ### Wave 6
 - [ ] [Settings' Plugins section](09-settings-plugins.md) — after 08
@@ -306,9 +306,11 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 05 · 3a42a35f · diff read; typecheck 0, lint 0; pageReady|CoreEvents grep empty in src; worker ran the task's 30 test files 486 pass plus slot-store, harness, plugin-host · concerns: a throwing ready now logs under plugin-host, not the plugin's id; the part harness host has no log so a throwing ready is silent in tests; workflow-heavy-page test's variable is heavy, not engine
 - 06 · a2c4b96b · diff read; worker typecheck 0, layer and style checks clean, 4 test files 89 pass; full compile at the wave end · concerns: until task 08 the page follows main's start-time list, no longer the user's list at each page load (the plan's intent); the Settings page reads the applied list as plugins.disabled
 - 07 · 810da4d4 · diff read: every Produces present (presenter, forms, primer, docs, notes, backlog, chat mayStop); typecheck and lint clean on the full tree; worker ran the 7 task test files, 156 passed · concerns: docs unsavedPath already refuses while a restore is pending; reloadWith gained an optional rowOf parameter; for review: forms/main/start.ts header comment reads 'That one presenter which owns…' and forms/primer header comment lines run past the wrap width
+- 08 · 7b7b966a · diff read: every Produces present (neededBy, PluginStatus/corePluginsSlot, bridge channels and onPluginParts, PluginSwitchService, createPluginSwitch, createPageParts, addPluginSwitchActions, setPluginsProblem, servedChanged, settings description); typecheck and lint clean on the full tree; worker ran 12 test files, 295 passed · concerns: a restart leaves a page part's binds in the keymap between its page stop and start (a key then runs a command with no handler); each page start re-applies the push and logs '[config] applied a new config' again (task 09's self-test steps); unchecked: a main part restarted under a drive run re-adding its drive actions may throw 'already added'; mainStartList in selftest-config.ts is now redundant under the self-test; for review: plugin-switch.ts and renderer.ts comments run past the wrap width
 ### Contract changes
 - check-layers src/main/config layers: as planned unchanged → gains src/main/plugins · why: user-config.ts imports appliedCommands and AppliedPlugins · consumers: 08 (plugin-switch.ts in src/main/plugins must not import src/main/config, or the layers cycle) · group 06
 - 07: chat's rule and wording live on the view as ChatTabs.mayStop(rows), start.ts passes rows.all().values(); the ?? sessionId label fallback never applies. createForms returns presenter typed AgentFormChannelPresenter<Round, FormBody>.
+- 08: PluginSwitchDeps.main picks 'started' too; slots is structural { clearOwner(pluginId) } (layer rule); PluginSwitchDeps gains timers: Timers and PLUGIN_RETRY_MS is exported; drive deps are a named PluginSwitchActionDeps; answerPluginParts takes PluginPartsAnswerDeps { reapplyPush(): void; log: Log }; startMainParts gains an isLaunchStartDone() parameter.
 ### Rulings
 - Branch hot-reload is cut from command-consumers e784f07e (Wave 3, in final review), with the plan commits cherry-picked from main — the user's word to start before Wave 3 lands — once Wave 3 lands, rebase onto main and re-check any review fix that touched a Consumes · lead
 - bridgeClaim's test is named in the repo's sentence style (describe bridgeClaim / it returns the bridge to the first claim and throws on the second) rather than bridgeClaim_SecondClaim_Throws — the repo's Vitest files read that way — a rename only · group 01 · group 01
@@ -322,5 +324,8 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - chat-view's test helper calls view.ready() only on the first open, as the old helper's one-shot listener did · group 05 · group 05
 - AGENTS.md disabled-plugin bullet and chat-bar § Optional plugins reworded to the start-time list; task 08 rewrites both for the live switch · group 06 · group 06
 - 07: docs names an added view's session from the source id AddedView now records, not from the addedViews key (a view id, which sessionIdOfSource never maps) · group 07
+- 08: an apply with nothing to change clears the last refusal; apply writes the status in a finally; a stop failing while undoing a failed start logs failed: and the start error is rethrown · group 08
+- 08: the page reconciles at load after pageHost.ready() and restores.partsReady(), before dataset.ready; a page stop that throws also replies every part running before and not after; a page start re-applies the push even when it threw · group 08
+- 08: under the self-test defaultSettings() gives plugins.disabled []; the harness's fake pluginSwitch refuses nothing · group 08
 ### Review rounds
 ### Test gate

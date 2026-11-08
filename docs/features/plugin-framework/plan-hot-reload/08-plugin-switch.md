@@ -1,6 +1,6 @@
 # 08 — The plugin switch
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 03, 04, 06, 07
 Plan: [plan.md](plan.md)
@@ -217,3 +217,5 @@ Done when: the project compiles; lint is clean; the test gate runs the tests abo
 Commit: one commit, `Plugin switch: plugins.disabled applies live, page parts stop first and main parts start first`.
 
 ## Proof
+
+Commit 7b7b966a · proof: diff read: every Produces present (neededBy, PluginStatus/corePluginsSlot, bridge channels and onPluginParts, PluginSwitchService, createPluginSwitch, createPageParts, addPluginSwitchActions, setPluginsProblem, servedChanged, settings description); typecheck and lint clean on the full tree; worker ran 12 test files, 295 passed · concerns: a restart leaves a page part's binds in the keymap between its page stop and start (a key then runs a command with no handler); each page start re-applies the push and logs '[config] applied a new config' again (task 09's self-test steps); unchecked: a main part restarted under a drive run re-adding its drive actions may throw 'already added'; mainStartList in selftest-config.ts is now redundant under the self-test; for review: plugin-switch.ts and renderer.ts comments run past the wrap width
