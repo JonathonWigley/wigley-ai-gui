@@ -340,33 +340,50 @@ describe('session rows', () => {
     );
   });
 
+  const throwsNoRound = (): string | null => {
+    throw new Error('no round');
+  };
+
   it.each([
     {
       case: 'with an activity',
       activity: WORKING,
+      notesTooltip: (): string | null => null,
       tooltip: 'Fix the build · label s1 · working · Round 2/5 · Primer open',
+      logged: [],
     },
     {
       case: 'with no activity',
       activity: null,
+      notesTooltip: (): string | null => null,
       tooltip: 'Fix the build · label s1 · Round 2/5 · Primer open',
+      logged: [],
+    },
+    {
+      case: 'with a part whose tooltip throws',
+      activity: WORKING,
+      notesTooltip: throwsNoRound,
+      tooltip: 'Fix the build · label s1 · working · Round 2/5 · Primer open',
+      logged: ['row part notes.status tooltip failed: no round'],
     },
   ])(
     'sessionsView_RowTooltip_JoinsTitleLabelActivityAndPartTooltips ($case)',
-    ({ activity, tooltip }) => {
-      const { view, sideBar, rowParts } = sessionsViewSetup();
-      const tooltipPart = (id: string, text: string | null) => ({
+    ({ activity, notesTooltip, tooltip, logged: expectedLogged }) => {
+      const { view, sideBar, rowParts, logged } = sessionsViewSetup();
+      const tooltipPart = (id: string, text: () => string | null) => ({
         id,
         build: () => ({}),
-        tooltip: () => text,
+        tooltip: text,
       });
-      rowParts.add(tooltipPart('forms.status', 'Round 2/5'));
-      rowParts.add(tooltipPart('notes.status', null));
-      rowParts.add(tooltipPart('primer.status', 'Primer open'));
+      rowParts.add(tooltipPart('forms.status', () => 'Round 2/5'));
+      rowParts.add(tooltipPart('notes.status', notesTooltip));
+      rowParts.add(tooltipPart('primer.status', () => 'Primer open'));
       view.render(titledState('Fix the build'));
       view.setActivity('s1', 'chat', activity);
 
       expect(drawnRows(sideBar)[0].title).toBe(tooltip);
+      // Each draw of the row logs once; the count is draw timing.
+      expect(new Set(logged)).toEqual(new Set(expectedLogged));
     },
   );
 

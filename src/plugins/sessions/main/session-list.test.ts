@@ -1879,6 +1879,24 @@ describe('createSessionList', () => {
       expected: ['00000001', null, '00000002'],
     },
     {
+      name: 'mark within the window after an at-once close whose cancel hold released the selected row',
+      act: (list, clock) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
+        list.addCloseGuard(
+          () => null,
+          (sessionId) => list.release(sessionId),
+        );
+        clock.time = 5_000;
+        list.closeSession('00000001', true);
+        clock.time = 5_000 + RESELECT_WINDOW_MS;
+        list.mark('00000001', MARK);
+      },
+      expected: ['00000001', '00000002'],
+    },
+    {
       name: 'mark after release of an unselected row',
       act: (list) => {
         list.connect(info('/work/x'));

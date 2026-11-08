@@ -236,10 +236,11 @@ function routeCall(
 // its label while it lasts; a closed row comes back at the end with the
 // session's next mark or activate. A row `release` closed while selected
 // comes back selected when the session's next mark comes within
-// RESELECT_WINDOW_MS of the release, unless in between the user activated a
-// row, a row was opened selected, a mark selected another session from none,
-// or `release` closed another selected row. A mark that reaches a row not
-// selected stores its options as the row's `markToast` while that is null, and
+// RESELECT_WINDOW_MS of the release, unless the release came from a guard's
+// `cancelHold` inside an at-once `closeSession`, or in between the user
+// activated a row, a row was opened selected, a mark selected another session
+// from none, or `release` closed another selected row. A mark that reaches a
+// row not selected stores its options as the row's `markToast` while that is null, and
 // an activate clears it. `activateExistingRow` selects
 // only a row the session holds and logs and ignores one with none. `mark`,
 // `activate`, `activateExistingRow`, `release` and `closeSession` write only what
@@ -772,6 +773,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       if (atOnce) {
         cancelHolds(sessionId);
+        // A hold's cancel may `release` the row, which is the user's close here.
+        if (reselectOnReturn?.sessionId === sessionId) {
+          reselectOnReturn = null;
+        }
       }
       if (rows.get(sessionId) === undefined) {
         return null;
