@@ -270,5 +270,6 @@ Review base: 1a938e2f
 - 06: pane keys group runs at width 1400 (hub hidden under the 900px start width) and returns to start · group 06
 - 07: fixture start order chat-second, chat-images, chat-selftest (list is newest-started first); attachments step 1 is <A-S-o>, step 7 <A-S-i> · group 07
 - 07: the viewer's counter and x hint share a new div.chat-image-viewer-line flex row · group 07
+- 08: lead split the Batch into two sequential dispatches — (a) the list-picker key set, then (b)-(e) — since both halves share keymap.ts and the manifests and one worker would read past the sizing point; one commit per dispatch
 ### Review rounds
 ### Test gate
