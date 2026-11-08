@@ -7,7 +7,7 @@ import {
   startsSkill,
   type WorkflowSignal,
 } from '../workflow/contract';
-import type { PlanProgress } from './plan-reader';
+import type { PlanProgress } from '../../shared/plan-progress';
 import {
   heavyEventOf,
   type HeavyMainStage,

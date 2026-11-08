@@ -24,10 +24,7 @@ import {
 
 const NODE_ONLY: Partial<LayerRule> = { packages: ['node:'] };
 
-const HEAVY_SUBLAYERS = [
-  'src/plugins/workflow-heavy/plan-reader.ts',
-  'src/plugins/workflow-heavy/stages',
-];
+const HEAVY_SUBLAYERS = ['src/plugins/workflow-heavy/stages'];
 
 // Heavy's tests that run a stage rule through the engine's real fold.
 const HEAVY_FOLD_TEST_RULE: LayerRule = {
@@ -38,7 +35,6 @@ const HEAVY_FOLD_TEST_RULE: LayerRule = {
     'src/plugins/workflow/contract.ts',
     'src/plugins/workflow-heavy',
     'src/plugins/workflow-heavy/contract.ts',
-    'src/plugins/workflow-heavy/plan-reader.ts',
     'src/plugins/workflow-heavy/stages',
     'src/plugins/chat/contract.ts',
     'src/plugins/workflow-heavy/main',
@@ -173,25 +169,19 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     contract: { layers: ['src/plugins/workflow/layouts'] },
     main: { packages: ['node:'] },
   },
-  // Its root and parts share the plan reader and stages; main uses `node:path`.
+  // Its root and parts share the stages; main uses `node:path`.
   'workflow-heavy': {
     root: { layers: HEAVY_SUBLAYERS },
-    contract: {
-      layers: ['src/plugins/workflow-heavy/plan-reader.ts', 'src/shared'],
-    },
+    contract: { layers: ['src/shared'] },
     main: { layers: HEAVY_SUBLAYERS, packages: ['node:'] },
     page: { layers: HEAVY_SUBLAYERS },
     sublayers: {
-      'src/plugins/workflow-heavy/plan-reader.ts': {
-        layers: ['src/shared'],
-        packages: [],
-      },
       'src/plugins/workflow-heavy/stages': {
         layers: [
           'src/contracts',
+          'src/shared',
           'src/plugins/workflow-heavy',
           'src/plugins/workflow-heavy/contract.ts',
-          'src/plugins/workflow-heavy/plan-reader.ts',
           'src/plugins/workflow/contract.ts',
         ],
         packages: [],
@@ -213,7 +203,6 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/workflow/contract.ts',
           'src/plugins/workflow/page',
           'src/plugins/workflow-heavy/contract.ts',
-          'src/plugins/workflow-heavy/plan-reader.ts',
           'src/plugins/workflow-heavy/page',
         ],
         packages: [],
@@ -610,7 +599,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-heavy/contract.ts',
       'src/plugins/workflow-heavy/main',
       'src/plugins/workflow-heavy',
-      'src/plugins/workflow-heavy/plan-reader.ts',
     ],
     packages: [],
   },
@@ -632,7 +620,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-heavy/contract.ts',
       'src/plugins/workflow-heavy/layouts',
       'src/plugins/workflow-heavy/page',
-      'src/plugins/workflow-heavy/plan-reader.ts',
     ],
     packages: [],
   },

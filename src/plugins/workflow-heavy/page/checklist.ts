@@ -5,7 +5,7 @@ import type {
   SessionFlow,
 } from '../../workflow/contract';
 import { heavyStateOf } from '../contract';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 
 const TASKS_GROUP_TITLE = 'Tasks';
 

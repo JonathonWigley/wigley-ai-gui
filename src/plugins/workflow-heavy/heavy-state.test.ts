@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../workflow/contract';
 import { foldFlow, newFlow } from '../workflow/flow';
-import type { PlanProgress } from './plan-reader';
+import type { PlanProgress } from '../../shared/plan-progress';
 import {
   EMPTY_HEAVY_STATE,
   HEAVY_WORKFLOW_ID,
@@ -53,11 +53,16 @@ const PROGRESS: PlanProgress = {
   reviewRounds: 1,
   title: 'Plan A',
   tasks: [
-    { wave: 1, text: 'first', done: true },
-    { wave: 2, text: 'second', done: false },
-    { wave: 2, text: 'third', done: false },
+    { wave: 1, text: 'first', done: true, file: null, status: null },
+    { wave: 2, text: 'second', done: false, file: null, status: null },
+    { wave: 2, text: 'third', done: false, file: null, status: null },
   ],
 };
+// A state whose progress holds the one task line `task`, as a saved flow may.
+function stateWithTask(task: object): unknown {
+  return { ...EMPTY_HEAVY_STATE, progress: { ...PROGRESS, tasks: [task] } };
+}
+
 const PROGRESS_RETITLED_TASK: PlanProgress = {
   ...PROGRESS,
   tasks: [
@@ -422,15 +427,30 @@ describe('heavyStateOf', () => {
       name: 'a progress of the wrong shape',
       state: { ...EMPTY_HEAVY_STATE, progress: { checked: 1 } },
     },
+    {
+      name: 'a task line with a status not a task status',
+      state: stateWithTask({ ...PROGRESS.tasks[0], status: 'paused' }),
+    },
+    {
+      name: 'a task line with file but no status',
+      state: stateWithTask({ wave: 1, text: 'first', done: true, file: null }),
+    },
   ])('heavyStateOf_BadShape_ReadsEmpty ($name)', ({ state }) => {
     expect(heavyStateOf({ ...newFlow('s1', '/r'), state })).toBe(
       EMPTY_HEAVY_STATE,
     );
   });
 
-  it('a valid state reads as that object', () => {
-    const state: HeavyState = { ...EMPTY_HEAVY_STATE, progress: PROGRESS };
-
+  it.each([
+    {
+      name: 'a state with progress',
+      state: { ...EMPTY_HEAVY_STATE, progress: PROGRESS },
+    },
+    {
+      name: 'a task line saved before file and status',
+      state: stateWithTask({ wave: 1, text: 'first', done: true }),
+    },
+  ])('heavyStateOf_ValidState_ReadsThatObject ($name)', ({ state }) => {
     expect(heavyStateOf({ ...newFlow('s1', '/r'), state })).toBe(state);
   });
 

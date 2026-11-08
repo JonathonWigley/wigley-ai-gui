@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Files } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { WorkflowSignal } from '../../workflow/contract';
-import { readPlanProgress } from '../plan-reader';
+import { readPlanProgress } from '../../../shared/plan-progress';
 import { heavySignal } from '../contract';
 import { createPlanWatch, type PlanWatch } from './plan-watch';
 
@@ -25,7 +25,10 @@ function startWatch(files: Pick<Files, 'read' | 'stat' | 'watch'>) {
 }
 
 function changed(text: string): WorkflowSignal {
-  return heavySignal({ type: 'planChanged', progress: readPlanProgress(text) });
+  return heavySignal({
+    type: 'planChanged',
+    progress: readPlanProgress(text, new Map()),
+  });
 }
 
 describe('createPlanWatch', () => {

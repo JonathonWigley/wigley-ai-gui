@@ -6,7 +6,7 @@ import {
   statusLine,
 } from '../../workflow/contract';
 import { newFlow } from '../../workflow/flow';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import {
   HEAVY_WORKFLOW_ID,
   type HeavyState,

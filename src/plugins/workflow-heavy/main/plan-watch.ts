@@ -7,7 +7,7 @@ import {
 import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type { WorkflowSignal } from '../../workflow/contract';
-import { readPlanProgress } from '../plan-reader';
+import { readPlanProgress } from '../../../shared/plan-progress';
 import { heavySignal } from '../contract';
 
 // Watches each session's plan folder, signalling `planChanged` with the
@@ -94,7 +94,7 @@ export function createPlanWatch(deps: {
           sessionId,
           heavySignal({
             type: 'planChanged',
-            progress: readPlanProgress(text),
+            progress: readPlanProgress(text, new Map()),
           }),
         );
         return;

@@ -2,7 +2,7 @@
 // stage, make both busy and not, the plan-ready countdown on the second plan
 // ready. The stage ids are sample data, not stage rules.
 import type { StageId, SessionFlow } from '../../workflow/contract';
-import type { PlanProgress, PlanTaskLine } from '../plan-reader';
+import type { PlanProgress, PlanTaskLine } from '../../../shared/plan-progress';
 import { HEAVY_WORKFLOW_ID, type HeavyState } from '../contract';
 
 // `busy` sets the sample's `turnRunning`; `countdown` starts its auto-start.
@@ -32,13 +32,13 @@ const PREVIEW_TITLE = 'Preview plan';
 
 // The sample plan's seven tasks, by the wave each sits under.
 const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done'>[] = [
-  { wave: 1, text: 'Write the contract' },
-  { wave: 1, text: 'Read the plan file' },
-  { wave: 1, text: 'Fold the signals' },
-  { wave: 2, text: 'Draw the row chip' },
-  { wave: 2, text: 'Draw the composer strip' },
-  { wave: 2, text: 'Add the side pane' },
-  { wave: 3, text: 'Run the self-test' },
+  { wave: 1, text: 'Write the contract', file: null, status: null },
+  { wave: 1, text: 'Read the plan file', file: null, status: null },
+  { wave: 1, text: 'Fold the signals', file: null, status: null },
+  { wave: 2, text: 'Draw the row chip', file: null, status: null },
+  { wave: 2, text: 'Draw the composer strip', file: null, status: null },
+  { wave: 2, text: 'Add the side pane', file: null, status: null },
+  { wave: 3, text: 'Run the self-test', file: null, status: null },
 ];
 
 // How far the sample plan has come at each stage that has one.

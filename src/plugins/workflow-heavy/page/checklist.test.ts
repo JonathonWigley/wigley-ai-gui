@@ -5,7 +5,7 @@ import {
   HEAVY_WORKFLOW_ID,
   withHeavyState,
 } from '../contract';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import { heavyChecklist } from './checklist';
 
 const BASE_FLOW: SessionFlow = {
@@ -27,6 +27,8 @@ function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
     wave,
     done,
     text: `t${index}`,
+    file: null,
+    status: null,
   }));
   return {
     checked: lines.filter((line) => line.done).length,

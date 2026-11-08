@@ -2,13 +2,17 @@
 // stage rules, its main part and its page part share.
 
 import type { ChannelShape } from '../../contracts/plugin';
-import { isJsonObject } from '../../shared/json';
+import { isJsonObject, type JsonObject } from '../../shared/json';
 import type {
   MainStage,
   SessionFlow,
   WorkflowSignal,
 } from '../workflow/contract';
-import type { PlanProgress, PlanTaskLine } from './plan-reader';
+import {
+  type PlanProgress,
+  type PlanTaskLine,
+  TASK_STATUSES,
+} from '../../shared/plan-progress';
 
 export const HEAVY_WORKFLOW_ID = 'workflow-heavy';
 
@@ -129,13 +133,29 @@ function isPlanProgress(value: unknown): value is PlanProgress {
   );
 }
 
+// A line with neither `file` nor `status` passes: the flow store saves
+// `flow.state`, a flow saved before the two fields holds such lines, and a
+// refused line would empty the state and lose the session's plan folder.
 function isPlanTaskLine(value: unknown): value is PlanTaskLine {
   return (
     isJsonObject(value) &&
     isNumberOrNull(value.wave) &&
     typeof value.text === 'string' &&
-    typeof value.done === 'boolean'
+    typeof value.done === 'boolean' &&
+    (isSavedBeforeFileAndStatus(value) || hasFileAndStatus(value))
   );
+}
+
+function isSavedBeforeFileAndStatus(line: JsonObject): boolean {
+  return !('file' in line) && !('status' in line);
+}
+
+function hasFileAndStatus(line: JsonObject): boolean {
+  const isFile = line.file === null || typeof line.file === 'string';
+  const isStatus =
+    line.status === null ||
+    (TASK_STATUSES as readonly unknown[]).includes(line.status);
+  return isFile && isStatus;
 }
 
 function isNumberOrNull(value: unknown): boolean {

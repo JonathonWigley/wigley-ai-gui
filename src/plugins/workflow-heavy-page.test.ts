@@ -51,7 +51,7 @@ import {
 } from './workflow-heavy/contract';
 import defaultLayout from './workflow-heavy/layouts/default/layout.js';
 import { workflowHeavyPagePart } from './workflow-heavy/page/start';
-import type { PlanProgress } from './workflow-heavy/plan-reader';
+import type { PlanProgress } from '../shared/plan-progress';
 
 const NO_SECTION = { setSummary: () => undefined };
 
@@ -80,6 +80,8 @@ function progressOf(
       wave: index + 1,
       text: `task ${index + 1}.${at + 1}`,
       done: false,
+      file: null,
+      status: null,
     })),
   );
   tasks.forEach((task, index) => {
@@ -139,7 +141,13 @@ function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
   const lines = tasks.map(([wave, done]) => {
     const at = (seen.get(wave) ?? 0) + 1;
     seen.set(wave, at);
-    return { wave, done, text: `${wave === null ? 't' : `w${wave}`}.${at}` };
+    return {
+      wave,
+      done,
+      text: `${wave === null ? 't' : `w${wave}`}.${at}`,
+      file: null,
+      status: null,
+    };
   });
   return {
     checked: lines.filter((line) => line.done).length,

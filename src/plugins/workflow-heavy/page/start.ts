@@ -10,7 +10,7 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowHeavyManifest } from '../manifest';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import { HEAVY_COMMANDS, HEAVY_PAGE_STAGES } from '../stages';
 import { heavyChecklist } from './checklist';
 import { countdownText } from './countdown';
