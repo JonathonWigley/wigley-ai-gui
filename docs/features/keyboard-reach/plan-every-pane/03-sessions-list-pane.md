@@ -1,6 +1,6 @@
 # 03 — Sessions list pane
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01
 Plan: [plan.md](plan.md)

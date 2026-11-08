@@ -1,6 +1,6 @@
 # 02 — Unity-pool right-bar stop
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -137,3 +137,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9c50228e · proof: diff read (Produces present, five binds found), typecheck pass; worker ran pool-view-model tests (70 pass), lint pass, selftest --plugin unity-pool pass · concerns: no typed HolderInput literals existed to gain isCursor; drawPanel builds panelInput twice per draw to clamp the cursor; re-entry step cannot tell the shown session's holder from index 0 (one holder in the fixture); inline panelSlot.style.outline='none' to stop :focus-visible drawing a second ring

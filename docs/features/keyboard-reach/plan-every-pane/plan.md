@@ -207,7 +207,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Core area focus](01-core-area-focus.md)
 
 ### Wave 2
-- [ ] [Unity-pool right-bar stop](02-unity-pool-right-bar.md) — after 01
+- [x] [Unity-pool right-bar stop](02-unity-pool-right-bar.md) — after 01
 
 ### Wave 3
 - [ ] [Sessions list pane](03-sessions-list-pane.md) — after 01
@@ -239,11 +239,15 @@ Review base: 1a938e2f
 
 ### Groups
 - 01 · 5e5cca77 · diff read (every Produces present or in Contract changes), typecheck pass, worker ran 6 touched test files (278 pass) · concerns: baseChanged row asserts ['outer left','side bar'] since baseChanged drops the view target; a hook moving DOM focus before its setScope while a stop holds the keys runs focusMain early (narrow sideBarOpenedOver); a click into main from the right bar runs focusMain on mousedown before the click picks its pane — live check; lint oxfmt fails on docs/keymap.md, pre-existing from docs-ahead 3e3c2fcb
+- 02 · 9c50228e · diff read (Produces present, five binds found), typecheck pass; worker ran pool-view-model tests (70 pass), lint pass, selftest --plugin unity-pool pass · concerns: no typed HolderInput literals existed to gain isCursor; drawPanel builds panelInput twice per draw to clamp the cursor; re-entry step cannot tell the shown session's holder from index 0 (one holder in the fixture); inline panelSlot.style.outline='none' to stop :focus-visible drawing a second ring
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 ### Rulings
 - Alt+j/k between stops calls the left stop's left before the next stop's focus — left runs on every end of a turn — harmless if wrong · group 01 · group 01
 - every return to main writes area=main and calls left before focusMain (unlike entering, written after the hook) so a focusin during focusMain finds main already holding — double focusMain if wrong · group 01 · group 01
 - focusLeftRightBar logs focus back in main; sideBarOpened ends a held stop's turn first — an extra log line if wrong · group 01 · group 01
+- focus() also logs cursor on <label> so the re-entry step can expect the row — an extra log line if wrong · group 02 · group 02
+- added exported heldCloneCursor in pool-view-model.ts for re-entry — one more export if wrong · group 02 · group 02
+- lead: docs/keymap.md oxfmt reflow committed on its own (9764f9bc), a pre-existing lint failure on main · lead · group 02
 ### Review rounds
 ### Test gate
