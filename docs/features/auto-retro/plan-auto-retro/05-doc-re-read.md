@@ -20,6 +20,7 @@ an order of steps, a file name, a reason that no longer holds.
 - GUI `docs/features/session-log/design.md` — the `closed` row.
 - GUI `docs/features/layouts/design.md` — the `sessions` and `auto-retro` Adopters rows.
 - GUI `DESIGN.md` § Surfaces › Side bar — the plugin sections line.
+- GUI `docs/features/session-groups/design.md` § Order and § Drawing — the plugin sections.
 - GUI `docs/features/agent-chat/design.md` § Chat plugin — **Saved sessions** and **Permissions**, against task 02's
   `unattended` and `close`.
 - GUI `src/plugins/sessions/layouts/layout.d.ts` header comment ("Both sections always draw", "the two `section`s")

@@ -54,7 +54,9 @@ Decisions:
   for `addRowPart`.
 - **Claims.** `sidebarSections` asks each section's `claims` for each row on each call. A claimed row leaves the
   project groups. A row that two sections claim goes to the section with the lower `order`; on a tie, to the section
-  registered first. Rows inside a plugin section run newest first by row stamp, a row with no stamp older than every
+  registered first. `mountSessionsView` wraps each section's `claims` before it reaches `sidebarSections`: a
+  `claims` that throws counts as false for that row and is logged once per draw as
+  `section <id> claims failed: <error>`, so one plugin's bug never stops the side bar drawing. Rows inside a plugin section run newest first by row stamp, a row with no stamp older than every
   stamped row, ties in the order of `rows` — the same rule as inside a group.
 - **Order.** `plugins` holds only the sections that claim at least one row, sorted by `order`, ties in registration
   order. `drawnRows` returns Favorites' rows, then Recent's, then each plugin section's rows in turn. `orderedRows`,
@@ -84,8 +86,12 @@ Decisions:
   - Favorites and Recent labels keep today's rule: they show while `has-favorites` or `is-reordering`.
   - `row` adds `session-row--claimed` while `input.section !== null`. A claimed row is muted: its title takes
     `--wg-fg-secondary`, and its card has no `card-background` at rest. It takes a dashed accent edge on its start:
-    `border-inline-start: var(--wg-indicator-width) dashed var(--wg-accent)`. Hover, selection and on-screen keep
-    today's rules.
+    `border-inline-start: var(--wg-indicator-width) dashed var(--wg-accent)`. The edge stays accent in every state:
+    write `.ui-row.session-row.session-row--claimed { border-inline-start-color: var(--wg-accent) }` after today's
+    hover, `is-selected` and `is-on-screen` rules, at a specificity above theirs, so their `border-color` shorthand
+    recolours only the other three sides. Hover, selection and on-screen otherwise keep today's rules: a selected
+    claimed row takes today's selected fill and title colour; the muted title applies at rest and on hover. A
+    claimed row with an emphasis draws its `session-row-edge--*` status edge on top of the dashed edge, as today.
   - Update the file's top comment to name the plugin sections and the claimed row.
 - **The layout preview** (`page/preview.ts`): add a sample section and one claimed sample row, so `Space z l s`
   shows the claimed look. Section: `{ id: 'preview-section', label: 'Plugin', order: 0, claims: (row) =>
@@ -97,6 +103,11 @@ Decisions:
   on each side-bar draw, so a header whose content changes between draws redraws into its own div. Update the
   `sessionsPagePart` comment in `page/start.ts` ("The rows group by project under Favorites and Recent", line 200),
   the `mountSidebarView` comment, and the `sidebar-order.ts` file comment ("two sections of project groups").
+  In `layout.d.ts` also rewrite the `SectionPane` comment ("one `group` per project", line 126) and the
+  `Layout.section` comment ("its label and drop hint over the box of its groups", line 222) to say a plugin
+  section's `groups` holds `row`s directly, and give `SessionRowInput.section` (near line 46) its comment.
+- **Docs.** `docs/features/session-groups/design.md` § Order and § Drawing are written ahead (plugin sections);
+  this task edits no doc.
 
 GIVEN rows `a1` and `r1` in project `alpha` and a section `retro` that claims `r1`
 WHEN the side bar draws
@@ -129,14 +140,17 @@ Tests:
     `[['retro', 0, ['a1', 'a2']]]` → plugins `['retro: a2 a1']`, drawn `['a2', 'a1']`
   - `a favorite's claimed row leaves Favorites`: rows `f1 fav`, `f2 fav`; favorites `['fav']`; sections
     `[['retro', 0, ['f1']]]` → favorites `['fav*: f2']`, plugins `['retro: f1']`, drawn `['f2', 'f1']`
-- `sessions-view.test.ts`, new `sessionsView_SectionAddedThenDisposed_RedrawsTheSideBar`: rows `a1 alpha` and
-  `r1 alpha`. Add `{ id: 'retro', label: 'Retro', order: 0, claims: (row) => row.sessionId === 'r1', header }`,
+- `sessions-view.test.ts`, new `sessionsView_SectionAddedThenDisposed_RedrawsTheSideBar`: rows `a1` and `r1`, each
+  `{ ...sessionRow(id), project: 'alpha' }`. Add `{ id: 'retro', label: 'Retro', order: 0, claims: (row) => row.sessionId === 'r1', header }`,
   where `header.build` appends a `span` with text `2 queued` and records each dispose. After the add: a
   `session-section--plugin` element holds the label text `Retro`, the text `2 queued` inside its
-  `session-section-part`, and one row with title text `label r1` carrying `session-row--claimed`; row `a1` does not
+  `session-section-part`, and one row, the one whose tooltip holds `label r1` (find it with `rowNamed`), carrying `session-row--claimed`; row `a1` does not
   carry it; `orderedRows()` ids are `['a1', 'r1']`. After a `render` of the same state, the header's dispose count is
   1. After the handle's `dispose`: no `session-section--plugin` element; `orderedRows()` ids are `['a1', 'r1']` with
   `r1` inside group `alpha`; the header's dispose count is 2.
+- `sessions-view.test.ts`, new `sessionsView_ClaimsThrows_RowStaysInItsGroupAndLogs`: a section whose `claims`
+  throws `boom` for `r1` → `r1` draws in group `alpha` with no `session-row--claimed`, no plugin section draws, and
+  the log holds `section retro claims failed: boom` once for that draw.
 - `page/start.test.ts`, new `addSection_ReservedId_Throws` (`it.each` over `favorites` and `recent`): the started
   part's `addSection` with that id throws `section id <id> is reserved`, and the side bar draws no plugin section.
   The sessions-view test above adds its section through the view's `sections` store, not through the exports.
@@ -145,7 +159,10 @@ Tests:
   (default a new store).
 - `sessions-parts.test.ts`, `groupAndSectionParts_Draw_KeepsTheContract`: add rows:
   - `default plugin section` — input `{ kind: 'plugin', id: 'retro', label: 'Retro', dropHint: '', isEmpty: false }`,
-    header building text `1 queued` → drawn by `default`, holds `['Retro', '1 queued']`, boxes inside, failure null
+    header building text `1 queued` → drawn by `default`, holds `['Retro1 queued']` (`sectionShape` reads the
+    label's `textContent`, and the header part sits inside the label), boxes inside, failure null. `sectionShape`
+    gains an optional third argument `header: SectionPart | null`, default `null`, passed on to `parts.section`;
+    the existing rows pass nothing
   - `user section places its header part twice` → drawn by `default`, failure `headerPart placed twice`
   - `header part build throws` → drawn by `default` with no header text, failure `section part retro failed`
 - `consumer-view.test.ts`, `disposes the tabs and parts a consumer added when its registrations dispose`: add a
@@ -153,7 +170,9 @@ Tests:
 - `preview.test.ts`, `previewRowState_PinnedSample_ShowsItsTitleAndActivity`: add the row
   `{ label: 'wigley-agents 2', title: 'Retro of Scratchpad', activity: 'working' }`. In
   `preview_SampleRows_CoverEveryRowState`, assert `previewSections(PREVIEW_STATE).plugins` holds one section whose
-  rows are `['preview-6']`.
+  rows are `['preview-6']`. `sessionsView_StepPreview_MovesSampleSelectionOnly`'s `by -1` row now lands on
+  `wigley-agents 2`: `preview-6` is the last drawn row and `stepSession` wraps. Update that expected value; keep
+  the preview's row order.
 
 Approach: the existing rows of `sidebarSections_ordersSectionsGroupsAndRows` stay as they are, with
 `expectedPlugins` defaulting to `[]`. Build each test section with `{ id, order, claims: (row) =>

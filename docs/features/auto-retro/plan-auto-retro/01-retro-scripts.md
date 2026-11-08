@@ -24,7 +24,8 @@ Produces:  in `plugins/wigley/scripts/retro/ledger.py`:
            ledger.py runs add --session <id> --analyzed <id>... --note "<line>"   appends to <root>/runs.md
            ledger.py runs                                                         prints each run line, oldest first
            ledger.py runs --clear                                                 empties runs.md to its header
-           ledger.py draft <slug> --file <path> [--target <path>]   writes `## Draft` and frontmatter `draft_hash`
+           ledger.py draft <slug> --file <path> [--target <path>]   writes `## Draft` and frontmatter `draft_target` (as passed,
+                                                                    `none` without `--target`) and `draft_hash` (`none` too)
            ledger.py ripe                                           each item gains "draft": "missing" | "fresh" | "stale"
            ```
            in `plugins/wigley/scripts/retro/digest.py`:
@@ -60,7 +61,13 @@ Produces:  in `plugins/wigley/scripts/retro/ledger.py`:
   - the file names another owner and is not stale: change nothing. Print `held by <owner> since <iso time>` to
     stderr. Exit 1.
   - the file names another owner and is stale: write a temp file beside it and `os.replace` it over the lock, with
-    this owner and the current time. Print `took over <old owner>`. Exit 0.
+    this owner and the current time. Print `took over <old owner>`. Exit 0. The takeover is not atomic: two runs
+    that both read the same stale lock can both take it over. That is accepted, because the app runs one background
+    retro at a time, so only a manual run that starts in the same second as a queued one, behind a lock dead for 3
+    hours, can overlap.
+- A `since` later than now (clock skew) is not stale. An `owner:` line whose value is empty or holds whitespace does
+  not parse, so the file is held by `unknown`.
+- `--lock-file`, `draft --file` and `draft --target` each expand `~` (`expanduser`), as `root_path` does for `--root`.
 - `lock release`, by case:
   - the file names this owner: delete it. Print `released`. Exit 0.
   - no lock file: print `not held`. Exit 0. (SKILL.md releases on an early stop too, and the lock may be gone.)
@@ -71,9 +78,13 @@ Produces:  in `plugins/wigley/scripts/retro/ledger.py`:
 ### Runs (`ledger.py runs`)
 
 - `runs` has an optional positional action, `add`. `runs` with no action prints. `runs --clear` clears. `add`
-  together with `--clear` is a usage error (argparse exit 2).
-- `runs add` needs `--session` (one id), `--analyzed` (one or more ids, `nargs="+"`) and `--note`. It takes
-  `--today` with default `date.today().isoformat()`, as `seen` does.
+  together with `--clear` is a usage error (argparse exit 2). `--session`, `--analyzed`, `--note` or `--today`
+  given without `add` exits 1 with `<flag> needs runs add` on stderr, so a mistyped call in SKILL.md step 7 fails
+  loudly instead of printing the list.
+- `runs add` needs `--session` (one id), `--analyzed` (one or more ids, `nargs="+"`) and `--note`. A missing one
+  exits 1 with `runs add needs <flag>` on stderr and writes nothing (not argparse `required`, since `runs` alone
+  takes none of them). It takes `--today`, typed `iso_day` as `add --date` is, with default
+  `date.today().isoformat()`.
 - `<root>/runs.md` header is `# Background runs\n\n`. `runs add` creates the root and the file with that header when
   the file is missing, then appends one line:
   ```
@@ -175,8 +186,9 @@ under `<dir>/projects`
 
 ## Tests
 
-Add to `test_ledger.py`. Use the existing `write_candidate` and `run_main` helpers. Add `lock_file` as
-`self.root.parent / "lock" / "ledger.lock"` or a second temp folder, outside `self.root`.
+Add to `test_ledger.py`. Use the existing `write_candidate`, `run_main` and `run_add` helpers. Make a second
+`tempfile.TemporaryDirectory()` in `setUp`, clean it in `tearDown`, and set `lock_file` to `<it>/ledger.lock`, so no
+lock file outlives a test or sits in a folder two tests share.
 
 - `test_the_lock_admits_one_owner_until_it_releases` — one sequence, asserting `(code, stdout, stderr)` at each step:
   `acquire a` → `(0, "acquired\n", "")`; `acquire a` again → `(0, "acquired\n", "")`; `acquire b` → exit 1, stderr
@@ -190,6 +202,11 @@ Add to `test_ledger.py`. Use the existing `write_candidate` and `run_main` helpe
   | `owner: a` / `since: <now − 4 h>` | `(0, "took over a\n", "")`; file first line `owner: b` |
   | `owner: a` / `since: <now − 2 h>` | exit 1; stderr `held by a since <now − 2 h>\n`; file unchanged |
   | `garbage`, mtime set to now − 4 h with `os.utime` | `(0, "took over unknown\n", "")` |
+  | `owner: ` (empty) / `since: <now − 4 h>`, mtime now − 4 h | `(0, "took over unknown\n", "")` |
+  | `owner: a` / `since: <now + 1 h>` | exit 1; stderr starts `held by a since ` |
+  The 3-hour boundary itself stays untested; the rows sit an hour either side of it.
+- `test_lock_refuses_an_empty_or_spaced_owner` — table, `acquire` with `--owner ""` and `--owner "a b"`, each → exit
+  1 and no lock file.
 - `test_the_lock_file_defaults_outside_the_ledger` — patch `HOME` to a temp folder with `unittest.mock.patch.dict`;
   `acquire a` with no `--lock-file` → exit 0; `<HOME>/.local/state/wigley-retro/ledger.lock` exists; `self.root`
   holds no file.
@@ -199,7 +216,12 @@ Add to `test_ledger.py`. Use the existing `write_candidate` and `run_main` helpe
   `"- 2026-11-01 · r1 · s1, s2 · first run\n- 2026-11-02 · r2 · s3 · second run\n"`; `runs --clear` →
   `(0, "cleared 2\n", "")`; `runs` stdout is `""`; `runs.md` text is `"# Background runs\n\n"`.
 - `test_runs_add_refuses_a_spaced_id_an_empty_note_and_a_line_break` — table of `runs add` calls, each → exit 1 and
-  `runs.md` does not exist: `--session "r 1"`; `--analyzed "s 1"`; `--note "   "`; `--note "one\ntwo"`.
+  `runs.md` does not exist: `--session "r 1"`; `--analyzed "s 1"`; `--note "   "`; `--note "one\ntwo"`; no
+  `--note`; `--today 2026-13-01` (this row exits 2, from `iso_day`).
+- `test_runs_without_a_file_and_misused_flags` — with no `runs.md` and no root folder: `runs` → `(0, "", "")`;
+  `runs --note x` → exit 1, stderr contains `needs runs add`; `runs add --clear --session r --analyzed s --note n`
+  → exit 2; `runs --clear` → `(0, "cleared 0\n", "")` and `runs.md` is `"# Background runs\n\n"`; then a valid
+  `runs add` into a fresh missing root → exit 0 and the root exists.
 - `test_draft_writes_the_section_after_occurrences_and_the_target_hash` — candidate `ripe-a`, kind `rule`, sessions
   s1 and s2; target file bytes `b"rule text\n"`; draft file text `"Add the line.\n\n"`. `draft ripe-a --file <d>
   --target <t>` → `(0, "drafted\n", "")`. The file text ends with
@@ -216,11 +238,13 @@ Add to `test_ledger.py`. Use the existing `write_candidate` and `run_main` helpe
   | drafted with target `t`, `t` unchanged | `fresh` |
   | drafted with target `t`, then `t` rewritten | `stale` |
   | drafted with target `t`, then `t` deleted | `stale` |
-  | drafted with no `--target` | `fresh` |
+  | drafted with no `--target` (fields `draft_target: none`, `draft_hash: none`) | `fresh` |
+  | drafted with `--target ~/t.md`, `HOME` patched to a temp folder holding `t.md` (stored `draft_target` is `~/t.md`) | `fresh` |
+  | the same, then `<HOME>/t.md` rewritten | `stale` |
   | `\n## Draft\n\nHand text.\n` appended by hand, no `draft_hash` | `stale` |
   | `\n## Draft\n\n` appended by hand, nothing below | `missing` |
 - `test_a_draft_section_leaves_add_archive_and_the_malformed_check_as_they_were` — draft candidate `ripe-a` (s1,
-  s2) with no target; `add ripe-a --session s3` → `(0, "added\n", "")`; the lines from `## Occurrences` on are
+  s2) with no target; `self.run_add("ripe-a", "s3")` (which passes `--note evidence --date 2026-10-08`) → `(0, "added\n", "")`; the lines from `## Occurrences` on are
   `["## Occurrences", "", "- 2026-10-01 · s1 · evidence", "- 2026-10-02 · s2 · evidence",
   "- 2026-10-08 · s3 · evidence", "", "## Draft", "", "Draft text."]`; `read_candidate`'s `rejected` is `[]` and
   `is_malformed` is false; `index` puts `| ripe-a |` in the open table; after `set_status(path, "promoted")`,
@@ -275,6 +299,8 @@ python3 scripts/check_pointers.py
 (cd plugins/wigley/scripts/retro && python3 -m unittest discover)
 claude plugin validate .
 ```
+
+`check_manifests.py --against origin/main` stays out of this list: task 05 makes the bump it checks.
 
 `python3 plugins/wigley/scripts/retro/ledger.py --help` lists `lock`, `runs` and `draft`, each with a help line.
 
