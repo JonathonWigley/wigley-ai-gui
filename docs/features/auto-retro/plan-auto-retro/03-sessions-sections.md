@@ -1,6 +1,6 @@
 # 03 — Sessions: sidebar section registration
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -187,4 +187,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit b82a3403 · proof: diff read; Produces present (SidebarSection, SectionPart, addSection, SectionInput.kind/id, SessionRowInput.section, SectionKit.headerPart, RowClaim/ClaimedSection, sidebarSections sections arg, SessionsParts.section header); typecheck 0 errors; sessions tests 573 pass; lint clean but pre-existing docs/keymap.md format · concerns: headerPart returns a detached div when header build throws; claims failures log per order computation (orderedRows, moveFavorite too), not only per draw; accent-edge rule doubles the class to outrank hover specificity; status edge sits beside the dashed edge, unverified live; no user sessions layout and no layout setting

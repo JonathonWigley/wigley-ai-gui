@@ -1,6 +1,6 @@
 # 02 — Chat: unattended launch and close by id
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -154,3 +154,4 @@ a body naming `isUserClose` and the two consumers that read it.
 
 ## Proof
 
+Commit fb6ba21b · proof: diff read; Produces present (LaunchRequest.unattended, finished, isUserClose, close, SavedSession.unattended, UNATTENDED_REASON); typecheck clean outside sessions/ (03 in flight); 5 test files 534 pass; oxfmt clean on touched folders · concerns: selftest-script.ts:1185 also closes with project-closed, not named by the new SessionCloseReason comment; npm run lint fails on docs/keymap.md formatting, untouched since 3e3c2fcb (pre-existing)

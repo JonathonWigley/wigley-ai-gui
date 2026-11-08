@@ -206,9 +206,9 @@ digest.py --projects                                     default $CLAUDE_CONFIG_
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Retro scripts: lock, runs, drafts, short sessions](01-retro-scripts.md)
-- [ ] [Chat: unattended launch and close by id](02-chat-unattended-close.md)
-- [ ] [Sessions: sidebar section registration](03-sessions-sections.md)
+- [x] [Retro scripts: lock, runs, drafts, short sessions](01-retro-scripts.md)
+- [x] [Chat: unattended launch and close by id](02-chat-unattended-close.md)
+- [x] [Sessions: sidebar section registration](03-sessions-sections.md)
 
 ### Wave 2
 - [ ] [The auto-retro plugin](04-auto-retro-plugin.md) — after 02, 03
@@ -221,10 +221,19 @@ digest.py --projects                                     default $CLAUDE_CONFIG_
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 946a8cda
 
 ### Groups
+- 01 · 94313b0 · diff read; retro unittest 180 OK; check_manifests, check_pointers (after rebase onto origin/main 0122bbb), claude plugin validate pass · concerns: check_pointers failed before the rebase: the branch lacked origin/main's new wigley:wrap-up skill; lead rebased the marketplace branch onto origin/main
+- 02 · fb6ba21b · diff read; Produces present (LaunchRequest.unattended, finished, isUserClose, close, SavedSession.unattended, UNATTENDED_REASON); typecheck clean outside sessions/ (03 in flight); 5 test files 534 pass; oxfmt clean on touched folders · concerns: selftest-script.ts:1185 also closes with project-closed, not named by the new SessionCloseReason comment; npm run lint fails on docs/keymap.md formatting, untouched since 3e3c2fcb (pre-existing)
+- 03 · b82a3403 · diff read; Produces present (SidebarSection, SectionPart, addSection, SectionInput.kind/id, SessionRowInput.section, SectionKit.headerPart, RowClaim/ClaimedSection, sidebarSections sections arg, SessionsParts.section header); typecheck 0 errors; sessions tests 573 pass; lint clean but pre-existing docs/keymap.md format · concerns: headerPart returns a detached div when header build throws; claims failures log per order computation (orderedRows, moveFavorite too), not only per draw; accent-edge rule doubles the class to outrank hover specificity; status edge sits beside the dashed edge, unverified live; no user sessions layout and no layout setting
 ### Contract changes
 ### Rulings
+- Two-repo run: the Review base above is the GUI worktree's tip; the marketplace worktree's review base is 00b90b5 (its tip at preflight, one docs-ahead commit past the plan's 1dbe437) — plan.py takes one sha · lead
+- keep_refusal renamed open_candidate_refusal, shared by keep and draft; messages unchanged — the task asked for one shared helper — a caller elsewhere by the old name would break (none found) · group 01 · group 01
+- runs --today defaults to None and becomes today inside add, so --today without add is caught — argparse default would hide it — none · group 01 · group 01
+- lock acquire retries create when the lock file vanishes between O_EXCL fail and read — race with a release — none · group 01 · group 01
+- Marketplace auto-retro rebased onto origin/main 0122bbb (wigley:wrap-up landed mid-run); task 01's commit is 94313b0 after the rebase; marketplace review base is now 0122bbb's child range 0122bbb..auto-retro minus the three docs-ahead commits (9373445, 9af0df4, 1737240) · lead
+- startNew takes a fourth argument unattended: boolean to carry the flag from launch to openAndStart — plan left the path open — none · group 02 · group 02
 ### Review rounds
 ### Test gate

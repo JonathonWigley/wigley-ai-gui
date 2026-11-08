@@ -1,6 +1,6 @@
 # 01 — Retro scripts: lock, runs, drafts, short sessions
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -312,4 +312,4 @@ what the scripts now do: the ledger lock, the background-run records, stored pro
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 94313b0 · proof: diff read; retro unittest 180 OK; check_manifests, check_pointers (after rebase onto origin/main 0122bbb), claude plugin validate pass · concerns: check_pointers failed before the rebase: the branch lacked origin/main's new wigley:wrap-up skill; lead rebased the marketplace branch onto origin/main
