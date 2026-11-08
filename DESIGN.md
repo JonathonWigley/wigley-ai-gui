@@ -354,7 +354,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
-- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
+- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections, then flat under each section a plugin registers (Retro), whose rows draw muted with a dashed accent edge. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the primer popup's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
