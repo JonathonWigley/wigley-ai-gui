@@ -141,7 +141,7 @@
 
 /* Once usage's bar has shrunk away, the stage's tag ellipsizes, so the parts
    after it stay on the row's card. A chip without the `workflow-chip` class and the
-   `No workflow` tag keep their width. */
+   `No workflow` and `Working` tags keep their width. */
 .session-row-part[data-part='workflow.chip']:has(> .workflow-chip) {
   flex: 0 1 auto;
   min-width: 0;

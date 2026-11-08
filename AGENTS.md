@@ -322,7 +322,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
-                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the `No workflow` and `Working` tags of a chip with no stage are the exception to
+                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the chip's `No workflow` and `Working` tags are the exception to
                  the layout rule: the engine draws them with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
   workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan

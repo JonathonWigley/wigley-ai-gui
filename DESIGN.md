@@ -194,11 +194,11 @@ means something.
   agent-state pulse, such as a session row's running stage tag; slow enough to read as breathing, not flashing).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
-  session row's pulsing Working label, a tool step settling from running to done). Content does not animate in, and nothing moves on its
+  session row's pulsing running stage or Working tag, a tool step settling from running to done). Content does not animate in, and nothing moves on its
   own.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
   `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator and the
-  pulsing Working label are static.
+  pulsing stage and Working tags are static.
 - **A floating panel fades in on open** (`openFloatingPanel`) over `duration-base`; showing a page
   or mode that holds an open panel does not fade it again, and closing is instant.
 
@@ -494,8 +494,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   or `--wg-workflow-heavy-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
   `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
   row's label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes; a session that finished a turn with no
-  workflow started draws one error Tag, `No workflow`, in `status-error`, and a session with no stage to draw takes a
-  running `Working` Tag, pulsing, while its turn or subagents run. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+  workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
+  activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
+  pulsing, unless its stage tag is already running. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status

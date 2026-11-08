@@ -14,6 +14,7 @@ import type {
   SessionFlow,
   SidePaneInput,
   StageActionSpec,
+  StageStatus,
   StripInput,
   WorkflowDraw,
 } from '../contract';
@@ -123,7 +124,7 @@ function flowOf(
 // with the main action `go`, `review`, and `idle` out of the stepper. Its timers
 // record each `set` (its handle the set's count), and its `nameOf` reads every session
 // as `proj`. `workflows` is what the view reads; `sidePart` is `stub`'s. Every session in
-// `previews` shows the preview.
+// `previews` shows the preview, and every session in `working` reads as working.
 function setUp(previews: readonly string[] = []) {
   const now = NOW;
   const sets: { run: () => void; handle: number }[] = [];
@@ -131,6 +132,7 @@ function setUp(previews: readonly string[] = []) {
   const toasts: string[] = [];
   const flows = new Map<string, SessionFlow>();
   const rowActivities = new Map<string, RowActivity | null>();
+  const working = new Set<string>();
   let isFlowOfBroken = false;
   const stages = createStageList<PageStage>();
   stages.add(stageOf('idle', 'Idle', 0, { inStepper: false }));
@@ -160,6 +162,7 @@ function setUp(previews: readonly string[] = []) {
     isPreview: (sessionId) => previews.includes(sessionId),
     setRowActivity: (sessionId, activity) =>
       rowActivities.set(sessionId, activity),
+    isWorking: (sessionId) => working.has(sessionId),
   });
   const held = stubWorkflow('stub', undefined, { stages: stages.all() });
   workflows.push(held.workflow);
@@ -182,6 +185,7 @@ function setUp(previews: readonly string[] = []) {
     sets,
     logged,
     rowActivities,
+    working,
   };
 }
 
@@ -320,14 +324,17 @@ describe('workflow view', () => {
 
 describe('workflow view over several workflows', () => {
   it.each([
-    { missedLevel: false, turnRunning: false, chip: [] },
-    { missedLevel: true, turnRunning: false, chip: ['No workflow'] },
-    { missedLevel: false, turnRunning: true, chip: ['Working'] },
-    { missedLevel: true, turnRunning: true, chip: ['No workflow', 'Working'] },
+    { missedLevel: false, isWorking: false, chip: [] },
+    { missedLevel: true, isWorking: false, chip: ['No workflow'] },
+    { missedLevel: false, isWorking: true, chip: ['Working'] },
+    { missedLevel: true, isWorking: true, chip: ['No workflow', 'Working'] },
   ])(
-    'Draw_NullWorkflow missedLevel $missedLevel turnRunning $turnRunning',
-    ({ missedLevel, turnRunning, chip: chipTexts }) => {
-      const { view, put, sidePart, rowActivities } = setUp();
+    'Draw_NullWorkflow missedLevel $missedLevel isWorking $isWorking',
+    ({ missedLevel, isWorking, chip: chipTexts }) => {
+      const { view, put, sidePart, rowActivities, working } = setUp();
+      if (isWorking) {
+        working.add('a');
+      }
       const chip = new FakeElement('div');
       const strip = new FakeElement('div');
       const pane = new FakeElement('div');
@@ -336,21 +343,61 @@ describe('workflow view over several workflows', () => {
       view.stripPart.build(asHtml(strip), 'a');
       sidePart.build(asHtml(pane), 'a', section);
 
-      put({ ...newFlow('a', '/p'), missedLevel, turnRunning });
+      put({ ...newFlow('a', '/p'), missedLevel });
 
       expect(chip.children.map((child) => child.textContent)).toEqual(
         chipTexts,
       );
       expect(findAll(chip, 'ui-tag--error')).toHaveLength(missedLevel ? 1 : 0);
-      expect(findAll(chip, 'ui-tag--running')).toHaveLength(
-        turnRunning ? 1 : 0,
-      );
+      expect(findAll(chip, 'ui-tag--running')).toHaveLength(isWorking ? 1 : 0);
       expect(strip.children).toHaveLength(0);
       expect(pane.children).toHaveLength(0);
       expect(section.summaries.at(-1)).toBeNull();
       expect(rowActivities.get('a')).toBeNull();
     },
   );
+
+  it.each<{ status: StageStatus; isWorking: boolean; working: number }>([
+    { status: 'running', isWorking: true, working: 0 },
+    { status: 'done', isWorking: true, working: 1 },
+    { status: 'ready', isWorking: true, working: 1 },
+    { status: 'done', isWorking: false, working: 0 },
+  ])(
+    'Draw_StageChip status $status isWorking $isWorking',
+    ({ status, isWorking, working: workingTags }) => {
+      const { view, workflows, put, working } = setUp();
+      const shown = stubWorkflow(
+        'w',
+        stageOf('build', 'Build', 10, { status: () => status }),
+      );
+      workflows.push(shown.workflow);
+      if (isWorking) {
+        working.add('a');
+      }
+      const chip = new FakeElement('div');
+      view.chipPart.build(asHtml(chip), 'a');
+
+      put(flowOf('w'));
+
+      expect(
+        chip.children.filter((child) => child.textContent === 'Working'),
+      ).toHaveLength(workingTags);
+    },
+  );
+
+  it('ActivityChanged_DrawsTheChipAgain', () => {
+    const { view, put, working } = setUp();
+    const chip = new FakeElement('div');
+    view.chipPart.build(asHtml(chip), 'a');
+    put(newFlow('a', '/p'));
+
+    working.add('a');
+    view.activityChanged('a');
+
+    expect(chip.children.map((child) => child.textContent)).toEqual([
+      'Working',
+    ]);
+  });
 
   it('Steps_PerWorkflow', () => {
     const { view, workflows, put } = setUp();

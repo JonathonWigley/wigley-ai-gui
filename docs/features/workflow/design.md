@@ -264,8 +264,9 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   bar shrinks away first, then the tag ellipsizes. A user layout can also draw the
   progress and the main action's button, which the chip's input carries. Idle draws no stage. A session in no workflow
   draws the **`No workflow`** tag, an error Tag in `--wg-status-error`, once a live turn with agent work has ended with no
-  level skill started, and nothing before. A chip with no stage to draw (no workflow, or idle) adds a running
-  `Working` tag, pulsing, while the flow is busy (a turn or a subagent running).
+  level skill started, and nothing before. While the session's row holds a running activity (chat's
+  working, which counts background tasks too), the chip ends on a running `Working` tag, pulsing, unless its stage tag
+  is already running: so a busy session with no stage, or at a done or ready stage, still says it works.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the trail, the countdown and the main
   action. A stage outside the stepper keeps the status mark and line, since the trail does not show it. Once a plan is
   read the side pane holds the detail and the other actions, so a hidden pane leaves the trail, the main action and the
