@@ -282,5 +282,6 @@ Review base: 21b036cb
 - Head click compares the line's open state before and after its dispatches and logs only on change — no double log — a click logs nothing if wrong · group 05
 - The question card's head kind tag (itemHead 'Question') counts as the head, not a section label, so 'no section labels' wording stays — matches 02's pinned card — docs would need a clause if the tag counts · group 09
 - Mid-run rebase at task 10: marketplace onto main dd60953 (a peer took 1.20.2; 08's bump dropped as already upstream, re-bumped to 1.20.3 in d4c4874), agents onto main 63018f1 (AGENTS.md conflict kept the forms.md pointer; the peer's visuals-in-context rule moved into forms.md § Questions, a59ec37); review bases now marketplace dd60953, agents 63018f1; gui rebases after the live checks — work builds on origin's latest — the review range would sweep in peer commits if stale · lead
+- Rebased gui onto main bc18cdfc at task 10 (12 commits, incl. e38de06f dropping ask_round's item caps); keymap.md raw-key line merged both sides; group commits now 03 a4fca096, 01 5124b14d, 06 4e662d6d, 02 1cb7db0a, 04 35148c85, 05 b40572de, 07 dd2f5cb7, 09 44533956, 10 fix e6a27daf; gui review base now 3910924d (the plan commit) — work builds on origin's latest — a stale sha misleads the review range · lead
 ### Review rounds
 ### Test gate
