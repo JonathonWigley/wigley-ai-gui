@@ -42,7 +42,8 @@ start one whenever a check needs it.
    row; a `sessions.connect` session is never reused. To put a round and a primer on one row, run
    `sessions.open '{"sessionId":"s"}'` first, then both open actions with `"sessionId":"s"`. The
    second of the two opens logs `[sessions] newer relay took over session <id>`; that line is
-   expected there.
+   expected there. A second open of the same round in a session where it was already submitted
+   replays the stored answers and shows nothing, so pass a different `round`.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). `setting <name> <json value>` takes the

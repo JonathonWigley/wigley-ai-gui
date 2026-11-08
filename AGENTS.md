@@ -448,7 +448,7 @@ round; primer: an open primer), since main, not the page, decides.
   narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
   focuses its list, and every mode gives `focusMain`, which gives main's last pane back its scope and focus; the
   core's focus keys reach the side bar and the right bar only through these (A focus target, below). A hidden mode keeps its state,
-  so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
+  so leaving one never loses work in it, but it keeps no keys: each mode, each session tab and each session popup is told when it becomes
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
@@ -496,8 +496,8 @@ round; primer: an open primer), since main, not the page, decides.
   (`docs/features/auto-compact/design.md`).
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
-  the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the
-  focused pane's selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
+  the focused pane, and the visible surface, whose `shown` sets the key scope and whose `isVisible` reads true, is the
+  focused pane's top open popup, else its selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one

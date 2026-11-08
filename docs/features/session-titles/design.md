@@ -100,7 +100,7 @@ session's conversation, sending a message and the next turn starting also clear 
 that ends while its session is the focused pane's skips done. An unselected `marked` row with no activity
 draws the needs you label; while a row shows an activity, the default layout draws that activity's label alone. A
 selected row draws as unmarked at once: the page clears a done on selecting before main's reply clears the mark.
-Other tabs' status lines (a form's or primer's name and count) still draw on the row's
+Other tabs' and popups' status lines (a form's or primer's name and count) still draw on the row's
 second line; chat no longer sends one.
 
 Activities live in the page and start blank on a page load.

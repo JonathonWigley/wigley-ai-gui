@@ -15,8 +15,8 @@
 ## Intent
 
 The user starts Claude Code sessions from the app, chats with them, and never switches to a terminal: when a
-session's agent sends a forms round, the session's tab swaps to the form in place, and submitting (or cancelling)
-swaps back to the chat. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
+session's agent sends a forms round, the form slides up over the session's tabs in a popup, and submitting (or
+cancelling) closes it onto the chat again. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
 interview on 2026-10-23; this file is the record of both.
 
 ## Vocabulary
@@ -52,7 +52,6 @@ interview on 2026-10-23; this file is the record of both.
   (its process still running in the session host) and after its process ends on its own, resting until the next message starts the process again, until the user
   closes the row (§ Saved sessions). A
   **connected session** is one a relay connection brought (a terminal session), as today.
-- **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
   agent. Any plugin registers one through chat's page exports. Chat registers `/login`, `/logout` and `/status`, the
   terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands), and `/clear` with Claude's

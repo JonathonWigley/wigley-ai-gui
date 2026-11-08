@@ -20,8 +20,8 @@ so the same hands work in both tools.
 
 ## What a pane is
 
-- A pane shows one whole session: its tab bar and its tabs (Chat, Form, Docs, Primer). A round
-  still takes over its session's pane, as it takes over the session today.
+- A pane shows one whole session: its tab bar and its tabs (Chat, and Docs when the `docs-session-tab` plugin is
+  on), with the session's popups (a round, the primer) over them. A round's popup opens in its session's pane.
 - A session shows in at most one pane. Each tab hands the session one element, and tmux never
   shows one process in two panes either.
 - Only Sessions mode splits. Docs, Backlog and Settings keep their own fixed panes.
@@ -97,8 +97,8 @@ does not wrap, as the user's tmux binds stop at `pane_at_left` and the other edg
 - The focused pane draws an accent border, and unfocused panes are not dimmed, as the user's tmux
   theme draws them (active border coloured, `window-style` dimming off).
 - Tabs draw as icons, with the tab's title as its tooltip, so tab bars stay short in narrow panes.
-  Each tab plugin names its Codicon: Chat `comment`, Form `checklist`, Docs `book`, Primer
-  `lightbulb`. A user layout can bring the titles back.
+  Each tab plugin names its Codicon: Chat `comment`, Docs `book`; the popups name theirs for the hidden bar, forms
+  `checklist` and the primer `lightbulb`. A user layout can bring the titles back.
 - The focused pane shows a key prompt on each side that has a pane that way (`‹ ⌥H ⌃⌥H swap`),
   so the user sees where focus and swap would go. None shares a divider's centre, where the
   divider's resize prompt shows: the up prompt sits at the pane's right corner under the tab bar,
