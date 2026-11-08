@@ -182,5 +182,6 @@ Review base: 69550804
 - Task 07 runs alongside task 06 rather than after it: 07 waits only on 02, 03 and 04, and the two share no file. 07 may rename deadlineSeconds in workflow-heavy-main.test.ts and workflow/main/start.test.ts, which 06 does not touch.
 - Task 06's key constant is workflowStageActionCommand (the ...Command suffix ruling), not workflowStageActionKey. · group 06
 - Task 07: SessionsMainExports does not export closeSession; activate on a selected row clearing markToast writes and returns true; a take-over handle releases once; nouns from roundType.noun/primerType.noun; self-test close-prompt steps reworked or dropped; AgentFormMarkOptions restates MarkOptions in contracts. · group 07
+- Task 08 runs as two workers by sizing: 08a (place-slot.ts, page-hide.ts, autosave, session-form-tabs, sessions, forms, primer) and 08b (chat, docs, notes, backlog, settings); 08a owns the shared helpers and writes them first, 08b imports them; one commit for the group.
 ### Review rounds
 ### Test gate
