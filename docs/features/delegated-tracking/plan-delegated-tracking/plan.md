@@ -264,5 +264,7 @@ Review base: 9980e669
 - 06: stale page-test rows updated to the decided pending mark, not the code · group 06
 - 10: check 6 defect fixed under 08's rules: roots also spelled under the row folder's spelling via realPath; root match case-insensitive like worktreeNameOf · group 10
 ### Review rounds
+- Round 1 (implementation review, 9980e669..59a29b26, lanes A/B/C/D/P1/P2): NEEDS FIXES — 5 Important, 14 Minor, 1 pre-existing; 4 lead-applied (b4b7dbf9); all picks on recommendation per AGENTS.md § Review (Fix now / Decide now); report /tmp/claude-delegated-tracking/review-59a29b26.md
 ### Test gate
 - Unit: full suite 540 files 10235+ tests pass after every group; chat 46 files 1460 after e58a4601. Self-test: --plugin workflow-heavy,backlog,agent-strip,workflow-light,chat, 41 groups pass (task 10; picked as the touched plugins per writing-tests § Picking tests for a gate; sessions and workflow are covered by chat's and the workflow plugins' groups). Live: task 10 checks 1-6 pass, 6 after its fix. Typecheck and lint clean.
+- After review round 1 fixes (head 1ee87695): full suite 536 files, 10286 tests pass; typecheck and lint clean; self-test --plugin backlog,workflow-heavy,workflow-light,chat,agent-strip all passed.
