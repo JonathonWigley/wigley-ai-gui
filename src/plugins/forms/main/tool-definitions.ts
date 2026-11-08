@@ -83,7 +83,8 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
 
 // The two wigley-forms tools as MCP tools/list publishes them. ask_round's item
 // lists come from the same formats parseRound validates with, so the schema
-// and the validator never disagree.
+// and the validator agree, but for one case: the validator still reads a
+// question's legacy `question` as its summary.
 export const FORMS_TOOLS: ToolDefinition[] = [
   {
     name: 'ask_round',

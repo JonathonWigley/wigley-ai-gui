@@ -12,9 +12,10 @@ import {
 } from '../contributions';
 import { apply, initialState, type RoundState } from '../form-state';
 import { findingFormat } from '../kinds/finding/finding-card';
+import { noticeFormat } from '../kinds/notice/notice-card';
 import { questionFormat } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
-import { finding, presentedRound, question } from '../test-rounds';
+import { finding, notice, presentedRound, question } from '../test-rounds';
 import type { LayoutAction } from '../../layouts/layout';
 import {
   baseKitDepsFor,
@@ -194,11 +195,11 @@ function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   return createCardKit('finding', 1, input, round, 0, deps);
 }
 
-// The kit of a round's second item, a question of two choices after one
-// finding, at rail position 1.
-function questionKit(deps: CardDeps) {
+// The kit of a round's second item, a question of two choices recommending
+// choice `recommend`, after one finding, at rail position 1.
+function questionKit(deps: CardDeps, recommend = 1) {
   const presented = presentedRound('r1', {
-    questions: [question('Alpha', { choices: ['one', 'two'], recommend: 1 })],
+    questions: [question('Alpha', { choices: ['one', 'two'], recommend })],
     findings: [finding('Delta')],
   });
   const round = apply(initialState([], presented.sessionId), {
@@ -207,6 +208,22 @@ function questionKit(deps: CardDeps) {
   }).forms[0];
   const input = questionFormat.cardInput(round.round, 1);
   return createCardKit('question', 1, input, round, 1, deps);
+}
+
+// The kit of a round's second notice, after one question and one finding,
+// whose notices stop is at rail position 2.
+function noticeKit(deps: CardDeps) {
+  const presented = presentedRound('r1', {
+    questions: [question('Alpha')],
+    findings: [finding('Delta')],
+    notices: [notice('Renamed'), notice('Kept')],
+  });
+  const round = apply(initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
+  const input = noticeFormat.cardInput(round.round, 2);
+  return createCardKit('notice', 2, input, round, 2, deps);
 }
 
 // A part that records what each build received.
@@ -343,42 +360,58 @@ describe('card kit', () => {
     ).toEqual([[], ['Out of scope']]);
   });
 
+  const QUESTION_FOCUS = [{ type: 'focusItem', item: 1 }];
+
   it.each([
     {
+      card: 'question',
       action: { type: 'choose', number: 2 } as const,
-      dispatched: [{ type: 'choose', number: 2 }],
+      dispatched: [...QUESTION_FOCUS, { type: 'choose', number: 2 }],
       togglesDontAsk: false,
     },
     {
+      card: 'question',
       action: { type: 'toggleNotApplicable' } as const,
-      dispatched: [{ type: 'toggleNotApplicable' }],
+      dispatched: [...QUESTION_FOCUS, { type: 'toggleNotApplicable' }],
       togglesDontAsk: false,
     },
     {
+      card: 'question',
       action: { type: 'accept' } as const,
-      dispatched: [{ type: 'acceptRecommendation' }],
+      dispatched: [...QUESTION_FOCUS, { type: 'acceptRecommendation' }],
       togglesDontAsk: false,
     },
     {
+      card: 'question',
       action: { type: 'focus' } as const,
-      dispatched: [],
+      dispatched: QUESTION_FOCUS,
       togglesDontAsk: false,
     },
     {
+      card: 'question',
       action: { type: 'toggleDontAsk' } as const,
-      dispatched: [],
+      dispatched: QUESTION_FOCUS,
       togglesDontAsk: true,
     },
+    {
+      card: 'notice',
+      action: { type: 'focus' } as const,
+      dispatched: [
+        { type: 'focusItem', item: 2 },
+        { type: 'focusNotice', notice: 2 },
+      ],
+      togglesDontAsk: false,
+    },
   ])(
-    'kitRun_$action.type_FocusesTheCardItemFirst',
-    ({ action, dispatched, togglesDontAsk }) => {
+    'kitRun_$card_$action.type_FocusesTheCardItemFirst',
+    ({ card, action, dispatched, togglesDontAsk }) => {
       const { deps } = fakeCardDeps(createFormsContributions());
-      const { kit } = questionKit(deps);
+      const { kit } = card === 'notice' ? noticeKit(deps) : questionKit(deps);
 
       kit.run(action);
 
       expect(vi.mocked(deps.dispatch).mock.calls).toEqual(
-        [{ type: 'focusItem', item: 1 }, ...dispatched].map((each) => [each]),
+        dispatched.map((each) => [each]),
       );
       expect(vi.mocked(deps.toggleDontAsk).mock.calls).toHaveLength(
         togglesDontAsk ? 1 : 0,
@@ -508,26 +541,35 @@ describe('card kit', () => {
     {
       kind: 'question',
       draw: (deps: CardDeps, parent: HTMLElement) =>
-        questionKit(deps).kit.choiceList(parent, 'recommended'),
+        questionKit(deps, 2).kit.choiceList(parent, 'recommended'),
+      reasonsByEntry: [0, 1],
       labelsPerReason: 0,
     },
     {
       kind: 'finding',
       draw: (deps: CardDeps, parent: HTMLElement) =>
         findingKit(deps).kit.choiceGroups(parent, 'all'),
+      reasonsByEntry: [1, 1, 1, 0, 0],
       labelsPerReason: 1,
     },
-  ])('choiceReason_LabelByCardKind_$kind', ({ draw, labelsPerReason }) => {
-    const { deps } = fakeCardDeps(createFormsContributions());
+  ])(
+    'choiceReason_LabelByCardKind_$kind',
+    ({ draw, reasonsByEntry, labelsPerReason }) => {
+      const { deps } = fakeCardDeps(createFormsContributions());
 
-    const answer = asFake(draw(deps, asHtml(new FakeElement('div'))));
+      const answer = asFake(draw(deps, asHtml(new FakeElement('div'))));
 
-    const reasons = findAll(answer, 'choice-reason');
-    expect(reasons.length).toBeGreaterThan(0);
-    expect(findAll(answer, 'choice-reason-label')).toHaveLength(
-      reasons.length * labelsPerReason,
-    );
-  });
+      const reasons = findAll(answer, 'choice-reason');
+      expect(
+        findAll(answer, 'choice').map(
+          (entry) => findAll(entry, 'choice-reason').length,
+        ),
+      ).toEqual(reasonsByEntry);
+      expect(findAll(answer, 'choice-reason-label')).toHaveLength(
+        reasons.length * labelsPerReason,
+      );
+    },
+  );
 
   it.each([
     {

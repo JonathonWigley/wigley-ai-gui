@@ -107,7 +107,8 @@ export interface Kit extends FormsBaseKit {
     parent: HTMLElement,
     field: 'notes' | 'dontAskReason' | 'comment',
   ): HTMLElement;
-  // Focuses this card's item, then runs the action. Call it from event handlers, not while the card builds.
+  // Focuses this card's item (a notice's own line, on the notices stop), then runs the action. Call it from event
+  // handlers, not while the card builds.
   run(action: LayoutAction): void;
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
@@ -195,7 +196,7 @@ export interface ReviewInput {
 }
 
 // One notice as the notices pane lists it. `index` is its 1-based place among the notices, which `NoticesKit.line`
-// takes; `label` is its rail number, as `N1`.
+// takes; `label` is the notice's own number, as `N1` (the rail shows only the `N` stop).
 export interface NoticeLineInput {
   index: number;
   label: string;
@@ -249,7 +250,9 @@ export interface NoticesKit extends FormsBaseKit {
   // Draws the line for notice `index` (its chevron, its open state, its hidden body holding the notice's
   // `cards.notice`, and the cursor mark), appends it to `parent`, and returns the line's head for the layout to draw
   // into. Call it on an attached `parent`. Each line draws once; a line the pane leaves out is appended at the end of
-  // the pane. The app owns the click, the open state and the cursor.
+  // the pane. The app owns the click, the open state and the cursor. The head sits inside the line's toggle button, so
+  // a click on it toggles the line: draw nothing interactive there. On each update the app appends the toggle key's
+  // prompt (`span.notice-line-prompt`) to the end of the cursor line's head.
   line(parent: HTMLElement, index: number): HTMLElement;
 }
 

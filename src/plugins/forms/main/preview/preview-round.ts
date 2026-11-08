@@ -1,7 +1,8 @@
 // The preview's built-in sample: ask_round arguments holding every card kind,
-// three notices (one per badge), long and short titles, inline code and a choice long enough to wrap. Its
-// Defect groups a deferral choice under Follow-up, and its Decision and Nit each
-// carry the reason for the deferral action they recommend.
+// three notices (one per badge), long and short titles, inline code and a
+// choice long enough to wrap. Its Defect groups a deferral choice under
+// Follow-up, and its Decision and Nit each carry the reason for the deferral
+// action they recommend.
 export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
   heading: 'Layout preview',
   overview:

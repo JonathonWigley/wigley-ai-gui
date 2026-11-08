@@ -230,25 +230,30 @@ function actionReasonOf(
   return text === undefined || text.trim() === '' ? null : text;
 }
 
-// The FormsActions a layout action dispatches: focusing the card's item at
-// rail `position`, then the action itself. Don't ask has none of its own: the
-// kit runs its command, which also focuses the reason box. Null for an action
-// type the contract does not name, as an older layout may still send.
+// The FormsActions a layout action dispatches: focusing `item` at rail
+// `position`, a notice also moving the line cursor onto it, then the action
+// itself. Don't ask has none of its own: the kit runs its command, which also
+// focuses the reason box. Null for an action type the contract does not name,
+// as an older layout may still send.
 function layoutActions(
   action: LayoutAction,
+  item: RoundItem,
   position: number,
 ): FormsAction[] | null {
-  const focus: FormsAction = { type: 'focusItem', item: position };
+  const focus: FormsAction[] = [{ type: 'focusItem', item: position }];
+  if (item.kind === 'notice') {
+    focus.push({ type: 'focusNotice', notice: item.index });
+  }
   switch (action.type) {
     case 'choose':
-      return [focus, { type: 'choose', number: action.number }];
+      return [...focus, { type: 'choose', number: action.number }];
     case 'toggleNotApplicable':
-      return [focus, { type: 'toggleNotApplicable' }];
+      return [...focus, { type: 'toggleNotApplicable' }];
     case 'accept':
-      return [focus, { type: 'acceptRecommendation' }];
+      return [...focus, { type: 'acceptRecommendation' }];
     case 'toggleDontAsk':
     case 'focus':
-      return [focus];
+      return focus;
     default:
       return null;
   }
@@ -509,7 +514,7 @@ function appendCardKeys(
 // Dispatches the action's FormsActions, then Don't ask's command for it; an
 // action type the contract does not name is logged and runs nothing.
 function runLayoutAction(card: CardContext, action: LayoutAction) {
-  const formsActions = layoutActions(action, card.position);
+  const formsActions = layoutActions(action, card.item, card.position);
   if (formsActions === null) {
     card.deps.log(`layout action ${action.type} is not known`);
     return;

@@ -460,14 +460,24 @@
   min-width: 0;
 }
 
-:where(.form-tab) .notice-line .ui-collapsible-summary {
+:where(.form-tab) .notice-line-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.form-tab)
+  .notice-line
+  > .ui-collapsible-head
+  > .ui-collapsible-summary {
   display: none;
 }
 
 /* Under the chevron: the leading head is no status dot. */
 :where(.form-tab)
   .notice-line.ui-collapsible--plain.ui-collapsible--leading
-  .ui-collapsible-body {
+  > .ui-collapsible-body {
   padding-left: calc(var(--wg-space-2) * 2 + var(--wg-icon-size));
 }
 

@@ -16,7 +16,6 @@ import {
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
-import { formById } from '../../../../shared/page/session-forms';
 import {
   type ButtonVariant,
   textButton,
@@ -68,11 +67,11 @@ import {
   railDotStatus,
   railEntryLabel,
   railEntryTitle,
-  noticeToggledLine,
   type ReviewRow,
   reviewRows,
   reviewRowsChanged,
   reviewSummaryText,
+  toggleNoticeLine,
 } from '../view-model';
 import type { FormsContributions } from '../contributions';
 import {
@@ -342,17 +341,10 @@ function drawNoticeLine(
   return head;
 }
 
-// A head click: moves the cursor to the line, then opens or closes it, and
-// logs the toggle when the line's open state changed.
+// A head click: moves the cursor to the line, then opens or closes it.
 function clickNoticeLine(deps: PaneDeps, formId: string, index: number) {
-  const before = formById(deps.getState(), formId);
   deps.dispatch({ type: 'focusNotice', notice: index });
-  deps.dispatch({ type: 'toggleNotice', notice: index });
-  const after = formById(deps.getState(), formId);
-  const isOpen = after?.openNotices[index - 1];
-  if (isOpen !== undefined && isOpen !== before?.openNotices[index - 1]) {
-    deps.log(noticeToggledLine(index, isOpen));
-  }
+  toggleNoticeLine(deps, formId, index);
 }
 
 function drawRail(

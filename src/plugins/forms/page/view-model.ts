@@ -12,7 +12,7 @@ import type {
   FormsView,
   Round,
 } from '../contract';
-import { activeForm } from '../../../shared/page/session-forms';
+import { activeForm, formById } from '../../../shared/page/session-forms';
 import { findingSolution } from '../finding-pick';
 import {
   type AnswerableItem,
@@ -243,6 +243,27 @@ export function jumpedToLine(item: RailItem): string {
 // The log line a notice line's open or close writes; `notice` is 1-based.
 export function noticeToggledLine(notice: number, isOpen: boolean): string {
   return `${isOpen ? 'opened' : 'closed'} notice ${notice}`;
+}
+
+// Opens or closes notice line `notice` on round `formId`, and logs it when that
+// line's open state changed.
+export function toggleNoticeLine(
+  deps: {
+    dispatch(action: FormsAction): void;
+    getState(): FormsState;
+    log: PluginLog;
+  },
+  formId: string,
+  notice: number,
+): void {
+  const isOpenOn = (state: FormsState) =>
+    formById(state, formId)?.openNotices[notice - 1];
+  const wasOpen = isOpenOn(deps.getState());
+  deps.dispatch({ type: 'toggleNotice', notice });
+  const isOpen = isOpenOn(deps.getState());
+  if (isOpen !== undefined && isOpen !== wasOpen) {
+    deps.log(noticeToggledLine(notice, isOpen));
+  }
 }
 
 // The log line a move of the notices stop's line cursor writes.

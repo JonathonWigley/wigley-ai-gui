@@ -544,6 +544,15 @@ describe('formsCommandHandlers', () => {
       logs: [],
     },
     {
+      name: 'editNotes under the review with line 1 open focuses no box',
+      before: ['toggleNotice', 'openReview'],
+      command: 'editNotes',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      logs: [],
+    },
+    {
       name: 'choose 1 changes nothing',
       before: [],
       command: { command: 'choose', arg: 1 },

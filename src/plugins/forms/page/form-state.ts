@@ -95,7 +95,7 @@ export type TextTarget =
   | { field: 'comment'; notice: number }
   | { field: 'note' };
 
-// Acts on the active round's focused item.
+// Acts on the active round: its focused item, or the notice an action names.
 export type ItemAction =
   | { type: 'nextItem' }
   | { type: 'prevItem' }
@@ -113,7 +113,8 @@ export type ItemAction =
   | { type: 'acceptRecommendation' }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' }
-  // `notice` is 1-based in each notice action. Opens or closes that line.
+  // `notice` is 1-based in each notice action. Opens or closes that line,
+  // whatever item is focused.
   | { type: 'toggleNotice'; notice: number }
   // Moves the line cursor while the notices stop is focused.
   | { type: 'moveNoticeLine'; delta: 1 | -1 }

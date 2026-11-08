@@ -1154,6 +1154,15 @@ describe('fingerprint', () => {
     );
   });
 
+  it("hashes a legacy question's `question` as its summary twin", () => {
+    const { summary, ...rest } = question(BASE_QUESTION);
+    const legacy = args({ questions: [{ ...rest, question: summary }] });
+
+    expect(fingerprint(parseRound(legacy))).toBe(
+      fingerprint(parseRound(args())),
+    );
+  });
+
   it('hashes a round with no findings with no findings key', () => {
     expect(fingerprint(parseRound(args({ notices: [] })))).toBe(
       '56624f6db3c22a5e6fb81207c85d247e1ec9e920364a03263f46d2d6afc00ffb',

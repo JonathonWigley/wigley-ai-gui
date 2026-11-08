@@ -53,7 +53,7 @@ import {
   jumpedToLine,
   jumpMoved,
   lineCursorLine,
-  noticeToggledLine,
+  toggleNoticeLine,
 } from './view-model';
 
 export interface FormsCommandDeps {
@@ -144,7 +144,7 @@ export function formsCommandHandlers(
       focusBoxItem(store, boxIn(deps, context));
       const stop = noticesStop(store.get());
       if (stop !== null) {
-        toggleNoticeLine(deps, stop.noticeLine);
+        toggleCursorLine(deps, stop);
         return;
       }
       changeAnswer(
@@ -188,7 +188,7 @@ export function formsCommandHandlers(
         return;
       }
       if (!stop.openNotices[stop.noticeLine - 1]) {
-        toggleNoticeLine(deps, stop.noticeLine);
+        toggleCursorLine(deps, stop);
       }
       focusCursorLineBox(deps, APPEND);
     },
@@ -211,7 +211,7 @@ export function formsCommandHandlers(
       focusBoxItem(store, boxIn(deps, context));
       const stop = noticesStop(store.get());
       if (stop !== null) {
-        toggleNoticeLine(deps, stop.noticeLine);
+        toggleCursorLine(deps, stop);
       }
     },
     nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
@@ -379,17 +379,17 @@ function noticesStop(state: FormsState): RoundState | null {
   return isOnNoticesStop ? round : null;
 }
 
-// Opens or closes notice line `notice` and logs it when it changed.
-function toggleNoticeLine(deps: FormsCommandDeps, notice: number) {
-  const before = activeForm(deps.store.get());
-  deps.store.dispatch({ type: 'toggleNotice', notice });
-  const after = activeForm(deps.store.get());
-  if (before === null || after === null) {
-    return;
-  }
-  if (after.openNotices !== before.openNotices) {
-    deps.log(noticeToggledLine(notice, after.openNotices[notice - 1]));
-  }
+// Opens or closes the notices stop's cursor line, and logs it.
+function toggleCursorLine(deps: FormsCommandDeps, stop: RoundState) {
+  toggleNoticeLine(
+    {
+      dispatch: deps.store.dispatch,
+      getState: deps.store.get,
+      log: deps.log,
+    },
+    stop.formId,
+    stop.noticeLine,
+  );
 }
 
 // Focuses the comment box of the notices stop's cursor line while that line is

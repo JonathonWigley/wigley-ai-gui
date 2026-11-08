@@ -52,7 +52,7 @@ export const formsManifest = definePlugin({
       runsIn: 'page',
     },
     acceptRecommendation: {
-      label: 'accept the recommendation',
+      label: 'accept the recommendation, or open or close the notice line',
       group: 'choices',
       runsIn: 'page',
     },

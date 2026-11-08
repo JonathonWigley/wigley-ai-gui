@@ -12,7 +12,8 @@ export const FORMATS: PageFormats = {
   question: questionFormat,
 };
 
-// The item's number as the rail, its card head and the review show it.
+// The item's number as its card head shows it; the rail and the review show a
+// question's or finding's too.
 export function itemLabel(item: RoundItem): string {
   return labelFor(FORMATS[item.kind].railPrefix, item.index);
 }

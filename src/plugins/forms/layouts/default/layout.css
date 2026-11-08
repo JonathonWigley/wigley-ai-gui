@@ -89,10 +89,3 @@
   flex-direction: column;
   gap: var(--wg-space-0_5);
 }
-
-:where(.form-tab) .notice-line-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
