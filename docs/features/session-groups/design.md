@@ -33,8 +33,8 @@ the Unity editors apart, and other plugins and log lines use it.
 
 ## Order
 
-The side bar holds two sections, **Favorites** then **Recent**, each a list of project groups, each group a header
-over its rows. The default layout draws the section labels only while a favorite project has an open session or a
+The side bar holds **Favorites** then **Recent**, each a list of project groups, each group a header over its rows,
+then each section a plugin registers (`addSection`) that claims a row, its claimed rows flat with no groups. The default layout draws the section labels only while a favorite project has an open session or a
 group is dragged; otherwise the groups sit directly under the Sessions header.
 
 - **Favorites** are in the user's own order, set by drag and by `<Leader>pk` / `<Leader>pj`.
@@ -72,7 +72,7 @@ project names), so they last across restarts.
 ## Drawing
 
 The sessions layout gains two parts: `section` (a Favorites or Recent label over the box the app fills with
-groups, both always drawn; the default layout hides an empty one outside a drag) and `group` (a project header over the box the app
+groups, both always drawn, or a plugin section's label over its rows; the default layout hides an empty one outside a drag) and `group` (a project header over the box the app
 fills with rows), with a `GroupKit` that draws the star (`favoriteToggle`) and the grip (`dragHandle`, a visual
 cue: the whole header drags). The app keeps the star's click and the drag on each header, through the
 DragReorder primitive (`DESIGN.md` § Primitives).
