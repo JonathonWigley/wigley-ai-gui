@@ -624,9 +624,11 @@ export interface KeyHints {
 // not waited on, nor one tracked after they settled. A tracked restore can wait
 // on main: docs' restored open waits on its view's index read, and on a rebuild
 // when that index does not list the doc, so the restores can settle seconds
-// after `core.pageReady`. Until they settle, a part cannot tell a restore's key
-// base change from the user's: the user's moves before then leave notes'
-// restored popup open. `onSettled` calls its listener once they settle, or at
+// after `core.pageReady`. A restore main never answers, or one no later step
+// ever ends, is waited on only until a time cap after `core.pageReady`, when
+// the restores settle with the count still pending logged. Until they settle,
+// a part cannot tell a restore's key base change from the user's: the user's
+// moves before then leave notes' restored popup open. `onSettled` calls its listener once they settle, or at
 // once when they already have, until its `dispose`.
 export interface PageRestores {
   track(restore: Promise<unknown>): void;

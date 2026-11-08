@@ -1,27 +1,52 @@
+import type { Timers } from '../contracts/ambient';
 import type { PageRestores } from '../contracts/plugin';
+
+// The latest the restores settle after `core.pageReady`: well past a docs index
+// rebuild, which can take seconds.
+export const RESTORES_CAP_MS = 30_000;
+
+export interface PageRestoresDeps {
+  timers: Timers;
+  log(message: string): void;
+}
 
 // The page load's one `PageRestores`. The composition root calls `pageReady`
 // once `core.pageReady` has been emitted, after which the restores settle as
-// soon as no tracked restore is pending.
+// soon as no tracked restore is pending, or at `RESTORES_CAP_MS` after it,
+// logging the count still pending.
 export interface PageRestoresHost extends PageRestores {
   pageReady(): void;
 }
 
-export function createPageRestores(): PageRestoresHost {
+export function createPageRestores(deps: PageRestoresDeps): PageRestoresHost {
   let isPageReady = false;
   let isSettled = false;
   let pending = 0;
+  let cap: number | null = null;
   const listeners = new Set<() => void>();
-  const settleWhenIdle = () => {
-    if (!isPageReady || pending > 0 || isSettled) {
-      return;
-    }
+  const settle = () => {
     isSettled = true;
+    if (cap !== null) {
+      deps.timers.clear(cap);
+      cap = null;
+    }
     const settledListeners = [...listeners];
     listeners.clear();
     for (const listener of settledListeners) {
       listener();
     }
+  };
+  const settleWhenIdle = () => {
+    if (isPageReady && pending === 0 && !isSettled) {
+      settle();
+    }
+  };
+  const settleAtCap = () => {
+    cap = null;
+    deps.log(
+      `restores settled at the ${RESTORES_CAP_MS} ms cap, ${pending} still pending`,
+    );
+    settle();
   };
   return {
     track(restore) {
@@ -46,6 +71,9 @@ export function createPageRestores(): PageRestoresHost {
     pageReady() {
       isPageReady = true;
       settleWhenIdle();
+      if (!isSettled) {
+        cap = deps.timers.set(settleAtCap, RESTORES_CAP_MS);
+      }
     },
   };
 }

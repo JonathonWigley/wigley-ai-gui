@@ -338,7 +338,10 @@ async function start() {
     scope: () => scopeStack.current(),
   });
   const bus = createEventBus();
-  const restores = createPageRestores();
+  const restores = createPageRestores({
+    timers,
+    log: (message) => log('page', message),
+  });
   restores.onSettled(() => log('page', 'restores settled'));
   const layouts = createPageLayouts({
     bridge,

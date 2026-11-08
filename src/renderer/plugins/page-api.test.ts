@@ -199,7 +199,10 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       addTarget: () => ({ dispose: () => {} }),
       savePasted: async () => '',
     },
-    restores: createPageRestores(),
+    restores: createPageRestores({
+      timers: { set: () => 0, clear: () => undefined },
+      log: () => undefined,
+    }),
     state: createSlotStore(() => {}),
     anchors: createAnchors({
       keysFor: () => null,
