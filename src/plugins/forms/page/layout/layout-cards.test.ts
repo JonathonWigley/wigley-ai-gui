@@ -12,6 +12,7 @@ import {
   type TextTarget,
 } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
+import { fakeFormsKitCommands } from '../fake-kit-commands.test-support';
 import { finding, presentedRound } from '../test-rounds';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { buildLayoutCard, recordingDeps } from './layout-cards';
@@ -46,8 +47,6 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     },
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
-    dispatch: vi.fn(),
-    toggleDontAsk: vi.fn(),
     keys: {
       keysFor: () => null,
       anchor: () => ({ dispose: () => undefined }),
@@ -55,7 +54,7 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     platform: 'macos',
     state: noLayoutState,
     log: vi.fn(),
-    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
+    commands: fakeFormsKitCommands(),
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},

@@ -175,7 +175,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       return;
     }
     const state = store.get();
-    syncRoundViews(state, shownRounds, tabs, active, deps, dispatch);
+    syncRoundViews(state, shownRounds, tabs, active, deps);
     tabs.sync((sessionId) => {
       const round = formOfSession(state, sessionId);
       return round === undefined ? null : sessionTitle(round);
@@ -246,7 +246,6 @@ function syncRoundViews(
   tabs: SessionFormTabs,
   active: ActiveLayouts,
   deps: FormsViewDeps,
-  dispatch: (action: FormsAction) => void,
 ) {
   for (const roundId of roundViews.views.keys()) {
     if (!state.forms.some((round) => round.formId === roundId)) {
@@ -255,7 +254,7 @@ function syncRoundViews(
   }
   for (const round of state.forms) {
     if (!roundViews.views.has(round.formId)) {
-      const roundView = showRound(round, tabs, active, deps, dispatch);
+      const roundView = showRound(round, tabs, active, deps);
       roundViews.views.set(round.formId, roundView);
       roundViews.dropTargets.set(
         round.formId,
@@ -323,7 +322,6 @@ function showRound(
   tabs: SessionFormTabs,
   active: ActiveLayouts,
   deps: FormsViewDeps,
-  dispatch: (action: FormsAction) => void,
 ): RoundView {
   return createRoundView(
     (root) => tabs.mount(round.sessionId, root),
@@ -333,8 +331,6 @@ function showRound(
       markdown: deps.markdown,
       boxes: deps.boxes,
       keys: deps.keys,
-      dispatch,
-      getState: deps.store.get,
       run: deps.run,
       commands: deps.commands,
       contributions: deps.contributions,

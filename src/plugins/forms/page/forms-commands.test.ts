@@ -12,9 +12,16 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { createReducerStore } from '../../../shared/page/reducer-store';
-import type { Finding, Question, RoundEnd } from '../contract';
+import type { Finding, FormsView, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
-import { apply, buildBody, focusedItem, initialState } from './form-state';
+import {
+  apply,
+  buildBody,
+  focusedItem,
+  type FormsAction,
+  initialState,
+  type ItemAnswer,
+} from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
@@ -195,6 +202,10 @@ const notes2: BoxRef = {
 const reason1: BoxRef = {
   roundId: 'r1',
   target: { field: 'dontAskReason', item: { kind: 'question', index: 1 } },
+};
+const reason2: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'dontAskReason', item: { kind: 'question', index: 2 } },
 };
 
 describe('formsCommandHandlers', () => {
@@ -791,6 +802,243 @@ describe('formsCommandHandlers', () => {
     expect(toasts).toEqual([expect.stringContaining('project · r2')]);
     expect(activated).toEqual([]);
   });
+
+  // Rail: notice 1 (0), question 1 (1), question 2 (2); the box focused sits
+  // on question 1, and each command names question 2.
+  it.each<{
+    command: FormsCommand;
+    arg: unknown;
+    before: FormsAction[];
+    answer: Partial<ItemAnswer>;
+    logs: string[];
+  }>([
+    {
+      command: 'chooseAt',
+      arg: { item: 2, number: 3 },
+      before: [],
+      answer: { choice: 3 },
+      logs: ['chose 3 on question 2'],
+    },
+    {
+      command: 'clearChoiceAt',
+      arg: 2,
+      before: [
+        { type: 'focusItem', item: 2 },
+        { type: 'choose', number: 1 },
+      ],
+      answer: { choice: 0 },
+      logs: ['cleared the choice on question 2'],
+    },
+    {
+      command: 'acceptRecommendationAt',
+      arg: 2,
+      before: [],
+      answer: { choice: 2 },
+      logs: ['accepted the recommendation on question 2'],
+    },
+    {
+      command: 'toggleNotApplicableAt',
+      arg: 2,
+      before: [],
+      answer: { notApplicable: true },
+      logs: ['not applicable on question 2'],
+    },
+    {
+      command: 'toggleDontAskAt',
+      arg: 2,
+      before: [],
+      answer: { dontAsk: true },
+      logs: ["don't ask on question 2"],
+    },
+    {
+      command: 'focusItem',
+      arg: 2,
+      before: [],
+      answer: { choice: 0, notApplicable: false, dontAsk: false },
+      logs: [],
+    },
+  ])(
+    'atCommands_BoxFocusedOnOtherItem_ActOnTheNamedItem: $command',
+    ({ command, arg, before, answer, logs: expected }) => {
+      const { run, store, round, logs, setActive } = setup();
+      for (const action of before) {
+        store.dispatch(action);
+      }
+      store.dispatch({ type: 'focusItem', item: 1 });
+      const untouched = round().answers[0];
+      setActive(notes1);
+      logs.length = 0;
+
+      run(command, { arg });
+
+      expect(round().focus).toBe(2);
+      expect(round().answers[1]).toMatchObject(answer);
+      expect(round().answers[0]).toBe(untouched);
+      expect(logs).toEqual(expected);
+    },
+  );
+
+  // The commands whose arg is a rail position alone.
+  const POSITION_COMMANDS: FormsCommand[] = [
+    'clearChoiceAt',
+    'acceptRecommendationAt',
+    'toggleNotApplicableAt',
+    'toggleDontAskAt',
+    'focusItem',
+    'pickRailItem',
+  ];
+
+  it.each<{
+    name: string;
+    command: FormsCommand;
+    arg: unknown;
+    before: FormsCommand[];
+    hasRound: boolean;
+    logs: string[];
+  }>([
+    ...POSITION_COMMANDS.map((command) => ({
+      name: `${command} past the rail`,
+      command,
+      arg: 7,
+      before: [],
+      hasRound: true,
+      logs: ['no rail item at 7'],
+    })),
+    {
+      name: 'chooseAt past the rail',
+      command: 'chooseAt',
+      arg: { item: 7, number: 1 },
+      before: [],
+      hasRound: true,
+      logs: ['no rail item at 7'],
+    },
+    {
+      name: 'reviewJumpAt past the rows',
+      command: 'reviewJumpAt',
+      arg: 5,
+      before: ['openReview'],
+      hasRound: true,
+      logs: ['no review row 5'],
+    },
+    {
+      name: 'chooseAt with no round',
+      command: 'chooseAt',
+      arg: { item: 1, number: 1 },
+      before: [],
+      hasRound: false,
+      logs: [],
+    },
+  ])(
+    'argCommands_StaleArg_LogAndChangeNothing: $name',
+    ({ command, arg, before, hasRound, logs: expected }) => {
+      const { run, store, logs, setActive, closeFromMain } = setup();
+      store.dispatch({ type: 'focusItem', item: 1 });
+      for (const each of before) {
+        run(each);
+      }
+      if (!hasRound) {
+        closeFromMain('r1', false);
+      }
+      setActive(notes2);
+      const state = store.get();
+      logs.length = 0;
+
+      run(command, { arg });
+
+      expect(store.get()).toBe(state);
+      expect(logs).toEqual(expected);
+    },
+  );
+
+  it('chooseAt_HeldNumber_ClearsAndLogsAsChooseDoes', () => {
+    const byKey = setup();
+    const byClick = setup();
+    byKey.store.dispatch({ type: 'focusItem', item: 2 });
+
+    for (let press = 0; press < 2; press++) {
+      byKey.run('choose', { arg: 3 });
+      byClick.run('chooseAt', { arg: { item: 2, number: 3 } });
+    }
+
+    expect(byClick.logs).toEqual([
+      'chose 3 on question 2',
+      'cleared the choice on question 2',
+    ]);
+    expect(byClick.logs).toEqual(byKey.logs);
+    expect(byClick.round().answers).toEqual(byKey.round().answers);
+  });
+
+  it('toggleDontAskAt_TurnsOn_FocusesReasonBox', () => {
+    const { run, focused, setActive } = setup();
+    setActive(notes1);
+
+    run('toggleDontAskAt', { arg: 2 });
+
+    expect(focused).toEqual([reason2]);
+  });
+
+  // Rail: notice 1 (0), question 1 (1), question 2 (2); question 2 is review
+  // row 1.
+  it.each<{
+    name: string;
+    before: (FormsCommand | FormsAction)[];
+    position: number;
+    view: FormsView;
+    focus: number;
+    logs: string[];
+  }>([
+    {
+      name: 'the form focuses the item',
+      before: [],
+      position: 2,
+      view: 'forms',
+      focus: 2,
+      logs: ['jumped to question 2'],
+    },
+    {
+      name: "the review jumps to the item's row",
+      before: ['openReview'],
+      position: 2,
+      view: 'forms',
+      focus: 2,
+      logs: ['jumped to question 2'],
+    },
+    {
+      name: "the review shows a notice's card",
+      before: [{ type: 'focusItem', item: 2 }, 'openReview'],
+      position: 0,
+      view: 'forms',
+      focus: 0,
+      logs: ['jumped to notice 1'],
+    },
+    {
+      name: 'the confirm does nothing',
+      before: [{ type: 'focusItem', item: 1 }, 'openReview', 'askCancel'],
+      position: 2,
+      view: 'confirm',
+      focus: 1,
+      logs: [],
+    },
+  ])(
+    'pickRailItem_EachView_FollowsRailPickAction: $name',
+    ({ before, position, view, focus, logs: expected }) => {
+      const { run, store, round, logs } = setup();
+      for (const each of before) {
+        if (typeof each === 'string') {
+          run(each);
+        } else {
+          store.dispatch(each);
+        }
+      }
+      logs.length = 0;
+
+      run('pickRailItem', { arg: position });
+
+      expect(store.get().view).toBe(view);
+      expect(round().focus).toBe(focus);
+      expect(logs).toEqual(expected);
+    },
+  );
 
   it('openPreview_Rejects_ToastsError', async () => {
     const { run, failLayouts, toasts, toastTones, logs } = setup();

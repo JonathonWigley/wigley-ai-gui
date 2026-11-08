@@ -8,6 +8,19 @@ export const primerManifest = definePlugin({
   commands: {
     nextRow: { label: 'next row', group: 'rows', runsIn: 'page' },
     prevRow: { label: 'previous row', group: 'rows', runsIn: 'page' },
+    // A column's click names its row, as the row keys move to one.
+    selectTask: {
+      label: 'select the task row',
+      group: 'rows',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    selectItem: {
+      label: 'select the item row',
+      group: 'rows',
+      runsIn: 'page',
+      arg: 'number',
+    },
     needYes: { label: 'needed', group: 'need', runsIn: 'page' },
     needNo: { label: 'not needed', group: 'need', runsIn: 'page' },
     needUnclear: { label: 'unclear', group: 'need', runsIn: 'page' },
@@ -25,6 +38,12 @@ export const primerManifest = definePlugin({
       label: 'include the item',
       group: 'items',
       runsIn: 'page',
+    },
+    toggleIncludeAt: {
+      label: 'include the item row',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
     },
     addItem: { label: 'add an item', group: 'items', runsIn: 'page' },
     editItemComment: {

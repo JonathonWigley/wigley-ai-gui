@@ -33,8 +33,8 @@ export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
 // One numbered pick down a finding card: a choice with the action it sits under, or the header of an action with no
 // choices, whose `choice` is 0. `choice` is otherwise the choice's 1-based position in `choices`; `number` is the
 // entry's 1-based position down the card, which its key picks through `forms.choose` with that number: draw the key
-// with `kit.keyHint(parent, 'choose', { arg: number })` or read it with `kit.keys('choose', number)`. `kit.command`
-// passes no argument, so it throws on `forms.choose`; a card's click runs `kit.run({ type: 'choose', number })`.
+// with `kit.keyHint(parent, 'choose', { arg: number })` or read it with `kit.keys('choose', number)`. A card's click
+// picks it with `kit.command('forms.chooseAt', { item: kit.position, number })`, obtained while the card builds.
 export interface FindingCardEntry {
   number: number;
   action: FindingAction;
@@ -76,15 +76,6 @@ export interface CardAnswer {
   action: FindingAction | null;
 }
 
-export type LayoutAction =
-  // `number` is 1-based: a question's choice, or a finding's entry (`FindingCardEntry.number`), which sets its choice
-  // and action together. Picking the held number again clears the pick.
-  | { type: 'choose'; number: number }
-  | { type: 'toggleNotApplicable' }
-  | { type: 'toggleDontAsk' }
-  | { type: 'accept' }
-  | { type: 'focus' };
-
 // The base kit every forms card and pane, and the head, draws with.
 export interface FormsBaseKit extends BaseKit {
   // As the base kit's `keyHint`; a string `options` is the span's `className`.
@@ -96,6 +87,11 @@ export interface FormsBaseKit extends BaseKit {
 }
 
 export interface Kit extends FormsBaseKit {
+  // This card's item's rail position, the `arg` of `forms.focusItem` and the `forms.*At` commands, and the `item` of
+  // `forms.chooseAt`. A click acts on this item through them, whatever box holds focus: `kit.command(id, arg)` checks
+  // its command while the card builds, so obtain each runner then. `forms.chooseAt`'s `number` is 1-based, a
+  // question's choice or a finding's entry (`FindingCardEntry.number`); picking the held number again clears the pick.
+  readonly position: number;
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
@@ -105,8 +101,6 @@ export interface Kit extends FormsBaseKit {
     parent: HTMLElement,
     field: 'notes' | 'dontAskReason' | 'comment',
   ): HTMLElement;
-  // Focuses this card's item, then runs the action. Call it from event handlers, not while the card builds.
-  run(action: LayoutAction): void;
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
   // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that

@@ -36,8 +36,6 @@ import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
 import type { BoxRef } from './boxes';
 import {
-  type FormsAction,
-  type FormsState,
   progress,
   railItems,
   type RoundState,
@@ -68,10 +66,10 @@ import {
   roundSaveState,
 } from './view-model';
 
-// `getState` reads the forms state, so a rail click logs only a jump that
-// moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
-// rail's dragged width; `timers` runs the split's resize prompt linger.
-// `commands` is what every kit's `command` checks and runs; `contributions`
+// `platform` is the OS key hints are drawn for; `uiState` keeps the rail's
+// dragged width; `timers` runs the split's resize prompt linger. `commands`
+// is what every kit's `command` checks and runs, and every click of a card
+// and pane runs through; `contributions`
 // holds the card parts and review columns other plugins added; `state` is
 // what every kit's `state` reads.
 export interface RoundViewDeps {
@@ -88,8 +86,6 @@ export interface RoundViewDeps {
     | 'formIdOf'
   >;
   keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'>;
-  dispatch(action: FormsAction): void;
-  getState(): FormsState;
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
@@ -283,8 +279,7 @@ function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
 // Builds the split's start pane, the rail header, the rail pane and the rail
 // foot, and the round's main column in its end pane: the layout's head, the
 // item pager, the items pane of cards, and the review pane, each card and pane
-// drawn by its pick in `picks`. A rail click acts on the forms view the state
-// holds as it lands, the cancel prompt included. Every part anchors its keys
+// drawn by its pick in `picks`. Every part anchors its keys
 // through one recording `keys` and records its markdown mounts beside those
 // anchors, the head into its own, so `dispose` reaches them all.
 function buildRoundParts(
@@ -306,12 +301,9 @@ function buildRoundParts(
     platform: deps.platform,
     log: deps.log,
     keys,
-    dispatch: deps.dispatch,
-    getState: deps.getState,
     run: deps.run,
     mountBox,
     destroyBox,
-    shownView: () => deps.getState().view,
     commands: deps.commands,
     contributions: deps.contributions,
     state: deps.state,
@@ -350,8 +342,6 @@ function buildRoundParts(
     markdown: deps.markdown,
     mountBox,
     destroyBox,
-    dispatch: deps.dispatch,
-    toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
     keys,
     platform: deps.platform,
     log: deps.log,

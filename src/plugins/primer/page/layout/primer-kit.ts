@@ -45,7 +45,6 @@ import {
   FEATURE_FIELDS,
   includedCount,
   type OpenPrimer,
-  type PrimerAction,
   selectedEntry,
   type TaskRow,
   taskRows,
@@ -56,11 +55,10 @@ import {
 // commands a kit's `command` reaches, and the platform its key hints draw for.
 export type PrimerKitDeps = OwnerKitServices;
 
-// What the card and column kits act through besides: the text boxes and the
-// store.
+// What the card and column kits act through besides: the text boxes. Every
+// click runs a primer command through `commands`.
 export interface PrimerPartKitDeps extends PrimerKitDeps {
   boxes: Pick<EditorBoxes<PrimerBox>, 'mount' | 'destroyBox'>;
-  dispatch(action: PrimerAction): void;
 }
 
 // A card's kit and what the app does around the layout's card: append the
@@ -171,6 +169,7 @@ export function createTaskKit(
 }
 
 // The kit of item `number` (1-based) of `entry`. Each include mark it drew
+// runs `primer.toggleInclude`, on the selected item as the key does, and
 // shows the item's include on each `update`.
 export function createItemKit(
   deps: PrimerPartKitDeps,
@@ -189,15 +188,16 @@ export function createItemKit(
     },
   ]);
   const marks: HTMLElement[] = [];
+  const base = createPrimerKit(deps, 'card', rollback);
   return {
     kit: {
-      ...createPrimerKit(deps, 'card', rollback),
+      ...base,
       textBox: boxes.mount,
       includeMark(parent) {
         const mark = toggleMark({
           isOn: item.include,
           label: 'Include the item',
-          onToggle: () => deps.dispatch({ type: 'toggleInclude' }),
+          onToggle: base.command(primerCommand('toggleInclude')),
         });
         marks.push(mark);
         return appended(parent, mark);
@@ -234,7 +234,7 @@ export function createItemKit(
 }
 
 // The tasks column's kit over the primer's task rows: each row `taskRow`
-// draws selects its task on a click.
+// draws runs `primer.selectTask` with its position on a click.
 export function createTasksKit(
   deps: PrimerPartKitDeps,
   primer: OpenPrimer,
@@ -246,8 +246,11 @@ export function createTasksKit(
   const kit: TasksKit = {
     ...base,
     taskRow(parent, position) {
-      const node = taskRowElement(primer, taskRowsNow, position, () =>
-        deps.dispatch({ type: 'selectTask', row: position }),
+      const node = taskRowElement(
+        primer,
+        taskRowsNow,
+        position,
+        base.command(primerCommand('selectTask'), position),
       );
       rows.set(position, node);
       return appended(parent, node);
@@ -263,7 +266,8 @@ export function createTasksKit(
 }
 
 // The items column's kit over the selected task's items: each row `itemRow`
-// draws selects its item on a click, and its mark selects and toggles it.
+// draws runs `primer.selectItem` with its item's number on a click, and its
+// mark `primer.toggleIncludeAt`.
 export function createItemsKit(
   deps: PrimerPartKitDeps,
   primer: OpenPrimer,
@@ -279,12 +283,13 @@ export function createItemsKit(
       if (item === undefined) {
         throw new Error(`the items column has no row ${position}`);
       }
-      const select = () =>
-        deps.dispatch({ type: 'selectItem', item: position + 1 });
-      const node = itemRowElement(item, position + 1, select, () => {
-        select();
-        deps.dispatch({ type: 'toggleInclude' });
-      });
+      const number = position + 1;
+      const node = itemRowElement(
+        item,
+        number,
+        base.command(primerCommand('selectItem'), number),
+        base.command(primerCommand('toggleIncludeAt'), number),
+      );
       rows.set(position, node);
       return appended(parent, node);
     },

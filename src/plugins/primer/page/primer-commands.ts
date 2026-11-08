@@ -47,6 +47,7 @@ import {
   selectedItem,
   submitProblems,
   type TextTarget,
+  taskRows,
 } from './primer-state';
 import type { PrimerStore } from './primer-store';
 
@@ -103,6 +104,16 @@ export function primerCommandHandlers(
     addExtraTask: handler(() => addExtraTask(deps)),
     removeExtraTask: handler(() => removeExtraTask(deps)),
     toggleInclude: handler(() => toggleInclude(deps)),
+    // A click names its row, so these act with no box's row shown first.
+    selectTask: ({ arg }) => selectTaskRow(deps, arg),
+    selectItem: ({ arg }) => {
+      selectItemRow(deps, arg);
+    },
+    toggleIncludeAt: ({ arg }) => {
+      if (selectItemRow(deps, arg)) {
+        toggleInclude(deps);
+      }
+    },
     addItem: handler(() => focusAddItem(deps)),
     editItemComment: handler(() => focusItemComment(deps)),
     editTaskComment: handler(() => focusTaskComment(deps)),
@@ -357,6 +368,36 @@ function toggleInclude(deps: PrimerCommandDeps) {
   deps.log(
     `${item.include ? 'included' : 'left out'} item ${row.item} on task ${row.entryId}`,
   );
+}
+
+// Selects tasks column row `row`, a position in taskRows; nothing with no
+// shown primer, and the miss logged for a row the column lacks, as a click
+// drawn before the primer changed sends.
+function selectTaskRow(deps: PrimerCommandDeps, row: number) {
+  const primer = shownPrimer(deps.store.get());
+  if (primer === null) {
+    return;
+  }
+  if (taskRows(primer)[row] === undefined) {
+    deps.log(`no task row ${row}`);
+    return;
+  }
+  deps.store.dispatch({ type: 'selectTask', row });
+}
+
+// Selects the selected task's item `item`, 1-based; false with no shown
+// primer, and false with the miss logged for an item the task lacks.
+function selectItemRow(deps: PrimerCommandDeps, item: number): boolean {
+  const primer = shownPrimer(deps.store.get());
+  if (primer === null) {
+    return false;
+  }
+  if (selectedEntry(primer)?.items[item - 1] === undefined) {
+    deps.log(`no item ${item}`);
+    return false;
+  }
+  deps.store.dispatch({ type: 'selectItem', item });
+  return true;
 }
 
 function focusItemComment(deps: PrimerCommandDeps) {

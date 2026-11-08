@@ -51,6 +51,56 @@ export const formsManifest = definePlugin({
       group: 'answer',
       runsIn: 'page',
     },
+    // A card's click names its item by rail position, so a click never acts on
+    // the item the focused box sits on; each `At` command is its key's twin.
+    chooseAt: {
+      label: 'pick the numbered choice on the item',
+      group: 'choices',
+      runsIn: 'page',
+      arg: { item: 'number', number: 'number' },
+    },
+    clearChoiceAt: {
+      label: 'clear the choice on the item',
+      group: 'choices',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    acceptRecommendationAt: {
+      label: 'accept the recommendation on the item',
+      group: 'choices',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    toggleNotApplicableAt: {
+      label: 'not applicable on the item',
+      group: 'answer',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    toggleDontAskAt: {
+      label: "don't ask me this on the item",
+      group: 'answer',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    focusItem: {
+      label: 'focus the item',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    pickRailItem: {
+      label: 'pick the rail item',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    reviewJumpAt: {
+      label: 'jump to the review row',
+      group: 'review',
+      runsIn: 'page',
+      arg: 'number',
+    },
     editNotes: { label: 'notes box', group: 'boxes', runsIn: 'page' },
     editNote: { label: 'round note', group: 'boxes', runsIn: 'page' },
     nextBox: { label: 'next box', group: 'boxes', runsIn: 'page' },

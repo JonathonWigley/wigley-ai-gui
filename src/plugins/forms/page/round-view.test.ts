@@ -17,6 +17,7 @@ import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
 import { apply, type FormsState, initialState } from './form-state';
 import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
+import { fakeFormsKitCommands } from './fake-kit-commands.test-support';
 import { createRoundView } from './round-view';
 import { presentedRound } from './test-rounds';
 import {
@@ -125,14 +126,8 @@ function roundViewSetup(
       markdown,
       boxes,
       keys: { ...keys, onKeymapChanged: () => ({ dispose: () => undefined }) },
-      dispatch: vi.fn(),
-      getState: () => state,
       run: vi.fn(),
-      commands: {
-        exists: () => false,
-        argShape: () => undefined,
-        run: vi.fn(),
-      },
+      commands: fakeFormsKitCommands(),
       contributions: createFormsContributions(),
       platform: 'macos',
       state: noLayoutState,

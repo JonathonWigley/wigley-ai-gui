@@ -8,7 +8,11 @@ import type {
   TextEditor,
 } from '../../../contracts/editor';
 import type { PaneDirection } from '../../../contracts/panes';
-import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
+import type {
+  CommandHandler,
+  PageCommandContext,
+  ToastTone,
+} from '../../../contracts/plugin';
 import type { PrimerBody, PrimerEntry, PrimerFeature } from '../contract';
 import { boxKey, type PrimerBox } from './boxes';
 import {
@@ -133,8 +137,8 @@ function setup(
   const activated: string[] = [];
   const run = (
     command: PrimerCommand,
-    context: Omit<PageCommandContext, 'arg'> = {},
-  ) => handlers[command]({ arg: undefined, ...context });
+    context: Partial<PageCommandContext<any>> = {},
+  ) => (handlers[command] as CommandHandler)({ arg: undefined, ...context });
   // A press of the core's focus key toward `direction`.
   const move = (direction: PaneDirection) => focusTarget.move(direction);
   const primer = () => {
@@ -371,6 +375,88 @@ describe('primerCommandHandlers', () => {
       'included item 1 on task 1',
     ]);
   });
+
+  // Task rows: Feature (0), task 1 (1), s1 (2), extra-1 (3); task 1's items
+  // are 1 and 2, both included.
+  it('selectCommands_ArgNamesTheRow', () => {
+    const { run, primer, logs } = setup();
+
+    run('selectTask', { arg: 1 });
+    const onTask = primer().selectedTask;
+    run('selectItem', { arg: 2 });
+    const onItem = primer().selectedItem;
+    run('selectItem', { arg: 1 });
+    run('toggleIncludeAt', { arg: 2 });
+
+    expect(onTask).toEqual({ kind: 'task', entryId: '1' });
+    expect(onItem).toBe(2);
+    expect(primer().selectedItem).toBe(2);
+    expect(primer().entries[0].items.map((item) => item.include)).toEqual([
+      true,
+      false,
+    ]);
+    expect(logs).toEqual(['left out item 2 on task 1']);
+  });
+
+  it.each<{
+    name: string;
+    command: PrimerCommand;
+    arg: number;
+    isShown: boolean;
+    logs: string[];
+  }>([
+    {
+      name: 'selectTask past the rows',
+      command: 'selectTask',
+      arg: 9,
+      isShown: true,
+      logs: ['no task row 9'],
+    },
+    {
+      name: 'selectItem past the items',
+      command: 'selectItem',
+      arg: 3,
+      isShown: true,
+      logs: ['no item 3'],
+    },
+    {
+      name: 'toggleIncludeAt past the items',
+      command: 'toggleIncludeAt',
+      arg: 3,
+      isShown: true,
+      logs: ['no item 3'],
+    },
+    {
+      name: 'selectTask in the review',
+      command: 'selectTask',
+      arg: 1,
+      isShown: false,
+      logs: [],
+    },
+    {
+      name: 'toggleIncludeAt in the review',
+      command: 'toggleIncludeAt',
+      arg: 1,
+      isShown: false,
+      logs: [],
+    },
+  ])(
+    'selectCommands_StaleArg_LogAndChangeNothing: $name',
+    ({ command, arg, isShown, logs: expected }) => {
+      const { run, store, logs } = setup();
+      store.dispatch({ type: 'selectTask', row: 1 });
+      if (!isShown) {
+        run('openReview');
+      }
+      const state = store.get();
+      logs.length = 0;
+
+      run(command, { arg });
+
+      expect(store.get()).toBe(state);
+      expect(logs).toEqual(expected);
+    },
+  );
 
   it('says no item is selected for the item keys on a task row', () => {
     const { run, store, logs, focused } = setup();

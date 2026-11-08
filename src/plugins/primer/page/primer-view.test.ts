@@ -8,7 +8,12 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import type { CommandId } from '../../../contracts/commands';
+import type {
+  CommandArg,
+  CommandArgShape,
+  CommandId,
+} from '../../../contracts/commands';
+import type { CommandHandler } from '../../../contracts/plugin';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type { AnchorOptions } from '../../../contracts/keymap';
@@ -30,6 +35,7 @@ import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { PrimerEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { PrimerLayout } from '../layouts/layout';
+import { primerManifest } from '../manifest';
 import {
   boxKey,
   focusActionFor,
@@ -93,6 +99,15 @@ interface RegisteredTarget {
 
 type PrimerCommand = keyof ReturnType<typeof primerCommandHandlers>;
 
+const PRIMER_COMMANDS: Readonly<
+  Record<string, { label: string; arg?: CommandArgShape }>
+> = primerManifest.commands;
+
+// The short name of primer command `id`, as the handlers key it.
+function primerShort(id: CommandId): PrimerCommand {
+  return id.slice('primer.'.length) as PrimerCommand;
+}
+
 // One `keys.anchor` call the view made, its `dispose` a spy.
 interface NamedAnchor {
   element: FakeElement;
@@ -155,6 +170,7 @@ function primerTabSetup(
   const uiWrites: [string, unknown][] = [];
   const tabs = new Map<string, FakeElement>();
   const activities: [string, string, RowActivity | null][] = [];
+  const ran: [CommandId, CommandArg | undefined][] = [];
   const view = mountPrimerTab({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
@@ -206,8 +222,16 @@ function primerTabSetup(
     run: () => undefined,
     commands: {
       exists: () => true,
-      argShape: () => undefined,
-      run: () => undefined,
+      argShape: (id) =>
+        id.startsWith('primer.')
+          ? PRIMER_COMMANDS[primerShort(id)]?.arg
+          : undefined,
+      run: (id, arg) => {
+        ran.push([id, arg]);
+        if (id.startsWith('primer.')) {
+          void (handlers[primerShort(id)] as CommandHandler)({ arg });
+        }
+      },
     },
     platform: 'macos',
     state: noLayoutState,
@@ -263,8 +287,11 @@ function primerTabSetup(
     sessionId: presented.sessionId,
     tab,
     tabs,
+    // Each command a click ran through the kit, with its arg.
+    ran,
     // Fires `command` with no editor in its context, as a page key does.
-    run: (command: PrimerCommand) => handlers[command]({ arg: undefined }),
+    run: (command: PrimerCommand) =>
+      (handlers[command] as CommandHandler)({ arg: undefined }),
   };
 }
 
@@ -808,6 +835,46 @@ describe('primer anchors', () => {
       true,
       false,
     ]);
+  });
+
+  // Task rows: Feature (0), task 1 (1); task 1's items are 1 and 2.
+  it.each<{
+    control: string;
+    click: (tab: FakeElement) => void;
+    ran: [CommandId, CommandArg | undefined];
+  }>([
+    {
+      control: 'a task row',
+      click: (tab) => findAll(columnBody(tab, 'tasks'), 'ui-row')[1].click(),
+      ran: ['primer.selectTask', 1],
+    },
+    {
+      control: 'an item row',
+      click: (tab) => findAll(columnBody(tab, 'items'), 'ui-row')[1].click(),
+      ran: ['primer.selectItem', 2],
+    },
+    {
+      control: "an item row's mark",
+      click: (tab) => {
+        const [, lead] = findAll(columnOf(tab, 'items'), 'primer-item-lead');
+        findAll(lead, 'ui-toggle-mark')[0].click();
+      },
+      ran: ['primer.toggleIncludeAt', 2],
+    },
+    {
+      control: "the item card's mark",
+      click: (tab) =>
+        findAll(pane(tab, 'primer-card'), 'ui-toggle-mark')[0].click(),
+      ran: ['primer.toggleInclude', undefined],
+    },
+  ])('tasksAndItems_Click_RunTheirCommands: $control', ({ click, ran }) => {
+    const setup = primerTabSetup();
+    setup.store.dispatch({ type: 'selectTask', row: 1 });
+    setup.store.dispatch({ type: 'selectItem', item: 1 });
+
+    click(setup.tab);
+
+    expect(setup.ran).toEqual([ran]);
   });
 
   it.each<{ name: string; actions: PrimerAction[]; copy: string }>([

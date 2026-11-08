@@ -37,12 +37,9 @@ import type {
 import {
   answerableItems,
   answerStatus,
-  type FormsAction,
-  type FormsState,
   progress,
   type RailItem,
   railItems,
-  railPosition,
   type RoundState,
   type TextTarget,
 } from '../form-state';
@@ -54,7 +51,6 @@ import {
 } from '../kinds/card-parts';
 import { FORMATS, itemLabel } from '../kinds/formats';
 import {
-  pickRailItem,
   progressText,
   railDotStatus,
   type ReviewRow,
@@ -74,23 +70,20 @@ import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
 // hints are drawn for, the log, the keys bound in a forms scope and the
-// anchors that show them, the forms state and its actions, a forms command,
-// the round's text boxes, the forms view now, which decides what a rail click
-// does, the registered commands `kit.command` checks and runs, the review
-// columns other plugins added, the slots `kit.state` reads, where each anchor
-// the kit names and each slot subscription a pane makes is recorded, and where
-// each markdown mount it makes is recorded for disposal.
+// anchors that show them, a forms command, the round's text boxes, the
+// registered commands `kit.command` checks and runs, which the rail entries
+// and review rows run through, the review columns other plugins added, the
+// slots `kit.state` reads, where each anchor the kit names and each slot
+// subscription a pane makes is recorded, and where each markdown mount it
+// makes is recorded for disposal.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: OsName;
   log: PluginLog;
   keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
-  dispatch(action: FormsAction): void;
-  getState(): FormsState;
   run(command: CommandId): void;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
-  shownView(): FormsView;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'reviewColumns'>;
   state: LayoutState;
@@ -176,12 +169,12 @@ function drawRail(
   deps: PaneDeps,
 ): RailPane {
   const items = railItems(round.round);
-  const reviewRowAt = reviewRowsByRailPosition(round);
   const updaters: Updater[] = [];
   const entries = new Map<number, HTMLElement>();
   let shownView: FormsView = 'forms';
+  const base = createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms')));
   const kit: RailKit = {
-    ...createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms'))),
+    ...base,
     entry(entryParent, position) {
       requireIndexIn(
         position,
@@ -189,14 +182,11 @@ function drawRail(
         `rail has no item at position ${position}`,
       );
       const item = items[position];
-      const entry = buildRailEntry(entryParent, round, item, () =>
-        pickRailItem(
-          deps,
-          deps.shownView(),
-          item,
-          position,
-          reviewRowAt[position],
-        ),
+      const entry = buildRailEntry(
+        entryParent,
+        round,
+        item,
+        base.command(formsCommand('pickRailItem'), position),
       );
       entries.set(position, entry.element);
       updaters.push((current) =>
@@ -231,15 +221,6 @@ function drawRail(
       entries.get(position)?.scrollIntoView({ block: 'nearest' });
     },
   };
-}
-
-// Each rail position's review row; undefined at a notice, which has none.
-function reviewRowsByRailPosition(round: RoundState): (number | undefined)[] {
-  const rows: (number | undefined)[] = [];
-  answerableItems(round.round).forEach((item, row) => {
-    rows[railPosition(round.round, item)] = row;
-  });
-  return rows;
 }
 
 // An item's row in the rail, and the status dot it leads with.
@@ -321,24 +302,25 @@ function drawReview(
       title: FORMATS[item.kind].title(round.round, item.index),
     })),
   };
+  const base = createFormsBaseKit(baseKitDepsFor(deps, formsScope('review')));
   const kit: ReviewKit = {
-    ...createFormsBaseKit(baseKitDepsFor(deps, formsScope('review'))),
+    ...base,
     row(rowParent, row) {
       requireIndexIn(row, input.rows.length, `review has no row ${row}`);
       const entry = element('li', 'review-row');
       rowParent.append(entry);
       rowElements.set(row, entry);
+      const jump = base.command(formsCommand('reviewJumpAt'), row);
       updaters.push(() => {
         const rows = changedRows;
         if (rows !== null) {
-          drawReviewRow(
-            entry,
-            rows[row],
-            round.formId,
+          drawReviewRow(entry, rows[row], {
+            roundId: round.formId,
+            jump,
             deps,
             mount,
             jumpPrompt,
-          );
+          });
         }
       });
       return entry;
@@ -441,25 +423,31 @@ function appendReviewButton(
   return control;
 }
 
+// What a review row draws with besides its row: its round, `jump`, the
+// runner of the row's `forms.reviewJumpAt`, the pane's deps, the review's
+// markdown mount and the cursor row's jump prompt.
+interface ReviewRowDraw {
+  roundId: string;
+  jump: () => void;
+  deps: PaneDeps;
+  mount: MarkdownMount;
+  jumpPrompt: HTMLElement;
+}
+
 // Redraws `entry`'s contents from `row`. A finding's pick reads as its action,
 // then its choice, drawn through `mount`, under the number the card gives
 // it; a header pick reads as its action alone, and a row with no pick as its
-// status. The cursor's row takes `jumpPrompt`, the keys that jump to its
-// item, as clicking it does. The row ends with each contributed column's
-// cell.
+// status. A click on the pick runs `jump`. The cursor's row takes
+// `jumpPrompt`, the keys that jump to its item, as clicking it does. The row
+// ends with each contributed column's cell.
 function drawReviewRow(
   entry: HTMLElement,
   row: ReviewRow,
-  roundId: string,
-  deps: PaneDeps,
-  mount: MarkdownMount,
-  jumpPrompt: HTMLElement,
+  { roundId, jump, deps, mount, jumpPrompt }: ReviewRowDraw,
 ) {
   entry.dataset.status = row.status;
   entry.classList.toggle('is-cursor', row.isCursor);
-  const pick = button('review-pick', '', () =>
-    deps.dispatch({ type: 'reviewJump', row: row.row }),
-  );
+  const pick = button('review-pick', '', jump);
   const answer = element('span', 'review-answer');
   if (row.actionLabel !== '') {
     answer.append(element('span', 'review-action', row.actionLabel));

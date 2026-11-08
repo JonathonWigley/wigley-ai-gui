@@ -234,7 +234,7 @@ export function jumpMoved(before: FormsState, after: FormsState): boolean {
   );
 }
 
-// A click on the rail entry of `item`, at rail position `position`: dispatches
+// A pick of the rail entry of `item`, at rail position `position`: dispatches
 // its railPickAction and logs the jump when it moved the focus or the view,
 // doing nothing when that action is null.
 export function pickRailItem(
@@ -257,6 +257,17 @@ export function pickRailItem(
   if (jumpMoved(before, deps.getState())) {
     deps.log(jumpedToLine(item));
   }
+}
+
+// Each rail position's review row; undefined at a notice, which has none.
+export function reviewRowsByRailPosition(
+  round: RoundState,
+): (number | undefined)[] {
+  const rows: (number | undefined)[] = [];
+  answerableItems(round.round).forEach((item, row) => {
+    rows[railPosition(round.round, item)] = row;
+  });
+  return rows;
 }
 
 // What clicking a rail item does: focus it in the forms view; in the review,

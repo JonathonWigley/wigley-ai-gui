@@ -67,6 +67,60 @@ export const formsChooseCommand: CommandKey<number, 'forms.choose'> = {
   id: 'forms.choose',
 };
 
+// The arg of `forms.chooseAt`: the item's 0-based rail position, and the
+// 1-based number `forms.choose` takes.
+export interface FormsChooseAtArg {
+  item: number;
+  number: number;
+}
+
+// Picks numbered choice `number` on the item at rail position `item`, as a
+// card's click does; picking the held number again clears it.
+export const formsChooseAtCommand: CommandKey<
+  FormsChooseAtArg,
+  'forms.chooseAt'
+> = { id: 'forms.chooseAt' };
+
+// Each command below takes the item's 0-based rail position and acts on that
+// item, as a card's control does, whatever box holds focus.
+export const formsClearChoiceAtCommand: CommandKey<
+  number,
+  'forms.clearChoiceAt'
+> = { id: 'forms.clearChoiceAt' };
+
+export const formsAcceptRecommendationAtCommand: CommandKey<
+  number,
+  'forms.acceptRecommendationAt'
+> = { id: 'forms.acceptRecommendationAt' };
+
+export const formsToggleNotApplicableAtCommand: CommandKey<
+  number,
+  'forms.toggleNotApplicableAt'
+> = { id: 'forms.toggleNotApplicableAt' };
+
+export const formsToggleDontAskAtCommand: CommandKey<
+  number,
+  'forms.toggleDontAskAt'
+> = { id: 'forms.toggleDontAskAt' };
+
+// Focuses the item at the rail position, and nothing more.
+export const formsFocusItemCommand: CommandKey<number, 'forms.focusItem'> = {
+  id: 'forms.focusItem',
+};
+
+// What a click on the rail entry at the position does in the view shown:
+// focus it in the form, jump to it in the review.
+export const formsPickRailItemCommand: CommandKey<
+  number,
+  'forms.pickRailItem'
+> = { id: 'forms.pickRailItem' };
+
+// Jumps to the item of the 0-based review row, as a click on the row does.
+export const formsReviewJumpAtCommand: CommandKey<
+  number,
+  'forms.reviewJumpAt'
+> = { id: 'forms.reviewJumpAt' };
+
 // Where a finding comes from; it sets the card the finding draws as and the
 // fields it takes.
 export type FindingOrigin = 'caused' | 'pre_existing' | 'design' | 'nit';

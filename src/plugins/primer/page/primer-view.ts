@@ -341,14 +341,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
       return;
     }
     const state = store.get();
-    syncPrimerViews(
-      state,
-      shownPrimers,
-      tabs,
-      deps,
-      dispatch,
-      () => shownLayouts,
-    );
+    syncPrimerViews(state, shownPrimers, tabs, deps, () => shownLayouts);
     tabs.sync((sessionId) => {
       const primer = formOfSession(state, sessionId);
       return primer === undefined ? null : sessionTitle(primer);
@@ -482,7 +475,6 @@ function syncPrimerViews(
   primerViews: PrimerViews,
   tabs: SessionFormTabs,
   deps: PrimerViewDeps,
-  dispatch: (action: PrimerAction) => void,
   shown: () => ShownLayouts<PrimerLayout>,
 ) {
   for (const primerId of primerViews.views.keys()) {
@@ -496,7 +488,6 @@ function syncPrimerViews(
         (root) => tabs.mount(primer.sessionId, root),
         primer,
         deps,
-        dispatch,
         shown,
       );
       primerViews.views.set(primer.formId, primerView);
@@ -565,7 +556,6 @@ function createPrimerFormView(
   attach: (root: HTMLElement) => void,
   primer: OpenPrimer,
   deps: PrimerViewDeps,
-  dispatch: (action: PrimerAction) => void,
   shown: () => ShownLayouts<PrimerLayout>,
 ): PrimerFormView {
   const splitDeps = {
@@ -612,7 +602,6 @@ function createPrimerFormView(
     platform: deps.platform,
     state: deps.state,
     boxes: deps.boxes,
-    dispatch,
     log: deps.log,
   };
   const primerId = primer.formId;

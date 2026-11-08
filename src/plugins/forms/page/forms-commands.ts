@@ -42,11 +42,21 @@ import {
   type FormsStore,
   type ItemAnswer,
   itemAnswer,
+  answerableItems,
   pickNumber,
+  type RailItem,
+  railItems,
   railPosition,
+  type RoundState,
   unansweredItem,
 } from './form-state';
-import { itemName, jumpedToLine, jumpMoved } from './view-model';
+import {
+  itemName,
+  jumpedToLine,
+  jumpMoved,
+  pickRailItem,
+  reviewRowsByRailPosition,
+} from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -84,8 +94,25 @@ const ANSWER_FIELDS: BoxField[] = ['notes', 'comment'];
 
 const APPEND: FocusOptions = { insertAtEnd: true };
 
+const DESCRIBE_CLEAR: DescribeChange = (_answer, item) =>
+  `cleared the choice on ${itemName(item)}`;
+
+const DESCRIBE_ACCEPT: DescribeChange = (_answer, item) =>
+  `accepted the recommendation on ${itemName(item)}`;
+
+const DESCRIBE_NOT_APPLICABLE: DescribeChange = (answer, item) =>
+  answer.notApplicable
+    ? `not applicable on ${itemName(item)}`
+    : `applicable again on ${itemName(item)}`;
+
+const DESCRIBE_DONT_ASK: DescribeChange = (answer, item) =>
+  answer.dontAsk
+    ? `don't ask on ${itemName(item)}`
+    : `ask again on ${itemName(item)}`;
+
 // Every forms command's handler, by short id. A command fired in a box first
-// focuses that box's item, so it acts where the user is typing.
+// focuses that box's item, so it acts where the user is typing; an `At`
+// command acts on the item its arg names instead, as a card's click does.
 export function formsCommandHandlers(
   deps: FormsCommandDeps,
 ): PageStart<typeof formsManifest>['commands'] {
@@ -118,26 +145,22 @@ export function formsCommandHandlers(
     // same number was held.
     choose: (context) => {
       const number = context.arg;
-      changeAnswer(deps, context, { type: 'choose', number }, (_, item) =>
-        activePickNumber(store.get(), item) === number
-          ? `chose ${number} on ${itemName(item)}`
-          : `cleared the choice on ${itemName(item)}`,
-      );
-    },
-    clearChoice: (context) => {
       changeAnswer(
         deps,
         context,
-        { type: 'clearChoice' },
-        (_answer, item) => `cleared the choice on ${itemName(item)}`,
+        { type: 'choose', number },
+        describeChoice(store, number),
       );
+    },
+    clearChoice: (context) => {
+      changeAnswer(deps, context, { type: 'clearChoice' }, DESCRIBE_CLEAR);
     },
     acceptRecommendation: (context) => {
       changeAnswer(
         deps,
         context,
         { type: 'acceptRecommendation' },
-        (_answer, item) => `accepted the recommendation on ${itemName(item)}`,
+        DESCRIBE_ACCEPT,
       );
     },
     toggleNotApplicable: (context) => {
@@ -145,26 +168,61 @@ export function formsCommandHandlers(
         deps,
         context,
         { type: 'toggleNotApplicable' },
-        (answer, item) =>
-          answer.notApplicable
-            ? `not applicable on ${itemName(item)}`
-            : `applicable again on ${itemName(item)}`,
+        DESCRIBE_NOT_APPLICABLE,
       );
     },
     toggleDontAsk: (context) => {
-      const answer = changeAnswer(
+      focusReasonBoxWhenOn(
         deps,
-        context,
-        { type: 'toggleDontAsk' },
-        (changed, item) =>
-          changed.dontAsk
-            ? `don't ask on ${itemName(item)}`
-            : `ask again on ${itemName(item)}`,
+        changeAnswer(
+          deps,
+          context,
+          { type: 'toggleDontAsk' },
+          DESCRIBE_DONT_ASK,
+        ),
       );
-      if (answer?.dontAsk) {
-        focusShownBox(deps, ['dontAskReason']);
+    },
+    chooseAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg.item)) {
+        applyAnswer(
+          deps,
+          { type: 'choose', number: arg.number },
+          describeChoice(store, arg.number),
+        );
       }
     },
+    clearChoiceAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        applyAnswer(deps, { type: 'clearChoice' }, DESCRIBE_CLEAR);
+      }
+    },
+    acceptRecommendationAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        applyAnswer(deps, { type: 'acceptRecommendation' }, DESCRIBE_ACCEPT);
+      }
+    },
+    toggleNotApplicableAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        applyAnswer(
+          deps,
+          { type: 'toggleNotApplicable' },
+          DESCRIBE_NOT_APPLICABLE,
+        );
+      }
+    },
+    toggleDontAskAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        focusReasonBoxWhenOn(
+          deps,
+          applyAnswer(deps, { type: 'toggleDontAsk' }, DESCRIBE_DONT_ASK),
+        );
+      }
+    },
+    focusItem: ({ arg }) => {
+      focusNamedItem(deps, arg);
+    },
+    pickRailItem: ({ arg }) => pickNamedRailItem(deps, arg),
+    reviewJumpAt: ({ arg }) => jumpToReviewRow(deps, arg),
     // As vim's `A`: `a` and `o` start typing after the box's text.
     editNotes: () => focusShownBox(deps, ANSWER_FIELDS, APPEND),
     editNote: () => focusShownBox(deps, ['note'], APPEND),
@@ -236,8 +294,17 @@ function focusedAnswer(
   return { item, answer: itemAnswer(round, item) };
 }
 
-// Applies an answer action to the focused question or finding and logs the
-// change; returns the changed answer, or null when nothing changed.
+// The log line of a pick of `number`: the number the item now holds, or the
+// clear when the same number was held.
+function describeChoice(store: FormsStore, number: number): DescribeChange {
+  return (_answer, item) =>
+    activePickNumber(store.get(), item) === number
+      ? `chose ${number} on ${itemName(item)}`
+      : `cleared the choice on ${itemName(item)}`;
+}
+
+// Focuses the item of the command's box, then applies the answer action as
+// applyAnswer does.
 function changeAnswer(
   deps: FormsCommandDeps,
   context: EditorContext,
@@ -245,6 +312,16 @@ function changeAnswer(
   describe: DescribeChange,
 ): ItemAnswer | null {
   focusBoxItem(deps.store, boxIn(deps, context));
+  return applyAnswer(deps, action, describe);
+}
+
+// Applies an answer action to the focused question or finding and logs the
+// change; returns the changed answer, or null when nothing changed.
+function applyAnswer(
+  deps: FormsCommandDeps,
+  action: FormsAction,
+  describe: DescribeChange,
+): ItemAnswer | null {
   const before = focusedAnswer(deps.store.get());
   deps.store.dispatch(action);
   const after = focusedAnswer(deps.store.get());
@@ -253,6 +330,80 @@ function changeAnswer(
   }
   deps.log(describe(after.answer, after.item));
   return after.answer;
+}
+
+// Focuses Don't ask's reason box when `answer`, the toggled one, turned it on.
+function focusReasonBoxWhenOn(
+  deps: FormsCommandDeps,
+  answer: ItemAnswer | null,
+) {
+  if (answer?.dontAsk) {
+    focusShownBox(deps, ['dontAskReason']);
+  }
+}
+
+// The active round and its rail item at `position`; null with no round, and
+// null with the miss logged for a position the rail lacks, as a click drawn
+// before the round changed sends.
+function railItemAt(
+  deps: FormsCommandDeps,
+  position: number,
+): { round: RoundState; item: RailItem } | null {
+  const round = activeForm(deps.store.get());
+  if (round === null) {
+    return null;
+  }
+  const item = railItems(round.round)[position];
+  if (item === undefined) {
+    deps.log(`no rail item at ${position}`);
+    return null;
+  }
+  return { round, item };
+}
+
+// Focuses the item at rail `position` whatever box holds focus, so a click's
+// answer lands on its own card; false when railItemAt found none.
+function focusNamedItem(deps: FormsCommandDeps, position: number): boolean {
+  if (railItemAt(deps, position) === null) {
+    return false;
+  }
+  deps.store.dispatch({ type: 'focusItem', item: position });
+  return true;
+}
+
+// The rail entry at `position` picked in the view the store shows now, with
+// the review row the item has there.
+function pickNamedRailItem(deps: FormsCommandDeps, position: number) {
+  const found = railItemAt(deps, position);
+  if (found === null) {
+    return;
+  }
+  const { store, log } = deps;
+  pickRailItem(
+    {
+      dispatch: (action) => store.dispatch(action),
+      getState: () => store.get(),
+      log,
+    },
+    store.get().view,
+    found.item,
+    position,
+    reviewRowsByRailPosition(found.round)[position],
+  );
+}
+
+// Moves the review cursor to `row` and shows its item, as Enter on the row
+// does; a row the review lacks is logged.
+function jumpToReviewRow(deps: FormsCommandDeps, row: number) {
+  const round = activeForm(deps.store.get());
+  if (round === null) {
+    return;
+  }
+  if (answerableItems(round.round)[row] === undefined) {
+    deps.log(`no review row ${row}`);
+    return;
+  }
+  deps.store.dispatch({ type: 'reviewJump', row });
 }
 
 function focusShownBox(

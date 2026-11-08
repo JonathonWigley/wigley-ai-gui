@@ -14,8 +14,8 @@ import { apply, initialState, type RoundState } from '../form-state';
 import { findingFormat } from '../kinds/finding/finding-card';
 import { questionFormat } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
-import { finding, presentedRound, question } from '../test-rounds';
-import type { LayoutAction } from '../../layouts/layout';
+import { fakeFormsKitCommands } from '../fake-kit-commands.test-support';
+import { finding, notice, presentedRound, question } from '../test-rounds';
 import {
   baseKitDepsFor,
   choiceGroupsOf,
@@ -135,10 +135,15 @@ describe('choiceGroupsOf', () => {
   });
 });
 
-// A round of one finding, `overrides` over its defaults, open and active.
-function findingRound(overrides: Partial<DefectFinding> = {}): RoundState {
+// A round of one finding after `notices`, `overrides` over its defaults,
+// open and active.
+function findingRound(
+  overrides: Partial<DefectFinding> = {},
+  notices: string[] = [],
+): RoundState {
   const presented = presentedRound('r1', {
     questions: [],
+    notices: notices.map((title) => notice(title)),
     findings: [finding('Delta', overrides)],
   });
   return apply(initialState([], presented.sessionId), {
@@ -148,8 +153,8 @@ function findingRound(overrides: Partial<DefectFinding> = {}): RoundState {
 }
 
 // Card deps over `contributions`, whose keys lookup binds only `demo.run`
-// (to `g d`), whose anchors are recorded, and whose commands register only
-// `demo.run`.
+// (to `g d`), whose anchors are recorded, and whose commands register every
+// forms command and `demo.run`, each run recorded.
 function fakeCardDeps(contributions: FormsContributions) {
   const keysFor = vi.fn((command: string) =>
     command === 'demo.run' ? 'g d' : null,
@@ -170,17 +175,11 @@ function fakeCardDeps(contributions: FormsContributions) {
     },
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
-    dispatch: vi.fn(),
-    toggleDontAsk: vi.fn(),
     keys: { keysFor, anchor },
     platform: 'macos',
     state: noLayoutState,
     log,
-    commands: {
-      exists: (id) => id === 'demo.run',
-      argShape: () => undefined,
-      run,
-    },
+    commands: fakeFormsKitCommands(run, ['demo.run']),
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},
@@ -192,6 +191,17 @@ function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   const round = findingRound(overrides);
   const input = findingFormat.cardInput(round.round, 1);
   return createCardKit('finding', 1, input, round, 0, deps);
+}
+
+// The kit of a finding of two fix_now choices after two notices, at rail
+// position 2; its entries are 1 and 2 (A, B), then 3 and 4 (the headers).
+function laterFindingKit(deps: CardDeps) {
+  const round = findingRound(
+    { choices: [choice('A', 'fix_now'), choice('B', 'fix_now')] },
+    ['Heads up', 'Also'],
+  );
+  const input = findingFormat.cardInput(round.round, 1);
+  return createCardKit('finding', 1, input, round, 2, deps);
 }
 
 // The kit of a round's second item, a question of two choices after one
@@ -343,60 +353,6 @@ describe('card kit', () => {
     ).toEqual([[], ['Out of scope']]);
   });
 
-  it.each([
-    {
-      action: { type: 'choose', number: 2 } as const,
-      dispatched: [{ type: 'choose', number: 2 }],
-      togglesDontAsk: false,
-    },
-    {
-      action: { type: 'toggleNotApplicable' } as const,
-      dispatched: [{ type: 'toggleNotApplicable' }],
-      togglesDontAsk: false,
-    },
-    {
-      action: { type: 'accept' } as const,
-      dispatched: [{ type: 'acceptRecommendation' }],
-      togglesDontAsk: false,
-    },
-    {
-      action: { type: 'focus' } as const,
-      dispatched: [],
-      togglesDontAsk: false,
-    },
-    {
-      action: { type: 'toggleDontAsk' } as const,
-      dispatched: [],
-      togglesDontAsk: true,
-    },
-  ])(
-    'kitRun_$action.type_FocusesTheCardItemFirst',
-    ({ action, dispatched, togglesDontAsk }) => {
-      const { deps } = fakeCardDeps(createFormsContributions());
-      const { kit } = questionKit(deps);
-
-      kit.run(action);
-
-      expect(vi.mocked(deps.dispatch).mock.calls).toEqual(
-        [{ type: 'focusItem', item: 1 }, ...dispatched].map((each) => [each]),
-      );
-      expect(vi.mocked(deps.toggleDontAsk).mock.calls).toHaveLength(
-        togglesDontAsk ? 1 : 0,
-      );
-    },
-  );
-
-  it('kitRun_UnknownActionType_LogsAndDispatchesNothing', () => {
-    const { deps, log } = fakeCardDeps(createFormsContributions());
-    const { kit } = findingKit(deps);
-
-    kit.run({ type: 'chooseAction' } as unknown as LayoutAction);
-
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('chooseAction'));
-    expect(deps.dispatch).not.toHaveBeenCalled();
-    expect(deps.toggleDontAsk).not.toHaveBeenCalled();
-  });
-
   it('kitKeysFor_ReadsTheCardScope', () => {
     const { deps, keysFor } = fakeCardDeps(createFormsContributions());
     const { kit } = findingKit(deps);
@@ -504,22 +460,109 @@ describe('card kit', () => {
     expect(chooseArgs).toEqual([1, 2]);
   });
 
-  it('clearButton_Click_FocusesTheItemThenClears', () => {
+  // The question kit sits at rail position 1, the later finding kit at 2.
+  it.each<{
+    control: string;
+    click: (deps: CardDeps) => void;
+    ran: [string, unknown];
+  }>([
+    {
+      control: 'a choice',
+      click: (deps) =>
+        clickPick(questionKit(deps).kit.choiceList(div(), 'none'), 1),
+      ran: ['forms.chooseAt', { item: 1, number: 2 }],
+    },
+    {
+      control: "a finding group's choice",
+      click: (deps) =>
+        clickPick(laterFindingKit(deps).kit.choiceGroups(div(), 'none'), 1),
+      ran: ['forms.chooseAt', { item: 2, number: 2 }],
+    },
+    {
+      control: "a choiceless action's header",
+      click: (deps) => {
+        const answer = laterFindingKit(deps).kit.choiceGroups(div(), 'none');
+        findAll(asFake(answer), 'choice-group-pick')[0].click();
+      },
+      ran: ['forms.chooseAt', { item: 2, number: 3 }],
+    },
+    {
+      control: 'Clear',
+      click: (deps) =>
+        clickButton(questionKit(deps).kit.choiceList(div(), 'none'), 'Clear'),
+      ran: ['forms.clearChoiceAt', 1],
+    },
+    {
+      control: 'Accept',
+      click: (deps) =>
+        clickButton(laterFindingKit(deps).kit.verdict(div()), 'Accept'),
+      ran: ['forms.acceptRecommendationAt', 2],
+    },
+    {
+      control: 'Not applicable',
+      click: (deps) =>
+        clickButton(
+          questionKit(deps).kit.answerControls(div()),
+          'Not applicable',
+        ),
+      ran: ['forms.toggleNotApplicableAt', 1],
+    },
+    {
+      control: "Don't ask me this",
+      click: (deps) =>
+        clickButton(
+          laterFindingKit(deps).kit.answerControls(div()),
+          "Don't ask me this",
+        ),
+      ran: ['forms.toggleDontAskAt', 2],
+    },
+  ])(
+    'cardControls_Click_RunTheirAtCommandWithPosition: $control',
+    ({ click, ran }) => {
+      const { deps, run } = fakeCardDeps(createFormsContributions());
+
+      click(deps);
+
+      expect(run.mock.calls).toEqual([ran]);
+    },
+  );
+
+  it('choiceList_CardBuilds_ObtainsEachRunnerBeforeAnyClick', () => {
     const { deps } = fakeCardDeps(createFormsContributions());
-    const { kit } = questionKit(deps);
-    const answer = asFake(
-      kit.choiceList(asHtml(new FakeElement('div')), 'none'),
-    );
+    const exists = vi.fn(deps.commands.exists);
+    deps.commands = { ...deps.commands, exists };
+    const answer = questionKit(deps).kit.choiceList(div(), 'none');
+    const checks = () =>
+      exists.mock.calls.filter(([id]) => id === 'forms.chooseAt').length;
+    const atBuild = checks();
 
-    const clear = findAll(answer, 'ui-button').find(
-      (control) => control.textContent === 'Clear',
-    );
-    clear?.click();
+    clickPick(answer, 0);
 
-    expect(clear).toBeDefined();
-    expect(vi.mocked(deps.dispatch).mock.calls).toEqual([
-      [{ type: 'focusItem', item: 1 }],
-      [{ type: 'clearChoice' }],
-    ]);
+    expect(atBuild).toBe(2);
+    expect(checks()).toBe(2);
   });
 });
+
+function div(): HTMLElement {
+  return asHtml(new FakeElement('div'));
+}
+
+// Clicks the `index`th choice row under `answer`, a choiceless header's
+// excluded.
+function clickPick(answer: HTMLElement, index: number) {
+  const picks = findAll(asFake(answer), 'choice-pick').filter(
+    (pick) => !pick.classList.contains('choice-group-pick'),
+  );
+  picks[index].click();
+}
+
+// Clicks the button under `parent` whose text starts with `label`.
+function clickButton(parent: HTMLElement, label: string) {
+  const control = findAll(asFake(parent), 'ui-button').find((each) =>
+    each.textContent.startsWith(label),
+  );
+  if (control === undefined) {
+    throw new Error(`no ${label} button`);
+  }
+  control.click();
+}

@@ -6,6 +6,7 @@ import {
   type FormsContributions,
 } from '../contributions';
 import { apply, type FormsState, initialState } from '../form-state';
+import { fakeFormsKitCommands } from '../fake-kit-commands.test-support';
 import { presentedRound } from '../test-rounds';
 import { buildRailPane, buildReviewPane, type PaneDeps } from './layout-panes';
 import {
@@ -27,7 +28,9 @@ function openRound(): FormsState {
   });
 }
 
-function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
+// Pane deps over `contributions` whose commands register every forms
+// command, each run recorded.
+function fakePaneDeps(contributions: FormsContributions) {
   const keysFor = vi.fn(() => null);
   const anchor = vi.fn(
     (_element: HTMLElement, _command: string, _options?: unknown) => ({
@@ -35,6 +38,7 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
     }),
   );
   const log = vi.fn();
+  const run = vi.fn();
   const deps: PaneDeps = {
     markdown: {
       block: (text) => text,
@@ -46,18 +50,15 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
     state: noLayoutState,
     log,
     keys: { keysFor, anchor },
-    dispatch: vi.fn(),
-    getState: () => state,
     run: vi.fn(),
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
-    shownView: () => 'review',
-    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
+    commands: fakeFormsKitCommands(run),
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},
   };
-  return { deps, keysFor, anchor, log };
+  return { deps, keysFor, anchor, log, run };
 }
 
 // A review drawing only row 0 into its `ul`; `onKit` sees the kit as it
@@ -82,7 +83,7 @@ function column(id: string, cell: FormsReviewColumn['cell']) {
 function drawRow(contributions: FormsContributions) {
   const state = openRound();
   const round = state.forms[0];
-  const { deps, log } = fakePaneDeps(contributions, state);
+  const { deps, log, run } = fakePaneDeps(contributions);
   const pane = buildReviewPane(
     { name: 'test', layout: oneRowReview() },
     asHtml(new FakeElement('div')),
@@ -91,7 +92,7 @@ function drawRow(contributions: FormsContributions) {
   );
   pane.update(round, true);
   const [row] = findAll(asFake(pane.element), 'review-row');
-  return { row, log };
+  return { row, log, run };
 }
 
 describe('review pane', () => {
@@ -141,9 +142,17 @@ describe('review pane', () => {
     ).toEqual(['c2']);
   });
 
+  it('reviewPick_Click_RunsReviewJumpAt', () => {
+    const { row, run } = drawRow(createFormsContributions());
+
+    findAll(row, 'review-pick')[0].click();
+
+    expect(run.mock.calls).toEqual([['forms.reviewJumpAt', 0]]);
+  });
+
   it('reviewKit_KeysFor_ReadsTheReviewScope', () => {
     const state = openRound();
-    const { deps, keysFor } = fakePaneDeps(createFormsContributions(), state);
+    const { deps, keysFor } = fakePaneDeps(createFormsContributions());
     let read: string | null | undefined;
 
     buildReviewPane(
@@ -169,7 +178,7 @@ describe('review pane', () => {
 
   it('reviewKit_KeyHint_AnchorsInTheReviewScope', () => {
     const state = openRound();
-    const { deps, anchor } = fakePaneDeps(createFormsContributions(), state);
+    const { deps, anchor } = fakePaneDeps(createFormsContributions());
 
     buildReviewPane(
       {
@@ -196,7 +205,7 @@ describe('review pane', () => {
   it('reviewRow_CursorRow_HoldsTheJumpPrompt', () => {
     const opened = openRound();
     const round = { ...opened.forms[0], reviewRow: 1 };
-    const { deps, anchor } = fakePaneDeps(createFormsContributions(), opened);
+    const { deps, anchor } = fakePaneDeps(createFormsContributions());
     const pane = buildReviewPane(
       {
         name: 'test',
@@ -240,7 +249,7 @@ function drawPane(
   layout: Layout,
 ) {
   const state = openRound();
-  const { deps, log } = fakePaneDeps(createFormsContributions(), state);
+  const { deps, log, run } = fakePaneDeps(createFormsContributions());
   const parent = new FakeElement('div');
   const pane = build(
     { name: 'test', layout },
@@ -248,7 +257,7 @@ function drawPane(
     state.forms[0],
     deps,
   );
-  return { pane, parent, deps, log };
+  return { pane, parent, deps, log, run };
 }
 
 // A review that appends a stray node and mounts the round note, then throws.
@@ -295,6 +304,20 @@ describe('panes', () => {
       { field: 'note' },
       expect.any(String),
     );
+  });
+
+  it('railEntry_Click_RunsPickRailItem', () => {
+    const { pane, run } = drawPane(buildRailPane, {
+      rail(parent, _input, kit) {
+        const nav = kit.el(parent, 'nav', 'rail');
+        kit.entry(nav, 1);
+        return { element: nav };
+      },
+    });
+
+    findAll(asFake(pane.element), 'rail-entry')[0].click();
+
+    expect(run.mock.calls).toEqual([['forms.pickRailItem', 1]]);
   });
 
   it.each([-1, 0.5, 99])(

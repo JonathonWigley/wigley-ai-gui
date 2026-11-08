@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../contracts/commands';
 import type {
   AgentFormInvoke,
   AgentFormMessages,
@@ -104,6 +105,23 @@ export interface PrimerPageEvents extends EventShape {
   needChanged: { primerId: string; entryId: string; need: PrimerNeed };
   primerFinished: { primerId: string; outcome: PrimerFinishOutcome };
 }
+
+// Selects the tasks column row at the 0-based position in the task rows, as a
+// click on the row does.
+export const primerSelectTaskCommand: CommandKey<number, 'primer.selectTask'> =
+  { id: 'primer.selectTask' };
+
+// Selects the selected task's item of the 1-based number, as a click on its
+// row does.
+export const primerSelectItemCommand: CommandKey<number, 'primer.selectItem'> =
+  { id: 'primer.selectItem' };
+
+// Selects the selected task's item of the 1-based number and flips its
+// include, as a click on its row's mark does.
+export const primerToggleIncludeAtCommand: CommandKey<
+  number,
+  'primer.toggleIncludeAt'
+> = { id: 'primer.toggleIncludeAt' };
 
 export interface PrimerPageExports {
   activePrimer(): PresentedPrimer | null;
