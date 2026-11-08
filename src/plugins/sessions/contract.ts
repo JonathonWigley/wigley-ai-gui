@@ -547,10 +547,11 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // session's row arrives shows once it does; a row leaving drops its
 // activities, and every page load starts with none.
 // `addSection` registers a side bar section; it throws `section id <id> is
-// reserved` for `favorites` or `recent`, and on an id another registered
-// section holds. On each side bar draw every section's `claims` is asked of
-// every row: a claimed row leaves its project group and draws in the section,
-// newest first; a row two sections claim goes to the lower `order`, a tie to
+// reserved` for `favorites` or `recent`, and `part <id> is already added` on
+// an id another registered section holds. On each side bar draw every
+// section's `claims` is asked of every row: a claimed row leaves its project
+// group and draws in the section, newest first; a row two sections claim goes
+// to the lower `order`, a tie to
 // the section registered first, and a `claims` that throws counts as false
 // and is logged. The sections that claim a row draw after Recent, by `order`,
 // a tie in registration order; one that claims none draws nothing. Adding a

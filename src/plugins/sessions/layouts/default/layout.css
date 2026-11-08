@@ -193,9 +193,10 @@
   overflow: hidden;
 }
 
-/* An activity with an emphasis draws an edge on the card's start in its tone. A
-   pseudo-element, so the edge survives the cursor's and on-screen's box
-   shadows. */
+/* An activity with an emphasis draws an edge in its tone at the start of the
+   card's padding box: on the card's start, or just inside a claimed row's
+   dashed start border. A pseudo-element, so the edge survives the cursor's and
+   on-screen's box shadows. */
 .ui-row.session-row[class*='session-row-edge--'] {
   position: relative;
 }
@@ -308,8 +309,9 @@
 
 /* A row a plugin section claimed is muted: no card fill at rest, a
    `fg-secondary` title unless selected, and a dashed accent edge on its start.
-   Selection, hover and on-screen keep their rules; the edge stays accent, the
-   class twice so it outranks their `border-color`. */
+   Selection, hover and on-screen keep their rules; the edge stays accent: the
+   class twice outranks the selected and on-screen `border-color`, and ties the
+   hover rules' and wins by coming after them. */
 .ui-row.session-row.session-row--claimed {
   border-inline-start: var(--wg-indicator-width) dashed var(--wg-accent);
 }

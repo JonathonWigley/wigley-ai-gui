@@ -618,7 +618,7 @@ describe('sessions view side bar', () => {
         },
       },
     };
-    const state = stateWith([rowIn('a1', 'alpha'), rowIn('r1', 'alpha')]);
+    const state = stateWith([rowIn('r1', 'alpha'), rowIn('a1', 'alpha')]);
     view.render(state);
     const orderedIds = () => view.orderedRows().map((row) => row.sessionId);
 
@@ -643,7 +643,7 @@ describe('sessions view side bar', () => {
     added.dispose();
 
     expect(findAll(sideBar, 'session-section--plugin')).toEqual([]);
-    expect(orderedIds()).toEqual(['a1', 'r1']);
+    expect(orderedIds()).toEqual(['r1', 'a1']);
     expect(
       rowNamed(
         findAll(groupNamed(setup, 'alpha'), 'ui-row'),

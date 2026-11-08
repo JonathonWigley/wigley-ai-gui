@@ -215,8 +215,8 @@ export interface RowKit extends SessionsKit {
 export interface SectionKit extends SessionsKit {
   // `div.session-section-part` (`data-part="<section id>"`) at the end of `parent`, holding the plugin section's header
   // part; returns the div, empty for a section with no header part and for Favorites and Recent. A section that leaves
-  // it out draws no header part. A part that throws is logged and its div removed. A second call throws
-  // `headerPart placed twice`, so the section draws with `default`.
+  // it out draws no header part. A part that throws is logged, and the div returned is empty and outside the tree. A
+  // second call throws `headerPart placed twice`, so the section draws with `default`.
   headerPart(parent: HTMLElement): HTMLElement;
 }
 

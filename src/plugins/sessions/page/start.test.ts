@@ -311,22 +311,35 @@ describe('sessions page part', () => {
     },
   );
 
-  it.each(['favorites', 'recent'])(
-    'addSection_ReservedId_Throws (%s)',
-    async (id) => {
-      const setup = await startApplied(['s1'], 's1');
-      const claims = vi.fn(() => true);
-
-      expect(() =>
-        setup.exports.addSection({ id, label: 'Taken', order: 0, claims }),
-      ).toThrow(`section id ${id} is reserved`);
-      setup.rows.set('s1', { ...hostRow('s1'), marked: true });
-      await settle();
-
-      expect(claims).not.toHaveBeenCalled();
-      await setup.harness.stop();
+  it.each([
+    {
+      id: 'favorites',
+      isHeld: false,
+      failure: 'section id favorites is reserved',
     },
-  );
+    { id: 'recent', isHeld: false, failure: 'section id recent is reserved' },
+    { id: 'retro', isHeld: true, failure: 'part retro is already added' },
+  ])('addSection_TakenId_Throws ($id)', async ({ id, isHeld, failure }) => {
+    const setup = await startApplied(['s1'], 's1');
+    if (isHeld) {
+      setup.exports.addSection({
+        id,
+        label: 'Held',
+        order: 0,
+        claims: () => false,
+      });
+    }
+    const claims = vi.fn(() => true);
+
+    expect(() =>
+      setup.exports.addSection({ id, label: 'Taken', order: 0, claims }),
+    ).toThrow(failure);
+    setup.rows.set('s1', { ...hostRow('s1'), marked: true });
+    await settle();
+
+    expect(claims).not.toHaveBeenCalled();
+    await setup.harness.stop();
+  });
 
   it('start_SetsActiveToNull', () => {
     const state = createSlotStore(() => undefined);

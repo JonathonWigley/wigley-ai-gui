@@ -210,6 +210,20 @@ describe('sidebarSections', () => {
       expectedDrawn: ['a1'],
     },
     {
+      case: 'a row two sections at one order claim goes to the first registered',
+      rows: [['a1', 'alpha']],
+      favorites: [],
+      stamps: {},
+      sections: [
+        ['first', 3, ['a1']],
+        ['second', 3, ['a1']],
+      ],
+      expectedFavorites: [],
+      expectedRecent: [],
+      expectedPlugins: ['first: a1'],
+      expectedDrawn: ['a1'],
+    },
+    {
       case: 'rows in a plugin section run newest first',
       rows: [
         ['a1', 'alpha'],
