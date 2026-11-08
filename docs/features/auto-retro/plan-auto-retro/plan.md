@@ -247,5 +247,6 @@ Review base: 946a8cda
 - Marketplace auto-retro rebased again onto origin/main 7b3e8c4 (version now 1.21.2); the lead resolved the SKILL.md conflict in the docs-ahead commit (now 9599887) by keeping the plan's steps 6-10 and carrying main's question wording into step 10 (summary carries the candidate's summary, context the home, occurrences and draft); task 01's commit is now 0211e71; marketplace review range 7b3e8c4..auto-retro · lead
 - GUI review range after the rebase: 94b63304..HEAD (94b63304 is the rewritten 946a8cda, the plan's last commit before task 02); the Review base line keeps the pre-rebase sha, which plan.py will not replace · lead
 ### Review rounds
+- Round 1 at GUI cb51e8b5 / marketplace bf06bb20: NEEDS FIXES — 6 lanes, 23 findings (5 Important), 8 prose fixes lead-applied (GUI 9c85cc32, marketplace 93b6eca); report /tmp/claude-auto-retro/review-cb51e8b5.md · lead
 ### Test gate
 - Picked the suites owning every changed file in both ranges: GUI npm test over src/plugins/{chat,sessions,auto-retro,session-log,session-stash} — 84 files / 2172 pass; typecheck 0; lint pass; filtered selftest chat+sessions+session-log+session-stash all passed (teardown 'Stopped python3' from context-sources after the result); marketplace retro unittest 180 OK, check_manifests --against origin/main, check_pointers, claude plugin validate pass · lead
