@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08
 Plan: [plan.md](plan.md)
@@ -39,3 +39,5 @@ gone; `git diff 34a21fb3 -- <the docs>` shows only true lines.
 Commit:    one commit for the doc fixes, or none when no line is stale
 
 ## Proof
+
+Commit bc88a5d5 · proof: diff read: three AGENTS.md lines match the git contract, plan-watch and the guard wiring; the other seven docs read against the code and held; follow-up already gone; lint clean · concerns: no doc names chat listing a worktree a Bash command names (worktreesInCommand); no line is stale on it, so none was added

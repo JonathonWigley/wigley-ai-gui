@@ -1,6 +1,6 @@
 # 06 — Heavy reads the newest plan copy
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -168,3 +168,5 @@ gate runs the tests above.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit beb53a5c, 09310eb8 · proof: diff read; Produces present (ChecklistItem.running, itemState, plan watch over copies/commonDir/worktrees); first proof failed 5 stale rows in workflow-heavy-page.test.ts, re-dispatched and fixed by test update; full typecheck, lint, and suite 540 files 10235 tests pass · concerns: the worktree-added row cannot prove the worktrees-folder watch exists, since MemoryFiles reports nested changes as the subfolder name; self-test held for the gate; review-busy row now passes via running:false rather than the stage

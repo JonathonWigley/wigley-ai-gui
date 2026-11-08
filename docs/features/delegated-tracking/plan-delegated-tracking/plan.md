@@ -217,12 +217,12 @@ Boundary rules:
 - [x] [Worktree list and plan copies](02-worktree-list-and-plan-copies.md) — after 01
 
 ### Wave 3
-- [ ] [Heavy reads the newest plan copy](06-heavy-newest-plan-copy.md) — after 01, 02
+- [x] [Heavy reads the newest plan copy](06-heavy-newest-plan-copy.md) — after 01, 02
 - [x] [Backlog counts from the newest copy](07-backlog-newest-copy.md) — after 01, 02
 - [x] [Chat names each call's agent and each touched worktree](08-chat-callers-and-worktrees.md) — after 02, 03
 
 ### Wave 4
-- [ ] [Doc re-read](09-doc-re-read.md)
+- [x] [Doc re-read](09-doc-re-read.md)
 
 ### Wave 5
 - [ ] [Final verification](10-final-verification.md)
@@ -240,6 +240,8 @@ Review base: 9980e669
 - 02 · 8fa2e4c7 · diff read: GitWorktree, worktrees, commonDir in git contract and process-git; PlanCopy, PlanCopyDeps, repoTop, planCopies, newestPlanCopy, readPlanCopy in src/shared/plan-copies.ts; full typecheck clean; git/backlog/docs/plan-copies tests pass (1368) · concerns: AGENTS.md git/ entry names worktrees but not commonDir (for 09)
 - 07 · 45db9863 · diff read: BacklogDeps.files widened; readPlan counts and statuses from newestPlanCopy/readPlanCopy, header from index copy; backlog tests pass; backlog self-test owed to the test gate · concerns: listed memory seed relies on memory-files storing before its first await
 - 08 · 4b3f3339 · diff read; Produces present (createToolCallers, callerGuard, worktreesInCommand, guard wired in start.ts); chat tests 46 files 1454 passed; full typecheck/lint held for 06's in-progress heavy files · concerns: doc sentence on the worktree-add command not matching is untrue: the post-result roots read re-matches that command, so the new worktree lists from the add itself; stale-read row is a timeline check; startChatPart fixture has no services.git, so open-time reads log rejections
+- 09 · bc88a5d5 · diff read: three AGENTS.md lines match the git contract, plan-watch and the guard wiring; the other seven docs read against the code and held; follow-up already gone; lint clean · concerns: no doc names chat listing a worktree a Bash command names (worktreesInCommand); no line is stale on it, so none was added
+- 06 · beb53a5c, 09310eb8 · diff read; Produces present (ChecklistItem.running, itemState, plan watch over copies/commonDir/worktrees); first proof failed 5 stale rows in workflow-heavy-page.test.ts, re-dispatched and fixed by test update; full typecheck, lint, and suite 540 files 10235 tests pass · concerns: the worktree-added row cannot prove the worktrees-folder watch exists, since MemoryFiles reports nested changes as the subfolder name; self-test held for the gate; review-busy row now passes via running:false rather than the stage
 ### Contract changes
 ### Rulings
 - Ended/aborted checks after the guard wait run only when a guard was registered at call time; with none the handler runs same-tick as before — Decisions call these checks new to the guard wait — once chat's guard lands every call takes the checks · group 03 · group 03
@@ -255,5 +257,9 @@ Review base: 9980e669
 - 08: commandOf is a local field reader, since json-fields.ts is outside plugin imports · group 08
 - 08: two roots sharing a last segment list one name · group 08
 - Lead: 09 (doc re-read) dispatched beside 06's re-dispatch, since the 06 fix edits only workflow-heavy-page.test.ts, which no doc names.
+- 06: git-folder watch onError lists again; worktrees watch onError drops the watch so the next report reopens it · group 06
+- 06: a worktrees report closes the worktrees watch when that folder is gone · group 06
+- 06: startPartsInHarnesses also gets NO_CLONE_GIT · group 06
+- 06: stale page-test rows updated to the decided pending mark, not the code · group 06
 ### Review rounds
 ### Test gate
