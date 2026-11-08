@@ -174,8 +174,8 @@ export interface BacklogViewDeps {
   isShown(): boolean;
   // Opens the mode's side bar when it is hidden.
   revealSideBar(): void;
-  // Hears each home the user picks from the side bar, by click or Enter; `l`
-  // opens one without picking it.
+  // Hears each home the user picks from the side bar, by click or Enter, and
+  // main taking the keys; `l` opens one without picking it.
   homePicked(): void;
   // The open home, for the title bar; null with none open.
   homeShown(home: BacklogHome | null): void;
@@ -918,7 +918,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     shownFocus = focus;
     if (isChanged) {
-      deps.log(`${PANE_NAMES[focus]} focused`);
+      deps.log(`${scopeOf(state)} focused`);
     }
     switch (focus) {
       case 'homes':
@@ -982,7 +982,10 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   store.subscribe(() => render());
 
   // Main's last pane takes the keys, the list when the detail refuses them
-  // with no row selected; an open editor takes the DOM focus again.
+  // with no row selected; an open editor takes the DOM focus again. The scope
+  // and targets are set again even when the focus did not change, since
+  // another scope may hold the keys; `homePicked` closes a narrow window's
+  // side bar overlay, so the keys never sit in a pane under it.
   const focusMain = () => {
     if (store.get().editor === null) {
       dispatch({ type: 'focus', focus: lastMainFocus });
@@ -990,7 +993,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         dispatch({ type: 'focus', focus: 'items' });
       }
     }
-    syncFocus(store.get(), true);
+    deps.homePicked();
+    render(true);
   };
 
   // ── Reads and writes ───────────────────────────────────────────────────
@@ -1399,14 +1403,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     commands,
   };
 }
-
-// The name each pane that takes the keys logs under.
-const PANE_NAMES: Record<BacklogFocus | 'editor', string> = {
-  homes: 'homes',
-  items: 'list',
-  detail: 'detail',
-  editor: 'editor',
-};
 
 // The pane a focus move toward `direction` reaches from `from`: right from the
 // list to the detail, left back; null for every other move.

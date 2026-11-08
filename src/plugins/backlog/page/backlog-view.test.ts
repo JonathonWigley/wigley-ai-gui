@@ -554,9 +554,13 @@ describe('backlog pane targets', () => {
     );
   });
 
+  // The rows without the side bar's turn catch a `focusMain` that leaves the
+  // scope and targets to a render that never runs when the focus is unchanged,
+  // as after a turn in another plugin's scope.
   it.each<{
     last: string;
     run(setup: Awaited<ReturnType<typeof backlogSetup>>): void;
+    isFromSideBar: boolean;
   }>([
     {
       last: 'list',
@@ -564,20 +568,43 @@ describe('backlog pane targets', () => {
         setup.move('right');
         setup.move('left');
       },
+      isFromSideBar: true,
     },
-    { last: 'detail', run: (setup) => setup.move('right') },
-  ])('focusMain_ReturnsToMainsLastPane: $last', async ({ last, run }) => {
-    const setup = await backlogSetup();
-    run(setup);
+    {
+      last: 'detail',
+      run: (setup) => setup.move('right'),
+      isFromSideBar: true,
+    },
+    {
+      last: 'detail',
+      run: (setup) => setup.move('right'),
+      isFromSideBar: false,
+    },
+    {
+      last: 'editor',
+      run: (setup) => setup.view.commands.create(),
+      isFromSideBar: false,
+    },
+  ])(
+    'focusMain_ReturnsToMainsLastPane: $last, from the side bar $isFromSideBar',
+    async ({ last, run, isFromSideBar }) => {
+      const setup = await backlogSetup();
+      run(setup);
+      if (isFromSideBar) {
+        setup.view.focusSideBar();
+      }
+      const before = setup.calls.length;
 
-    setup.view.focusSideBar();
-    const scopeOnHomes = setup.calls.at(-3);
-    setup.view.focusMain();
+      setup.view.focusMain();
 
-    const scopes = setup.calls.filter((call) => call[0] === 'setScope');
-    expect(scopeOnHomes).toEqual(['setScope', 'homes']);
-    expect(scopes.at(-1)?.[1]).toBe(last);
-  });
+      expect(setup.calls.slice(before).slice(-3)).toEqual([
+        ['setScope', last],
+        ['setResizeTarget', 'target'],
+        ['setFocusTarget', 'target'],
+      ]);
+      expect(setup.homePicked).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each([
     { command: 'open', picked: 0 },

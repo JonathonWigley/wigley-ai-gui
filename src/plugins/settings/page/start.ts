@@ -49,7 +49,8 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
           label,
         }),
       sectionShown: (title) => mode.setContext({ title: TITLE, detail: title }),
-      // A section opened from the side bar closes its overlay.
+      // A section picked from the side bar, or main taking the keys, closes
+      // its overlay.
       sectionPicked: () => mode.picked(),
     });
 

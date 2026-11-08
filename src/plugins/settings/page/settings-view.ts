@@ -201,8 +201,8 @@ export interface SettingsViewDeps {
   ): Disposable;
   // The open section's title, for the title bar.
   sectionShown(title: string): void;
-  // Hears each section the user picks from the side bar, by click or Enter;
-  // `l` opens one without picking it.
+  // Hears each section the user picks from the side bar, by click or Enter,
+  // and main taking the keys; `l` opens one without picking it.
   sectionPicked(): void;
 }
 
@@ -629,7 +629,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const focusTarget: FocusTarget = {
     move(direction) {
       if (focus === 'sections' && direction === 'right') {
-        focusRows();
+        focusMain();
         return true;
       }
       return false;
@@ -655,6 +655,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     deps.setFocusTarget(focusTarget);
     rowsSheet.focus();
     markCursor();
+  };
+
+  // The rows take the keys; `sectionPicked` closes a narrow window's side bar
+  // overlay, so the keys never sit in rows under it. The rows take focus
+  // first, so the `sideBarHidden` it may cause finds them already focused.
+  const focusMain = () => {
+    focusRows();
+    deps.sectionPicked();
   };
 
   const focusSections = () => {
@@ -1102,7 +1110,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     },
     sideBarOpenedOver: focusSections,
     focusSideBar: focusSections,
-    focusMain: focusRows,
+    focusMain,
     commands,
   };
 }

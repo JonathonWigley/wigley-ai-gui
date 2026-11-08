@@ -96,7 +96,8 @@ function fakeChannel(schema: UserConfigSchema, keymap: UserKeymap | null) {
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
 // named, `handed`: each scope set and each focus target handed over, in
-// order, `logged`: each line logged, and `picked`: each `sectionPicked`.
+// order, `logged`: each line logged, and `picked`: each `sectionPicked`
+// after the rows take the keys.
 async function shownView(schema = SCHEMA, keymap: UserKeymap | null = null) {
   const { channel, written, writtenKeymaps } = fakeChannel(schema, keymap);
   const overlay = asFake(document.createElement('div'));
@@ -151,6 +152,7 @@ async function shownView(schema = SCHEMA, keymap: UserKeymap | null = null) {
     return target.move(direction);
   };
   move('right');
+  picked.mockClear();
   return {
     view,
     overlay,
@@ -204,7 +206,7 @@ describe('createSettingsView', () => {
   ] as const)(
     'focusTarget_MovesBetweenSectionsAndRows: $from $direction',
     async ({ from, direction, after, moved }) => {
-      const { view, handed, move } = await shownView();
+      const { view, handed, picked, move } = await shownView();
       if (from === 'sections') {
         view.focusSideBar();
       }
@@ -217,6 +219,7 @@ describe('createSettingsView', () => {
       expect(handed.slice(handedBefore).map((each) => typeof each)).toEqual(
         moved ? ['string', 'object'] : [],
       );
+      expect(picked).toHaveBeenCalledTimes(moved ? 1 : 0);
     },
   );
 
@@ -241,7 +244,7 @@ describe('createSettingsView', () => {
   );
 
   it('focusSideBarThenFocusMain_MovesAndLogsOnce', async () => {
-    const { view, handed, logged } = await shownView();
+    const { view, handed, logged, picked } = await shownView();
     const handedBefore = handed.length;
     const loggedBefore = logged.length;
 
@@ -249,6 +252,7 @@ describe('createSettingsView', () => {
     view.focusSideBar();
     view.focusMain();
 
+    expect(picked).toHaveBeenCalledTimes(1);
     expect(
       logged.slice(loggedBefore).filter((line) => line.endsWith(' focused')),
     ).toEqual(['sections focused', 'rows focused']);
