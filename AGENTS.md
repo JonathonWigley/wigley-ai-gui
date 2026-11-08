@@ -237,8 +237,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/chat-bar/design.md`
   auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
                  registers the send gate that compacts a cold-cache session before a message when its context is above
-                 the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction);
-                 `docs/features/auto-compact/design.md`
+                 the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction; reads
+                 `workflow.flows` and, through chat's `compact`, compacts a workflow session once per wait when its main
+                 turn ends while its subagents run and its context is above the `agentWaitMinTokens` setting, the
+                 rule in `main/agent-wait.ts`); `docs/features/auto-compact/design.md`
   session-log/   manifest.ts and main/ only (hears chat's and sessions' lifecycle events, appends each to
                  `session-events.jsonl` in its plugin data, registers the Recently closed resume section through chat's
                  `addResumeSection`, hands its self-test script); `docs/features/session-log/design.md`
@@ -279,7 +281,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual and workflow, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the placement check over the core's anchors), layouts/
