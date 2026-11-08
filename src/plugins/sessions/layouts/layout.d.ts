@@ -11,7 +11,9 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // plugin adds or removes a bar part. The app fills the side bar's `rows` with the two `section`s, Favorites then Recent,
 // a `section`'s `groups` with one `group` per project, a `group`'s `rows` with that project's `row`s, and each tab bar's
 // `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
-// row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. A part whose `rows`, `groups`,
+// row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. The side bar's rows are the
+// Sessions list, which holds the keys in scope `sessions.sidebar` once Alt+h moves past the leftmost pane; the row
+// under its cursor ends in the cursor prompt, through its kit's `cursorPrompt`. A part whose `rows`, `groups`,
 // `header` or `strip` is not a child of its `element` is drawn by `default` instead.
 //
 // Chat panes. Sessions mode splits into panes, each showing one session. `pane` draws each pane's frame, again
@@ -23,6 +25,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - the click on each row (activate its session) and each tab (select it), set on the element the part returns with
 //   `ui-row--action` and a mousedown that takes no focus, and dropped while that element is `is-disabled`;
 // - `is-selected` and `aria-current="true"` on the selected row, `is-active` and `aria-current` on the active tab;
+// - `is-cursor` on the list cursor's row while the Sessions list holds the keys (scope `sessions.sidebar`);
 // - the `title` tooltip on each row (`title · label · status`, each part only when present) and each tab (`title`),
 //   and each tab's `aria-label` (`title`), so a tab that draws only its icon keeps its accessible name;
 // - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides
@@ -36,8 +39,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - `has-favorites` on the side bar's `rows` while Favorites holds a group, and `is-reordering` there while a group is
 //   dragged.
 // The tab bodies, the sheet that holds them and the tab elements other plugins add stay the app's.
-// Every key prompt here has no scope, so it shows in every scope; a layout that leaves a kit prompt out leaves that
-// key unprompted.
+// Every key prompt here has no scope, so it shows in every scope, except the row's cursor prompt, whose keys fire in
+// `sessions.sidebar`; a layout that leaves a kit prompt out leaves that key unprompted.
 //
 // Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
 // `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
@@ -49,7 +52,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
 // and draws a needs you label for `marked` only while no activity is set; `status` is the row's status text, null for none, which `default` shows only in the tooltip, and the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
-// the focused one.
+// the focused one; `isPrompted` is true on the list cursor's row, which ends in the cursor prompt: the selected row while
+// the list does not hold the keys.
 export interface SessionRowInput {
   sessionId: string;
   title: string | null;
@@ -63,6 +67,7 @@ export interface SessionRowInput {
   } | null;
   status: string | null;
   onScreen: boolean;
+  isPrompted: boolean;
 }
 
 // One side bar section. Both sections always draw. `label` is its name (`Favorites`, `Recent`); `dropHint` says what
@@ -166,6 +171,12 @@ export interface RowKit extends SessionsKit {
   // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`. The
   // holder keeps its parts on one line under every layout, and each part keeps its content's width.
   contributedParts(parent: HTMLElement): HTMLElement;
+  // On a prompted row: places the app's cursor prompt `span.session-row-actions` (`s favorite  r rename  d close`, with
+  // `K up  J down` after the favorite key on a favorite project's row, the favorite key then reading `unfavorite`)
+  // and returns it; its keys fire in `sessions.sidebar` and hide, keeping their space, in every other scope. On any
+  // other row: places nothing and returns null. A prompted row that leaves it out gets it appended at its element's
+  // end. A second call on a prompted row throws `cursorPrompt placed twice`, so the row draws with `default`.
+  cursorPrompt(parent: HTMLElement): HTMLElement | null;
 }
 
 export interface SideBarKit extends SessionsKit {

@@ -1,3 +1,4 @@
+import type { OuterPanes } from '../contracts/panes';
 import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
@@ -196,6 +197,16 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   readonly anchors: readonly HarnessAnchor[];
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
+  // The live mode added under qualified id `id`; throws when none is live.
+  mode(id: string): Mode;
+  // The qualified id of each mode whose handle's `picked` ran, in order.
+  readonly picks: readonly string[];
+  // Sets what every mode handle's `sideBarShown` reads; false until set.
+  setSideBarShown(isShown: boolean): void;
+  // The base scope `keys.setScope` set last, qualified; `idle` at the start.
+  scope(): string;
+  // The outer panes `panes.setOuterPanes` set last, null for none.
+  outerPanes(): OuterPanes | null;
 }
 
 // `services` replaces the named default services, and a replaced service counts
@@ -987,10 +998,12 @@ function newPageRecord(
   };
 }
 
-// A mode the fake registry holds: its qualified id and the calls it hears.
+// A mode the fake registry holds: its qualified id, the calls it hears, and
+// the mode a part added, null for the harness's own first mode.
 interface FakeLiveMode {
   id: string;
   mode: Pick<Mode, 'shown' | 'hidden'>;
+  added: Mode | null;
 }
 
 // What every page part of one harness shares: the page core's single slots.
@@ -1003,6 +1016,12 @@ interface PageWorld extends HarnessWorld {
   // The live modes in add order, and the shown one.
   liveModes: FakeLiveMode[];
   shownMode: FakeLiveMode | null;
+  // The qualified id of each mode whose handle's `picked` ran, in order, and
+  // what every handle's `sideBarShown` reads.
+  picks: string[];
+  isSideBarShown: boolean;
+  // The outer panes `panes.setOuterPanes` set last.
+  outerPanes: OuterPanes | null;
   fences: FenceContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
@@ -1022,6 +1041,7 @@ function createPageWorld(
     ? {
         id: 'part-harness.first-mode',
         mode: { shown() {}, hidden() {} },
+        added: null,
       }
     : null;
   const world: PageWorld = {
@@ -1040,6 +1060,9 @@ function createPageWorld(
     transparency: null,
     liveModes: firstMode === null ? [] : [firstMode],
     shownMode: firstMode,
+    picks: [],
+    isSideBarShown: false,
+    outerPanes: null,
     fences: [],
     anchors: [],
     where: 'page',
@@ -1104,7 +1127,7 @@ function fakeModes(
       if (liveModes.some((live) => live.id === id)) {
         throw new Error(`Mode "${id}" is added twice`);
       }
-      const entry: FakeLiveMode = { id, mode };
+      const entry: FakeLiveMode = { id, mode, added: mode };
       liveModes.push(entry);
       const isDisposed = () => !liveModes.includes(entry);
       const handle: ModeHandle = common.register({
@@ -1122,8 +1145,10 @@ function fakeModes(
             throw new Error(`Mode "${id}" has no side bar`);
           }
         },
-        picked() {},
-        sideBarShown: () => false,
+        picked() {
+          world.picks.push(id);
+        },
+        sideBarShown: () => world.isSideBarShown,
         dispose() {
           if (isDisposed()) {
             return;
@@ -1312,7 +1337,9 @@ function fakePageApi(
     panes: {
       setResizeTarget() {},
       setFocusTarget() {},
-      setOuterPanes() {},
+      setOuterPanes(outer) {
+        world.outerPanes = outer;
+      },
     },
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
     settings: () => record.settings,
@@ -1565,6 +1592,19 @@ export function startPagePart<M extends PluginManifest>(
       world.whereListeners.tell(where);
     },
     hintsShown: () => world.hintsShown,
+    mode(id) {
+      const live = world.liveModes.find((entry) => entry.id === id)?.added;
+      if (live === undefined || live === null) {
+        throw new Error(`part harness: no live mode ${id}`);
+      }
+      return live;
+    },
+    picks: world.picks,
+    setSideBarShown(isShown) {
+      world.isSideBarShown = isShown;
+    },
+    scope: () => world.scope,
+    outerPanes: () => world.outerPanes,
     send(message, data) {
       record.channelListeners.get(message)?.tell(data);
     },

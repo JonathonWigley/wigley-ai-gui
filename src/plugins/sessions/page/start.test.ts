@@ -8,7 +8,11 @@ import type {
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  installFakeDom,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   dataEmitted,
   noCounts,
@@ -372,6 +376,140 @@ describe('sessions page part', () => {
     await settle();
 
     expect(setup.active.get()).toBe('s1');
+    await setup.harness.stop();
+  });
+});
+
+describe('the sessions list in the page part', () => {
+  beforeEach(() => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const MODE_ID = 'sessions.sessions';
+
+  // The part with `rowIds` applied and `selected` shown, its side bar shown.
+  async function startWithList(
+    rowIds: string[],
+    selected: string | null,
+    uiState?: UiState,
+  ) {
+    const setup = await startApplied(rowIds, selected, uiState);
+    setup.harness.setSideBarShown(true);
+    const mode = setup.harness.mode(MODE_ID);
+    const { commands } = setup.harness.started();
+    const linesFrom = (start: number) =>
+      setup.harness.logs.slice(start).map((line) => line.message);
+    return { ...setup, mode, commands, linesFrom };
+  }
+
+  it('listShow_KeepsTheListScope_WhileTheVisibleTabChanges', async () => {
+    const setup = await startWithList(['s1', 's2'], 's1');
+    setup.addTab('s1');
+    const shownS2 = setup.addTab('s2');
+    setup.mode.focusSideBar?.();
+    setup.commands.listDown({ arg: undefined });
+
+    setup.commands.listShow({ arg: undefined });
+
+    expect(setup.active.get()).toBe('s2');
+    expect(shownS2).not.toHaveBeenCalled();
+    expect(setup.harness.scope()).toBe('sessions.sidebar');
+    await setup.harness.stop();
+  });
+
+  it('focusMain_SetsIdle_WhenThePaneShowsNoTab', async () => {
+    const setup = await startWithList(['s1'], 's1');
+    setup.mode.focusSideBar?.();
+    const start = setup.harness.logs.length;
+
+    setup.mode.focusMain();
+
+    expect(setup.harness.scope()).toBe('sessions.idle');
+    expect(setup.harness.picks).toEqual([MODE_ID]);
+    expect(setup.linesFrom(start)).toContain('list left');
+    await setup.harness.stop();
+  });
+
+  it('paneKeyFocused_ReshowsTheTab', async () => {
+    const setup = await startWithList(['s1', 's2'], 's1', savedSplit('a'));
+    setup.addTab('s1');
+    const shownS2 = setup.addTab('s2');
+    const start = setup.harness.logs.length;
+
+    setup.harness.outerPanes()?.focus.move('right');
+
+    // Once as the visible tab changes, once more as the keys reach the pane.
+    expect(shownS2).toHaveBeenCalledTimes(2);
+    expect(setup.linesFrom(start)).toContain('keys to pane label s2');
+    expect(
+      setup.harness.commandRuns.some((run) => run.id === 'chat.focusBox'),
+    ).toBe(false);
+    await setup.harness.stop();
+  });
+
+  it.each<{
+    case: string;
+    act: (setup: Awaited<ReturnType<typeof startWithList>>) => void;
+    lines: string[];
+    scope: string;
+  }>([
+    {
+      case: 'a press in the chat panes',
+      act: ({ mode }) => asFake(mode.element).fire('pointerdown'),
+      lines: ['list left'],
+      scope: 'sessions.idle',
+    },
+    {
+      case: 'a focus in the chat panes',
+      act: ({ mode }) => asFake(mode.element).fire('focusin'),
+      lines: ['list left'],
+      scope: 'sessions.idle',
+    },
+    {
+      case: 'the side bar hiding',
+      act: ({ mode }) => mode.sideBarHidden?.(),
+      lines: ['list left', 'keys to pane label s1'],
+      scope: 'sessions.idle',
+    },
+    {
+      case: 'the mode hiding, then showing again',
+      act: ({ mode }) => {
+        mode.hidden();
+        mode.shown();
+      },
+      lines: [],
+      scope: 'sessions.idle',
+    },
+  ])('listTurn_EndsWithoutPicked: $case', async ({ act, lines, scope }) => {
+    const setup = await startWithList(['s1'], 's1');
+    setup.mode.focusSideBar?.();
+    const start = setup.harness.logs.length;
+
+    act(setup);
+
+    const shown = setup
+      .linesFrom(start)
+      .filter((line) => line === 'list left' || line.startsWith('keys to'));
+    expect(shown).toEqual(lines);
+    expect(setup.harness.scope()).toBe(scope);
+    expect(setup.harness.picks).toEqual([]);
+    await setup.harness.stop();
+  });
+
+  it('listKey_DoesNothing_WhileTheSideBarIsHidden', async () => {
+    const setup = await startWithList(['s1', 's2'], 's1');
+    setup.mode.focusSideBar?.();
+    setup.harness.setSideBarShown(false);
+    const start = setup.harness.logs.length;
+
+    setup.commands.listDown({ arg: undefined });
+
+    expect(setup.linesFrom(start)).toEqual([
+      'list keys ignored: the side bar is hidden',
+    ]);
     await setup.harness.stop();
   });
 });

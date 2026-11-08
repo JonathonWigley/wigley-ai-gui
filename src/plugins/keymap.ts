@@ -206,6 +206,7 @@ export const defaultKeymap = {
     ...(
       [
         'sessions.idle',
+        'sessions.sidebar',
         'chat.chat',
         'agent-strip.strip',
         'docs.tree',
@@ -248,6 +249,19 @@ export const defaultKeymap = {
     { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
     { keys: '<Leader>pk', scope: 'any', command: 'sessions.moveProjectUp' },
     { keys: '<Leader>pj', scope: 'any', command: 'sessions.moveProjectDown' },
+    // The Sessions list, past the leftmost pane: its cursor's row keys.
+    { keys: 'j', scope: 'sessions.sidebar', command: 'sessions.listDown' },
+    { keys: 'k', scope: 'sessions.sidebar', command: 'sessions.listUp' },
+    { keys: 'gg', scope: 'sessions.sidebar', command: 'sessions.listTop' },
+    { keys: 'G', scope: 'sessions.sidebar', command: 'sessions.listBottom' },
+    { keys: '<CR>', scope: 'sessions.sidebar', command: 'sessions.listOpen' },
+    { keys: 'l', scope: 'sessions.sidebar', command: 'sessions.listShow' },
+    { keys: '<Esc>', scope: 'sessions.sidebar', command: 'sessions.listBack' },
+    { keys: 's', scope: 'sessions.sidebar', command: 'sessions.listFavorite' },
+    { keys: 'K', scope: 'sessions.sidebar', command: 'sessions.listMoveUp' },
+    { keys: 'J', scope: 'sessions.sidebar', command: 'sessions.listMoveDown' },
+    { keys: 'r', scope: 'sessions.sidebar', command: 'sessions.listRename' },
+    { keys: 'd', scope: 'sessions.sidebar', command: 'sessions.listClose' },
 
     // ── Workflow ───────────────────────────────────────────────────────────
     { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },

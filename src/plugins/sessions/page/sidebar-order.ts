@@ -75,6 +75,50 @@ export function drawnRows<R extends OrderedRow>(
   );
 }
 
+// A move of the side bar list's cursor: one row down or up, or to an end.
+export type CursorMove = 1 | -1 | 'first' | 'last';
+
+// The session id the cursor lands on after `move` over `order`, the drawn row
+// ids: a step clamps at the ends; a cursor that is null or not in `order`
+// lands on the first row; null for no rows.
+export function movedCursor(
+  order: readonly string[],
+  cursorId: string | null,
+  move: CursorMove,
+): string | null {
+  if (order.length === 0) {
+    return null;
+  }
+  const index = cursorId === null ? -1 : order.indexOf(cursorId);
+  if (index === -1 || move === 'first') {
+    return order[0] ?? null;
+  }
+  if (move === 'last') {
+    return order.at(-1) ?? null;
+  }
+  const next = Math.min(Math.max(index + move, 0), order.length - 1);
+  return order[next] ?? null;
+}
+
+// The cursor once the drawn rows change from `before` to `after`: it stays on
+// its row while that row is drawn; a row that left gives the row now at the
+// index it held, clamped to the last row; a cursor that is null or was not in
+// `before` takes the first row; null for no rows.
+export function cursorAfterDraw(
+  before: readonly string[],
+  after: readonly string[],
+  cursorId: string | null,
+): string | null {
+  if (cursorId !== null && after.includes(cursorId)) {
+    return cursorId;
+  }
+  const index = cursorId === null ? -1 : before.indexOf(cursorId);
+  if (index === -1) {
+    return after[0] ?? null;
+  }
+  return after[Math.min(index, after.length - 1)] ?? null;
+}
+
 function newestFirst(left: number, right: number): number {
   // -Infinity minus itself is NaN.
   return left === right ? 0 : right - left;

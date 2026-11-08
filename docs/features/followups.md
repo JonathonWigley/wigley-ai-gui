@@ -189,10 +189,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   released tab leaves the document before its `click`: `pointerup` lands on the tab, `mouseup` on the `NAV`, and no
   `click` fires. A second click selects it. The bar's other controls (Split right, Close pane) work on the first click.
   Keep the tab elements across draws. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
-- **Pane focus keys leave the keyboard in the old pane** — *agent-ready*: `Alt+h` from a focused box moves pane focus
-  while `activeElement` stays in the old pane's box (seen: active in slot 1, focused slot 0). A click already moves it
-  (`panePressed`, `src/plugins/sessions/page/start.ts`); give the keys the same treatment. Source session: Claude Code
-  368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
 - **A press on an older selection in an unfocused pane leaves the keys nowhere** — *agent-ready*: `pressedFocusAction`
   (`src/plugins/sessions/page/pane-sessions.ts`) reads the selection at the release, so it cannot tell one this press
   began from an older one left in that pane. A press on the selected text keeps nothing (Chromium collapses it at

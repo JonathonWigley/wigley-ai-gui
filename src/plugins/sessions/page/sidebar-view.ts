@@ -1,4 +1,6 @@
 import type { Timers } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
+import type { KeyHints } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import {
@@ -6,12 +8,14 @@ import {
   type ReorderDrop,
 } from '../../../shared/page/ui/drag-reorder';
 import { rowAction } from '../../../shared/page/ui/row';
+import { qualify } from '../../../shared/plugin-manifests';
 import type { RowActivity, SessionRow, SessionsState } from '../contract';
 import type {
   SectionInput,
   SectionPane,
   SessionsPart,
 } from '../layouts/layout';
+import { sessionsManifest } from '../manifest';
 import type {
   DrawnGroup,
   DrawnSideBar,
@@ -43,6 +47,13 @@ export interface SidebarEvents {
   dropped(drop: ReorderDrop, shownFavorites: readonly string[]): void;
 }
 
+// The side bar list's cursor: the row it sits on, null for none, and whether
+// the list holds the keys, which rings that row.
+export interface SidebarCursor {
+  sessionId: string | null;
+  hasKeys: boolean;
+}
+
 export interface SidebarView {
   // The side bar's host, which the shell holds; it lays out the drawn pane as
   // its own child.
@@ -50,18 +61,61 @@ export interface SidebarView {
   // Draws the side bar pane again with the parts' current layouts, dropping
   // its rows and ending any drag; `render` then draws them.
   redrawPane(): void;
-  // Disposes the rows and the pane and ends any drag; a held draw never runs.
+  // Disposes the rows, the pane and the cursor prompt's anchors and ends any
+  // drag; a held draw never runs.
   dispose(): void;
   // `sections` are the rows to draw, in order; `rowStateOf` reads what a
   // session's row draws; `skip` holds the sessions a session step passes over,
-  // which decide whether its prompts show. While a drag runs the last call
-  // waits, and draws once the drag ends.
+  // which decide whether its prompts show; `cursor`'s row ends in the cursor
+  // prompt and, while the list holds the keys, carries `is-cursor` and scrolls
+  // into view. While a drag runs the last call waits, and draws once the drag
+  // ends.
   render(
     state: SessionsState | null,
     sections: SidebarSections<SessionRow>,
     rowStateOf: (row: SessionRow) => RowState,
     skip: ReadonlySet<string>,
+    cursor: SidebarCursor,
   ): void;
+  // Focuses the drawn pane's rows box, which the list's keys act in.
+  focus(): void;
+}
+
+type SessionsCommand = keyof typeof sessionsManifest.commands;
+
+// The cursor prompt on a favorite project's row, and on any other row.
+const FAVORITE_ROW_ACTIONS: readonly [SessionsCommand, string][] = [
+  ['listFavorite', 'unfavorite'],
+  ['listMoveUp', 'up'],
+  ['listMoveDown', 'down'],
+  ['listRename', 'rename'],
+  ['listClose', 'close'],
+];
+const OTHER_ROW_ACTIONS: readonly [SessionsCommand, string][] = [
+  ['listFavorite', 'favorite'],
+  ['listRename', 'rename'],
+  ['listClose', 'close'],
+];
+
+// The cursor prompt `span.session-row-actions`, its keys firing in the
+// `sessions.sidebar` scope; `anchors` receives the anchors it names.
+function rowActionsElement(
+  rowActions: readonly [SessionsCommand, string][],
+  anchors: Disposable[],
+  anchor: KeyHints['anchor'],
+): HTMLElement {
+  const actions = element('span', 'session-row-actions');
+  for (const [command, label] of rowActions) {
+    const node = element('span');
+    anchors.push(
+      anchor(node, qualify(sessionsManifest.id, command), {
+        scope: qualify(sessionsManifest.id, 'sidebar'),
+        label,
+      }),
+    );
+    actions.append(node);
+  }
+  return actions;
 }
 
 type SectionKind = SectionInput['kind'];
@@ -79,21 +133,38 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // hidden while no session a step reaches is there to move to) over the
 // Favorites and Recent `section`s, each holding a `group` per project over its
 // `row`s. The rows box carries `has-favorites` while Favorites holds a group,
-// and `is-reordering` while a group header drags. The view keeps each row's
-// click, which activates its session, its tooltip, the selected row's mark,
-// each star's click and each header's tooltip and drag.
+// and `is-reordering` while a group header drags; it takes focus by script
+// alone (`tabIndex` -1) while the list holds the keys. The view keeps each
+// row's click, which activates its session, its tooltip, the selected row's
+// mark, the cursor's ring and prompt (`s favorite  r rename  d close`, with
+// `K up  J down` on a favorite's row, named with `anchor`), each star's click
+// and each header's tooltip and drag.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
   timers: Timers,
+  anchor: KeyHints['anchor'],
 ): SidebarView {
   const host = element('div', 'session-side-host');
   host.style.display = 'contents';
+  // The anchors the cursor prompts name, for the view's life.
+  const promptAnchors: Disposable[] = [];
+  const favoritePrompt = rowActionsElement(
+    FAVORITE_ROW_ACTIONS,
+    promptAnchors,
+    anchor,
+  );
+  const otherPrompt = rowActionsElement(
+    OTHER_ROW_ACTIONS,
+    promptAnchors,
+    anchor,
+  );
   // The prompt stays hidden until `render` hands it a state.
   const drawPane = (): DrawnPart<DrawnSideBar> => {
     host.replaceChildren();
     const drawn = parts.sideBar(host);
     drawn.built.sessionEdge?.classList.add('is-no-target');
+    drawn.built.rows.tabIndex = -1;
     return drawn;
   };
   let pane = drawPane();
@@ -143,6 +214,7 @@ export function mountSidebarView(
     group: SidebarGroup<SessionRow>,
     selectedSessionId: string | null,
     rowStateOf: (row: SessionRow) => RowState,
+    cursor: SidebarCursor,
   ) => {
     const { project, isFavorite } = group;
     const drawn = parts.group(parent, {
@@ -157,16 +229,24 @@ export function mountSidebarView(
     );
     dragReorder.item(drawn.built.element, drawn.built.header, project, kind);
     for (const session of group.rows) {
-      rows.push(
-        drawRow(
-          parts,
-          drawn.built.rows,
-          session,
-          session.sessionId === selectedSessionId,
-          rowStateOf(session),
-          events.activate,
-        ),
+      const isCursor = session.sessionId === cursor.sessionId;
+      const row = drawRow(
+        parts,
+        drawn.built.rows,
+        session,
+        session.sessionId === selectedSessionId,
+        rowStateOf(session),
+        events.activate,
+        {
+          isPrompted: isCursor,
+          prompt: isFavorite ? favoritePrompt : otherPrompt,
+        },
       );
+      row.built.element.classList.toggle(
+        'is-cursor',
+        isCursor && cursor.hasKeys,
+      );
+      rows.push(row);
     }
   };
 
@@ -175,6 +255,7 @@ export function mountSidebarView(
     sectionGroups: readonly SidebarGroup<SessionRow>[],
     selectedSessionId: string | null,
     rowStateOf: (row: SessionRow) => RowState,
+    cursor: SidebarCursor,
   ) => {
     const drawn = parts.section(pane.built.rows, {
       kind,
@@ -186,7 +267,14 @@ export function mountSidebarView(
       ordered: kind === 'favorites',
     });
     for (const group of sectionGroups) {
-      drawGroup(drawn.built.groups, kind, group, selectedSessionId, rowStateOf);
+      drawGroup(
+        drawn.built.groups,
+        kind,
+        group,
+        selectedSessionId,
+        rowStateOf,
+        cursor,
+      );
     }
   };
 
@@ -202,8 +290,12 @@ export function mountSidebarView(
       heldDraw = null;
       disposeRows();
       pane.dispose();
+      for (const promptAnchor of promptAnchors) {
+        promptAnchor.dispose();
+      }
     },
-    render(state, nextSections, rowStateOf, skip) {
+    focus: () => pane.built.rows.focus(),
+    render(state, nextSections, rowStateOf, skip, cursor) {
       const draw = () => {
         const selectedSessionId = state?.selectedSessionId ?? null;
         pane.built.sessionEdge?.classList.toggle(
@@ -224,13 +316,20 @@ export function mountSidebarView(
           nextSections.favorites,
           selectedSessionId,
           rowStateOf,
+          cursor,
         );
         drawSection(
           'recent',
           nextSections.recent,
           selectedSessionId,
           rowStateOf,
+          cursor,
         );
+        if (cursor.hasKeys) {
+          rows
+            .find((row) => row.built.element.classList.contains('is-cursor'))
+            ?.built.element.scrollIntoView({ block: 'nearest' });
+        }
       };
       if (dragReorder.isDragging()) {
         heldDraw = draw;
@@ -248,24 +347,30 @@ function drawRow(
   isSelected: boolean,
   { title, activity, status, onScreen }: RowState,
   activate: (sessionId: string) => void,
+  { isPrompted, prompt }: { isPrompted: boolean; prompt: HTMLElement },
 ): DrawnPart<SessionsPart> {
-  const drawn = parts.row(list, {
-    sessionId: session.sessionId,
-    title,
-    label: session.label,
-    harness: harnessText(session.harness),
-    marked: session.marked && !isSelected,
-    activity:
-      activity === null
-        ? null
-        : {
-            word: activity.word,
-            tone: activity.tone,
-            emphasis: activity.emphasis ?? null,
-          },
-    status,
-    onScreen,
-  });
+  const drawn = parts.row(
+    list,
+    {
+      sessionId: session.sessionId,
+      title,
+      label: session.label,
+      harness: harnessText(session.harness),
+      marked: session.marked && !isSelected,
+      activity:
+        activity === null
+          ? null
+          : {
+              word: activity.word,
+              tone: activity.tone,
+              emphasis: activity.emphasis ?? null,
+            },
+      status,
+      onScreen,
+      isPrompted,
+    },
+    prompt,
+  );
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));
   entry.title = [title, session.label, activity?.word ?? null, status]

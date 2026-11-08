@@ -10,7 +10,8 @@
 // label: the workflow chip's tag in the footer says it), a status edge for an
 // activity with an emphasis, and its on-screen mark,
 // over a footer line that never wraps, holding other plugins' row parts
-// (`contributedParts`); its status shows only in the row's tooltip,
+// (`contributedParts`), then, on the list cursor's row, the cursor prompt on a
+// line of its own (`cursorPrompt`); its status shows only in the row's tooltip,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the
@@ -104,6 +105,9 @@ const layout = {
     }
     const foot = kit.el(element, 'div', 'session-row-foot');
     kit.contributedParts(foot);
+    if (input.isPrompted) {
+      kit.cursorPrompt(element);
+    }
     return { element };
   },
 

@@ -132,6 +132,7 @@ function viewOf(tree: PaneTree) {
   const changed: PaneTree[] = [];
   const focused: string[] = [];
   const pressFocused: string[] = [];
+  const keyFocused: string[] = [];
   const view = createPaneTreeView({
     initialId: tree.focusedId,
     anchor: () => ({ dispose: () => undefined }),
@@ -139,11 +140,12 @@ function viewOf(tree: PaneTree) {
     changed: (next) => changed.push(next),
     focused: (id) => focused.push(id),
     pressFocused: (id) => pressFocused.push(id),
+    keyFocused: (id) => keyFocused.push(id),
     leaving: () => undefined,
   });
   view.restore(tree);
   asFake(view.element).isPageRoot = true;
-  return { view, changed, focused, pressFocused };
+  return { view, changed, focused, pressFocused, keyFocused };
 }
 
 function asPane(node: HTMLElement): PaneFakeElement {
@@ -556,34 +558,47 @@ describe('createPaneTreeView focused', () => {
     {
       name: 'a press and release on another pane',
       act: (view: PaneTreeView) => pressAndRelease(view.slot('b')),
-      expected: ['b'],
+      pressed: ['b'],
+      keyed: [],
     },
     {
       name: 'a press and release on the focused pane',
       act: (view: PaneTreeView) => pressAndRelease(view.slot('a')),
-      expected: [],
+      pressed: [],
+      keyed: [],
     },
     {
       name: 'focus on another pane by call',
       act: (view: PaneTreeView) => view.focus('b'),
-      expected: [],
+      pressed: [],
+      keyed: [],
     },
     {
       name: 'a focus move',
       act: (view: PaneTreeView) => view.outer.focus.move('right'),
-      expected: [],
+      pressed: [],
+      keyed: ['b'],
+    },
+    {
+      name: 'a key move at the edge',
+      act: (view: PaneTreeView) => view.outer.focus.move('left'),
+      pressed: [],
+      keyed: [],
     },
   ])(
-    'reports a release only when it moved focus: $name',
-    ({ act, expected }) => {
-      const { view, pressFocused } = viewOf({
+    'reports a release or a key move only when it moved focus: $name',
+    ({ act, pressed, keyed }) => {
+      const { view, pressFocused, keyFocused } = viewOf({
         root: row(0.5, leaf('a'), leaf('b')),
         focusedId: 'a',
       });
 
       act(view);
 
-      expect(pressFocused).toEqual(expected);
+      expect({ pressFocused, keyFocused }).toEqual({
+        pressFocused: pressed,
+        keyFocused: keyed,
+      });
     },
   );
 });

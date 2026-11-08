@@ -62,6 +62,7 @@ import { createProjectFavorites } from './project-favorites';
 import { createRenameDialog } from './rename-dialog';
 import { createSessionRecency } from './session-recency';
 import { mountSessionsView, type SessionsView } from './sessions-view';
+import type { CursorMove } from './sidebar-order';
 import {
   isRoundToast,
   isSameVisibleTab,
@@ -199,7 +200,16 @@ function createExports(
 // `titleMaxLength` setting, drawn again when it changes. The rows group by
 // project under Favorites and Recent, from the favorites and recency stamps in
 // uiState; the session step keys follow that drawn order, and the project keys
-// change the focused pane's session's project's favorite.
+// change the focused pane's session's project's favorite. The side bar's rows
+// are the Sessions list, reached by Alt+h past the leftmost pane
+// (`focusSideBar`) or by opening the side bar over a narrow window: it holds
+// the `sidebar` scope while its cursor walks the rows, and while it does no
+// visible tab takes the scope. Its row keys act on the cursor's row; Enter,
+// Esc and Alt+l (`focusMain`) end its turn, as do the side bar hiding, the
+// mode hiding and a press or a focus in the chat panes, each setting main's
+// scope again. A pane key move, like a key leaving the list, hands the keys
+// to the focused pane's transcript in normal mode; a release into a pane
+// focuses its Chat box.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -251,8 +261,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Tells the visible tab, when it changed, that it shows; with none
     // visible while the mode shows, sets the `idle` scope. `isShownAgain`
     // tells an unchanged visible tab again, after a pane move or a layout
-    // redraw took keyboard focus from its element.
+    // redraw took keyboard focus from its element. Does nothing while the
+    // Sessions list holds the keys, so no tab takes the scope from it.
     const checkVisible = (isShownAgain = false) => {
+      if (view.list.holdsKeys()) {
+        return;
+      }
       const sessionId = view.panes.focusedSessionId();
       const tab =
         sessionId === null ? null : view.tabs.selectedTabOf(sessionId);
@@ -387,6 +401,27 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       return sessionId === null ? 'empty' : labelOf(sessionId);
     };
 
+    // Sets main's scope again, whatever `checkVisible` last saw: the visible
+    // tab's `shown`, or `idle` when the focused pane shows no tab.
+    const setMainScope = () => {
+      lastVisible = null;
+      checkVisible(true);
+    };
+
+    // Hands the keys to the focused pane as a key move does: the focused
+    // element blurs and the visible tab is told it shows again, so the keys
+    // land on its transcript in normal mode, or the pane's `idle`.
+    const keysToFocusedPane = () => {
+      log(
+        `keys to pane ${paneLabel(view.panes.sessions(), view.panes.focusedPaneId())}`,
+      );
+      blurFocusedElement();
+      setMainScope();
+    };
+
+    const logListCursor = (row: SessionRow | null) =>
+      log(row === null ? 'no session rows' : `list cursor on ${row.label}`);
+
     const rowParts = createPartStore<SessionPart>();
     const barParts = createPartStore<SessionPart>();
     // A row click closes the side bar's overlay; `activate` reads `mode` only
@@ -420,6 +455,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           tellMain(sessionId);
         }
       },
+      paneKeyFocused: () => keysToFocusedPane(),
+      cursorMoved: (row) => logListCursor(row),
       // The keys follow a release into its pane, as `pressedFocusAction` says.
       panePressed(pane) {
         const textSelection = window.getSelection();
@@ -478,6 +515,27 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       () => (isModeShown ? view.panes.focusedSessionId() : null),
     );
 
+    // Gives the Sessions list the keys, the cursor on the selected row.
+    const focusList = () => {
+      api.keys.setScope('sidebar');
+      const row = view.list.enter();
+      log(
+        row === null ? 'list focused, no rows' : `list focused on ${row.label}`,
+      );
+    };
+
+    // Ends the list's turn and gives main's scope and keys back; `picked`
+    // closes a narrow window's side bar overlay, so the keys never sit in a
+    // pane under it. `leave` runs first, so the `sideBarHidden` it may cause
+    // finds the list already left.
+    const focusMain = () => {
+      if (view.list.leave()) {
+        log('list left');
+        mode.picked();
+      }
+      keysToFocusedPane();
+    };
+
     // The first mode's `shown` runs inside `add`, before `mode` is assigned.
     const mode = api.modes.add({
       id: 'sessions',
@@ -493,19 +551,31 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       hidden() {
         isModeShown = false;
+        view.list.leave();
         api.panes.setOuterPanes(null);
         checkVisible();
       },
-      // The idle pane holds no box, so the DOM focus leaves the area left.
-      focusMain() {
-        if (lastVisible === 'none') {
-          api.keys.setScope('idle');
-          blurFocusedElement();
-        } else {
-          checkVisible(true);
+      focusSideBar: focusList,
+      focusMain,
+      sideBarOpenedOver: focusList,
+      sideBarHidden() {
+        if (view.list.leave()) {
+          log('list left');
+          keysToFocusedPane();
         }
       },
     });
+
+    // A press or a focus inside the chat panes ends the list's turn; the press
+    // or the focus places the DOM focus itself.
+    const endListByMain = () => {
+      if (view.list.leave()) {
+        log('list left');
+        setMainScope();
+      }
+    };
+    view.element.addEventListener('pointerdown', endListByMain, true);
+    view.element.addEventListener('focusin', endListByMain);
 
     // Lays out the first state's panes as `restorePlan` says.
     const restoreSavedPanes = (first: SessionsState) => {
@@ -860,6 +930,32 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       checkVisible(true);
     };
 
+    // Runs a list key while the side bar shows; a narrowing hides it without
+    // telling, so a key then logs and does nothing.
+    const listKey = (run: () => void) => () => {
+      if (!mode.sideBarShown()) {
+        log('list keys ignored: the side bar is hidden');
+        return;
+      }
+      run();
+    };
+
+    const moveListCursor = (move: CursorMove) =>
+      listKey(() => logListCursor(view.list.move(move)));
+
+    // Runs a list key on main's row under the cursor; a layout preview row is
+    // not main's.
+    const cursorRowKey = (run: (row: SessionRow) => void) =>
+      listKey(() => {
+        const sessionId = view.list.cursorSessionId();
+        const row = sessionId === null ? undefined : rowOf(sessionId);
+        if (row === undefined) {
+          log('no session under the cursor');
+          return;
+        }
+        run(row);
+      });
+
     return {
       commands: {
         showMode,
@@ -897,6 +993,25 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         favoriteProject: projectKey((project) => view.toggleFavorite(project)),
         moveProjectUp: projectKey((project) => view.moveFavorite(project, -1)),
         moveProjectDown: projectKey((project) => view.moveFavorite(project, 1)),
+        listDown: moveListCursor(1),
+        listUp: moveListCursor(-1),
+        listTop: moveListCursor('first'),
+        listBottom: moveListCursor('last'),
+        listOpen: cursorRowKey((row) => {
+          exports.activate(row.sessionId);
+          focusMain();
+        }),
+        listShow: cursorRowKey((row) => exports.activate(row.sessionId)),
+        listBack: focusMain,
+        listFavorite: cursorRowKey((row) => view.toggleFavorite(row.project)),
+        listMoveUp: cursorRowKey((row) => view.moveFavorite(row.project, -1)),
+        listMoveDown: cursorRowKey((row) => view.moveFavorite(row.project, 1)),
+        listRename: cursorRowKey((row) => renameDialog.open(row)),
+        listClose: cursorRowKey((row) => {
+          void exports
+            .closeSession(row.sessionId)
+            .then(() => view.list.refocus());
+        }),
       },
       exports: (consumer) =>
         sessionsPageView(exports, consumer, (listener) =>

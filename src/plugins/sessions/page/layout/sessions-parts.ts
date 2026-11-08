@@ -105,7 +105,14 @@ export interface SessionsParts {
   // Its element carries `is-empty` while `input.isEmpty`.
   section(parent: HTMLElement, input: SectionInput): DrawnPart<SectionPane>;
   group(parent: HTMLElement, input: GroupInput): DrawnPart<DrawnGroup>;
-  row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
+  // `cursorPrompt` is the view's own cursor prompt, which `kit.cursorPrompt`
+  // moves in on a prompted row; a prompted row whose layout leaves it out ends
+  // with it.
+  row(
+    parent: HTMLElement,
+    input: SessionRowInput,
+    cursorPrompt: HTMLElement,
+  ): DrawnPart<SessionsPart>;
   pane(parent: HTMLElement, input: PaneInput): DrawnPart<DrawnPanePart>;
   // `sessionId` is the session whose frame the bar tops.
   tabBar(parent: HTMLElement, sessionId: string): DrawnPart<DrawnTabBar>;
@@ -209,11 +216,14 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           favoriteToggle,
         };
       }),
-    row: (parent, input) =>
+    row: (parent, input, cursorPrompt) =>
       parts.draw('row', parent, (builder, into, rollback) => {
         let isPlaced = false;
+        const prompt = appSlot(cursorPrompt, 'cursorPrompt', rollback);
         const kit: RowKit = {
           ...sessionsKit(rollback),
+          cursorPrompt: (promptParent) =>
+            input.isPrompted ? prompt.place(promptParent) : null,
           contributedParts(partsParent) {
             if (isPlaced) {
               throw new Error('row placed contributed parts twice');
@@ -232,6 +242,9 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         const row = builder(into, input, kit);
         if (!isPlaced && deps.rowParts.parts().length > 0) {
           kit.contributedParts(requireElementIn(into, row.element, 'row'));
+        }
+        if (input.isPrompted) {
+          prompt.placeIfLeftOut(requireElementIn(into, row.element, 'row'));
         }
         return row;
       }),

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cursorAfterDraw,
+  type CursorMove,
   drawnRows,
+  movedCursor,
   type OrderedRow,
   type SidebarGroup,
   sidebarSections,
@@ -160,6 +163,53 @@ describe('sidebarSections', () => {
       expect(drawnRows(sections).map((row) => row.sessionId)).toEqual(
         expectedDrawn,
       );
+    },
+  );
+});
+
+describe('the list cursor', () => {
+  it.each<{
+    cursor: string | null;
+    order: string[];
+    move: CursorMove;
+    expected: string | null;
+  }>([
+    { cursor: 'b', order: ['a', 'b', 'c'], move: 1, expected: 'c' },
+    { cursor: 'c', order: ['a', 'b', 'c'], move: 1, expected: 'c' },
+    { cursor: 'a', order: ['a', 'b', 'c'], move: -1, expected: 'a' },
+    { cursor: 'b', order: ['a', 'b', 'c'], move: 'first', expected: 'a' },
+    { cursor: 'a', order: ['a', 'b', 'c'], move: 'last', expected: 'c' },
+    { cursor: null, order: ['a', 'b', 'c'], move: 1, expected: 'a' },
+    { cursor: 'x', order: ['a', 'b', 'c'], move: -1, expected: 'a' },
+    { cursor: 'a', order: [], move: 1, expected: null },
+  ])(
+    'movedCursor_StepsAndClampsInDrawnOrder: $cursor $move over $order',
+    ({ cursor, order, move, expected }) => {
+      expect(movedCursor(order, cursor, move)).toBe(expected);
+    },
+  );
+
+  it.each<{
+    cursor: string | null;
+    before: string[];
+    after: string[];
+    expected: string | null;
+  }>([
+    {
+      cursor: 'b',
+      before: ['a', 'b', 'c'],
+      after: ['c', 'b', 'a'],
+      expected: 'b',
+    },
+    { cursor: 'b', before: ['a', 'b', 'c'], after: ['a', 'c'], expected: 'c' },
+    { cursor: 'c', before: ['a', 'b', 'c'], after: ['a', 'b'], expected: 'b' },
+    { cursor: 'a', before: ['a', 'b'], after: [], expected: null },
+    { cursor: null, before: [], after: ['a', 'b'], expected: 'a' },
+    { cursor: 'x', before: ['a', 'b'], after: ['b', 'a'], expected: 'b' },
+  ])(
+    'cursorAfterDraw_KeepsOrReplacesTheCursorRow: $cursor, $before to $after',
+    ({ cursor, before, after, expected }) => {
+      expect(cursorAfterDraw(before, after, cursor)).toBe(expected);
     },
   );
 });

@@ -516,6 +516,100 @@ describe('sessions parts', () => {
     },
   );
 
+  it.each<{
+    case: string;
+    layout: Layout;
+    isPrompted: boolean;
+    expected: { drawnBy: string; promptAt: 'end' | 'inside' | 'none' };
+  }>([
+    {
+      case: 'the default row, prompted',
+      layout: {},
+      isPrompted: true,
+      expected: { drawnBy: 'default', promptAt: 'end' },
+    },
+    {
+      case: 'a row that leaves the prompt out',
+      layout: {
+        row: (parent, input, kit) => ({
+          element: kit.el(parent, 'div', 'bare', input.label),
+        }),
+      },
+      isPrompted: true,
+      expected: { drawnBy: 'mine', promptAt: 'end' },
+    },
+    {
+      case: 'a row that places the prompt twice',
+      layout: {
+        row: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'bare', input.label);
+          const line = kit.el(element, 'div', 'bare-line');
+          kit.cursorPrompt(line);
+          kit.cursorPrompt(line);
+          return { element };
+        },
+      },
+      isPrompted: true,
+      expected: { drawnBy: 'default', promptAt: 'end' },
+    },
+    {
+      case: 'a row that places the prompt inside, not prompted',
+      layout: {
+        row: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'bare', input.label);
+          kit.cursorPrompt(kit.el(element, 'div', 'bare-line'));
+          return { element };
+        },
+      },
+      isPrompted: false,
+      expected: { drawnBy: 'mine', promptAt: 'none' },
+    },
+    {
+      case: 'a row that places the prompt inside, prompted',
+      layout: {
+        row: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'bare', input.label);
+          kit.cursorPrompt(kit.el(element, 'div', 'bare-line'));
+          return { element };
+        },
+      },
+      isPrompted: true,
+      expected: { drawnBy: 'mine', promptAt: 'inside' },
+    },
+  ])(
+    'rowPart_CursorPrompt_PlacesTheAppsPrompt ($case)',
+    ({ layout, isPrompted, expected }) => {
+      const { parts } = sessionsPartsSetup();
+      parts.setLayouts(withUser<Layout>(defaultLayout, layout));
+      const prompt = document.createElement('span');
+
+      const drawn = parts.row(
+        document.createElement('div'),
+        {
+          sessionId: 'a',
+          title: 'Title',
+          label: 'a',
+          harness: '',
+          marked: false,
+          activity: null,
+          status: null,
+          onScreen: false,
+          isPrompted,
+        },
+        prompt,
+      );
+
+      const element = asFake(drawn.built.element);
+      const placed = asFake(prompt);
+      const promptAt = !element.contains(placed)
+        ? 'none'
+        : element.lastElementChild === placed
+          ? 'end'
+          : 'inside';
+      expect({ drawnBy: drawn.layoutName, promptAt }).toEqual(expected);
+    },
+  );
+
   it('sessionsParts_RowDrawnByUserLayout_KeepsClickAndSelection', () => {
     const { view, sideBar, activated } = sessionsViewSetup();
     view.setLayouts(
@@ -603,6 +697,11 @@ describe('sessions parts', () => {
       'sessions.splitDown': 1,
       'sessions.closePane': 1,
       'sessions.showMode': 2,
+      'sessions.listFavorite': 2,
+      'sessions.listMoveUp': 1,
+      'sessions.listMoveDown': 1,
+      'sessions.listRename': 2,
+      'sessions.listClose': 2,
     });
   });
 

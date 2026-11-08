@@ -38,7 +38,8 @@ const NUDGE_STEP = 24;
 // focus and resize each call `changed` once when they change the tree, and a
 // focus change also calls `focused`; `restore` calls neither. The release of a
 // press that began in another pane focuses that pane, then calls
-// `pressFocused`; a press with no release in the window moves nothing. Each
+// `pressFocused`; a press with no release in the window moves nothing. An outer
+// focus move that moved focus then calls `keyFocused`. Each
 // split is drawn at its ratio clamped to the least pane sizes in the tree's
 // box, drawn again as the box resizes, while the tree keeps the ratio it was
 // given.
@@ -80,6 +81,9 @@ export interface PaneTreeViewOptions {
   // Runs after a release moved focus to the pane its press began in, once
   // `focused` ran, inside the release's capture, so its `click` still follows.
   pressFocused(id: string): void;
+  // Runs after an outer focus move (`outer.focus.move`) moved focus to pane
+  // `id`, once `focused` ran.
+  keyFocused(id: string): void;
   // Runs with the ids of the leaves a close or `restore` drops while their
   // slots are still in the document, before they leave it.
   leaving(ids: readonly string[]): void;
@@ -449,6 +453,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
             return false;
           }
           commit(next);
+          options.keyFocused(next.focusedId);
           return true;
         },
       },

@@ -173,7 +173,8 @@
    and activity's label on the first line and the parts on a second line under
    them, `space-1` above and below and `space-1_5` at the
    sides. Hover strengthens the border; the selected card keeps the row
-   primitive's accent fill, and the keyboard cursor its focus ring. */
+   primitive's accent fill, and the list cursor's card draws the focus ring
+   over its border. */
 .ui-row.session-row {
   align-items: center;
   padding-block: var(--wg-space-1);
@@ -273,6 +274,28 @@
 .ui-row.session-row.is-on-screen {
   border-color: var(--wg-border-strong);
   box-shadow: inset 0 0 0 1px var(--wg-border-strong);
+}
+
+/* The list cursor's card while the list holds the keys: the focus ring as the
+   card's 1px border, over the selected and on-screen borders, in place of the
+   row primitive's inset ring, so the ring stays 1px. */
+.ui-row.session-row.is-cursor {
+  border-color: var(--wg-focus-border);
+  box-shadow: none;
+}
+
+/* The cursor prompt takes the card's full width on a line of its own,
+   wrapping when it has no room. Out of the list's scope its keys hide in
+   place, so the selected card keeps its height. */
+.session-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--wg-space-2);
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: var(--wg-space-0_5);
+  font-size: var(--wg-text-11);
 }
 
 /* A row's first line never wraps: the title (`New Chat` for a row with no

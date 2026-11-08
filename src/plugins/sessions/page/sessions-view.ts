@@ -39,8 +39,15 @@ import {
   mountSessionTabsView,
   type SessionTabsView,
 } from './session-tabs-view';
-import { drawnRows, sidebarSections } from './sidebar-order';
-import { mountSidebarView } from './sidebar-view';
+import {
+  cursorAfterDraw,
+  type CursorMove,
+  drawnRows,
+  movedCursor,
+  type SidebarSections,
+  sidebarSections,
+} from './sidebar-order';
+import { mountSidebarView, type RowState } from './sidebar-view';
 import { rowChanges, rowStatus, stepSession } from './tabs';
 
 // `activate` runs on a row click; `isModeShown` reads whether Sessions mode
@@ -49,8 +56,11 @@ import { rowChanges, rowStatus, stepSession } from './tabs';
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a press's release or outer pane key included,
-// and `panePressed` with the pane's slot after `paneFocused` when a release
-// moved it;
+// `panePressed` with the pane's slot after `paneFocused` when a release
+// moved it, and `paneKeyFocused` after `paneFocused` when an outer pane key
+// moved it; `cursorMoved` runs with the list cursor's new row (null for none)
+// when a side bar draw moved the cursor off a row that left, or a row click
+// moved it while the list holds the keys;
 // `rowParts` are the parts each row draws, and adding or removing one draws
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
 // removing one draws the tab bars again; `titleMaxLength` reads the setting
@@ -68,6 +78,8 @@ export interface SessionsViewDeps extends Omit<
   panesChanged(): void;
   paneFocused(paneId: string): void;
   panePressed(pane: HTMLElement): void;
+  paneKeyFocused(): void;
+  cursorMoved(row: SessionRow | null): void;
   rowParts: PartStore<SessionPart>;
   barParts: PartStore<SessionPart>;
   titleMaxLength(): number;
@@ -75,6 +87,25 @@ export interface SessionsViewDeps extends Omit<
   favorites: ProjectFavorites;
   // Writes `sessionsActivitySlot`, which holds the rows' activities.
   activities: KeyedSlotWriter<RowActivitySource[]>;
+}
+
+// The Sessions list: the side bar's rows as a keyboard pane, its cursor a
+// session row apart from the selected one. `enter` gives the list the keys,
+// the cursor on the selected row, else the first drawn row, the rows box
+// focused, and returns the cursor's row; `leave` puts the cursor back on the
+// selected row, takes the ring off and returns whether the list held the keys;
+// `move` steps the cursor in drawn order (`movedCursor`) and returns its row;
+// `cursorSessionId` reads the cursor's session, the selected one while the
+// list does not hold the keys; `refocus` focuses the rows box again while the
+// list holds the keys. Rows are null for none, and walk the preview's sample
+// while it shows.
+export interface SessionList {
+  enter(): SessionRow | null;
+  leave(): boolean;
+  holdsKeys(): boolean;
+  move(move: CursorMove): SessionRow | null;
+  cursorSessionId(): string | null;
+  refocus(): void;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -105,7 +136,8 @@ export interface SessionPanes {
 }
 
 // `element` is the mode's root, the chat panes; `sideBar` is the mode's side
-// bar, the session list's header over its rows.
+// bar, the session list's header over its rows; `list` is that list as a
+// keyboard pane.
 // `setLayouts` draws the side bar, panes and tab bars again with `shown`, then
 // the rows, tabs and text from the state the view holds. `showPreview(true)`
 // swaps the side bar's rows for the preview sample, whose selection a row
@@ -129,6 +161,7 @@ export interface SessionsView {
   parts: Pick<SessionsParts, 'renameDialog'>;
   tabs: SessionTabsView;
   panes: SessionPanes;
+  list: SessionList;
   render(state: SessionsState): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   showPreview(isShown: boolean): void;
@@ -148,8 +181,8 @@ export interface SessionsView {
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
 // draws in its side bar, and the root holding the chat panes. Each row's
-// second line follows its tabs' statuses. Both draw with `default` until the
-// first `setLayouts`.
+// second line follows its tabs' statuses, and the list cursor's row ends in
+// the cursor prompt. Both draw with `default` until the first `setLayouts`.
 export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');
   const parts = createSessionsParts(deps);
@@ -175,6 +208,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const sidebar = mountSidebarView(
     {
       activate(sessionId) {
+        if (cursor.hasKeys && cursor.sessionId !== sessionId) {
+          cursor = { sessionId, hasKeys: true };
+          drawSidebar();
+          deps.cursorMoved(drawnRowOf(sessionId));
+        }
         if (preview === null) {
           deps.activate(sessionId);
           return;
@@ -204,8 +242,17 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     },
     parts,
     deps.timers,
+    deps.keys.anchor,
   );
   let state: SessionsState | null = null;
+  // The list cursor while the list holds the keys; out of the list it sits on
+  // the selected row, which each draw reads.
+  let cursor: { sessionId: string | null; hasKeys: boolean } = {
+    sessionId: null,
+    hasKeys: false,
+  };
+  // The session ids the last side bar draw drew, in order.
+  let drawnOrder: string[] = [];
   const activities = createRowActivities(deps.activities);
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
@@ -220,32 +267,112 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     );
   };
 
-  const drawSidebar = () => {
+  // What the side bar draws now: the preview's sample while it shows, else
+  // main's rows with the focused pane's session selected.
+  const sidebarDraw = (): {
+    state: SessionsState | null;
+    sections: SidebarSections<SessionRow>;
+    rowStateOf: (row: SessionRow) => RowState;
+    skip: ReadonlySet<string>;
+  } => {
     const titleMax = titleLimit(deps.titleMaxLength());
     if (preview !== null) {
-      sidebar.render(
-        preview,
-        previewSections(preview),
-        (row) => previewRowState(row, titleMax),
-        new Set(),
-      );
-      return;
+      return {
+        state: preview,
+        sections: previewSections(preview),
+        rowStateOf: (row) => previewRowState(row, titleMax),
+        skip: new Set(),
+      };
     }
     const tree = treeView.tree();
     const elsewhere = shownElsewhere(assigned, tree.focusedId);
-    sidebar.render(
-      state === null
-        ? null
-        : { ...state, selectedSessionId: assigned.get(tree.focusedId) ?? null },
-      realSections(),
-      (row) => ({
+    return {
+      state:
+        state === null
+          ? null
+          : {
+              ...state,
+              selectedSessionId: assigned.get(tree.focusedId) ?? null,
+            },
+      sections: realSections(),
+      rowStateOf: (row) => ({
         title: shownTitle(row.titles, titleMax),
         activity: activities.top(row.sessionId),
         status: rowStatus(tabs.statusesOf(row.sessionId)),
         onScreen: elsewhere.has(row.sessionId),
       }),
-      elsewhere,
-    );
+      skip: elsewhere,
+    };
+  };
+
+  // The row the side bar draws for `sessionId`, null for none.
+  const drawnRowOf = (sessionId: string | null) =>
+    drawnRows(sidebarDraw().sections).find(
+      (row) => row.sessionId === sessionId,
+    ) ?? null;
+
+  // Draws the side bar; while the list holds the keys, a cursor whose row
+  // left moves by `cursorAfterDraw` and reports its new row.
+  const drawSidebar = () => {
+    const drawn = sidebarDraw();
+    const rows = drawnRows(drawn.sections);
+    const order = rows.map((row) => row.sessionId);
+    let movedTo: SessionRow | null | undefined;
+    if (cursor.hasKeys) {
+      const next = cursorAfterDraw(drawnOrder, order, cursor.sessionId);
+      if (next !== cursor.sessionId) {
+        cursor = { sessionId: next, hasKeys: true };
+        movedTo = rows.find((row) => row.sessionId === next) ?? null;
+      }
+    }
+    drawnOrder = order;
+    sidebar.render(drawn.state, drawn.sections, drawn.rowStateOf, drawn.skip, {
+      sessionId: cursor.hasKeys
+        ? cursor.sessionId
+        : (drawn.state?.selectedSessionId ?? null),
+      hasKeys: cursor.hasKeys,
+    });
+    if (movedTo !== undefined) {
+      deps.cursorMoved(movedTo);
+    }
+  };
+
+  const list: SessionList = {
+    enter() {
+      const drawn = sidebarDraw();
+      const rows = drawnRows(drawn.sections);
+      const selectedId = drawn.state?.selectedSessionId ?? null;
+      const entry =
+        rows.find((row) => row.sessionId === selectedId) ?? rows[0] ?? null;
+      cursor = { sessionId: entry?.sessionId ?? null, hasKeys: true };
+      drawSidebar();
+      sidebar.focus();
+      return entry;
+    },
+    leave() {
+      if (!cursor.hasKeys) {
+        return false;
+      }
+      cursor = { sessionId: null, hasKeys: false };
+      drawSidebar();
+      return true;
+    },
+    holdsKeys: () => cursor.hasKeys,
+    move(by) {
+      const sessionId = movedCursor(drawnOrder, cursor.sessionId, by);
+      cursor = { ...cursor, sessionId };
+      drawSidebar();
+      return drawnRowOf(sessionId);
+    },
+    cursorSessionId: () =>
+      cursor.hasKeys
+        ? cursor.sessionId
+        : (sidebarDraw().state?.selectedSessionId ?? null),
+    refocus() {
+      if (cursor.hasKeys) {
+        sidebar.focus();
+      }
+    },
   };
 
   const drawPanes = () => {
@@ -283,6 +410,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     },
     focused: (paneId) => deps.paneFocused(paneId),
     pressFocused: (paneId) => deps.panePressed(treeView.slot(paneId)),
+    keyFocused: () => deps.paneKeyFocused(),
     leaving: (paneIds) => tabs.vacate(paneIds),
   });
   assigned.set('pane-1', null);
@@ -347,6 +475,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     parts,
     tabs,
     panes,
+    list,
     render(next) {
       const before = state?.rows ?? null;
       for (const sessionId of rowChanges(before ?? [], next.rows).removed) {
@@ -361,6 +490,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       parts.setLayouts(shown);
       sidebar.redrawPane();
       drawSidebar();
+      list.refocus();
       tabs.redrawPane();
     },
     showPreview(isShown) {

@@ -3,6 +3,7 @@ import {
   FakeElement,
   findAll,
   installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { NEEDS_YOU_ACTIVITY, type SessionRow } from '../contract';
@@ -536,4 +537,126 @@ describe('sessions view side bar', () => {
       expect(findAll(sideBar, 'session-section')).toHaveLength(2);
     },
   );
+});
+
+describe('the sessions list', () => {
+  beforeEach(() => {
+    installFocusFakeDom(vi.stubGlobal);
+  });
+
+  // Rows a and b in the favorite gamma, then c in alpha under Recent, with b
+  // selected: the focused pane shows it.
+  function listSetup() {
+    const setup = sessionsViewSetup(undefined, undefined, undefined, {
+      uiState: fakeUiState([['favorites', ['gamma']]]),
+    });
+    setup.view.render(
+      stateWith([
+        rowIn('a', 'gamma'),
+        rowIn('b', 'gamma'),
+        rowIn('c', 'alpha'),
+      ]),
+    );
+    setup.view.panes.load(setup.view.panes.focusedPaneId(), 'b');
+    return setup;
+  }
+
+  // What the side bar draws of the list: the rows ringed as the cursor, and
+  // the prompted row with how many keys its cursor prompt names.
+  function drawnList({ sideBar }: Setup) {
+    const rows = drawnRows(sideBar);
+    const idOf = (row: FakeElement) => row.title.replace(/.*label /, '');
+    const prompted = rows.filter(
+      (row) => findAll(row, 'session-row-actions').length > 0,
+    );
+    return {
+      ringed: rows
+        .filter((row) => row.classList.contains('is-cursor'))
+        .map(idOf),
+      prompted: prompted.map((row) => ({
+        row: idOf(row),
+        keys: findAll(row, 'session-row-actions')[0].children.length,
+      })),
+    };
+  }
+
+  it.each<{
+    case: string;
+    act: (setup: Setup) => unknown;
+    result: unknown;
+    ringed: string[];
+    prompted: { row: string; keys: number };
+  }>([
+    {
+      case: 'enter puts the cursor on the selected row',
+      act: ({ view }) => view.list.enter()?.sessionId,
+      result: 'b',
+      ringed: ['b'],
+      prompted: { row: 'b', keys: 5 },
+    },
+    {
+      case: 'a move to the last row takes the ring and a Recent prompt',
+      act: ({ view }) => {
+        view.list.enter();
+        return view.list.move('last')?.sessionId;
+      },
+      result: 'c',
+      ringed: ['c'],
+      prompted: { row: 'c', keys: 3 },
+    },
+    {
+      case: 'leave takes the ring off and prompts the selected row',
+      act: ({ view }) => {
+        view.list.enter();
+        view.list.move('last');
+        return view.list.leave();
+      },
+      result: true,
+      ringed: [],
+      prompted: { row: 'b', keys: 5 },
+    },
+    {
+      case: 'a second leave does nothing',
+      act: ({ view }) => {
+        view.list.enter();
+        view.list.leave();
+        return view.list.leave();
+      },
+      result: false,
+      ringed: [],
+      prompted: { row: 'b', keys: 5 },
+    },
+  ])(
+    'sessionList_EntryMovesAndLeave: $case',
+    ({ act, result, ringed, prompted }) => {
+      const setup = listSetup();
+
+      expect(act(setup)).toEqual(result);
+
+      expect(drawnList(setup)).toEqual({ ringed, prompted: [prompted] });
+    },
+  );
+
+  it('sessionList_RowLeaving_MovesTheCursorAndReports', () => {
+    const setup = listSetup();
+    setup.view.list.enter();
+    setup.view.list.move('last');
+
+    setup.view.render(stateWith([rowIn('a', 'gamma'), rowIn('b', 'gamma')]));
+
+    expect(setup.cursorMoves).toEqual(['b']);
+    expect(setup.view.list.cursorSessionId()).toBe('b');
+    expect(drawnList(setup).ringed).toEqual(['b']);
+  });
+
+  it('sessionList_RowClick_MovesTheCursorWhileTheListHoldsTheKeys', () => {
+    const setup = listSetup();
+    setup.view.list.enter();
+
+    rowNamed(drawnRows(setup.sideBar), 'label a').click();
+
+    expect(setup.cursorMoves).toEqual(['a']);
+    expect(setup.activated).toEqual(['a']);
+    expect(drawnList(setup).ringed).toEqual(['a']);
+  });
 });
