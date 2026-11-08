@@ -235,9 +235,10 @@
 }
 
 /* The footer is the card's second line: other plugins' row parts, on one line
-   that never wraps. A footer with nothing in it takes no
-   space. */
+   that never wraps while the footer is wide enough. A footer with nothing in it
+   takes no space. */
 .session-row-foot {
+  container: session-row-foot / inline-size;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -250,6 +251,25 @@
 
 .session-row-foot:not(:has(.session-row-part:not(:empty))) {
   display: none;
+}
+
+/* On a footer too narrow for every part on one line, the end group — the parts
+   ordered 2 and later (the context bar, the run time and the cache mark) —
+   moves to a line of its own under the rest, its slots kept. The break is a
+   full-width item ordered ahead of the group's parts. Usage's `usage.css`
+   repeats this breakpoint, so its context bar fills that line. */
+@container session-row-foot (width < 220px) {
+  .session-row-parts {
+    flex-wrap: wrap;
+    row-gap: var(--wg-space-0_5);
+  }
+
+  .session-row-parts::before {
+    content: '';
+    flex-basis: 100%;
+    order: 2;
+    height: 0;
+  }
 }
 
 .ui-row.session-row:not(.is-selected) {

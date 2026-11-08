@@ -65,16 +65,17 @@ mark at the line's end:
   background events, and could not save the total with the session.
 - **The cache mark is its own usage row part**: the run time sits between the meter and the cache mark, and parts
   from two plugins order only as whole parts.
-- **The second line never wraps**: the parts stay whole and the row stays two lines. When the line is too narrow the
-  meter's bar shrinks to nothing, the used tokens
-  staying whole (under the default layout `usage.rowLine` shrinks, its bar the only part of it that can). No container query is used on
-  `div.session-row-parts`: `container-type: inline-size` gives the holder no intrinsic width. Below that the other
-  parts clip at the card edge with no ellipsis: measured at 12m 05s clocks, a plain row (meter, clock, cache) needs
-  about 113px of line and clips below a side bar of about 136px, under `SIDE_BAR_MIN` (160). A row with five
-  parts (workflow chip, working line, meter, clock, cache) is an estimate: about 258px of line, a side bar of about
-  282px, so it would clip at the default 256 and below. It assumes an injected 62px `Reviewing` chip, which is not
-  a built-in label (the labels are Idle, Primer, Feature, Plan, Make, Review, Closed), and the working line comes from
-  `agent-lines`, which is off by default.
+- **The second line wraps only on a narrow footer**: the parts stay whole. When the line is too narrow the meter's
+  bar shrinks to nothing, the used tokens staying whole (under the default layout `usage.rowLine` shrinks, its bar
+  the only part of it that can). On a footer narrower than `220px` (a side bar under about 243px) the default layout
+  moves the end group — the parts ordered 2 and later: meter, clock, cache — to a line of its own under the rest,
+  its bar filling that line's free room. The fixed slots alone (clock 50px, meter at its least 38px, cache 16px, two
+  gaps) take about 116px, so at `SIDE_BAR_MIN` (160, a 137px footer) the `No workflow` tag and the working line had
+  no room beside them and were cut off. The container is `div.session-row-foot`, which the row's grid sizes;
+  `div.session-row-parts` cannot be one, as `container-type: inline-size` gives it no intrinsic width. Above `220px`
+  a row with many parts (workflow chip, working line, meter, clock, cache) can still outgrow its line once the bar
+  has shrunk away: the chip's tag then ellipsizes, and the `No workflow` tag and the working line clip at the card
+  edge.
 - **The cache mark turns cold at usage's next redraw**: usage redraws its lines once a minute, so the mark can lag
   the expiry by up to a minute.
 

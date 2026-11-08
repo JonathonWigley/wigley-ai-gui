@@ -49,7 +49,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // the harness's name, '' for none; `marked` is true while something marked the row waits unviewed, and never on the selected row; `activity` is what the session is
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
-// and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
+// and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, which `default` wraps only on a narrow row, moving the parts ordered 2 and later to a line of their own; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;

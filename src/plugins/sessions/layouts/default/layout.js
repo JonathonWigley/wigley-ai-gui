@@ -8,7 +8,7 @@
 // title; no harness name) with its activity's label or, with no
 // activity, a needs you label while `marked`, a status edge for an
 // activity with an emphasis, and its on-screen mark,
-// over a footer line that never wraps, holding other plugins' row parts
+// over a footer line, wrapped only on a narrow row, holding other plugins' row parts
 // (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its

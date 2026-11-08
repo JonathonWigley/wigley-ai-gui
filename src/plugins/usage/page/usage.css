@@ -55,6 +55,18 @@
   min-width: calc(var(--wg-space-8) + var(--wg-space-1_5));
 }
 
+/* On the narrow footer where sessions' default layout moves the row's end group
+   to a line of its own (`width < 220px` there too), the context starts from its
+   least width and takes the line's free room, so the run time and the cache
+   mark stay on its line. */
+@container session-row-foot (width < 220px) {
+  .session-row-part[data-part='usage.rowLine']:has(
+      > [data-layout-owner='usage'][data-layout='default'].usage-row-line
+    ) {
+    flex: 1 1000000 0;
+  }
+}
+
 .session-row-part[data-part='usage.rowCache'] {
   min-width: var(--wg-icon-size);
   order: 4;
