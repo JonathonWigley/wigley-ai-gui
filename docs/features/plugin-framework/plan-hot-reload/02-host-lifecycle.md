@@ -1,6 +1,6 @@
 # 02 — Host starts, stops and restarts live
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -79,3 +79,5 @@ Done when: `npm run typecheck` passes; the test gate runs `src/shared/plugin-hos
 Commit: one commit for the group
 
 ## Proof
+
+Commit 4e2cfd84 · proof: diff read; typecheck 0, lint 0 on the wave 1 tree; plugin-host + page tests and the wave 1 files 663 pass · concerns: stale prose outside scope: PagePart/MainPart comments in contracts/plugin.ts say start once / every page load; AGENTS.md disabled-plugin and stop(id) bullets (task 11); design.md says a restart starts in start order, code follows plan.md parts order (task 12)
