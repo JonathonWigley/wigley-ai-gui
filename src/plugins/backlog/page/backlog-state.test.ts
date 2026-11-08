@@ -58,6 +58,22 @@ function plan(title: string, taskTitles: string[]): BacklogPlan {
   };
 }
 
+function feature(slug: string, taskTitles: string[]): BacklogFeature {
+  const folder = `${ROOT}/${slug}`;
+  return {
+    path: `${folder}/feature.md`,
+    slug,
+    checked: 0,
+    total: taskTitles.length,
+    tasks: taskTitles.map((task) => ({
+      path: `${folder}/${task}.md`,
+      copyPath: `${folder}/${task}.md`,
+      title: task,
+      status: null,
+    })),
+  };
+}
+
 function home(
   root: string,
   items: FollowupItem[],
@@ -501,6 +517,37 @@ describe('backlogReducer', () => {
 
     expect(selectedTitle(state)).toBe('02-next');
   });
+
+  it.each([
+    {
+      kind: 'plan',
+      shown: home(
+        ROOT,
+        [item('One')],
+        [plan('The plan', ['01-first', '02-next'])],
+      ),
+    },
+    {
+      kind: 'feature',
+      shown: {
+        ...home(ROOT, [item('One')]),
+        features: [feature('clusters', ['01-first', '02-next'])],
+      },
+    },
+  ])(
+    'backlogReducer_OpenOnExpandedRow_SelectsItsFirstTask: $kind',
+    ({ shown }) => {
+      const state = run(
+        opened(shown),
+        { type: 'move', to: 'down' },
+        { type: 'open' },
+        { type: 'open' },
+      );
+
+      expect(state.focus).toBe('items');
+      expect(selectedTitle(state)).toBe('01-first');
+    },
+  );
 });
 
 describe('emptyReason', () => {
