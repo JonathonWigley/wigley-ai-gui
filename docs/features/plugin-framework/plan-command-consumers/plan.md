@@ -132,7 +132,7 @@ Each sweep task lists the commands it adds under Produces, each as `<plugin>.<sh
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Kit buttons run commands, and listing rules](01-kit-commands.md)
+- [x] [Kit buttons run commands, and listing rules](01-kit-commands.md)
 
 ### Wave 2
 - [ ] [Sweep: forms and primer](02-sweep-forms-primer.md) — after 01
@@ -163,10 +163,12 @@ Each sweep task lists the commands it adds under Produces, each as `<plugin>.<sh
 Review base: 69550804
 
 ### Groups
+- 01 · 84ca8726 · diff read (Produces present: button/command with arg, KitCommands.run(id,arg?), kitCommandsOf, keyRunner, commandArgLabel, CommandRow.label, picker.chooseRow/cancel, registerPickerCommands); typecheck 0; lint clean; worker: vitest 9974 pass, selftest unity-pool/docs/settings pass · concerns: settings rowsPerArg compares args with isSameJson (key-order blind); page-api picker run voids router.run, a sync throw would escape the click; 14 start.ts swaps covered by typecheck/vitest only; one blocked npx call (nothing downloaded); lint:fix reformatted run files only
 ### Contract changes
 ### Rulings
 - Review base is 69550804, not c3a76bdb: the Docs wiki merge landed on main between preflight and the first dispatch. Tasks 05 and 08 re-grep the docs plugin, which that merge rewrote (main-page, list-page, list-pane, section-edit, wiki-main-source, tree-view).
 - Task 06 is stale after the workflow levels split (workflow/stages, main/actions.ts and workflow-parts.ts moved to workflow-heavy; addStage is gone). User chose: run the other tasks, and rewrite 06 for the split before Wave 3 with the same goal and keys — the engine owns workflow.stageAction, Heavy declares its own session commands. The changed design goes in the report.
 - Task 01 reuses the landed KitCommandArg, argShape and keys(command, arg?) rather than adding a CommandArg type; task 11's filtered self-test list names workflow-heavy, workflow-light and workflow-medium.
+- Task 01 contract changes: kitCommandsOf also takes services.log; new RuntimeCommands.infoOf, read by PageApi.keys.command; new src/renderer/shell/shell-commands.ts; docs gains docs.editSectionAt {view, anchor} and loses SectionEditControlKit/openSection; unity-pool gains hold/release {pool, clone}; registerPickerCommands throws 'no picker for owner <owner>' (the registry logs it). · group 01
 ### Review rounds
 ### Test gate

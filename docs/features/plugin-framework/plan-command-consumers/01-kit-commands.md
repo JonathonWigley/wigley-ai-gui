@@ -1,6 +1,6 @@
 # 01 — Kit buttons run commands, and listing rules
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -278,3 +278,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 84ca8726 · proof: diff read (Produces present: button/command with arg, KitCommands.run(id,arg?), kitCommandsOf, keyRunner, commandArgLabel, CommandRow.label, picker.chooseRow/cancel, registerPickerCommands); typecheck 0; lint clean; worker: vitest 9974 pass, selftest unity-pool/docs/settings pass · concerns: settings rowsPerArg compares args with isSameJson (key-order blind); page-api picker run voids router.run, a sync throw would escape the click; 14 start.ts swaps covered by typecheck/vitest only; one blocked npx call (nothing downloaded); lint:fix reformatted run files only
