@@ -41,7 +41,9 @@ user closes a row ──► chat.sessionClosed (reason user, sent true)
 
 - **What queues.** A `chat.sessionClosed` with reason `user` and `sent` true, for a row this plugin did not launch.
   Every other reason — a failed start, `closeSessionsIn`, `finished` — and a quit queue nothing. A terminal session
-  never closes in the app; the next manual retro's backfill finds it.
+  never closes in the app; the next manual retro's backfill finds it. A row whose last conversation sent nothing
+  queues nothing, even when a conversation before its `/clear` sent: the backfill finds that one too. The self-test
+  queues nothing, so its scripts' closes launch no retro; a drive run queues as the app does.
 - **What a run gets.** The closed row's host session id and every id it had before a `/clear` (`chat.sessionCleared`),
   oldest first, and the row's profile. The plugin keeps each open row's earlier ids for this, since the close payload
   carries only the current one.
@@ -76,8 +78,9 @@ in chat, not in the Claude adapter.
 
 A retro row is done when its main turn has ended and no subagent or task still runs: chat's `chat.session` slot reads
 `activity` idle, `background` 0 and no compaction, after its first turn started. `chat.turnFinished` alone fires while
-the analysts still run. A process that ended (clean or crash) is done too. A short settle wait keeps a task that ends
-and wakes the agent from closing the row under a new turn.
+the analysts still run. A process that ended (clean or crash) is done too. A short settle wait (the `settleSeconds` setting, 5 s by default) keeps a task that ends and wakes the agent from
+closing the row under a new turn. A retro row raises no Turn finished alert. A running retro whose row does not come
+back within 30 s of a start is dropped, and the next close launches.
 
 On done the plugin calls chat's `close(rowId, 'finished')`. A `finished` close stays out of Recently closed and the
 stash, which take `user` closes only, and queues no retro. A run that failed still closes: it never marked its
@@ -90,7 +93,11 @@ sessions seen, so the next manual retro's backfill analyzes them and its report 
   and a status surface.
 - **A section registration, not a special case in sessions.** Favorites and Recent were a closed list; any plugin
   that owns rows can now give them a section.
-- **No on/off setting.** `plugins.disabled` switches the plugin off.
+- **No on/off setting.** `plugins.disabled` switches the plugin off. `settleSeconds` exists so a live check can
+  hold a row open.
+- **A quit in the instant after a launch** can leave the retro row restored as an ordinary row; its close then
+  queues a retro of a retro session, which the retro marks seen and finds nothing in. Accepted: the window is the
+  time between `launch` resolving and one file write.
 - **Deny, not allow, in an unattended row.** An allowed prompt would let an unwatched run do what the user's rules hold
   back; a denied one costs at most a retro that stops short, which the next manual run catches up.
 - **The closed session's profile.** Its config folder holds the transcript, and `digest.py` reads

@@ -489,7 +489,7 @@ interview on 2026-10-23; this file is the record of both.
   permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
   seen.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
-  the row is marked.
+  the row is marked. A row launched `unattended` raises no alert and is not marked: nobody waits on it.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
   and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name
   and aliases through the app's fuzzy matcher (fzf), best match first; with text typed, the completion hands the
