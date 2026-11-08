@@ -133,11 +133,12 @@ import {
 import type { PrimerStore } from './primer-store';
 
 // `closesAtOnce` says whether the close key ends the session's primer with it;
-// `beforeClose` answers whether the session may close. `setScope` sets the key scope to `scopeOf` the
-// state while a primer popup is the visible surface; `pushConfirmScope` lays
-// the cancel prompt's scope over it. `keys` anchors each key hint the view and
-// its layout draw and reads the keys a layout asks for. `run` runs a button's command; `commands` is what a layout's
-// `kit.command` reaches. `platform` is the OS the layouts' key hints draw for.
+// `beforeClose` answers whether the session may close. `setScope` sets the key
+// scope to `scopeOf` the state while a primer popup is the visible surface;
+// `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors each
+// key hint the view and its layout draw and reads the keys a layout asks for.
+// `run` runs a button's command; `commands` is what a layout's `kit.command`
+// reaches. `platform` is the OS the layouts' key hints draw for.
 // `uiState` keeps the tasks and items columns' widths, which every primer's
 // columns open at. `timers` runs the splits' resize prompt linger. Each primer
 // view is a drop target through `drops`, typing files into the primer's box

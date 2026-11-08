@@ -144,8 +144,9 @@ function listenForPrimers(
 // While a primer popup is the visible surface, the key scope, the resize keys'
 // split and the focus keys' panes follow the primer view. The close key on a
 // session with an open primer cancels the primer and closes the session at
-// once; a primer being sent keeps its session. Every store change emits the primer page events it makes, each logged as it goes;
-// other plugins read the active primer through the exports. The popup draws
+// once; a primer being sent keeps its session. Every store change emits the
+// primer page events it makes, each logged as it goes; other plugins read the
+// active primer through the exports. The popup draws
 // through the primer layout `primer.layout` names, redrawing as it or the
 // layout changes. Each open primer's place (`primerPlaceSlot`) and its unsaved
 // edits, saved at once on page hide, outlive a page reload.

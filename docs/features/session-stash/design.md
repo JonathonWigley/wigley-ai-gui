@@ -24,8 +24,8 @@ know nothing of it.
   changing under the dialog does.
 - **The stash.** Enter closes the dialog and hands main `{ sessionId, note }` over the plugin's channel, so main holds
   the note before the close's event fires. It then awaits sessions' `closeSession`, the normal close: a session mid-turn
-  asks chat's end-session confirm first, and a session holding an open round or primer asks its cancel prompt, the
-  close waiting on the answer. A close that does not land — a confirm or cancel prompt answered no, a tab's
+  asks chat's end-session confirm first, and a session holding an open round or primer is refused by main's close
+  guard, its reason toasted. A close that does not land — chat's end-session confirm answered no, a tab's
   `beforeClose` or a main close guard keeping the row — tells main to drop the note and logs `stash dropped: <name>
   stayed open`. A drop that fails to reach main logs `stash drop not sent for <name>: <error>`.
 - **Only sessions the app started.** Main refuses a session chat does not own (`chat.profileOf` is null, such as a

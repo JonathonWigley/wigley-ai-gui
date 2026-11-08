@@ -249,7 +249,7 @@ export interface NoticesKit extends FormsBaseKit {
   // Draws the line for notice `index` (its chevron, its open state, its hidden body holding the notice's
   // `cards.notice`, and the cursor mark), appends it to `parent`, and returns the line's head for the layout to draw
   // into. Call it on an attached `parent`. Each line draws once; a line the pane leaves out is appended at the end of
-  // the pane. The app owns the click, which runs `forms.toggleNoticeAt` with `index`, the open state and the cursor.
+  // the pane. The app owns the click, the open state and the cursor; a click runs `forms.toggleNoticeAt` with `index`.
   // The head sits inside the line's toggle button, so a click on it toggles the line: draw nothing interactive there.
   // On each update the app appends the toggle key's prompt (`span.notice-line-prompt`) to the end of the cursor line's
   // head.
