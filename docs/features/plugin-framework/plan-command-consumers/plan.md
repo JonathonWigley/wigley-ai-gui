@@ -190,3 +190,4 @@ Review base: 69550804
 - Task 08: a fresh take over replaces only a saved record no take over in this page claimed (savedTakeOverTabIds); placeRestored runs on the read route only, again on a form's first activation; prune after the forms read keeps read forms plus store forms; docs place key is the view's source id, not the generated view:<n>; chat writes its place from drawFocus and expander toggles, not only changed(), and writes nothing before its box mounts. · group 08
 ### Review rounds
 ### Test gate
+- At 8cfb0087: typecheck 0, lint 0 warnings, full vitest 530 files / 10197 tests pass. Filtered self-tests: task 11's combined run (16 plugins) plus forms,primer and agent-lines,unity-pool alone; fix workers re-ran notes (30 pass) and chat (exit 0). Open: agent-lines narrow-fit step fails alone (No workflow tag overflow, likely pre-existing on main, unproven). Fixes C1 78eaa882 and C2 8cfb0087 from task 11's drive checks; their live re-checks not re-run.
