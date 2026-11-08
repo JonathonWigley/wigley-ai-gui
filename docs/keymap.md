@@ -45,7 +45,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
   the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, on a
   doc it focuses the docs tree, and in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
-  `y`/`n` confirm (in chat `y` copies with a range open, else allows a waiting permission, else copies), `i`/`a` enter the box, `e` edits the doc's section at the top of sight. `gh` opens Docs mode's Main page, from any docs view. On a docs list page `j`/`k` move the row and `l`/`Enter` open it. Letters are mnemonic verbs.
+  `y`/`n` confirm (in chat `y` copies with a range open, else allows the waiting permission under the cursor, else the oldest waiting one, else copies; `n` denies the same one), `i`/`a` enter the box, `e` edits the doc's section at the top of sight. `gh` opens Docs mode's Main page, from any docs view. On a docs list page `j`/`k` move the row and `l`/`Enter` open it. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `J`/`K` by message beside `j`/`k` by block, `R` rescan. Chat's `V` is vim's line select
   instead, since `v` opens visuals.
@@ -70,7 +70,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
   take the key from vim's insert-mode completion. In every other main view (Sessions with nothing
-  shown, the Chat tab and its agent strip, the docs tree and doc, the Backlog list and detail, the
+  shown, the Chat tab, its session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog list and detail, the
   Settings sections and rows, the gallery) **Ctrl+n** opens the new-session prompt with only its
   folder and profile steps, bound per scope since a key cannot sit in `any` beside a scope's bind.
   A new main view adds its scope to that list in `src/plugins/keymap.ts`. While a box's completion popup is open,
@@ -94,7 +94,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
 - **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line
   where the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its
-  review, the gallery and the key help.
+  review, the session hub (its section heads), the doc's right column, the gallery and the key help. The doc's right
+  column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
   moves its left one; `Alt+Shift+j`/`Alt+Shift+k` move the pane's lower divider down and up, else its
@@ -143,7 +144,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves          |
 | `r`                | rename                               | `rr` rename the focused session                                                                                                                                                                                                                                                             |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                                                                                               |
-| `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `ci` show the attached images (`x` removes the shown one), `cy` copy the sign-in link (sign-in dialog) |
+| `c`                | chat controls                        | on the page or in a box: `ci` show the attached images (`x` removes the shown one); in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog) |
 | `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear                                                                                                                                                                                                              |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                                                                                                                                                          |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                                                                             |
