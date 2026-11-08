@@ -130,6 +130,7 @@ import { createPageCommands } from './page-commands';
 import { createPageLog } from './page-log';
 import { createPageParts } from './page-parts';
 import { createPastedFiles } from './pasted-files';
+import { logSlowQuit, quitStep } from './quit-wait';
 import {
   type AppliedPlugins,
   createAppliedPlugins,
@@ -382,6 +383,14 @@ let layoutService: LayoutService | null = null;
 const quitTasks: (() => unknown)[] = [];
 let quitWork: Promise<unknown> | null = null;
 let hasQuitStarted = false;
+// The ids whose stop is in flight in the main host, which a slow quit logs;
+// at quit the page has gone, so only the main host is still stopping parts.
+let stoppingParts: () => readonly string[] = () => [];
+// At will-quit every window has closed, so the quit's lines go to stderr in
+// every run mode.
+const quitLog: Log = (source, message) => {
+  process.stderr.write(`wigley-ai-gui ${source}: ${message}\n`);
+};
 
 function onQuit(task: () => unknown) {
   quitTasks.push(task);
@@ -408,22 +417,25 @@ function startQuitWork() {
   return quitWork;
 }
 
-// Starts the quit work on the first will-quit. A drive run holds the quit
-// until every task settles, so a drive `restart` finds the ui-state it left
-// and a recording finishes encoding; a second will-quit during the hold
-// (another quit, or the SIGTERM Electron turns into a quit) exits at once.
-// The user's app quits without waiting, so a task still running when it exits
-// is cut short.
+// Starts the quit work on the first will-quit and holds the quit until every
+// task settles, with no cap, so each part's stop keeps its save, a drive
+// `restart` finds the ui-state it left and a recording finishes encoding. A
+// second will-quit during the hold exits a drive run at once (another quit, or
+// the SIGTERM Electron turns into a quit); the live app keeps holding. A quit
+// still running after QUIT_WAIT_LOG_MS logs the parts still stopping to stderr.
 function runQuitTasks(event: Event) {
-  if (runMode === 'drive' && quitWork !== null) {
+  const step = quitStep(runMode, quitWork !== null);
+  if (step === 'exit') {
     app.exit(0);
     return;
   }
-  const work = startQuitWork();
-  if (runMode === 'drive') {
-    void work.then(() => app.exit(0));
-    event.preventDefault();
+  event.preventDefault();
+  if (step === 'hold') {
+    return;
   }
+  const work = startQuitWork();
+  logSlowQuit(work, stoppingParts, timers, quitLog);
+  void work.then(() => app.exit(0));
 }
 
 // The self-test gives plugins a fresh temp folder as the home folder. Its
@@ -906,6 +918,7 @@ function createWindow(
   // has detached and sees no `closed`, unless its `quit` command kept them for a
   // `restart`.
   let mainHost: PluginHost<MainStart<PluginManifest>> | null = null;
+  stoppingParts = () => mainHost?.stopping() ?? [];
   let stopsSessionsOnQuit = runMode === 'drive';
   // Added ahead of the parts: as on a quit, the page has gone before they stop,
   // so no stop reaches a page that would invoke a part already stopped.
