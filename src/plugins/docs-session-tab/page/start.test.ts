@@ -157,6 +157,24 @@ describe('docsSessionTabPagePart', () => {
   });
 
   it.each([
+    { name: 'page load', restarts: false },
+    { name: 'live restart', restarts: true },
+  ])(
+    'ready_RowArrivesAfterLoad_AddsItsDocsTab: $name',
+    async ({ restarts }) => {
+      const { harness, rows, seen } = startWithRows(['s1']);
+      if (restarts) {
+        await harness.restart();
+      }
+
+      rows.set('s2', projectRow('s2'));
+
+      expect([...seen.liveTabs.keys()]).toEqual(['s1', 's2']);
+      await harness.stop();
+    },
+  );
+
+  it.each([
     { state: 'hidden', isTabVisible: false },
     { state: 'visible', isTabVisible: true },
   ])(
