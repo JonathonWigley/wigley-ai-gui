@@ -16,23 +16,34 @@ import type { PluginHost } from '../../shared/plugin-host';
 import { neededBy } from '../../shared/plugin-manifests';
 import type { AppliedPlugins } from './applied-plugins';
 
-// How often a refused switch-off asks again, until the part lets go or the list changes.
+// How often a refused switch-off asks again, until the part lets go or the
+// list changes.
 export const PLUGIN_RETRY_MS = 2000;
 
-// Turns plugins on and off while the app runs. `apply` and `restart` run one at a time, each after the one
-// before it settles; `mayDisable` runs beside them.
+// Turns plugins on and off while the app runs. `apply` and `restart` run one
+// at a time, each after the one before it settles; `mayDisable` runs beside
+// them.
 export interface PluginSwitch extends PluginSwitchService {
-  // Applies a new disabled list: refuses with the host's `<id>: <reason>` when a part `mayStop` refuses
-  // (a config problem, retried every `PLUGIN_RETRY_MS`), else stops page parts then main parts, clears the
-  // switched-off owners' slots, starts main parts then page parts, and sets the applied list. Resolves to the
-  // refusal or null.
+  // Applies a new disabled list: refuses with the host's `<id>: <reason>` when
+  // a part `mayStop` refuses (a config problem, retried every
+  // `PLUGIN_RETRY_MS` with the newest list `apply` was handed). Else, to switch
+  // off, it sets the applied list and pushes the served config, stops page
+  // parts then main parts, and clears the switched-off owners' slots; to
+  // switch on, it starts main parts, sets the applied list and pushes the
+  // served config, then starts page parts. A main stop that throws still
+  // stops every other id. Resolves to the refusal or null.
   apply(disabled: readonly string[]): Promise<string | null>;
-  // The reason turning `pluginId` off would be refused now, in words Settings shows (neededBy, then mayStop),
-  // or null.
+  // The reason turning `pluginId` off would be refused now, in words Settings
+  // shows (neededBy, then mayStop), or null.
   mayDisable(pluginId: string): Promise<string | null>;
-  // Stops `pluginId` and its dependents, page parts first, then starts what stopped, main parts first; their
-  // slots are kept. Rejects for a plugin that is off or that no manifest has.
+  // Stops `pluginId` and its dependents, page parts first, then starts what
+  // stopped, main parts first; their slots are kept. When a step throws, it
+  // still starts the main and page parts it stopped, then rejects. Rejects
+  // for a plugin that is off or that no manifest has.
   restart(pluginId: string): Promise<void>;
+  // Clears the retry timer; a later `apply` resolves null and a later
+  // `restart` resolves, each doing nothing.
+  dispose(): void;
 }
 
 export interface PluginSwitchDeps {
@@ -47,7 +58,8 @@ export interface PluginSwitchDeps {
   manifests: readonly PluginManifest[];
   // Sets or clears the switch's config problem.
   problem(message: string | null): void;
-  // The applied list changed: push the served config to the page and apply main's keys again.
+  // The applied list changed: push the served config to the page and apply
+  // main's keys again.
   servedChanged(): void;
   timers: Timers;
   log: Log;
@@ -83,9 +95,11 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   const label = (id: string) =>
     manifests.find((manifest) => manifest.id === id)?.label ?? id;
   let lastRefusal: string | null = null;
-  // The refused list a retry applies; null when no retry waits.
+  // The newest list `apply` was handed, which a retry applies when it runs;
+  // null before the first `apply` and after `dispose`.
   let pending: readonly string[] | null = null;
   let retryHandle: number | null = null;
+  let isDisposed = false;
   let tail: Promise<unknown> = Promise.resolve();
 
   const inQueue = <T>(work: () => Promise<T>): Promise<T> => {
@@ -121,30 +135,36 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     lastRefusal = refusal;
   };
 
-  // Steps 3 and 4: the binds leave while the handlers exist, then page parts stop before main parts.
+  // Steps 3 and 4: the binds leave while the handlers exist, then page parts
+  // stop before main parts.
   const switchOff = async (off: readonly string[]) => {
     applied.set([...applied.disabled(), ...off]);
     deps.servedChanged();
     await deps.page({ kind: 'stop', ids: off });
-    try {
-      for (const id of off) {
-        await main.stop(id);
-      }
-    } catch (error) {
-      for (const id of off.filter((each) => !main.started.has(each))) {
-        deps.slots.clearOwner(id);
-      }
-      throw error;
-    }
+    const errors: unknown[] = [];
     for (const id of off) {
+      try {
+        await main.stop(id);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    for (const id of off.filter((each) => !main.started.has(each))) {
       deps.slots.clearOwner(id);
+    }
+    if (errors.length > 0) {
+      for (const error of errors.slice(1)) {
+        deps.log(SOURCE, `failed: ${errorText(error)}`);
+      }
+      throw errors[0];
     }
     for (const id of off) {
       deps.log(SOURCE, `off ${id}`);
     }
   };
 
-  // Step 5: main parts start before the binds join, and the page parts after both.
+  // Step 5: main parts start before the binds join, and the page parts after
+  // both.
   const switchOn = async (on: readonly string[], next: readonly string[]) => {
     try {
       main.start(on);
@@ -160,7 +180,8 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     }
   };
 
-  // Stops each of `ids` that main has started, last first; a stop that throws is logged.
+  // Stops each of `ids` that main has started, last first; a stop that throws
+  // is logged.
   const stopStarted = async (ids: readonly string[]) => {
     for (const id of [...ids].reverse()) {
       if (!main.started.has(id)) {
@@ -212,33 +233,67 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     return null;
   };
 
-  const retry = () => {
-    retryHandle = null;
-    if (pending !== null) {
-      apply(pending).catch((error: unknown) =>
-        deps.log(SOURCE, `failed: ${errorText(error)}`),
-      );
+  const clearRetry = () => {
+    if (retryHandle !== null) {
+      deps.timers.clear(retryHandle);
+      retryHandle = null;
     }
   };
 
-  const apply = (disabled: readonly string[]) => {
-    if (pending !== null) {
-      pending = disabled;
-    }
-    return inQueue(async () => {
-      const refusal = await applyNow(disabled);
-      if (refusal === null) {
-        pending = null;
-        if (retryHandle !== null) {
-          deps.timers.clear(retryHandle);
-          retryHandle = null;
-        }
+  // Queues an apply of the list `listOf` gives when the queued work runs.
+  const applyQueued = (listOf: () => readonly string[] | null) =>
+    inQueue(async () => {
+      const disabled = listOf();
+      if (isDisposed || disabled === null) {
         return null;
       }
-      pending = disabled;
+      const refusal = await applyNow(disabled);
+      if (refusal === null) {
+        clearRetry();
+        return null;
+      }
       retryHandle ??= deps.timers.set(retry, PLUGIN_RETRY_MS);
       return refusal;
     });
+
+  const retry = () => {
+    retryHandle = null;
+    applyQueued(() => pending).catch((error: unknown) =>
+      deps.log(SOURCE, `failed: ${errorText(error)}`),
+    );
+  };
+
+  const apply = (disabled: readonly string[]) => {
+    if (isDisposed) {
+      return Promise.resolve(null);
+    }
+    pending = disabled;
+    return applyQueued(() => disabled);
+  };
+
+  // Starts each of `mainIds` that main no longer runs, then the page parts of
+  // `pageIds`, which the page skips where started; a start that throws is
+  // logged.
+  const startWhatStopped = async (
+    mainIds: readonly string[],
+    pageIds: readonly string[],
+  ) => {
+    const mainStopped = mainIds.filter((id) => !main.started.has(id));
+    try {
+      if (mainStopped.length > 0) {
+        main.start(mainStopped);
+      }
+    } catch (error) {
+      deps.log(SOURCE, `failed: ${errorText(error)}`);
+    }
+    if (pageIds.length === 0) {
+      return;
+    }
+    try {
+      await deps.page({ kind: 'start', ids: pageIds });
+    } catch (error) {
+      deps.log(SOURCE, `failed: ${errorText(error)}`);
+    }
   };
 
   writeStatus();
@@ -262,23 +317,38 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     },
     restart: (pluginId) =>
       inQueue(async () => {
+        if (isDisposed) {
+          return;
+        }
         if (!known.has(pluginId)) {
           throw new Error(`No plugin "${pluginId}"`);
         }
         if (applied.disabled().includes(pluginId)) {
           throw new Error(`Plugin "${pluginId}" is off`);
         }
+        const mainBefore = idsWhere(manifests, (id) => main.started.has(id));
+        let pageStopped: readonly string[] = [];
+        let isDone = false;
         try {
-          const pageStopped = stoppedOf(
+          pageStopped = stoppedOf(
             await deps.page({ kind: 'stop', ids: [pluginId] }),
           );
           const mainStopped = await main.stop(pluginId);
           main.start(mainStopped);
           await deps.page({ kind: 'start', ids: pageStopped });
+          isDone = true;
           deps.log(SOURCE, `restarted ${pluginId}`);
         } finally {
+          if (!isDone) {
+            await startWhatStopped(mainBefore, pageStopped);
+          }
           writeStatus();
         }
       }),
+    dispose() {
+      isDisposed = true;
+      pending = null;
+      clearRetry();
+    },
   };
 }

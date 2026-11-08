@@ -41,15 +41,19 @@ interface SetupOptions {
   applied?: readonly string[];
 }
 
-// A switch over a fake main host and a fake page, each pushing `<side> <kind> <ids>` to `calls`, with the
-// applied list, `clearOwner` and `servedChanged` pushing to the same list. `main` and `page` hold what the
-// fakes answer, and a test changes them between calls.
+// A switch over a fake main host and a fake page, each pushing
+// `<side> <kind> <ids>` to `calls`, with the applied list, `clearOwner` and
+// `servedChanged` pushing to the same list. `main` and `page` hold what the
+// fakes answer, and a test changes them between calls. A refusal answers only
+// for a request naming its id, and a stop that rejects still forgets the part,
+// as the host does.
 function setup({ manifests, applied: initial = [] }: SetupOptions) {
   const calls: string[] = [];
   const logs: string[] = [];
   const problems: (string | null)[] = [];
   const statuses: (readonly PluginStatus[])[] = [];
   const timers: { run(): void; ms: number }[] = [];
+  const cleared: number[] = [];
   const started = new Map<string, MainStart<PluginManifest>>(
     manifests
       .filter((each) => !initial.includes(each.id))
@@ -72,21 +76,27 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
       timers.push({ run, ms });
       return timers.length;
     },
-    clear() {},
+    clear(handle) {
+      cleared.push(handle);
+    },
   };
+  const refusalFor = (refusal: string | null, ids: readonly string[]) =>
+    refusal !== null && ids.includes(refusal.slice(0, refusal.indexOf(':')))
+      ? refusal
+      : null;
   const deps: PluginSwitchDeps = {
     main: {
       started,
       mayStop(ids) {
         calls.push(`main mayStop ${ids.join(',')}`);
-        return main.refusal;
+        return refusalFor(main.refusal, ids);
       },
       async stop(id) {
         calls.push(`main stop ${id}`);
+        started.delete(id);
         if (main.stopRejects === id) {
           throw new Error(`stop of ${id} failed`);
         }
-        started.delete(id);
         return main.stopReply ?? [id];
       },
       start(ids) {
@@ -102,7 +112,7 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
     async page(request: PluginPartsRequest): Promise<PluginPartsReply> {
       calls.push(`page ${request.kind} ${request.ids.join(',')}`);
       if (request.kind === 'mayStop') {
-        return { reason: page.refusal };
+        return { reason: refusalFor(page.refusal, request.ids) };
       }
       if (request.kind === 'stop') {
         await page.hold;
@@ -137,9 +147,19 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
     problems,
     statuses,
     timers,
+    cleared,
     main,
     page,
   };
+}
+
+// A promise for `page.hold` and the call that settles it.
+function heldPage(): { hold: Promise<void>; release(): void } {
+  let release = () => {};
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { hold, release };
 }
 
 const GALLERY = [manifest('gallery'), manifest('notes')];
@@ -262,11 +282,11 @@ describe('createPluginSwitch', () => {
 
   it.each([
     {
-      case: 'main stop rejects',
+      case: 'main stop rejects on the first id',
       applied: [],
       disabled: ['a', 'b'],
-      fail: { stopRejects: 'b' },
-      tail: ['main stop a', 'main stop b', 'clearOwner a'],
+      fail: { stopRejects: 'a' },
+      tail: ['main stop a', 'main stop b', 'clearOwner a', 'clearOwner b'],
     },
     {
       case: 'main start throws after starting a',
@@ -305,12 +325,32 @@ describe('createPluginSwitch', () => {
     expect(calls).toContain('main stop forms');
   });
 
+  it('apply_NewerApplyBeforeTheRetry_RetriesTheNewerList', async () => {
+    const { pluginSwitch, page, timers, calls } = setup({ manifests: FORMS });
+    page.refusal = REFUSAL;
+    const held = heldPage();
+    page.hold = held.hold;
+    const refused = pluginSwitch.apply(['forms']);
+    const newer = pluginSwitch.apply(['notes']);
+    await refused;
+    await expect.poll(() => calls.at(-1)).toBe('page stop notes');
+    page.refusal = null;
+
+    timers[0].run();
+    held.release();
+    await newer;
+    await pluginSwitch.apply(['notes']);
+
+    expect(calls).not.toContain('main stop forms');
+    expect(calls.filter((call) => call.startsWith('applied'))).toEqual([
+      'applied notes',
+    ]);
+  });
+
   it('apply_Overlapping_RunsOneAtATime', async () => {
     const { pluginSwitch, page, calls } = setup({ manifests: GALLERY });
-    let release = () => {};
-    page.hold = new Promise((resolve) => {
-      release = resolve;
-    });
+    const { hold, release } = heldPage();
+    page.hold = hold;
     const first = pluginSwitch.apply(['gallery']);
     await expect.poll(() => calls.at(-1)).toBe('page stop gallery');
 
@@ -436,6 +476,51 @@ describe('createPluginSwitch', () => {
       'page start b,a',
     ]);
     expect(logs).toEqual(['[plugin-switch] restarted a']);
+  });
+
+  it.each([
+    {
+      case: 'main stop rejects',
+      fail: { stopRejects: 'a' },
+      calls: ['page stop a', 'main stop a', 'main start a', 'page start a'],
+    },
+    {
+      case: 'main start throws',
+      fail: { startThrowsAt: 'a' },
+      calls: [
+        'page stop a',
+        'main stop a',
+        'main start a',
+        'main start a',
+        'page start a',
+      ],
+    },
+  ])('restart_StepFails_StartsWhatItStopped: $case', async (row) => {
+    const switched = setup({ manifests: [manifest('a'), manifest('b')] });
+    Object.assign(switched.main, row.fail);
+
+    await expect(switched.pluginSwitch.restart('a')).rejects.toThrow(/failed$/);
+
+    expect(switched.calls).toEqual(row.calls);
+  });
+
+  it('dispose_ClearsTheRetryAndLaterCallsDoNothing', async () => {
+    const { pluginSwitch, page, timers, cleared, calls } = setup({
+      manifests: FORMS,
+    });
+    page.refusal = REFUSAL;
+    await pluginSwitch.apply(['forms']);
+    page.refusal = null;
+    const callsAtDispose = calls.length;
+
+    pluginSwitch.dispose();
+    timers[0].run();
+    const applied = await pluginSwitch.apply(['notes']);
+    await pluginSwitch.restart('forms');
+
+    expect(cleared).toEqual([1]);
+    expect(applied).toBe(null);
+    expect(calls.slice(callsAtDispose)).toEqual([]);
   });
 
   it.each([

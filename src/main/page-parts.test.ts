@@ -92,21 +92,60 @@ describe('createPageParts', () => {
       { kind: 'stop' as const, empty: { stopped: [] } },
       { kind: 'start' as const, empty: { started: [] } },
     ].flatMap((row) => [
-      { ...row, case: 'no page', hasPage: false, logs: [] as string[] },
+      {
+        ...row,
+        case: 'no page',
+        hasPage: false,
+        isStarted: true,
+        isGone: false,
+        logs: [] as string[],
+      },
       {
         ...row,
         case: 'started falling',
         hasPage: true,
+        isStarted: true,
+        isGone: false,
+        logs: [`plugin-switch: page ${row.kind} ended with the page`],
+      },
+      {
+        ...row,
+        case: 'page gone while held',
+        hasPage: true,
+        isStarted: false,
+        isGone: true,
+        logs: [`plugin-switch: page ${row.kind} ended with the page`],
+      },
+      {
+        ...row,
+        case: 'page gone while sent',
+        hasPage: true,
+        isStarted: true,
+        isGone: true,
         logs: [`plugin-switch: page ${row.kind} ended with the page`],
       },
     ]),
   )('request_PageEndsOrNoPage_ResolvesEmpty: $kind, $case', async (row) => {
-    const { parts, logs, setStarted } = setup(row.hasPage, true);
+    const { parts, logs, setStarted } = setup(row.hasPage, row.isStarted);
 
     const reply = parts.request({ kind: row.kind, ids: ['a'] });
-    setStarted(false);
+    if (row.isGone) {
+      parts.pageGone();
+    } else {
+      setStarted(false);
+    }
 
     expect(await reply).toEqual(row.empty);
     expect(logs).toEqual(row.logs);
+  });
+
+  it('request_AfterPageGone_ResolvesEmptyAndSendsNothing', async () => {
+    const { parts, send } = setup(true, true);
+    parts.pageGone();
+
+    const reply = await parts.request({ kind: 'stop', ids: ['a'] });
+
+    expect(reply).toEqual({ stopped: [] });
+    expect(send).not.toHaveBeenCalled();
   });
 });
