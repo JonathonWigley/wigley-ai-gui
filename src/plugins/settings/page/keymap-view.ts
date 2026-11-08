@@ -1,6 +1,5 @@
 import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { ViewScope } from '../../../contracts/keymap';
-import type { CommandInfo } from '../../../contracts/plugin';
 import { commandTarget } from '../../../shared/command-args';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
@@ -111,8 +110,8 @@ function acceleratorLine(ctx: RowContext, line: AcceleratorLine): KeyLineInput {
   return { kind: 'accelerator', keys, tags, isStruck: line.state !== 'active' };
 }
 
-// The typed keys as Kbd, and the other commands a bind of `command` on them in
-// `scope` replaces.
+// The typed keys as Kbd, and the other rows a bind of `command` on them in
+// `scope` replaces, each by its row label.
 function keysPreview(
   ctx: RowContext,
   text: string,
@@ -146,8 +145,8 @@ function keysPreview(
   return node;
 }
 
-function replacedLabels(commands: readonly CommandInfo[]): string {
-  return andList(commands.map((command) => command.label));
+function replacedLabels(rows: readonly CommandRow[]): string {
+  return andList(rows.map((row) => row.label));
 }
 
 // Adds a bind to `row`'s command and argument: a box takes the keys, then the scope

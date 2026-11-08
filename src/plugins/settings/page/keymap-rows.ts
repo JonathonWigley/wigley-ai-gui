@@ -307,11 +307,12 @@ export function keymapRows(
   return [...groups.values()].filter((group) => group.rows.length > 0);
 }
 
-// Every other row's command a new bind of `command` with `arg` on `keys` in `scope`
-// would displace, in row order: each whose default bind fires on a half the new bind
+// Every other row a new bind of `command` with `arg` on `keys` in `scope` would
+// displace, in row order: each whose default bind fires on a half the new bind
 // shares, and each whose user bind `withAddedBind` drops; judged half by half
-// as the merge does, each command once. The row of `command` and `arg` itself is left
-// out, since a bind on keys it already holds displaces nothing. Empty when none, or
+// as the merge does. A command's arg rows count apart, each naming its own
+// argument in its label. The row of `command` and `arg` itself is left out,
+// since a bind on keys it already holds displaces nothing. Empty when none, or
 // when the merge cannot expand those keys.
 export function replacedBy(
   schema: UserConfigSchema,
@@ -320,7 +321,7 @@ export function replacedBy(
   scope: string,
   command: CommandId,
   arg?: CommandArg,
-): CommandInfo[] {
+): CommandRow[] {
   const leader = keymapLeader(schema, layer);
   const typed: KeyBind = { keys, scope, command };
   if (!isExpandable(typed, leader)) {
@@ -339,10 +340,5 @@ export function replacedBy(
         const takesEditor = shared.editor && line.editor?.state === 'active';
         return takesPage || takesEditor;
       }),
-    )
-    .map((row) => row.command)
-    .filter(
-      (info, index, all) =>
-        all.findIndex((each) => each.id === info.id) === index,
     );
 }

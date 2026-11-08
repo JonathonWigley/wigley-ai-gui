@@ -532,8 +532,23 @@ describe('createSettingsView', () => {
         filter: 'size',
       },
       opened: 'section q',
+      sectionsCursor: 1,
       cursorKey: 'q.size',
       isFilterShown: true,
+    },
+    {
+      // Sections p, q and the keymap: index 2 is the last.
+      name: 'a sections cursor past the last section',
+      saved: {
+        sectionsCursor: 9,
+        openSectionId: 'q',
+        cursorKey: 'q.size',
+        filter: '',
+      },
+      opened: 'section q',
+      sectionsCursor: 2,
+      cursorKey: 'q.size',
+      isFilterShown: false,
     },
     {
       name: 'a gone row',
@@ -544,6 +559,7 @@ describe('createSettingsView', () => {
         filter: '',
       },
       opened: 'section p',
+      sectionsCursor: 0,
       cursorKey: 'p.name',
       isFilterShown: false,
     },
@@ -556,12 +572,13 @@ describe('createSettingsView', () => {
         filter: 'size',
       },
       opened: 'section p',
+      sectionsCursor: 0,
       cursorKey: 'p.name',
       isFilterShown: false,
     },
   ])(
     'restores_cursor_and_filter: $name',
-    async ({ saved, opened, cursorKey, isFilterShown }) => {
+    async ({ saved, opened, sectionsCursor, cursorKey, isFilterShown }) => {
       const { logs, places, sheet } = await shownView(
         true,
         TWO_SECTIONS,
@@ -570,6 +587,7 @@ describe('createSettingsView', () => {
       );
 
       expect(logs).toContain(opened);
+      expect(places.at(-1)?.sectionsCursor).toBe(sectionsCursor);
       expect(places.at(-1)?.cursorKey).toBe(cursorKey);
       expect(only(sheet, 'settings-filter').hidden).toBe(!isFilterShown);
     },

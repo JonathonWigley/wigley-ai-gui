@@ -36,8 +36,12 @@ function schema(
   };
 }
 
-function ids(commands: readonly CommandInfo[]): string[] {
-  return commands.map((info) => info.id);
+function ids(rows: readonly CommandRow[]): string[] {
+  return rows.map((each) => each.command.id);
+}
+
+function labels(rows: readonly CommandRow[]): string[] {
+  return rows.map((each) => each.label);
 }
 
 function row(groups: ReturnType<typeof keymapRows>, id: string): CommandRow {
@@ -407,7 +411,7 @@ describe('a command with an argument', () => {
     expect(argsOf(groups)).toEqual([4]);
   });
 
-  it('replacedBy_ArgCommand_NamesItOnce', () => {
+  it('replacedBy_ArgCommand_NamesEachArgRow', () => {
     const defaults = [
       {
         keys: '<Leader>x',
@@ -426,10 +430,10 @@ describe('a command with an argument', () => {
     ];
 
     expect(
-      ids(
+      labels(
         replacedBy(schema([pick], defaults), null, '<Leader>x', 'p.s', 'p.z'),
       ),
-    ).toEqual(['p.pick']);
+    ).toEqual(['p.pick label: 1', 'p.pick label: 2']);
   });
 
   it('replacedBy_SameCommandOtherArg_ReportsTheDisplacedRow', () => {
@@ -439,11 +443,9 @@ describe('a command with an argument', () => {
     ];
     const withPick = schema([pick], defaults);
 
-    expect(ids(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 2))).toEqual([
-      'p.pick',
-    ]);
-    expect(ids(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 3))).toEqual(
-      [],
+    expect(labels(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 2))).toEqual(
+      ['p.pick label: 3'],
     );
+    expect(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 3)).toEqual([]);
   });
 });

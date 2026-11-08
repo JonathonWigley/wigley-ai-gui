@@ -183,7 +183,7 @@ export function keyRunner(
 
 // Starts `run` and voids its promise, which the command core settles and logs;
 // a throw at the call logs `command <id> failed: <error text>`.
-function runLogged(
+export function runLogged(
   id: CommandId,
   log: PluginLog,
   run: () => Promise<void>,

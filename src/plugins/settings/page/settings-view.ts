@@ -920,19 +920,23 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     draw(true);
   };
 
-  // The first show opens the first section, once the schema names it, or the
-  // restored place's section with its filter and cursor.
+  // The first show opens the first section, once the schema names it, with
+  // the sections cursor on it; or the restored place's section with its
+  // filter and cursor, the sections cursor clamped to the sections there are.
   const openFirstSection = () => {
     if (!hasShown || hasOpenedSection || schema === null) {
       return;
     }
-    const restoredIndex = sectionList().findIndex(
+    const list = sectionList();
+    const restoredIndex = list.findIndex(
       (section) => section.id === openSectionId,
     );
     if (isPlaceRestored && restoredIndex !== -1) {
+      sectionsCursor = Math.max(0, Math.min(list.length - 1, sectionsCursor));
       openSection(restoredIndex, query, cursorKey);
       return;
     }
+    sectionsCursor = 0;
     openSection(0);
   };
 

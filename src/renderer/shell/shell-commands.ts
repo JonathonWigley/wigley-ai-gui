@@ -1,7 +1,9 @@
 import type { Log } from '../../contracts/log';
 import type { PageCommandContext } from '../../contracts/plugin';
-import { errorText } from '../../shared/error-text';
-import type { KitCommands } from '../../shared/page/layout-host/base-kit';
+import {
+  type KitCommands,
+  runLogged,
+} from '../../shared/page/layout-host/base-kit';
 import type { RuntimeCommands } from '../../shared/runtime-commands';
 
 // The shell kit's commands, read from the router's catalog as every plugin's
@@ -14,11 +16,11 @@ export function shellCommands(
     exists: (id) => commands.infoOf(id) !== undefined,
     argShape: (id) => commands.infoOf(id)?.arg,
     run(id, arg) {
-      try {
-        void commands.router.run(id, arg, {});
-      } catch (error) {
-        log('commands', `command ${id} failed: ${errorText(error)}`);
-      }
+      runLogged(
+        id,
+        (line) => log('commands', line),
+        () => commands.router.run(id, arg, {}),
+      );
     },
   };
 }
