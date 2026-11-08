@@ -45,7 +45,7 @@ export interface ChecklistItem {
   done: boolean;
   // Set by a workflow that knows which open items run; left out, an open item
   // shows the stage's state.
-  readonly running?: boolean;
+  running?: boolean;
 }
 
 export interface SessionFlow {

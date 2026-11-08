@@ -235,7 +235,8 @@ export interface SessionsMainExports {
   // guards answered the tool's contribution was disposed (rejects `Unknown
   // tool:`), the session ended (rejects `Session ended`) or the call's signal
   // aborted (rejects with its reason). A guard disposed while a call awaits it
-  // still decides that call, and no later call asks it. Each call is its own
+  // still decides that call; a guard disposed before its turn in a call is not
+  // asked, and no later call asks it. Each call is its own
   // registration, so one function added twice is asked twice until both
   // handles are disposed; a second `dispose` does nothing.
   addToolCallGuard(guard: ToolCallGuard): Disposable;

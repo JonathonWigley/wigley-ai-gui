@@ -75,7 +75,9 @@ export async function planCopies(
 }
 
 // The copy with the largest `changedAt`, the earlier one in `planCopies`
-// order on a tie; null when there is none.
+// order on a tie; null when there is none. A checkout, merge or pull rewrites
+// modified times, so the newest copy can move to a tree whose progress did not
+// change.
 export async function newestPlanCopy(
   planDir: string,
   deps: PlanCopyDeps,
