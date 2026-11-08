@@ -254,15 +254,33 @@
   display: none;
 }
 
-/* On a footer too narrow for every part on one line, the end group — the parts
-   ordered 2 and later (the context bar, the run time and the cache mark) —
-   moves to a line of its own under the rest, its slots kept. The break is a
+/* While the parts overflow their line (`is-crowded`), and on any footer under
+   220px, where a shrinking part would shrink too far, the end group — the parts
+   ordered 2 and later (the context bar, the run time and the cache mark) — moves
+   to a line of its own under the rest, its slots kept. The break is a
    full-width item ordered ahead of the group's parts. Usage's `usage.css`
-   repeats this breakpoint, so its context bar fills that line. */
+   repeats both conditions, so its context bar fills that line. The break always
+   forms a flex line, empty on a row with no part ahead of it, so the gap is each
+   part's top margin, which the holder takes back once: an empty first line then
+   adds no height, and the lines sit one gap apart. */
+.session-row-parts.is-crowded {
+  flex-wrap: wrap;
+  row-gap: 0;
+  margin-block-start: calc(-1 * var(--wg-space-0_5));
+}
+
+.session-row-parts.is-crowded > .session-row-part {
+  margin-block-start: var(--wg-space-0_5);
+}
+
+.session-row-parts.is-crowded::before {
+  content: '';
+  flex-basis: 100%;
+  order: 2;
+  height: 0;
+}
+
 @container session-row-foot (width < 220px) {
-  /* The break always forms a flex line, empty on a row with no part ahead of
-     it, so the gap is each part's top margin, which the holder takes back once:
-     an empty first line then adds no height, and the lines sit one gap apart. */
   .session-row-parts {
     flex-wrap: wrap;
     row-gap: 0;

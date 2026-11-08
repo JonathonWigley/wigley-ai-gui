@@ -61,7 +61,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // the harness's name, '' for none; `marked` is true while something marked the row waits unviewed, and never on the selected row; `activity` is what the session is
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
-// and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, which `default` wraps only on a narrow row, moving the parts ordered 2 and later to a line of their own; `onScreen` is true while the session shows in a pane other than
+// and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, which `default` wraps only on a narrow or crowded row, moving the parts ordered 2 and later to a line of their own; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;
@@ -198,7 +198,9 @@ export interface RowKit extends SessionsKit {
   // for every row, in the order they were added; returns the `div.session-row-parts`. Call it once, where the parts
   // go: a row that leaves it out gets the parts appended at the end of its element. A part that throws is logged and
   // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`. The
-  // holder keeps its parts on one line under every layout, and each part keeps its content's width.
+  // holder lays its parts on one line, each part keeping its content's width, and carries `is-crowded` while they
+  // need more than its width there, measured a frame after the holder or a part resizes, so a layout can move some
+  // of them to a line of their own.
   contributedParts(parent: HTMLElement): HTMLElement;
 }
 

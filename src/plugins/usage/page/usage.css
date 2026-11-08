@@ -55,10 +55,17 @@
   min-width: calc(var(--wg-space-8) + var(--wg-space-1_5));
 }
 
-/* On the narrow footer where sessions' default layout moves the row's end group
-   to a line of its own (`width < 220px` there too), the context starts from its
-   least width and takes the line's free room, so the run time and the cache
-   mark stay on its line. */
+/* Where sessions' default layout moves the row's end group to a line of its own
+   (a crowded parts holder, or a footer under `220px`, as there), the context
+   starts from its least width and takes the line's free room, so the run time
+   and the cache mark stay on its line. */
+.session-row-parts.is-crowded
+  > .session-row-part[data-part='usage.rowLine']:has(
+    > [data-layout-owner='usage'][data-layout='default'].usage-row-line
+  ) {
+  flex: 1 1000000 0;
+}
+
 @container session-row-foot (width < 220px) {
   .session-row-part[data-part='usage.rowLine']:has(
       > [data-layout-owner='usage'][data-layout='default'].usage-row-line
