@@ -89,7 +89,10 @@ const layout = {
       defaultText: null,
       drawEnd(end) {
         if (input.lockedText !== null) {
-          kit.tag(end, input.lockedText);
+          end.classList.add('settings-row-end--locked');
+          const lock = kit.tag(end, input.lockedText);
+          lock.classList.add('settings-row-lock');
+          lock.title = input.lockedText;
         }
         kit.el(end, 'span', 'settings-row-value', input.value);
       },

@@ -25,8 +25,8 @@ export function createAppliedPlugins(
 }
 
 // `config` as main serves it: `disabled` as its `plugins.disabled`, in place of
-// the user's list, and without the binds and commands of the plugins in it,
-// every other field as it was.
+// the user's list, and without the binds, commands and scopes of the plugins in
+// it, every other field as it was.
 export function withAppliedList(
   config: AppConfig,
   disabled: readonly string[],
@@ -42,6 +42,7 @@ export function withAppliedList(
     settings: { ...config.settings, plugins: { disabled: [...disabled] } },
     keymap: withoutPluginBinds(mainKept, config.commands, disabled, 'page'),
     commands: appliedCommands(config.commands, disabled),
+    scopes: config.scopes.filter((info) => !disabled.includes(info.plugin)),
   };
 }
 

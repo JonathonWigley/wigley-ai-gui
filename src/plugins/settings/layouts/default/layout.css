@@ -81,6 +81,22 @@
   text-align: right;
 }
 
+/* A locked Plugins row keeps its lock Tag and value on one line: the Tag
+   ellipsizes before it pushes the value down or runs under the label. */
+.settings-row-end--locked {
+  flex-wrap: nowrap;
+}
+
+.settings-row-lock {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-row-end--locked > .settings-row-value {
+  flex: none;
+}
+
 .settings-row-value {
   overflow-wrap: anywhere;
 }

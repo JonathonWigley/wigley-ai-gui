@@ -403,7 +403,7 @@ async function start() {
       return started;
     },
     manifests,
-    // Main serves the applied list in `plugins.disabled`, and no command or bind of those plugins.
+    // Main serves the applied list in `plugins.disabled`, and no command, bind or scope of those plugins.
     served.settings.plugins.disabled,
     log,
   );

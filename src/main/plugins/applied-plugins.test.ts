@@ -15,8 +15,9 @@ describe('withAppliedList', () => {
     runsIn: 'main' | 'page',
   ): CommandInfo => ({ id, label: id, group: 'Test', runsIn, plugin });
 
-  // Plugins `p` and `q`, each with one app bind and one page bind, and the
-  // user's own `plugins.disabled` of `['p']`; nothing here reads the rest.
+  // Plugins `p` and `q`, each with one app bind, one page bind and one scope,
+  // and the user's own `plugins.disabled` of `['p']`; nothing here reads the
+  // rest.
   const config = {
     settings: { keySequenceTimeoutMs: 900, plugins: { disabled: ['p'] } },
     keymap: {
@@ -33,6 +34,10 @@ describe('withAppliedList', () => {
       'p.page': command('p.page', 'p', 'page'),
       'q.page': command('q.page', 'q', 'page'),
     },
+    scopes: [
+      { id: 'p.view', title: 'In p', plugin: 'p' },
+      { id: 'q.view', title: 'In q', plugin: 'q' },
+    ],
   } as unknown as AppConfig;
 
   it.each([
@@ -44,22 +49,30 @@ describe('withAppliedList', () => {
         app: [pApp, qApp],
         page: [pPage, qPage],
         commands: ['p.go', 'q.go', 'p.page', 'q.page'],
+        scopes: ['p.view', 'q.view'],
       },
     },
     {
-      case: 'OneOff_DropsItsBindsAndCommands',
+      case: 'OneOff_DropsItsBindsCommandsAndScopes',
       disabled: ['q'],
       expected: {
         disabled: ['q'],
         app: [pApp],
         page: [pPage],
         commands: ['p.go', 'p.page'],
+        scopes: ['p.view'],
       },
     },
     {
       case: 'BothOff_KeepsTheListOrderAndDropsAll',
       disabled: ['q', 'p'],
-      expected: { disabled: ['q', 'p'], app: [], page: [], commands: [] },
+      expected: {
+        disabled: ['q', 'p'],
+        app: [],
+        page: [],
+        commands: [],
+        scopes: [],
+      },
     },
   ])('withAppliedList_$case', ({ disabled, expected }) => {
     const served = withAppliedList(config, disabled);
@@ -69,6 +82,7 @@ describe('withAppliedList', () => {
       app: served.keymap.app,
       page: served.keymap.page,
       commands: Object.keys(served.commands),
+      scopes: served.scopes.map((info) => info.id),
     }).toEqual(expected);
   });
 });
