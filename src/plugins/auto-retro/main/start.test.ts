@@ -221,18 +221,51 @@ describe('autoRetroMainPart', () => {
     const part = startPart();
     await settled();
     await part.close('h1');
+    await part.close('h2');
     await part.startedThenIdle('retro-1');
 
     part.harness.advance(3000);
-    part.sessions.set('retro-1', sessionInfo('retro-1', 'working'));
     part.sessions.set('retro-1', sessionInfo('retro-1', 'idle'));
-    part.harness.advance(SETTLE_MS - 1);
+    part.harness.advance(SETTLE_MS - 3000 - 1);
 
     expect(part.closes).toEqual([]);
 
     part.harness.advance(1);
 
     expect(part.closes).toEqual([['retro-1', 'finished']]);
+
+    await part.close('retro-host-1', 'finished');
+    await part.startedThenIdle('retro-2');
+    part.harness.advance(3000);
+    part.sessions.set('retro-2', sessionInfo('retro-2', 'working'));
+    part.sessions.set('retro-2', sessionInfo('retro-2', 'idle'));
+    part.harness.advance(SETTLE_MS - 1);
+
+    expect(part.closes).toHaveLength(1);
+
+    part.harness.advance(1);
+
+    expect(part.closes).toEqual([
+      ['retro-1', 'finished'],
+      ['retro-2', 'finished'],
+    ]);
+  });
+
+  it('sessionClosed_RunningRowClosedByUser_LogsTheDroppedRetroAndLaunchesTheNext', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    await part.close('h2');
+
+    await part.close('retro-host-1');
+
+    expect(part.messages()).toContain(
+      'retro row-retro-host-1 closed before done; h1 not analyzed',
+    );
+    expect(part.texts()).toEqual([
+      '/wigley:retro auto h1',
+      '/wigley:retro auto h2',
+    ]);
   });
 
   it('restart_LaunchCutShort_LaunchesAgain', async () => {
@@ -261,6 +294,14 @@ describe('autoRetroMainPart', () => {
     await part.harness.restart();
     await settled();
 
+    expect(part.state()?.rows).toEqual(['retro-9']);
+
+    part.harness.advance(RESTORE_WAIT_MS);
+    await settled();
+
+    expect(
+      part.messages().some((message) => message.startsWith('dropped retro')),
+    ).toBe(false);
     expect(part.state()?.rows).toEqual(['retro-9']);
 
     part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));

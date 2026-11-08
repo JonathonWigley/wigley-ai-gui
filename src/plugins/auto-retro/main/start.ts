@@ -29,6 +29,7 @@ import {
   EMPTY_QUEUE,
   nextQueue,
   type QueueEvent,
+  RETRO_COMMAND,
   type RetroItem,
   type RetroQueue,
 } from './retro-queue';
@@ -226,7 +227,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           ),
           profile: item.profile,
           message: {
-            text: `/wigley:retro auto ${hostIdsText(item)}`,
+            text: `${RETRO_COMMAND} ${hostIdsText(item)}`,
             images: [],
           },
           unattended: true,
@@ -244,6 +245,13 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     };
 
     const closed = (event: ChatMainEvents['sessionClosed']) => {
+      const { running } = queue;
+      const isRunningRow = running?.hostSessionId === event.hostSessionId;
+      if (running !== null && isRunningRow && event.reason !== 'finished') {
+        log(
+          `retro ${event.sessionId} closed before done; ${hostIdsText(running.item)} not analyzed`,
+        );
+      }
       const next = nextQueue(queue, { kind: 'closed', ...event });
       const queuedItem =
         next.queued.length > queue.queued.length

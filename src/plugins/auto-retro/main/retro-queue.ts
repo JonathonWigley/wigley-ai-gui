@@ -19,6 +19,9 @@ export interface RetroQueue {
   cleared: Record<string, string[]>; // a row's current host id → its earlier ids, oldest first
 }
 
+// The command a retro row's first message opens with, before its host ids.
+export const RETRO_COMMAND = '/wigley:retro auto';
+
 export const EMPTY_QUEUE: RetroQueue = {
   queued: [],
   running: null,
@@ -45,7 +48,8 @@ export type QueueEvent =
   | { kind: 'restoreMissed' };
 
 // The queue after `event`: a new object, `queue` left as it was. A user close that sent a message queues a retro,
-// unless the row is a retro row; one retro runs at a time.
+// unless the row is a retro row: one in `launched`, or one whose first message is a `RETRO_COMMAND`, which covers a
+// retro row `launched` lost. One retro runs at a time.
 export function nextQueue(queue: RetroQueue, event: QueueEvent): RetroQueue {
   switch (event.kind) {
     case 'closed':
@@ -80,7 +84,9 @@ function afterClose(
       cleared,
     };
   }
-  const queuesRetro = isUserClose(closed.reason) && closed.sent;
+  const isRetroRow =
+    closed.titles.firstMessage?.startsWith(`${RETRO_COMMAND} `) ?? false;
+  const queuesRetro = isUserClose(closed.reason) && closed.sent && !isRetroRow;
   if (!queuesRetro) {
     return { ...queue, cleared };
   }

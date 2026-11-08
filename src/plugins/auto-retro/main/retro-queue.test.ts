@@ -137,6 +137,18 @@ describe('nextQueue', () => {
       expected: queueOf({ running: null, launched: [], queued: [] }),
     },
     {
+      case: 'a close of a retro row the queue lost queues nothing',
+      start: queueOf({ cleared: { r1: ['r0'] } }),
+      events: [
+        closed('r1', 'user', true, {
+          user: 'Fix login',
+          agent: null,
+          firstMessage: '/wigley:retro auto h1',
+        }),
+      ],
+      expected: queueOf({ cleared: {} }),
+    },
+    {
       case: 'launching moves the head to running',
       start: queueOf({ queued: [A, B] }),
       events: [{ kind: 'launching' }],
@@ -275,7 +287,7 @@ describe('parseQueue', () => {
     expect(() => parseQueue(text)).toThrow('queue.json is not a queue');
   });
 
-  it('parseQueue_BadText_Throws: round trip', () => {
+  it('parseQueue_GoodText_ReturnsTheQueue', () => {
     expect(parseQueue(JSON.stringify(FULL))).toEqual(FULL);
   });
 });
