@@ -447,13 +447,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   },
   'src/main/themes': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/config': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/main/themes',
-      // The schema filters its commands by the applied list.
-      'src/main/plugins',
-    ],
+    layers: ['src/contracts', 'src/shared', 'src/main/themes'],
     packages: ['node:'],
   },
   'src/main/ui-state': {

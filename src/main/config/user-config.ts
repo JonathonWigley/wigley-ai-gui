@@ -14,14 +14,12 @@ import { capitalised } from '../../shared/capitalised';
 import { errorText } from '../../shared/error-text';
 import { isJsonObject } from '../../shared/json';
 import {
+  appliedCommands,
+  appliedScopes,
   defaultKeyLayers,
   mergeKeymap,
   pluginSettingInfo,
 } from '../../shared/plugin-manifests';
-import {
-  type AppliedPlugins,
-  appliedCommands,
-} from '../plugins/applied-plugins';
 import type { ThemeFileText } from '../themes/theme-loader';
 import {
   checkKeymapText,
@@ -41,17 +39,18 @@ import { settingsFileDefaults } from './user-settings';
 
 // `folder` is the absolute user config folder `store` watches; `settingInfo`
 // declares each core setting by its dotted path; the schema lists no command
-// of a plugin in `applied`.
+// or scope of a plugin in `applied`'s list.
 export interface UserConfigDeps extends ConfigCheckDeps {
   files: Files;
   folder: string;
   store: ConfigStore;
   settingInfo: Readonly<Record<string, SettingInfo>>;
-  applied: Pick<AppliedPlugins, 'disabled'>;
+  applied: { disabled(): readonly string[] };
 }
 
-// A file's check: the problem that refuses the text, or null when it passes. A
-// bind naming no command yet passes, as in a hand edit, and the store holds it back.
+// A file's check: the problem that refuses the text, or null when it passes.
+// A bind naming no command yet passes, as in a hand edit, and the store holds
+// it back.
 type TextCheck = (
   text: string,
   userThemes: readonly ThemeFileText[],
@@ -223,19 +222,18 @@ function userConfigSchema(
 }
 
 // `schema` with the runtime commands and binds the store serves now, and the
-// commands of the applied list's plugins left out.
+// commands and scopes of the applied list's plugins left out.
 function withRuntime(
   schema: UserConfigSchema,
   deps: UserConfigDeps,
 ): UserConfigSchema {
   const { layer } = deps.store.runtime();
   const merged = mergeKeymap(deps.defaultKeymap, deps.manifests, {}, layer);
+  const disabled = deps.applied.disabled();
   return {
     ...schema,
-    commands: appliedCommands(
-      deps.store.current().commands,
-      deps.applied.disabled(),
-    ),
+    commands: appliedCommands(deps.store.current().commands, disabled),
+    scopes: appliedScopes(schema.scopes, disabled),
     defaultBindLayers:
       layer.binds === undefined || layer.binds.length === 0
         ? schema.defaultBindLayers

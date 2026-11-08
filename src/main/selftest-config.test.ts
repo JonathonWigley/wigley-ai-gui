@@ -11,7 +11,6 @@ import {
   applySelfTestConfig,
   checkGroups,
   type HandedScript,
-  mainStartList,
   mergeSelfTestConfigs,
   SELFTEST_FILTER_ENV,
   screenshotFiles,
@@ -146,16 +145,6 @@ describe('applySelfTestConfig', () => {
 
     expect(served.keymap.page).toEqual([userBind, scriptBind]);
     expect(served.pluginSettings).toEqual({ p: { size: 1, speed: 9 } });
-    expect(served.settings.plugins.disabled).toEqual([]);
-  });
-});
-
-describe('mainStartList', () => {
-  it.each([
-    { case: 'SelfTest_StartsEvery', isSelfTest: true, expected: [] },
-    { case: 'NotSelfTest_KeepsTheList', isSelfTest: false, expected: ['a'] },
-  ])('mainStartList_$case', ({ isSelfTest, expected }) => {
-    expect(mainStartList(isSelfTest, ['a'])).toEqual(expected);
   });
 });
 

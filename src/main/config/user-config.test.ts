@@ -845,7 +845,7 @@ describe('createUserConfig', () => {
       ]);
     });
 
-    it('schema_AppliedPluginCommands_AreNotListed', async () => {
+    it('schema_AppliedPluginCommandsAndScopes_AreNotListed', async () => {
       const otherPlugin = definePlugin({
         id: 'q',
         label: 'q',
@@ -853,7 +853,7 @@ describe('createUserConfig', () => {
         dependsOn: { main: [], page: [] },
         reads: { main: [], page: [] },
         commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
-        scopes: {},
+        scopes: { view: 'In q' },
         settings: {},
         settingInfo: {},
         themeTokens: {},
@@ -865,9 +865,13 @@ describe('createUserConfig', () => {
         disabled: () => ['p'],
       });
 
-      const ids = Object.keys(userConfig.schema().commands);
+      const schema = userConfig.schema();
+      const ids = Object.keys(schema.commands);
       expect(ids.filter((id) => id.startsWith('p.'))).toEqual([]);
       expect(ids).toContain('q.go');
+      const scopePlugins = schema.scopes.map((info) => info.plugin);
+      expect(scopePlugins).not.toContain('p');
+      expect(scopePlugins).toContain('q');
     });
 
     it('writeKeymap_UnknownCommandBothStarted_WritesAndTheStoreHoldsItBack', async () => {

@@ -65,6 +65,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
+import { isSameJson } from '../shared/json';
 import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
@@ -73,6 +74,7 @@ import {
   pluginThemeTokens,
   qualify,
   requireListed,
+  withAppliedList,
 } from '../shared/plugin-manifests';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
@@ -134,7 +136,6 @@ import { logSlowQuit, quitStep } from './quit-wait';
 import {
   type AppliedPlugins,
   createAppliedPlugins,
-  withAppliedList,
 } from './plugins/applied-plugins';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createPluginSwitch, type PluginSwitch } from './plugins/plugin-switch';
@@ -143,11 +144,7 @@ import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
-import {
-  applySelfTestConfig,
-  mainStartList,
-  selfTestFilterOf,
-} from './selftest-config';
+import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
@@ -671,14 +668,11 @@ async function loadConfig(homeDir: string): Promise<{
   const deps = await configStoreDeps(homeDir);
   const store = await loadConfigStore(deps);
   const applied = createAppliedPlugins(
-    mainStartList(
-      runMode === 'selfTest',
-      store
-        .current()
-        .settings.plugins.disabled.filter((id) =>
-          manifests.some((manifest) => manifest.id === id),
-        ),
-    ),
+    store
+      .current()
+      .settings.plugins.disabled.filter((id) =>
+        manifests.some((manifest) => manifest.id === id),
+      ),
   );
   return {
     store,
@@ -780,14 +774,15 @@ function serveLayouts(
 // Starts every plugin's main part `disabled` does not name, each with its own
 // API over one plugin channel router to the window's page, the settings
 // `store` serves with no self-test layer, one event bus, the shared
-// `services`, its own host from `selfTest` (null outside the self-test, and for
-// a part started once `isLaunchStartDone` is true, since the handover has
-// closed), its own host from `driveRun` (null outside a drive run), its data folder under
-// `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
-// as it starts, tracked in its registrations, so stopping the part unregisters
-// them, and each part's API reaches `commands` under its id. Outside the user's
-// app, the host's lines also go to stderr, which the drive CLI keeps in the run's
-// `app.log`, as the page has gone by the time a quit stops the parts.
+// `services`, its own host from `selfTest` (null outside the self-test, and
+// for a part started once `isLaunchStartDone` is true, since the handover has
+// closed), its own host from `driveRun` (null outside a drive run), its data
+// folder under `dataRoot`, and its layouts in `layouts`. Each part's commands
+// join `commands` as it starts, tracked in its registrations, so stopping the
+// part unregisters them, and each part's API reaches `commands` under its id.
+// Outside the user's app, the host's lines also go to stderr, which the drive
+// CLI keeps in the run's `app.log`, as the page has gone by the time a quit
+// stops the parts.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
@@ -1130,9 +1125,18 @@ function createWindow(
     log,
   });
   pluginSwitch = liveSwitch;
+  onQuit(() => liveSwitch.dispose());
+  // A change that leaves the list as it was, such as the switch's own problem
+  // write, applies nothing.
+  let handedList = store.current().settings.plugins.disabled;
   store.onChanged((config) => {
+    const { disabled } = config.settings.plugins;
+    if (isSameJson(disabled, handedList)) {
+      return;
+    }
+    handedList = disabled;
     liveSwitch
-      .apply(config.settings.plugins.disabled)
+      .apply(disabled)
       .catch((error: unknown) =>
         log('plugin-switch', `failed: ${errorText(error)}`),
       );

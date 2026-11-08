@@ -1,8 +1,3 @@
-import type { CommandId } from '../../contracts/commands';
-import type { CommandInfo } from '../../contracts/plugin';
-import type { AppConfig } from '../../contracts/settings';
-import { withoutPluginBinds } from '../../shared/plugin-manifests';
-
 // The applied list: the plugins whose parts do not run, which the served
 // config carries as `plugins.disabled`.
 export interface AppliedPlugins {
@@ -22,38 +17,4 @@ export function createAppliedPlugins(
       current = [...disabled];
     },
   };
-}
-
-// `config` as main serves it: `disabled` as its `plugins.disabled`, in place of
-// the user's list, and without the binds, commands and scopes of the plugins in
-// it, every other field as it was.
-export function withAppliedList(
-  config: AppConfig,
-  disabled: readonly string[],
-): AppConfig {
-  const mainKept = withoutPluginBinds(
-    config.keymap,
-    config.commands,
-    disabled,
-    'main',
-  );
-  return {
-    ...config,
-    settings: { ...config.settings, plugins: { disabled: [...disabled] } },
-    keymap: withoutPluginBinds(mainKept, config.commands, disabled, 'page'),
-    commands: appliedCommands(config.commands, disabled),
-    scopes: config.scopes.filter((info) => !disabled.includes(info.plugin)),
-  };
-}
-
-// `commands` without the commands of the plugins in `disabled`.
-export function appliedCommands(
-  commands: Readonly<Record<CommandId, CommandInfo>>,
-  disabled: readonly string[],
-): Record<CommandId, CommandInfo> {
-  return Object.fromEntries(
-    Object.entries(commands).filter(
-      ([, info]) => !disabled.includes(info.plugin),
-    ),
-  );
 }

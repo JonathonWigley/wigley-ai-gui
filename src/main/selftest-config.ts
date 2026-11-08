@@ -159,31 +159,20 @@ function checkStep(where: string, step: SelfTestStep): void {
 }
 
 // `config` as the self-test serves it: the scripts' page binds after every
-// bind, their settings laid over the plugin settings, and `plugins.disabled`
-// empty, so the page starts every plugin. Throws on a setting no plugin holds.
+// bind, and their settings laid over the plugin settings. Throws on a setting
+// no plugin holds.
 export function applySelfTestConfig(
   config: AppConfig,
   selfTest: SelfTestConfig,
 ): AppConfig {
   return {
     ...config,
-    settings: { ...config.settings, plugins: { disabled: [] } },
     keymap: {
       ...config.keymap,
       page: [...config.keymap.page, ...selfTest.pageBinds],
     },
     pluginSettings: overrideSettings(config.pluginSettings, selfTest.settings),
   };
-}
-
-// The plugin ids main does not start: none under the self-test, which starts
-// every plugin, else `disabled`. `applySelfTestConfig` is the page's half of
-// the same rule, and `createAppliedPlugins` holds the result.
-export function mainStartList(
-  isSelfTest: boolean,
-  disabled: readonly string[],
-): readonly string[] {
-  return isSelfTest ? [] : disabled;
 }
 
 // The environment variable `npm run selftest` sets to the run's filter, as
