@@ -113,6 +113,8 @@ export interface NotePopupDeps {
   encoder: ImageEncoder;
   // Hears the page tearing down, when autosave saves an unsaved edit at once.
   onPageHide(listener: () => void): Disposable;
+  // Hears each key press and pointer press on the page, before it acts.
+  onUserInput(listener: () => void): Disposable;
   // Hears the place after each change to the popup's open state or cursors.
   placeChanged(place: NotesPlace): void;
 }
@@ -124,7 +126,8 @@ export interface NotePopup {
   setLayouts(shown: ShownLayouts<Layout>): void;
   // Puts back a reloaded page's place: an open popup opens through `open`,
   // its cursors applied once the draft loads, on its fields with no box
-  // focused.
+  // focused. It stays open through the key base changes other views' restores
+  // make, until the user's first key or pointer press.
   restorePlace(place: NotesPlace): void;
   // Closes an open markup session, starting its save, and ends autosave: an
   // edit it has not saved yet is dropped. A send still in flight then closes
@@ -170,6 +173,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   let homes: NoteHome[] = [];
   // The one operation changing the draft through main, named for log lines.
   let inFlight: DraftOperation | null = null;
+  // A restored popup's wait for the user's first input; a base change during
+  // it came from another view's restore and leaves the popup open.
+  let awaitingUserInput: Disposable | null = null;
   // An open() whose body focus waits for the operation in flight.
   let focusBodyWhenFree = false;
   // Counts the drafts put into the boxes, so a take can tell its draft left.
@@ -728,8 +734,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   // ── Opening and closing ───────────────────────────────────────────────────
-  // `restored` is a reloaded page's place: its cursors replace the body's, and
-  // no box takes focus.
+  // `restored` is a reloaded page's place: its cursors replace the body's, no
+  // box takes focus, and a base change closes the popup only after the user's
+  // first input.
   const open = async (restored?: NotesPlace) => {
     phase = 'loading';
     writePlace();
@@ -756,8 +763,12 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       return;
     }
     const scope = deps.pushScope('popup');
+    if (restored !== undefined) {
+      awaitingUserInput = deps.onUserInput(stopAwaitingUserInput);
+    }
     scope.onBaseChanged(() => {
-      if (popupScope === scope) {
+      const isUsersBaseChange = awaitingUserInput === null;
+      if (popupScope === scope && isUsersBaseChange) {
         close();
       }
     });
@@ -801,10 +812,16 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     phase = 'closed';
     writePlace();
     focusBodyWhenFree = false;
+    stopAwaitingUserInput();
     popupScope?.pop();
     popupScope = null;
     dialog.hide();
     log('popup closed');
+  };
+
+  const stopAwaitingUserInput = () => {
+    awaitingUserInput?.dispose();
+    awaitingUserInput = null;
   };
 
   // ── Capture ───────────────────────────────────────────────────────────────
@@ -1340,6 +1357,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       markupView.close();
       blurBoxes();
       phase = 'closed';
+      stopAwaitingUserInput();
       autosave.dispose();
     },
   };

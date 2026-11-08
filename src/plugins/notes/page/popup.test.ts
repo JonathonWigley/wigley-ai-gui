@@ -136,6 +136,11 @@ interface Harness {
   typeFilter(text: string): void;
   // Each place the popup reported, in order.
   places: NotesPlace[];
+  // Moves the key base under every pushed scope, as a view setting its scope
+  // does.
+  changeBase(): void;
+  // A key or pointer press on the page.
+  userInput(): void;
 }
 
 interface Fakes {
@@ -327,6 +332,8 @@ async function openPopup(
   let filterEvents: EditorEvents | null = null;
   let pushes = 0;
   let pops = 0;
+  const baseListeners: (() => void)[] = [];
+  const userInputListeners = new Set<() => void>();
   const pushed = (): PushedScope => {
     pushes += 1;
     return {
@@ -334,7 +341,10 @@ async function openPopup(
         pops += 1;
       },
       dispose: () => undefined,
-      onBaseChanged: () => ({ dispose: () => undefined }),
+      onBaseChanged(listener) {
+        baseListeners.push(() => listener('other.view'));
+        return { dispose: () => undefined };
+      },
     };
   };
   const services = {
@@ -401,6 +411,10 @@ async function openPopup(
     },
     encoder: { encode: (...args) => fakes.encode(...args) },
     onPageHide: () => ({ dispose: () => undefined }),
+    onUserInput(listener) {
+      userInputListeners.add(listener);
+      return { dispose: () => userInputListeners.delete(listener) };
+    },
     placeChanged: (place) => places.push(place),
   });
   if (restored === undefined) {
@@ -440,6 +454,16 @@ async function openPopup(
     take: (files) => targets[0].take(files),
     typeFilter: (text) => filterEvents?.changed(text),
     places,
+    changeBase() {
+      for (const listener of baseListeners) {
+        listener();
+      }
+    },
+    userInput() {
+      for (const listener of userInputListeners) {
+        listener();
+      }
+    },
   };
 }
 
@@ -964,6 +988,42 @@ describe('note popup', () => {
       );
       expect(harness.places.at(-1)).toEqual(expected);
       expect(harness.doc.activeElement).not.toBe(harness.bodyFrame);
+    },
+  );
+
+  it.each([
+    {
+      name: 'opened by its command',
+      restored: false,
+      input: false,
+      closes: true,
+    },
+    {
+      name: 'restored, before any input',
+      restored: true,
+      input: false,
+      closes: false,
+    },
+    {
+      name: 'restored, after an input',
+      restored: true,
+      input: true,
+      closes: true,
+    },
+  ] as const)(
+    'baseChanged_ClosesThePopupUnlessARestoreMadeIt: $name',
+    async ({ restored, input, closes }) => {
+      const harness = await openPopup(
+        DRAFT,
+        restored ? { isOpen: true, field: 'title', imageIndex: 0 } : undefined,
+      );
+      if (input) {
+        harness.userInput();
+      }
+
+      harness.changeBase();
+
+      expect(harness.places.at(-1)?.isOpen).toBe(!closes);
     },
   );
 
