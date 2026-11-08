@@ -94,7 +94,7 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
   `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
 - `<C-j>` / `<C-k>` scroll the form and its review a line and `<C-S-j>` / `<C-S-k>` half a page, as in docs, chat
   and the gallery.
-- The fold keys `zM` and `zR` do not exist, and a card's context and "Why recommended" sections are always shown.
+- The fold keys `zM` and `zR` do not exist, and a card's context and its choice reasons are always shown.
   `za` is bound in forms: it opens or closes the cursor's notice line (`forms.toggleNotice`).
 
 ## Keys plugin (plan B)

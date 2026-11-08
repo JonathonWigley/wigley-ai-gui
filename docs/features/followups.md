@@ -605,6 +605,11 @@ Duplication and drift with no user-visible defect.
   clear when not" has four copies (`grep pendingTick`: `chat/page/row-clock.ts`, `agent-strip/page/agent-strip.ts`,
   `workflow/page/workflow-view.ts`, `agent-lines/page/working-lines.ts`). The `fakeTimers` test helper has eight
   (`grep 'fakeTimers ='`). Give each one home in `src/shared`.
+- **Legacy `question` tolerance in the question format** — *agent-ready*, after 2027-02-06: the form store prunes saved
+  rounds after 90 days (`RETENTION_SECONDS` in `src/shared/agent-forms/form-store.ts`), so by that date none saved before
+  the `question` to `summary` rename remains. Remove `LEGACY_SUMMARY_FIELD` in
+  `src/plugins/forms/main/kinds/question/question-format.ts`, its filter in the missing-field check, the error for both
+  fields present, and the two legacy rows in `question-format.test.ts`.
 
 ## Latent defects and tests
 
