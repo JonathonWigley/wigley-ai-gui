@@ -217,7 +217,7 @@ digest.py --projects                                     default $CLAUDE_CONFIG_
 - [x] [Doc re-read](05-doc-re-read.md) — after 01, 04
 
 ### Wave 4
-- [ ] [Final verification](06-final-verification.md) — after 05
+- [x] [Final verification](06-final-verification.md) — after 05
 
 ## Run log
 
@@ -229,6 +229,7 @@ Review base: 946a8cda
 - 03 · b82a3403 · diff read; Produces present (SidebarSection, SectionPart, addSection, SectionInput.kind/id, SessionRowInput.section, SectionKit.headerPart, RowClaim/ClaimedSection, sidebarSections sections arg, SessionsParts.section header); typecheck 0 errors; sessions tests 573 pass; lint clean but pre-existing docs/keymap.md format · concerns: headerPart returns a detached div when header build throws; claims failures log per order computation (orderedRows, moveFavorite too), not only per draw; accent-edge rule doubles the class to outrank hover specificity; status edge sits beside the dashed edge, unverified live; no user sessions layout and no layout setting
 - 04 · ae33390d · diff read; Produces present (AutoRetroState, autoRetroStateSlot, autoRetroManifest, RetroItem/RetroQueue/QueueEvent/nextQueue/parseQueue/EMPTY_QUEUE, QUEUE_FILE/createQueueFile, DEFAULT_SETTLE_SECONDS/RESTORE_WAIT_MS/isRetroDone, both parts, layout.d.ts, readAutoRetroLayout); typecheck 0; auto-retro + layout-contracts tests 51 pass; lint clean but pre-existing docs/keymap.md · concerns: no test catches the settle timer restarting on each repeated done value; until the queue loads after a restart the slot still holds the previous start's row ids; header look left to 06
 - 05 · GUI 23aa5b52, marketplace bf06bb2 · diff read in both repos; SKILL.md lock/runs/draft text checked against ledger.py; session-groups plugin-section claims checked against sidebar-order.ts; check_manifests --against origin/main and check_pointers pass on 1.22.0 · concerns: auto-retro/design.md 'a click opens the row's Chat tab' untraced (06's drive checks it); SKILL.md step 10's cancelled branch says go to step 11 before it says commit step 9's drafts
+- 06 · none (verification only) · gates: marketplace Done commands pass; GUI typecheck 0, lint pass, 84 files/2172 tests; filtered selftest all passed; drive run .drive/20261108-135944-29e8 checks 1-6 PASS plus click opens Chat tab — screenshots c1-sidebar, c2-after, c3-header-2queued(-sidebar), c3-header-1queued, c4-after-restart, c4-after-close, c5-step, c6-retro-chat, c-click-retro; lead read c3 and click shots against DESIGN.md; report /tmp/claude-auto-retro/reports/06-drive.md · concerns: closing rows fast with the close key: after a close the selection lands on the new retro row, so the next press closes the retro run; a settleSeconds change does not re-arm a row already settling; the auto-retro close line is in the page log, not app.log as 06 worded it; 'muted' label measured rgb(166,173,200), no token named in design.md
 ### Contract changes
 ### Rulings
 - Two-repo run: the Review base above is the GUI worktree's tip; the marketplace worktree's review base is 00b90b5 (its tip at preflight, one docs-ahead commit past the plan's 1dbe437) — plan.py takes one sha · lead

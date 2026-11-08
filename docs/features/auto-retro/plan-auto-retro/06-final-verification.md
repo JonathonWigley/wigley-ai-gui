@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -48,3 +48,7 @@ Read every screenshot against `DESIGN.md`. A failed check is fixed through `wigl
 
 Done when: every gate passes and every live check passes, each with its capture path in the Proof.
 Commit:    none
+
+## Proof
+
+Commit none (verification only) · proof: gates: marketplace Done commands pass; GUI typecheck 0, lint pass, 84 files/2172 tests; filtered selftest all passed; drive run .drive/20261108-135944-29e8 checks 1-6 PASS plus click opens Chat tab — screenshots c1-sidebar, c2-after, c3-header-2queued(-sidebar), c3-header-1queued, c4-after-restart, c4-after-close, c5-step, c6-retro-chat, c-click-retro; lead read c3 and click shots against DESIGN.md; report /tmp/claude-auto-retro/reports/06-drive.md · concerns: closing rows fast with the close key: after a close the selection lands on the new retro row, so the next press closes the retro run; a settleSeconds change does not re-arm a row already settling; the auto-retro close line is in the page log, not app.log as 06 worded it; 'muted' label measured rgb(166,173,200), no token named in design.md
