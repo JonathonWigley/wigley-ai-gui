@@ -9,12 +9,16 @@ import type {
 } from '../contract';
 import type { PanelCloneInput, RowBadgeInput } from '../layouts/layout';
 import {
+  type CursorMove,
+  heldCloneCursor,
+  movedCursor,
   type PendingAction,
   type PoolRow,
   ordinal,
   panelInput,
   poolOfRow,
   rowBadges,
+  sessionHolders,
 } from './pool-view-model';
 
 const NOW = 1_000_000;
@@ -545,6 +549,7 @@ describe('panelInput', () => {
       NOW,
       pending ?? NO_PENDING,
       NO_ACTIONS,
+      null,
     );
     expect(plainClone(input.clones[0])).toEqual(expected);
   });
@@ -592,6 +597,7 @@ describe('panelInput', () => {
         NOW,
         NO_PENDING,
         NO_ACTIONS,
+        null,
       );
       expect(input.clones.map((each) => each.blocking)).toEqual(blocking);
       expect(input.longWait).toBe(longWait);
@@ -628,6 +634,7 @@ describe('panelInput', () => {
       NOW,
       NO_PENDING,
       NO_ACTIONS,
+      null,
     );
     expect(input.counts).toEqual(counts);
   });
@@ -664,6 +671,7 @@ describe('panelInput', () => {
       NOW,
       NO_PENDING,
       NO_ACTIONS,
+      null,
     );
     expect(input.clones[0]).toMatchObject({ branch, dirty, blocking: false });
   });
@@ -699,6 +707,7 @@ describe('panelInput', () => {
       NOW,
       NO_PENDING,
       NO_ACTIONS,
+      null,
     );
     expect(
       input.queue.map(({ holder, ...rest }) => ({
@@ -745,10 +754,135 @@ describe('panelInput', () => {
       NOW,
       NO_PENDING,
       actions,
+      null,
     );
     input.clones[0].holder?.select?.();
     input.clones[1].action?.run();
     expect(actions.select.mock.calls).toEqual([['row-7']]);
     expect(actions.run.mock.calls).toEqual([['hold', 4]]);
   });
+
+  // Clone 1 held by the user, clone 2 claimed by row A, clone 3 handed off to row B, then a ticket queued by row C
+  // and one by a session with no row: the session holders are A, B, C.
+  const cursorRows: PoolRow[] = ['A', 'B', 'C'].map((label) => ({
+    sessionId: `row-${label}`,
+    label,
+    projectDir: null,
+    hostSessionId: `host-${label}`,
+  }));
+  const cursorPool = pool(
+    'p',
+    [
+      clone(1, { claim: claim('hold', null, null) }),
+      clone(2, { claim: claim('agent', 'host-A', 'row-A') }),
+      clone(3, {
+        handoff: { session: 'host-B', row: 'row-B', until: NOW + 3_000 },
+      }),
+    ],
+    [
+      ticket({ session: 'host-C', row: 'row-C' }),
+      ticket({ session: 'host-q' }),
+    ],
+  );
+
+  it.each<{ case: string; cursor: number | null; marked: string[] }>([
+    { case: 'first', cursor: 0, marked: ['clone 2'] },
+    { case: 'a queue ticket', cursor: 2, marked: ['ticket 1'] },
+    { case: 'none', cursor: null, marked: [] },
+    { case: 'past the last', cursor: 9, marked: [] },
+  ])("marks the cursor's session holder only: $case", ({ cursor, marked }) => {
+    const input = panelInput(
+      cursorPool,
+      cursorRows,
+      NOW,
+      NO_PENDING,
+      NO_ACTIONS,
+      cursor,
+    );
+    const holders = [
+      ...input.clones.map((each, index) => ({
+        name: `clone ${index + 1}`,
+        holder: each.holder,
+      })),
+      ...input.queue.map((each, index) => ({
+        name: `ticket ${index + 1}`,
+        holder: each.holder,
+      })),
+    ];
+    expect(
+      holders
+        .filter(({ holder }) => holder?.isCursor === true)
+        .map(({ name }) => name),
+    ).toEqual(marked);
+  });
+
+  it('sessionHolders walks the clones, then the queue, sessions only', () => {
+    const input = panelInput(
+      cursorPool,
+      cursorRows,
+      NOW,
+      NO_PENDING,
+      NO_ACTIONS,
+      null,
+    );
+    expect(sessionHolders(input).map((holder) => holder.label)).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+  });
+
+  it.each<{ case: string; sessionId: string; expected: number | null }>([
+    { case: 'a claim', sessionId: 'row-A', expected: 0 },
+    { case: 'a handoff after a claim', sessionId: 'row-B', expected: 1 },
+    { case: 'queued only', sessionId: 'row-C', expected: null },
+  ])(
+    'heldCloneCursor finds the held clone: $case',
+    ({ sessionId, expected }) => {
+      expect(heldCloneCursor(cursorPool, cursorRows, sessionId)).toBe(expected);
+    },
+  );
+
+  it('heldCloneCursor skips a stranded mark', () => {
+    const strandedPool = pool('p', [
+      clone(1, {
+        stranded: {
+          session: 'host-A',
+          row: 'row-A',
+          since: NOW - 1_000,
+          reason: 'expired-dirty',
+        },
+      }),
+      clone(2, { claim: claim('agent', 'host-A', 'row-A') }),
+    ]);
+    expect(heldCloneCursor(strandedPool, cursorRows, 'row-A')).toBe(1);
+  });
+});
+
+describe('movedCursor', () => {
+  it.each<{
+    case: string;
+    cursor: number;
+    count: number;
+    move: CursorMove;
+    expected: number;
+  }>([
+    { case: 'down', cursor: 1, count: 3, move: 'down', expected: 2 },
+    {
+      case: 'down at the last',
+      cursor: 2,
+      count: 3,
+      move: 'down',
+      expected: 2,
+    },
+    { case: 'up at the first', cursor: 0, count: 3, move: 'up', expected: 0 },
+    { case: 'top', cursor: 2, count: 4, move: 'top', expected: 0 },
+    { case: 'bottom', cursor: 0, count: 4, move: 'bottom', expected: 3 },
+    { case: 'no holders', cursor: 0, count: 0, move: 'down', expected: 0 },
+  ])(
+    'movedCursor moves and clamps: $case',
+    ({ cursor, count, move, expected }) => {
+      expect(movedCursor(cursor, count, move)).toBe(expected);
+    },
+  );
 });

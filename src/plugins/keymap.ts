@@ -752,6 +752,21 @@ export const defaultKeymap = {
     { keys: 'n', scope: 'notes.confirm', command: 'notes.confirmNo' },
     { keys: '<Esc>', scope: 'notes.confirm', command: 'notes.confirmNo' },
 
+    // ── Unity pool ─────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'unity-pool.panel', command: 'unity-pool.cursorDown' },
+    { keys: 'k', scope: 'unity-pool.panel', command: 'unity-pool.cursorUp' },
+    { keys: 'gg', scope: 'unity-pool.panel', command: 'unity-pool.cursorTop' },
+    {
+      keys: 'G',
+      scope: 'unity-pool.panel',
+      command: 'unity-pool.cursorBottom',
+    },
+    {
+      keys: '<CR>',
+      scope: 'unity-pool.panel',
+      command: 'unity-pool.showHolder',
+    },
+
     // ── Gallery ────────────────────────────────────────────────────────────
     {
       keys: 't',

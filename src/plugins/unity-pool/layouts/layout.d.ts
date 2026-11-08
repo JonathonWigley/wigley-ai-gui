@@ -9,7 +9,9 @@
 // - the row part and the right-bar slot, contributed while the shown session has a pool and removed when it has none;
 // - the clicks: a holder's `select` selects its row, and an action's `run` runs `unity-pool hold|release` through
 //   main, the clone's `action.running` true until the result lands in its `result`;
-// - no keys and no focus: the panel is mouse-driven and its buttons never take focus;
+// - the keys and the focus: Alt+l past main's right edge gives the panel the keys, `j`/`k`/`gg`/`G` walk a cursor
+//   over the session holders and Enter shows the cursor's session, as the holder's click does; the buttons and
+//   links never take focus;
 // - every redraw: on each pool change, each change of the shown session or its rows, each action result, and once a
 //   minute for the times.
 // Durations arrive in milliseconds; `kit.duration` formats them: `42s`, `3m 05s` or `1h 02m`.
@@ -24,12 +26,15 @@ export interface RowBadgeInput {
 
 // Who holds a clone. `kind` 'session' is a session with a side-bar row, whose click `select` selects that row;
 // 'user' is a hold the user made; 'agent' is a session the app has no row for. `idleMs` is the time since the
-// claim's last renewal, null for a hold, a handoff or a stranded mark.
+// claim's last renewal, null for a hold, a handoff or a stranded mark. `isCursor` is true on the one session holder
+// the keyboard cursor is on while the panel holds the keys; the layout adds `is-cursor` to that holder's element,
+// and the app scrolls the first `.is-cursor` in the panel into view.
 export interface HolderInput {
   kind: 'session' | 'user' | 'agent';
   label: string;
   idleMs: number | null;
   select: (() => void) | null;
+  isCursor: boolean;
 }
 
 // One clone of the pool. `branch` reads `detached` on a detached HEAD and `unknown` for a clone never probed;

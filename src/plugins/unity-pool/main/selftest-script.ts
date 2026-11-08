@@ -32,6 +32,7 @@ const line = (text: string) => `[unity-pool] ${text}`;
 // `open` launches a session in the project folder, writes the pool with clone 1 claimed by its row, reads the pools
 // again and shows the session. Each step writes the whole state file for its stage, the text built when the step
 // runs, since it carries the row id `open` learns. The writes are outside changes on disk, which main's watch reads.
+// `panel keys` walks the panel's cursor from the keyboard and back to main.
 // Hold and Release are clicks, which the self-test cannot drive.
 export function unityPoolSelfTestScript(
   deps: UnityPoolSelfTestDeps,
@@ -63,6 +64,28 @@ export function unityPoolSelfTestScript(
       ],
     },
     {
+      name: 'panel keys',
+      why: "Alt+l past main's right edge gives the Unity pool panel the keys with its cursor on the session holding clone 1; G keeps it on the one holder, Enter shows that session, and Alt+h gives the keys back to main.",
+      steps: [
+        {
+          // Two presses, so the step holds with a pane between the Chat tab and the right bar.
+          keys: ['<A-l>', '<A-l>'],
+          expect: line('panel focused'),
+          screenshot: 'panel-cursor',
+        },
+        { keys: ['G'], expect: line(`cursor on ${SELFTEST_PROJECT_NAME}`) },
+        { keys: ['Enter'], expect: line(`showed ${SELFTEST_PROJECT_NAME}`) },
+        { keys: ['<A-h>'], expect: '[page] focus back in main' },
+        {
+          why: "Back in the panel, the cursor re-enters on the shown session's holder.",
+          keys: ['<A-l>', '<A-l>'],
+          expect: line('panel focused'),
+          alsoExpect: [/^\[unity-pool\] cursor on unity-pool-selftest$/],
+        },
+        { keys: ['<A-h>'], expect: '[page] focus back in main' },
+      ],
+    },
+    {
       name: 'tiles',
       why: 'Every clone state draws in its tile: held, free with a failed warm-up, stranded with its reason, and free while warming up.',
       steps: [
@@ -90,8 +113,9 @@ export function unityPoolSelfTestScript(
     },
     {
       name: 'unknown version',
-      why: "A state file of a version the app does not read drops its pool: main holds none, the row's badge goes and the panel leaves the right bar.",
+      why: "A state file of a version the app does not read drops its pool: main holds none, the row's badge goes and the panel leaves the right bar, handing the keys it held back to main.",
       steps: [
+        { keys: ['<A-l>', '<A-l>'], expect: line('panel focused') },
         {
           writeFile: stateAt('unknownVersion'),
           keys: [],
@@ -99,6 +123,7 @@ export function unityPoolSelfTestScript(
           alsoExpect: [
             /^\[unity-pool\] badge in unity-pool-selftest: none$/,
             /^\[unity-pool\] panel hidden$/,
+            /^\[page\] focus back in main$/,
           ],
         },
       ],

@@ -100,7 +100,9 @@ export function poolOfRow(
 
 // The panel of `pool` at `now`: each clone in number order with its holder matched to `rows`, the queue in order,
 // and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action's `run` calls
-// `actions.run` with its clone, and a session holder's `select` calls `actions.select` with its row id.
+// `actions.run` with its clone, and a session holder's `select` calls `actions.select` with its row id. `cursor` is
+// the keyboard cursor's index in `sessionHolders` order, its holder alone marked `isCursor`; null, or past the last
+// holder, marks none.
 export function panelInput(
   pool: PoolState,
   rows: readonly PoolRow[],
@@ -110,6 +112,7 @@ export function panelInput(
     run(action: PoolAction, clone: number): void;
     select(sessionId: string): void;
   },
+  cursor: number | null,
 ): PanelInput {
   const longWait = pool.queue.some((ticket) => ticket.longWait);
   const clones = pool.clones.map((clone) =>
@@ -129,7 +132,7 @@ export function panelInput(
     waitedMs: now - ticket.enqueuedAt,
     longWait: ticket.longWait,
   }));
-  return {
+  const input: PanelInput = {
     pool: pool.pool,
     clones,
     queue,
@@ -143,6 +146,65 @@ export function panelInput(
       blocking: clones.filter((clone) => clone.blocking).length,
     },
   };
+  const cursorHolder =
+    cursor === null ? undefined : sessionHolders(input)[cursor];
+  if (cursorHolder !== undefined) {
+    cursorHolder.isCursor = true;
+  }
+  return input;
+}
+
+// The panel's holders the keyboard cursor walks: each clone's holder in clone order, then each queue ticket's,
+// keeping those of kind `session`.
+export function sessionHolders(input: PanelInput): HolderInput[] {
+  const holders = [
+    ...input.clones.map((clone) => clone.holder),
+    ...input.queue.map((ticket) => ticket.holder),
+  ];
+  return holders.filter(
+    (holder): holder is HolderInput => holder?.kind === 'session',
+  );
+}
+
+export type CursorMove = 'down' | 'up' | 'top' | 'bottom';
+
+// The cursor after `move` over `count` holders: down and up by one, top the first, bottom the last, clamped to the
+// holders; 0 for none.
+export function movedCursor(
+  cursor: number,
+  count: number,
+  move: CursorMove,
+): number {
+  const moved = {
+    down: cursor + 1,
+    up: cursor - 1,
+    top: 0,
+    bottom: count - 1,
+  }[move];
+  return Math.max(0, Math.min(count - 1, moved));
+}
+
+// The index in `sessionHolders` order of the holder of the first clone the row `sessionId` holds by an agent claim
+// or an open handoff, null when it holds none.
+export function heldCloneCursor(
+  pool: PoolState,
+  rows: readonly PoolRow[],
+  sessionId: string,
+): number | null {
+  let index = 0;
+  for (const clone of pool.clones) {
+    const holder = cloneSessionHolder(clone);
+    const row = holder === null ? undefined : holderRow(holder, rows);
+    if (row === undefined) {
+      continue;
+    }
+    const holdsClone = holder !== clone.stranded;
+    if (holdsClone && row.sessionId === sessionId) {
+      return index;
+    }
+    index += 1;
+  }
+  return null;
 }
 
 function poolBadge(
@@ -257,13 +319,28 @@ function cloneHolder(
   select: (sessionId: string) => void,
 ): HolderInput | null {
   const { claim } = clone;
-  if (claim !== null) {
-    return claim.kind === 'hold'
-      ? { kind: 'user', label: 'Held by you', idleMs: null, select: null }
-      : holderInput(claim, rows, now - claim.renewedAt, select);
+  if (claim?.kind === 'hold') {
+    return {
+      kind: 'user',
+      label: 'Held by you',
+      idleMs: null,
+      select: null,
+      isCursor: false,
+    };
   }
-  const other = clone.handoff ?? clone.stranded;
-  return other === null ? null : holderInput(other, rows, null, select);
+  const holder = cloneSessionHolder(clone);
+  const idleMs = claim === null ? null : now - claim.renewedAt;
+  return holder === null ? null : holderInput(holder, rows, idleMs, select);
+}
+
+// The session behind the clone's holder: its agent claim, else its handoff, else its stranded mark; null for the
+// user's hold or no holder.
+function cloneSessionHolder(clone: PoolClone): PoolHolder | null {
+  const { claim } = clone;
+  if (claim !== null) {
+    return claim.kind === 'hold' ? null : claim;
+  }
+  return clone.handoff ?? clone.stranded;
 }
 
 function holderInput(
@@ -279,11 +356,12 @@ function holderInput(
       label: row.label,
       idleMs,
       select: () => select(row.sessionId),
+      isCursor: false,
     };
   }
   const label =
     holder.session === null
       ? 'unknown session'
       : `session ${holder.session.slice(0, 8)}`;
-  return { kind: 'agent', label, idleMs, select: null };
+  return { kind: 'agent', label, idleMs, select: null, isCursor: false };
 }

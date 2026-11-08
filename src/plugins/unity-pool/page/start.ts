@@ -34,6 +34,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type {
   CompleteLayout,
+  HolderInput,
   Layout,
   PanelInput,
   RowBadgeInput,
@@ -42,11 +43,15 @@ import type {
 import { unityPoolManifest } from '../manifest';
 import { readUnityPoolLayout } from './layout/read-unity-pool-layout';
 import {
+  type CursorMove,
+  heldCloneCursor,
+  movedCursor,
   type PendingAction,
   type PoolRow,
   panelInput,
   poolOfRow,
   rowBadges,
+  sessionHolders,
 } from './pool-view-model';
 
 type UnityPoolApi = PageApi<
@@ -82,9 +87,12 @@ interface HeldWrapper {
 // session's folder's origin name once per folder while any pool exists. Hold
 // and Release run through main, one at a time per clone, each clone's last
 // result kept until the page reloads. Redraws all at `core.pageReady`, on each of
-// those, on each layouts set and once a minute for the times. Logs each row's badges and the
-// panel's showing, hiding and counts when they change, and a Hold or Release
-// whose call to main fails; main logs every run it answers.
+// those, on each layouts set and once a minute for the times. The panel is a
+// right-bar stop: given the keys, it walks a cursor over its session holders
+// and Enter shows the cursor's session, until the core ends its turn. Logs each
+// row's badges and the panel's showing, hiding, counts and keys when they
+// change, and a Hold or Release whose call to main fails; main logs every run
+// it answers.
 export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {
@@ -123,10 +131,18 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     // Each row's badge text last logged; a row never logged reads `none`.
     const loggedBadges = new Map<string, string>();
     const panelSlot = element('div', 'unity-pool-panel-slot');
+    panelSlot.tabIndex = -1;
+    // The cursor's holder draws the focus ring, so the slot draws none.
+    panelSlot.style.outline = 'none';
     let panelContribution: Disposable | null = null;
     let panel: DrawnPart<UnityPoolPart> | null = null;
     let shownPool: string | null = null;
     let lastCountsText: string | null = null;
+    // True while the panel holds the keys; `cursor` indexes `cursorHolders`,
+    // the session holders drawn last.
+    let hasKeys = false;
+    let cursor = 0;
+    let cursorHolders: HolderInput[] = [];
     // True once the part stopped: a reply from main that lands later draws nothing.
     let isDisposed = false;
 
@@ -232,6 +248,8 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       }
       const contribution = panelContribution;
       const last = panel;
+      hasKeys = false;
+      cursorHolders = [];
       panelContribution = null;
       panel = null;
       shownPool = null;
@@ -248,12 +266,28 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     };
 
     const drawPanel = (pool: PoolState, now: number) => {
+      const actions = {
+        run: (action: PoolAction, clone: number) =>
+          runAction(pool.pool, action, clone),
+        select: (sessionId: string) => sessions.activate(sessionId),
+      };
+      const poolRows = [...rows.all().values()];
+      const pending = pendingOf(pool.pool);
+      const holderCount = sessionHolders(
+        panelInput(pool, poolRows, now, pending, actions, null),
+      ).length;
+      cursor = Math.min(cursor, Math.max(0, holderCount - 1));
       const input = withShownPaths(
-        panelInput(pool, [...rows.all().values()], now, pendingOf(pool.pool), {
-          run: (action, clone) => runAction(pool.pool, action, clone),
-          select: (sessionId) => sessions.activate(sessionId),
-        }),
+        panelInput(
+          pool,
+          poolRows,
+          now,
+          pending,
+          actions,
+          hasKeys ? cursor : null,
+        ),
       );
+      cursorHolders = sessionHolders(input);
       const last = panel;
       panel = null;
       callEach<() => void>(
@@ -272,7 +306,14 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       );
       panelContribution ??= api.areas.rightBar.contribute(panelSlot, {
         order: PANEL_ORDER,
+        focus: focusPanel,
+        left: leavePanel,
       });
+      if (hasKeys) {
+        panelSlot
+          .querySelector('.is-cursor')
+          ?.scrollIntoView({ block: 'nearest' });
+      }
       if (pool.pool !== shownPool) {
         shownPool = pool.pool;
         lastCountsText = null;
@@ -292,6 +333,61 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       } else {
         drawPanel(pool, services.clock.now());
       }
+    };
+
+    const logCursor = () => {
+      const holder = cursorHolders[cursor];
+      log(
+        holder === undefined
+          ? 'no session holder'
+          : `cursor on ${holder.label}`,
+      );
+    };
+
+    // The core gives the panel the keys: the cursor re-enters on the shown
+    // session's clone holder, else the first holder.
+    const focusPanel = () => {
+      const pool = shownPoolState();
+      const row = shownRow();
+      cursor =
+        pool === null || row === undefined
+          ? 0
+          : (heldCloneCursor(pool, [...rows.all().values()], row.sessionId) ??
+            0);
+      hasKeys = true;
+      api.keys.setScope('panel');
+      panelSlot.focus();
+      updatePanel();
+      log('panel focused');
+      logCursor();
+    };
+
+    // The core ended the panel's turn.
+    const leavePanel = () => {
+      hasKeys = false;
+      if (!isDisposed) {
+        updatePanel();
+      }
+    };
+
+    const moveCursor = (move: CursorMove) => {
+      if (cursorHolders.length === 0) {
+        log('no session holder');
+        return;
+      }
+      cursor = movedCursor(cursor, cursorHolders.length, move);
+      updatePanel();
+      logCursor();
+    };
+
+    const showHolder = () => {
+      const holder = cursorHolders[cursor];
+      if (holder === undefined) {
+        log('no session holder');
+        return;
+      }
+      holder.select?.();
+      log(`showed ${holder.label}`);
     };
 
     const redraw = () => {
@@ -381,7 +477,13 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     });
 
     return {
-      commands: {},
+      commands: {
+        cursorDown: () => moveCursor('down'),
+        cursorUp: () => moveCursor('up'),
+        cursorTop: () => moveCursor('top'),
+        cursorBottom: () => moveCursor('bottom'),
+        showHolder,
+      },
       dispose() {
         isDisposed = true;
         panel?.dispose();

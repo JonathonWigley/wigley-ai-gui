@@ -6,7 +6,7 @@
 // Release button, branch, editor state, dirty mark, who has it or `Free`, and
 // any handoff, stranded mark, warm-up or result), then the queue. A clone
 // blocking a long wait takes the attention edge and shows its holder's idle
-// time.
+// time. The session holder under the keyboard cursor takes the focus ring.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -214,7 +214,8 @@ function drawTicket(parent, ticket, kit) {
 }
 
 // A session holder with a row is a link-styled click that selects the row and
-// takes no focus; any other holder is plain text.
+// takes no focus, ringed while the keyboard cursor is on it; any other holder
+// is plain text.
 /**
  * @param {HTMLElement} parent
  * @param {import('../layout').HolderInput} holder
@@ -222,6 +223,7 @@ function drawTicket(parent, ticket, kit) {
  */
 function drawHolder(parent, holder, kit) {
   const element = kit.el(parent, 'span', 'unity-pool-holder', holder.label);
+  element.classList.toggle('is-cursor', holder.isCursor);
   const select = holder.select;
   if (select === null) {
     return;

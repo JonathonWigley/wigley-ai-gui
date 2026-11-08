@@ -111,6 +111,15 @@
   color: var(--wg-fg-secondary);
 }
 
+/* The keyboard cursor's holder: the one focus ring, padded clear of the text. */
+[data-layout-owner='unity-pool'][data-layout='default']
+  .unity-pool-holder.is-cursor {
+  margin-inline: calc(var(--wg-space-1) * -1);
+  padding-inline: var(--wg-space-1);
+  border-radius: var(--wg-radius-sm);
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
 [data-layout-owner='unity-pool'][data-layout='default']
   .unity-pool-holder.is-link {
   color: var(--wg-fg-link);

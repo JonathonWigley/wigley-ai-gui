@@ -2,14 +2,21 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // The unity-pool view: which pool clone each session holds or waits for, as a badge on its sidebar row, and every
 // clone of the shown session's pool in a right-bar panel with Hold and Release buttons, read from unity-pool's state
-// files and changed only through its CLI. It names `sessions` for the rows it badges and the sessions it matches, and
-// `chat` for its self-test's launch.
+// files and changed only through its CLI. The panel is a right-bar stop: while it holds the keys, `j`/`k`/`gg`/`G`
+// walk a cursor over its session holders and Enter shows the cursor's session. It names `sessions` for the rows it
+// badges and the sessions it matches, and `chat` for its self-test's launch.
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
-  commands: {},
-  scopes: {},
+  commands: {
+    cursorDown: { label: 'next session', group: 'panel', runsIn: 'page' },
+    cursorUp: { label: 'previous session', group: 'panel', runsIn: 'page' },
+    cursorTop: { label: 'first session', group: 'panel', runsIn: 'page' },
+    cursorBottom: { label: 'last session', group: 'panel', runsIn: 'page' },
+    showHolder: { label: 'show the session', group: 'panel', runsIn: 'page' },
+  },
+  scopes: { panel: 'In the Unity pool panel' },
   settings: { scriptPath: '', pythonCommand: 'python3', layout: 'default' },
   settingInfo: {
     scriptPath: {
