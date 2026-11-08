@@ -51,6 +51,27 @@ Core seams that most items below assume.
   box that held it, nor insert mode, because a box's key scope comes from `shown` today.
 - **Reload keeps a Settings row's open edit box** — *needs a feature plan*: after a page reload Settings returns the
   cursor and the filter, but a row's open edit box closes and the text typed in it goes.
+- **A page reload comes back in Sessions mode**: the shown mode (Docs, Settings, Backlog) has no page slot, so a reload
+  shows Sessions whichever mode the user was in.
+- **Chat's confirmed close is a plain close**: the end-session confirm's callback (`mayClose` in
+  `src/plugins/chat/page/chat-view.ts`) closes through `sessions.closeSession`, which always sends `atOnce` false. A
+  second press of the close key while the confirm shows does not re-read `closesAtOnce`, so a round opened since the
+  confirm still waits on the guard. `plugin-framework/design.md` words the close key's act as plain here; whether the
+  confirm should re-read it is the user's call.
+- **A saved take over is dropped when its tab is disposed first**: a restored session's tab that disposes before its
+  plugin's restored `takeOver` runs releases the take over the last page saved for it
+  (`session-tabs-view.ts`, `dispose` calls `release`), so the saved record leaves the place and the tab selected before
+  it comes back selected.
+- **Preview sessions lose their title-bar detail**: the Layout and Primer previews carry `projectDir: null`, so
+  `publishFocused` in `sessions/page/start.ts` sets the title bar's detail line to null. The line repeated the name
+  when the previews had a path, and no replacement detail was chosen.
+- **A session row's mark text is frozen at the first mark**: a row not yet selected keeps the first mark's `options` as
+  its `markToast` until an activate (`markToast` in `sessions/main/session-list.ts`), so a later mark on the same row,
+  or later state, does not change the toast text.
+- **`workflow.stageAction`'s `onDidRun` listeners hear a rejected action too**: `runFor` in
+  `workflow/page/workflow-view.ts` catches a failed `runAction`, logs and toasts it, and resolves, so the command ends
+  with no failure and `onDidRun` fires for it, as for "nothing to run" and a preview's skipped run. A listener cannot
+  tell a run that did its work from one that did not.
 - **Page state survives an app restart** — *needs a feature plan*: the page `*.place` slots live in main's memory, so
   an app restart loses chat's draft, forms' place and the rest.
 - **A second page reload loses a session's selected tab** — *needs a feature plan*: a tab added late, as forms' is

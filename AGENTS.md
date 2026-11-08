@@ -47,8 +47,9 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   from a user folder would. A closed list, switch or union that a new plugin would have to edit is an extension
   point waiting to become a registration.
 - **Every action is a command, shared state is published.** Every user action runs as a command, and every state
-  change another plugin reads or a page reload keeps is published as an event or slot typed in its `contract.ts`, so
-  a plugin can hook, bind or read what the app itself does. A view's private draw state stays in the view. Drags and
+  change another plugin reads or a page reload keeps is published as an event or slot typed in its `contract.ts`, or
+  held by its own main part behind its channel (forms' and primer's rounds, notes' drafts), so a plugin can hook, bind
+  or read what the app itself does. A view's private draw state stays in the view. Drags and
   focus guards stay plain listeners, and a layout wanting something else writes its own listener knowingly.
 - **Everything draws through a layout.** Every surface — each plugin's views, the overlays and dialogs, the shell
   chrome — draws through a user-editable layout, so any part of the app's look changes by editing a layout file,
