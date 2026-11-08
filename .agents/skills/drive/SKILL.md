@@ -80,6 +80,9 @@ the session host and re-attaches them. The docs fixture survives a `restart` as 
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
 keeps the Docs tree's "Claude pending" chip on screen long enough to see; default 0).
+A drive run starts with the default settings, so `docs-session-tab` is off and no session shows a Docs tab. A
+Docs-tab check first runs `setting plugins.disabled '["agent-lines","usage-tab-line"]'` (the default list without
+`docs-session-tab`), then `restart`, because turning a plugin on takes effect on the next app start.
 `docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and
 opens the doc at that line, or toasts that the machine index does not list it. `line` is a
 positive whole number, or the command rejects with `line must be a positive whole number`. A

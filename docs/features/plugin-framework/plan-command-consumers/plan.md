@@ -5,6 +5,13 @@ Target: `main` of wigley-ai-gui · Written: 2026-11-04
 
 REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
+> **Premise break.** The form-popup change (`docs/features/session-popups/`) removed interfaces that tasks 07, 08 and 11 build on:
+> `createSessionFormTabs`, `FormTabHandle` and the session take-over (`takeOver`, `takeOvers`, `TakeOver`,
+> `SessionTabHandle.takeOver`). `createSessionFormPopups` (`src/shared/page/session-form-popups.ts`) replaces them: each round
+> and the primer open in a session popup through sessions' `addPopup` and `SessionPopupHandle`. Affected lines:
+> `07-sessions.md:10,40,82,90,116,125,136`, `08-page-state.md:10,43,74,105-111,162`, `11-final-verification.md:29-31` and
+> `plan.md:35`. Run `wigley:feature` to revise these tasks before this plan runs.
+
 **Contents**
 
 - **Goal** — what Wave 3 lands.

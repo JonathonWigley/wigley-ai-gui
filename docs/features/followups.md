@@ -51,7 +51,8 @@ Core seams that most items below assume.
 - **Page state survives a page reload** — *needs a feature plan*: a core per-plugin page-state slot kept outside the
   page, which a page reload restores. Chat's draft and its images: a layout reload keeps them (the box moves into the
   redrawn composer), but a page reload starts the box empty (`docs/features/layouts/design.md`). Forms: focus, review
-  row and view (review, confirm) go into the draft or the slot; pending autosaves flush on `pagehide`.
+  row and view (review, confirm) go into the draft or the slot; pending autosaves flush on `pagehide`. Open: whether a round restored after a page reload opens its popup over
+  the tab again, or comes back hidden (`plan-command-consumers` task 08 implements this).
 - **Visual reads chat's focused entry through a slot** — *agent-ready*: `ChatPageExports.focusedEntry` and
   `focusedBlock` hand visual an `HTMLElement`, which a plugin from a user folder cannot read across a reload. Publish
   the focused entry's id and the cursor's block as a page slot in chat's `contract.ts`, and let visual find the
@@ -627,7 +628,9 @@ because the earlier items rewrite many of these tests anyway.
   have the script open the session it waits on.
 - **Docs editor-landing issues** — when the docs editor lands: an editor key sequence bound only in other scopes is
   taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in
-  docs.…` while forms binds `<Esc>`.
+  docs.…` while forms binds `<Esc>`. A row removed while its round stays open rebuilds that round's popup in a
+  new frame for the gone session (`addPopup`'s `frameOf`, `src/plugins/sessions/page/session-tabs-view.ts`), and
+  nothing drops that frame after the round closes.
 - **Editor key replay limits** — editor key replay (a broken key sequence replayed into a box through
   `EditorHost.typeInto`, `src/renderer/page-keys.ts`) has three limits only a custom keymap reaches: focus moving
   mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on
@@ -711,9 +714,9 @@ because the earlier items rewrite many of these tests anyway.
   roster ignore `usage`. Choice: keep the bus and let the log skip replays (a marker on the event), or send saved
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
-- **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the docs page hears
-  a row's host id change through `followRows` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
-  shown (`src/plugins/docs-session-tab/page/start.ts`, `docs-view.ts`). Two unit tests pin one half each: the
+- **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the
+  `docs-session-tab` part hears a row's host id change through `followRows` and calls `DocsViewHandle.sourceReplaced()`,
+  which rebuilds a session Docs tab that has shown (`src/plugins/docs-session-tab/page/start.ts`, `docs-view.ts`). Two unit tests pin one half each: the
   `docs-session-tab` part's `start.test.ts` pins that the call reaches the changed row's view, and the docs page's
   `start.test.ts` pins that `sourceReplaced` rebuilds a view only once shown. No test joins them, and the chat
   self-test's clear step never shows chat-second's Docs tab. Add a self-test step that shows the Docs tab before the
@@ -780,13 +783,6 @@ because the earlier items rewrite many of these tests anyway.
   It cannot happen until an idle compaction is seen under the app's flags (`docs/features/agent-chat/claude-stream.md`
   § Idle compaction); measure that shape, then treat an unended compaction as busy in both calls. Source session: Claude
   Code c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
-- **Docs tab's first show has no test** — *agent-ready*: the `docs-session-tab` tab's `shown`
-  (`src/plugins/docs-session-tab/page/start.ts`) runs the docs view's `shown`, which runs `showFirstTime`
-  (`src/plugins/docs/page/start.ts`) and so `loadIndex` (`docs-view.ts`). The forms self-test used to pin it live
-  through its `y` step, and now presses `R`, because rows draw in no fixed order and an earlier step can pass the Codex
-  row first. Both parts' `page/start.test.ts` cover the lifecycle, the `docs-session-tab` one over a fake docs view, and the
-  docs one shows a view only to set up its `sourceReplaced` case, so no test asserts a first show and a pin needs a
-  small seam first. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
 - **Chat self-test steps by single presses** — *agent-ready*: rows draw most recent first and rows opened in one
   millisecond tie, so the chat script's single `<A-S-o>` and `<A-S-i>` steps between its two rows may land elsewhere.
   It passes today and was not audited for ties or rows left open. Forms' `stepToRow` and sessions' `stepNextTo` hold

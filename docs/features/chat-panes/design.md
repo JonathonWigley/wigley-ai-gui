@@ -49,7 +49,7 @@ so the same hands work in both tools.
   focuses none. At the release the keys stay on a text box the press focused in that pane, or a selection it began
   there; the Chat box takes them in insert mode at its caret. Any other focus lets go, and a visible Chat tab's box takes
   them.
-- A round for a session in an unfocused pane takes over that pane and leaves focus where it is.
+- A round for a session in an unfocused pane opens its popup in that pane and leaves focus where it is.
   The row keeps its Needs you label until the user focuses that pane. Focus moving on its own would
   send the user's typing to the wrong session.
 

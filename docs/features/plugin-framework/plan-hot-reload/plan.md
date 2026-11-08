@@ -5,6 +5,13 @@ Target: `main` of wigley-ai-gui · Written: 2026-11-07
 
 REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
+> **Premise break.** The form-popup change (`docs/features/session-popups/`) moved rounds and the primer from session tabs to
+> session popups. `04-manifest-identity.md:58,62` pins two manifest descriptions that now name the wrong surface:
+> `Shows each review round an agent asks in a Form tab, where you answer it.` (forms) and
+> `Shows each feature primer an agent opens in a Primer tab, where you answer it.` (primer). The forms and primer manifests
+> (`src/plugins/forms/manifest.ts`, `src/plugins/primer/manifest.ts`) hold no description yet, so the task text is the only copy.
+> Run `wigley:feature` to revise task 04 so both descriptions name the session popup before this plan runs.
+
 **Contents**
 
 - **Goal** — what this plan lands.
