@@ -570,23 +570,26 @@ describe('createTreeView', () => {
         tree.setTree(nodes, NOTHING, NO_HEADINGS, true),
     },
   ])(
-    'restored_expansion_survives_the_first_tree: $name',
+    'restored_place_holds_until_and_through_the_first_tree: $name',
     ({ hasWiki, setTree }) => {
       const { tree, titles, selected } = wikiSetUp({ hasWiki });
-      tree.restorePlace({
+      const restored = {
         expanded: ['shelf:Two'],
         selectedId: 'entry:e:b',
         filter: '',
-      });
+      };
+      tree.restorePlace(restored);
+      // A tree with no rows draws, and reports its place, before the rows come.
+      setTree(tree, []);
+      const placeBeforeRows = tree.place();
 
       setTree(tree, [shelf('One', [page('a')]), shelf('Two', [page('b')])]);
 
       expect(titles()).toEqual(['One', 'Two', 'b']);
       expect(selected()).toEqual(['b']);
-      expect(tree.place()).toEqual({
-        expanded: ['shelf:Two'],
-        selectedId: 'entry:e:b',
-        filter: '',
+      expect({ placeBeforeRows, placeAfter: tree.place() }).toEqual({
+        placeBeforeRows: restored,
+        placeAfter: restored,
       });
     },
   );

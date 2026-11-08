@@ -184,7 +184,8 @@ export interface DocsView {
   // Puts back a reloaded page's place: the tree's at once, before its first
   // tree, and the open doc through `openDoc`'s path, its unsaved edits back in
   // its editor once it opens. Until that open settles no place is written, so
-  // a place not restored yet stays in the slot; a doc the index no longer lists
+  // a place not restored yet stays in the slot, and its edits count as unsaved
+  // (`unsavedPath`); a doc the index no longer lists
   // toasts as `openDoc` does.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
@@ -224,8 +225,10 @@ export interface DocsView {
   // Moves focus between the tree and the doc pane by `paneFocusedBy`, with
   // the pane's scope; its caller hands it over with each pane scope it sets.
   focusTarget: FocusTarget;
+  // Whether `unsavedPath` names a doc.
   hasUnsavedEdits(): boolean;
-  // The open doc's path while its editor holds unsaved edits, else null.
+  // The open doc's path while its editor holds unsaved edits, else the path of
+  // a reloaded page's unsaved edits while their restore waits, else null.
   unsavedPath(): string | null;
   // A new set of layouts is shown: each part whose pick changed draws again,
   // keeping the open doc, the editor, scroll, selection, filter and focus. A
@@ -1639,8 +1642,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         isRedrawing = false;
       }
     },
-    hasUnsavedEdits: () => doc.hasUnsavedEdits(),
-    unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
+    hasUnsavedEdits: () => view.unsavedPath() !== null,
+    unsavedPath: () =>
+      doc.hasUnsavedEdits() ? doc.openPath() : (restoring?.edits?.path ?? null),
     dispose() {
       callEach<() => void>(
         [

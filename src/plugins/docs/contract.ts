@@ -278,10 +278,10 @@ export interface DocsPageExports {
   openDoc(path: string, line?: number): void;
 }
 
-// Opens the section whose heading carries `anchor`, in the docs view `view`, as
-// a section's `edit` control does.
+// Opens the section whose heading carries `anchor`, in the docs view `viewId`,
+// as a section's `edit` control does.
 export const docsEditSectionAtCommand: CommandKey<
-  { view: string; anchor: string },
+  { viewId: string; anchor: string },
   'docs.editSectionAt'
 > = { id: 'docs.editSectionAt' };
 
@@ -320,6 +320,13 @@ export const docsCreateMainCommand: CommandKey<
   { viewId: string },
   'docs.createMain'
 > = { id: 'docs.createMain' };
+
+// A Trash button's click: the prompt of the docs view `viewId` takes `answer`,
+// `yes` or `no`.
+export const docsAnswerConfirmCommand: CommandKey<
+  { viewId: string; answer: string },
+  'docs.answerConfirm'
+> = { id: 'docs.answerConfirm' };
 
 export const docsPageKey: DependencyKey<DocsPageExports, 'page', 'docs'> = {
   id: 'docs',

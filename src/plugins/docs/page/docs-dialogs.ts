@@ -14,13 +14,13 @@ import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import { qualify } from '../../../shared/plugin-manifests';
-import type {
-  CreateKind,
-  CreatePlace,
-  DocsChannel,
-  FolderEntry,
-  IndexEntry,
+import {
+  type CreateKind,
+  type CreatePlace,
+  type DocsChannel,
+  docsAnswerConfirmCommand,
+  type FolderEntry,
+  type IndexEntry,
 } from '../contract';
 import { CREATE_KINDS, nameProblem, placesFor } from '../kinds';
 import {
@@ -30,7 +30,6 @@ import {
   completions,
 } from '../path-completion';
 import type { DocsKit } from '../layouts/layout';
-import { docsManifest } from '../manifest';
 import {
   type DocChangeRecord,
   noPlaceText,
@@ -361,7 +360,7 @@ function createConfirm(
             pick === 'yes' ? 'confirmYes' : 'confirmNo',
             label,
             variant,
-            kit.command(qualify(docsManifest.id, 'answerConfirm'), {
+            kit.command(docsAnswerConfirmCommand.id, {
               viewId,
               answer: pick,
             }),

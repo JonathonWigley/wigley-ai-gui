@@ -36,7 +36,15 @@ const viewCalls = vi.hoisted(() => [] as [string, string, unknown][]);
 
 vi.mock('./docs-view', async (importOriginal) => {
   const original = await importOriginal<typeof import('./docs-view')>();
-  const clickMethods = ['openNode', 'followLink', 'answerConfirm'] as const;
+  const clickMethods = [
+    'openNode',
+    'followLink',
+    'answerConfirm',
+    'switchTreeView',
+    'openListRow',
+    'createMain',
+    'editSectionAt',
+  ] as const;
   return {
     ...original,
     createDocsView: (deps: Parameters<typeof original.createDocsView>[0]) => {
@@ -225,7 +233,8 @@ function startDocsPage(
 type DocsPage = ReturnType<typeof startDocsPage>;
 
 // Stops the page, leaves `places` in the docs place slot as the last page's,
-// and holds the rows of `sessionIds` before the page starts again.
+// and holds the rows of `sessionIds` before the page starts again; resolves to
+// the rows' writer.
 async function reloadWith(
   { harness }: DocsPage,
   places: Record<string, DocsPlace>,
@@ -243,6 +252,7 @@ async function reloadWith(
   }
   await harness.restart();
   harness.emit('core.pageReady', null);
+  return rows;
 }
 
 const openedPaths = ({ harness }: DocsPage) =>
@@ -434,6 +444,18 @@ describe('docs page part lifecycle', () => {
       arg: { answer: 'yes' },
       reached: 'yes',
     },
+    { command: 'switchTreeView' as const, arg: {}, reached: undefined },
+    {
+      command: 'openListRow' as const,
+      arg: { entryId: 'entry:y' },
+      reached: 'entry:y',
+    },
+    { command: 'createMain' as const, arg: {}, reached: undefined },
+    {
+      command: 'editSectionAt' as const,
+      arg: { anchor: 'intro' },
+      reached: 'intro',
+    },
   ])(
     'clickCommand_ViewIdOfAnAddedView_ActsOnThatView ($command)',
     async ({ command, arg, reached }) => {
@@ -510,51 +532,94 @@ describe('docs page part lifecycle', () => {
     await harness.stop();
   });
 
-  it('row_gone_during_reload_prunes_its_view_and_keeps_docs_modes', async () => {
-    const page = startDocsPage();
-    const { harness } = page;
+  it.each([
+    { case: 'gone while no page ran', rowsAtReload: ['kept'] },
+    { case: 'removed while the page runs', rowsAtReload: ['gone', 'kept'] },
+  ])(
+    'rowGone_DeletesItsPlace_KeepsTheOthers ($case)',
+    async ({ rowsAtReload }) => {
+      const page = startDocsPage();
+      const { harness } = page;
 
-    await reloadWith(
-      page,
-      {
-        [MACHINE_SOURCE_ID]: placeAt('/p/machine.md'),
-        [sessionSourceId('gone')]: placeAt('/p/gone.md'),
-        [sessionSourceId('kept')]: placeAt('/p/kept.md'),
-      },
-      ['kept'],
-    );
+      const rows = await reloadWith(
+        page,
+        {
+          [MACHINE_SOURCE_ID]: placeAt('/p/machine.md'),
+          [sessionSourceId('gone')]: placeAt('/p/gone.md'),
+          [sessionSourceId('kept')]: placeAt('/p/kept.md'),
+        },
+        rowsAtReload,
+      );
+      rows.delete('gone');
 
-    expect(
-      [...harness.state.read(docsPlaceSlot, 'test').all().keys()].sort(),
-    ).toEqual([MACHINE_SOURCE_ID, sessionSourceId('kept')].sort());
-    await harness.stop();
-  });
+      expect(
+        [...harness.state.read(docsPlaceSlot, 'test').all().keys()].sort(),
+      ).toEqual([MACHINE_SOURCE_ID, sessionSourceId('kept')].sort());
+      await harness.stop();
+    },
+  );
 
-  it('restored_edits_refuse_the_close', async () => {
+  const restoredEdits = {
+    path: '/p/kept.md',
+    text: '# Doc\nedited',
+    baseText: '# Doc',
+  };
+
+  it.each([
+    { case: 'tab shown, edits back in the editor', isShown: true },
+    { case: 'tab never shown, restore waiting', isShown: false },
+  ])('restoredEdits_RefuseTheClose ($case)', async ({ isShown }) => {
     const page = startDocsPage(servingIndexOf(['/p/kept.md'], []));
     const { harness, liveTabs } = page;
-    const edits = {
-      path: '/p/kept.md',
-      text: '# Doc\nedited',
-      baseText: '# Doc',
-    };
 
     await reloadWith(
       page,
-      { [sessionSourceId('s1')]: placeAt('/p/kept.md', edits) },
+      { [sessionSourceId('s1')]: placeAt('/p/kept.md', restoredEdits) },
       ['s1'],
     );
     const tab = liveTabs.get('s1');
-    tab?.shown?.();
-    await vi.waitFor(() =>
-      expect(
-        harness.logs.some(({ message }) =>
-          message.startsWith('restored edits on'),
-        ),
-      ).toBe(true),
-    );
+    if (isShown) {
+      tab?.shown?.();
+      await vi.waitFor(() =>
+        expect(
+          harness.logs.some(({ message }) =>
+            message.startsWith('restored edits on'),
+          ),
+        ).toBe(true),
+      );
+    }
 
     expect(tab?.beforeClose?.(false)).toBe(false);
+    await harness.stop();
+  });
+
+  it('restorePending_TreeDraws_KeepsTheLastPagesPlace', async () => {
+    const readDocs: unknown[] = [];
+    const serve = servingIndexOf(['/p/kept.md'], readDocs);
+    // The restore's doc read never settles, so the restore stays pending.
+    const page = startDocsPage((method, ...args) => {
+      if (method === 'readDoc') {
+        readDocs.push(args[0]);
+        return new Promise(() => undefined);
+      }
+      return serve(method, ...args);
+    });
+    const { harness, liveTabs } = page;
+    const saved = {
+      ...placeAt('/p/kept.md', restoredEdits),
+      expanded: ['shelf:x'],
+    };
+
+    await reloadWith(page, { [sessionSourceId('s1')]: saved }, ['s1']);
+    liveTabs.get('s1')?.shown?.();
+    await vi.waitFor(() => expect(readDocs).toEqual(['/p/kept.md']));
+
+    expect(
+      harness.state
+        .read(docsPlaceSlot, 'test')
+        .all()
+        .get(sessionSourceId('s1')),
+    ).toEqual(saved);
     await harness.stop();
   });
 

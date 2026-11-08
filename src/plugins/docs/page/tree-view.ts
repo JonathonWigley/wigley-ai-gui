@@ -179,7 +179,8 @@ export interface TreeView {
   redraw(): void;
   // The place a page reload puts back: the expanded ids, selection and filter
   // of the view a new tree shows first, the wiki with `hasWiki`, else All
-  // pages. The other view's start over on a reload.
+  // pages; while a put-back place waits for that view's first tree with rows,
+  // that place. The other view's start over on a reload.
   place(): TreePlace;
   // Puts back a reloaded page's place, before the first `setTree`: the first
   // tree with rows in that view takes it in place of its default expansion and
@@ -740,7 +741,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       });
     },
     place() {
-      const { expanded, selectedId, filter } = placeSlot.state;
+      const { expanded, selectedId, filter } =
+        placeSlot.restored ?? placeSlot.state;
       return { expanded: [...expanded], selectedId, filter };
     },
     restorePlace({ expanded, selectedId, filter }) {

@@ -238,7 +238,7 @@ export interface SectionEditControlInput {
   // The section's heading text.
   title: string;
   command: string;
-  arg: { view: string; anchor: string };
+  arg: { viewId: string; anchor: string };
 }
 // recentChanges, scope docs.doc.
 export interface RecentChangesInput {

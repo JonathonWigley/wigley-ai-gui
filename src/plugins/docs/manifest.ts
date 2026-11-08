@@ -122,7 +122,7 @@ export const docsManifest = definePlugin({
       label: 'edit the section under its heading',
       group: 'doc',
       runsIn: 'page',
-      arg: { view: 'string', anchor: 'string' },
+      arg: { viewId: 'string', anchor: 'string' },
     },
     prevSection: { label: 'previous section', group: 'doc', runsIn: 'page' },
     nextSection: { label: 'next section', group: 'doc', runsIn: 'page' },

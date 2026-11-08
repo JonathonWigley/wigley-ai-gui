@@ -666,17 +666,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         halfPageUp: onActiveView('halfPageUp'),
         edit: onActiveView('edit'),
         editSection: onActiveView('editSection'),
-        editSectionAt: ({ arg }) => {
-          const view =
-            arg.view === machineViewId
-              ? machineView
-              : addedViews.get(arg.view)?.view;
-          if (view === undefined) {
-            log(`no docs view ${arg.view} to edit a section in`);
-            return;
-          }
-          view.editSectionAt(arg.anchor);
-        },
+        editSectionAt: ({ arg }) =>
+          viewNamed(arg.viewId, 'editSectionAt')?.editSectionAt(arg.anchor),
         switchTreeView: ({ arg }) =>
           viewNamed(arg.viewId, 'switchTreeView')?.switchTreeView(),
         openNode: ({ arg }) =>

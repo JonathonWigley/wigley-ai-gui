@@ -48,7 +48,12 @@ const READ: BacklogRead = {
   message: null,
 };
 
-function startBacklogPage() {
+// A Backlog page over main's side `invoke`, by default one whose `load` reads
+// `READ` at once.
+function startBacklogPage(
+  invoke = async (method: string): Promise<unknown> =>
+    method === 'load' ? READ : undefined,
+) {
   installFakeDom(vi.stubGlobal);
   return startPagePart(backlogPagePart, {
     dependencies: [fakeDocs],
@@ -62,7 +67,7 @@ function startBacklogPage() {
         ...NO_FENCES,
       },
     },
-    invoke: async (method) => (method === 'load' ? READ : undefined),
+    invoke,
   });
 }
 
@@ -110,5 +115,27 @@ describe('backlog page part lifecycle', () => {
     });
     const logs = harness.logs.slice(logsBefore).map((line) => line.message);
     expect(logs).toContain('selected Beta');
+  });
+
+  it('reload_ChangeBeforeTheFirstLoad_KeepsTheLastPagesPlace', async () => {
+    let isLoadHeld = false;
+    const harness = startBacklogPage(async (method) => {
+      if (method !== 'load') {
+        return undefined;
+      }
+      return isLoadHeld ? new Promise(() => undefined) : READ;
+    });
+    await settle();
+    harness.started().commands.openHomeRow({ arg: ROOT });
+    harness.started().commands.listDown({ arg: undefined });
+    const placeSlot = harness.state.read(backlogPlaceSlot, 'test');
+    const saved = placeSlot.get();
+    isLoadHeld = true;
+
+    await harness.restart();
+    harness.started().commands.toggleAgentReadyOnly({ arg: undefined });
+    await settle();
+
+    expect(placeSlot.get()).toEqual(saved);
   });
 });

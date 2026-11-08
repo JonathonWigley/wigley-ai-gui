@@ -909,7 +909,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         {
           title: section.title,
           command: docsEditSectionAtCommand.id,
-          arg: { view: deps.viewId, anchor },
+          arg: { viewId: deps.viewId, anchor },
         },
         (kit) => kit,
       );
