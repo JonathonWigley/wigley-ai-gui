@@ -1,6 +1,6 @@
 # 09 — Standing rule in AGENTS.md
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -35,3 +35,5 @@ Done when: the bullet is in § Intent; the Contents line names it; the box is ti
 Commit: one commit for the group.
 
 ## Proof
+
+Commit a957faa9 · proof: Diff read: Intent bullet and Contents line as the task's text; truth greps re-run by worker all pass (no kit.run, no textButton in workflow-kit.ts, PlaceSlot in all eight contracts, every textButton/iconButton hit passes); master-plan Wave 3 checkpoint ticked. · concerns: none; extra scope: AGENTS.md src/shared/page and sessions entries brought up to task 08.
