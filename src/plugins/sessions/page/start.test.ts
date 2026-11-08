@@ -341,24 +341,36 @@ describe('sessions page part', () => {
     await harness.stop();
   });
 
-  it('pageReady_TracksOnlyTheRestoreUntilItsFocusFollows', async () => {
-    const harness = startPagePart(sessionsPagePart, {
-      services: { picker: fakeListPickerService(), uiState: fakeUiState() },
-    });
-    const rows = harness.state.publish(sessionsRowsSlot);
-    rows.set('s1', hostRow('s1'));
-    harness.state.publish(sessionsSelectionSlot).set('s1');
+  // A rowless first selection is mid-operation: main's next selection write
+  // settles it.
+  it.each([
+    { case: 'first selection has its row', firstSelection: 's1' },
+    { case: 'first selection is rowless', firstSelection: 'gone' },
+  ])(
+    'pageReady_TracksOnlyTheRestoreUntilItsFocusFollows ($case)',
+    async ({ firstSelection }) => {
+      const harness = startPagePart(sessionsPagePart, {
+        services: { picker: fakeListPickerService(), uiState: fakeUiState() },
+      });
+      const rows = harness.state.publish(sessionsRowsSlot);
+      rows.set('s1', hostRow('s1'));
+      const selection = harness.state.publish(sessionsSelectionSlot);
+      selection.set(firstSelection);
 
-    harness.emit('core.pageReady', null);
-    const [restore] = harness.restores;
-    await restore;
-    const activeAtSettle = harness.state.read(sessionsActiveSlot, 'test').get();
-    rows.set('s2', hostRow('s2'));
-    await settle();
+      harness.emit('core.pageReady', null);
+      const [restore] = harness.restores;
+      selection.set('s1');
+      await restore;
+      const activeAtSettle = harness.state
+        .read(sessionsActiveSlot, 'test')
+        .get();
+      rows.set('s2', hostRow('s2'));
+      await settle();
 
-    expect([harness.restores.length, activeAtSettle]).toEqual([1, 's1']);
-    await harness.stop();
-  });
+      expect([harness.restores.length, activeAtSettle]).toEqual([1, 's1']);
+      await harness.stop();
+    },
+  );
 
   it('pageReady_SessionsAppliesBeforeAReaderAdded', async () => {
     // A row part's builds, then what they held as each `added` arrived.

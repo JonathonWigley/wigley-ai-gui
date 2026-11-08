@@ -60,19 +60,21 @@ type OpenForm = ReturnType<typeof openForm>;
 
 // The forms part over sessions, main holding `open` rounds, a row for each
 // round's session, the first round's selected and the page ready, so it is the
-// active round. `reload` starts a new page over the same slots and readies it;
-// `whileRead` runs once the new page has asked for its open rounds, before the
-// read lands. `place` reads a round's place, r1's by default; `select` selects a
-// round's session and lets the selection settle.
+// active round. `reload` starts a new page over the same slots and readies it,
+// its open rounds read landing after the page is ready, as main's answer does;
+// `duringRead` runs once the new page is ready and before the read lands, handed
+// the restores the new page tracked as it started. `place` reads a round's
+// place, r1's by default; `select` selects a round's session and lets the
+// selection settle.
 async function startOverOpenRounds(open: { forms: OpenForm[] }) {
-  let whileRead = () => undefined as void;
+  let readHeld: Promise<void> = Promise.resolve();
   const harness = startPagePart(formsPagePart, {
     parts: [sessionsPagePart],
     invoke: async (method) => {
       if (method !== 'openForms') {
         return new Promise(() => undefined);
       }
-      whileRead();
+      await readHeld;
       return open.forms;
     },
     services: {
@@ -93,11 +95,20 @@ async function startOverOpenRounds(open: { forms: OpenForm[] }) {
   selection.set(open.forms[0].sessionId);
   harness.emit('core.pageReady', null);
   await settle();
-  const reload = async (duringRead: () => void = () => undefined) => {
-    whileRead = duringRead;
+  const reload = async (
+    duringRead: (
+      tracked: readonly Promise<unknown>[],
+    ) => void | Promise<void> = () => undefined,
+  ) => {
+    const read = deferred<void>();
+    readHeld = read.promise;
+    const trackedBefore = harness.restores.length;
     await harness.restart();
-    whileRead = () => undefined;
+    const tracked = harness.restores.slice(trackedBefore);
     harness.emit('core.pageReady', null);
+    await settle();
+    await duringRead(tracked);
+    read.resolve();
     await settle();
   };
   const place = (formId = 'r1') =>
@@ -304,23 +315,51 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
-  it('a background round shows its saved place on its first activation after a reload', async () => {
+  it('the open rounds read is tracked as a restore until its rounds are back in place', async () => {
+    const { harness, reload } = await startOverOpenRounds({
+      forms: [threeQuestionForm()],
+    });
+    moveToReviewRowThree(harness);
+    const emittedBefore = harness.emitted.length;
+    const viewAfterReload = () =>
+      dataEmitted(
+        { emitted: harness.emitted.slice(emittedBefore) },
+        'forms.viewChanged',
+      ).at(-1);
+    const settledViews: unknown[] = [];
+    let tracked = 0;
+    let settledDuringRead = 0;
+
+    await reload(async (restores) => {
+      tracked = restores.length;
+      for (const restore of restores) {
+        void restore.then(() => settledViews.push(viewAfterReload()));
+      }
+      await settle();
+      settledDuringRead = settledViews.length;
+    });
+
+    expect([tracked, settledDuringRead, settledViews]).toEqual([
+      1,
+      0,
+      [{ view: 'review', roundId: 'r1' }],
+    ]);
+    await harness.stop();
+  });
+
+  it('a round the read finds in the background shows its saved view on its first activation', async () => {
     const { harness, reload, place, select } = await startOverOpenRounds({
       forms: [threeQuestionForm('r1'), threeQuestionForm('r2')],
     });
-    await select('r2');
     moveToReviewRowThree(harness);
+
+    await reload(() => select('r2'));
     await select('r1');
-    const background: RoundPlace = { ...REVIEW_ROW_THREE, view: 'forms' };
-    expect(place('r2')).toEqual(background);
 
-    await reload();
-    await select('r2');
-
-    expect(place('r2')).toEqual(background);
+    expect(place('r1')).toEqual(REVIEW_ROW_THREE);
     expect(dataEmitted(harness, 'forms.viewChanged').at(-1)).toEqual({
-      view: 'forms',
-      roundId: 'r2',
+      view: 'review',
+      roundId: 'r1',
     });
     await harness.stop();
   });

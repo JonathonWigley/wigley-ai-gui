@@ -843,6 +843,36 @@ describe('placeRestored', () => {
       },
     },
     {
+      case: 'no saved item on a task with items',
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: null,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 1,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+    },
+    {
+      case: 'a saved item on a task with no items',
+      place: {
+        selectedTask: { kind: 'task', entryId: 's1' },
+        selectedItem: 2,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+      expected: {
+        selectedTask: { kind: 'task', entryId: 's1' },
+        selectedItem: null,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+    },
+    {
       case: "the card showing the items column's item",
       place: {
         selectedTask: TASK_1,

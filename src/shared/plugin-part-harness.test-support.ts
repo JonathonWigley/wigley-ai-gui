@@ -184,7 +184,11 @@ export interface HarnessAnchor {
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
 // order. `restores` holds each restore handed to `restores.track`; the harness
-// runs no page load, so `restores.onSettled` calls its listener at once.
+// runs no page load, so `restores.onSettled` calls its listener at once, unless
+// the options hold the restores: then each page load's restores settle at
+// `settleRestores`. `changeBase` moves the base scope and tells each pushed
+// scope's `onBaseChanged`, as a scope change another view made would; a part's
+// own `keys.setScope` tells none.
 // `pushSettings` replaces what `settings()` reads for the part under test and tells
 // its `onSettingsChanged` listeners. The fake `modes` writes `coreModeSlot` on each
 // change of the shown mode, unless a test holds that slot's claim.
@@ -200,6 +204,8 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   readonly anchors: readonly HarnessAnchor[];
   readonly picked: readonly string[];
   readonly restores: readonly Promise<unknown>[];
+  settleRestores(): void;
+  changeBase(scope: string): void;
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
 }
@@ -222,7 +228,8 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 // never settles. A replaced `editor` or `markdown` still runs through its
 // per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
-// added. `parts` and `state` are as on main.
+// added. `holdsRestores` keeps each page load's restores unsettled until the
+// harness's `settleRestores`. `parts` and `state` are as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
   // Runs at each fake anchor's `dispose`, to make one throw.
   anchorDispose?(): void;
@@ -231,6 +238,7 @@ export interface PagePartHarnessOptions<M extends PluginManifest> {
   services?: Partial<Omit<PageServices, 'timers' | 'log'>>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
   firstModeTaken?: boolean;
+  holdsRestores?: boolean;
   parts?: readonly PagePart[];
   state?: SlotStore;
 }
@@ -1030,6 +1038,11 @@ interface PageWorld extends HarnessWorld {
   shownMode: FakeLiveMode | null;
   picked: string[];
   restores: Promise<unknown>[];
+  // False from each page load's start until `settleRestores` while the
+  // options hold the restores.
+  areRestoresSettled: boolean;
+  settledListeners: Listeners<null>;
+  baseListeners: Listeners<string>;
   fences: FenceContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
@@ -1069,6 +1082,9 @@ function createPageWorld(
     shownMode: firstMode,
     picked: [],
     restores: [],
+    areRestoresSettled: true,
+    settledListeners: createListeners(),
+    baseListeners: createListeners(),
     fences: [],
     anchors: [],
     where: 'page',
@@ -1084,9 +1100,11 @@ function createPageWorld(
 
 function fakePushedScope(
   scope: string,
-  common: Pick<CommonApi, 'register' | 'liveHandle'>,
+  common: Pick<CommonApi, 'register'>,
+  baseListeners: Listeners<string>,
 ): PushedScope {
   let isPopped = false;
+  const heard: Disposable[] = [];
   const pushed: PushedScope = {
     pop() {
       if (isPopped) {
@@ -1094,9 +1112,16 @@ function fakePushedScope(
       }
       pushed.dispose();
     },
-    onBaseChanged: common.liveHandle,
+    onBaseChanged(listener) {
+      const handle = baseListeners.add(listener);
+      heard.push(handle);
+      return common.register(handle);
+    },
     dispose() {
       isPopped = true;
+      for (const handle of heard.splice(0)) {
+        handle.dispose();
+      }
     },
   };
   return common.register(pushed);
@@ -1249,8 +1274,9 @@ function ownCommand(
   id: string,
 ): CommandInfo | undefined {
   const prefix = `${manifest.id}.`;
-  const declared = id.startsWith(prefix)
-    ? manifest.commands[id.slice(prefix.length)]
+  const short = id.startsWith(prefix) ? id.slice(prefix.length) : '';
+  const declared = Object.hasOwn(manifest.commands, short)
+    ? manifest.commands[short]
     : undefined;
   return declared && { ...declared, id, plugin: manifest.id };
 }
@@ -1301,7 +1327,11 @@ function fakePageApi(
         world.scope = qualify(manifest.id, scope);
       },
       pushScope: (scope) =>
-        fakePushedScope(qualify(manifest.id, scope), common),
+        fakePushedScope(
+          qualify(manifest.id, scope),
+          common,
+          world.baseListeners,
+        ),
       scope: () => world.scope,
       onPending: liveHandle,
       holdPending() {},
@@ -1351,8 +1381,11 @@ function fakePageApi(
         world.restores.push(restore);
       },
       onSettled(listener) {
-        listener();
-        return liveHandle();
+        if (world.areRestoresSettled) {
+          listener();
+          return liveHandle();
+        }
+        return register(world.settledListeners.add(() => listener()));
       },
     },
     settings: () => record.settings,
@@ -1569,6 +1602,8 @@ export function startPagePart<M extends PluginManifest>(
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
   world.anchorDispose = options.anchorDispose;
+  const holdsRestores = options.holdsRestores === true;
+  world.areRestoresSettled = !holdsRestores;
   const record = newPageRecord(
     options.settings ?? part.manifest.settings,
     zeroCounts(),
@@ -1598,10 +1633,26 @@ export function startPagePart<M extends PluginManifest>(
   lifecycle.start();
   return {
     ...baseHarness(lifecycle, world, record.counts),
+    // A new page load's restores are held again.
+    restart() {
+      world.areRestoresSettled = !holdsRestores;
+      return lifecycle.restart();
+    },
     fences: world.fences,
     anchors: world.anchors,
     picked: world.picked,
     restores: world.restores,
+    settleRestores() {
+      if (world.areRestoresSettled) {
+        return;
+      }
+      world.areRestoresSettled = true;
+      world.settledListeners.tell(null);
+    },
+    changeBase(scope) {
+      world.scope = scope;
+      world.baseListeners.tell(scope);
+    },
     setWhere(where) {
       world.where = where;
       world.whereListeners.tell(where);

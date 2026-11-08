@@ -247,6 +247,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Read once; the first state places it.
     const saved = readSavedPanes(uiState.get(PANES_KEY));
     let hasRestored = false;
+    // The restore tracked from the first apply until the first apply that is
+    // not mid-operation shows the restored panes' visible tab, setting the key
+    // base, in its microtask.
+    let restoreFollowed: PromiseWithResolvers<void> | null = null;
     // The restored panes still waiting for their sessions (`restorePlan`),
     // until the first pane key closes them.
     let waiting = new Map<string, string>();
@@ -637,7 +641,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const apply = (next: SessionsState) => {
       const before = state;
-      const isRestore = !hasRestored;
+      if (!hasRestored) {
+        restoreFollowed = Promise.withResolvers<void>();
+        api.restores.track(restoreFollowed.promise);
+      }
       state = next;
       isApplying = true;
       const changes = rowChanges(before.rows, next.rows);
@@ -678,9 +685,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       midOperation = NO_MID_OPERATION;
-      // The restored panes' visible tab shows in the microtask, setting the
-      // key base, so the restore is tracked until it has run.
-      const followed = isRestore ? Promise.withResolvers<void>() : null;
+      const followed = restoreFollowed;
+      restoreFollowed = null;
       queueMicrotask(() => {
         try {
           publishFocused();
@@ -689,9 +695,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           followed?.resolve();
         }
       });
-      if (followed !== null) {
-        api.restores.track(followed.promise);
-      }
     };
 
     // Main sends `activated` before the writes it causes, so the mode shows

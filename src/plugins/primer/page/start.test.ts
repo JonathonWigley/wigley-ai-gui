@@ -29,15 +29,22 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 // The primer part over sessions, main holding `open` primers, a row for each
 // primer's session, the first one's selected and the page ready, so it is the
-// active primer. `reload` starts a new page over the same slots and readies it;
-// `beforeRead` runs once the new page has started, before its open primers read
-// lands. `place` reads p1's place; `select` selects a primer's session and lets
-// the selection settle.
+// active primer. `reload` starts a new page over the same slots and readies it,
+// its open primers read landing after the page is ready, as main's answer does;
+// `duringRead` runs once the new page is ready and before the read lands, handed
+// the restores the new page tracked as it started. `place` reads p1's place;
+// `select` selects a primer's session and lets the selection settle.
 async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
+  let readHeld: Promise<void> = Promise.resolve();
   const harness = startPagePart(primerPagePart, {
     parts: [sessionsPagePart],
-    invoke: async (method) =>
-      method === 'openForms' ? open.forms : new Promise(() => undefined),
+    invoke: async (method) => {
+      if (method !== 'openForms') {
+        return new Promise(() => undefined);
+      }
+      await readHeld;
+      return open.forms;
+    },
     services: {
       editor: countingEditors().host,
       markdown: PLAIN_MARKDOWN,
@@ -56,10 +63,20 @@ async function startOverOpenPrimers(open: { forms: PresentedPrimer[] }) {
   selection.set(open.forms[0].sessionId);
   harness.emit('core.pageReady', null);
   await settle();
-  const reload = async (beforeRead: () => void = () => undefined) => {
+  const reload = async (
+    duringRead: (
+      tracked: readonly Promise<unknown>[],
+    ) => void | Promise<void> = () => undefined,
+  ) => {
+    const read = deferred<void>();
+    readHeld = read.promise;
+    const trackedBefore = harness.restores.length;
     await harness.restart();
-    beforeRead();
+    const tracked = harness.restores.slice(trackedBefore);
     harness.emit('core.pageReady', null);
+    await settle();
+    await duringRead(tracked);
+    read.resolve();
     await settle();
   };
   const place = () => harness.state.read(primerPlaceSlot, 'test').get('p1');
@@ -133,6 +150,36 @@ describe('primer page part', () => {
 
     expect(setup.place()).toEqual(expected);
     await setup.harness.stop();
+  });
+
+  it('the open primers read is tracked as a restore until its primers are back in place', async () => {
+    const setup = await startOverOpenPrimers({
+      forms: [presentedPrimer('p1')],
+    });
+    const { harness, reload, place } = setup;
+    const { commands } = harness.started();
+    commands.nextRow({} as PageCommandContext);
+    commands.openReview({} as PageCommandContext);
+    commands.askCancel({} as PageCommandContext);
+    const settledPlaces: unknown[] = [];
+    let tracked = 0;
+    let settledDuringRead = 0;
+
+    await reload(async (restores) => {
+      tracked = restores.length;
+      for (const restore of restores) {
+        void restore.then(() => settledPlaces.push(place()));
+      }
+      await settle();
+      settledDuringRead = settledPlaces.length;
+    });
+
+    expect([tracked, settledDuringRead, settledPlaces]).toEqual([
+      1,
+      0,
+      [CANCEL_PROMPT_ON_TASK_ONE],
+    ]);
+    await harness.stop();
   });
 
   it('stops with nothing live and starts again', async () => {
