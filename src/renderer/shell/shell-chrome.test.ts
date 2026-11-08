@@ -81,8 +81,10 @@ function handle(): ModeHandle & { show: Mock<() => void> } {
   };
 }
 
-// The chrome over fake title and activity bars, in the dev app.
+// The chrome over fake title and activity bars, in the dev app. `runs` holds
+// each command run through the kit, with its arg.
 function mountChrome(keys: KeyHints = recordingAnchors().keys) {
+  const runs: [string, unknown][] = [];
   const titleBar = fakeArea();
   const activityBar = fakeArea();
   const chrome = mountShellChrome({
@@ -99,7 +101,9 @@ function mountChrome(keys: KeyHints = recordingAnchors().keys) {
       commands: {
         exists: (id) => id === REGISTERED,
         argShape: () => undefined,
-        run: () => undefined,
+        run: (id, arg) => {
+          runs.push([id, arg]);
+        },
       },
       platform: 'macos',
       state: noLayoutState,
@@ -109,6 +113,7 @@ function mountChrome(keys: KeyHints = recordingAnchors().keys) {
   });
   return {
     chrome,
+    runs,
     titleBar: titleBar.area,
     titleBarRoot: titleBar.root,
     activityBar: activityBar.root,
@@ -226,31 +231,55 @@ describe('mountShellChrome', () => {
     },
   );
 
-  it('activityItem_Click_ShowsItsMode', () => {
-    const { chrome, activityBar } = mountChrome();
-    const sessions = handle();
+  it('activityItem_Click_RunsModesShowWithItsId', () => {
+    const { chrome, runs, activityBar } = mountChrome();
     const docs = handle();
-    chrome.addMode(mode('sessions', 'Sessions'), sessions);
-    chrome.addMode(mode('docs', 'Docs'), docs);
+    chrome.addMode(mode('sessions.sessions', 'Sessions'), handle());
+    chrome.addMode(mode('docs.docs', 'Docs'), docs);
     chrome.setLayouts(shownMine());
 
     parts(activityBar)[1]?.click();
+
+    expect(runs).toEqual([['modes.show', 'docs.docs']]);
+    expect(docs.show).not.toHaveBeenCalled();
+  });
+
+  it('showMode_KnownId_ShowsThroughTheHandle', () => {
+    const { chrome } = mountChrome();
+    const sessions = handle();
+    const docs = handle();
+    chrome.addMode(mode('sessions.sessions', 'Sessions'), sessions);
+    chrome.addMode(mode('docs.docs', 'Docs'), docs);
+
+    chrome.showMode('docs.docs');
 
     expect(docs.show).toHaveBeenCalledTimes(1);
     expect(sessions.show).not.toHaveBeenCalled();
   });
 
-  it('addMode_Dispose_RemovesTheActivityItem', () => {
-    const { chrome, activityBar } = mountChrome();
+  it('showMode_UnknownId_DoesNothing', () => {
+    const { chrome } = mountChrome();
     const docs = handle();
-    const added = chrome.addMode(mode('sessions', 'Sessions'), handle());
-    chrome.addMode(mode('docs', 'Docs'), docs);
+    chrome.addMode(mode('docs.docs', 'Docs'), docs);
+
+    chrome.showMode('docs');
+
+    expect(docs.show).not.toHaveBeenCalled();
+  });
+
+  it('addMode_Dispose_RemovesTheActivityItem', () => {
+    const { chrome, runs, activityBar } = mountChrome();
+    const added = chrome.addMode(
+      mode('sessions.sessions', 'Sessions'),
+      handle(),
+    );
+    chrome.addMode(mode('docs.docs', 'Docs'), handle());
 
     added.dispose();
 
     expect(parts(activityBar).length).toBe(1);
     parts(activityBar)[0]?.click();
-    expect(docs.show).toHaveBeenCalledTimes(1);
+    expect(runs).toEqual([['modes.show', 'docs.docs']]);
   });
 
   // `text` and `title`: what the badge's text and tooltip match; null for a

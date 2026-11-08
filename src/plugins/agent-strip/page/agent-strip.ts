@@ -48,7 +48,8 @@ import {
 // row's title to the session title limit. `setScope` sets the
 // strip's key scope, `agent-strip.strip`; `nameOf` is a session's name in the
 // page log; `createScroller` makes the HScroller a strip draws its agent boxes
-// into.
+// into; `run` runs `agent-strip.toggleBoxAt` with a clicked box's session and
+// key.
 export interface AgentStripDeps {
   kit: OwnerKitServices;
   log: PluginLog;
@@ -59,6 +60,7 @@ export interface AgentStripDeps {
   setScope(): void;
   nameOf(sessionId: string): string;
   createScroller(): HScroller;
+  run(arg: { sessionId: string; key: string }): void;
 }
 
 // `part` is the composer part chat draws above each Chat tab's box, whose
@@ -66,6 +68,8 @@ export interface AgentStripDeps {
 // cursor and do nothing while none does: `prevBox` / `nextBox` move the
 // selection, `leave` hands the cursor back to the entries, `toBox` to the chat
 // box, `toggleBox` opens or closes the selected box and scrolls it into view.
+// `toggleBoxAt` does the same for box `key` of session `sessionId`'s strip,
+// selected or not, and does nothing for a box the strip does not hold.
 // `rosterUpdated` redraws a session's strip after its roster changed;
 // `setLayouts` redraws every strip; `forget` drops a session that left.
 export interface AgentStrip {
@@ -76,6 +80,7 @@ export interface AgentStrip {
   toBox(how: 'insert' | 'append'): void;
   rosterUpdated(sessionId: string): void;
   toggleBox(): void;
+  toggleBoxAt(sessionId: string, key: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;
 }
@@ -346,11 +351,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     boxElement: HTMLElement,
     sessionId: string,
     key: string,
-  ) =>
-    boxElement.addEventListener('click', () => {
-      toggleOpen(sessionId, key);
-      revealBox(sessionId, key);
-    });
+  ) => boxElement.addEventListener('click', () => deps.run({ sessionId, key }));
 
   // The element the box draws into: the track for an agent box, the rows
   // element for a task box.
@@ -714,6 +715,10 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         toggleOpen(selection.sessionId, selection.key);
         revealSelected();
       }
+    },
+    toggleBoxAt(sessionId, key) {
+      toggleOpen(sessionId, key);
+      revealBox(sessionId, key);
     },
     setLayouts(shown) {
       layoutParts.setLayouts(shown);

@@ -1,5 +1,6 @@
 import {
   type CommandId,
+  MODES_SHOW,
   PICKER_CANCEL,
   PICKER_CHOOSE_ROW,
 } from '../contracts/commands';
@@ -58,6 +59,12 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
   [PICKER_CANCEL.id]: {
     label: 'cancel the list',
     group: 'picker',
+    runsIn: 'page',
+    arg: 'string',
+  },
+  [MODES_SHOW.id]: {
+    label: 'show the mode',
+    group: 'modes',
     runsIn: 'page',
     arg: 'string',
   },

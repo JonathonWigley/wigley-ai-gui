@@ -1,8 +1,16 @@
 import './visual.css';
-import type { PagePart, PageApi } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PageCommandContext,
+  PagePart,
+} from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { chatPageKey } from '../../chat/contract';
-import type { VisualChannel, VisualPageEvents } from '../contract';
+import {
+  type VisualChannel,
+  visualExpandCommand,
+  type VisualPageEvents,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -60,7 +68,7 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
       parts,
       registry,
       log: services.log,
-      expand: (source) => overlay.open([source], 0),
+      expand: (source) => void api.commands.run(visualExpandCommand, source),
     });
     services.markdown.addFence(fence.contribution);
 
@@ -79,12 +87,15 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
     });
 
     return {
-      commands: createVisualCommands({
-        chat,
-        registry,
-        overlay,
-        log: services.log,
-      }),
+      commands: {
+        ...createVisualCommands({
+          chat,
+          registry,
+          overlay,
+          log: services.log,
+        }),
+        expand: ({ arg }: PageCommandContext<string>) => overlay.open([arg], 0),
+      },
       dispose() {
         callEach<() => void>(
           [() => overlay.close(), () => fence.dispose()],

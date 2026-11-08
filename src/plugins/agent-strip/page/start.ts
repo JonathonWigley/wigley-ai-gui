@@ -3,6 +3,7 @@ import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
+  PageCommandContext,
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
@@ -18,6 +19,7 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
+import { agentStripToggleBoxAtCommand } from '../contract';
 import { agentStripManifest } from '../manifest';
 import { createAgentStrip } from './agent-strip';
 import { readAgentStripLayout } from './layout/read-agent-strip-layout';
@@ -57,6 +59,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       setScope: () => api.keys.setScope('strip'),
       nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
       createScroller: createHScroller,
+      run: (arg) => void api.commands.run(agentStripToggleBoxAtCommand, arg),
     });
     chat.addComposerPart(strip.part);
 
@@ -84,6 +87,10 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
         focusBox: () => strip.toBox('insert'),
         appendBox: () => strip.toBox('append'),
         toggleBox: () => strip.toggleBox(),
+        toggleBoxAt: ({
+          arg,
+        }: PageCommandContext<{ sessionId: string; key: string }>) =>
+          strip.toggleBoxAt(arg.sessionId, arg.key),
       },
     };
   },

@@ -155,6 +155,26 @@ describe('session tabs view', () => {
     );
   });
 
+  it('tab_Click_RunsSelectTab', () => {
+    const { view, area, runs } = sessionsViewSetup();
+    view.tabs.add('s', tabView('chat'));
+    view.tabs.add('s', tabView('docs'));
+    view.render(stateOf(['s'], 's'));
+    view.panes.restore(
+      { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
+      new Map([['pane-1', 's']]),
+    );
+
+    findAll(area, 'ui-tab')
+      .find((tab) => tab.title === 'title docs')
+      ?.click();
+
+    expect(runs).toEqual([
+      ['sessions.selectTab', { sessionId: 's', tab: 'docs' }],
+    ]);
+    expect(view.tabs.selectedTabOf('s')?.id).toBe('docs');
+  });
+
   it('sessionTabs_SelectedTabRemoved_SelectsItsStripNeighbour', () => {
     const { view } = sessionsViewSetup();
     const chat = view.tabs.add('s', tabView('chat', 2));

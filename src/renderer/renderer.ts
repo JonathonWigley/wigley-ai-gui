@@ -7,6 +7,7 @@ import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
+import { MODES_SHOW } from '../contracts/commands';
 import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -272,6 +273,11 @@ async function start() {
       'core',
     );
   }
+  registry.register(
+    MODES_SHOW.id,
+    ({ arg }: PageCommandContext<string>) => chrome.showMode(arg),
+    'core',
+  );
   const pickerCommands = registerPickerCommands(registry);
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);

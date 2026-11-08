@@ -3,6 +3,7 @@ import type { CoreEvents } from '../../../contracts/core-state';
 import type { PaneDirection } from '../../../contracts/panes';
 import type {
   PageApi,
+  PageCommandContext,
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
@@ -26,10 +27,13 @@ import {
   type SessionsChannel,
   sessionsActiveSlot,
   sessionsActivitySlot,
+  sessionsFavoriteProjectAtCommand,
   type SessionsPageEvents,
   type SessionsPageExports,
   sessionsRowsSlot,
   sessionsSelectionSlot,
+  sessionsSelectRowCommand,
+  sessionsSelectTabCommand,
   type SessionsState,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -386,13 +390,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const rowParts = createPartStore<SessionPart>();
     const barParts = createPartStore<SessionPart>();
-    // A row click closes the side bar's overlay; `activate` reads `mode` only
-    // on a click, after `add`.
+    // A row click, a star's click and a tab's click each run their command.
     const view = mountSessionsView({
-      activate: (sessionId) => {
-        exports.activate(sessionId);
-        mode.picked();
-      },
+      activate: (sessionId) =>
+        void api.commands.run(sessionsSelectRowCommand, sessionId),
+      runFavorite: (project) =>
+        void api.commands.run(sessionsFavoriteProjectAtCommand, project),
+      selectTab: (sessionId, tab) =>
+        void api.commands.run(sessionsSelectTabCommand, { sessionId, tab }),
       isModeShown: () => isModeShown,
       tabsChanged() {
         if (!isApplying) {
@@ -874,10 +879,22 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         pickerUp: () => picker.up(),
         pickerChoose: () => picker.choose(),
         pickerCancel: () => picker.cancel(),
+        // Closes the side bar's overlay, as a row click picks in it.
+        selectRow: ({ arg }: PageCommandContext<string>) => {
+          exports.activate(arg);
+          mode.picked();
+        },
+        // Logs no `showed` line: the tab keys log that.
+        selectTab: ({
+          arg,
+        }: PageCommandContext<{ sessionId: string; tab: string }>) =>
+          view.tabs.select(arg.sessionId, arg.tab),
         renameSession,
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
         favoriteProject: projectKey((project) => view.toggleFavorite(project)),
+        favoriteProjectAt: ({ arg }: PageCommandContext<string>) =>
+          view.toggleFavorite(arg),
         moveProjectUp: projectKey((project) => view.moveFavorite(project, -1)),
         moveProjectDown: projectKey((project) => view.moveFavorite(project, 1)),
       },

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PageCommandContext } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PageCommandContext,
+  PagePart,
+} from '../../../contracts/plugin';
+import { definePlugin } from '../../../shared/define-plugin';
 import { fakeVisualFrames } from '../../../shared/page/fake-visual-frames';
 import {
   asFake,
@@ -15,14 +20,39 @@ import {
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
 import { visualPagePart } from './start';
 
+const runListenerManifest = definePlugin({
+  id: 'run-listener',
+  dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
+  commands: {},
+  scopes: {},
+  settings: {},
+  settingInfo: {},
+  themeTokens: {},
+});
+
+// A page part that records each command run its process hears, with its arg,
+// in `runs`.
+function runListenerPart(runs: [string, unknown][]): PagePart {
+  return {
+    manifest: runListenerManifest,
+    start(api: PageApi<typeof runListenerManifest, never>) {
+      api.commands.onDidRun((id, arg) => runs.push([id, arg]));
+      return { commands: {} };
+    },
+  } as unknown as PagePart;
+}
+
 // The part on the harness, over fake frames and a chat whose focused entry is
 // `entry`, with the harness's own markdown, which records the fence as the page
-// API does.
+// API does. `runs` holds each page command run, with its arg.
 function startOnHarness() {
   const { frames, opened } = fakeVisualFrames();
   const entry = new FakeElement('li');
+  const runs: [string, unknown][] = [];
   const harness = startPagePart(visualPagePart, {
     services: { visualFrames: frames },
+    parts: [runListenerPart(runs)],
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -34,15 +64,16 @@ function startOnHarness() {
       ),
     ],
   });
-  return { harness, opened, entry };
+  return { harness, opened, entry, runs };
 }
 
 type Started = ReturnType<typeof startOnHarness>;
 
-// Mounts a closed visual in the focused entry.
-function mountVisual({ harness, entry }: Started) {
-  const view = harness.fences[0].mount('<p>one</p>', true);
+// Mounts a closed visual in the focused entry, and returns its element.
+function mountVisual({ harness, entry }: Started, source = '<p>one</p>') {
+  const view = harness.fences[0].mount(source, true);
   entry.append(asFake(view.element));
+  return asFake(view.element);
 }
 
 describe('visualPagePart', () => {
@@ -88,6 +119,23 @@ describe('visualPagePart', () => {
     expect(started.harness.counts()).toEqual(noCounts);
     expect(started.harness.fences).toEqual([]);
     expect(started.opened.map((frame) => frame.disposed)).toEqual(opened);
+  });
+
+  it('expandClick_RunsVisualExpandAndOpensOverlayOnSource', async () => {
+    const started = startOnHarness();
+    mountVisual(started, '<p>one</p>');
+    const second = mountVisual(started, '<p>two</p>');
+
+    second.querySelector('.ui-icon-button')?.click();
+
+    await vi.waitFor(() =>
+      expect(started.runs).toEqual([['visual.expand', '<p>two</p>']]),
+    );
+    expect(started.harness.emitted).toContainEqual({
+      event: 'visual.visualOpened',
+      data: { count: 1, index: 0 },
+    });
+    expect(started.opened.at(-1)?.source).toBe('<p>two</p>');
   });
 
   it('stopThenStart_StartsAgain', async () => {

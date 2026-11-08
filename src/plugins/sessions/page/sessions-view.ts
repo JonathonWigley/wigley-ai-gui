@@ -43,8 +43,9 @@ import { drawnRows, sidebarSections } from './sidebar-order';
 import { mountSidebarView } from './sidebar-view';
 import { rowChanges, rowStatus, stepSession } from './tabs';
 
-// `activate` runs on a row click; `isModeShown` reads whether Sessions mode
-// shows; `tabsChanged` runs after any change to a session's tabs, their
+// `activate` runs on a row click and `runFavorite` on a star's click, neither
+// while the preview shows; `selectTab` runs on a tab's click; `isModeShown`
+// reads whether Sessions mode shows; `tabsChanged` runs after any change to a session's tabs, their
 // selection or their statuses; `keys` draws the session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
@@ -61,6 +62,8 @@ export interface SessionsViewDeps extends Omit<
   'keys' | 'rowParts' | 'barParts'
 > {
   activate(sessionId: string): void;
+  runFavorite(project: string): void;
+  selectTab(sessionId: string, tabId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
   keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
@@ -117,7 +120,8 @@ export interface SessionPanes {
 // bar's rows again, for a changed title length. `orderedRows` lists main's rows
 // in the order the side bar draws them, the preview's sample never among them.
 // `toggleFavorite` and `moveFavorite` change the user's favorites, draw the
-// side bar again and log the outcome; a star's click and a drop do the same.
+// side bar again and log the outcome; a drop does the same, and a star's click
+// runs `runFavorite`.
 // The preview never changes the favorites: while it shows, a star and a drop do
 // nothing, and the two methods log `projects ignored` and do nothing. `parts`
 // draws through the sessions layout the view's `setLayouts` sets, for the
@@ -184,7 +188,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       },
       toggleFavorite(project) {
         if (preview === null) {
-          toggleFavorite(project);
+          deps.runFavorite(project);
         }
       },
       dropped({ key: project, zone, index }, shownFavorites) {
@@ -268,6 +272,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     isModeShown: deps.isModeShown,
     keys: deps.keys,
     parts,
+    selectTab: deps.selectTab,
     changed() {
       drawSidebar();
       deps.tabsChanged();

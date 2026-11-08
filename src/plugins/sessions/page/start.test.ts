@@ -359,6 +359,81 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
+  it('selectRow_Handler_ActivatesAndClosesTheOverlay', async () => {
+    const setup = await startApplied(['s1', 's2'], 's1');
+    setup.activations.length = 0;
+
+    setup.harness.started().commands.selectRow({ arg: 's2' });
+
+    expect(setup.active.get()).toBe('s2');
+    expect(setup.activations).toEqual(['s2']);
+    expect(setup.harness.picked).toEqual(['sessions.sessions']);
+    await setup.harness.stop();
+  });
+
+  it('selectTab_Handler_SelectsTheTabAndLogsNoShowedLine', async () => {
+    const setup = await startApplied(['s1'], 's1');
+    const { commands } = setup.harness.started();
+    commands.showMode({ arg: undefined });
+    const tabOf = (id: string) =>
+      setup.exports.addTab('s1', {
+        id,
+        title: `Tab ${id}`,
+        icon: 'book',
+        element: document.createElement('div'),
+        beforeClose: () => true,
+        shown: () => undefined,
+      });
+    const first = tabOf('first');
+    const second = tabOf('second');
+    const logged = setup.harness.logs.length;
+
+    commands.selectTab({ arg: { sessionId: 's1', tab: 'second' } });
+
+    expect([first.isVisible(), second.isVisible()]).toEqual([false, true]);
+    expect(
+      setup.harness.logs
+        .slice(logged)
+        .filter((line) => line.message.startsWith('showed')),
+    ).toEqual([]);
+    await setup.harness.stop();
+  });
+
+  // The focused pane's session is in project `project`; the handler acts on
+  // the project it names.
+  it.each([
+    {
+      case: 'toggles the named project',
+      preview: false,
+      favorites: ['other'],
+      line: 'favorited other',
+    },
+    {
+      case: 'under the preview saves nothing',
+      preview: true,
+      favorites: [],
+      line: 'projects ignored: the layout preview shows',
+    },
+  ])(
+    'favoriteProjectAt_Handler_TogglesTheNamedProject: $case',
+    async ({ preview, favorites, line }) => {
+      const uiState = fakeUiState([['favorites', []]]);
+      const setup = await startApplied(['s1'], 's1', uiState);
+      const { commands } = setup.harness.started();
+      if (preview) {
+        commands.openPreview({ arg: undefined });
+      }
+
+      commands.favoriteProjectAt({ arg: 'other' });
+
+      expect(uiState.get('favorites')).toEqual(favorites);
+      expect(setup.harness.logs.map((logged) => logged.message)).toContain(
+        line,
+      );
+      await setup.harness.stop();
+    },
+  );
+
   it('rowNotice_LeavesWaitedEchoes: a selection write still places nothing', async () => {
     const setup = await startApplied(['s1', 's2'], 's1');
     // The page asks for s2, then back for s1, while main's selection is s1.

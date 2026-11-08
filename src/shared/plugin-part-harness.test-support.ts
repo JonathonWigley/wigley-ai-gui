@@ -181,6 +181,8 @@ export interface HarnessAnchor {
 // `services.markdown`. `anchors` holds each anchor named through the fake
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
+// `picked` holds the qualified id of each mode whose handle's `picked` ran, in
+// order.
 // `pushSettings` replaces what `settings()` reads for the part under test and tells
 // its `onSettingsChanged` listeners. The fake `modes` writes `coreModeSlot` on each
 // change of the shown mode, unless a test holds that slot's claim.
@@ -194,6 +196,7 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   pushSettings(settings: M['settings']): void;
   readonly fences: readonly FenceContribution[];
   readonly anchors: readonly HarnessAnchor[];
+  readonly picked: readonly string[];
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
 }
@@ -1003,6 +1006,7 @@ interface PageWorld extends HarnessWorld {
   // The live modes in add order, and the shown one.
   liveModes: FakeLiveMode[];
   shownMode: FakeLiveMode | null;
+  picked: string[];
   fences: FenceContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
@@ -1040,6 +1044,7 @@ function createPageWorld(
     transparency: null,
     liveModes: firstMode === null ? [] : [firstMode],
     shownMode: firstMode,
+    picked: [],
     fences: [],
     anchors: [],
     where: 'page',
@@ -1122,7 +1127,9 @@ function fakeModes(
             throw new Error(`Mode "${id}" has no side bar`);
           }
         },
-        picked() {},
+        picked() {
+          world.picked.push(id);
+        },
         sideBarShown: () => false,
         dispose() {
           if (isDisposed()) {
@@ -1560,6 +1567,7 @@ export function startPagePart<M extends PluginManifest>(
     ...baseHarness(lifecycle, world, record.counts),
     fences: world.fences,
     anchors: world.anchors,
+    picked: world.picked,
     setWhere(where) {
       world.where = where;
       world.whereListeners.tell(where);

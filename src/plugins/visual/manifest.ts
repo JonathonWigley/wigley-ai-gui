@@ -21,6 +21,12 @@ export const visualManifest = definePlugin({
     nextVisual: { label: 'next visual', group: 'visual', runsIn: 'page' },
     prevVisual: { label: 'previous visual', group: 'visual', runsIn: 'page' },
     closeVisual: { label: 'close the visual', group: 'visual', runsIn: 'page' },
+    expand: {
+      label: 'expand the visual',
+      group: 'visual',
+      runsIn: 'page',
+      arg: 'string',
+    },
   },
   scopes: { overlay: 'In the visual overlay' },
   settings: { layout: 'default' },

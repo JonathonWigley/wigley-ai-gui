@@ -295,6 +295,65 @@ describe('sessions view side bar', () => {
 
   it.each<{
     case: string;
+    click: (setup: Setup) => void;
+    runs: [string, unknown][];
+  }>([
+    {
+      case: 'sidebarRow_Click_RunsSelectRow',
+      click: (setup) => rowNamed(drawnRows(setup.sideBar), 'label g1').click(),
+      runs: [['sessions.selectRow', 'g1']],
+    },
+    {
+      case: 'favoriteToggle_Click_RunsFavoriteProjectAt',
+      click: (setup) => clickStar(setup, 'gamma'),
+      runs: [['sessions.favoriteProjectAt', 'gamma']],
+    },
+  ])('sidebarClick_RunsItsCommand ($case)', ({ click, runs }) => {
+    const setup = sessionsViewSetup();
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('g1', 'gamma')]));
+
+    click(setup);
+
+    expect(setup.runs).toEqual(runs);
+  });
+
+  // The preview's sample selects `preview-1` and holds project `wigley-agents`.
+  it.each<{ case: string; click: (setup: Setup) => void; selected: string }>([
+    {
+      case: 'a row click',
+      click: (setup) =>
+        rowNamed(drawnRows(setup.sideBar), 'new-games-prototypes').click(),
+      selected: 'new-games-prototypes',
+    },
+    {
+      case: 'a star click',
+      click: (setup) => clickStar(setup, 'wigley-agents'),
+      selected: 'wigley-ai-gui',
+    },
+  ])(
+    'sidebarClick_PreviewShown_RunsNoCommand ($case)',
+    ({ click, selected }) => {
+      const uiState = fakeUiState([['favorites', []]]);
+      const setup = sessionsViewSetup(undefined, undefined, undefined, {
+        uiState,
+      });
+      setup.view.render(stateWith([rowIn('a1', 'alpha')]));
+      setup.view.showPreview(true);
+
+      click(setup);
+
+      expect(setup.runs).toEqual([]);
+      expect(setup.activated).toEqual([]);
+      expect(uiState.get('favorites')).toEqual([]);
+      const marked = drawnRows(setup.sideBar).filter((row) =>
+        row.classList.contains('is-selected'),
+      );
+      expect(marked.map((row) => row.title.includes(selected))).toEqual([true]);
+    },
+  );
+
+  it.each<{
+    case: string;
     stamps: Record<string, number>;
     // Each state main sends the fresh view, in turn.
     states: SessionRow[][];

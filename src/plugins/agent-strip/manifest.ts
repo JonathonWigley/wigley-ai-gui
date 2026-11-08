@@ -34,6 +34,12 @@ export const agentStripManifest = definePlugin({
       group: 'agent strip',
       runsIn: 'page',
     },
+    toggleBoxAt: {
+      label: 'open or close the named box',
+      group: 'agent strip',
+      runsIn: 'page',
+      arg: { sessionId: 'string', key: 'string' },
+    },
   },
   scopes: { strip: 'In the agent strip' },
   settings: { layout: 'default' },

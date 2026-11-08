@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -10,6 +11,28 @@ import type {
   SlotKey,
 } from '../../contracts/state';
 import { callEach } from '../../shared/call-each';
+
+// Activates the session whose id is the arg and closes the side bar's overlay,
+// as a click on its row does.
+export const sessionsSelectRowCommand: CommandKey<
+  string,
+  'sessions.selectRow'
+> = {
+  id: 'sessions.selectRow',
+};
+
+// Shows tab `tab` of session `sessionId`, as a click on the tab does.
+export const sessionsSelectTabCommand: CommandKey<
+  { sessionId: string; tab: string },
+  'sessions.selectTab'
+> = { id: 'sessions.selectTab' };
+
+// Favorites or unfavorites the project whose key is the arg, as a click on its
+// group's star does.
+export const sessionsFavoriteProjectAtCommand: CommandKey<
+  string,
+  'sessions.favoriteProjectAt'
+> = { id: 'sessions.favoriteProjectAt' };
 
 // Every agent harness a session can run in; the relay hello's parse reads a
 // harness missing from this list as none.

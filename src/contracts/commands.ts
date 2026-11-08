@@ -43,6 +43,12 @@ export const PICKER_CANCEL: CommandKey<string, 'picker.cancel'> = {
   id: 'picker.cancel',
 };
 
+// Shows the mode its arg names by qualified id, as a click on its activity item
+// does; an unknown id does nothing.
+export const MODES_SHOW: CommandKey<string, 'modes.show'> = {
+  id: 'modes.show',
+};
+
 // What an intercept reads of the run it wraps.
 export interface CommandRunContext {
   readonly id: CommandId;

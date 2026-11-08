@@ -29,6 +29,18 @@ export const sessionsManifest = definePlugin({
       group: 'sessions',
       runsIn: 'page',
     },
+    selectRow: {
+      label: 'open the session',
+      group: 'sessions',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    selectTab: {
+      label: 'show the tab',
+      group: 'sessions',
+      runsIn: 'page',
+      arg: { sessionId: 'string', tab: 'string' },
+    },
     renameSession: {
       label: 'rename the session',
       group: 'sessions',
@@ -38,6 +50,12 @@ export const sessionsManifest = definePlugin({
       label: 'favorite or unfavorite the project',
       group: 'projects',
       runsIn: 'page',
+    },
+    favoriteProjectAt: {
+      label: 'favorite or unfavorite the named project',
+      group: 'projects',
+      runsIn: 'page',
+      arg: 'string',
     },
     moveProjectUp: {
       label: 'move the project up',

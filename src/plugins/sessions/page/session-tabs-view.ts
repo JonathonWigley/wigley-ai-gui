@@ -83,10 +83,11 @@ interface DrawnPane {
 // change to a session's tabs, their selection or their statuses; `keys`
 // draws the key beside the text asking for a session to be picked; `parts`
 // draws the panes, the tab bars with the bar parts other plugins added, the
-// tabs and that text.
+// tabs and that text; `selectTab` runs on a tab's click.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
+  selectTab(sessionId: string, tabId: string): void;
   keys: Pick<KeyHints, 'anchor'>;
   parts: SessionsParts;
 }
@@ -147,7 +148,8 @@ export interface SessionTabsView {
 // `order` (`tabsAfterAdd`). A frame no pane shows, a session's with no row yet
 // included, waits in the hidden holder.
 // Until `render` hands it main's first state, it shows no text either. The
-// view keeps each tab's click, its tooltip and the active tab's mark.
+// view keeps each tab's click, which runs `selectTab`, its tooltip and the
+// active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   const { parts } = deps;
   const holder = element('div', 'session-frame-holder');
@@ -263,7 +265,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         strip,
         tab.view,
         tab.view.id === frame.tabs.selectedTabId,
-        () => select(sessionId, tab.view.id),
+        () => deps.selectTab(sessionId, tab.view.id),
       ),
     );
     scrollSelectedIntoView(frame);

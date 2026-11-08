@@ -80,7 +80,9 @@ export interface SessionsViewOptions {
 
 // A sessions view over fake keys that record each anchor, a log that records
 // each line, `activated` recording each session a row
-// click activates, the row parts its rows draw (`rowParts`, a new store
+// click activates, `runs` each command a row's, star's or tab's click runs
+// with its arg (a star's and a tab's run then act as their commands do), the
+// row parts its rows draw (`rowParts`, a new store
 // unless one is handed in) and the bar parts its tab bars draw (`barParts`,
 // likewise), and the title length `titleMaxLength` reads (40 unless one is
 // handed in). Runs under `installFakeDom`.
@@ -96,9 +98,21 @@ export function sessionsViewSetup(
 ) {
   const { anchors, logged, services } = fakeKitServices();
   const activated: string[] = [];
+  const runs: [string, unknown][] = [];
   const view = mountSessionsView({
     ...services,
-    activate: (sessionId) => activated.push(sessionId),
+    activate(sessionId) {
+      runs.push(['sessions.selectRow', sessionId]);
+      activated.push(sessionId);
+    },
+    runFavorite(project) {
+      runs.push(['sessions.favoriteProjectAt', project]);
+      view.toggleFavorite(project);
+    },
+    selectTab(sessionId, tab) {
+      runs.push(['sessions.selectTab', { sessionId, tab }]);
+      view.tabs.select(sessionId, tab);
+    },
     isModeShown: () => true,
     tabsChanged: () => undefined,
     timers,
@@ -119,6 +133,7 @@ export function sessionsViewSetup(
     anchors,
     logged,
     activated,
+    runs,
     sideBar,
     area,
     rowParts,
