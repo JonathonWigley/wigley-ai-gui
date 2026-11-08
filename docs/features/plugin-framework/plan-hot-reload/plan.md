@@ -296,10 +296,11 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: db7bff7db57d13e92537e80719d425160bb094fa
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Branch hot-reload is cut from command-consumers e784f07e (Wave 3, in final review), with the plan commits cherry-picked from main — the user's word to start before Wave 3 lands — once Wave 3 lands, rebase onto main and re-check any review fix that touched a Consumes · lead
 ### Review rounds
 ### Test gate

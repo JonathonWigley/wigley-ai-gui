@@ -27,7 +27,7 @@ export const BRIDGE_CHANNELS = {
   uiStateWrite: 'bridge:ui-state-write',
 } as const;
 
-// What the preload exposes to the renderer as `window.wigley`.
+// What the core claims once at start through `window.wigley.claim()`.
 export interface Bridge {
   config(): Promise<AppConfig>;
   // Calls `listener` with each new config main serves after a config file

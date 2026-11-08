@@ -108,7 +108,7 @@ function requireServedSettings(config: AppConfig, pluginId: string) {
 }
 
 async function start() {
-  const bridge = window.wigley;
+  const bridge = window.wigley.claim();
   const log = createLogView(document.getElementById('log') as HTMLOListElement);
   bridge.onLog(log);
   // A push before start finishes is held, the newest replacing any older, and

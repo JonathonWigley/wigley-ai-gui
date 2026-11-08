@@ -1,6 +1,6 @@
 # 01 — Close the raw bridge
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

@@ -13,5 +13,5 @@ declare module '*?url' {
 }
 
 interface Window {
-  wigley: import('./contracts/bridge').Bridge;
+  wigley: { claim(): import('./contracts/bridge').Bridge };
 }

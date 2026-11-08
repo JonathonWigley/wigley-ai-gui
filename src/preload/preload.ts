@@ -5,6 +5,7 @@ import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import { errorText } from '../shared/error-text';
 import { createListeners } from '../shared/listeners';
+import { bridgeClaim } from './bridge-claim';
 import { createPluginMessageSubscribe } from './plugin-message-subscribe';
 
 // Electron prefixes a handler's error with the channel and the error's name.
@@ -98,4 +99,4 @@ const bridge: Bridge = {
   },
 };
 
-contextBridge.exposeInMainWorld('wigley', bridge);
+contextBridge.exposeInMainWorld('wigley', bridgeClaim(bridge));

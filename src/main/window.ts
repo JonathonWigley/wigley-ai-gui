@@ -41,6 +41,8 @@ export function createMainWindow(
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       offscreen,
+      contextIsolation: true,
+      sandbox: true,
     },
   });
   // Electron otherwise replaces the window title with the page's `<title>`.

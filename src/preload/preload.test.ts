@@ -42,7 +42,7 @@ const electron = vi.hoisted(() => {
 });
 vi.mock('electron', () => electron);
 
-const bridge = electron.exposed.wigley as Bridge;
+const bridge = (electron.exposed.wigley as { claim(): Bridge }).claim();
 
 function sendFromMain(toPlugin: string, message: string, data: unknown) {
   for (const [channel, listener] of electron.onCalls) {
