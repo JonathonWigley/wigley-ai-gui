@@ -25,9 +25,14 @@ describe('worktreeNameOf', () => {
       name: null,
     },
     {
-      case: 'WorktreeFolderItself_Null',
+      case: 'WorktreeFolderAsFile_Null',
       filePath: '/Users/u/dev/.worktrees/app-fix',
       name: null,
+    },
+    {
+      case: 'FolderCaseDiffers_NamesWorktree',
+      filePath: '/Users/u/dev/app/.Claude/Worktrees/sweeps/src/a.ts',
+      name: 'sweeps',
     },
     {
       case: 'NestedWorktrees_NamesInner',

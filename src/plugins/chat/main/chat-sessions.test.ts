@@ -1608,16 +1608,16 @@ describe('createChatSessions', () => {
 
   it('fileWritten_InWorktrees_ListsEachWorktreeOnceInWriteOrder', async () => {
     const test = await started();
-    for (const path of [
-      '/Users/u/dev/.worktrees/app-fix/src/a.ts',
-      '/Users/u/dev/app/src/b.ts',
-      '/Users/u/dev/.worktrees/docs-fix/README.md',
-      '/Users/u/dev/.worktrees/app-fix/src/c.ts',
+    for (const [agentId, path] of [
+      [MAIN_AGENT_ID, '/Users/u/dev/.worktrees/app-fix/src/a.ts'],
+      [MAIN_AGENT_ID, '/Users/u/dev/app/src/b.ts'],
+      ['subagent-1', '/Users/u/dev/.worktrees/docs-fix/README.md'],
+      ['subagent-1', '/Users/u/dev/.worktrees/app-fix/src/c.ts'],
     ]) {
       test.process.events.agentEvent({
         type: 'fileWritten',
         at: 0,
-        agentId: MAIN_AGENT_ID,
+        agentId,
         path,
       });
     }

@@ -985,7 +985,9 @@ function showBranch(tab: HeldTab, log: PluginLog) {
 
 function showWorktrees(tab: HeldTab, log: PluginLog) {
   drawStatusLine(tab);
-  log(`${tab.name} wrote in worktrees ${tab.state.worktrees.join(', ')}`);
+  const { worktrees } = tab.state;
+  const noun = worktrees.length === 1 ? 'worktree' : 'worktrees';
+  log(`${tab.name} wrote in ${noun} ${worktrees.join(', ')}`);
 }
 
 function showCompaction(tab: HeldTab, log: PluginLog) {

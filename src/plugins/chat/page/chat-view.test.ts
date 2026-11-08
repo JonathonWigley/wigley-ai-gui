@@ -569,6 +569,22 @@ describe('mountChatView session facts source', () => {
     ).toBe(composerRedrawn);
   });
 
+  it('worktreesWrite_ListenerHearsWorktreeRow', () => {
+    const mount = mounted();
+    mount.open(stateOf([]));
+    const source = mount.view.sessionFactsSource('row-1');
+    const worktreesHeard: (string | undefined)[] = [];
+    source?.onChanged(() =>
+      worktreesHeard.push(
+        source.input().facts.find((fact) => fact.label === 'Worktree')?.value,
+      ),
+    );
+
+    mount.setInfo('row-1', { worktrees: ['app-fix'] });
+
+    expect(worktreesHeard).toEqual(['app-fix']);
+  });
+
   it('source_SubscriptionDisposedOrSessionUnheld_HearsNothingAndIsNull', () => {
     const mount = mounted();
     mount.open(stateOf([]));
@@ -892,6 +908,13 @@ describe('mountChatView slots', () => {
       block: 'repo',
       change: { repo: 'other' },
       lines: ['app is in other on main'],
+      workingDraws: 0,
+      clockCalls: 0,
+    },
+    {
+      block: 'worktrees',
+      change: { worktrees: ['app-fix'] },
+      lines: ['app wrote in worktree app-fix'],
       workingDraws: 0,
       clockCalls: 0,
     },
