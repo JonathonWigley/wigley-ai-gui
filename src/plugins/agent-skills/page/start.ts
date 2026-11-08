@@ -15,6 +15,7 @@ import type { Layout } from '../layouts/layout';
 import { agentSkillsManifest } from '../manifest';
 import { readAgentSkillsLayout } from './layout/read-agent-skills-layout';
 import { createSkillList } from './skill-list';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type AgentSkillsApi = PageApi<
   typeof agentSkillsManifest,
@@ -38,11 +39,7 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

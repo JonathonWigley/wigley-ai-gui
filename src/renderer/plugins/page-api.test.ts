@@ -47,6 +47,7 @@ import {
   asFake,
   asHtml,
   FakeElement,
+  findAll,
   installFakeDom,
 } from '../../shared/page/test-dom';
 import { fakePlatform } from '../../shared/platform.test-support';
@@ -59,6 +60,7 @@ import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import { createAnchors } from '../key-anchors';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
+import { registerPickerCommands } from '../picker-commands';
 import { createPageUiState } from '../ui-state';
 import {
   createPageApi,
@@ -204,6 +206,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       platform: 'macos',
     }),
     boxFocus: { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
+    pickerCommands: { track: () => ({ dispose: () => {} }) },
     ...overrides,
   };
 }
@@ -898,6 +901,63 @@ describe('createPageApi services.picker', () => {
     expect(list.isOpen()).toBe(false);
     expect(asFake(list.element).hidden).toBe(true);
     expect(scopeStack.current()).toBe('any');
+  });
+
+  // A plugin's picker API over the page's real router, with the core's picker
+  // commands registered in its registry and `picker.chooseRow` served.
+  function routedPickerApi() {
+    const served: AppConfig['commands'] = {
+      'picker.chooseRow': {
+        id: 'picker.chooseRow',
+        plugin: 'core',
+        label: 'choose the row',
+        group: 'picker',
+        runsIn: 'page',
+        arg: { owner: 'string', index: 'number' },
+      },
+    };
+    const commands = pageCommandsOver(
+      createSlotStore(() => {}),
+      served,
+    );
+    const registrations = createRegistrations();
+    const api = createPageApi(
+      { ...manifest, scopes: { picker: 'In a list' } },
+      deps({
+        commands,
+        registrations,
+        pickerCommands: registerPickerCommands(commands.registry),
+        areas: {
+          overlay: { contribute: () => ({ dispose: () => {} }) },
+        } as unknown as PageApiDeps['areas'],
+        services: {
+          log: () => {},
+          fuzzy: fakeFuzzyMatcher,
+        } as unknown as PageApiServices,
+      }),
+    );
+    return { picker: api.services.picker, registrations };
+  }
+
+  it('picker_RowClick_RunsChooseRowWithThePluginAsOwner', () => {
+    const { picker } = routedPickerApi();
+    const chosen = vi.fn();
+    const list = picker.create();
+    list.open({ ...REQUEST, items: ['a', 'b'], chosen });
+
+    findAll(asFake(list.element), 'ui-row')[1].click();
+
+    expect(chosen).toHaveBeenCalledWith('b');
+  });
+
+  it('picker_PartRestarts_OwnerIsFreeAgain', () => {
+    const { picker, registrations } = routedPickerApi();
+    picker.create();
+    expect(() => picker.create()).toThrow('picker owner p is taken');
+
+    registrations.dispose();
+
+    expect(() => picker.create()).not.toThrow();
   });
 
   it('picker_PartStops_ClosesWithNoCancel', () => {

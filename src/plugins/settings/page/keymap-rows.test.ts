@@ -3,6 +3,7 @@ import type {
   AcceleratorBind,
   InterceptBind,
   KeyBind,
+  UserKeymap,
 } from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
@@ -305,20 +306,84 @@ describe('a command with an argument', () => {
       .filter((each) => each.command.id === 'p.pick')
       .map((each) => each.arg);
 
-  it('keymapRows_ArgCommand_OneRowPerBoundArgAndNoneWhenUnbound', () => {
-    const defaults = [
-      { keys: '1', scope: 'p.s', command: 'p.pick', arg: 1 },
-      { keys: '2', scope: 'p.s', command: 'p.pick', arg: 2 },
-      { keys: 'x', scope: 'p.s', command: 'p.pick', arg: 1 },
-    ];
+  const place: CommandInfo = {
+    ...command('p.place'),
+    arg: { pool: 'string', clone: 'number' },
+  };
+  it.each<{
+    row: string;
+    commands: CommandInfo[];
+    defaults: KeyBind[];
+    layer: UserKeymap | null;
+    rows: { arg: unknown; label: string; keys: string[] }[];
+  }>([
+    {
+      row: 'two bound args',
+      commands: [pick],
+      defaults: [
+        { keys: '1', scope: 'p.s', command: 'p.pick', arg: 1 },
+        { keys: '2', scope: 'p.s', command: 'p.pick', arg: 2 },
+        { keys: 'x', scope: 'p.s', command: 'p.pick', arg: 1 },
+      ],
+      layer: null,
+      rows: [
+        { arg: 1, label: 'p.pick label: 1', keys: ['1', 'x'] },
+        { arg: 2, label: 'p.pick label: 2', keys: ['2'] },
+      ],
+    },
+    { row: 'unbound', commands: [pick], defaults: [], layer: null, rows: [] },
+    {
+      row: 'a record arg in both field orders',
+      commands: [place],
+      defaults: [
+        {
+          keys: 'a',
+          scope: 'p.s',
+          command: 'p.place',
+          arg: { pool: 'q', clone: 3 },
+        },
+      ],
+      layer: {
+        binds: [
+          {
+            keys: 'b',
+            scope: 'p.s',
+            command: 'p.place',
+            arg: { clone: 3, pool: 'q' },
+          },
+        ],
+      },
+      rows: [
+        {
+          arg: { pool: 'q', clone: 3 },
+          label: 'p.place label: clone 3, pool q',
+          keys: ['a', 'b'],
+        },
+      ],
+    },
+    {
+      row: 'a default the user unbound',
+      commands: [pick],
+      defaults: [{ keys: '4', scope: 'p.s', command: 'p.pick', arg: 4 }],
+      layer: { unbind: [{ keys: '4', scope: 'p.s' }] },
+      rows: [{ arg: 4, label: 'p.pick label: 4', keys: ['4'] }],
+    },
+  ])(
+    'keymapRows_ArgCommand_OneRowPerBoundArgAndNoneWhenUnbound: $row',
+    ({ commands, defaults, layer, rows }) => {
+      const groups = keymapRows(schema(commands, defaults), layer);
 
-    const groups = keymapRows(schema([pick], defaults), null);
-
-    expect(argsOf(groups)).toEqual([1, 2]);
-    const first = groups[0].rows[0];
-    expect(first.binds.map((line) => line.bind.keys)).toEqual(['1', 'x']);
-    expect(argsOf(keymapRows(schema([pick], []), null))).toEqual([]);
-  });
+      expect(
+        groups
+          .flatMap((group) => group.rows)
+          .map((each) => ({
+            arg: each.arg,
+            label: each.label,
+            keys: each.binds.map((line) => line.bind.keys),
+          })),
+      ).toEqual(rows);
+    },
+  );
 
   it('keymapRows_ArgCommand_UserLineGivesARow', () => {
     const groups = keymapRows(schema([pick], []), {
@@ -340,6 +405,31 @@ describe('a command with an argument', () => {
     );
 
     expect(argsOf(groups)).toEqual([4]);
+  });
+
+  it('replacedBy_ArgCommand_NamesItOnce', () => {
+    const defaults = [
+      {
+        keys: '<Leader>x',
+        scope: 'p.s',
+        command: 'p.pick',
+        arg: 1,
+        where: 'page' as const,
+      },
+      {
+        keys: '<Leader>x',
+        scope: 'p.s',
+        command: 'p.pick',
+        arg: 2,
+        where: 'box' as const,
+      },
+    ];
+
+    expect(
+      ids(
+        replacedBy(schema([pick], defaults), null, '<Leader>x', 'p.s', 'p.z'),
+      ),
+    ).toEqual(['p.pick']);
   });
 
   it('replacedBy_SameCommandOtherArg_ReportsTheDisplacedRow', () => {

@@ -9,6 +9,7 @@ import type { BacklogLayout } from '../layouts/layout';
 import { backlogManifest } from '../manifest';
 import { createBacklogView } from './backlog-view';
 import { readBacklogLayout } from './layout/read-layout';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type BacklogApi = PageApi<typeof backlogManifest, BacklogChannel>;
 
@@ -40,11 +41,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       keys: api.keys,
       platform: api.platform.os,
       state: api.state.forLayouts,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       tags: () => api.settings().tags,
       openDoc: (path, line) => docs.openDoc(path, line),
       setScope: (scope) => api.keys.setScope(scope),

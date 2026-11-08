@@ -19,8 +19,8 @@ export function matchesSetting(
   );
 }
 
-// Whether `query` fuzzily matches a command row's label, id, any line's keys
-// or any accelerator.
+// Whether `query` fuzzily matches a command row's label (its arg's label
+// included), id, any line's keys or any accelerator.
 export function matchesCommand(
   row: CommandRow,
   query: string,
@@ -30,7 +30,7 @@ export function matchesCommand(
     line.kind === 'intercept' ? line.bind.key : line.bind.accelerator,
   );
   return [
-    row.command.label,
+    row.label,
     row.command.id,
     ...row.binds.map((line) => line.bind.keys),
     ...accelerators,

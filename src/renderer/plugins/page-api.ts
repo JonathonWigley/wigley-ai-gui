@@ -1,4 +1,5 @@
 import type { Bridge } from '../../contracts/bridge';
+import type { CommandArg, CommandId } from '../../contracts/commands';
 import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
 import type { EditorHost } from '../../contracts/editor';
@@ -59,6 +60,7 @@ import type { ScopeStack } from '../key-scope';
 import { type LiveConfig, onChangedPart } from '../live-config';
 import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
+import type { PickerCommands } from '../picker-commands';
 
 // The services the page core hands the plugin APIs: each plugin's `uiState`,
 // `picker` and scoped `log` are made from these, `log` being the core's own.
@@ -85,7 +87,8 @@ export type PageApiServices = Omit<
 // disposes when the part stops. `state` is the page load's slot store, and
 // `commands` the page's commands, which each plugin reaches under its id.
 // `anchors` holds every key hint of the page load, and `boxFocus` tells whether
-// focus is in a text box.
+// focus is in a text box. `pickerCommands` tracks each plugin's list picker for
+// the core's picker commands.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -110,6 +113,7 @@ export interface PageApiDeps {
   state: SlotStore;
   anchors: Anchors;
   boxFocus: BoxFocus;
+  pickerCommands: PickerCommands;
 }
 
 // `KeyHints['keysFor']` over the config served now, read at each call.
@@ -132,7 +136,8 @@ export function liveKeysFor(
 // Every registration it makes through the API is filed in
 // `deps.registrations`. Editors, timers, pane targets and the transparency
 // override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
-// `services.picker` builds lists under its scopes, log, editor and overlay;
+// `services.picker` builds lists under its scopes, log, editor and overlay,
+// owned by its id for the picker commands;
 // `services.visualFrames`, `services.markup` and `uiState` are not recorded,
 // and the plugin closes what it opens through them.
 export function createPageApi(
@@ -179,7 +184,7 @@ export function createPageApi(
           onChangedPart(config, (served) => served.keymap, listener),
         ),
       label: (id) => commandLabel(config.current().commands, id),
-      command: (id) => config.current().commands[id],
+      command: (id) => deps.commands.infoOf(id),
       get scopes() {
         return config.current().scopes;
       },
@@ -224,6 +229,8 @@ export function createPageApi(
         editor,
         overlay: areas.overlay,
         registrations,
+        run: (command, arg) => void deps.commands.router.run(command, arg, {}),
+        pickerCommands: deps.pickerCommands,
       }),
       markdown: trackedMarkdown(deps.services.markdown, registrations),
       timers: trackedTimers(deps.services.timers, registrations),
@@ -260,9 +267,10 @@ function trackedPushedScope(
   return registrations.track(view);
 }
 
-// One plugin's list pickers. `pushedScopes` is filed ahead of each list's close,
-// because the store disposes in reverse: the close pops the scope it holds, and
-// a second pop throws.
+// One plugin's list pickers, each owned by the plugin's id. `pushedScopes` is
+// filed ahead of each list's close, because the store disposes in reverse: the
+// close pops the scope it holds, and a second pop throws. The owner's tracking is
+// filed beside the close, so the part's stop frees the owner.
 function pluginPicker(
   manifest: PluginManifest,
   deps: {
@@ -272,6 +280,8 @@ function pluginPicker(
     editor: EditorHost;
     overlay: Area;
     registrations: Registrations;
+    run(command: CommandId, arg: CommandArg): void;
+    pickerCommands: PickerCommands;
   },
 ): ListPickerService {
   return {
@@ -280,6 +290,8 @@ function pluginPicker(
       requireDeclaredScope(manifest, scopeName());
       const pushedScopes = deps.registrations.track(createRegistrations());
       const picker = createListPicker({
+        owner: manifest.id,
+        run: deps.run,
         pushScope() {
           const name = scopeName();
           requireDeclaredScope(manifest, name);
@@ -298,6 +310,7 @@ function pluginPicker(
         parent.append(picker.element);
       }
       deps.registrations.track({ dispose: () => picker.close() });
+      deps.registrations.track(deps.pickerCommands.track(manifest.id, picker));
       return picker;
     },
   };

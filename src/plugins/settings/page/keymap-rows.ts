@@ -8,7 +8,7 @@ import type {
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { capitalised } from '../../../shared/capitalised';
-import { commandTarget } from '../../../shared/command-args';
+import { commandArgLabel, commandTarget } from '../../../shared/command-args';
 import { isSameJson } from '../../../shared/json';
 import {
   bindIdentities,
@@ -30,8 +30,10 @@ export interface BindLine {
 // `accelerators`: a main command's `app`, `global` and `intercept` binds, read-only in the rows (the advanced box
 // edits them); the view prints them with `formatAccelerator` and `chordName`.
 // `arg`: the argument this row's lines bind, for a command that declares one.
+// `label`: the command's label, then `: ` and `commandArgLabel(arg)` on an arg row.
 export interface CommandRow {
   command: CommandInfo;
+  label: string;
   arg?: CommandArg;
   binds: BindLine[];
   accelerators: AcceleratorLine[];
@@ -235,7 +237,9 @@ function groupTitle(plugin: string): string {
 
 // The rows of `whole`, every line of one command: `whole` itself for a command
 // that declares no argument, else one row per distinct bound argument, in the
-// order its lines first name each, and no row when no key binds it.
+// order its lines first name each, and no row when no key binds it. A default
+// line binds its argument whatever its state, so a default the user unbound
+// keeps its row.
 function rowsPerArg(whole: CommandRow): CommandRow[] {
   if (whole.command.arg === undefined) {
     return [whole];
@@ -251,6 +255,7 @@ function rowsPerArg(whole: CommandRow): CommandRow[] {
   }
   return args.map((arg) => ({
     ...whole,
+    label: `${whole.command.label}: ${commandArgLabel(arg)}`,
     arg,
     binds: whole.binds.filter(({ bind }) => isSameJson(bind.arg, arg)),
     accelerators: whole.accelerators.filter(({ bind }) =>
@@ -284,6 +289,7 @@ export function keymapRows(
       .map((bind) => userLine(bind, leader));
     const rows = rowsPerArg({
       command,
+      label: command.label,
       binds: [...defaultLines, ...userLines],
       accelerators: acceleratorLines(schema, layer, command.id, leader),
     });
@@ -304,9 +310,9 @@ export function keymapRows(
 // Every other row's command a new bind of `command` with `arg` on `keys` in `scope`
 // would displace, in row order: each whose default bind fires on a half the new bind
 // shares, and each whose user bind `withAddedBind` drops; judged half by half
-// as the merge does. The row of `command` and `arg` itself is left out, since a bind
-// on keys it already holds displaces nothing. Empty when none, or when the merge
-// cannot expand those keys.
+// as the merge does, each command once. The row of `command` and `arg` itself is left
+// out, since a bind on keys it already holds displaces nothing. Empty when none, or
+// when the merge cannot expand those keys.
 export function replacedBy(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
@@ -334,5 +340,9 @@ export function replacedBy(
         return takesPage || takesEditor;
       }),
     )
-    .map((row) => row.command);
+    .map((row) => row.command)
+    .filter(
+      (info, index, all) =>
+        all.findIndex((each) => each.id === info.id) === index,
+    );
 }

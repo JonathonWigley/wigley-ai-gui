@@ -24,7 +24,12 @@ import { createMarkdownMount } from '../../../shared/page/markdown-mount';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
-import type { DocsChannel, IndexEntry, IndexLink } from '../contract';
+import {
+  type DocsChannel,
+  docsEditSectionAtCommand,
+  type IndexEntry,
+  type IndexLink,
+} from '../contract';
 import { splitFrontmatter } from '../frontmatter';
 import type { DocHeaderInput, RecentChangesInput } from '../layouts/layout';
 import { linkedFrom } from '../linked-from';
@@ -226,6 +231,10 @@ export interface DocView {
   // Opens the section at the top of sight in the editor, or the whole file
   // when no section holds that line; only focuses an editor already open.
   editSection(): void;
+  // Opens the section whose heading carries `anchor`, as its `edit` control's
+  // click asks: refused while the open editor holds unsaved edits, and a clean
+  // editor closes first.
+  editSectionAt(anchor: string): void;
   // Scrolls to the next or previous heading in the file's order, logging where
   // it landed or why it stayed.
   moveSection(direction: 1 | -1): void;
@@ -853,8 +862,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       const part = parts.draw(
         'sectionEditControl',
         slot,
-        { title: section.title },
-        (kit) => ({ ...kit, openSection: () => clickSection(anchor) }),
+        {
+          title: section.title,
+          command: docsEditSectionAtCommand.id,
+          arg: { view: deps.viewId, anchor },
+        },
+        (kit) => kit,
       );
       sectionControls.push({ part, slot });
     }
@@ -1552,8 +1565,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     openSectionEditor(doc, section, 1);
   };
 
-  // A section's `edit` control. An open editor with edits stays; a clean one
-  // closes first, so the section is read from a body drawn from the file's text.
+  // A section's `edit` control, through `docs.editSectionAt`. An open editor
+  // with edits stays; a clean one closes first, so the section is read from a
+  // body drawn from the file's text.
   function clickSection(anchor: string) {
     const doc = shown;
     if (doc === null || view.refuseWithUnsavedEdits()) {
@@ -1939,6 +1953,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           ),
       );
     },
+    editSectionAt: (anchor) => clickSection(anchor),
     editSection() {
       const doc = shown;
       if (doc === null || refuseReadOnly(doc)) {

@@ -77,6 +77,12 @@ export const docsManifest = definePlugin({
     },
     edit: { label: 'edit the doc', group: 'doc', runsIn: 'page' },
     editSection: { label: 'edit this section', group: 'doc', runsIn: 'page' },
+    editSectionAt: {
+      label: 'edit the section under its heading',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { view: 'string', anchor: 'string' },
+    },
     prevSection: { label: 'previous section', group: 'doc', runsIn: 'page' },
     nextSection: { label: 'next section', group: 'doc', runsIn: 'page' },
     historyBack: { label: 'go back', group: 'doc', runsIn: 'page' },

@@ -40,6 +40,7 @@ import {
 import { buildBody, initialState } from './primer-state';
 import { createPrimerStore, type PrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type PrimerApi = PageApi<
   typeof primerManifest,
@@ -166,11 +167,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       markdown: services.markdown,
       keys: api.keys,
       run: (command) => api.commands.run(command),
-      commands: {
-        exists: (command) => api.keys.command(command) !== undefined,
-        argShape: (command) => api.keys.command(command)?.arg,
-        run: (command) => api.commands.run(command),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       uiState: services.uiState,

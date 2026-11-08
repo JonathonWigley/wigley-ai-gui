@@ -13,6 +13,7 @@ import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createBaseKit,
+  kitCommandsOf,
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
@@ -109,6 +110,9 @@ const TREE_COMMAND_IDS: ReadonlySet<CommandId> = new Set(
 // stored width.
 const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 
+// The machine view's id; each view `addView` hands out is `view:<n>`.
+const machineViewId = 'machine';
+
 // Docs mode over the machine's index, its tree in the side bar and its doc in
 // the sheet, and the views `addView` hands out, each its tree and doc side by
 // side in a split: a Docs tab in every session over that session's index among
@@ -146,11 +150,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
     };
@@ -248,7 +248,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // opens or a key runs, after `add`. A doc opened from the tree closes the
     // side bar's overlay.
     const machineView = createView(
-      'machine',
+      machineViewId,
       MACHINE_SOURCE_ID,
       () => isDocsModeShown,
       (path) =>
@@ -609,6 +609,17 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         halfPageUp: onActiveView('halfPageUp'),
         edit: onActiveView('edit'),
         editSection: onActiveView('editSection'),
+        editSectionAt: ({ arg }) => {
+          const view =
+            arg.view === machineViewId
+              ? machineView
+              : addedViews.get(arg.view)?.view;
+          if (view === undefined) {
+            log(`no docs view ${arg.view} to edit a section in`);
+            return;
+          }
+          view.editSectionAt(arg.anchor);
+        },
         prevSection: onActiveView('prevSection'),
         nextSection: onActiveView('nextSection'),
         historyBack: onActiveView('historyBack'),

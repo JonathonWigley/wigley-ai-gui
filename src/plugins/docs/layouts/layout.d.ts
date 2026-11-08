@@ -231,14 +231,13 @@ export interface AsideLinkInput {
   title: string;
   depth: number;
 }
-// sectionEditControl, scope docs.doc: drawn inside a rendered heading.
+// sectionEditControl, scope docs.doc: drawn inside a rendered heading. `kit.button(parent, label, command, { arg })`
+// runs `command` with `arg`, which opens this section in the editor.
 export interface SectionEditControlInput {
   // The section's heading text.
   title: string;
-}
-export interface SectionEditControlKit extends DocsKit {
-  // Opens this section in the editor.
-  openSection(): void;
+  command: string;
+  arg: { view: string; anchor: string };
 }
 // recentChanges, scope docs.doc.
 export interface RecentChangesInput {
@@ -380,7 +379,7 @@ export interface Layout {
   sectionEditControl?(
     parent: HTMLElement,
     input: SectionEditControlInput,
-    kit: SectionEditControlKit,
+    kit: DocsKit,
   ): LayoutPart;
   recentChanges?(
     parent: HTMLElement,

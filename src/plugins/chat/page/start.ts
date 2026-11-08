@@ -54,6 +54,7 @@ import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type ChatApi = PageApi<
   typeof chatManifest,
@@ -110,11 +111,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       layouts,
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id: string) => api.keys.command(id) !== undefined,
-        argShape: (id: string) => api.keys.command(id)?.arg,
-        run: (id: string) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       log: services.log,

@@ -177,6 +177,9 @@ export interface DocsView {
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
   // view with no wiki.
   openMain(): void;
+  // Opens the section whose heading carries `anchor` in the doc pane, as its
+  // `edit` control's click asks.
+  editSectionAt(anchor: string): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
@@ -1504,6 +1507,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         await openListed(path, line, null);
       })();
     },
+    editSectionAt: (anchor) => doc.editSectionAt(anchor),
     openMain() {
       if (wikiMain === null) {
         return;

@@ -755,7 +755,8 @@ round; primer: an open primer), since main, not the page, decides.
   `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
-  `kbd`, `button` — variant and `keys` — and `sectionHeader`, and `command(qualifiedId)` and `keysFor(qualifiedId)`
+  `kbd`, `button` — a command id with its `arg`, variant and `keys` — and `sectionHeader`, and
+  `command(qualifiedId, arg?)` and `keysFor(qualifiedId)`
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
   scrolling, the split width, the rail header's open count and saved state, and the cancel dialog. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and

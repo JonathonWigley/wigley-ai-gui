@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PageStart } from '../../../contracts/plugin';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   deferred,
@@ -20,9 +21,13 @@ import {
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, PanelInput } from '../layouts/layout';
+import { unityPoolManifest } from '../manifest';
 import { unityPoolPagePart } from './start';
 
 const ROW_ID = 'row-1';
+const CLONE_2 = { pool: 'q', clone: 2 };
+
+type PoolCommands = PageStart<typeof unityPoolManifest>['commands'];
 const CLONE_PATH = '/x/repo-1';
 
 const ROW: SessionRow = {
@@ -142,26 +147,53 @@ describe('unityPoolPagePart', () => {
     expect(panels.map(({ pool }) => pool).at(-1)).toBe('p');
   });
 
-  it('run_OnePerCloneAndARejectedCallShowsItsError', async () => {
-    const run = deferred<unknown>();
-    const runs: unknown[][] = [];
+  it.each([
+    {
+      name: 'hold',
+      runs: (commands: PoolCommands) => commands.hold({ arg: CLONE_2 }),
+      sent: [['hold', 'q', 2]],
+    },
+    {
+      name: 'release',
+      runs: (commands: PoolCommands) => commands.release({ arg: CLONE_2 }),
+      sent: [['release', 'q', 2]],
+    },
+    {
+      name: 'a second hold while the first runs',
+      runs: (commands: PoolCommands) => {
+        commands.hold({ arg: CLONE_2 });
+        commands.hold({ arg: CLONE_2 });
+      },
+      sent: [['hold', 'q', 2]],
+    },
+  ])('hold_RunsActionOnTheArgsPoolAndClone: $name', ({ runs, sent }) => {
+    const runsSent: unknown[][] = [];
     const harness = startOnHarness(async (method, ...args) => {
       if (method === 'run') {
-        runs.push(args);
-        return run.promise;
+        runsSent.push(args);
+        return deferred<unknown>().promise;
       }
       return null;
     });
+
+    runs(harness.started().commands);
+
+    expect(runsSent).toEqual(sent);
+  });
+
+  it('run_RejectedCall_ShowsItsError', async () => {
+    const run = deferred<unknown>();
+    const harness = startOnHarness(async (method) =>
+      method === 'run' ? run.promise : null,
+    );
     const panels = captureLayout(harness);
     harness.state.publish(unityPoolSnapshotSlot).set(SNAPSHOT);
     harness.emit('core.pageReady', null);
     harness.state.publish(sessionsActiveSlot).set(ROW_ID);
     harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
     await vi.waitFor(() => expect(panels.length).toBeGreaterThan(0));
-    const hold = () => panels[panels.length - 1].clones[0].action?.run();
 
-    hold();
-    hold();
+    harness.started().commands.hold({ arg: { pool: 'p', clone: 1 } });
     run.reject(new Error('main stopped'));
 
     await vi.waitFor(() =>
@@ -170,6 +202,5 @@ describe('unityPoolPagePart', () => {
         text: 'main stopped',
       }),
     );
-    expect(runs).toEqual([['hold', 'p', 1]]);
   });
 });

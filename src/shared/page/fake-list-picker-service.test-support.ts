@@ -1,5 +1,7 @@
+import { PICKER_CANCEL, PICKER_CHOOSE_ROW } from '../../contracts/commands';
 import type { EditorHost } from '../../contracts/editor';
 import type {
+  ListPicker,
   ListPickerOptions,
   ListPickerService,
 } from '../../contracts/list-picker';
@@ -18,7 +20,9 @@ interface FakeListPickerOptions {
   pushScope?(scope: string): PushedScope;
 }
 
-// A real createListPicker over a fake matcher. `scopes` records each scope
+// A real createListPicker over a fake matcher, owned by `fake`: a click's
+// `picker.chooseRow` or `picker.cancel` reaches the picker it ran from, as the
+// core's picker commands would. `scopes` records each scope
 // pushed, by its short name, and `created` each `create`'s options.
 export function fakeListPickerService(
   fakes: FakeListPickerOptions = {},
@@ -31,7 +35,15 @@ export function fakeListPickerService(
     create(options = {}) {
       created.push(options);
       const { scope = 'picker', filter = false, parent } = options;
-      const picker = createListPicker({
+      const picker: ListPicker = createListPicker({
+        owner: 'fake',
+        run(command, arg) {
+          if (command === PICKER_CHOOSE_ROW.id) {
+            picker.chooseAt((arg as { index: number }).index);
+          } else if (command === PICKER_CANCEL.id) {
+            picker.cancel();
+          }
+        },
         pushScope() {
           const name = typeof scope === 'string' ? scope : scope();
           scopes.push(name);

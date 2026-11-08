@@ -1,4 +1,8 @@
-import type { CommandId } from '../contracts/commands';
+import {
+  type CommandId,
+  PICKER_CANCEL,
+  PICKER_CHOOSE_ROW,
+} from '../contracts/commands';
 import { PANE_FOCUS_COMMANDS, PANE_RESIZE_COMMANDS } from '../contracts/panes';
 import type { CommandDecl, ScopeInfo } from '../contracts/plugin';
 
@@ -44,6 +48,18 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
     label: 'focus the pane below',
     group: 'panes',
     runsIn: 'page',
+  },
+  [PICKER_CHOOSE_ROW.id]: {
+    label: 'choose the row',
+    group: 'picker',
+    runsIn: 'page',
+    arg: { owner: 'string', index: 'number' },
+  },
+  [PICKER_CANCEL.id]: {
+    label: 'cancel the list',
+    group: 'picker',
+    runsIn: 'page',
+    arg: 'string',
   },
 };
 

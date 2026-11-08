@@ -11,6 +11,7 @@ import { createGalleryView } from './gallery-view';
 import { readGalleryLayout } from './layout/read-gallery-layout';
 import { testShellLayout } from './test-shell-layout';
 import { nextTransparency } from './transparency-toggle';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 // The gallery's main part only registers its layouts, so its channel carries
 // nothing.
@@ -39,11 +40,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
         timers: api.services.timers,
         markdown: api.services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         log,
       },
       api.transparency.overridden(),

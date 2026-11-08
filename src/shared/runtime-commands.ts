@@ -41,9 +41,12 @@ export interface RuntimeCommandsDeps<Context extends { arg: unknown }> {
 
 // One process's commands: the registry of its handlers, the router every run takes,
 // and each plugin's view of them, which reads and writes the process's catalog slot.
+// `infoOf` is the router's read of a command: this process's catalog, then the
+// other's, then the served config.
 export interface RuntimeCommands<Context extends { arg: unknown }> {
   readonly registry: CommandRegistry<Context>;
   readonly router: CommandRouter<Context>;
+  infoOf(id: CommandId): CommandInfo | undefined;
   readonly keyCommands: KeyCommands<Context>;
   forPlugin(
     pluginId: string,
@@ -164,6 +167,7 @@ export function createRuntimeCommands<Context extends { arg: unknown }>(
   return {
     registry,
     router,
+    infoOf,
     keyCommands: {
       run: router.run,
       has: (id) => registry.has(id),

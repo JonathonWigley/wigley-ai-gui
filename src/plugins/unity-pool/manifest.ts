@@ -8,7 +8,20 @@ export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
-  commands: {},
+  commands: {
+    hold: {
+      label: 'hold the clone',
+      group: 'pool',
+      runsIn: 'page',
+      arg: { pool: 'string', clone: 'number' },
+    },
+    release: {
+      label: 'release the clone',
+      group: 'pool',
+      runsIn: 'page',
+      arg: { pool: 'string', clone: 'number' },
+    },
+  },
   scopes: {},
   settings: { scriptPath: '', pythonCommand: 'python3', layout: 'default' },
   settingInfo: {

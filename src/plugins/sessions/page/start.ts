@@ -73,6 +73,7 @@ import {
   type VisibleTab,
   visibleTab,
 } from './tabs';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type SessionsApi = PageApi<
   typeof sessionsManifest,
@@ -444,11 +445,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       markdown: api.services.markdown,
       platform: api.platform.os,
       state: api.state.forLayouts,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       log,
       rowParts,
       barParts,

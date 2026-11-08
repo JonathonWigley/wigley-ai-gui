@@ -10,6 +10,7 @@ import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import {
   createBaseKit,
+  kitCommandsOf,
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
@@ -94,11 +95,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
     };
@@ -250,7 +247,6 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     const drawPanel = (pool: PoolState, now: number) => {
       const input = withShownPaths(
         panelInput(pool, [...rows.all().values()], now, pendingOf(pool.pool), {
-          run: (action, clone) => runAction(pool.pool, action, clone),
           select: (sessionId) => sessions.activate(sessionId),
         }),
       );
@@ -381,7 +377,10 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     });
 
     return {
-      commands: {},
+      commands: {
+        hold: ({ arg }) => runAction(arg.pool, 'hold', arg.clone),
+        release: ({ arg }) => runAction(arg.pool, 'release', arg.clone),
+      },
       dispose() {
         isDisposed = true;
         panel?.dispose();

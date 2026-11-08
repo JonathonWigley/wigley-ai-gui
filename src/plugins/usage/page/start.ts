@@ -43,6 +43,7 @@ import {
   statusLineInput,
   statusLineText,
 } from './usage-view-model';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type UsageApi = PageApi<
   typeof usageManifest,
@@ -84,11 +85,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

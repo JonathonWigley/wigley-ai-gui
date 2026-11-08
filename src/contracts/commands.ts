@@ -31,6 +31,18 @@ export type CommandArg =
   | string
   | { readonly [field: string]: number | string };
 
+// Chooses the row at item `index` of `owner`'s open list picker, as a click on
+// the row does; `owner` is the plugin id that created the picker.
+export const PICKER_CHOOSE_ROW: CommandKey<
+  { owner: string; index: number },
+  'picker.chooseRow'
+> = { id: 'picker.chooseRow' };
+
+// Cancels `owner`'s open list picker, as a click outside its panel does.
+export const PICKER_CANCEL: CommandKey<string, 'picker.cancel'> = {
+  id: 'picker.cancel',
+};
+
 // What an intercept reads of the run it wraps.
 export interface CommandRunContext {
   readonly id: CommandId;

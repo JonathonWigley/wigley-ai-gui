@@ -43,6 +43,7 @@ import { mountFormsView } from './forms-view';
 import { readLayout } from './layout/read-layout';
 import { roundLayoutNames } from './layout/layout-resolver';
 import { presentedRoundOf } from './presented-round';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type FormsApi = PageApi<typeof formsManifest, FormsChannel, FormsPageEvents>;
 
@@ -162,11 +163,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       markdown: services.markdown,
       keys: api.keys,
       run: (command) => api.commands.run(command),
-      commands: {
-        exists: (command) => api.keys.command(command) !== undefined,
-        argShape: (command) => api.keys.command(command)?.arg,
-        run: (command) => api.commands.run(command),
-      },
+      commands: kitCommandsOf(api),
       contributions,
       platform: api.platform.os,
       state: api.state.forLayouts,

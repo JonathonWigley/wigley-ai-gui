@@ -30,6 +30,7 @@ import {
 } from './layout/workflow-draw';
 import { createPreview } from './preview-steps';
 import { createWorkflowView } from './workflow-view';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type WorkflowApi = PageApi<
   typeof workflowManifest,
@@ -106,11 +107,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

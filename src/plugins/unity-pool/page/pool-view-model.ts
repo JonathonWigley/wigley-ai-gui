@@ -1,11 +1,13 @@
 import type { Paths } from '../../../contracts/paths';
-import type {
-  CloneStranded,
-  EditorState,
-  PoolAction,
-  PoolClone,
-  PoolHolder,
-  PoolState,
+import {
+  type CloneStranded,
+  type EditorState,
+  type PoolAction,
+  type PoolClone,
+  type PoolHolder,
+  type PoolState,
+  unityPoolHoldCommand,
+  unityPoolReleaseCommand,
 } from '../contract';
 import type {
   HolderInput,
@@ -99,21 +101,20 @@ export function poolOfRow(
 }
 
 // The panel of `pool` at `now`: each clone in number order with its holder matched to `rows`, the queue in order,
-// and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action's `run` calls
-// `actions.run` with its clone, and a session holder's `select` calls `actions.select` with its row id.
+// and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action names the
+// `unity-pool.hold` or `unity-pool.release` command with its pool and clone, and a session holder's `select` calls
+// `actions.select` with its row id.
 export function panelInput(
   pool: PoolState,
   rows: readonly PoolRow[],
   now: number,
   pending: ReadonlyMap<number, PendingAction>,
-  actions: {
-    run(action: PoolAction, clone: number): void;
-    select(sessionId: string): void;
-  },
+  actions: { select(sessionId: string): void },
 ): PanelInput {
   const longWait = pool.queue.some((ticket) => ticket.longWait);
   const clones = pool.clones.map((clone) =>
     cloneInput(
+      pool.pool,
       clone,
       rows,
       now,
@@ -191,15 +192,13 @@ function isUnheld(clone: PoolClone): boolean {
 }
 
 function cloneInput(
+  pool: string,
   clone: PoolClone,
   rows: readonly PoolRow[],
   now: number,
   pending: PendingAction | null,
   longWait: boolean,
-  actions: {
-    run(action: PoolAction, clone: number): void;
-    select(sessionId: string): void;
-  },
+  actions: { select(sessionId: string): void },
 ): PanelCloneInput {
   const { facts, handoff, stranded, warmup } = clone;
   const isDirty = facts.dirty === true;
@@ -224,25 +223,27 @@ function cloneInput(
         ? null
         : { state: warmup.state, error: warmup.error },
     blocking: longWait && (!unheld || isDirty),
-    action: cloneAction(clone, unheld, pending, actions.run),
+    action: cloneAction(pool, clone, unheld, pending),
     result: pending?.result ?? null,
   };
 }
 
 function cloneAction(
+  pool: string,
   clone: PoolClone,
   unheld: boolean,
   pending: PendingAction | null,
-  run: (action: PoolAction, clone: number) => void,
 ): PanelCloneInput['action'] {
   const running = pending?.running ?? false;
+  const arg = { pool, clone: clone.number };
   if (unheld) {
-    return { label: 'Hold', run: () => run('hold', clone.number), running };
+    return { label: 'Hold', command: unityPoolHoldCommand.id, arg, running };
   }
   if (clone.claim?.kind === 'hold') {
     return {
       label: 'Release',
-      run: () => run('release', clone.number),
+      command: unityPoolReleaseCommand.id,
+      arg,
       running,
     };
   }

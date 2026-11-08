@@ -21,6 +21,7 @@ import type { Layout } from '../layouts/layout';
 import { agentStripManifest } from '../manifest';
 import { createAgentStrip } from './agent-strip';
 import { readAgentStripLayout } from './layout/read-agent-strip-layout';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type AgentStripApi = PageApi<
   typeof agentStripManifest,
@@ -44,11 +45,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

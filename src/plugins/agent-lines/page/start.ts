@@ -19,6 +19,7 @@ import type { Layout } from '../layouts/layout';
 import { agentLinesManifest } from '../manifest';
 import { readAgentLinesLayout } from './layout/read-agent-lines-layout';
 import { createWorkingLines } from './working-lines';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type AgentLinesApi = PageApi<
   typeof agentLinesManifest,
@@ -42,11 +43,7 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

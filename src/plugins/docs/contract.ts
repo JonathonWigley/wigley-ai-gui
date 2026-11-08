@@ -2,6 +2,7 @@
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -265,6 +266,13 @@ export interface DocsPageExports {
   addView(sourceId: string, options: { isVisible(): boolean }): DocsViewHandle;
   openDoc(path: string, line?: number): void;
 }
+
+// Opens the section whose heading carries `anchor`, in the docs view `view`, as
+// a section's `edit` control does.
+export const docsEditSectionAtCommand: CommandKey<
+  { view: string; anchor: string },
+  'docs.editSectionAt'
+> = { id: 'docs.editSectionAt' };
 
 export const docsPageKey: DependencyKey<DocsPageExports, 'page', 'docs'> = {
   id: 'docs',

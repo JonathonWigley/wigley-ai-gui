@@ -1,3 +1,9 @@
+import {
+  type CommandArg,
+  type CommandId,
+  PICKER_CANCEL,
+  PICKER_CHOOSE_ROW,
+} from '../../contracts/commands';
 import type { EditorHost } from '../../contracts/editor';
 import type { FuzzyMatcher } from '../../contracts/fuzzy';
 import type {
@@ -20,10 +26,16 @@ import {
   visibleIndexes,
 } from './list-picker-state';
 
+// `owner` is the owning plugin's id, and `run` runs a command: a row's click
+// runs `picker.chooseRow` and a click outside the panel `picker.cancel`, each
+// naming `owner`.
 export interface ListPickerDeps {
+  owner: string;
+  run(command: CommandId, arg: CommandArg): void;
   // Pushes the owning plugin's picker scope.
   pushScope(): PushedScope;
-  // Takes the `picker shown: <title>` line.
+  // Takes the `picker shown: <title>` and `picker row <index> is not shown`
+  // lines.
   log: PluginLog;
   // Ranks the rows a filter keeps.
   matcher: FuzzyMatcher;
@@ -68,7 +80,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   });
   layer.addEventListener('click', (event) => {
     if (event.target === layer) {
-      picker.cancel();
+      deps.run(PICKER_CANCEL.id, deps.owner);
     }
   });
 
@@ -93,10 +105,8 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     const label = state.labels[index];
     const atCursor = index === state.cursor;
     const trailing = atCursor ? (request?.cursorEndAt(index) ?? null) : null;
-    const choose = () => {
-      state = { ...state, cursor: index };
-      picker.choose();
-    };
+    const choose = () =>
+      deps.run(PICKER_CHOOSE_ROW.id, { owner: deps.owner, index });
     let drawn = request?.drawRowAt(list, index, { label, trailing }) ?? null;
     if (drawn === null) {
       const builtIn = row({
@@ -277,6 +287,14 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       }
       const cursor = state.cursor;
       hide()?.chooseAt(cursor);
+    },
+    chooseAt(index) {
+      if (!visibleIndexes(state, deps.matcher).includes(index)) {
+        deps.log(`picker row ${index} is not shown`);
+        return;
+      }
+      state = { ...state, cursor: index };
+      picker.choose();
     },
     cancel() {
       hide()?.cancelled?.();

@@ -61,6 +61,7 @@ import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
+import { registerPickerCommands } from './picker-commands';
 import {
   createPageApi,
   liveKeysFor,
@@ -72,6 +73,7 @@ import type { Layout as ChromeLayout } from './shell/layouts/layout';
 import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { readShellLayout } from './shell/read-shell-layout';
 import { mountShell } from './shell/shell';
+import { shellCommands } from './shell/shell-commands';
 import { mountShellChrome } from './shell/shell-chrome';
 import { defaultShellLayout } from './shell/shell-layout';
 import { startedPluginsConfig } from './started-config';
@@ -207,11 +209,7 @@ async function start() {
       markdown,
       keys: keyHints,
       platform: config.platform.os,
-      commands: {
-        exists: (id) => live.current().commands[id] !== undefined,
-        argShape: (id) => live.current().commands[id]?.arg,
-        run: (id) => commands.router.run(id, undefined),
-      },
+      commands: shellCommands(commands, log),
       state: layoutState(state, 'shell', (handle) => handle),
     },
     instance: config.appInstance,
@@ -274,6 +272,7 @@ async function start() {
       'core',
     );
   }
+  const pickerCommands = registerPickerCommands(registry);
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   const paths = config.platform.os === 'windows' ? windowsPaths : posixPaths;
@@ -378,6 +377,7 @@ async function start() {
           state,
           anchors,
           boxFocus,
+          pickerCommands,
         }),
       );
       const handlers: Record<

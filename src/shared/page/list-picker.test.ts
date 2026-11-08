@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../contracts/editor';
-import type { ListPickerRequest } from '../../contracts/list-picker';
+import type { CommandArg, CommandId } from '../../contracts/commands';
+import type {
+  ListPicker,
+  ListPickerRequest,
+} from '../../contracts/list-picker';
 import { fakeFuzzyMatcher } from '../fake-fuzzy-matcher.test-support';
 import { createListPicker } from './list-picker';
 import {
@@ -13,17 +17,34 @@ import {
 
 const ITEMS = ['one', 'two', 'three'];
 
+// A picker owned by `test`. `ran` records each command its clicks run, and each
+// run reaches the picker as the core's picker commands would.
 function pickerSetup() {
-  const picker = createListPicker({
+  const ran: [CommandId, CommandArg][] = [];
+  const log = vi.fn();
+  const picker: ListPicker = createListPicker({
+    owner: 'test',
+    run(command, arg) {
+      ran.push([command, arg]);
+      runOnPicker(picker, command, arg);
+    },
     pushScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
-    log: vi.fn(),
+    log,
     matcher: fakeFuzzyMatcher,
   });
-  return { picker, layer: asFake(picker.element) };
+  return { picker, layer: asFake(picker.element), ran, log };
+}
+
+function runOnPicker(picker: ListPicker, command: CommandId, arg: CommandArg) {
+  if (command === 'picker.chooseRow') {
+    picker.chooseAt((arg as { index: number }).index);
+  } else if (command === 'picker.cancel') {
+    picker.cancel();
+  }
 }
 
 // A picker over a filter editor whose `type` sets the filter text as typing
@@ -42,18 +63,22 @@ function filteredPickerSetup() {
       };
     },
   } as unknown as EditorHost;
-  const picker = createListPicker({
+  const log = vi.fn();
+  const picker: ListPicker = createListPicker({
+    owner: 'test',
+    run: (command, arg) => runOnPicker(picker, command, arg),
     pushScope: () => ({
       pop: () => undefined,
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
-    log: vi.fn(),
+    log,
     matcher: fakeFuzzyMatcher,
     filterEditor,
   });
   return {
     picker,
+    log,
     layer: asFake(picker.element),
     type: (text: string) => events?.changed(text),
   };
@@ -188,8 +213,32 @@ describe('list picker', () => {
     expect(findAll(rows(layer)[0], 'ui-row-trailing')).toHaveLength(0);
   });
 
+  it('backdropClick_RunsPickerCancelWithOwner', () => {
+    const { picker, layer, ran } = pickerSetup();
+    const cancelled = vi.fn();
+    picker.open(request({ cancelled }));
+
+    layer.click();
+
+    expect(ran).toEqual([['picker.cancel', 'test']]);
+    expect(cancelled).toHaveBeenCalled();
+  });
+
+  it('chooseAt_HiddenIndex_DoesNothing', () => {
+    const { picker, layer, type, log } = filteredPickerSetup();
+    const chosen = vi.fn();
+    picker.open(request({ chosen }));
+    type('thr');
+
+    picker.chooseAt(0);
+
+    expect(chosen).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith('picker row 0 is not shown');
+    expect(layer.hidden).toBe(false);
+  });
+
   it('drawRow_DrawsEachVisibleItemAndKeepsCursorAndClick', () => {
-    const { picker, layer } = pickerSetup();
+    const { picker, layer, ran } = pickerSetup();
     const end = new FakeElement('span');
     const chosen = vi.fn();
     const { drawRow } = owningRows();
@@ -219,7 +268,17 @@ describe('list picker', () => {
     drawn[0].click();
     expect(chosen).not.toHaveBeenCalled();
     drawn[2].click();
+    expect(ran).toEqual([['picker.chooseRow', { owner: 'test', index: 2 }]]);
     expect(chosen).toHaveBeenCalledWith('three');
+
+    const builtInChosen = vi.fn();
+    picker.open(request({ chosen: builtInChosen }));
+    rows(layer)[1].click();
+    expect(ran.at(-1)).toEqual([
+      'picker.chooseRow',
+      { owner: 'test', index: 1 },
+    ]);
+    expect(builtInChosen).toHaveBeenCalledWith('two');
   });
 
   it('drawRow_TrailingLeftOut_AppendedToTheRow', () => {

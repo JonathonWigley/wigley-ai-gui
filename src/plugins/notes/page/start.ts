@@ -20,6 +20,7 @@ import type { Layout } from '../layouts/layout';
 import { notesManifest } from '../manifest';
 import { readNotesLayout } from './layout/read-notes-layout';
 import { createNotePopup, type NotePopupDeps } from './popup';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type NotesApi = PageApi<
   typeof notesManifest,
@@ -78,11 +79,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       services,
       keys: api.keys,
       overlay: api.areas.overlay,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       pushScope: (scope) => api.keys.pushScope(scope),

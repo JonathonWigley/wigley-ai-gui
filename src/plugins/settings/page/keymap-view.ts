@@ -266,13 +266,13 @@ function commandActions(ctx: RowContext, row: CommandRow): RowActions {
   };
 }
 
-// A command row's input: its label capitalised, its binds then its
+// A command row's input: its row label capitalised, its binds then its
 // accelerators.
 export function keyRowInput(ctx: RowContext, row: CommandRow): KeyRowInput {
   const { command } = row;
   return {
     command: command.id,
-    label: capitalised(command.label),
+    label: capitalised(row.label),
     runsIn: command.runsIn,
     lines: [
       ...row.binds.map((line) => bindLine(ctx, line)),

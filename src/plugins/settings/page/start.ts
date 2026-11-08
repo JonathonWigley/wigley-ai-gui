@@ -9,6 +9,7 @@ import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
 import { readSettingsLayout } from './layout/read-layout';
 import { createSettingsView } from './settings-view';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type SettingsApi = PageApi<typeof settingsManifest, SettingsChannel>;
 
@@ -32,11 +33,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       state: api.state.forLayouts,
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       log,
       toast: services.toast,
       setScope: (scope) => api.keys.setScope(scope),

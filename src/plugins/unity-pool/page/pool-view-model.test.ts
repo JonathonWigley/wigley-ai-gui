@@ -71,7 +71,9 @@ const ROW: PoolRow = {
 };
 
 const NO_PENDING: ReadonlyMap<number, PendingAction> = new Map();
-const NO_ACTIONS = { run: () => {}, select: () => {} };
+const NO_ACTIONS = { select: () => {} };
+
+const CLONE_1 = { pool: 'p', clone: 1 };
 
 describe('ordinal', () => {
   it.each([
@@ -306,7 +308,7 @@ describe('poolOfRow', () => {
   );
 });
 
-// A clone's input with its functions replaced by what the layout reads from them.
+// A clone's input with its holder's `select` replaced by whether it selects.
 function plainClone(input: PanelCloneInput) {
   const { holder, action, ...rest } = input;
   return {
@@ -320,8 +322,7 @@ function plainClone(input: PanelCloneInput) {
             idleMs: holder.idleMs,
             selects: holder.select !== null,
           },
-    action:
-      action === null ? null : { label: action.label, running: action.running },
+    action,
   };
 }
 
@@ -352,7 +353,15 @@ describe('panelInput', () => {
     {
       name: 'free',
       clone: clone(1),
-      expected: { ...BASE_EXPECTED, action: { label: 'Hold', running: false } },
+      expected: {
+        ...BASE_EXPECTED,
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
+      },
     },
     {
       name: 'user hold',
@@ -365,7 +374,12 @@ describe('panelInput', () => {
           idleMs: null,
           selects: false,
         },
-        action: { label: 'Release', running: false },
+        action: {
+          label: 'Release',
+          command: 'unity-pool.release',
+          arg: CLONE_1,
+          running: false,
+        },
       },
     },
     {
@@ -471,7 +485,15 @@ describe('panelInput', () => {
           error: null,
         },
       }),
-      expected: { ...BASE_EXPECTED, action: { label: 'Hold', running: false } },
+      expected: {
+        ...BASE_EXPECTED,
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
+      },
     },
     {
       name: 'warm-up failed',
@@ -488,14 +510,27 @@ describe('panelInput', () => {
         ...BASE_EXPECTED,
         editor: 'editor busy',
         warmup: { state: 'failed', error: 'license' },
-        action: { label: 'Hold', running: false },
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
       },
     },
     {
       name: 'pending running hold',
       clone: clone(1),
       pending: new Map([[1, { action: 'hold', running: true, result: null }]]),
-      expected: { ...BASE_EXPECTED, action: { label: 'Hold', running: true } },
+      expected: {
+        ...BASE_EXPECTED,
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: true,
+        },
+      },
     },
     {
       name: 'finished release with its result',
@@ -512,7 +547,12 @@ describe('panelInput', () => {
       ]),
       expected: {
         ...BASE_EXPECTED,
-        action: { label: 'Hold', running: false },
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
         result: { ok: true, text: 'Released Unity 1' },
       },
     },
@@ -734,8 +774,8 @@ describe('panelInput', () => {
     ]);
   });
 
-  it('panelInput_Select_CallsActionWithRowId', () => {
-    const actions = { run: vi.fn(), select: vi.fn() };
+  it('panelInput_SelectAndAction_TargetTheirRowAndClone', () => {
+    const actions = { select: vi.fn() };
     const input = panelInput(
       pool('p', [
         clone(3, { claim: claim('agent', 'host-7', null) }),
@@ -747,8 +787,10 @@ describe('panelInput', () => {
       actions,
     );
     input.clones[0].holder?.select?.();
-    input.clones[1].action?.run();
     expect(actions.select.mock.calls).toEqual([['row-7']]);
-    expect(actions.run.mock.calls).toEqual([['hold', 4]]);
+    expect(input.clones[1].action).toMatchObject({
+      command: 'unity-pool.hold',
+      arg: { pool: 'p', clone: 4 },
+    });
   });
 });

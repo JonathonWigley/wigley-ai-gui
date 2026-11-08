@@ -13,7 +13,7 @@ import {
   ScrollerFakeElement,
   ShrinkingScrollerFakeElement,
 } from '../../../shared/page/test-dom';
-import type { IndexEntry } from '../contract';
+import { docsEditSectionAtCommand, type IndexEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   DocHeaderInput,
@@ -113,7 +113,14 @@ function docViewOver(
     ...NO_FENCES,
   },
 ) {
-  const { parts } = fakeDocsParts(layouts);
+  // A section control's click runs `docs.editSectionAt`, which start.ts sends
+  // to the view its arg names.
+  let view: DocView | null = null;
+  const { parts } = fakeDocsParts(layouts, (id, arg) => {
+    if (id === docsEditSectionAtCommand.id) {
+      view?.editSectionAt((arg as { anchor: string }).anchor);
+    }
+  });
   const editors: {
     parent: HTMLElement;
     line: number;
@@ -215,8 +222,10 @@ function docViewOver(
     parts,
     openChanged: () => undefined,
   } as unknown as DocViewDeps;
+  const created = createDocView(deps);
+  view = created;
   return {
-    view: createDocView(deps),
+    view: created,
     editors,
     deps,
     replies,

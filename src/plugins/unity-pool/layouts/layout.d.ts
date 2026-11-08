@@ -7,8 +7,9 @@
 //
 // The app keeps:
 // - the row part and the right-bar slot, contributed while the shown session has a pool and removed when it has none;
-// - the clicks: a holder's `select` selects its row, and an action's `run` runs `unity-pool hold|release` through
-//   main, the clone's `action.running` true until the result lands in its `result`;
+// - the clicks: a holder's `select` selects its row, and an action's button runs the action's `command` with its
+//   `arg`, which runs `unity-pool hold|release` through main, the clone's `action.running` true until the result
+//   lands in its `result`;
 // - no keys and no focus: the panel is mouse-driven and its buttons never take focus;
 // - every redraw: on each pool change, each change of the shown session or its rows, each action result, and once a
 //   minute for the times.
@@ -35,7 +36,8 @@ export interface HolderInput {
 // One clone of the pool. `branch` reads `detached` on a detached HEAD and `unknown` for a clone never probed;
 // `editor` is the editor's state in words (`editor ready`, `in Play Mode`). `blocking` is true only while the queue
 // has a long wait, on each clone that keeps the queue waiting: held, handed off, stranded or dirty. `action` is Hold
-// on a free clone and Release on the user's hold, null otherwise; `result` is the last Hold or Release's outcome.
+// on a free clone and Release on the user's hold, null otherwise: `kit.button(parent, label, command, { arg })` runs it.
+// `result` is the last Hold or Release's outcome.
 export interface PanelCloneInput {
   title: string;
   path: string;
@@ -49,7 +51,8 @@ export interface PanelCloneInput {
   blocking: boolean;
   action: {
     label: 'Hold' | 'Release';
-    run: () => void;
+    command: string;
+    arg: { pool: string; clone: number };
     running: boolean;
   } | null;
   result: { ok: boolean; text: string } | null;

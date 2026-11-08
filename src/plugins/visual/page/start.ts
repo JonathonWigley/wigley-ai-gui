@@ -13,6 +13,7 @@ import { createVisualParts } from './layout/visual-parts';
 import { createVisualCommands } from './visual-commands';
 import { createVisualOverlay } from './visual-overlay';
 import { createVisualRegistry } from './visual-registry';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type VisualApi = PageApi<
   typeof visualManifest,
@@ -38,11 +39,7 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },

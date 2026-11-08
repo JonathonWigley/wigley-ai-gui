@@ -2,15 +2,22 @@ import type {
   CommandArg,
   CommandArgShape,
   CommandId,
+  CommandKey,
 } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { OsName } from '../../../contracts/platform';
-import type { KeyHints, PluginManifest } from '../../../contracts/plugin';
+import type {
+  CommandInfo,
+  KeyHints,
+  PluginCommands,
+  PluginManifest,
+} from '../../../contracts/plugin';
 import type { LayoutState } from '../../../contracts/state';
 import { checkCommandArg } from '../../command-args';
+import { errorText } from '../../error-text';
 import { qualify } from '../../plugin-manifests';
 import { appended, element } from '../dom';
 import { createMarkdownMount, type MarkdownMount } from '../markdown-mount';
@@ -110,21 +117,24 @@ function qualifiedScope(
   return typeof scope === 'string' ? qualify(pluginId, scope) : scope.qualified;
 }
 
-// The commands a kit's `command` reaches: whether the served commands hold an
-// id, the argument it declares, and running it.
+// The commands a kit's `command` and `button` reach, each read from the
+// router's catalog: whether it knows an id, the argument the id declares, and
+// running it with `arg`. `run` never throws: a run that cannot start, as a
+// served command with no handler, is logged and runs nothing.
 export interface KitCommands {
   exists(id: CommandId): boolean;
   argShape(id: CommandId): CommandArgShape | undefined;
-  run(id: CommandId): void;
+  run(id: CommandId, arg?: CommandArg): void;
 }
 
-// A runner for the command `qualifiedId`, which runs it on each call and
-// never on creation. Throws at once for an id the app does not serve and for a
-// command that needs an argument, since a runner passes none, so a part asking
-// for either fails while it builds.
+// A runner for the command `qualifiedId` with `arg`, which runs it on each
+// call and never on creation. Throws at once for an id the app does not know
+// and for an `arg` the command does not declare, so a part asking for either
+// fails while it builds.
 export function commandRunner(
   qualifiedId: CommandId,
   commands: KitCommands,
+  arg?: CommandArg,
 ): () => void {
   if (!commands.exists(qualifiedId)) {
     throw new Error(`no command ${qualifiedId}`);
@@ -132,12 +142,56 @@ export function commandRunner(
   const argProblem = checkCommandArg(
     qualifiedId,
     commands.argShape(qualifiedId),
-    undefined,
+    arg,
   );
   if (argProblem !== null) {
     throw new Error(argProblem);
   }
-  return () => commands.run(qualifiedId);
+  return () => commands.run(qualifiedId, arg);
+}
+
+// A plugin's `KitCommands`: `exists` and `argShape` read `api.keys.command`,
+// and `run` runs through `api.commands`, logging under the plugin a run that
+// throws at the call.
+export function kitCommandsOf(api: {
+  keys: { command(id: CommandId): CommandInfo | undefined };
+  commands: Pick<PluginCommands, 'run'>;
+  services: { log: PluginLog };
+}): KitCommands {
+  return {
+    exists: (id) => api.keys.command(id) !== undefined,
+    argShape: (id) => api.keys.command(id)?.arg,
+    run(id, arg) {
+      runLogged(id, api.services.log, () =>
+        arg === undefined
+          ? api.commands.run(id)
+          : api.commands.run({ id }, arg),
+      );
+    },
+  };
+}
+
+// Runs a typed command key from a click: a throw at the call, such as a stale
+// argument, is logged and never leaves the listener.
+export function keyRunner(
+  commands: Pick<PluginCommands, 'run'>,
+  log: PluginLog,
+): <A>(key: CommandKey<A>, arg: A) => void {
+  return (key, arg) => runLogged(key.id, log, () => commands.run(key, arg));
+}
+
+// Starts `run` and voids its promise, which the command core settles and logs;
+// a throw at the call logs `command <id> failed: <error text>`.
+function runLogged(
+  id: CommandId,
+  log: PluginLog,
+  run: () => Promise<void>,
+): void {
+  try {
+    void run();
+  } catch (error) {
+    log(`command ${id} failed: ${errorText(error)}`);
+  }
 }
 
 // The parts every owner's layout draws with, so an owner makes one per part
@@ -213,7 +267,8 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
       }
       return node;
     },
-    command: (qualifiedId) => commandRunner(qualifiedId, deps.commands),
+    command: (qualifiedId, arg) =>
+      commandRunner(qualifiedId, deps.commands, arg),
     keysFor: (qualifiedId, arg) => keysFor(qualifiedId, arg),
     card(parent, className = '') {
       const node = cardPart();
@@ -224,11 +279,12 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     },
     tag: (parent, text, tone) => appended(parent, tagPart(text, tone)),
     kbd: (parent, keys) => appended(parent, kbd(keys, deps.platform)),
-    button(parent, label, onClick, options = {}) {
+    button(parent, label, command, options = {}) {
+      const run = commandRunner(command, deps.commands, options.arg);
       const keys = options.keys ?? null;
       return appended(
         parent,
-        textButton(label, onClick, {
+        textButton(label, run, {
           variant: options.variant,
           hint: keys === null ? null : kbd(keys, deps.platform),
         }),

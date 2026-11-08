@@ -240,8 +240,9 @@ const layout = {
       }),
     };
   },
-  sectionEditControl(parent, _input, kit) {
-    const button = kit.button(parent, 'edit', kit.openSection, {
+  sectionEditControl(parent, input, kit) {
+    const button = kit.button(parent, 'edit', input.command, {
+      arg: input.arg,
       variant: 'ghost',
     });
     button.classList.add('docs-section-edit');

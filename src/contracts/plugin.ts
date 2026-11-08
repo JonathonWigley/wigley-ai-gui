@@ -633,7 +633,9 @@ export interface KeyHints {
 // config now sets it, every plugin's binds qualified, and
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
 // `keys.label` falls back to the id for a command with no label;
-// `keys.command` reads a command by its qualified id; `keys.scopes` lists
+// `keys.command` reads a command by its qualified id, from the freshest catalog
+// the page has, so a command a part registered counts before main serves it
+// again; `keys.scopes` lists
 // every scope as main serves them. `keysFor`, `anchor` and `onKeymapChanged` are as
 // `KeyHints` says, each handle filed in the part's registrations.
 // `keys.where` reads whether focus is in a text box now, and `keys.onWhereChanged`
