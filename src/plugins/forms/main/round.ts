@@ -66,12 +66,6 @@ function parseItems<Item>(format: ItemFormat<Item>, raw: unknown): Item[] {
       `ask_round's ${format.argsKey} must be a list of objects.`,
     );
   }
-  if (raw.length > format.maxItems) {
-    throw new RoundError(
-      `ask_round got ${raw.length} ${format.argsKey}; the maximum is ` +
-        `${format.maxItems}. Split the round.`,
-    );
-  }
   const noun = capitalised(format.noun);
   return raw.map((item, i) => format.parse(item, `${noun} ${i + 1}: `));
 }

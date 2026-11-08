@@ -238,34 +238,10 @@ describe('parseRound with notices', () => {
     expect(roundError(args)).toMatch(/notice.*finding.*question/);
   });
 
-  it('accepts fifty notices and refuses fifty-one', () => {
-    const notices = (count: number) =>
-      Array.from({ length: count }, (_, n) => notice({ title: `Fix ${n}` }));
-
-    expect(
-      parseRound({ heading: 'H', notices: notices(50) }).notices,
-    ).toHaveLength(50);
-    expect(roundError({ heading: 'H', notices: notices(51) })).toMatch(
-      /\b51\b.*\b50\b/,
-    );
-  });
-
   it.each(['Dispatched', 'Decided'])('accepts the %s badge', (badge) => {
     const round = parseRound({ heading: 'H', notices: [notice({ badge })] });
 
     expect(round.notices[0].badge).toBe(badge);
-  });
-
-  it('accepts twenty questions and refuses twenty-one', () => {
-    const questions = (count: number) =>
-      Array.from({ length: count }, (_, n) => question({ title: `Q ${n}` }));
-
-    expect(
-      parseRound({ heading: 'H', questions: questions(20) }).questions,
-    ).toHaveLength(20);
-    expect(roundError({ heading: 'H', questions: questions(21) })).toMatch(
-      /\b21\b.*\b20\b/,
-    );
   });
 });
 
@@ -307,18 +283,6 @@ describe('parseRound with findings', () => {
       parseRound({ heading: 'H', questions: [question()], findings: null })
         .findings,
     ).toEqual([]);
-  });
-
-  it('accepts twenty findings and refuses twenty-one', () => {
-    const findings = (count: number) =>
-      Array.from({ length: count }, (_, n) => finding({ title: `F ${n}` }));
-
-    expect(
-      parseRound({ heading: 'H', findings: findings(20) }).findings,
-    ).toHaveLength(20);
-    expect(roundError({ heading: 'H', findings: findings(21) })).toMatch(
-      /\b21\b.*\b20\b/,
-    );
   });
 
   it("numbers a finding's errors from 1", () => {

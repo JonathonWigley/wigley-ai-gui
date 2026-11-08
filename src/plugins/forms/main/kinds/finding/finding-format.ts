@@ -39,8 +39,6 @@ import {
 } from './finding-text';
 import { isJsonObject, type JsonObject } from '../../../../../shared/json';
 
-const MAX_FINDINGS = 20;
-
 // The fewest choices any origin takes.
 const MIN_SOLUTIONS = Math.min(
   ...FINDING_ORIGINS.map((origin) => FINDING_ORIGIN_RULES[origin].minChoices),
@@ -532,10 +530,8 @@ function actionReasonsContent(
 export const findingFormat: AnswerableFormat<Finding> = {
   argsKey: 'findings',
   noun: 'finding',
-  maxItems: MAX_FINDINGS,
   arraySchema: {
     type: 'array',
-    maxItems: MAX_FINDINGS,
     items: {
       type: 'object',
       additionalProperties: false,

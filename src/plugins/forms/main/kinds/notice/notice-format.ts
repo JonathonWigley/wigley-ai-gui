@@ -10,8 +10,6 @@ import {
 import type { ItemFormat } from '../item-format';
 import { isJsonObject } from '../../../../../shared/json';
 
-const MAX_NOTICES = 50;
-
 const NOTICE_BADGES: readonly NoticeBadge[] = [
   'Applied',
   'Dispatched',
@@ -106,10 +104,8 @@ function parseNotice(item: unknown, where: string): Notice {
 export const noticeFormat: ItemFormat<Notice> = {
   argsKey: 'notices',
   noun: 'notice',
-  maxItems: MAX_NOTICES,
   arraySchema: {
     type: 'array',
-    maxItems: MAX_NOTICES,
     items: {
       type: 'object',
       additionalProperties: false,

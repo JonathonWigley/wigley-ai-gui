@@ -12,8 +12,6 @@ import {
 import type { AnswerableFormat } from '../item-format';
 import { isJsonObject } from '../../../../../shared/json';
 
-const MAX_QUESTIONS = 20;
-
 const QUESTION_FIELDS = [
   'title',
   'context',
@@ -102,10 +100,8 @@ function parseQuestion(item: unknown, where: string): Question {
 export const questionFormat: AnswerableFormat<Question> = {
   argsKey: 'questions',
   noun: 'question',
-  maxItems: MAX_QUESTIONS,
   arraySchema: {
     type: 'array',
-    maxItems: MAX_QUESTIONS,
     items: {
       type: 'object',
       additionalProperties: false,
