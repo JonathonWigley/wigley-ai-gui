@@ -1125,6 +1125,11 @@ function createWindow(
     log,
   });
   pluginSwitch = liveSwitch;
+  // At quit, or with the window or its page destroyed, the page never comes
+  // back, so a request it holds resolves empty rather than holding the
+  // switch's queue. A crashed page that reloads is not gone: its requests wait.
+  onQuit(() => pageParts.pageGone());
+  window.webContents.once('destroyed', () => pageParts.pageGone());
   onQuit(() => liveSwitch.dispose());
   // A change that leaves the list as it was, such as the switch's own problem
   // write, applies nothing.
@@ -1159,6 +1164,7 @@ function createWindow(
   );
   window.on('closed', () => {
     globalShortcut.unregisterAll();
+    pageParts.pageGone();
   });
 
   if (runMode !== 'live') {
