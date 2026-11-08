@@ -664,6 +664,14 @@ because the earlier items rewrite many of these tests anyway.
 - **A stop drops unsaved text** — notes' popup and a forms draft lose what the user typed when their part stops. A
   switch-off asks `mayStop` first and refuses while their text is unsaved or a round is open, so a restart (drive-only) is the stop that still
   drops it.
+- **Switching off docs-session-tab drops unsaved Docs tab edits** — *agent-ready*: the part has no page `mayStop`
+  (`src/plugins/docs-session-tab/page/start.ts`), so a live switch-off disposes a session's Docs tab with its unsaved
+  text and asks nothing. Docs' own `mayStop` (`src/plugins/docs/page/start.ts`) runs only when docs itself is switched
+  off. Give docs-session-tab a `mayStop` that refuses while a Docs tab's text is unsaved, as docs does, with a row in
+  its `start.test.ts`.
+- **Switching off session-stash drops a note being typed** — *agent-ready*: the part has no `mayStop`
+  (`src/plugins/session-stash/page/start.ts`), so a live switch-off while its note dialog is open drops the note the
+  user is typing. Refuse the switch-off while the dialog is open (`noteDialog.isOpen()`), with a test of the refusal.
 - **A pushed scope after its host is disposed** — `PushedScope.pop` throws after host disposal (notes popup, rename
   dialog, settings view), and `keys.setScope` leaves its base behind. Same trigger as the item above.
 - **A disposed layout preview still opens** — after `dispose`, the layout preview's `show` can open a preview, because
