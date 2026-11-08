@@ -1,6 +1,6 @@
 # 04 — The auto-retro plugin
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -287,4 +287,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit ae33390d · proof: diff read; Produces present (AutoRetroState, autoRetroStateSlot, autoRetroManifest, RetroItem/RetroQueue/QueueEvent/nextQueue/parseQueue/EMPTY_QUEUE, QUEUE_FILE/createQueueFile, DEFAULT_SETTLE_SECONDS/RESTORE_WAIT_MS/isRetroDone, both parts, layout.d.ts, readAutoRetroLayout); typecheck 0; auto-retro + layout-contracts tests 51 pass; lint clean but pre-existing docs/keymap.md · concerns: no test catches the settle timer restarting on each repeated done value; until the queue loads after a restart the slot still holds the previous start's row ids; header look left to 06
