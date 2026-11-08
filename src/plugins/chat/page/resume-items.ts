@@ -31,6 +31,12 @@ export function sessionTime(modified: number): string {
   return `${day} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+// A section row's line after its title: its note when it has one, then
+// `detail`.
+export function withNote(row: ResumeSectionRow, detail: string): string {
+  return row.note === undefined ? detail : `${row.note} · ${detail}`;
+}
+
 // Every section's rows in the order given, each session once, under the first
 // section that holds it.
 export function sectionRowsOnce(
@@ -75,7 +81,7 @@ export function sessionItems(
         section,
         row: saved,
         closed,
-        label: `${closed.title} · ${sessionTime(closed.at)}`,
+        label: `${closed.title} · ${withNote(closed, sessionTime(closed.at))}`,
       });
     }
   }

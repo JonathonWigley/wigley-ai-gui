@@ -173,6 +173,28 @@ describe('resume items', () => {
   );
 
   it.each([
+    { given: 'no note', note: undefined, label: 'closed a · 2026-01-02 03:04' },
+    {
+      given: 'a note',
+      note: 'after lunch',
+      label: 'closed a · after lunch · 2026-01-02 03:04',
+    },
+  ])(
+    'sessionItems_SectionRowNote_FollowsTitle given $given',
+    ({ note, label }) => {
+      const [item] = sessionItems(
+        [a],
+        [{ title: 'Stashed', rows: [closedRow('a', { note })] }],
+        STEP,
+        posixPaths,
+        false,
+      );
+
+      expect(item.kind === 'section' ? item.label : null).toBe(label);
+    },
+  );
+
+  it.each([
     {
       given: 'a section row',
       item: inSection(a),

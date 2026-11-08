@@ -1,0 +1,11 @@
+/* The stash dialog's note box. */
+.session-stash-box {
+  background: transparent;
+  border: 0;
+  color: var(--wg-fg);
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}

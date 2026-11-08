@@ -398,6 +398,10 @@ export interface SessionsPageExports {
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose`, then asks main to close it.
   closeSession(sessionId: string): void;
+  // The focused pane's session while Sessions mode shows, the session the
+  // close and rename keys act on; null while the mode is hidden or the pane is
+  // empty.
+  shownSessionId(): string | null;
   setActivity(
     sessionId: string,
     sourceId: string,

@@ -108,12 +108,14 @@ export interface SendGateVerdict {
 // the write go on.
 export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
-// A saved session a resume section lists.
+// A saved session a resume section lists. `note` is the section's word about
+// the session, drawn after its title.
 export interface ResumeSectionRow {
   hostSessionId: string;
   projectDir: string;
   profile: string;
   title: string;
+  note?: string;
   at: number;
 }
 

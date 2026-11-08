@@ -403,7 +403,7 @@ export interface AttachmentsKit extends BaseKit {
 // One row of a list chat opens, by list: the start prompt's Folder, Profile and Session steps, the Controls list and a
 // control's choices. A recent folder's `path` is spelled as the row shows it, the home folder as `~`; a control's
 // `value` as its chip shows it. A `section` row sits under a heading: `title` is its name, `detail` the rest of its
-// line, and `at` the time `detail` spells.
+// line (the section's note on the row first, when it has one), and `at` the time `detail` spells.
 export type PickerItemInput =
   | {
       list: 'folder';

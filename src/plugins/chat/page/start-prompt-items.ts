@@ -5,7 +5,7 @@ import type {
   ResumeSectionRow,
   ResumeSectionRows,
 } from '../contract';
-import { sectionRowsOnce, sessionTime } from './resume-items';
+import { sectionRowsOnce, sessionTime, withNote } from './resume-items';
 
 export type FolderItem =
   | { kind: 'section'; section: string; row: ResumeSectionRow; label: string }
@@ -24,12 +24,15 @@ export function displayPath(
   return paths.tilde(projectDir, homeDir);
 }
 
-// A folder step section row's line after its title.
+// A folder step section row's line after its title, its note first.
 export function folderSectionDetail(
   row: ResumeSectionRow,
   paths: Paths,
 ): string {
-  return `${paths.base(row.projectDir)} · ${row.profile} · ${sessionTime(row.at)}`;
+  return withNote(
+    row,
+    `${paths.base(row.projectDir)} · ${row.profile} · ${sessionTime(row.at)}`,
+  );
 }
 
 // The folder step's lines: the section rows, then the recent folders in the

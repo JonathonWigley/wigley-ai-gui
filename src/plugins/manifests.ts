@@ -13,6 +13,7 @@ import { keysManifest } from './keys/manifest';
 import { notesManifest } from './notes/manifest';
 import { primerManifest } from './primer/manifest';
 import { sessionLogManifest } from './session-log/manifest';
+import { sessionStashManifest } from './session-stash/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 import { unityPoolManifest } from './unity-pool/manifest';
@@ -36,6 +37,7 @@ export const builtInManifests = [
   primerManifest,
   chatManifest,
   autoCompactManifest,
+  sessionStashManifest,
   sessionLogManifest,
   agentsManifest,
   agentLinesManifest,

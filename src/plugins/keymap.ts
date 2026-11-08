@@ -242,6 +242,7 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+    { keys: "<Leader>'", scope: 'any', command: 'session-stash.stash' },
     { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
     { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
     { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
@@ -303,6 +304,16 @@ export const defaultKeymap = {
       keys: '<Esc>',
       scope: 'sessions.rename',
       command: 'sessions.renameCancel',
+    },
+    {
+      keys: '<CR>',
+      scope: 'session-stash.note',
+      command: 'session-stash.noteAccept',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'session-stash.note',
+      command: 'session-stash.noteCancel',
     },
 
     // ── Help ───────────────────────────────────────────────────────────────

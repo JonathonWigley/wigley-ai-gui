@@ -11,6 +11,7 @@ import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
 import { notesPagePart } from './notes/page/start';
 import { primerPagePart } from './primer/page/start';
+import { sessionStashPagePart } from './session-stash/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
 import { unityPoolPagePart } from './unity-pool/page/start';
@@ -28,6 +29,7 @@ import { workflowMediumPagePart } from './workflow-medium/page/start';
 export const pageParts: readonly PagePart[] = [
   keysPagePart,
   sessionsPagePart,
+  sessionStashPagePart,
   chatPagePart,
   formsPagePart,
   primerPagePart,

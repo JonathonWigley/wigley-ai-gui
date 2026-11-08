@@ -39,6 +39,7 @@ function fakeExports() {
     }),
     activate: () => undefined,
     closeSession: () => undefined,
+    shownSessionId: () => null,
     setActivity: (sessionId, sourceId, activity) =>
       activities.push([sessionId, sourceId, activity]),
   };

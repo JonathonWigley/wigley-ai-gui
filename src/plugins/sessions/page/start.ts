@@ -136,6 +136,7 @@ function createExports(
   barParts: PartStore<SessionPart>,
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
+  shownSessionId: () => string | null,
 ): SessionsPageExports {
   const { log } = api.services;
   return {
@@ -162,6 +163,7 @@ function createExports(
         })
         .catch((error) => log(`session not closed: ${errorText(error)}`));
     },
+    shownSessionId,
     setActivity: (sessionId, sourceId, activity) =>
       view.setActivity(sessionId, sourceId, activity),
   };
@@ -471,6 +473,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       barParts,
       activate,
       labelOf,
+      () => (isModeShown ? view.panes.focusedSessionId() : null),
     );
 
     // The first mode's `shown` runs inside `add`, before `mode` is assigned.
