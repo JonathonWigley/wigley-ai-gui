@@ -11,12 +11,13 @@ export type LayoutPart =
   | 'notice'
   | 'head'
   | 'rail'
-  | 'review';
+  | 'review'
+  | 'notices';
 
 // The layout that draws a part, and its name.
 export type LayoutPick = PartPick<Layout>;
 
-type LayoutPane = 'head' | 'rail' | 'review';
+type LayoutPane = 'head' | 'rail' | 'review' | 'notices';
 
 // The pick for each finding's and question's card, in rail order (rail
 // positions 0 to n - 1), for each notice's card, by notice index - 1, and for
@@ -28,7 +29,7 @@ export interface RoundPicks {
 }
 
 const DEFAULT_NAME = 'default';
-const PANES: readonly LayoutPane[] = ['head', 'rail', 'review'];
+const PANES: readonly LayoutPane[] = ['head', 'rail', 'review', 'notices'];
 
 // What each part reads from a layout; a layout defines the part when the read
 // is a function.
@@ -39,6 +40,7 @@ const PART_READS: { [P in LayoutPart]: (layout: Layout) => unknown } = {
   head: (layout) => layout.head,
   rail: (layout) => layout.rail,
   review: (layout) => layout.review,
+  notices: (layout) => layout.notices,
 };
 
 // The names to look a part up in, first to last: the item's layout, the
@@ -113,6 +115,7 @@ export function pickRoundLayouts(
       head: pickLayout('head', paneChain, loaded),
       rail: pickLayout('rail', paneChain, loaded),
       review: pickLayout('review', paneChain, loaded),
+      notices: pickLayout('notices', paneChain, loaded),
     },
   };
 }

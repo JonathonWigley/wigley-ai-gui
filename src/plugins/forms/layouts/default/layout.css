@@ -1,4 +1,4 @@
-/* The default Form layout: the rail's list, the round head, an item's status, and the review. */
+/* The default Form layout: the rail's list, the round head, an item's status, the review, and the notices lines. */
 
 /* Rail */
 :where(.form-tab) .rail-list {
@@ -81,4 +81,18 @@
   flex-wrap: wrap;
   gap: var(--wg-space-2);
   margin-top: var(--wg-space-4);
+}
+
+/* Notices */
+:where(.form-tab) .notice-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
+}
+
+:where(.form-tab) .notice-line-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

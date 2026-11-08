@@ -14,11 +14,17 @@ import {
 import {
   drawPart,
   requireElementIn,
+  type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
+import { formById } from '../../../../shared/page/session-forms';
 import {
   type ButtonVariant,
   textButton,
 } from '../../../../shared/page/ui/button';
+import {
+  type CollapsibleCard,
+  createCollapsibleCard,
+} from '../../../../shared/page/ui/card';
 import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
@@ -29,6 +35,8 @@ import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
   LayoutPane,
+  NoticesInput,
+  NoticesKit,
   RailInput,
   RailKit,
   ReviewInput,
@@ -53,12 +61,14 @@ import {
   statusLabel,
 } from '../kinds/card-parts';
 import { FORMATS, itemLabel } from '../kinds/formats';
+import type { CardDeps, ItemCard } from '../kinds/item-format';
 import {
   pickRailItem,
   progressText,
   railDotStatus,
   railEntryLabel,
   railEntryTitle,
+  noticeToggledLine,
   type ReviewRow,
   reviewRows,
   reviewRowsChanged,
@@ -71,7 +81,7 @@ import {
   type ScopedAnchor,
   scopedAnchor,
 } from './card-kit';
-import { recordingDeps } from './layout-cards';
+import { buildLayoutCard, recordingDeps } from './layout-cards';
 import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
@@ -163,11 +173,183 @@ export function buildReviewPane(
   }).built;
 }
 
+// The round's notices page at rail `position`, drawn into `parent` as
+// buildRailPane draws the rail, with the layout's `notices`. Each line's body is
+// its notice's card, drawn by buildLayoutCard with `bodyPicks[index - 1]` and
+// `cardDeps`; a pane that throws destroys each body it drew through the body's
+// own dispose, and `default` draws the pane and its bodies again. `update`
+// opens the open lines, marks the cursor line, moves the toggle prompt to it
+// and updates each body; it scrolls the cursor line into view when it moved
+// since the last update.
+export function buildNoticesPane(
+  pick: LayoutPick,
+  bodyPicks: readonly LayoutPick[],
+  parent: HTMLElement,
+  round: RoundState,
+  position: number,
+  deps: PaneDeps,
+  cardDeps: CardDeps,
+): ItemCard {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.notices,
+    build: (notices, paneParent, rollback) =>
+      drawNotices(notices, paneParent, {
+        round,
+        position,
+        bodyPicks,
+        deps: recordingDeps(deps, rollback),
+        cardDeps,
+        rollback,
+      }),
+    log: deps.log,
+    partName: 'notices',
+  }).built;
+}
+
 // Throws `message` unless `index` is a whole number in [0, `length`).
 function requireIndexIn(index: number, length: number, message: string) {
   const isInRange = Number.isInteger(index) && index >= 0 && index < length;
   if (!isInRange) {
     throw new Error(message);
+  }
+}
+
+// What one draw of the notices pane draws its lines and bodies with: `deps`
+// records into the draw's `rollback`, and each body records its dispose there.
+interface NoticesDraw {
+  round: RoundState;
+  position: number;
+  bodyPicks: readonly LayoutPick[];
+  deps: PaneDeps;
+  cardDeps: CardDeps;
+  rollback: RollbackDeps;
+}
+
+// One notice's line: its collapsible root, the head the layout draws into, and
+// the notice card drawn as its body.
+interface NoticeLine {
+  line: CollapsibleCard;
+  head: HTMLElement;
+  body: ItemCard;
+}
+
+function drawNotices(
+  notices: CompleteLayout['notices'],
+  parent: HTMLElement,
+  draw: NoticesDraw,
+): ItemCard {
+  const { round, deps } = draw;
+  const count = round.round.notices.length;
+  const lines = new Map<number, NoticeLine>();
+  // The cursor line's prompt, which each update moves to that line's head.
+  const togglePrompt = element('span', 'notice-line-prompt');
+  scopedAnchor(deps.keys, formsScope('forms'))(
+    togglePrompt,
+    formsCommand('toggleNotice'),
+    { label: 'toggle' },
+  );
+  const kit: NoticesKit = {
+    ...createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms'))),
+    line(lineParent, index) {
+      requireIndexIn(index - 1, count, `notices pane has no line ${index}`);
+      if (lines.has(index)) {
+        throw new Error(`notices pane drew line ${index} twice`);
+      }
+      return drawNoticeLine(lineParent, index, lines, draw);
+    },
+  };
+  const input: NoticesInput = {
+    round: roundInfo(round.round),
+    notices: round.round.notices.map((notice, i) => ({
+      index: i + 1,
+      label: itemLabel({ kind: 'notice', index: i + 1 }),
+      title: notice.title,
+      badge: notice.badge,
+    })),
+  };
+  const paneElement = requireElementIn(
+    parent,
+    (notices(parent, input, kit) as LayoutPane | undefined)?.element,
+    'notices',
+  );
+  for (const notice of input.notices) {
+    if (!lines.has(notice.index)) {
+      const head = drawNoticeLine(paneElement, notice.index, lines, draw);
+      head.append(element('span', 'notice-line-title', notice.title));
+    }
+  }
+  let shownLine = round.noticeLine;
+  return {
+    element: paneElement,
+    update(current) {
+      for (const [index, { line, body }] of lines) {
+        line.setOpen(current.openNotices[index - 1]);
+        line.element.classList.toggle(
+          'is-cursor',
+          current.noticeLine === index,
+        );
+        body.update(current);
+      }
+      const cursorLine = lines.get(current.noticeLine);
+      cursorLine?.head.append(togglePrompt);
+      if (current.noticeLine !== shownLine) {
+        shownLine = current.noticeLine;
+        cursorLine?.line.element.scrollIntoView({ block: 'nearest' });
+      }
+    },
+  };
+}
+
+// Appends notice `index`'s line to `parent`, draws the notice's card into its
+// body, records the line in `lines` and returns its head.
+function drawNoticeLine(
+  parent: HTMLElement,
+  index: number,
+  lines: Map<number, NoticeLine>,
+  draw: NoticesDraw,
+): HTMLElement {
+  const { round, deps } = draw;
+  const head = element('span', 'notice-line-head');
+  // `keepBody` builds the body once, at creation.
+  const holder = element('div', 'notice-line-body');
+  const line = createCollapsibleCard({
+    summary: '',
+    plain: true,
+    leading: head,
+    keepBody: true,
+    open: round.openNotices[index - 1],
+    onToggle: () => clickNoticeLine(deps, round.formId, index),
+    body: () => holder,
+  });
+  line.element.classList.add('notice-line');
+  parent.append(line.element);
+  const body = buildLayoutCard(
+    draw.bodyPicks[index - 1],
+    holder,
+    round,
+    { kind: 'notice', index },
+    draw.position,
+    draw.cardDeps,
+    draw.rollback,
+  );
+  lines.set(index, { line, head, body });
+  return head;
+}
+
+// A head click: moves the cursor to the line, then opens or closes it, and
+// logs the toggle when the line's open state changed.
+function clickNoticeLine(deps: PaneDeps, formId: string, index: number) {
+  const before = formById(deps.getState(), formId);
+  deps.dispatch({ type: 'focusNotice', notice: index });
+  deps.dispatch({ type: 'toggleNotice', notice: index });
+  const after = formById(deps.getState(), formId);
+  const isOpen = after?.openNotices[index - 1];
+  if (isOpen !== undefined && isOpen !== before?.openNotices[index - 1]) {
+    deps.log(noticeToggledLine(index, isOpen));
   }
 }
 

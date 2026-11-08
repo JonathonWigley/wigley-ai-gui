@@ -1,6 +1,6 @@
 # 04 — Notices stop, state and keys
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -298,3 +298,5 @@ Commit: one commit for the group.
   `[false, true]`, logs `['opened notice 2']`; the same row for `toggleNotice`. Break: the handler passes a fixed 1.
 
 ## Proof
+
+Commit 29df4efc · proof: diff read: RoundItem, RailItem union, railItems, openNotices/noticeLine, the three actions, railEntryLabel/Title, noticeToggledLine, lineCursorLine, RoundPicks.noticeCards, RailEntryInput.kind, the three commands and binds all present; worker full npm test (10156), typecheck, lint pass · concerns: forms selftest-script expects j ran forms.nextItem in many rows — task 07 owns it; za is not a vim key, so the placement check wants an anchor for forms.toggleNotice — task 05's notices pane must draw it; interim notice cards use the stop's rail position

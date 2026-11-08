@@ -48,6 +48,7 @@ import type { CardDeps, ItemCard } from './kinds/item-format';
 import { baseKitDepsFor, createFormsBaseKit } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
+  buildNoticesPane,
   buildRailPane,
   buildReviewPane,
   type PaneDeps,
@@ -154,9 +155,10 @@ interface ItemPager {
 
 // One open round's DOM, built with its editors: a split with the rail header,
 // the rail pane and the Review button in its start pane, and the layout's
-// head, the item pager, every item's card and the review pane, which holds the
-// round note, in its end pane, each card and pane drawn by the layout
-// `pickRoundLayouts` picks for it from `shown`. A render only updates it, the
+// head, the item pager, every finding's and question's card, the notices
+// pane and the review pane, which holds the round note, in its end pane, each
+// card and pane drawn by the layout `pickRoundLayouts` picks for it from
+// `shown`. A render only updates it, the
 // rail taking the latest dragged width of any round; new layouts that change a
 // pick rebuild both panes, as `rebuild` does, keeping the rail's dragged
 // width, the focused box and the main column's scroll. Every key hint is an
@@ -282,8 +284,9 @@ function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
 
 // Builds the split's start pane, the rail header, the rail pane and the rail
 // foot, and the round's main column in its end pane: the layout's head, the
-// item pager, the items pane of cards, and the review pane, each card and pane
-// drawn by its pick in `picks`. A rail click acts on the forms view the state
+// item pager, the items pane of cards and the notices pane at the notices
+// stop's rail position, and the review pane, each card and pane drawn by its
+// pick in `picks`. A rail click acts on the forms view the state
 // holds as it lands, the cancel prompt included. Every part anchors its keys
 // through one recording `keys` and records its markdown mounts beside those
 // anchors, the head into its own, so `dispose` reaches them all.
@@ -363,7 +366,15 @@ function buildRoundParts(
   };
   const itemCards = items.map((item, position) =>
     item.kind === 'notices'
-      ? buildNoticesInterim(itemsPane, round, picks, position, cardDeps)
+      ? buildNoticesPane(
+          picks.panes.notices,
+          picks.noticeCards,
+          itemsPane,
+          round,
+          position,
+          paneDeps,
+          cardDeps,
+        )
       : buildLayoutCard(
           picks.cards[position],
           itemsPane,
@@ -392,41 +403,6 @@ function buildRoundParts(
     dispose() {
       disposeAnchors(anchors);
       disposeAnchors(headAnchors);
-    },
-  };
-}
-
-// Appends `div.notices-interim` to `parent` for the notices stop at rail
-// `position`: every notice's card, each hidden while its line is closed.
-function buildNoticesInterim(
-  parent: HTMLElement,
-  round: RoundState,
-  picks: RoundPicks,
-  position: number,
-  cardDeps: CardDeps,
-): ItemCard {
-  const holder = element('div', 'notices-interim');
-  parent.append(holder);
-  const cards = picks.noticeCards.map((pick, i) =>
-    buildLayoutCard(
-      pick,
-      holder,
-      round,
-      { kind: 'notice', index: i + 1 },
-      position,
-      cardDeps,
-    ),
-  );
-  return {
-    element: holder,
-    update(current) {
-      cards.forEach((card, i) => {
-        const isOpen = current.openNotices[i];
-        card.element.hidden = !isOpen;
-        if (isOpen) {
-          card.update(current);
-        }
-      });
     },
   };
 }

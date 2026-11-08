@@ -10,6 +10,7 @@ const FUNCTION_PARTS: Record<Exclude<keyof Layout, 'cards'>, true> = {
   head: true,
   rail: true,
   review: true,
+  notices: true,
 };
 const CARD_KINDS: Record<keyof LayoutCards, true> = {
   question: true,

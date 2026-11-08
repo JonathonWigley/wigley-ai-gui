@@ -12,7 +12,8 @@ import {
   type TextTarget,
 } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
-import { finding, presentedRound } from '../test-rounds';
+import defaultLayout from '../../layouts/default/layout.js';
+import { finding, notice, presentedRound } from '../test-rounds';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { buildLayoutCard, recordingDeps } from './layout-cards';
 import {
@@ -160,6 +161,42 @@ describe('buildLayoutCard', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('buildLayoutCard_WithRollback_RecordsItsDispose', () => {
+    const presented = presentedRound('r1', {
+      questions: [],
+      notices: [notice('Heads up')],
+    });
+    const round = apply(initialState([], presented.sessionId), {
+      type: 'formShown',
+      form: presented,
+    }).forms[0];
+    const deps = fakeCardDeps(createFormsContributions());
+    const destroys: (() => void)[] = [];
+
+    buildLayoutCard(
+      { name: 'default', layout: defaultLayout },
+      asHtml(new FakeElement('div')),
+      round,
+      { kind: 'notice', index: 1 },
+      0,
+      deps,
+      {
+        recordBox: (destroy) => destroys.push(destroy),
+        recordAnchor: () => {},
+      },
+    );
+    for (const destroy of [...destroys, ...destroys]) {
+      destroy();
+    }
+
+    expect(destroys).toHaveLength(1);
+    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
+    expect(deps.destroyBox).toHaveBeenCalledWith({
+      field: 'comment',
+      notice: 1,
+    });
   });
 
   it('buildLayoutCard_CardThrowsAfterMountingABox_DestroysItAndDrawsDefault', () => {

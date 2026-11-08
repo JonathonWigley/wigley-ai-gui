@@ -15,10 +15,15 @@ import type { Layout } from '../layouts/layout';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
-import { apply, type FormsState, initialState } from './form-state';
+import {
+  apply,
+  type FormsState,
+  initialState,
+  type RoundState,
+} from './form-state';
 import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import { createRoundView } from './round-view';
-import { presentedRound } from './test-rounds';
+import { notice, presentedRound, question } from './test-rounds';
 import {
   fencePlaceholder,
   installMarkdownDom,
@@ -96,10 +101,11 @@ const bareLayout: Layout = {
   }),
 };
 
-// Round r1, two questions, open and active, shown in the forms view by a round
-// view over editor boxes; `main` is the scrolled main column, and `anchors`
-// holds every anchor the keys named, in call order. It draws with `layout`
-// over `default` and renders through `markdown`.
+// Round r1, open and active, shown in the forms view by a round view over
+// editor boxes; `main` is the scrolled main column, and `anchors` holds every
+// anchor the keys named, in call order. It draws with `layout` over `default`
+// and renders through `markdown`. The round is `presented` (two questions by
+// default) as `shape` changes it.
 function roundViewSetup(
   layout: Layout = bareLayout,
   markdown: MarkdownRenderer = {
@@ -108,15 +114,17 @@ function roundViewSetup(
     document: async (text) => text,
     ...NO_FENCES,
   },
+  presented = presentedRound('r1'),
+  shape: (round: RoundState) => RoundState = (round) => round,
 ) {
   const { boxes, created } = setup();
   const { anchors, keys } = recordingAnchors();
-  const presented = presentedRound('r1');
-  const state: FormsState = apply(initialState([], presented.sessionId), {
+  const shown = apply(initialState([], presented.sessionId), {
     type: 'formShown',
     form: presented,
   });
-  const round = state.forms[0];
+  const round = shape(shown.forms[0]);
+  const state: FormsState = { ...shown, forms: [round] };
   const view = createRoundView(
     () => undefined,
     round,
@@ -186,6 +194,35 @@ describe('round view rebuild', () => {
       .slice(builtBefore)
       .filter((editor) => editor.focusOptions.length > 0);
     expect(focusedAfter).toHaveLength(1);
+  });
+
+  it('rebuild_OpenNoticeLine_KeepsItOpenItsCursorAndItsFocusedBox', () => {
+    const { boxes, round, view } = roundViewSetup(
+      bareLayout,
+      undefined,
+      presentedRound('r1', {
+        questions: [question('Alpha')],
+        notices: [notice('Heads up'), notice('Also')],
+      }),
+      (shown) => ({
+        ...shown,
+        focus: 1,
+        openNotices: [false, true],
+        noticeLine: 2,
+      }),
+    );
+    const comment: BoxRef = {
+      roundId: 'r1',
+      target: { field: 'comment', notice: 2 },
+    };
+    boxes.focus(comment);
+
+    view.rebuild(round);
+
+    expect(boxes.active()).toEqual(comment);
+    const line = findAll(asFake(view.element), 'notice-line')[1];
+    expect(line.classList.contains('is-open')).toBe(true);
+    expect(line.classList.contains('is-cursor')).toBe(true);
   });
 
   it('rebuild_DisposesTheFirstBuildsAnchors', () => {

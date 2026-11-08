@@ -795,7 +795,7 @@ round; primer: an open primer), since main, not the page, decides.
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
   scrolling, the split width, the rail header's open count and saved state, and the cancel dialog. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
-  the rail and review panes, and draws the forms look. The user's forms layouts are folders in
+  the rail, review and notices panes, and draws the forms look. The user's forms layouts are folders in
   `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the cards and panes it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page

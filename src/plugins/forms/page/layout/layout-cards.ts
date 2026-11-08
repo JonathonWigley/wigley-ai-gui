@@ -69,6 +69,8 @@ export function cardAnswer(
 // the picked layout, or with `default` when the pick lacks the item's kind or
 // its card throws. The boxes the card mounts, the anchors it names, its slot
 // subscriptions and its markdown mounts are recorded for drawPart's rollback.
+// With `rollback`, the drawn card's dispose is recorded in it, so the part the
+// card sits in undoes the card when it rolls back.
 export function buildLayoutCard(
   pick: LayoutPick,
   parent: HTMLElement,
@@ -76,8 +78,9 @@ export function buildLayoutCard(
   item: RoundItem,
   position: number,
   deps: CardDeps,
+  rollback?: RollbackDeps,
 ): ItemCard {
-  const { built, layoutName } = drawPart({
+  const { built, layoutName, dispose } = drawPart({
     owner: 'forms',
     parent,
     pick,
@@ -96,6 +99,7 @@ export function buildLayoutCard(
     log: deps.log,
     partName: `${item.kind} card`,
   });
+  rollback?.recordBox(dispose);
   return hostCard(built, layoutName, item, deps);
 }
 

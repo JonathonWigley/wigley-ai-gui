@@ -450,6 +450,37 @@
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
 }
 
+/* Notices: a line's head is the slot the layout draws into, in place of the
+   collapsible's summary. */
+:where(.form-tab) .notice-line-head {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+:where(.form-tab) .notice-line .ui-collapsible-summary {
+  display: none;
+}
+
+/* Under the chevron: the leading head is no status dot. */
+:where(.form-tab)
+  .notice-line.ui-collapsible--plain.ui-collapsible--leading
+  .ui-collapsible-body {
+  padding-left: calc(var(--wg-space-2) * 2 + var(--wg-icon-size));
+}
+
+:where(.form-tab) .notice-line.is-cursor {
+  background: var(--wg-list-active-background);
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+:where(.form-tab) .notice-line-prompt {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 :where(.form-tab) .review-row[data-status='untouched'] .review-answer {
   color: var(--wg-status-warning);
 }
