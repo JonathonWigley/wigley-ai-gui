@@ -14,6 +14,9 @@
 // - rail: `entry` (a rail without entries scrolls nothing into view)
 // - review: `roundNote` (appended at the end of the pane), and every other
 //   part, which then draws nothing
+//
+// The question card draws no section labels: the summary is its headline, and
+// the context, the choices and the rationale follow with no label.
 
 // A notice's badge tone; a badge not listed here is neutral.
 /** @type {Record<string, import('../layout').TagTone>} */
@@ -29,8 +32,8 @@ const layout = {
     question(parent, input, kit) {
       const card = kit.card(parent, 'item question');
       kit.itemHead(card, 'Question');
-      kit.section(card, 'Question', input.question);
-      kit.section(card, 'Context', input.context);
+      kit.inlineMarkdown(card, input.summary, 'item-summary');
+      kit.markdown(card, input.context, 'context-body md');
       const answer = kit.choiceList(card, 'recommended');
       kit.answerControls(answer);
       return { element: card };

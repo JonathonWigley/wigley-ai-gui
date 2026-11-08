@@ -1,6 +1,6 @@
 # 06 — Item descriptions and preview notices
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -98,3 +98,4 @@ Commit:    one commit for the group, in the gui worktree.
 
 ## Proof
 
+Commit a9f2adb2 · proof: diff read: NOTICES_DESCRIPTION, FINDINGS_DESCRIPTION, ASK_ROUND_DESCRIPTION pinned text, three preview notices one per badge, test checks every badge; worker typecheck, lint, named tests pass; order grep leaves only 04's two hits · concerns: none

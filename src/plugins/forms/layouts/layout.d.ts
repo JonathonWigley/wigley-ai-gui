@@ -15,7 +15,7 @@ export interface RoundInfo {
 export interface QuestionCard {
   label: string;
   title: string;
-  question: string;
+  summary: string;
   context: string;
   choices: string[];
   recommend: number;
@@ -120,9 +120,9 @@ export interface AnswerKit extends Kit {
   answerControls(parent: HTMLElement): HTMLElement;
 }
 export interface QuestionKit extends AnswerKit {
-  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `answerControls` may be
-  // appended to. 'recommended' and 'all': the rationale as 'Why recommended' under the recommended choice; 'none': no
-  // reason. A blank rationale draws nothing.
+  // `div.answer` holding the Clear button row and `ol.choices`, with no label; returns the `div.answer`, which
+  // `answerControls` may be appended to. 'recommended' and 'all': the rationale under the recommended choice, with no
+  // label; 'none': no reason. A blank rationale draws nothing.
   choiceList(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',

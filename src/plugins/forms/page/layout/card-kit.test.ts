@@ -504,6 +504,59 @@ describe('card kit', () => {
     expect(chooseArgs).toEqual([1, 2]);
   });
 
+  it.each([
+    {
+      kind: 'question',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        questionKit(deps).kit.choiceList(parent, 'recommended'),
+      labelsPerReason: 0,
+    },
+    {
+      kind: 'finding',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        findingKit(deps).kit.choiceGroups(parent, 'all'),
+      labelsPerReason: 1,
+    },
+  ])('choiceReason_LabelByCardKind_$kind', ({ draw, labelsPerReason }) => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+
+    const answer = asFake(draw(deps, asHtml(new FakeElement('div'))));
+
+    const reasons = findAll(answer, 'choice-reason');
+    expect(reasons.length).toBeGreaterThan(0);
+    expect(findAll(answer, 'choice-reason-label')).toHaveLength(
+      reasons.length * labelsPerReason,
+    );
+  });
+
+  it.each([
+    {
+      kind: 'question',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        questionKit(deps).kit.choiceList(parent, 'none'),
+      firstChild: 'answer-head',
+      headers: 0,
+    },
+    {
+      kind: 'finding',
+      draw: (deps: CardDeps, parent: HTMLElement) =>
+        findingKit(deps).kit.choiceGroups(parent, 'none'),
+      firstChild: 'ui-section-header',
+      headers: 1,
+    },
+  ])('answerArea_HeaderByCardKind_$kind', ({ draw, firstChild, headers }) => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+
+    const answer = asFake(draw(deps, asHtml(new FakeElement('div'))));
+
+    expect(answer.children[0].classList.contains(firstChild)).toBe(true);
+    expect(
+      answer.children.filter((child) =>
+        child.classList.contains('ui-section-header'),
+      ),
+    ).toHaveLength(headers);
+  });
+
   it('clearButton_Click_FocusesTheItemThenClears', () => {
     const { deps } = fakeCardDeps(createFormsContributions());
     const { kit } = questionKit(deps);

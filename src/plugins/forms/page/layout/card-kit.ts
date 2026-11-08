@@ -589,7 +589,7 @@ function buildQuestionKit(
   return {
     ...kit,
     choiceList(parent, reasons) {
-      const answerArea = appendAnswerArea(parent, card);
+      const answerArea = appendAnswerArea(parent, card, null);
       const list = element('ol', 'choices');
       answerArea.append(list);
       const choices = input.choices.map((text, i) => ({ text, number: i + 1 }));
@@ -606,12 +606,7 @@ function buildQuestionKit(
       );
       const recommended = entries[input.recommend - 1];
       if (reasons !== 'none' && recommended !== undefined) {
-        appendChoiceReason(
-          recommended,
-          'Why recommended',
-          input.rationale,
-          card,
-        );
+        appendChoiceReason(recommended, null, input.rationale, card);
       }
       card.updaters.push((current) => {
         const picked = pickNumber(current, item);
@@ -644,10 +639,15 @@ function buildFindingKit(
   };
 }
 
-// Appends `div.answer` to `parent`, under its 'Your answer' header, which
-// ends with the Clear button: a click focuses the card's item, then clears its
-// choice.
-function appendAnswerArea(parent: HTMLElement, card: CardContext): HTMLElement {
+// Appends `div.answer` to `parent`, opening on the row that holds the Clear
+// button: a click focuses the card's item, then clears its choice. The row is
+// a section header holding `label` when one is given; with null it is
+// `div.answer-head`, holding the Clear button alone.
+function appendAnswerArea(
+  parent: HTMLElement,
+  card: CardContext,
+  label: string | null,
+): HTMLElement {
   const clear = textButton(
     'Clear',
     () => {
@@ -658,15 +658,22 @@ function appendAnswerArea(parent: HTMLElement, card: CardContext): HTMLElement {
   );
   appendCardKeys(card, clear, formsCommand('clearChoice'));
   const answerArea = element('div', 'answer');
-  answerArea.append(sectionHeader('Your answer', clear));
+  if (label === null) {
+    const head = element('div', 'answer-head');
+    head.append(clear);
+    answerArea.append(head);
+  } else {
+    answerArea.append(sectionHeader(label, clear));
+  }
   parent.append(answerArea);
   return answerArea;
 }
 
-// Appends the labelled reason to a choice's row; blank text draws nothing.
+// Appends the reason to a choice's row, under `label` when one is given; blank
+// text draws nothing.
 function appendChoiceReason(
   entry: HTMLElement,
-  label: string,
+  label: string | null,
   text: string,
   card: CardContext,
 ) {
@@ -692,7 +699,7 @@ function buildChoiceGroups(
   kit: Kit,
   card: CardContext,
 ): HTMLElement {
-  const answerArea = appendAnswerArea(parent, card);
+  const answerArea = appendAnswerArea(parent, card, 'Your answer');
   const sections: HTMLElement[] = [];
   const picks: DrawnPick[] = [];
   for (const group of choiceGroupsOf(input)) {

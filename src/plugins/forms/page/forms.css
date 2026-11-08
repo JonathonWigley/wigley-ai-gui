@@ -149,6 +149,11 @@
   padding-top: var(--wg-space-3);
 }
 
+:where(.form-tab) .answer-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Choices: rows split by hairlines, each reason inline under its choice. */
 :where(.form-tab) .choices {
   display: flex;
