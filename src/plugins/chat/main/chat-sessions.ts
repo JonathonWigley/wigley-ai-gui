@@ -116,8 +116,9 @@ export interface ChatSessionsDeps {
   // Reads each row's repo, branch and linked worktrees at its open and after
   // each turn, and the worktrees again after a Bash call runs `git worktree`.
   git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
-  // Resolves the row's folder at each worktree read, so a root git lists
-  // resolved also matches under the folder's own spelling.
+  // Resolves the row's folder and every folder above it at each worktree
+  // read, so a root git lists resolved also matches under the folder's own
+  // spelling.
   files: Pick<Files, 'realPath'>;
   // Told the agent of each `toolStarted`, before chat emits it.
   toolCallers: Pick<ToolCallers, 'noteToolStarted'>;
@@ -1592,9 +1593,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Reads the clone's linked worktree roots, and lists each worktree not yet
-  // listed that a seen Bash command names under them. A read that a later one started after, or
-  // that settles after the row closed or `detachAll`, changes nothing; a
-  // failed read keeps the roots the row had.
+  // listed that a seen Bash command names under them. A read that a later one
+  // started after, or that settles after the row closed or `detachAll`,
+  // changes nothing; a failed read keeps the roots the row had.
   function readWorktreeRoots(session: HeldSession) {
     session.worktreeReads += 1;
     const read = session.worktreeReads;
