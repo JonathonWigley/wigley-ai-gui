@@ -56,6 +56,40 @@ describe('createSlotHolder', () => {
     ]);
   });
 
+  it('applyPageWrite_Cleared_IsIgnoredAndLogged', () => {
+    const { holder, logs } = holderWithPushes();
+    holder.applyPageWrite(pageChange);
+
+    holder.applyPageWrite({ id: 'p.page', kind: 'cleared' });
+
+    expect(holder.snapshot()).toEqual({
+      seq: 1,
+      slots: { 'p.page': { kind: 'value', value: 'x' } },
+    });
+    expect(logs).toEqual([
+      ['state', 'ignored a cleared change from the page: p.page'],
+    ]);
+  });
+
+  it('clearOwner_PushesEachClearedSlotWithNextSeq', () => {
+    const { holder, pushes } = holderWithPushes();
+    const writer = holder.store.publish(mainSlot);
+    writer.set(1);
+    writer.dispose();
+    holder.applyPageWrite(pageChange);
+    holder.store.publish({ id: 'q.v', process: 'main', kind: 'value' }).set(7);
+    pushes.length = 0;
+
+    holder.clearOwner('p');
+
+    expect(pushes).toEqual([
+      [4, { id: 'p.v', kind: 'cleared' }],
+      [5, { id: 'p.page', kind: 'cleared' }],
+    ]);
+    expect(holder.snapshot().seq).toBe(5);
+    expect(holder.snapshot().slots['q.v']).toEqual({ kind: 'value', value: 7 });
+  });
+
   it('snapshot_AfterBothKinds_HoldsLastSeqAndValues', () => {
     const { holder } = holderWithPushes();
     holder.store.publish(mainSlot).set(1);

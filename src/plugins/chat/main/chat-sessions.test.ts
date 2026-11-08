@@ -145,7 +145,7 @@ function messagesFrom(timeline: readonly TimelineItem[]): Message[] {
       messages.push({ message: 'sessionRested', data: item.rested });
       continue;
     }
-    if (item.kind === 'value') {
+    if (item.kind === 'value' || item.kind === 'cleared') {
       continue;
     }
     const { id, key: sessionId } = item;

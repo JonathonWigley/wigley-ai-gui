@@ -166,6 +166,18 @@ describe('changes', () => {
           value: undefined,
         }),
     },
+    {
+      case: 'clear of empty slots',
+      act: (store) => {
+        store.publish(keyedKey).dispose();
+        store.publish(listKey).dispose();
+        store.clearOwner('p');
+      },
+    },
+    {
+      case: 'remote clear of an absent slot',
+      act: (store) => store.applyRemote({ id: 'p.k', kind: 'cleared' }),
+    },
   ])('delete_AbsentKey_ChangesNothing: $case', ({ act }) => {
     const { store } = storeWithLogs();
     const heard: unknown[] = [];
@@ -319,18 +331,95 @@ describe('changes', () => {
     expect(heard).toEqual([]);
   });
 
-  it('applyRemote_TellsListenersAndNotOnWrite', () => {
+  it.each<{ case: string; changes: SlotChange[]; heard: unknown[] }>([
+    {
+      case: 'value',
+      changes: [{ id: 'p.v', kind: 'value', value: 5 }],
+      heard: [5],
+    },
+    {
+      case: 'cleared',
+      changes: [
+        { id: 'p.v', kind: 'value', value: 5 },
+        { id: 'p.v', kind: 'cleared' },
+      ],
+      heard: [5, undefined],
+    },
+  ])('applyRemote_TellsListenersAndNotOnWrite: $case', ({ changes, heard }) => {
     const { store } = storeWithLogs();
     const writes: unknown[] = [];
-    const heard: unknown[] = [];
+    const heardValues: unknown[] = [];
     store.onWrite((change) => writes.push(change));
-    store.read(valueKey, 'q').on((value) => heard.push(value));
+    store.read(valueKey, 'q').on((value) => heardValues.push(value));
 
-    store.applyRemote({ id: 'p.v', kind: 'value', value: 5 });
+    for (const change of changes) {
+      store.applyRemote(change);
+    }
 
-    expect(heard).toEqual([5]);
+    expect(heardValues).toEqual(heard);
     expect(writes).toEqual([]);
+    expect(store.read(valueKey, 'q').get()).toBe(heard.at(-1));
   });
+
+  it.each<{
+    case: string;
+    filled: SlotChange[];
+    id: string;
+    heard: unknown[][];
+  }>([
+    {
+      case: 'cleared keyed',
+      id: 'p.k',
+      filled: [
+        { id: 'p.k', kind: 'keyed', key: 'x', value: 1 },
+        { id: 'p.k', kind: 'keyed', key: 'y', value: 2 },
+      ],
+      heard: [
+        ['x', undefined],
+        ['y', undefined],
+      ],
+    },
+    {
+      case: 'cleared list',
+      id: 'p.l',
+      filled: [
+        {
+          id: 'p.l',
+          kind: 'list',
+          key: 'a',
+          change: { kind: 'put', item: A1 },
+        },
+        {
+          id: 'p.l',
+          kind: 'list',
+          key: 'b',
+          change: { kind: 'put', item: B2 },
+        },
+      ],
+      heard: [
+        ['a', { kind: 'delete' }],
+        ['b', { kind: 'delete' }],
+      ],
+    },
+  ])(
+    'applyRemote_Cleared_TellsOneDeletePerEntry: $case',
+    ({ id, filled, heard }) => {
+      const { store } = storeWithLogs();
+      for (const change of filled) {
+        store.applyRemote(change);
+      }
+      const writes: unknown[] = [];
+      const heardArgs: unknown[][] = [];
+      store.onWrite((change) => writes.push(change));
+      store.readById(id, 'q').on((...args) => heardArgs.push(args));
+
+      store.applyRemote({ id, kind: 'cleared' });
+
+      expect(heardArgs).toEqual(heard);
+      expect(writes).toEqual([]);
+      expect(store.readById(id, 'q').get()).toEqual([]);
+    },
+  );
 
   it('publish_IdHeldAsAnotherKind_Throws', () => {
     const { store } = storeWithLogs();
@@ -339,6 +428,81 @@ describe('changes', () => {
     expect(() =>
       store.publish({ id: 'p.v', process: 'main', kind: 'keyed' }),
     ).toThrow('Slot "p.v" is a value slot, not keyed');
+  });
+});
+
+describe('clearOwner', () => {
+  it('clearOwner_EveryKind_EmptiesOwnersSlotsAndTellsEachEntry', () => {
+    const { store } = storeWithLogs();
+    const value = store.publish(valueKey);
+    value.set(1);
+    const keyed = store.publish(keyedKey);
+    keyed.set('x', 1);
+    keyed.set('y', 2);
+    const list = store.publish(listKey);
+    list.put('a', A1);
+    const other = store.publish({
+      id: 'p-x.v',
+      process: 'main',
+      kind: 'value',
+    });
+    other.set(5);
+    for (const writer of [value, keyed, list, other]) {
+      writer.dispose();
+    }
+    const heard = new Map<string, unknown[][]>();
+    for (const id of ['p.v', 'p.k', 'p.l', 'p-x.v']) {
+      const calls: unknown[][] = [];
+      heard.set(id, calls);
+      store.readById(id, 'q').on((...args) => calls.push(args));
+    }
+    const siblingSeen: unknown[] = [];
+    store
+      .readById('p.v', 'q')
+      .on(() => siblingSeen.push(store.readById('p.k', 'q').get()));
+    const writes: unknown[] = [];
+    store.onWrite((change) => writes.push(change));
+
+    store.clearOwner('p');
+
+    expect(heard.get('p.v')).toEqual([[undefined]]);
+    expect(heard.get('p.k')).toEqual([
+      ['x', undefined],
+      ['y', undefined],
+    ]);
+    expect(heard.get('p.l')).toEqual([['a', { kind: 'delete' }]]);
+    expect(heard.get('p-x.v')).toEqual([]);
+    expect(siblingSeen).toEqual([[]]);
+    expect(writes).toEqual([
+      { id: 'p.v', kind: 'cleared' },
+      { id: 'p.k', kind: 'cleared' },
+      { id: 'p.l', kind: 'cleared' },
+    ]);
+    expect(store.readById('p.v', 'q').get()).toBeUndefined();
+    expect(store.readById('p.k', 'q').get()).toEqual([]);
+    expect(store.readById('p.l', 'q').get()).toEqual([]);
+    expect(store.readById('p-x.v', 'q').get()).toBe(5);
+  });
+
+  it('clearOwner_LiveWriter_ThrowsAndClearsNothing', () => {
+    const { store } = storeWithLogs();
+    const writes: unknown[] = [];
+    store.onWrite((change) => writes.push(change));
+    const keyed = store.publish(keyedKey);
+    keyed.set('x', 1);
+    keyed.dispose();
+    store.publish(valueKey).set(1);
+
+    expect(() => store.clearOwner('p')).toThrow(
+      'Slot "p.v" is held by a live part',
+    );
+
+    expect(store.readById('p.k', 'q').get()).toEqual([['x', 1]]);
+    expect(store.readById('p.v', 'q').get()).toBe(1);
+    expect(writes).toEqual([
+      { id: 'p.k', kind: 'keyed', key: 'x', value: 1 },
+      { id: 'p.v', kind: 'value', value: 1 },
+    ]);
   });
 });
 

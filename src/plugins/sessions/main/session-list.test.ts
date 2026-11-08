@@ -1395,7 +1395,7 @@ describe('createSessionList', () => {
       written.push(
         change.kind === 'value'
           ? `selection ${String(change.value)}`
-          : `rows delete ${change.key}`,
+          : `rows delete ${'key' in change ? change.key : change.id}`,
       ),
     );
 

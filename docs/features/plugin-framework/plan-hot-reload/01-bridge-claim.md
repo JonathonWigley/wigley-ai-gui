@@ -1,6 +1,6 @@
 # 01 — Close the raw bridge
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Done when:
 Commit: one commit for the group
 
 ## Proof
+
+Commit 2c61751d · proof: diff read; worker typecheck 0, lint 0, bridge-claim + preload tests 10 pass; window.wigley grep prints the claim line and the bridge.ts comment alone · concerns: none
