@@ -523,7 +523,15 @@ describe('docs page part lifecycle', () => {
       expected:
         "Save or discard the edits to plan.md in gamma 2's Docs tab first",
     },
-  ])('mayStop_$case', async ({ sourceId, expected }) => {
+    // The restore waits for the tab to show, so its edits are still pending.
+    {
+      case: 'SessionTabEditsRestorePending_NamesTheSession',
+      sourceId: sessionSourceId('s1'),
+      showsTab: false,
+      expected:
+        "Save or discard the edits to plan.md in gamma 2's Docs tab first",
+    },
+  ])('mayStop_$case', async ({ sourceId, showsTab = true, expected }) => {
     const page = startDocsPage(servingIndexOf(['/w/plan.md'], []));
     const { harness } = page;
 
@@ -535,8 +543,11 @@ describe('docs page part lifecycle', () => {
         sessionRow(sessionId, { label: 'gamma 2', projectDir: '/p' }),
     );
     harness.started().commands.showMode({ arg: undefined });
-    sessionView(page, 's1').shown();
-    if (sourceId !== null) {
+    const view = sessionView(page, 's1');
+    if (showsTab) {
+      view.shown();
+    }
+    if (sourceId !== null && showsTab) {
       await vi.waitFor(() =>
         expect(
           harness.logs.some(({ message }) =>

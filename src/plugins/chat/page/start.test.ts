@@ -412,6 +412,27 @@ describe('chat page part', () => {
     await harness.stop();
   });
 
+  // The view owns the rule; this proves the part hands it the rows.
+  it('mayStop_TypedDraft_NamesTheRowsChat', async () => {
+    const boxes: FakeBox[] = [];
+    const harness = startChatPage(
+      () => undefined,
+      () => false,
+      () => undefined,
+      () => undefined,
+      { boxes },
+    );
+    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
+    loadSessions(harness, [SESSION]);
+    // The tab's box is the last made: the dialogs make theirs at start.
+    boxes.at(-1)?.type('not sent yet');
+
+    expect(harness.started().mayStop?.()).toBe(
+      "Send or clear the draft in row's chat first",
+    );
+    await harness.stop();
+  });
+
   it('stopThenStart_StartsAgain', async () => {
     const harness = startChatPage();
 

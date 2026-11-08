@@ -241,20 +241,28 @@ describe('workflow page part', () => {
     return { harness, rows, flows };
   }
 
-  it('ready_DrawsEachFlowTheSlotHolds', () => {
-    startWithThreeFlows();
+  it.each([
+    { name: 'page load', restarts: false },
+    { name: 'live restart', restarts: true },
+  ])(
+    'ready_DrawsEachFlowTheSlotHoldsAndOneFlowNoticeDrawsOne: $name',
+    async ({ restarts }) => {
+      const { harness, flows } = startWithThreeFlows();
+      if (restarts) {
+        drawn.setFlow = [];
+        await harness.restart();
+      }
+      const drawnAtLoad = drawn.setFlow;
+      drawn.setFlow = [];
 
-    expect(drawn.setFlow).toEqual(['s1', 's2', 's3']);
-  });
+      flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
 
-  it('oneFlowNotice_DrawsOneFlow', () => {
-    const { flows } = startWithThreeFlows();
-    drawn.setFlow = [];
-
-    flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
-
-    expect(drawn.setFlow).toEqual(['s2']);
-  });
+      expect([drawnAtLoad, drawn.setFlow]).toEqual([
+        ['s1', 's2', 's3'],
+        ['s2'],
+      ]);
+    },
+  );
 
   it('flowNotice_RowHasLeft_DrawsNothing', () => {
     const { rows, flows } = startWithThreeFlows();

@@ -53,11 +53,11 @@ const PREVIEW_SAVED_ROUNDS = 20;
 
 // The agents' FormsService over the saved-round folder, and the layout
 // preview over a FormsService of its own whose store is in memory, with the
-// presenter they share. That one presenter which owns the channel's `finish` and `draft` handlers; the
-// preview's rounds go through its quiet view. The agents' service wakes the
-// round's chat session when a round finishes with no call waiting; the
-// preview's wakes nothing. Both services and the preview read `layoutNames`
-// for the layouts a round may name.
+// presenter they share, which owns the channel's `finish` and `draft`
+// handlers; the preview's rounds go through its quiet view. The agents'
+// service wakes the round's chat session when a round finishes with no call
+// waiting; the preview's wakes nothing. Both services and the preview read
+// `layoutNames` for the layouts a round may name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -191,8 +191,9 @@ export function addDriveActions(
 // Serves its two tools to every agent session, shows each session's rounds on
 // the page, wakes a round's chat session when the round finishes with no call
 // waiting, registers its layouts and opens the layout preview on the page's
-// ask, and refuses a switch-off while an agent's round is open; in the self-test it writes the fixture layouts and hands the
-// driver its script, and in a drive run it adds the drive actions.
+// ask, and refuses a switch-off while an agent's round is open; in the
+// self-test it writes the fixture layouts and hands the driver its script, and
+// in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {

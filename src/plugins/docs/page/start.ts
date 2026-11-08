@@ -664,7 +664,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       ready() {
         // A session source's place leaves with its row, and one whose row ended
         // while no page ran is pruned; the prune waits for the page mirror to
-        // hold the rows.
+        // hold the rows. On a live restart it can also drop the places of rows
+        // chat's restore has not reopened yet.
         pruneKeys(placeWriter, (sourceId) => {
           const sessionId = sessionIdOfSource(sourceId);
           return sessionId === null || rows.all().has(sessionId);

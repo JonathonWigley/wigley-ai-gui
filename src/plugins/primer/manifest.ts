@@ -5,7 +5,7 @@ export const primerManifest = definePlugin({
   id: 'primer',
   label: 'Primer',
   description:
-    'Shows each feature primer an agent opens in a Primer tab, where you answer it.',
+    'Shows each feature primer an agent opens in a Primer tab, to answer it.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

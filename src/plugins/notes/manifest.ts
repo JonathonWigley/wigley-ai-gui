@@ -10,7 +10,7 @@ export const notesManifest = definePlugin({
   id: 'notes',
   label: 'Notes',
   description:
-    'Adds a note popup over every mode that sends a note to a follow-up or to a new session.',
+    'Adds a note popup, over every mode, that sends a note to a follow-up or to a new session.',
   dependsOn: {
     main: ['sessions', 'chat', 'backlog'],
     page: [],

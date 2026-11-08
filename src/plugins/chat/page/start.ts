@@ -156,7 +156,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       held?.images.reset();
     };
     // A session whose row ended while no page ran leaves keys no tab takes;
-    // the prune waits for the page mirror to hold the rows.
+    // the prune waits for the page mirror to hold the rows. On a live restart
+    // it can also drop the keys of rows chat's restore has not reopened yet.
     const pruneEndedPlaces = () => {
       const isLive = (sessionId: string) => rows.all().has(sessionId);
       pruneKeys(placeWriter, isLive);

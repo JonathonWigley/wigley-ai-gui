@@ -12,7 +12,7 @@ export const formsManifest = definePlugin({
   id: 'forms',
   label: 'Forms',
   description:
-    'Shows each review round an agent asks in a Form tab, where you answer it.',
+    'Shows each review round an agent asks in a Form tab, to answer it.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

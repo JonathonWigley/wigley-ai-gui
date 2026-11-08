@@ -51,6 +51,8 @@ function startOnHarness() {
   return { harness, sectionSummaries };
 }
 
+type Harness = ReturnType<typeof startOnHarness>['harness'];
+
 describe('agentSkillsPagePart', () => {
   beforeEach(() => {
     installFakeDom(vi.stubGlobal);
@@ -80,13 +82,28 @@ describe('agentSkillsPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('ready_RosterWrittenBefore_DrawsIt', () => {
-    const { harness, sectionSummaries } = startOnHarness();
-    harness.state.publish(agentsRostersSlot).set(SESSION, ROSTER);
-    expect(sectionSummaries).toEqual([null]);
+  it.each<{ name: string; load: (harness: Harness) => Promise<void> }>([
+    { name: 'page load', load: async (harness) => harness.ready() },
+    {
+      name: 'live restart',
+      load: async (harness) => {
+        harness.ready();
+        await harness.restart();
+      },
+    },
+  ])(
+    'ready_RosterWrittenBefore_DrawsItAndHearsTheNext: $name',
+    async ({ load }) => {
+      const { harness, sectionSummaries } = startOnHarness();
+      const rosters = harness.state.publish(agentsRostersSlot);
+      rosters.set(SESSION, ROSTER);
+      expect(sectionSummaries).toEqual([null]);
 
-    harness.ready();
+      await load(harness);
+      const drawnAtLoad = sectionSummaries.at(-1);
+      rosters.set(SESSION, { ...ROSTER, skills: [] });
 
-    expect(sectionSummaries).toEqual([null, '1']);
-  });
+      expect([drawnAtLoad, sectionSummaries.at(-1)]).toEqual(['1', null]);
+    },
+  );
 });

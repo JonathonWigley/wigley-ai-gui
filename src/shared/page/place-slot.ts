@@ -24,7 +24,8 @@ export function placeWrites<V>(write: (value: V) => void): PlaceWrites<V> {
   };
 }
 
-// Deletes every key `isLive` refuses: the row or form ended while no page ran.
+// Deletes every key `isLive` refuses: the row or form ended while no page ran,
+// or, on a live restart, its row is one chat's restore has not reopened yet.
 export function pruneKeys<V>(
   writer: KeyedSlotWriter<V>,
   isLive: (key: string) => boolean,

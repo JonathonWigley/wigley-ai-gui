@@ -354,7 +354,7 @@ describe('sessions page part', () => {
     expect(placeKeys(state)).toEqual(['s-live']);
   });
 
-  it('prune_waits_for_page_ready', () => {
+  it('prune_waits_for_ready', () => {
     const { state, harness, rowsWriter } = startOverSavedPlaces([]);
 
     expect(placeKeys(state)).toEqual(['s-live', 's-gone']);
@@ -375,26 +375,47 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
-  it('ready_AppliesOnceFromTheStore', async () => {
-    const uiState = fakeUiState();
-    const written = vi.spyOn(uiState, 'set');
-    const harness = startPagePart(sessionsPagePart, {
-      services: { picker: fakeListPickerService(), uiState },
-    });
-    harness.state.publish(sessionsRowsSlot).set('s1', hostRow('s1'));
-    harness.state.publish(sessionsSelectionSlot).set('s1');
-    await settle();
-    expect(written).not.toHaveBeenCalled();
+  // A live restart applies once more, as the restarted part's own ready.
+  it.each([
+    { name: 'page load', restarts: false, activations: 1 },
+    { name: 'live restart', restarts: true, activations: 2 },
+  ])(
+    'ready_AppliesOnceFromTheStoreAndHearsTheNext: $name',
+    async ({ restarts, activations }) => {
+      const uiState = fakeUiState();
+      const written = vi.spyOn(uiState, 'set');
+      const harness = startPagePart(sessionsPagePart, {
+        services: { picker: fakeListPickerService(), uiState },
+      });
+      const rows = harness.state.publish(sessionsRowsSlot);
+      rows.set('s1', hostRow('s1'));
+      const selection = harness.state.publish(sessionsSelectionSlot);
+      selection.set('s1');
+      await settle();
+      expect(written).not.toHaveBeenCalled();
 
-    harness.ready();
-    await settle();
+      harness.ready();
+      await settle();
+      if (restarts) {
+        await harness.restart();
+        await settle();
+      }
+      const activeAtLoad = harness.state.read(sessionsActiveSlot, 'test').get();
+      const activatedS1 = harness.logs.filter(
+        (line) => line.message === 'activated label s1',
+      ).length;
+      rows.set('s2', hostRow('s2'));
+      selection.set('s2');
+      await settle();
 
-    expect(harness.state.read(sessionsActiveSlot, 'test').get()).toBe('s1');
-    expect(
-      harness.logs.filter((line) => line.message === 'activated label s1'),
-    ).toHaveLength(1);
-    await harness.stop();
-  });
+      expect([
+        activeAtLoad,
+        activatedS1,
+        harness.state.read(sessionsActiveSlot, 'test').get(),
+      ]).toEqual(['s1', activations, 's2']);
+      await harness.stop();
+    },
+  );
 
   // A rowless first selection is mid-operation: main's next selection write
   // settles it. A first apply that throws leaves its restore for the next

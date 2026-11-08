@@ -112,6 +112,14 @@ describe('notes page part', () => {
 
   it.each([
     {
+      case: 'popup never opened',
+      opens: false,
+      text: null,
+      saveFails: false,
+      waitsForSave: false,
+      expected: null,
+    },
+    {
       case: 'nothing typed',
       text: null,
       saveFails: false,
@@ -137,24 +145,30 @@ describe('notes page part', () => {
       text: 'an edit',
       saveFails: true,
       waitsForSave: true,
-      expected: 'Wait for the note to finish saving',
+      expected:
+        'The note did not save: disk full; edit or close it to save again',
     },
-  ])('mayStop_$case', async ({ text, saveFails, waitsForSave, expected }) => {
-    const { harness, changeBody } = startNotes({ saveFails });
-    harness.started().commands.open({} as PageCommandContext);
-    await settle();
-
-    if (text !== null) {
-      changeBody(text);
-    }
-    if (waitsForSave) {
-      harness.advance(60_000);
+  ])(
+    'mayStop_$case',
+    async ({ opens = true, text, saveFails, waitsForSave, expected }) => {
+      const { harness, changeBody } = startNotes({ saveFails });
+      if (opens) {
+        harness.started().commands.open({} as PageCommandContext);
+      }
       await settle();
-    }
 
-    expect(harness.started().mayStop?.()).toBe(expected);
-    await harness.stop();
-  });
+      if (text !== null) {
+        changeBody(text);
+      }
+      if (waitsForSave) {
+        harness.advance(60_000);
+        await settle();
+      }
+
+      expect(harness.started().mayStop?.()).toBe(expected);
+      await harness.stop();
+    },
+  );
 
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startNotes();

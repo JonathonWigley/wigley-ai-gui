@@ -54,6 +54,8 @@ function startOnHarness() {
   });
 }
 
+type Harness = ReturnType<typeof startOnHarness>;
+
 describe('agentLinesPagePart', () => {
   beforeEach(() => {
     installFakeDom(vi.stubGlobal);
@@ -82,16 +84,28 @@ describe('agentLinesPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('ready_RosterWrittenBefore_DrawsItAndHearsTheNext', () => {
-    const harness = startOnHarness();
-    const rosters = harness.state.publish(agentsRostersSlot);
-    rosters.set(SESSION, RUNNING);
-    expect(harness.counts().timers).toBe(0);
+  it.each<{ name: string; load: (harness: Harness) => Promise<void> }>([
+    { name: 'page load', load: async (harness) => harness.ready() },
+    {
+      name: 'live restart',
+      load: async (harness) => {
+        harness.ready();
+        await harness.restart();
+      },
+    },
+  ])(
+    'ready_RosterWrittenBefore_DrawsItAndHearsTheNext: $name',
+    async ({ load }) => {
+      const harness = startOnHarness();
+      const rosters = harness.state.publish(agentsRostersSlot);
+      rosters.set(SESSION, RUNNING);
+      expect(harness.counts().timers).toBe(0);
 
-    harness.ready();
-    expect(harness.counts().timers).toBe(1);
+      await load(harness);
+      expect(harness.counts().timers).toBe(1);
 
-    rosters.delete(SESSION);
-    expect(harness.counts().timers).toBe(0);
-  });
+      rosters.delete(SESSION);
+      expect(harness.counts().timers).toBe(0);
+    },
+  );
 });

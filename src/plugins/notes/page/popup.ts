@@ -130,7 +130,8 @@ export interface NotePopup {
   // load's restores settle.
   restorePlace(place: NotesPlace): void;
   // A refusal while the draft is not saved: unsaved, saving, held back while
-  // the popup is locked, or after a failed save; null once it is saved.
+  // the popup is locked, or after a failed save, which names the save's error;
+  // null once it is saved.
   mayStop(): string | null;
   // Closes an open markup session, starting its save, and ends autosave: an
   // edit it has not saved yet is dropped. A send still in flight then closes
@@ -1360,10 +1361,15 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         void open(place);
       }
     },
-    mayStop: () =>
-      saveState(store.get()) === 'saved'
-        ? null
-        : 'Wait for the note to finish saving',
+    mayStop() {
+      const state = store.get();
+      if (saveState(state) === 'saved') {
+        return null;
+      }
+      return state.saveError === null
+        ? 'Wait for the note to finish saving'
+        : `The note did not save: ${state.saveError}; edit or close it to save again`;
+    },
     dispose() {
       markupView.close();
       blurBoxes();

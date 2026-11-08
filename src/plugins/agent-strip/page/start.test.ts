@@ -77,6 +77,8 @@ function startOnHarness(parts: readonly PagePart[] = []) {
   });
 }
 
+type Harness = ReturnType<typeof startOnHarness>;
+
 describe('agentStripPagePart', () => {
   beforeEach(() => {
     installFakeDom(vi.stubGlobal);
@@ -109,15 +111,30 @@ describe('agentStripPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('ready_RosterWrittenBefore_DrawsIt', () => {
-    const harness = startOnHarness();
-    harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
-    expect(harness.counts().observers).toBe(0);
+  it.each<{ name: string; load: (harness: Harness) => Promise<void> }>([
+    { name: 'page load', load: async (harness) => harness.ready() },
+    {
+      name: 'live restart',
+      load: async (harness) => {
+        harness.ready();
+        await harness.restart();
+      },
+    },
+  ])(
+    'ready_RosterWrittenBefore_DrawsItAndHearsTheNext: $name',
+    async ({ load }) => {
+      const harness = startOnHarness();
+      const rosters = harness.state.publish(agentsRostersSlot);
+      rosters.set(SESSION, RUNNING);
+      expect(harness.counts().observers).toBe(0);
 
-    harness.ready();
+      await load(harness);
+      const observersAtLoad = harness.counts().observers;
+      rosters.delete(SESSION);
 
-    expect(harness.counts().observers).toBe(1);
-  });
+      expect([observersAtLoad, harness.counts().observers]).toEqual([1, 0]);
+    },
+  );
 
   it('toggleBoxAt_RunByAnotherPart_OpensThatBox', async () => {
     const held: { commands: PluginCommands | null } = { commands: null };

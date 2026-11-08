@@ -128,11 +128,18 @@ describe('unityPoolPagePart', () => {
   });
 
   it.each([
-    { name: 'written before ready', writesFirst: true },
-    { name: 'written after ready', writesFirst: false },
-  ])('pools_ReachThePanel: $name', ({ writesFirst }) => {
+    { name: 'written before ready', writesFirst: true, restarts: false },
+    { name: 'written after ready', writesFirst: false, restarts: false },
+    // The harness tells layouts only when a test shows them, so the restarted
+    // part is shown them again.
+    {
+      name: 'written after a live restart',
+      writesFirst: false,
+      restarts: true,
+    },
+  ])('pools_ReachThePanel: $name', async ({ writesFirst, restarts }) => {
     const harness = startOnHarness(() => Promise.resolve(null));
-    const panels = captureLayout(harness);
+    let panels = captureLayout(harness);
     harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
     harness.state.publish(sessionsActiveSlot).set(ROW_ID);
     const pools = harness.state.publish(unityPoolSnapshotSlot);
@@ -141,6 +148,10 @@ describe('unityPoolPagePart', () => {
       pools.set(SNAPSHOT);
     }
     harness.ready();
+    if (restarts) {
+      await harness.restart();
+      panels = captureLayout(harness);
+    }
     if (!writesFirst) {
       pools.set(SNAPSHOT);
     }

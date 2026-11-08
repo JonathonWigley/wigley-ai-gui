@@ -248,14 +248,15 @@ landed. The runtime plugin loader (step 3) gets its own plan, because its design
   everywhere by changing that one line (the user's condition). A `provides` registry was rejected for now: it adds
   start order and live swapping that no second provider needs yet, and it can come later behind the same contracts.
 - **A restart takes the dependents with it.** The host stops a plugin's dependents first, then the plugin, then starts
-  the plugin and every dependent it stopped, in the parts list's order with each part's dependencies first. So a
-  dependent may keep its view of a provider's exports for its whole run. A stable export proxy was rejected: every
-  export would have to survive a restart, and a registration made through the old run would belong to a provider that is
-  gone.
+  the plugin and every dependent it stopped, in the parts list's order with each part's dependencies first, a dependency
+  whose stop is still in flight counting as not started. So a dependent may keep its view of a provider's exports for
+  its whole run. A stable export proxy was rejected: every export would have to survive a restart, and a registration
+  made through the old run would belong to a provider that is gone.
 - **`ready()` replaces the page-ready event.** A part's start may return `ready()`. The host calls it once every part
-  has started at page load, and after a live start, once the whole set that start brought up has started. A core slot or
-  a replayed event was rejected: readiness is a phase of the part's lifecycle, so the host that owns the lifecycle calls
-  it, and no part writes its own "already ready?" check.
+  has started at page load, and after a live start, once the whole set that start brought up has started; a start whose
+  part throws readies the parts it already started and leaves them up. A core slot or a replayed event was rejected:
+  readiness is a phase of the part's lifecycle, so the host that owns the lifecycle calls it, and no part writes its own
+  "already ready?" check.
 - **`mayStop()` refuses a switch-off that would lose work.** A part may return `mayStop()`, which gives a reason while
   it holds open work (an open round, unsaved doc edits), in the same shape as the close guard. The host asks it before a
   switch-off, and the switch refuses with that reason. A refusal reaches the user as a `settings.json` config problem,
