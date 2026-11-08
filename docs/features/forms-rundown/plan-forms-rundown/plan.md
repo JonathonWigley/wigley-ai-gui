@@ -230,7 +230,7 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Question summary field](01-question-summary.md)
+- [x] [Question summary field](01-question-summary.md)
 - [x] [Collapsible keep-body option](03-collapsible-keep-body.md)
 - [x] [Marketplace version bump](08-marketplace-version.md)
 
@@ -260,9 +260,11 @@ Review base: 21b036cb
 ### Groups
 - 08 · marketplace 44d083c · diff read: both manifests 1.20.1→1.20.2 only; every Done command passes, check_manifests --against origin/main passes after commit · concerns: none
 - 03 · 31cacc80 · diff read: keepBody and onToggle in CollapsibleCardOptions as Produces pins, default path unchanged; worker typecheck, lint (own files), card and chat-kit tests pass · concerns: worker ran oxfmt on its two files to pass the format check
+- 01 · a46256e6 · diff read: Question.summary, QUESTION_FIELDS, fingerprint key summary, schema requires summary with no question property, test-rounds summary all present; typecheck passes; worker lint and named tests pass · concerns: worker ran oxfmt on its three edited files; forms selftest-script still sends question (legacy path parses it) until task 07
 ### Contract changes
 ### Rulings
 - Rebased the gui and agents branches onto main at preflight (9 and 1 commits behind); the docs-written-ahead commits are now gui 3c06d4c3 (was 4d679c5c) and agents 67c4697 (was 64ba2e3); review bases: gui 21b036cb, marketplace 3689c72, agents 67c4697 — work builds on origin's latest — a stale sha in a later brief would mislead a re-read · lead
 - Kept body starts hidden and the constructor's setOpen(true) reveals it for open:true — one opening path — nothing visible if wrong · group 03 · group 03
+- Summary description is its own constant QUESTION_SUMMARY_DESCRIPTION beside the context one — matches the file's pattern — cosmetic if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate

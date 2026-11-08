@@ -1,5 +1,5 @@
 // The preview's built-in sample: ask_round arguments holding every card kind,
-// with long and short titles, inline code and a choice long enough to wrap. Its
+// three notices (one per badge), long and short titles, inline code and a choice long enough to wrap. Its
 // Defect groups a deferral choice under Follow-up, and its Decision and Nit each
 // carry the reason for the deferral action they recommend.
 export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
@@ -7,6 +7,18 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
   overview:
     'A sample round that shows every card the layout draws; nothing you answer here reaches an agent.',
   notices: [
+    {
+      title: 'Rail entries show their full title on hover',
+      context:
+        ':::tree\nRail\n  + each entry shows its full title on hover\n:::',
+      badge: 'Applied',
+    },
+    {
+      title: 'Long choices wrap under their number',
+      context:
+        ':::changes\n~ a long choice wraps under its number instead of running off the card\n:::',
+      badge: 'Dispatched',
+    },
     {
       title: 'Kept the sidebar on the left',
       context:

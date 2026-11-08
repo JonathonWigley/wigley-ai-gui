@@ -1,6 +1,6 @@
 # 01 — Question summary field
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -190,3 +190,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a46256e6 · proof: diff read: Question.summary, QUESTION_FIELDS, fingerprint key summary, schema requires summary with no question property, test-rounds summary all present; typecheck passes; worker lint and named tests pass · concerns: worker ran oxfmt on its three edited files; forms selftest-script still sends question (legacy path parses it) until task 07

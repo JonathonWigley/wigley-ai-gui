@@ -43,9 +43,10 @@ const NOTICE_BADGE_DESCRIPTION =
 const NOTICES_DESCRIPTION =
   'Fixes already made, dispatched, decisions you took alone, or anything ' +
   'otherwise settled before this round opened — one object per notice. Each ' +
-  'draws as its own card before the findings and questions, badged ' +
-  "'Applied', 'Dispatched' or 'Decided', with only a comment box: no " +
-  'choices, no recommendation, nothing for the user to decide.';
+  "draws as one line, its badge and title, on the round's notices page, " +
+  'after every finding and question; the line opens to its context and one ' +
+  "comment box. Each is badged 'Applied', 'Dispatched' or 'Decided', and has " +
+  'no choices, no recommendation, nothing for the user to decide.';
 
 // Python's repr for the values a badge can hold.
 function pythonRepr(value: unknown): string {
