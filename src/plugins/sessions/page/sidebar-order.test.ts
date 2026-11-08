@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type ClaimedSection,
   drawnRows,
   type OrderedRow,
+  type RowClaim,
   type SidebarGroup,
   sidebarSections,
 } from './sidebar-order';
@@ -11,6 +13,13 @@ function drawnGroup(group: SidebarGroup<OrderedRow>): string {
   return `${group.project}${group.isFavorite ? '*' : ''}: ${ids}`;
 }
 
+function drawnSection(
+  claimed: ClaimedSection<OrderedRow, RowClaim<OrderedRow>>,
+): string {
+  const ids = claimed.rows.map((row) => row.sessionId).join(' ');
+  return `${claimed.section.id}: ${ids}`;
+}
+
 describe('sidebarSections', () => {
   it.each<{
     case: string;
@@ -18,8 +27,10 @@ describe('sidebarSections', () => {
     favorites: string[];
     stamps: Record<string, number>;
     projectStamps?: Record<string, number>;
+    sections?: [id: string, order: number, claimed: string[]][];
     expectedFavorites: string[];
     expectedRecent: string[];
+    expectedPlugins?: string[];
     expectedDrawn: string[];
   }>([
     {
@@ -138,6 +149,94 @@ describe('sidebarSections', () => {
       expectedRecent: [],
       expectedDrawn: ['f2', 'f1'],
     },
+    {
+      case: 'a claimed row leaves its group and draws after recent',
+      rows: [
+        ['a1', 'alpha'],
+        ['a2', 'alpha'],
+        ['b1', 'beta'],
+      ],
+      favorites: [],
+      stamps: { a1: 1, a2: 2, b1: 3 },
+      projectStamps: { alpha: 2, beta: 3 },
+      sections: [['retro', 0, ['a2']]],
+      expectedFavorites: [],
+      expectedRecent: ['beta: b1', 'alpha: a1'],
+      expectedPlugins: ['retro: a2'],
+      expectedDrawn: ['b1', 'a1', 'a2'],
+    },
+    {
+      case: 'plugin sections sort by order, a tie by registration',
+      rows: [
+        ['x1', 'alpha'],
+        ['y1', 'alpha'],
+        ['z1', 'alpha'],
+      ],
+      favorites: [],
+      stamps: {},
+      sections: [
+        ['late', 5, ['x1']],
+        ['first', 1, ['y1']],
+        ['tied', 5, ['z1']],
+      ],
+      expectedFavorites: [],
+      expectedRecent: [],
+      expectedPlugins: ['first: y1', 'late: x1', 'tied: z1'],
+      expectedDrawn: ['y1', 'x1', 'z1'],
+    },
+    {
+      case: 'a section that claims no row is left out',
+      rows: [['a1', 'alpha']],
+      favorites: [],
+      stamps: {},
+      sections: [['empty', 0, []]],
+      expectedFavorites: [],
+      expectedRecent: ['alpha: a1'],
+      expectedPlugins: [],
+      expectedDrawn: ['a1'],
+    },
+    {
+      case: 'a row two sections claim goes to the lower order',
+      rows: [['a1', 'alpha']],
+      favorites: [],
+      stamps: {},
+      sections: [
+        ['high', 9, ['a1']],
+        ['low', 2, ['a1']],
+      ],
+      expectedFavorites: [],
+      expectedRecent: [],
+      expectedPlugins: ['low: a1'],
+      expectedDrawn: ['a1'],
+    },
+    {
+      case: 'rows in a plugin section run newest first',
+      rows: [
+        ['a1', 'alpha'],
+        ['a2', 'alpha'],
+      ],
+      favorites: [],
+      stamps: { a1: 1, a2: 2 },
+      sections: [['retro', 0, ['a1', 'a2']]],
+      expectedFavorites: [],
+      expectedRecent: [],
+      expectedPlugins: ['retro: a2 a1'],
+      expectedDrawn: ['a2', 'a1'],
+    },
+    {
+      case: "a favorite's claimed row leaves Favorites",
+      rows: [
+        ['f1', 'fav'],
+        ['f2', 'fav'],
+      ],
+      favorites: ['fav'],
+      stamps: {},
+      sections: [['retro', 0, ['f1']]],
+      expectedFavorites: ['fav*: f2'],
+      expectedRecent: [],
+      expectedPlugins: ['retro: f1'],
+      expectedDrawn: ['f2', 'f1'],
+    },
   ])(
     'sidebarSections_ordersSectionsGroupsAndRows: $case',
     ({
@@ -145,8 +244,10 @@ describe('sidebarSections', () => {
       favorites,
       stamps,
       projectStamps = {},
+      sections: claims = [],
       expectedFavorites,
       expectedRecent,
+      expectedPlugins = [],
       expectedDrawn,
     }) => {
       const sections = sidebarSections(
@@ -154,9 +255,15 @@ describe('sidebarSections', () => {
         favorites,
         new Map(Object.entries(stamps)),
         new Map(Object.entries(projectStamps)),
+        claims.map(([id, order, ids]): RowClaim<OrderedRow> => ({
+          id,
+          order,
+          claims: (row) => ids.includes(row.sessionId),
+        })),
       );
       expect(sections.favorites.map(drawnGroup)).toEqual(expectedFavorites);
       expect(sections.recent.map(drawnGroup)).toEqual(expectedRecent);
+      expect(sections.plugins.map(drawnSection)).toEqual(expectedPlugins);
       expect(drawnRows(sections).map((row) => row.sessionId)).toEqual(
         expectedDrawn,
       );

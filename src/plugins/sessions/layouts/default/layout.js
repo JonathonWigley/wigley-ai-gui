@@ -1,14 +1,16 @@
 // @ts-check
 
-// The built-in Sessions look: the side bar's "Sessions" header over its two
+// The built-in Sessions look: the side bar's "Sessions" header over its
 // sections, Favorites then Recent, each a label beside a hairline and a drop
 // hint over its groups, each group a project's header (name, count, star and
-// grip) over its rows,
+// grip) over its rows, then each plugin section, its label always shown with
+// its header part at the hairline's end, over its claimed rows,
 // each row a compact card of two lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
 // activity, a needs you label while `marked` (a running activity draws no
 // label: the workflow chip's tag in the footer says it), a status edge for an
-// activity with an emphasis, and its on-screen mark,
+// activity with an emphasis, its on-screen mark, and for a row a plugin section
+// claimed, a muted title and card with a dashed accent edge,
 // over a footer holding other plugins' row parts (`contributedParts`): the parts
 // ordered below 2 on the second line, and those ordered 2 and later always on
 // a third,
@@ -73,8 +75,14 @@ const layout = {
 
   section(parent, input, kit) {
     const element = kit.el(parent, 'div', 'session-section');
-    kit.el(element, 'div', 'session-section-label', input.label);
-    kit.el(element, 'div', 'session-section-drop-hint', input.dropHint);
+    element.dataset.section = input.id;
+    const label = kit.el(element, 'div', 'session-section-label', input.label);
+    if (input.kind === 'plugin') {
+      element.classList.add('session-section--plugin');
+      kit.headerPart(label);
+    } else {
+      kit.el(element, 'div', 'session-section-drop-hint', input.dropHint);
+    }
     const groups = kit.el(element, 'div', 'session-section-groups');
     return { element, groups };
   },
@@ -97,6 +105,7 @@ const layout = {
     });
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);
+    element.classList.toggle('session-row--claimed', input.section !== null);
     const activity =
       input.activity ?? (input.marked ? MARKED_ROW_ACTIVITY : null);
     if (activity !== null && activity.tone !== 'running') {

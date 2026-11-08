@@ -14,6 +14,7 @@ import {
   type SessionsPlace,
   sessionsPlaceSlot,
   type SessionsState,
+  type SidebarSection,
 } from '../contract';
 import { createSessionsParts } from './layout/sessions-parts';
 import { createProjectFavorites } from './project-favorites';
@@ -75,14 +76,17 @@ export function sessionsPartsSetup() {
 // What `sessionsViewSetup` runs on beyond its stores: `uiState` holds the
 // favorites and recency stamps, `clock` stamps them, a fixed time unless handed
 // in, so rows keep main's order, `timers` never runs a timer unless handed in,
-// `places` holds the sessions' places, a new empty slot unless handed in, and
-// `tabsChanged` runs on each change to a session's tabs or popups.
+// `places` holds the sessions' places, a new empty slot unless handed in,
+// `tabsChanged` runs on each change to a session's tabs or popups, and
+// `sections` holds the side bar's registered sections, a new store unless
+// handed in.
 export interface SessionsViewOptions {
   uiState?: UiState;
   clock?: Clock;
   timers?: Timers;
   places?: KeyedSlotWriter<SessionsPlace>;
   tabsChanged?: () => void;
+  sections?: PartStore<SidebarSection>;
 }
 
 // A sessions view over fake keys that record each anchor, a log that records
@@ -103,6 +107,7 @@ export function sessionsViewSetup(
     timers = { set: () => 0, clear: () => undefined },
     places = createSlotStore(() => undefined).publish(sessionsPlaceSlot),
     tabsChanged = () => undefined,
+    sections = createPartStore(),
   }: SessionsViewOptions = {},
 ) {
   const { anchors, logged, services } = fakeKitServices();
@@ -131,6 +136,7 @@ export function sessionsViewSetup(
     panePressed: () => undefined,
     rowParts,
     barParts,
+    sections,
     titleMaxLength,
     recency: createSessionRecency(clock, uiState),
     favorites: createProjectFavorites(uiState),
@@ -149,6 +155,7 @@ export function sessionsViewSetup(
     area,
     rowParts,
     barParts,
+    sections,
   };
 }
 
@@ -164,8 +171,14 @@ export function rowNamed(rows: FakeElement[], text: string): FakeElement {
   return found;
 }
 
-// The rows in the `default` side bar's groups, in drawn order, by their place
-// since a user layout's row need not carry the `default` row's class.
+// The rows in the `default` side bar's groups, then in its plugin sections, in
+// drawn order, by their place since a user layout's row need not carry the
+// `default` row's class.
 export function drawnRows(sideBar: FakeElement): FakeElement[] {
-  return findAll(sideBar, 'session-group-rows').flatMap((box) => box.children);
+  const pluginBoxes = findAll(sideBar, 'session-section--plugin').flatMap(
+    (section) => findAll(section, 'session-section-groups'),
+  );
+  return [...findAll(sideBar, 'session-group-rows'), ...pluginBoxes].flatMap(
+    (box) => box.children,
+  );
 }

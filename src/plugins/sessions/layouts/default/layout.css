@@ -1,5 +1,5 @@
-/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, the tab bar, the
-   empty text, the session popup and its hidden bar. */
+/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, its plugin
+   sections and their claimed rows, the tab bar, the empty text, the session popup and its hidden bar. */
 
 /* A pane fills its slot; its body shows the session's frame or the empty
    text in one cell, and its focus edges sit on its sides. */
@@ -101,8 +101,17 @@
 }
 
 .has-favorites > .session-section > .session-section-label,
-.is-reordering > .session-section > .session-section-label {
+.is-reordering > .session-section > .session-section-label,
+.session-section--plugin > .session-section-label {
   display: flex;
+}
+
+/* A plugin section's header part sits after the hairline, at the line's end. */
+.session-section-part {
+  display: flex;
+  flex: none;
+  align-items: center;
+  order: 1;
 }
 
 .session-section-drop-hint {
@@ -295,6 +304,26 @@
 .ui-row.session-row.is-on-screen {
   border-color: var(--wg-border-strong);
   box-shadow: inset 0 0 0 1px var(--wg-border-strong);
+}
+
+/* A row a plugin section claimed is muted: no card fill at rest, a
+   `fg-secondary` title unless selected, and a dashed accent edge on its start.
+   Selection, hover and on-screen keep their rules; the edge stays accent, the
+   class twice so it outranks their `border-color`. */
+.ui-row.session-row.session-row--claimed {
+  border-inline-start: var(--wg-indicator-width) dashed var(--wg-accent);
+}
+
+.ui-row.session-row.session-row--claimed.session-row--claimed {
+  border-inline-start-color: var(--wg-accent);
+}
+
+.ui-row.session-row.session-row--claimed:not(.is-selected, .is-hover, :hover) {
+  background: transparent;
+}
+
+.session-row.session-row--claimed:not(.is-selected) > .ui-row-label {
+  color: var(--wg-fg-secondary);
 }
 
 /* A row's first line never wraps: the title (`New Chat` for a row with no

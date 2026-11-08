@@ -311,6 +311,23 @@ describe('sessions page part', () => {
     },
   );
 
+  it.each(['favorites', 'recent'])(
+    'addSection_ReservedId_Throws (%s)',
+    async (id) => {
+      const setup = await startApplied(['s1'], 's1');
+      const claims = vi.fn(() => true);
+
+      expect(() =>
+        setup.exports.addSection({ id, label: 'Taken', order: 0, claims }),
+      ).toThrow(`section id ${id} is reserved`);
+      setup.rows.set('s1', { ...hostRow('s1'), marked: true });
+      await settle();
+
+      expect(claims).not.toHaveBeenCalled();
+      await setup.harness.stop();
+    },
+  );
+
   it('start_SetsActiveToNull', () => {
     const state = createSlotStore(() => undefined);
     const oldPage = state.publish(sessionsActiveSlot);

@@ -6,7 +6,12 @@ import {
   type ReorderDrop,
 } from '../../../shared/page/ui/drag-reorder';
 import { rowAction } from '../../../shared/page/ui/row';
-import type { RowActivity, SessionRow, SessionsState } from '../contract';
+import type {
+  RowActivity,
+  SessionRow,
+  SessionsState,
+  SidebarSection,
+} from '../contract';
 import type {
   SectionInput,
   SectionPane,
@@ -18,6 +23,7 @@ import type {
   SessionsParts,
 } from './layout/sessions-parts';
 import {
+  type ClaimedSection,
   drawnRows,
   type SidebarGroup,
   type SidebarSections,
@@ -59,13 +65,14 @@ export interface SidebarView {
   // waits, and draws once the drag ends.
   render(
     state: SessionsState | null,
-    sections: SidebarSections<SessionRow>,
+    sections: SidebarSections<SessionRow, SidebarSection>,
     rowStateOf: (row: SessionRow) => RowState,
     skip: ReadonlySet<string>,
   ): void;
 }
 
-type SectionKind = SectionInput['kind'];
+// The kinds of the two sections that always draw.
+type SectionKind = Exclude<SectionInput['kind'], 'plugin'>;
 
 const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
   favorites: {
@@ -79,10 +86,12 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // pane (a "Sessions" header holding the previous and next session prompts,
 // hidden while no session a step reaches is there to move to) over the
 // Favorites and Recent `section`s, each holding a `group` per project over its
-// `row`s. The rows box carries `has-favorites` while Favorites holds a group,
-// and `is-reordering` while a group header drags. The view keeps each row's
-// click, which activates its session, its tooltip, the selected row's mark,
-// each star's click and each header's tooltip and drag.
+// `row`s, then a `section` per registered section that claimed a row, holding
+// its `row`s directly, with its header part. The rows box carries
+// `has-favorites` while Favorites holds a group, and `is-reordering` while a
+// group header drags. The view keeps each row's click, which activates its
+// session, its tooltip, the selected row's mark, each star's click and each
+// header's tooltip and drag.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
@@ -165,6 +174,7 @@ export function mountSidebarView(
           session,
           session.sessionId === selectedSessionId,
           rowStateOf(session),
+          null,
           events.activate,
         ),
       );
@@ -177,17 +187,55 @@ export function mountSidebarView(
     selectedSessionId: string | null,
     rowStateOf: (row: SessionRow) => RowState,
   ) => {
-    const drawn = parts.section(pane.built.rows, {
-      kind,
-      ...SECTION_TEXT[kind],
-      isEmpty: sectionGroups.length === 0,
-    });
+    const drawn = parts.section(
+      pane.built.rows,
+      {
+        kind,
+        id: kind,
+        ...SECTION_TEXT[kind],
+        isEmpty: sectionGroups.length === 0,
+      },
+      null,
+    );
     sections.push(drawn);
     dragReorder.zone(drawn.built.groups, kind, {
       ordered: kind === 'favorites',
     });
     for (const group of sectionGroups) {
       drawGroup(drawn.built.groups, kind, group, selectedSessionId, rowStateOf);
+    }
+  };
+
+  // A registered section: no drop zone, its rows straight in its box.
+  const drawPluginSection = (
+    { section, rows: sectionRows }: ClaimedSection<SessionRow, SidebarSection>,
+    selectedSessionId: string | null,
+    rowStateOf: (row: SessionRow) => RowState,
+  ) => {
+    const drawn = parts.section(
+      pane.built.rows,
+      {
+        kind: 'plugin',
+        id: section.id,
+        label: section.label,
+        dropHint: '',
+        isEmpty: false,
+      },
+      section.header ?? null,
+    );
+    sections.push(drawn);
+    for (const session of sectionRows) {
+      rows.push(
+        drawRow(
+          parts,
+          drawn.built.groups,
+          session,
+          session.sessionId === selectedSessionId,
+          rowStateOf(session),
+          section.id,
+          events.activate,
+        ),
+      );
     }
   };
 
@@ -232,6 +280,9 @@ export function mountSidebarView(
           selectedSessionId,
           rowStateOf,
         );
+        for (const claimed of nextSections.plugins) {
+          drawPluginSection(claimed, selectedSessionId, rowStateOf);
+        }
       };
       if (dragReorder.isDragging()) {
         heldDraw = draw;
@@ -248,6 +299,7 @@ function drawRow(
   session: SessionRow,
   isSelected: boolean,
   { title, activity, partTooltips, onScreen }: RowState,
+  section: string | null,
   activate: (sessionId: string) => void,
 ): DrawnPart<SessionsPart> {
   const drawn = parts.row(list, {
@@ -265,6 +317,7 @@ function drawRow(
             emphasis: activity.emphasis ?? null,
           },
     onScreen,
+    section,
   });
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));

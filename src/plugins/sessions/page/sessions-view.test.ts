@@ -5,7 +5,11 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
-import { NEEDS_YOU_ACTIVITY, type SessionRow } from '../contract';
+import {
+  NEEDS_YOU_ACTIVITY,
+  type SessionRow,
+  type SidebarSection,
+} from '../contract';
 import { sessionRow } from '../contract.test-support';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
@@ -591,4 +595,90 @@ describe('sessions view side bar', () => {
       expect(findAll(sideBar, 'session-section')).toHaveLength(2);
     },
   );
+
+  it('sessionsView_SectionAddedThenDisposed_RedrawsTheSideBar', () => {
+    const setup = sessionsViewSetup();
+    const { view, sideBar, sections } = setup;
+    let headerDisposes = 0;
+    const retro: SidebarSection = {
+      id: 'retro',
+      label: 'Retro',
+      order: 0,
+      claims: (row) => row.sessionId === 'r1',
+      header: {
+        build(parent) {
+          const span = document.createElement('span');
+          span.textContent = '2 queued';
+          parent.append(span);
+          return {
+            dispose: () => {
+              headerDisposes++;
+            },
+          };
+        },
+      },
+    };
+    const state = stateWith([rowIn('a1', 'alpha'), rowIn('r1', 'alpha')]);
+    view.render(state);
+    const orderedIds = () => view.orderedRows().map((row) => row.sessionId);
+
+    const added = sections.add(retro);
+
+    const [section] = findAll(sideBar, 'session-section--plugin');
+    expect(findAll(section, 'session-section-label')[0].textContent).toContain(
+      'Retro',
+    );
+    expect(findAll(section, 'session-section-part')[0].textContent).toBe(
+      '2 queued',
+    );
+    const claimed = drawnRows(sideBar).filter((row) =>
+      row.classList.contains('session-row--claimed'),
+    );
+    expect(claimed).toEqual([rowNamed(drawnRows(sideBar), 'label r1')]);
+    expect(findAll(section, 'session-row--claimed')).toEqual(claimed);
+    expect(orderedIds()).toEqual(['a1', 'r1']);
+    view.render(state);
+    expect(headerDisposes).toBe(1);
+
+    added.dispose();
+
+    expect(findAll(sideBar, 'session-section--plugin')).toEqual([]);
+    expect(orderedIds()).toEqual(['a1', 'r1']);
+    expect(
+      rowNamed(
+        findAll(groupNamed(setup, 'alpha'), 'ui-row'),
+        'label r1',
+      ).classList.contains('session-row--claimed'),
+    ).toBe(false);
+    expect(headerDisposes).toBe(2);
+  });
+
+  it('sessionsView_ClaimsThrows_RowStaysInItsGroupAndLogs', () => {
+    const setup = sessionsViewSetup();
+    setup.sections.add({
+      id: 'retro',
+      label: 'Retro',
+      order: 0,
+      claims(row) {
+        if (row.sessionId === 'r1') {
+          throw new Error('boom');
+        }
+        return false;
+      },
+    });
+
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('r1', 'alpha')]));
+
+    expect(
+      setup.logged.filter(
+        (line) => line === 'section retro claims failed: boom',
+      ),
+    ).toHaveLength(1);
+    const r1 = rowNamed(
+      findAll(groupNamed(setup, 'alpha'), 'ui-row'),
+      'label r1',
+    );
+    expect(r1.classList.contains('session-row--claimed')).toBe(false);
+    expect(findAll(setup.sideBar, 'session-section--plugin')).toEqual([]);
+  });
 });

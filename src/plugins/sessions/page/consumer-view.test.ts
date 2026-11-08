@@ -16,7 +16,7 @@ import { sessionsPageView } from './consumer-view';
 function fakeExports() {
   const removed = createListeners<string>();
   const activities: [string, string, RowActivity | null][] = [];
-  const disposes = { tab: 0, popup: 0, rowPart: 0, barPart: 0 };
+  const disposes = { tab: 0, popup: 0, rowPart: 0, barPart: 0, section: 0 };
   const exports: SessionsPageExports = {
     cutToTitleLimit: (text) => text,
     addTab: () => ({
@@ -45,6 +45,11 @@ function fakeExports() {
         disposes.barPart++;
       },
     }),
+    addSection: () => ({
+      dispose: () => {
+        disposes.section++;
+      },
+    }),
     activate: () => undefined,
     closeSession: () => Promise.resolve(true),
     shownSessionId: () => null,
@@ -55,7 +60,7 @@ function fakeExports() {
 }
 
 describe('sessionsPageView', () => {
-  it('disposes the tabs, popups and parts a consumer added when its registrations dispose', () => {
+  it('disposes the tabs, popups, parts and sections a consumer added when its registrations dispose', () => {
     const { exports, disposes, removed } = fakeExports();
     const consumer = createRegistrations();
     const view = sessionsPageView(exports, consumer, removed.add);
@@ -65,9 +70,21 @@ describe('sessionsPageView', () => {
     view.addPopup('s1', { id: 'popup' } as SessionPopupView);
     view.addRowPart(part);
     view.addBarPart(part);
+    view.addSection({
+      id: 'section',
+      label: 'Section',
+      order: 0,
+      claims: () => false,
+    });
     consumer.dispose();
 
-    expect(disposes).toEqual({ tab: 1, popup: 1, rowPart: 1, barPart: 1 });
+    expect(disposes).toEqual({
+      tab: 1,
+      popup: 1,
+      rowPart: 1,
+      barPart: 1,
+      section: 1,
+    });
   });
 
   it('clears each activity the consumer still holds when its registrations dispose', () => {

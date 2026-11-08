@@ -12,7 +12,12 @@ import {
   type SessionsState,
 } from '../contract';
 import { sessionRow } from '../contract.test-support';
-import { PREVIEW_STATE, previewRowState, previewToggle } from './preview';
+import {
+  PREVIEW_STATE,
+  previewRowState,
+  previewSections,
+  previewToggle,
+} from './preview';
 import {
   drawnRows,
   rowNamed,
@@ -73,6 +78,11 @@ describe('sessions preview', () => {
     expect(new Set(rows.map((row) => row.harness))).toEqual(
       new Set([...HARNESSES, null]),
     );
+    expect(
+      previewSections(PREVIEW_STATE).plugins.map((claimed) =>
+        claimed.rows.map((row) => row.sessionId),
+      ),
+    ).toEqual([['preview-6']]);
   });
 
   it('previewRowState_SampleRows_AreNeverOnScreen', () => {
@@ -97,6 +107,11 @@ describe('sessions preview', () => {
     },
     { label: 'new-games-prototypes', title: null, activity: 'error' },
     { label: 'wigley-ai-gui', title: null, activity: null },
+    {
+      label: 'wigley-agents 2',
+      title: 'Retro of Scratchpad',
+      activity: 'working',
+    },
   ])(
     'previewRowState_PinnedSample_ShowsItsTitleAndActivity ($label)',
     ({ label, title, activity }) => {
@@ -128,7 +143,7 @@ describe('sessions preview', () => {
 
   it.each([
     { by: 1 as const, selected: 'wigley-ai-marketplace' },
-    { by: -1 as const, selected: 'a-session-label-long-enough' },
+    { by: -1 as const, selected: 'wigley-agents 2' },
   ])(
     'sessionsView_StepPreview_MovesSampleSelectionOnly (by $by)',
     ({ by, selected }) => {

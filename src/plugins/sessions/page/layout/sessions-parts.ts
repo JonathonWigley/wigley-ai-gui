@@ -8,8 +8,10 @@ import { errorText } from '../../../../shared/error-text';
 import {
   type ContributedPartsPlace,
   type PartStore,
+  placeContributedPart,
   placeContributedParts,
 } from '../../../../shared/page/contributed-parts';
+import { element } from '../../../../shared/page/dom';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   createBaseKit,
@@ -46,6 +48,7 @@ import type {
   RenameDialogKit,
   RowKit,
   SectionInput,
+  SectionKit,
   SectionPane,
   SessionRowInput,
   SessionsKit,
@@ -57,7 +60,7 @@ import type {
   TabBarPane,
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
-import type { SessionPart } from '../../contract';
+import type { SectionPart, SessionPart } from '../../contract';
 
 type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 
@@ -107,8 +110,13 @@ export interface DrawnTabBar extends TabBarPane {
 export interface SessionsParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
   sideBar(parent: HTMLElement): DrawnPart<DrawnSideBar>;
-  // Its element carries `is-empty` while `input.isEmpty`.
-  section(parent: HTMLElement, input: SectionInput): DrawnPart<SectionPane>;
+  // Its element carries `is-empty` while `input.isEmpty`. `header` is the
+  // plugin section's header part, which `kit.headerPart` builds; null for none.
+  section(
+    parent: HTMLElement,
+    input: SectionInput,
+    header: SectionPart | null,
+  ): DrawnPart<SectionPane>;
   group(parent: HTMLElement, input: GroupInput): DrawnPart<DrawnGroup>;
   row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
   pane(parent: HTMLElement, input: PaneInput): DrawnPart<DrawnPanePart>;
@@ -168,9 +176,35 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         requireElementIn(pane.element, pane.rows, 'sideBar rows');
         return { element: pane.element, rows: pane.rows, sessionEdge };
       }),
-    section: (parent, input) =>
+    section: (parent, input, header) =>
       parts.draw('section', parent, (builder, into, rollback) => {
-        const pane = builder(into, input, sessionsKit(rollback));
+        let isPlaced = false;
+        const kit: SectionKit = {
+          ...sessionsKit(rollback),
+          headerPart(partParent) {
+            if (isPlaced) {
+              throw new Error('headerPart placed twice');
+            }
+            isPlaced = true;
+            if (header === null) {
+              const empty = element('div', SECTION_PART.wrapperClass);
+              empty.dataset.part = input.id;
+              partParent.append(empty);
+              return empty;
+            }
+            const placed = placeContributedPart(
+              partParent,
+              input.id,
+              { id: input.id, build: (wrapper) => header.build(wrapper) },
+              SECTION_PART,
+              deps.log,
+              rollback,
+            );
+            // A build that threw left no div in `partParent`.
+            return placed ?? element('div', SECTION_PART.wrapperClass);
+          },
+        };
+        const pane = builder(into, input, kit);
         requireElementIn(pane.element, pane.groups, 'section groups');
         pane.element.classList.toggle('is-empty', input.isEmpty);
         return { element: pane.element, groups: pane.groups };
@@ -451,6 +485,13 @@ const ROW_PARTS: ContributedPartsPlace = {
   noun: 'row part',
   holderClass: 'session-row-parts',
   wrapperClass: 'session-row-part',
+};
+
+// The one part a plugin section draws at its header's end.
+const SECTION_PART: ContributedPartsPlace = {
+  noun: 'section part',
+  holderClass: 'session-section-parts',
+  wrapperClass: 'session-section-part',
 };
 
 const BAR_PARTS: ContributedPartsPlace = {

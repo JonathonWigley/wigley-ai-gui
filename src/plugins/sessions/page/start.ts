@@ -35,10 +35,11 @@ import {
   sessionsSelectRowCommand,
   sessionsSelectTabCommand,
   type SessionsState,
+  type SidebarSection,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
-import type { Layout } from '../layouts/layout';
+import type { Layout, SectionInput } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import { cutTitle, titleLimit } from '../session-title';
 import { sessionsPageView } from './consumer-view';
@@ -140,6 +141,12 @@ function popupToggledLine(
   return `${isOpen ? 'opened' : 'hid'} ${title} popup in ${sessionLabel}`;
 }
 
+// The ids of the side bar's own sections, which no registered section may take.
+const RESERVED_SECTION_IDS: readonly string[] = [
+  'favorites',
+  'recent',
+] satisfies Exclude<SectionInput['kind'], 'plugin'>[];
+
 // A choice in the split picker: a session no pane shows, or a new session.
 type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 
@@ -180,6 +187,7 @@ function createExports(
   view: SessionsView,
   rowParts: PartStore<SessionPart>,
   barParts: PartStore<SessionPart>,
+  sections: PartStore<SidebarSection>,
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
   shownSessionId: () => string | null,
@@ -196,6 +204,12 @@ function createExports(
       cutTitle(text, titleLimit(api.settings().titleMaxLength)),
     addRowPart: (part) => rowParts.add(part),
     addBarPart: (part) => barParts.add(part),
+    addSection(section) {
+      if (RESERVED_SECTION_IDS.includes(section.id)) {
+        throw new Error(`section id ${section.id} is reserved`);
+      }
+      return sections.add(section);
+    },
     activate,
     closeSession: (sessionId) =>
       closeSession(api, view, labelOf, sessionId, false),
@@ -238,8 +252,10 @@ function createExports(
 // dialog over the focused pane's session; the rows draw titles cut to the
 // `titleMaxLength` setting, drawn again when it changes. The rows group by
 // project under Favorites and Recent, from the favorites and recency stamps in
-// uiState; the session step keys follow that drawn order, and the project keys
-// change the focused pane's session's project's favorite.
+// uiState, less the rows a section another plugin registers (`addSection`)
+// claims, which draw in that section after Recent; the session step keys follow
+// that drawn order, and the project keys change the focused pane's session's
+// project's favorite.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -464,6 +480,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const rowParts = createPartStore<SessionPart>();
     const barParts = createPartStore<SessionPart>();
+    const sections = createPartStore<SidebarSection>();
     // A row click, a star's click and a tab's click each run their command.
     const view = mountSessionsView({
       activate: (sessionId) =>
@@ -535,6 +552,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       log,
       rowParts,
       barParts,
+      sections,
       titleMaxLength: () => api.settings().titleMaxLength,
       recency: createSessionRecency(api.services.clock, uiState),
       favorites: createProjectFavorites(uiState),
@@ -553,6 +571,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       view,
       rowParts,
       barParts,
+      sections,
       activate,
       labelOf,
       () => (isModeShown ? view.panes.focusedSessionId() : null),

@@ -471,6 +471,22 @@ export interface SessionPart {
   tooltip?(sessionId: string): string | null;
 }
 
+// A side bar section another plugin registers, drawn after Favorites and
+// Recent: its label over the rows it claims, with no project groups.
+export interface SidebarSection {
+  id: string; // unique among registered sections
+  label: string; // the section header's text
+  order: number; // sections sort by order after Favorites and Recent
+  claims(row: SessionRow): boolean;
+  header?: SectionPart; // drawn at the header's end
+}
+
+// What a section draws at its header's end: `build` draws into `parent`, its
+// own wrapper; the returned `dispose` runs before the side bar draws again.
+export interface SectionPart {
+  build(parent: HTMLElement): { dispose?(): void };
+}
+
 // The tones a row's activity shows in, the members of the page kit's
 // `DotStatus`.
 export type ActivityTone =
@@ -530,6 +546,17 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // tie, and redraws only when that changed. An activity set before the
 // session's row arrives shows once it does; a row leaving drops its
 // activities, and every page load starts with none.
+// `addSection` registers a side bar section; it throws `section id <id> is
+// reserved` for `favorites` or `recent`, and on an id another registered
+// section holds. On each side bar draw every section's `claims` is asked of
+// every row: a claimed row leaves its project group and draws in the section,
+// newest first; a row two sections claim goes to the lower `order`, a tie to
+// the section registered first, and a `claims` that throws counts as false
+// and is logged. The sections that claim a row draw after Recent, by `order`,
+// a tie in registration order; one that claims none draws nothing. Adding a
+// section and disposing its `Disposable` each redraw the side bar. `header`
+// builds on each side bar draw, so a header whose content changes between
+// draws redraws into its own wrapper itself.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
   addPopup(
@@ -542,6 +569,7 @@ export interface SessionsPageExports {
   cutToTitleLimit(text: string): string;
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
+  addSection(section: SidebarSection): Disposable;
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose(false)` in turn, then its
   // popups, waiting on a promise's answer and asking too a tab or popup added

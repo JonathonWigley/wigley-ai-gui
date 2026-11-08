@@ -2,11 +2,11 @@ import type { Disposable, Registrations } from '../../../contracts/disposable';
 import { createRegistrations } from '../../../shared/registrations';
 import type { SessionsPageExports } from '../contract';
 
-// One dependent's view of sessions' page exports: every tab, popup and part it
-// adds is filed under its registrations, and their disposal clears each
-// activity it still holds. A session `onSessionRemoved` names leaves the store:
-// its tabs' and popups' handles and its activities, which sessions has already
-// dropped.
+// One dependent's view of sessions' page exports: every tab, popup, part and
+// section it adds is filed under its registrations, and their disposal clears
+// each activity it still holds. A session `onSessionRemoved` names leaves the
+// store: its tabs' and popups' handles and its activities, which sessions has
+// already dropped.
 export function sessionsPageView(
   exports: SessionsPageExports,
   consumer: Registrations,
@@ -50,6 +50,7 @@ export function sessionsPageView(
       handlesOf(sessionId).track(exports.addPopup(sessionId, popup)),
     addRowPart: (part) => consumer.track(exports.addRowPart(part)),
     addBarPart: (part) => consumer.track(exports.addBarPart(part)),
+    addSection: (section) => consumer.track(exports.addSection(section)),
     setActivity(sessionId, sourceId, activity) {
       exports.setActivity(sessionId, sourceId, activity);
       const key = JSON.stringify([sessionId, sourceId]);

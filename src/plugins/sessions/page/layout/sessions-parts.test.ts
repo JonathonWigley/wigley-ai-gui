@@ -8,7 +8,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
-import type { SessionPart, SessionTabView } from '../../contract';
+import type { SectionPart, SessionPart, SessionTabView } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   GroupInput,
@@ -44,6 +44,7 @@ const POPUP_BAR_INPUT: PopupBarInput = {
 };
 const RECENT: SectionInput = {
   kind: 'recent',
+  id: 'recent',
   label: 'Recent',
   dropHint: 'Drop here',
   isEmpty: false,
@@ -69,8 +70,32 @@ function shownBy(children: FakeElement[]): string[] {
   return children.map((child) => child.textContent || codiconOf(child));
 }
 
-function sectionShape(parts: SessionsParts, input: SectionInput): DrawnShape {
-  const drawn = parts.section(document.createElement('div'), input);
+const RETRO: SectionInput = {
+  kind: 'plugin',
+  id: 'retro',
+  label: 'Retro',
+  dropHint: '',
+  isEmpty: false,
+};
+
+// A header part that draws `text`.
+function textHeader(text: string): SectionPart {
+  return {
+    build(parent) {
+      const span = document.createElement('span');
+      span.textContent = text;
+      parent.append(span);
+      return {};
+    },
+  };
+}
+
+function sectionShape(
+  parts: SessionsParts,
+  input: SectionInput,
+  header: SectionPart | null = null,
+): DrawnShape {
+  const drawn = parts.section(document.createElement('div'), input, header);
   const element = asFake(drawn.built.element);
   return {
     drawnBy: drawn.layoutName,
@@ -436,6 +461,12 @@ describe('sessions parts', () => {
     boxesInside: true,
     isMarkedEmpty: false,
   };
+  const DEFAULT_PLUGIN_SECTION: DrawnShape = {
+    drawnBy: 'default',
+    holds: ['Retro1 queued'],
+    boxesInside: true,
+    isMarkedEmpty: false,
+  };
 
   it.each<{
     case: string;
@@ -469,6 +500,35 @@ describe('sessions parts', () => {
       draw: (parts) => sectionShape(parts, RECENT),
       expected: DEFAULT_SECTION,
       failure: null,
+    },
+    {
+      case: 'default plugin section',
+      layout: {},
+      draw: (parts) => sectionShape(parts, RETRO, textHeader('1 queued')),
+      expected: DEFAULT_PLUGIN_SECTION,
+      failure: null,
+    },
+    {
+      case: 'user section places its header part twice',
+      layout: {
+        section: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-section');
+          const label = kit.el(element, 'p', 'mine-label', input.label);
+          kit.headerPart(label);
+          kit.headerPart(label);
+          return { element, groups: kit.el(element, 'div', 'mine-groups') };
+        },
+      },
+      draw: (parts) => sectionShape(parts, RETRO, textHeader('1 queued')),
+      expected: DEFAULT_PLUGIN_SECTION,
+      failure: 'headerPart placed twice',
+    },
+    {
+      case: 'header part build throws',
+      layout: {},
+      draw: (parts) => sectionShape(parts, RETRO, { build: fail }),
+      expected: { ...DEFAULT_PLUGIN_SECTION, holds: ['Retro'] },
+      failure: 'section part retro failed',
     },
     {
       case: 'user group returns rows outside its element',

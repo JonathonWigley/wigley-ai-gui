@@ -4,6 +4,7 @@ import {
   type OuterPanes,
   type PaneDirection,
 } from '../../../contracts/panes';
+import type { PluginLog } from '../../../contracts/log';
 import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
@@ -25,6 +26,7 @@ import {
   type SessionRow,
   type SessionsPlace,
   type SessionsState,
+  type SidebarSection,
 } from '../contract';
 import type { Layout } from '../layouts/layout';
 import { shownTitle, titleLimit } from '../session-title';
@@ -59,7 +61,9 @@ import { rowChanges, stepSession } from './tabs';
 // moved it;
 // `rowParts` are the parts each row draws, and adding or removing one draws
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
-// removing one draws the tab bars again; `titleMaxLength` reads the setting
+// removing one draws the tab bars again; `sections` are the side bar sections
+// other plugins registered, and adding or removing one draws the side bar
+// again; `titleMaxLength` reads the setting
 // each row draw cuts a first-message title to; `recency` and `favorites` order
 // the side bar's rows; the rest is what the sessions layout's kits read.
 export interface SessionsViewDeps extends Omit<
@@ -79,6 +83,7 @@ export interface SessionsViewDeps extends Omit<
   panePressed(pane: HTMLElement): void;
   rowParts: PartStore<SessionPart>;
   barParts: PartStore<SessionPart>;
+  sections: PartStore<SidebarSection>;
   titleMaxLength(): number;
   recency: SessionRecency;
   favorites: ProjectFavorites;
@@ -222,6 +227,8 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
 
+  // The real rows' order, each section's `claims` guarded so one that throws
+  // claims nothing and logs once per call.
   const realSections = () => {
     const rows = state?.rows ?? [];
     return sidebarSections(
@@ -229,6 +236,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       favorites.list(),
       recency.stampsOf(rows),
       recency.projectStamps(),
+      guardedSections(deps.sections.parts(), deps.log),
     );
   };
 
@@ -366,6 +374,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   };
   drawPanes();
   deps.rowParts.onChanged(() => drawSidebar());
+  deps.sections.onChanged(() => drawSidebar());
   deps.barParts.onChanged(() => tabs.redrawBars());
 
   return {
@@ -449,4 +458,29 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       deps.log(`moved ${project} ${direction}`);
     },
   };
+}
+
+// `sections` with each `claims` wrapped: a throw counts as false for that row,
+// and the first throw of each section is logged.
+function guardedSections(
+  sections: readonly SidebarSection[],
+  log: PluginLog,
+): SidebarSection[] {
+  return sections.map((section) => {
+    let hasLogged = false;
+    return {
+      ...section,
+      claims(row) {
+        try {
+          return section.claims(row);
+        } catch (error) {
+          if (!hasLogged) {
+            hasLogged = true;
+            log(`section ${section.id} claims failed: ${errorText(error)}`);
+          }
+          return false;
+        }
+      },
+    };
+  });
 }
