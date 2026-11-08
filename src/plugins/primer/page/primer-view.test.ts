@@ -179,7 +179,6 @@ function primerTabSetup(
       addTab: (sessionId, view) => {
         tabs.set(sessionId, asFake(view.element));
         return {
-          setStatus: () => undefined,
           select: () => undefined,
           takeOver: () => ({ release: () => undefined }),
           isVisible: () => true,
@@ -188,7 +187,9 @@ function primerTabSetup(
       },
       setActivity: (sessionId, sourceId, activity) =>
         activities.push([sessionId, sourceId, activity]),
+      addRowPart: () => ({ dispose: () => undefined }),
     },
+    closesAtOnce: () => false,
     beforeClose: () => true,
     setScope: () => undefined,
     setResizeTarget: (target) => resizeTargets.push(target),
@@ -266,7 +267,6 @@ function primerTabSetup(
     store,
     boxes,
     finish: () => Promise.resolve(),
-    closeSession: () => undefined,
     scrollPrimer: () => null,
     openPreview: () => Promise.resolve(),
     toast: () => undefined,
@@ -418,16 +418,6 @@ describe('primer tab under the cancel prompt', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it('shows the card behind a close prompt asked from the card', () => {
-    const { store, sessionId, tab } = primerTabSetup();
-
-    store.dispatch({ type: 'askClose', sessionId });
-
-    expect(store.get().view).toBe('confirm');
-    expect(pane(tab, 'primer-card').hidden).toBe(false);
-    expect(pane(tab, 'primer-review-pane').hidden).toBe(true);
   });
 
   it('shows the review behind a cancel prompt asked from the review', () => {

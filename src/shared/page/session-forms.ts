@@ -9,12 +9,9 @@ import { errorText } from '../error-text';
 import { type DraftRevisions, finishSave, startSave } from './autosave';
 import type { ReducerStore } from './reducer-store';
 
-// A finish handed to main and not yet answered by it. `closesSession` marks a
-// cancel the close prompt asked, which closes the session once the form
-// closes.
+// A finish handed to main and not yet answered by it.
 export interface FormSend {
   kind: AgentFormEndKind;
-  closesSession: boolean;
 }
 
 // What the lifecycle reads of one open form; a plugin's form state extends it.
@@ -48,8 +45,6 @@ export interface SessionFormsState<
   view: SessionFormsView<FormView>;
   // Where keeping the form from the cancel prompt returns.
   confirmReturnView: FormView | 'review';
-  // Whether confirming the cancel prompt also closes the form's session.
-  confirmClosesSession: boolean;
 }
 
 // `Presented` is the form as main sends it.
@@ -57,8 +52,6 @@ export type SessionFormsAction<Presented> =
   | { type: 'formShown'; form: Presented }
   | { type: 'formClosed'; formId: string }
   | { type: 'sessionActivated'; sessionId: string | null }
-  // Asks to cancel the active form before its session closes.
-  | { type: 'askClose'; sessionId: string }
   | { type: 'closeReview' }
   | { type: 'askCancel' }
   | { type: 'dismissConfirm' }
@@ -100,7 +93,6 @@ const LIFECYCLE_ACTIONS: ReadonlySet<string> = new Set<
   'formShown',
   'formClosed',
   'sessionActivated',
-  'askClose',
   'closeReview',
   'askCancel',
   'dismissConfirm',
@@ -134,7 +126,6 @@ export function emptySessionForms<
     activeSessionId,
     view: 'idle',
     confirmReturnView: 'review',
-    confirmClosesSession: false,
   };
 }
 
@@ -257,8 +248,6 @@ function applyLifecycle<
       return closeForm(state, action.formId);
     case 'sessionActivated':
       return activateSession(state, action.sessionId, config.formView);
-    case 'askClose':
-      return askClose(state, action.sessionId, config.formView);
     case 'closeReview':
       return state.view === 'review'
         ? { ...state, view: config.formView }
@@ -269,28 +258,16 @@ function applyLifecycle<
             ...state,
             view: 'confirm',
             confirmReturnView: 'review',
-            confirmClosesSession: false,
           }
         : state;
     case 'dismissConfirm':
       return state.view === 'confirm'
-        ? {
-            ...state,
-            view: state.confirmReturnView,
-            confirmClosesSession: false,
-          }
+        ? { ...state, view: state.confirmReturnView }
         : state;
     case 'sendStarted':
       return updateForm(state, action.formId, (form: Form) =>
         form.sending === null
-          ? {
-              ...form,
-              sending: {
-                kind: action.kind,
-                closesSession:
-                  action.kind === 'cancelled' && state.confirmClosesSession,
-              },
-            }
+          ? { ...form, sending: { kind: action.kind } }
           : form,
       );
     case 'sendFailed':
@@ -342,7 +319,6 @@ function closeForm<Form extends SessionForm, FormView extends string>(
     forms,
     activeFormId: null,
     view: 'idle',
-    confirmClosesSession: false,
   };
 }
 
@@ -362,35 +338,13 @@ function activateSession<Form extends SessionForm, FormView extends string>(
     activeSessionId: sessionId,
     activeFormId: form?.formId ?? null,
     view: form === undefined ? 'idle' : formView,
-    confirmClosesSession: false,
-  };
-}
-
-// Opens the cancel prompt for the active form of the closing session, from
-// its form view or review; keeping the form returns there.
-function askClose<Form extends SessionForm, FormView extends string>(
-  state: SessionFormsState<Form, FormView>,
-  sessionId: string,
-  formView: FormView,
-): SessionFormsState<Form, FormView> {
-  const view = state.view;
-  const isFormOfSession = activeForm(state)?.sessionId === sessionId;
-  const isAskable = view === formView || view === 'review';
-  if (!isFormOfSession || !isAskable) {
-    return state;
-  }
-  return {
-    ...state,
-    view: 'confirm',
-    confirmReturnView: view === 'review' ? 'review' : formView,
-    confirmClosesSession: true,
   };
 }
 
 // The lifecycle actions the commands below dispatch.
 type LifecycleCommand = Extract<
   SessionFormsAction<never>,
-  { type: 'askClose' | 'sendStarted' | 'sendFailed' | 'formClosed' }
+  { type: 'sendStarted' | 'sendFailed' | 'formClosed' }
 >;
 
 // The store the commands below read and dispatch to; a plugin's store over
@@ -414,47 +368,29 @@ export interface SessionFormCommandDeps<Form extends SessionForm> {
   log: PluginLog;
 }
 
-// `showForm` selects the session's form tab; `activate` selects the session.
-export interface GuardSessionCloseDeps<
-  Form extends SessionForm,
-> extends SessionFormCommandDeps<Form> {
-  showForm(sessionId: string): void;
-  activate(sessionId: string): void;
-}
-
-// A session closes only once its form is gone: with its form active it
-// selects the session's form tab, so the confirm scope's keys are in force,
-// and asks to cancel the form; confirming closes the session. A form open in
-// the background keeps its session with no prompt: the guard logs the
-// refusal, toasts why, and selects the session. A form being sent, active or
-// not, keeps its session: the guard logs and toasts the send, and selects
-// nothing.
-export function guardSessionClose<Form extends SessionForm>(
-  deps: GuardSessionCloseDeps<Form>,
+// Whether the close key closes the session at once: it holds a form not
+// being sent, which main cancels as the session closes.
+export function formClosesAtOnce<Form extends SessionForm>(
+  store: Pick<SessionFormsStore<Form>, 'get'>,
   sessionId: string,
 ): boolean {
-  const { store, words } = deps;
   const form = formOfSession(store.get(), sessionId);
-  if (form === undefined) {
+  return form !== undefined && form.sending === null;
+}
+
+// A form being sent keeps its session, so the answers on their way are not
+// cancelled: the tab logs and toasts the send. Any other session may close;
+// main's close guard refuses an open form's plain close with its reason.
+export function mayCloseSessionForm<Form extends SessionForm>(
+  deps: Pick<SessionFormCommandDeps<Form>, 'store' | 'words' | 'toast' | 'log'>,
+  sessionId: string,
+): boolean {
+  const form = formOfSession(deps.store.get(), sessionId);
+  if (form === undefined || form.sending === null) {
     return true;
   }
-  if (form.sending !== null) {
-    deps.log(`session close kept: ${form.label} is sending`);
-    deps.toast(`Sending ${form.label}'s ${words.noun}…`, 'info');
-    return false;
-  }
-  if (form.formId !== store.get().activeFormId) {
-    deps.log(`session close kept: ${form.label} is open in the background`);
-    deps.toast(`Finish or cancel ${form.label}'s ${words.noun} first`, 'info');
-    deps.activate(sessionId);
-    return false;
-  }
-  deps.showForm(sessionId);
-  const wasConfirm = store.get().view === 'confirm';
-  store.dispatch({ type: 'askClose', sessionId });
-  if (!wasConfirm && store.get().view === 'confirm') {
-    deps.log(`closing the session asks to cancel ${form.label}`);
-  }
+  deps.log(`session close kept: ${form.label} is sending`);
+  deps.toast(`Sending ${form.label}'s ${deps.words.noun}…`, 'info');
   return false;
 }
 
@@ -496,19 +432,12 @@ export function finishActiveForm<Form extends SessionForm, Body>(
   });
 }
 
-export interface CloseFormFromMainDeps<
-  Form extends SessionForm,
-> extends SessionFormCommandDeps<Form> {
-  closeSession(sessionId: string): void;
-}
-
-// Closes a form main closed. A form the page was sending closes its session
-// when the close prompt asked the cancel, whoever closed the form. Only a
-// form the page's finish closed logs and toasts its send; one main closed on
-// its own stays quiet, since main dropped those edits, and its send is failed
-// first, so its finish event says `closed`.
+// Closes a form main closed. Only a form the page's finish closed logs and
+// toasts its send; one main closed on its own stays quiet, since main dropped
+// those edits or cancelled them for its closing session, and its send is
+// failed first, so its finish event says `closed`.
 export function closeFormFromMain<Form extends SessionForm>(
-  deps: CloseFormFromMainDeps<Form>,
+  deps: SessionFormCommandDeps<Form>,
   closed: AgentFormClosed,
 ): void {
   const { formId } = closed;
@@ -531,9 +460,6 @@ export function closeFormFromMain<Form extends SessionForm>(
         : `${capitalized(words.noun)} cancelled: ${form.label}`,
       isSubmit ? 'success' : 'info',
     );
-  }
-  if (sending.closesSession) {
-    deps.closeSession(form.sessionId);
   }
 }
 

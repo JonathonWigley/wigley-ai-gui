@@ -54,7 +54,7 @@ function parseHello(line: string): { hello: RelayHello } | { error: string } {
 }
 
 // An absent field counts as null.
-function isOptional(value: unknown, type: 'string' | 'number'): boolean {
+function isOptional(value: unknown, type: 'string'): boolean {
   return value === undefined || value === null || typeof value === type;
 }
 
@@ -64,9 +64,6 @@ function mistypedHelloField(hello: RelayHello): string | null {
   }
   if (!isOptional(hello.project_dir, 'string')) {
     return 'project_dir';
-  }
-  if (!isOptional(hello.deadline_seconds, 'number')) {
-    return 'deadline_seconds';
   }
   if (!isOptional(hello.harness, 'string')) {
     return 'harness';
@@ -82,14 +79,28 @@ function harnessOf(value: string | null | undefined): Harness | null {
   return HARNESSES.find((harness) => harness === value) ?? null;
 }
 
+// The hello fields sessions reads; every other is the host's own.
+const SESSIONS_HELLO_FIELDS: ReadonlySet<string> = new Set([
+  'protocol',
+  'session_id',
+  'project_dir',
+  'harness',
+  'config_dir',
+]);
+
 function sessionInfo(hello: RelayHello): SessionInfo {
-  return {
+  const info: SessionInfo = {
     sessionId: hello.session_id ?? null,
     projectDir: hello.project_dir ?? null,
-    deadlineSeconds: hello.deadline_seconds ?? null,
     harness: harnessOf(hello.harness),
     profileDir: hello.config_dir ?? undefined,
   };
+  const hostFields = Object.entries(hello).filter(
+    ([field]) => !SESSIONS_HELLO_FIELDS.has(field),
+  );
+  return hostFields.length === 0
+    ? info
+    : { ...info, host: Object.fromEntries(hostFields) };
 }
 
 function replyLine(reply: RelayHelloReply): string {

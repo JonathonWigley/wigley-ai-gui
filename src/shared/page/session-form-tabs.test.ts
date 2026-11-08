@@ -10,8 +10,6 @@ interface AddedTab {
   sessionId: string;
   view: FormTabView;
   handle: FormTabHandle & {
-    statuses: string[];
-    selects: number;
     takeOvers: number;
     releases: number;
     visible: boolean;
@@ -22,18 +20,15 @@ interface AddedTab {
 function tabsSetup() {
   const added: AddedTab[] = [];
   const beforeClose = vi.fn((sessionId: string) => sessionId === 'closable');
+  const closesAtOnce = vi.fn((sessionId: string) => sessionId === 'kept');
   const shown = vi.fn();
   const formShown: [string, boolean][] = [];
   const tabs = createSessionFormTabs({
     addTab: (sessionId, view) => {
       const handle: AddedTab['handle'] = {
-        statuses: [],
-        selects: 0,
         takeOvers: 0,
         releases: 0,
         visible: false,
-        setStatus: (status) => handle.statuses.push(status),
-        select: () => handle.selects++,
         takeOver: () => {
           handle.takeOvers++;
           return { release: () => handle.releases++ };
@@ -48,6 +43,8 @@ function tabsSetup() {
     icon: 'checklist',
     className: 'form-tab',
     idleText: 'No form open.',
+    statusPartId: 'forms.status',
+    closesAtOnce,
     beforeClose,
     shown,
     formShown: (sessionId, isShown) => formShown.push([sessionId, isShown]),
@@ -86,13 +83,15 @@ describe('session form tabs', () => {
     expect(tab.childNodes[1]).toBe(asFake(second));
   });
 
-  it('asks beforeClose about the tab session and passes shown on', () => {
+  it('asks beforeClose and closesAtOnce about the tab session and passes shown on', () => {
     const { tabs, added, beforeClose, shown } = tabsSetup();
     tabs.mount('closable', root());
     tabs.mount('kept', root());
 
-    expect(added[0].view.beforeClose()).toBe(true);
-    expect(added[1].view.beforeClose()).toBe(false);
+    expect(added[0].view.closesAtOnce()).toBe(false);
+    expect(added[1].view.closesAtOnce()).toBe(true);
+    expect(added[0].view.beforeClose(true)).toBe(true);
+    expect(added[1].view.beforeClose(false)).toBe(false);
     added[1].view.shown();
     expect(beforeClose.mock.calls).toEqual([['closable'], ['kept']]);
     expect(shown).toHaveBeenCalledOnce();
@@ -129,17 +128,24 @@ describe('session form tabs', () => {
     expect(idle.hidden).toBe(false);
   });
 
-  it('sends a status to the session row only when it changed', () => {
-    const { tabs, added } = tabsSetup();
-    tabs.mount('s1', root());
+  it.each([
+    { status: 'Feature 0/2', tooltip: 'Feature 0/2' },
+    { status: '', tooltip: null },
+    { status: null, tooltip: null },
+  ])(
+    'status part tooltip is the session status: $status',
+    ({ status, tooltip }) => {
+      const { tabs } = tabsSetup();
+      tabs.mount('s1', root());
+      tabs.sync(() => 'earlier');
 
-    tabs.sync(() => 'Feature 0/2');
-    tabs.sync(() => 'Feature 0/2');
-    tabs.sync(() => null);
-    tabs.sync(() => null);
+      tabs.sync((sessionId) => (sessionId === 's1' ? status : null));
 
-    expect(added[0].handle.statuses).toEqual(['Feature 0/2', '']);
-  });
+      expect(tabs.statusPart.id).toBe('forms.status');
+      expect(tabs.statusPart.tooltip('s1')).toBe(tooltip);
+      expect(tabs.statusPart.tooltip('s2')).toBeNull();
+    },
+  );
 
   it('tells the host when a form starts or stops showing, status text aside', () => {
     const { tabs, formShown } = tabsSetup();
@@ -166,16 +172,6 @@ describe('session form tabs', () => {
     tabs.mount('s1', root());
 
     expect(added.map((tab) => tab.sessionId)).toEqual(['s1', 's1']);
-  });
-
-  it('selects the session tab, and nothing for a session with none', () => {
-    const { tabs, added } = tabsSetup();
-    tabs.mount('s1', root());
-
-    tabs.select('s1');
-    tabs.select('s2');
-
-    expect(added[0].handle.selects).toBe(1);
   });
 
   it('is shown while one of its tabs is the visible tab', () => {

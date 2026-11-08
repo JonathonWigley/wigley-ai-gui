@@ -24,13 +24,14 @@ import {
 } from './sidebar-order';
 import { harnessText, hasOtherSession } from './tabs';
 
-// What a row draws beside its session: its shown title, its activity and its
-// second line, each null for none, and whether its session shows in a pane
-// other than the focused one.
+// What a row draws beside its session: its shown title and its activity, each
+// null for none, its row parts' tooltips, read at each draw and each time the
+// pointer enters the row, and whether its session shows in a pane other than
+// the focused one.
 export interface RowState {
   title: string | null;
   activity: RowActivity | null;
-  status: string | null;
+  partTooltips(): string[];
   onScreen: boolean;
 }
 
@@ -246,7 +247,7 @@ function drawRow(
   list: HTMLElement,
   session: SessionRow,
   isSelected: boolean,
-  { title, activity, status, onScreen }: RowState,
+  { title, activity, partTooltips, onScreen }: RowState,
   activate: (sessionId: string) => void,
 ): DrawnPart<SessionsPart> {
   const drawn = parts.row(list, {
@@ -263,14 +264,22 @@ function drawRow(
             tone: activity.tone,
             emphasis: activity.emphasis ?? null,
           },
-    status,
     onScreen,
   });
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));
-  entry.title = [title, session.label, activity?.word ?? null, status]
-    .filter((part) => part !== null)
-    .join(' · ');
+  const setTooltip = () => {
+    entry.title = [
+      title,
+      session.label,
+      activity?.word ?? null,
+      ...partTooltips(),
+    ]
+      .filter((part) => part !== null)
+      .join(' · ');
+  };
+  setTooltip();
+  entry.addEventListener('pointerenter', setTooltip);
   entry.classList.toggle('is-selected', isSelected);
   if (isSelected) {
     entry.setAttribute('aria-current', 'true');

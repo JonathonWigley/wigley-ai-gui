@@ -1,5 +1,6 @@
 import type {
   Harness,
+  MarkOptions,
   SessionRow,
   SessionsState,
   SessionTabView,
@@ -180,10 +181,20 @@ export function tabsAfterRelease(
     : tabs;
 }
 
-// A sidebar row's second line: the last non-empty status among its session's
-// tabs, in strip order, or null.
-export function rowStatus(statuses: readonly string[]): string | null {
-  return statuses.findLast((status) => status !== '') ?? null;
+// The take overs still held once `released` gives its tab back: every other
+// one, each that remembered `released`'s tab now remembering the tab
+// `released` remembered, so a later release skips the tab that left.
+export function takeOversAfterRelease(
+  live: readonly TakeOver[],
+  released: TakeOver,
+): TakeOver[] {
+  return live
+    .filter((takeOver) => takeOver.tabId !== released.tabId)
+    .map((takeOver) =>
+      takeOver.previousTabId === released.tabId
+        ? { ...takeOver, previousTabId: released.previousTabId }
+        : takeOver,
+    );
 }
 
 // The harness as a row shows it; nothing when the relay did not say.
@@ -198,12 +209,10 @@ export function harnessText(harness: Harness | null): string {
   }
 }
 
-// The toast for a round that arrived while Sessions mode is hidden; `keys`
-// are the keys that show the mode, null when none are bound.
-export function roundToastText(label: string, keys: string | null): string {
-  return keys === null
-    ? `Round from ${label}`
-    : `Round from ${label} — ${keys} to answer`;
+// The toast for a mark that selected its row while Sessions mode is hidden;
+// `keys` are the keys that show the mode, null when none are bound.
+export function markToastText(mark: MarkOptions, keys: string | null): string {
+  return keys === null ? mark.text : `${mark.text} — ${keys} to ${mark.action}`;
 }
 
 // The rows `after` holds that `before` did not, in `after`'s order; the ids
@@ -230,11 +239,10 @@ export function rowChanges(
   };
 }
 
-// Whether a selection change gets the round toast. Main selects a session on
-// its own only through a round arriving with none selected, so only a move
-// from none (`null`; `undefined` marks the first state) to a session, while
-// Sessions mode is hidden, toasts.
-export function isRoundToast(
+// Whether a selection change may get the mark toast: only a move from none
+// (`null`; `undefined` marks the first state) to a session, while Sessions
+// mode is hidden. The row's own `markToast` then says whether a mark made it.
+export function isMarkToast(
   before: string | null | undefined,
   after: string | null,
   isModeShown: boolean,
@@ -257,11 +265,20 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
 }
 
 // Asks each view in order whether its session may close, stopping at the
-// first that says no.
+// first that says no; `atOnce` is the close key's word that a tab asked for
+// the session to close at once.
 export function mayClose(
   views: readonly Pick<SessionTabView, 'beforeClose'>[],
+  atOnce: boolean,
 ): boolean {
-  return views.every((view) => view.beforeClose());
+  return views.every((view) => view.beforeClose(atOnce));
+}
+
+// Whether the close key closes the session at once: any tab says so.
+export function closesAtOnce(
+  views: readonly Pick<SessionTabView, 'closesAtOnce'>[],
+): boolean {
+  return views.some((view) => view.closesAtOnce?.() === true);
 }
 
 // What Sessions mode shows: the selected tab of the selected session; `'none'`

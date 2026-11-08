@@ -89,9 +89,9 @@ describe('open', () => {
     expect(connects).toEqual([
       {
         sessionId: 'primer-preview',
-        projectDir: 'Primer preview',
-        deadlineSeconds: null,
+        projectDir: null,
         harness: null,
+        label: 'Primer preview',
       },
     ]);
     expect(activated).toEqual(['preview-row']);

@@ -36,6 +36,7 @@ const ROW: SessionRow = {
   project: 'alpha',
   harness: 'claude',
   marked: false,
+  markToast: null,
   projectDir: CLONE_PATH,
   hostSessionId: 'host-1',
   titles: { user: null, agent: null, firstMessage: null },

@@ -149,8 +149,8 @@ describe('startRelayServer', () => {
       {
         sessionId: 'session-1',
         projectDir: '/work/project',
-        deadlineSeconds: 300,
         harness: 'claude',
+        host: { deadline_seconds: 300 },
       },
     ]);
   });
@@ -208,7 +208,6 @@ describe('startRelayServer', () => {
   it.each([
     ['session_id', { session_id: 7 }],
     ['project_dir', { project_dir: 42 }],
-    ['deadline_seconds', { deadline_seconds: '300' }],
     ['harness', { harness: 3 }],
     ['config_dir', { config_dir: 3 }],
   ])(
@@ -266,8 +265,8 @@ describe('startRelayServer', () => {
       expected: {
         sessionId: null,
         projectDir: null,
-        deadlineSeconds: null,
         harness: null,
+        host: { deadline_seconds: null },
       },
     },
     {
@@ -275,7 +274,6 @@ describe('startRelayServer', () => {
       expected: {
         sessionId: null,
         projectDir: null,
-        deadlineSeconds: null,
         harness: null,
       },
     },
@@ -284,9 +282,9 @@ describe('startRelayServer', () => {
       expected: {
         sessionId: 'session-1',
         projectDir: '/work/project',
-        deadlineSeconds: 300,
         harness: 'claude',
         profileDir: '/home/me/.claude-work',
+        host: { deadline_seconds: 300 },
       },
     },
     {
@@ -294,8 +292,8 @@ describe('startRelayServer', () => {
       expected: {
         sessionId: 'session-1',
         projectDir: '/work/project',
-        deadlineSeconds: 300,
         harness: 'codex',
+        host: { deadline_seconds: 300 },
       },
     },
     {
@@ -303,8 +301,17 @@ describe('startRelayServer', () => {
       expected: {
         sessionId: 'session-1',
         projectDir: '/work/project',
-        deadlineSeconds: 300,
         harness: null,
+        host: { deadline_seconds: 300 },
+      },
+    },
+    {
+      hello: { ...HELLO, deadline_seconds: '300', tab_id: 7 },
+      expected: {
+        sessionId: 'session-1',
+        projectDir: '/work/project',
+        harness: 'claude',
+        host: { deadline_seconds: '300', tab_id: 7 },
       },
     },
   ])(

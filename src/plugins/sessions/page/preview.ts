@@ -50,6 +50,7 @@ function sampleRow(
     project,
     harness,
     marked,
+    markToast: null,
     projectDir: null,
     hostSessionId: null,
     titles: PREVIEW_TITLES[sessionId] ?? NO_TITLES,
@@ -100,23 +101,14 @@ export function previewSections(
   return sidebarSections(preview.rows, PREVIEW_FAVORITES, new Map(), new Map());
 }
 
-// Each sample row's second line, null for none.
-export const PREVIEW_STATUSES: Readonly<Record<string, string | null>> = {
-  'preview-1': 'working',
-  'preview-2': 'waiting for permission',
-  'preview-3': null,
-  'preview-4': null,
-  'preview-5': null,
-};
-
-// Each sample row's state at the title length `titleMax`: its shown title,
-// its activity and its second line, and never on screen, since no pane shows
-// a sample session.
+// Each sample row's state at the title length `titleMax`: its shown title and
+// its activity, no part tooltips, and never on screen, since no pane shows a
+// sample session.
 export function previewRowState(row: SessionRow, titleMax: number): RowState {
   return {
     title: shownTitle(row.titles, titleMax),
     activity: PREVIEW_ACTIVITIES[row.sessionId] ?? null,
-    status: PREVIEW_STATUSES[row.sessionId] ?? null,
+    partTooltips: () => [],
     onScreen: false,
   };
 }

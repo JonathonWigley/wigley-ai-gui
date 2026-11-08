@@ -23,7 +23,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - the click on each row (activate its session) and each tab (select it), set on the element the part returns with
 //   `ui-row--action` and a mousedown that takes no focus, and dropped while that element is `is-disabled`;
 // - `is-selected` and `aria-current="true"` on the selected row, `is-active` and `aria-current` on the active tab;
-// - the `title` tooltip on each row (`title · label · status`, each part only when present) and each tab (`title`),
+// - the `title` tooltip on each row (`title · label · activity · each row part's tooltip`, each only when present) and
+//   each tab (`title`),
 //   and each tab's `aria-label` (`title`), so a tab that draws only its icon keeps its accessible name;
 // - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides
 //   each while it has nothing to act on, and on the key inside each of `splitRightHint`, `splitDownHint` and
@@ -45,10 +46,10 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none, which `default` draws as `New Chat`; `label` is the session's folder label (`gamma 2`); `harness` is
-// the harness's name, '' for none; `marked` is true while a round waits unopened or a turn that finished elsewhere waits unviewed, and never on the selected row; `activity` is what the session is
+// the harness's name, '' for none; `marked` is true while something marked the row waits unviewed, and never on the selected row; `activity` is what the session is
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
-// and draws a needs you label for `marked` only while no activity is set; `status` is the row's status text, null for none, which `default` shows only in the tooltip, and the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
+// and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;
@@ -61,7 +62,6 @@ export interface SessionRowInput {
     tone: DotStatus;
     emphasis: 'raised' | 'urgent' | null;
   } | null;
-  status: string | null;
   onScreen: boolean;
 }
 

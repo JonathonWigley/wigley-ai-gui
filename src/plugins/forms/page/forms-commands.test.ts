@@ -25,7 +25,7 @@ import {
 import {
   closeRoundFromMain,
   formsCommandHandlers,
-  guardClose,
+  mayCloseRound,
 } from './forms-commands';
 import { type FormsPageEvent, startFormsEvents } from './forms-events';
 import { finding, notice, presentedRound, question } from './test-rounds';
@@ -85,11 +85,7 @@ function setup(
   // returns.
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
-  // Each closed session, with the rounds the store held at the call.
-  const closedSessions: { sessionId: string; roundCount: number }[] = [];
   const log = (message: string) => logs.push(message);
-  const closeSession = (sessionId: string) =>
-    closedSessions.push({ sessionId, roundCount: store.get().forms.length });
   const toast = (text: string, tone: ToastTone) => {
     toasts.push(text);
     toastTones.push(tone);
@@ -115,7 +111,6 @@ function setup(
         ? Promise.resolve()
         : Promise.reject(finishFailure);
     },
-    closeSession,
     layouts: {
       openPreview: () =>
         layoutFailure === null
@@ -129,13 +124,6 @@ function setup(
     toast,
     log,
   });
-  // Each Form tab the guard selected, with the store's view at that moment.
-  const shownForms: { sessionId: string; view: string }[] = [];
-  const showForm = (sessionId: string) =>
-    shownForms.push({ sessionId, view: store.get().view });
-  // Each session the guard selected.
-  const activated: string[] = [];
-  const activate = (sessionId: string) => activated.push(sessionId);
   const run = (
     command: FormsCommand,
     context: Partial<PageCommandContext<any>> = {},
@@ -174,15 +162,9 @@ function setup(
     // Main's formClosed for `roundId` reaching the page; `byFinish` false is
     // main closing it on its own.
     closeFromMain: (roundId: string, byFinish = true) =>
-      closeRoundFromMain(
-        { store, closeSession, toast, log },
-        { formId: roundId, byFinish },
-      ),
-    closedSessions,
-    shownForms,
-    activated,
-    guardClose: (sessionId: string) =>
-      guardClose({ store, toast, log, showForm, activate }, sessionId),
+      closeRoundFromMain({ store, toast, log }, { formId: roundId, byFinish }),
+    mayClose: (sessionId: string) =>
+      mayCloseRound({ store, toast, log }, sessionId),
     leaves: () => leaves,
     // Focuses a box as the user clicking into it would, outside any command.
     setActive: (box: BoxRef) => {
@@ -519,10 +501,7 @@ describe('formsCommandHandlers', () => {
     expect(finished).toEqual([
       { roundId: 'r1', end: { kind: 'submitted', body } },
     ]);
-    expect(round().sending).toEqual({
-      kind: 'submitted',
-      closesSession: false,
-    });
+    expect(round().sending).toEqual({ kind: 'submitted' });
     expect(store.get().view).toBe('review');
     expect(toasts).toEqual([]);
   });
@@ -602,8 +581,8 @@ describe('formsCommandHandlers', () => {
     expect(toastTones).toEqual(['info']);
   });
 
-  it('keeps the round when the confirmation is dismissed', () => {
-    const { run, store, finished, closedSessions, closeFromMain } = setup();
+  it('review cancel leaves the session open', () => {
+    const { run, store, finished, closeFromMain } = setup();
     run('openReview');
     run('askCancel');
 
@@ -611,144 +590,42 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get().view).toBe('review');
     expect(finished).toEqual([]);
-    expect(closedSessions).toEqual([]);
     run('askCancel');
     run('confirmCancel');
     closeFromMain('r1');
-    expect(closedSessions).toEqual([]);
+    expect(store.get().activeSessionId).toBe('r1-session');
+    expect(store.get().view).toBe('idle');
   });
 
-  it('the close guard lets a session with no round close', () => {
-    const { store, logs, shownForms, toasts, activated, guardClose } = setup();
-    const before = store.get();
+  it.each([
+    { name: 'no round', sessionId: 'other', background: false },
+    { name: 'its active round', sessionId: 'r1-session', background: false },
+    { name: 'a background round', sessionId: 'r2-session', background: true },
+  ])(
+    'the close check lets a session with $name close, with no prompt or toast',
+    ({ sessionId, background }) => {
+      const { store, logs, toasts, mayClose } = setup();
+      if (background) {
+        store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+      }
+      const before = store.get();
 
-    expect(guardClose('other')).toBe(true);
+      expect(mayClose(sessionId)).toBe(true);
 
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([]);
-    expect(shownForms).toEqual([]);
-    expect(toasts).toEqual([]);
-    expect(activated).toEqual([]);
-  });
+      expect(store.get()).toBe(before);
+      expect(logs).toEqual([]);
+      expect(toasts).toEqual([]);
+    },
+  );
 
-  it("the close guard selects the session's Form tab before the prompt shows", () => {
-    const { store, shownForms, guardClose } = setup();
-
-    guardClose('r1-session');
-
-    expect(shownForms).toEqual([{ sessionId: 'r1-session', view: 'forms' }]);
-    expect(store.get().view).toBe('confirm');
-  });
-
-  it('the close guard opens the prompt and keeps a session with an open round', () => {
-    const { store, logs, toasts, activated, guardClose } = setup();
-
-    expect(guardClose('r1-session')).toBe(false);
-    expect(store.get().view).toBe('confirm');
-    expect(logs).toEqual([expect.stringContaining('project · r1')]);
-    expect(guardClose('r1-session')).toBe(false);
-
-    expect(logs).toHaveLength(1);
-    expect(toasts).toEqual([]);
-    expect(activated).toEqual([]);
-  });
-
-  it("the close guard keeps a background round's session, says why and selects it", () => {
-    const {
-      store,
-      logs,
-      shownForms,
-      toasts,
-      toastTones,
-      activated,
-      guardClose,
-    } = setup();
-    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
-    const before = store.get();
-
-    expect(guardClose('r2-session')).toBe(false);
-
-    expect(store.get()).toBe(before);
-    expect(shownForms).toEqual([]);
-    expect(logs).toEqual([expect.stringContaining('project · r2')]);
-    expect(toasts).toEqual([expect.stringContaining('project · r2')]);
-    expect(toastTones).toEqual(['info']);
-    expect(activated).toEqual(['r2-session']);
-  });
-
-  it('confirming a close prompt cancels the round, then closes its session', () => {
-    const { run, finished, closedSessions, guardClose, closeFromMain } =
-      setup();
-    guardClose('r1-session');
-
-    run('confirmCancel');
-
-    expect(finished.map((entry) => [entry.roundId, entry.end.kind])).toEqual([
-      ['r1', 'cancelled'],
-    ]);
-    expect(closedSessions).toEqual([]);
-    closeFromMain('r1');
-    expect(closedSessions).toEqual([
-      { sessionId: 'r1-session', roundCount: 0 },
-    ]);
-  });
-
-  it('a close prompt whose cancel fails keeps the session and the prompt', async () => {
-    const {
-      run,
-      round,
-      store,
-      toasts,
-      closedSessions,
-      guardClose,
-      failFinish,
-    } = setup();
-    guardClose('r1-session');
-    failFinish(new Error('disk full'));
-
-    run('confirmCancel');
-
-    await vi.waitFor(() =>
-      expect(toasts).toEqual([expect.stringContaining('disk full')]),
-    );
-    expect(closedSessions).toEqual([]);
-    expect(store.get().view).toBe('confirm');
-    expect(round().sending).toBeNull();
-  });
-
-  it('closing a round main closed on its own shows no toast and closes no session', () => {
-    const { store, toasts, logs, closedSessions, closeFromMain } = setup();
+  it('closing a round main closed on its own shows no toast', () => {
+    const { store, toasts, logs, closeFromMain } = setup();
 
     closeFromMain('r1', false);
 
     expect(store.get().forms).toEqual([]);
     expect(toasts).toEqual([]);
     expect(logs).toEqual([]);
-    expect(closedSessions).toEqual([]);
-  });
-
-  it('main closing a round on its own while its close-prompt cancel sends shows no toast but closes the session', () => {
-    const {
-      run,
-      store,
-      toasts,
-      logs,
-      closedSessions,
-      guardClose,
-      closeFromMain,
-    } = setup();
-    guardClose('r1-session');
-    run('confirmCancel');
-    logs.length = 0;
-
-    closeFromMain('r1', false);
-
-    expect(store.get().forms).toEqual([]);
-    expect(toasts).toEqual([]);
-    expect(logs).toEqual([]);
-    expect(closedSessions).toEqual([
-      { sessionId: 'r1-session', roundCount: 0 },
-    ]);
   });
 
   it.each([
@@ -772,36 +649,35 @@ describe('formsCommandHandlers', () => {
     },
   );
 
-  it('the close guard keeps the session of the active round while it sends, and says so', () => {
-    const { run, store, logs, shownForms, toasts, toastTones, guardClose } =
-      setup();
-    run('openReview');
-    run('submit');
-    logs.length = 0;
-    const before = store.get();
+  it.each([
+    { name: 'active', roundId: 'r1', background: false },
+    { name: 'background', roundId: 'r2', background: true },
+  ])(
+    'the close check keeps the session of a sending $name round, and says so',
+    ({ roundId, background }) => {
+      const { run, store, logs, toasts, toastTones, mayClose } = setup();
+      if (background) {
+        store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+        store.dispatch({
+          type: 'sendStarted',
+          formId: 'r2',
+          kind: 'submitted',
+        });
+      } else {
+        run('openReview');
+        run('submit');
+      }
+      logs.length = 0;
+      const before = store.get();
 
-    expect(guardClose('r1-session')).toBe(false);
+      expect(mayClose(`${roundId}-session`)).toBe(false);
 
-    expect(store.get()).toBe(before);
-    expect(shownForms).toEqual([]);
-    expect(logs).toEqual([expect.stringContaining('project · r1')]);
-    expect(toasts).toEqual([expect.stringContaining('project · r1')]);
-    expect(toastTones).toEqual(['info']);
-  });
-
-  it('the close guard keeps the session of a background round while it sends, and says so', () => {
-    const { store, logs, toasts, activated, guardClose } = setup();
-    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
-    store.dispatch({ type: 'sendStarted', formId: 'r2', kind: 'submitted' });
-    const before = store.get();
-
-    expect(guardClose('r2-session')).toBe(false);
-
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([expect.stringContaining('project · r2')]);
-    expect(toasts).toEqual([expect.stringContaining('project · r2')]);
-    expect(activated).toEqual([]);
-  });
+      expect(store.get()).toBe(before);
+      expect(logs).toEqual([expect.stringContaining(`project · ${roundId}`)]);
+      expect(toasts).toEqual([expect.stringContaining(`project · ${roundId}`)]);
+      expect(toastTones).toEqual(['info']);
+    },
+  );
 
   // Rail: notice 1 (0), question 1 (1), question 2 (2); the box focused sits
   // on question 1, and each command names question 2.

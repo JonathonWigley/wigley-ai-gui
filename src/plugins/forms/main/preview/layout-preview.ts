@@ -10,12 +10,12 @@ import type { FormsService } from '../../contract';
 import { parseRound, requireKnownLayouts } from '../round';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
-// The row label is projectDir's basename.
+// No project, so the row and its title bar carry the label alone.
 const PREVIEW_SESSION: SessionInfo = {
   sessionId: 'layout-preview',
-  projectDir: 'Layout preview',
-  deadlineSeconds: null,
+  projectDir: null,
   harness: null,
+  label: 'Layout preview',
 };
 
 // What `cursor` holds while the sample shows.

@@ -67,10 +67,11 @@ import { createRenameDialog } from './rename-dialog';
 import { createSessionRecency } from './session-recency';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
-  isRoundToast,
+  closesAtOnce,
+  isMarkToast,
   isSameVisibleTab,
+  markToastText,
   mayClose,
-  roundToastText,
   rowChanges,
   stepSession,
   stepTab,
@@ -134,6 +135,31 @@ const NO_MID_OPERATION: MidOperation = {
 // A choice in the split picker: a session no pane shows, or a new session.
 type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 
+// Asks the session's tabs in order, then main, to close it; `atOnce` says the
+// close key found a tab asking for an instant close, so main cancels what its
+// guards hold first. Main's refusal is logged and toasted.
+function closeSession(
+  api: SessionsApi,
+  view: SessionsView,
+  labelOf: (sessionId: string) => string,
+  sessionId: string,
+  atOnce: boolean,
+): void {
+  const { log } = api.services;
+  if (!mayClose(view.tabs.tabsOf(sessionId), atOnce)) {
+    return;
+  }
+  api.channel
+    .invoke('closeSession', sessionId, atOnce)
+    .then((refusal) => {
+      if (refusal !== null) {
+        log(`session close kept by main: ${labelOf(sessionId)}`);
+        api.services.toast(refusal, 'info');
+      }
+    })
+    .catch((error) => log(`session not closed: ${errorText(error)}`));
+}
+
 function createExports(
   api: SessionsApi,
   view: SessionsView,
@@ -142,7 +168,6 @@ function createExports(
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
 ): SessionsPageExports {
-  const { log } = api.services;
   return {
     addTab(sessionId, tab) {
       const handle = view.tabs.add(sessionId, tab);
@@ -154,19 +179,8 @@ function createExports(
     addRowPart: (part) => rowParts.add(part),
     addBarPart: (part) => barParts.add(part),
     activate,
-    closeSession(sessionId) {
-      if (!mayClose(view.tabs.tabsOf(sessionId))) {
-        return;
-      }
-      api.channel
-        .invoke('closeSession', sessionId)
-        .then((closed) => {
-          if (!closed) {
-            log(`session close kept by main: ${labelOf(sessionId)}`);
-          }
-        })
-        .catch((error) => log(`session not closed: ${errorText(error)}`));
-    },
+    closeSession: (sessionId) =>
+      closeSession(api, view, labelOf, sessionId, false),
     setActivity: (sessionId, sourceId, activity) =>
       view.setActivity(sessionId, sourceId, activity),
   };
@@ -187,8 +201,9 @@ function createExports(
 // asks main, and a pane whose session leaves closes, the last pane staying.
 // The visible tab, the focused pane's session's selected tab while the mode
 // shows, sets the base key scope through its `shown`; with none visible the
-// scope is `idle`. A round selected while the mode is hidden toasts instead
-// of showing it. The pane keys split, close and swap panes, a split asking
+// scope is `idle`; the tab that stops being visible hears `hidden`, and
+// `tabShown` fires for each tab told it shows. A row a mark selected while the
+// mode is hidden toasts the mark instead of showing it. The pane keys split, close and swap panes, a split asking
 // which session the new pane shows; a split or pane close does nothing while
 // that picker is open. The pane tree and each pane's session persist in
 // uiState `panes`; a restored pane whose session main does not hold yet waits
@@ -249,10 +264,19 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       state.rows.find((row) => row.sessionId === sessionId);
     const labelOf = (sessionId: string) => rowOf(sessionId)?.label ?? sessionId;
 
-    // Tells the visible tab, when it changed, that it shows; with none
-    // visible while the mode shows, sets the `idle` scope. `isShownAgain`
-    // tells an unchanged visible tab again, after a pane move or a layout
-    // redraw took keyboard focus from its element.
+    // The tab `visible` names, while its session still holds it.
+    const tabOfVisible = (visible: VisibleTab) =>
+      typeof visible === 'object' && visible !== null
+        ? view.tabs
+            .tabsOf(visible.sessionId)
+            .find((tab) => tab.id === visible.tabId)
+        : undefined;
+
+    // Tells the tab that was visible, when the visible tab changed, that it is
+    // hidden, then tells the visible tab that it shows; with none visible
+    // while the mode shows, sets the `idle` scope. `isShownAgain` tells an
+    // unchanged visible tab again, after a pane move or a layout redraw took
+    // keyboard focus from its element.
     const checkVisible = (isShownAgain = false) => {
       const sessionId = view.panes.focusedSessionId();
       const tab =
@@ -265,6 +289,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       ) {
         return;
       }
+      if (!isSameVisibleTab(lastVisible, next)) {
+        tabOfVisible(lastVisible)?.hidden?.();
+      }
       lastVisible = next;
       if (next === 'none') {
         api.keys.setScope('idle');
@@ -273,13 +300,17 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
             ? 'nothing shown'
             : `nothing shown in ${labelOf(sessionId)}`,
         );
-      } else if (next !== null) {
-        tab?.shown();
+      } else if (next !== null && tab !== null) {
+        tab.shown();
+        api.events.emit('tabShown', {
+          sessionId: next.sessionId,
+          tabId: tab.id,
+        });
       }
     };
 
     // Sets the title bar to the focused pane's session, and publishes it when
-    // it changed; a round selected while the mode is hidden toasts.
+    // it changed; a row a mark selected while the mode is hidden toasts.
     const publishFocused = () => {
       const sessionId = view.panes.focusedSessionId();
       const focused = sessionId === null ? undefined : rowOf(sessionId);
@@ -306,13 +337,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         log(`activated ${focused.label}`);
       }
       active.set(sessionId);
+      const markToast = focused?.markToast ?? null;
       if (
-        sessionId !== null &&
-        isRoundToast(lastPublished, sessionId, isModeShown)
+        markToast !== null &&
+        isMarkToast(lastPublished, sessionId, isModeShown)
       ) {
         api.services.toast(
-          roundToastText(
-            labelOf(sessionId),
+          markToastText(
+            markToast,
             api.keys.keysFor(qualify(sessionsManifest.id, 'showMode')),
           ),
           'info',
@@ -865,7 +897,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           }
           const sessionId = view.panes.focusedSessionId();
           if (sessionId !== null) {
-            exports.closeSession(sessionId);
+            const atOnce = closesAtOnce(view.tabs.tabsOf(sessionId));
+            closeSession(api, view, labelOf, sessionId, atOnce);
           }
         },
         splitDown: paneKey(unlessPicking(() => split('column'))),

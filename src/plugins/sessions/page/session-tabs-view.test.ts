@@ -206,6 +206,34 @@ describe('session tabs view', () => {
     expect(view.tabs.tabsOf('s')).toEqual([a]);
   });
 
+  it('frame take overs follow take over release and tab removal', () => {
+    const { view } = sessionsViewSetup();
+    const selected = () => view.tabs.selectedTabOf('s')?.id;
+    view.tabs.add('s', tabView('chat'));
+    const form = view.tabs.add('s', tabView('form'));
+    const docs = view.tabs.add('s', tabView('docs'));
+    view.tabs.select('s', 'chat');
+
+    const formTake = form.takeOver();
+    docs.takeOver();
+    formTake.release();
+    expect(selected()).toBe('docs');
+    docs.takeOver().release();
+    expect(selected()).toBe('chat');
+
+    const again = form.takeOver();
+    form.takeOver();
+    expect(selected()).toBe('form');
+    again.release();
+    expect(selected()).toBe('chat');
+
+    form.takeOver();
+    docs.takeOver();
+    form.dispose();
+    docs.dispose();
+    expect(selected()).toBe('chat');
+  });
+
   it('a disposed view leaves no pane part or empty text live', () => {
     const { view, pickHint, liveFocusEdges } = viewWithFramedAndEmptyPane();
 

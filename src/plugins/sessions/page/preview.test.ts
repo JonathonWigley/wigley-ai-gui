@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  asHtml,
   FakeElement,
   findAll,
   installFakeDom,
@@ -12,12 +11,7 @@ import {
   type SessionRow,
   type SessionsState,
 } from '../contract';
-import {
-  PREVIEW_STATE,
-  PREVIEW_STATUSES,
-  previewRowState,
-  previewToggle,
-} from './preview';
+import { PREVIEW_STATE, previewRowState, previewToggle } from './preview';
 import {
   drawnRows,
   rowNamed,
@@ -73,7 +67,6 @@ afterEach(() => {
 describe('sessions preview', () => {
   it('preview_SampleRows_CoverEveryRowState', () => {
     const { rows, selectedSessionId } = PREVIEW_STATE;
-    const statusOf = (sessionId: string) => PREVIEW_STATUSES[sessionId] ?? null;
 
     expect(rows.map((row) => row.sessionId)).toContain(selectedSessionId);
     expect(rows.some((row) => row.marked)).toBe(true);
@@ -81,15 +74,13 @@ describe('sessions preview', () => {
     expect(new Set(rows.map((row) => row.harness))).toEqual(
       new Set([...HARNESSES, null]),
     );
-    expect(rows.some((row) => statusOf(row.sessionId) !== null)).toBe(true);
-    expect(rows.some((row) => statusOf(row.sessionId) === null)).toBe(true);
   });
 
   it('previewRowState_SampleRows_AreNeverOnScreen', () => {
     for (const row of PREVIEW_STATE.rows) {
       const state = previewRowState(row, 40);
       expect(state.onScreen).toBe(false);
-      expect(state.status).toBe(PREVIEW_STATUSES[row.sessionId] ?? null);
+      expect(state.partTooltips()).toEqual([]);
     }
   });
 
@@ -353,34 +344,48 @@ describe('session rows', () => {
     {
       case: 'with an activity',
       activity: WORKING,
-      tooltip: 'Fix the build · label s1 · working · Round 2/5',
+      tooltip: 'Fix the build · label s1 · working · Round 2/5 · Primer open',
     },
     {
       case: 'with no activity',
       activity: null,
-      tooltip: 'Fix the build · label s1 · Round 2/5',
+      tooltip: 'Fix the build · label s1 · Round 2/5 · Primer open',
     },
   ])(
-    'sessionsView_RowTooltip_JoinsTitleLabelActivityAndStatus ($case)',
+    'sessionsView_RowTooltip_JoinsTitleLabelActivityAndPartTooltips ($case)',
     ({ activity, tooltip }) => {
-      const { view, sideBar } = sessionsViewSetup();
+      const { view, sideBar, rowParts } = sessionsViewSetup();
+      const tooltipPart = (id: string, text: string | null) => ({
+        id,
+        build: () => ({}),
+        tooltip: () => text,
+      });
+      rowParts.add(tooltipPart('forms.status', 'Round 2/5'));
+      rowParts.add(tooltipPart('notes.status', null));
+      rowParts.add(tooltipPart('primer.status', 'Primer open'));
       view.render(titledState('Fix the build'));
       view.setActivity('s1', 'chat', activity);
-
-      view.tabs
-        .add('s1', {
-          id: 'chat',
-          title: 'Chat',
-          icon: 'comment',
-          element: asHtml(new FakeElement('div')),
-          beforeClose: () => true,
-          shown: () => undefined,
-        })
-        .setStatus('Round 2/5');
 
       expect(drawnRows(sideBar)[0].title).toBe(tooltip);
     },
   );
+
+  it('sessionsView_PartTooltipChanged_RefreshesOnPointerEnter', () => {
+    const { view, sideBar, rowParts } = sessionsViewSetup();
+    let status = 'Round 1/5';
+    rowParts.add({
+      id: 'forms.status',
+      build: () => ({}),
+      tooltip: () => status,
+    });
+    view.render(titledState('Fix the build'));
+    const [row] = drawnRows(sideBar);
+
+    status = 'Round 2/5';
+    row.fire('pointerenter');
+
+    expect(row.title).toBe('Fix the build · label s1 · Round 2/5');
+  });
 
   it('sessionsView_SetActivityTopUnchanged_DrawsNothing', () => {
     const { view, sideBar } = sessionsViewSetup();

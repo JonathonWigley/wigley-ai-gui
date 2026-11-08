@@ -9,7 +9,7 @@
 // activity, a needs you label while `marked`, a status edge for an
 // activity with an emphasis, and its on-screen mark,
 // over a footer line that never wraps, holding other plugins' row parts
-// (`contributedParts`); its status shows only in the row's tooltip,
+// (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the

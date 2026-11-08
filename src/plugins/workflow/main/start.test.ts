@@ -92,7 +92,6 @@ function session(id: string, hostSessionId: string): AgentSession {
     info: {
       sessionId: hostSessionId,
       projectDir: '/r',
-      deadlineSeconds: null,
       harness: null,
     },
   };

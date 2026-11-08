@@ -26,6 +26,7 @@ function row(titles: SessionTitles = NO_TITLES): SessionRow {
     project: 'project',
     harness: 'claude',
     marked: false,
+    markToast: null,
     projectDir: null,
     hostSessionId: null,
     titles,

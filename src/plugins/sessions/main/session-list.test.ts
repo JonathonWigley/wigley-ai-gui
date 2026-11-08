@@ -5,6 +5,7 @@ import {
   type AgentSession,
   type ConnectedSession,
   type Harness,
+  type MarkOptions,
   type OwnedSession,
   type SessionInfo,
   sessionsRowsSlot,
@@ -18,20 +19,21 @@ import {
 } from '../contract';
 import { createSessionList, RESELECT_WINDOW_MS } from './session-list';
 
+const MARK: MarkOptions = { text: 'Round from x', action: 'answer' };
+
 const RESULT: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
 function info(
   projectDir: string | null,
   harness: Harness | null = null,
 ): SessionInfo {
-  return { sessionId: null, projectDir, deadlineSeconds: null, harness };
+  return { sessionId: null, projectDir, harness };
 }
 
 function owned(hostId: string, projectDir = '/work/x'): SessionInfo {
   return {
     sessionId: hostId,
     projectDir,
-    deadlineSeconds: null,
     harness: 'claude',
   };
 }
@@ -170,7 +172,7 @@ function connectWithRow(
   sessionInfo: SessionInfo,
 ): ConnectedSession {
   const connected = list.connect(sessionInfo);
-  list.mark(connected.session.id);
+  list.mark(connected.session.id, MARK);
   return connected;
 }
 
@@ -323,7 +325,7 @@ describe('createSessionList', () => {
     const id = second.session.id;
 
     expect(list.label(id)).toBe('x 2');
-    list.closeSession(id);
+    list.closeSession(id, false);
     expect(list.label(id)).toBe('x 2');
     second.end();
     expect(list.label(id)).toBeNull();
@@ -373,8 +375,8 @@ describe('createSessionList', () => {
     const b = list.connect(info('/work/x'));
     const c = list.connect(info('/work/x'));
 
-    list.mark(b.session.id);
-    list.mark(a.session.id);
+    list.mark(b.session.id, MARK);
+    list.mark(a.session.id, MARK);
 
     expect(
       states.map((state) => [
@@ -401,13 +403,13 @@ describe('createSessionList', () => {
     const { list, states } = setUp();
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
-    list.mark(a.session.id);
-    list.mark(b.session.id);
+    list.mark(a.session.id, MARK);
+    list.mark(b.session.id, MARK);
     const sentBefore = states.length;
     const before = list.state();
 
-    list.mark(a.session.id);
-    list.mark(b.session.id);
+    list.mark(a.session.id, MARK);
+    list.mark(b.session.id, MARK);
 
     expect(states).toHaveLength(sentBefore);
     expect(list.state()).toEqual(before);
@@ -416,12 +418,12 @@ describe('createSessionList', () => {
   it('selects a row when the selected one closed and none is left selected', () => {
     const { list } = setUp();
     const a = list.connect(info('/work/x'));
-    list.mark(a.session.id);
-    list.closeSession(a.session.id);
+    list.mark(a.session.id, MARK);
+    list.closeSession(a.session.id, false);
     expect(list.state().selectedSessionId).toBeNull();
     const b = list.connect(info('/work/x'));
 
-    list.mark(b.session.id);
+    list.mark(b.session.id, MARK);
 
     expect(list.state().selectedSessionId).toBe(b.session.id);
     expect(list.state().rows.map((row) => row.marked)).toEqual([false]);
@@ -433,11 +435,11 @@ describe('createSessionList', () => {
     list.contributeTools([tool('a')], contribution.start);
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
-    list.mark(a.session.id);
-    list.mark(b.session.id);
-    list.closeSession(b.session.id);
+    list.mark(a.session.id, MARK);
+    list.mark(b.session.id, MARK);
+    list.closeSession(b.session.id, false);
 
-    list.mark(b.session.id);
+    list.mark(b.session.id, MARK);
     await b.call(
       'a',
       {},
@@ -517,15 +519,16 @@ describe('createSessionList', () => {
     },
   );
 
-  it('reports activated for the selected row and sends nothing', () => {
+  it('reports activated for the selected row and sends nothing once its mark toast is cleared', () => {
     const { list, states, activated } = setUp();
     const a = list.connect(info('/work/x'));
-    list.mark(a.session.id);
+    list.mark(a.session.id, MARK);
+    list.activate(a.session.id);
     const sentBefore = states.length;
 
     list.activate(a.session.id);
 
-    expect(activated).toEqual(['00000001']);
+    expect(activated).toEqual(['00000001', '00000001']);
     expect(states).toHaveLength(sentBefore);
   });
 
@@ -533,18 +536,18 @@ describe('createSessionList', () => {
     const { list } = setUp();
     const [a, b, c] = [1, 2, 3].map(() => list.connect(info('/work/x')));
     for (const connected of [a, b, c]) {
-      list.mark(connected.session.id);
+      list.mark(connected.session.id, MARK);
     }
 
-    list.closeSession(a.session.id);
+    list.closeSession(a.session.id, false);
     expect(list.state().selectedSessionId).toBe(b.session.id);
     expect(list.state().rows[0].marked).toBe(false);
 
     list.activate(c.session.id);
-    list.closeSession(c.session.id);
+    list.closeSession(c.session.id, false);
     expect(list.state().selectedSessionId).toBe(b.session.id);
 
-    list.closeSession(b.session.id);
+    list.closeSession(b.session.id, false);
     expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
   });
 
@@ -556,8 +559,8 @@ describe('createSessionList', () => {
     list.contributeTools([tool('b')], secondContribution.start);
     const first = list.connect(info('/work/x'));
     const second = list.connect(info('/work/x'));
-    list.mark(first.session.id);
-    list.mark(second.session.id);
+    list.mark(first.session.id, MARK);
+    list.mark(second.session.id, MARK);
 
     first.end();
 
@@ -572,6 +575,7 @@ describe('createSessionList', () => {
           project: 'x',
           harness: null,
           marked: false,
+          markToast: MARK,
           projectDir: '/work/x',
           hostSessionId: null,
           titles: NO_TITLES,
@@ -633,37 +637,149 @@ describe('createSessionList', () => {
     const connected = connectWithRow(list, info('/work/x'));
     const id = connected.session.id;
     let roundOpen = true;
-    list.addCloseGuard(() => true);
-    list.addCloseGuard((sessionId) => !(sessionId === id && roundOpen));
+    list.addCloseGuard(() => null);
+    list.addCloseGuard((sessionId) =>
+      sessionId === id && roundOpen ? 'Round open' : null,
+    );
     const sentBefore = states.length;
 
-    expect(list.closeSession(id)).toBe(false);
+    expect(list.closeSession(id, false)).not.toBeNull();
 
     expect(list.state().rows.map((row) => row.sessionId)).toEqual([id]);
     expect(states).toHaveLength(sentBefore);
     expect(logged).toEqual([expect.stringContaining(id)]);
     roundOpen = false;
-    expect(list.closeSession(id)).toBe(true);
+    expect(list.closeSession(id, false)).toBeNull();
     expect(list.state().rows).toEqual([]);
-    list.mark(id);
-    const refusing = list.addCloseGuard(() => false);
-    expect(list.closeSession(id)).toBe(false);
+    list.mark(id, MARK);
+    const refusing = list.addCloseGuard(() => 'refused');
+    expect(list.closeSession(id, false)).not.toBeNull();
     refusing.dispose();
-    expect(list.closeSession(id)).toBe(true);
+    expect(list.closeSession(id, false)).toBeNull();
   });
 
   it('keeps a row while one registration of the same guard remains', () => {
     const { list } = setUp();
     const id = connectWithRow(list, info('/work/x')).session.id;
-    const refuse = () => false;
+    const refuse = () => 'refused';
     const first = list.addCloseGuard(refuse);
     const second = list.addCloseGuard(refuse);
 
     first.dispose();
-    expect(list.closeSession(id)).toBe(false);
+    expect(list.closeSession(id, false)).not.toBeNull();
 
     second.dispose();
-    expect(list.closeSession(id)).toBe(true);
+    expect(list.closeSession(id, false)).toBeNull();
+  });
+
+  it('first refusal wins and row stays', () => {
+    const { list, logged } = setUp();
+    const id = connectWithRow(list, info('/work/x')).session.id;
+    list.addCloseGuard(() => null);
+    list.addCloseGuard(() => 'Finish the round first');
+    list.addCloseGuard(() => 'Finish the primer first');
+
+    expect(list.closeSession(id, false)).toBe('Finish the round first');
+
+    expect(list.state().rows.map((row) => row.sessionId)).toEqual([id]);
+    expect(logged).toEqual([
+      `closeSession for session ${id} kept by a close guard`,
+    ]);
+  });
+
+  it('at once runs cancel holds then closes in one call', () => {
+    const { list, emitted } = setUp();
+    const id = connectWithRow(list, info('/work/x')).session.id;
+    let isHeld = true;
+    const cancelled: string[] = [];
+    list.addCloseGuard(
+      () => (isHeld ? 'Finish the round first' : null),
+      (sessionId) => {
+        cancelled.push(sessionId);
+        isHeld = false;
+      },
+    );
+
+    expect(list.closeSession(id, true)).toBeNull();
+
+    expect(cancelled).toEqual([id]);
+    expect(list.state().rows).toEqual([]);
+    expect(emitted.at(-1)).toEqual(['closed', { sessionId: id }]);
+  });
+
+  it('plain close never runs cancel holds', () => {
+    const { list } = setUp();
+    const id = connectWithRow(list, info('/work/x')).session.id;
+    const cancelled: string[] = [];
+    list.addCloseGuard(
+      () => 'Finish the round first',
+      (sessionId) => cancelled.push(sessionId),
+    );
+
+    expect(list.closeSession(id, false)).toBe('Finish the round first');
+
+    expect(cancelled).toEqual([]);
+  });
+
+  it('cancel hold that throws leaves the row with the reason', () => {
+    const { list, logged } = setUp();
+    const id = connectWithRow(list, info('/work/x')).session.id;
+    const cancelled: string[] = [];
+    list.addCloseGuard(
+      () => 'Finish the round first',
+      () => {
+        throw new Error('no such form');
+      },
+    );
+    list.addCloseGuard(
+      () => null,
+      (sessionId) => cancelled.push(sessionId),
+    );
+
+    expect(list.closeSession(id, true)).toBe('Finish the round first');
+
+    expect(cancelled).toEqual([id]);
+    expect(list.state().rows.map((row) => row.sessionId)).toEqual([id]);
+    expect(logged).toEqual([
+      `cancelling what holds session ${id} failed: no such form`,
+      `closeSession for session ${id} kept by a close guard`,
+    ]);
+  });
+
+  it('mark keeps its text until activate', () => {
+    const { list } = setUp();
+    const a = connectWithRow(list, info('/work/x')).session.id;
+    const b = list.connect(info('/work/y')).session.id;
+    const markToastOf = (id: string) =>
+      list.state().rows.find((row) => row.sessionId === id)?.markToast;
+
+    list.mark(b, { text: 'Turn finished in y', action: 'read it' });
+    list.activate(a);
+
+    expect(markToastOf(b)).toEqual({
+      text: 'Turn finished in y',
+      action: 'read it',
+    });
+    list.activate(b);
+    expect(markToastOf(b)).toBeNull();
+  });
+
+  it('first mark wins until activate', () => {
+    const { list } = setUp();
+    const a = connectWithRow(list, info('/work/x')).session.id;
+    const b = list.connect(info('/work/y')).session.id;
+    const later = { text: 'Turn finished in y', action: 'read it' };
+    const markToastOf = () =>
+      list.state().rows.find((row) => row.sessionId === b)?.markToast;
+
+    list.mark(b, MARK);
+    list.mark(b, later);
+    expect(markToastOf()).toEqual(MARK);
+
+    list.activate(b);
+    list.activate(a);
+    list.mark(b, later);
+    expect(markToastOf()).toEqual(later);
   });
 
   it('starts a contribution added after a session connected, and routes its calls', async () => {
@@ -775,7 +891,7 @@ describe('createSessionList', () => {
   it('drops the row of a session that ends whatever the close guards say', () => {
     const { list } = setUp();
     const connected = connectWithRow(list, info('/work/x'));
-    list.addCloseGuard(() => false);
+    list.addCloseGuard(() => 'refused');
 
     connected.end();
 
@@ -814,9 +930,9 @@ describe('createSessionList', () => {
     list.release(released);
     const sentBefore = states.length;
 
-    list.mark('ffffffff');
+    list.mark('ffffffff', MARK);
     list.activate('fffffffe');
-    expect(list.closeSession('fffffffd')).toBe(false);
+    expect(list.closeSession('fffffffd', false)).toBeNull();
     list.activateExistingRow('fffffffc');
     list.activateExistingRow(released);
 
@@ -846,7 +962,7 @@ describe('createSessionList', () => {
     },
     {
       name: 'close selected',
-      act: (list) => list.closeSession('00000001'),
+      act: (list) => list.closeSession('00000001', false),
       calls: [
         'rows delete 00000001',
         'rows set 00000002',
@@ -878,7 +994,7 @@ describe('createSessionList', () => {
       const { list, calls } = setUp();
       list.open(owned('h1'));
       list.open(owned('h2'), { select: false });
-      list.mark('00000002');
+      list.mark('00000002', MARK);
       calls.length = 0;
 
       act(list);
@@ -955,6 +1071,7 @@ describe('createSessionList', () => {
           project: 'x',
           harness: 'claude',
           marked: false,
+          markToast: null,
           projectDir: '/work/x',
           hostSessionId: 'host-1',
           titles: NO_TITLES,
@@ -971,7 +1088,7 @@ describe('createSessionList', () => {
   it('selects the opened row over the selected one', () => {
     const { list } = setUp();
     const a = list.connect(info('/work/x'));
-    list.mark(a.session.id);
+    list.mark(a.session.id, MARK);
 
     list.open(owned('h'));
 
@@ -1224,7 +1341,7 @@ describe('createSessionList', () => {
   it('setHostSessionId_RowClosedByUser_SendsNoStateAndMarkReaddsRowWithNewId', () => {
     const { list, states, emitted } = setUp();
     const ownedSession = list.open(owned('host-a'));
-    list.closeSession(ownedSession.session.id);
+    list.closeSession(ownedSession.session.id, false);
     const sentBefore = states.length;
 
     ownedSession.setHostSessionId('host-b');
@@ -1236,7 +1353,7 @@ describe('createSessionList', () => {
       ownedSession.session,
     ]);
 
-    list.mark(ownedSession.session.id);
+    list.mark(ownedSession.session.id, MARK);
 
     expect(list.state().rows.map((row) => row.hostSessionId)).toEqual([
       'host-b',
@@ -1277,7 +1394,7 @@ describe('createSessionList', () => {
     list.open(owned('host-1'));
     connectWithRow(list, info('/work/y'));
 
-    expect(list.closeSession('00000001')).toBe(true);
+    expect(list.closeSession('00000001', false)).toBeNull();
 
     expect(calls.slice(-4)).toEqual([
       'rows delete 00000001',
@@ -1288,10 +1405,10 @@ describe('createSessionList', () => {
     expect(emitted.at(-1)).toEqual(['closed', { sessionId: '00000001' }]);
     expect(contribution.ends()).toBe(0);
 
-    list.closeSession('00000002');
+    list.closeSession('00000002', false);
     expect(emitted.at(-1)).toEqual(['closed', { sessionId: '00000002' }]);
 
-    list.mark('00000001');
+    list.mark('00000001', MARK);
     expect(list.state().rows.map((row) => row.sessionId)).toEqual(['00000001']);
   });
 
@@ -1300,14 +1417,14 @@ describe('createSessionList', () => {
     const connected = connectWithRow(list, info('/work/x'));
     const id = connected.session.id;
     let allow = false;
-    list.addCloseGuard(() => allow);
+    list.addCloseGuard(() => (allow ? null : 'refused'));
     const closedEvents = () => emitted.filter(([event]) => event === 'closed');
 
-    expect(list.closeSession(id)).toBe(false);
+    expect(list.closeSession(id, false)).not.toBeNull();
     expect(closedEvents()).toEqual([]);
 
     allow = true;
-    list.closeSession(id);
+    list.closeSession(id, false);
     expect(closedEvents()).toHaveLength(1);
   });
 
@@ -1319,7 +1436,7 @@ describe('createSessionList', () => {
       name: 'a row the user closed',
       arrange: (list) => {
         const { id } = connectWithRow(list, info('/work/x')).session;
-        list.closeSession(id);
+        list.closeSession(id, false);
         return id;
       },
     },
@@ -1339,7 +1456,7 @@ describe('createSessionList', () => {
       name: 'an owned row the user closed',
       arrange: (list) => {
         const { id } = list.open(owned('h1')).session;
-        list.closeSession(id);
+        list.closeSession(id, false);
         return id;
       },
     },
@@ -1348,10 +1465,10 @@ describe('createSessionList', () => {
     ({ arrange }) => {
       const { list, states, emitted, logged } = setUp();
       const sessionId = arrange(list);
-      list.addCloseGuard(() => false);
+      list.addCloseGuard(() => 'refused');
       const lengthsBefore = [states.length, emitted.length, logged.length];
 
-      expect(list.closeSession(sessionId)).toBe(true);
+      expect(list.closeSession(sessionId, false)).toBeNull();
 
       expect([states.length, emitted.length, logged.length]).toEqual(
         lengthsBefore,
@@ -1432,7 +1549,7 @@ describe('createSessionList', () => {
   it('setTitle_RowClosedByUser_EmitsWithNoStateAndMarkBringsTheTitleBack', () => {
     const { list, states, emitted } = setUp();
     const { session } = connectWithRow(list, info('/work/x'));
-    list.closeSession(session.id);
+    list.closeSession(session.id, false);
     const sentBefore = states.length;
 
     list.setTitle(session.id, 'agent', 'X');
@@ -1443,7 +1560,7 @@ describe('createSessionList', () => {
       { sessionId: session.id, titles: { ...NO_TITLES, agent: 'X' } },
     ]);
 
-    list.mark(session.id);
+    list.mark(session.id, MARK);
 
     expect(list.state().rows[0].titles.agent).toBe('X');
   });
@@ -1520,7 +1637,7 @@ describe('createSessionList', () => {
       name: 'closes when every guard allows',
       arrange: (list) => {
         list.open(owned('h1'));
-        list.addCloseGuard(() => true);
+        list.addCloseGuard(() => null);
         return connectWithRow(list, info('/work/x')).session.id;
       },
       sent: [[['00000001'], '00000001']],
@@ -1530,7 +1647,7 @@ describe('createSessionList', () => {
     {
       name: 'a guard keeps the row',
       arrange: (list) => {
-        list.addCloseGuard(() => false);
+        list.addCloseGuard(() => 'refused');
         return connectWithRow(list, info('/work/x')).session.id;
       },
       sent: [],
@@ -1540,8 +1657,8 @@ describe('createSessionList', () => {
     {
       name: 'one of two guards keeps the row',
       arrange: (list) => {
-        list.addCloseGuard(() => true);
-        list.addCloseGuard(() => false);
+        list.addCloseGuard(() => null);
+        list.addCloseGuard(() => 'refused');
         return connectWithRow(list, info('/work/x')).session.id;
       },
       sent: [],
@@ -1649,7 +1766,7 @@ describe('createSessionList', () => {
       name: 'activate of the selected row, selected by a mark',
       act: (list) => {
         list.connect(info('/work/x'));
-        list.mark('00000001');
+        list.mark('00000001', MARK);
         list.activate('00000001');
       },
       expected: ['00000001'],
@@ -1659,8 +1776,8 @@ describe('createSessionList', () => {
       act: (list) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
       },
       expected: ['00000001'],
     },
@@ -1669,9 +1786,9 @@ describe('createSessionList', () => {
       act: (list) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
-        list.closeSession('00000001');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
+        list.closeSession('00000001', false);
       },
       expected: ['00000001', '00000002'],
     },
@@ -1679,8 +1796,8 @@ describe('createSessionList', () => {
       name: 'close of the last row, selected',
       act: (list) => {
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.closeSession('00000001');
+        list.mark('00000001', MARK);
+        list.closeSession('00000001', false);
       },
       expected: ['00000001', null],
     },
@@ -1689,9 +1806,9 @@ describe('createSessionList', () => {
       act: (list) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
-        list.closeSession('00000002');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
+        list.closeSession('00000002', false);
       },
       expected: ['00000001'],
     },
@@ -1700,12 +1817,12 @@ describe('createSessionList', () => {
       act: (list, clock) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
         clock.time = 5_000;
         list.release('00000001');
         clock.time = 5_000 + RESELECT_WINDOW_MS;
-        list.mark('00000001');
+        list.mark('00000001', MARK);
       },
       expected: ['00000001', '00000002', '00000001'],
     },
@@ -1714,12 +1831,12 @@ describe('createSessionList', () => {
       act: (list, clock) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
         clock.time = 5_000;
         list.release('00000001');
         clock.time = 5_000 + RESELECT_WINDOW_MS + 1;
-        list.mark('00000001');
+        list.mark('00000001', MARK);
       },
       expected: ['00000001', '00000002'],
     },
@@ -1728,10 +1845,10 @@ describe('createSessionList', () => {
       act: (list) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
+        list.mark('00000001', MARK);
         list.release('00000001');
-        list.mark('00000002');
-        list.mark('00000001');
+        list.mark('00000002', MARK);
+        list.mark('00000001', MARK);
       },
       expected: ['00000001', null, '00000002'],
     },
@@ -1741,12 +1858,12 @@ describe('createSessionList', () => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
-        list.mark('00000003');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
+        list.mark('00000003', MARK);
         list.release('00000001');
         list.activate('00000003');
-        list.mark('00000001');
+        list.mark('00000001', MARK);
       },
       expected: ['00000001', '00000002', '00000003'],
     },
@@ -1754,10 +1871,10 @@ describe('createSessionList', () => {
       name: 'mark after release of the selected row and a selecting open',
       act: (list) => {
         list.connect(info('/work/x'));
-        list.mark('00000001');
+        list.mark('00000001', MARK);
         list.release('00000001');
         list.open(owned('h1'));
-        list.mark('00000001');
+        list.mark('00000001', MARK);
       },
       expected: ['00000001', null, '00000002'],
     },
@@ -1766,10 +1883,10 @@ describe('createSessionList', () => {
       act: (list) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
-        list.mark('00000001');
-        list.mark('00000002');
+        list.mark('00000001', MARK);
+        list.mark('00000002', MARK);
         list.release('00000002');
-        list.mark('00000002');
+        list.mark('00000002', MARK);
       },
       expected: ['00000001'],
     },
@@ -2039,7 +2156,7 @@ describe('createSessionList', () => {
       });
       const connected = sessions.map((session) => list.connect(session));
       if (rowStage !== 'after landing') {
-        connected.forEach(({ session }) => list.mark(session.id));
+        connected.forEach(({ session }) => list.mark(session.id, MARK));
       }
       expect(rowProjects(list.state())).toEqual(projectsBeforeLanding);
       if (rowStage === 'ended before landing') {
@@ -2063,7 +2180,7 @@ describe('createSessionList', () => {
 
       expect(states.slice(statesBeforeLanding).map(rowProjects)).toEqual(sent);
       if (rowStage === 'after landing') {
-        connected.forEach(({ session }) => list.mark(session.id));
+        connected.forEach(({ session }) => list.mark(session.id, MARK));
       }
       expect(rowProjects(list.state())).toEqual(projects);
       expect(labels(list.state())).toEqual(finalLabels);
@@ -2079,7 +2196,7 @@ describe("a connected session's harness name", () => {
     const { list, states } = setUp(NO_PROJECT, async () => 'tournaments-wip');
     const { session } = list.connect(info('/work/x'));
 
-    list.mark(session.id);
+    list.mark(session.id, MARK);
     await vi.waitFor(() =>
       expect(states.at(-1)?.rows[0].titles.firstMessage).toBe(
         'tournaments-wip',
@@ -2092,12 +2209,12 @@ describe("a connected session's harness name", () => {
     const { list } = setUp(NO_PROJECT, async () => name);
     const { session } = list.connect(info('/work/x'));
 
-    list.mark(session.id);
+    list.mark(session.id, MARK);
     await vi.waitFor(() =>
       expect(list.titles(session.id)?.firstMessage).toBe('first name'),
     );
     name = 'renamed';
-    list.mark(session.id);
+    list.mark(session.id, MARK);
     await vi.waitFor(() =>
       expect(list.titles(session.id)?.firstMessage).toBe('renamed'),
     );
@@ -2108,7 +2225,7 @@ describe("a connected session's harness name", () => {
     const { session } = list.connect(info('/work/x'));
     list.setTitle(session.id, 'agent', 'Agent Heading');
 
-    list.mark(session.id);
+    list.mark(session.id, MARK);
     await vi.waitFor(() =>
       expect(list.titles(session.id)).toEqual({
         user: null,
@@ -2123,7 +2240,7 @@ describe("a connected session's harness name", () => {
     const { list } = setUp(NO_PROJECT, hostSessionName);
     const { session } = list.open(owned('host-1'));
 
-    list.mark(session.id);
+    list.mark(session.id, MARK);
     list.activate(session.id);
 
     expect(hostSessionName).not.toHaveBeenCalled();
@@ -2135,7 +2252,7 @@ describe("a connected session's harness name", () => {
     });
     const { session } = list.connect(info('/work/x'));
 
-    list.mark(session.id);
+    list.mark(session.id, MARK);
     await vi.waitFor(() =>
       expect(logged).toContainEqual(expect.stringContaining('no transcript')),
     );
@@ -2150,7 +2267,7 @@ describe("a connected session's harness name", () => {
     );
     const connected = list.connect(info('/work/x'));
 
-    list.mark(connected.session.id);
+    list.mark(connected.session.id, MARK);
     connected.end();
     land('late');
     await Promise.resolve();

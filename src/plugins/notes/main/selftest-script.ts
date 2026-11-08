@@ -343,7 +343,6 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
       {
         sessionId: SESSION_ID,
         projectDir: folder,
-        deadlineSeconds: null,
         harness: 'claude',
       },
       { select: false },

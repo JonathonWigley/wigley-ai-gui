@@ -8,16 +8,23 @@ export interface FormTabView {
   // A Codicon name.
   icon: string;
   element: HTMLElement;
-  beforeClose(): boolean;
+  closesAtOnce(): boolean;
+  beforeClose(atOnce: boolean): boolean;
   shown(): void;
 }
 
 // The sessions plugin's `SessionTabHandle` fits.
 export interface FormTabHandle {
-  setStatus(status: string): void;
-  select(): void;
   takeOver(): { release(): void };
   isVisible(): boolean;
+}
+
+// A row part with no content whose tooltip is the session's form status; the
+// sessions plugin's `SessionPart` fits.
+export interface FormStatusPart {
+  id: string;
+  build(): Record<string, never>;
+  tooltip(sessionId: string): string | null;
 }
 
 export interface SessionFormTabsDeps {
@@ -31,6 +38,10 @@ export interface SessionFormTabsDeps {
   className: string;
   // The idle state's line while the session has no open form.
   idleText: string;
+  // The id of the row part showing each session's status.
+  statusPartId: string;
+  // Whether the close key closes the session at once.
+  closesAtOnce(sessionId: string): boolean;
   beforeClose(sessionId: string): boolean;
   // Runs each time one of these tabs becomes the visible tab.
   shown(): void;
@@ -45,19 +56,19 @@ export interface SessionFormTabs {
   // Takes over the session with its tab for form `formId`; `release` gives it back.
   takeOver(formId: string, sessionId: string): void;
   release(formId: string): void;
-  // For each tab: shows its idle state while `statusOf` is null, and sends its status (`statusOf`, or '' for
-  // null) to the session's row when it changed, and calls `formShown` when whether a form shows changed.
+  // For each tab: shows its idle state while `statusOf` is null, keeps its status (`statusOf`) for
+  // `statusPart`'s tooltip, and calls `formShown` when whether a form shows changed.
   sync(statusOf: (sessionId: string) => string | null): void;
   // Drops the session's tab entry once sessions dropped the tab.
   forget(sessionId: string): void;
-  // Selects the session's tab; nothing when it has none.
-  select(sessionId: string): void;
   // Whether one of these tabs is the visible tab now.
   isShown(): boolean;
+  // The row part whose tooltip is the session's status as `sync` last kept it, null for none or ''.
+  statusPart: FormStatusPart;
 }
 
 // A session's tab: it holds the session's form views and the idle state,
-// with the status last sent to the session's row.
+// with the status `sync` last kept.
 interface FormTab {
   handle: FormTabHandle;
   element: HTMLElement;
@@ -88,6 +99,7 @@ export function createSessionFormTabs(
       title: deps.title,
       icon: deps.icon,
       element: tab,
+      closesAtOnce: () => deps.closesAtOnce(sessionId),
       beforeClose: () => deps.beforeClose(sessionId),
       shown: deps.shown,
     });
@@ -125,11 +137,7 @@ export function createSessionFormTabs(
         const shownStatus = statusOf(sessionId);
         const shown = shownStatus !== null;
         tab.idle.hidden = shown;
-        const status = shownStatus ?? '';
-        if (tab.status !== status) {
-          tab.status = status;
-          tab.handle.setStatus(status);
-        }
+        tab.status = shownStatus ?? '';
         if (tab.shown !== shown) {
           tab.shown = shown;
           deps.formShown(sessionId, shown);
@@ -139,11 +147,16 @@ export function createSessionFormTabs(
     forget(sessionId) {
       tabs.delete(sessionId);
     },
-    select(sessionId) {
-      tabs.get(sessionId)?.handle.select();
-    },
     isShown() {
       return [...tabs.values()].some((tab) => tab.handle.isVisible());
+    },
+    statusPart: {
+      id: deps.statusPartId,
+      build: () => ({}),
+      tooltip: (sessionId) => {
+        const status = tabs.get(sessionId)?.status ?? '';
+        return status === '' ? null : status;
+      },
     },
   };
 }

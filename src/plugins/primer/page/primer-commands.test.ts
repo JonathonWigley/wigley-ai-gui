@@ -17,7 +17,7 @@ import type { PrimerBody, PrimerEntry, PrimerFeature } from '../contract';
 import { boxKey, type PrimerBox } from './boxes';
 import {
   closePrimerFromMain,
-  guardClose,
+  mayClosePrimer,
   type PrimerCommandDeps,
   primerCommandHandlers,
   primerFocusTarget,
@@ -88,9 +88,7 @@ function setup(
   let previewFailure: Error | null = null;
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
-  const closedSessions: string[] = [];
   const log = (message: string) => logs.push(message);
-  const closeSession = (sessionId: string) => closedSessions.push(sessionId);
   const toast = (text: string, tone: ToastTone) => {
     toasts.push(text);
     toastTones.push(tone);
@@ -118,7 +116,6 @@ function setup(
         ? Promise.resolve()
         : Promise.reject(finishFailure);
     },
-    closeSession,
     scrollPrimer: (step, direction) => {
       scrolls.push([step, direction]);
       return scrollResult;
@@ -133,8 +130,6 @@ function setup(
   const handlers = primerCommandHandlers(deps);
   const focusTarget = primerFocusTarget(deps);
   // Each Primer tab the guard selected, and each session it selected.
-  const shownPrimers: string[] = [];
-  const activated: string[] = [];
   const run = (
     command: PrimerCommand,
     context: Partial<PageCommandContext<any>> = {},
@@ -161,9 +156,6 @@ function setup(
     toastTones,
     logs,
     scrolls,
-    closedSessions,
-    shownPrimers,
-    activated,
     leaves: () => leaves,
     // Makes every later scroll return `result`.
     setScroll: (result: ContentScroll | null) => {
@@ -180,20 +172,11 @@ function setup(
     // Main's formClosed for `primerId` reaching the page.
     closeFromMain: (primerId: string, byFinish = true) =>
       closePrimerFromMain(
-        { store, closeSession, toast, log },
+        { store, toast, log },
         { formId: primerId, byFinish },
       ),
-    guardClose: (sessionId: string) =>
-      guardClose(
-        {
-          store,
-          toast,
-          log,
-          showPrimer: (id) => shownPrimers.push(id),
-          activate: (id) => activated.push(id),
-        },
-        sessionId,
-      ),
+    mayClose: (sessionId: string) =>
+      mayClosePrimer({ store, toast, log }, sessionId),
     // Focuses a box as the user clicking into it would, outside any command.
     setActive: (box: PrimerBox) => {
       active = box;
@@ -728,10 +711,7 @@ describe('primerCommandHandlers', () => {
     expect(finished).toEqual([
       { primerId: 'p1', end: { kind: 'submitted', body } },
     ]);
-    expect(primer().sending).toEqual({
-      kind: 'submitted',
-      closesSession: false,
-    });
+    expect(primer().sending).toEqual({ kind: 'submitted' });
     closeFromMain('p1');
 
     expect(store.get().forms).toEqual([]);
@@ -789,68 +769,38 @@ describe('openPreview', () => {
   });
 });
 
-describe('guardClose', () => {
+describe('mayClosePrimer', () => {
   it('keeps the session of a sending primer and says so', () => {
-    const {
-      run,
-      logs,
-      toasts,
-      toastTones,
-      activated,
-      shownPrimers,
-      guardClose,
-    } = setup();
+    const { run, logs, toasts, toastTones, mayClose } = setup();
     run('openReview');
     run('submit');
     logs.length = 0;
 
-    expect(guardClose('p1-session')).toBe(false);
+    expect(mayClose('p1-session')).toBe(false);
 
     expect(logs).toEqual([expect.stringContaining('project · p1')]);
     expect(toasts).toEqual([expect.stringContaining('project · p1')]);
     expect(toastTones).toEqual(['info']);
-    expect(activated).toEqual([]);
-    expect(shownPrimers).toEqual([]);
   });
 
-  it("keeps a background primer's session, says why and selects it", () => {
-    const { store, logs, toasts, toastTones, activated, guardClose } = setup();
-    store.dispatch({ type: 'formShown', form: presentedPrimer('p2') });
-    const before = store.get();
+  it.each([
+    { name: 'no primer', sessionId: 'other', background: false },
+    { name: 'its active primer', sessionId: 'p1-session', background: false },
+    { name: 'a background primer', sessionId: 'p2-session', background: true },
+  ])(
+    'lets a session with $name close, with no prompt or toast',
+    ({ sessionId, background }) => {
+      const { store, logs, toasts, mayClose } = setup();
+      if (background) {
+        store.dispatch({ type: 'formShown', form: presentedPrimer('p2') });
+      }
+      const before = store.get();
 
-    expect(guardClose('p2-session')).toBe(false);
+      expect(mayClose(sessionId)).toBe(true);
 
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([expect.stringContaining('project · p2')]);
-    expect(toasts).toEqual([expect.stringContaining('project · p2')]);
-    expect(toastTones).toEqual(['info']);
-    expect(activated).toEqual(['p2-session']);
-  });
-
-  it('asks to cancel the active primer, and confirming closes its session', () => {
-    const {
-      run,
-      store,
-      logs,
-      shownPrimers,
-      closedSessions,
-      guardClose,
-      closeFromMain,
-    } = setup();
-
-    expect(guardClose('p1-session')).toBe(false);
-    expect(shownPrimers).toEqual(['p1-session']);
-    expect(store.get().view).toBe('confirm');
-    expect(logs).toEqual(['closing the session asks to cancel project · p1']);
-    run('confirmCancel');
-    closeFromMain('p1');
-
-    expect(closedSessions).toEqual(['p1-session']);
-  });
-
-  it('lets a session with no primer close', () => {
-    const { guardClose } = setup();
-
-    expect(guardClose('other')).toBe(true);
-  });
+      expect(store.get()).toBe(before);
+      expect(logs).toEqual([]);
+      expect(toasts).toEqual([]);
+    },
+  );
 });

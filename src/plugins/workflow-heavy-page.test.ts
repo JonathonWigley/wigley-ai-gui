@@ -168,6 +168,7 @@ function rowOf(sessionId: string): SessionRow {
     project: 'proj',
     harness: 'claude',
     marked: false,
+    markToast: null,
     projectDir: '/p/proj',
     hostSessionId: null,
     titles: { user: null, agent: null, firstMessage: null },

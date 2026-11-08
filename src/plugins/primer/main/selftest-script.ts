@@ -1,3 +1,4 @@
+import { HOST_DEADLINE_FIELD } from '../../../contracts/agent-forms';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type {
   ConnectedSession,
@@ -107,8 +108,8 @@ const EXTRA_TASK_STEPS: SelfTestStep[] = [
 ];
 
 // The review opens, closes and opens again; the cancel prompt opens from the
-// review's cancel key and from closing the session, and is dismissed each
-// time; the review submits, which closes the session's row.
+// review's cancel key and is dismissed; the review submits, which closes the
+// session's row.
 const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', ' '],
@@ -120,12 +121,6 @@ const REVIEW_STEPS: SelfTestStep[] = [
   { keys: [' ', ' '], expect: '[primer] review opened' },
   { keys: ['C'], expect: '[page] C ran primer.askCancel', checksFit: true },
   { keys: ['n'], expect: '[page] n ran primer.dismissConfirm' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[primer] closing the session asks to cancel primer-selftest · Self-test primer',
-  },
-  { keys: ['Escape'], expect: '[page] Escape ran primer.dismissConfirm' },
   {
     keys: ['<D-Enter>'],
     expect: '[primer] submitted',
@@ -220,7 +215,7 @@ export function primerSelfTestScript(
         sessionId: `primer-selftest-${run}`,
         projectDir: 'primer-selftest',
         harness: 'claude',
-        deadlineSeconds: 120,
+        host: { [HOST_DEADLINE_FIELD]: 120 },
       });
       connected = session;
       sessions.activate(session.session.id);
@@ -246,7 +241,7 @@ export function primerSelfTestScript(
       },
       {
         name: 'review and cancel',
-        why: 'Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; sending the primer closes its row with no prompt.',
+        why: 'Esc closes the review; C in the review opens the cancel prompt for the primer, and n keeps it; sending the primer closes its row with no prompt.',
         steps: REVIEW_STEPS,
       },
       {

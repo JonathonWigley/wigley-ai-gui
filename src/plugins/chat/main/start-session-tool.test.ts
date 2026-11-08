@@ -205,7 +205,6 @@ function toolSession(row: Row) {
     info: {
       sessionId: 'host-1',
       projectDir: row.callerFolder === undefined ? '/caller' : row.callerFolder,
-      deadlineSeconds: null,
       harness: 'claude',
     },
   });

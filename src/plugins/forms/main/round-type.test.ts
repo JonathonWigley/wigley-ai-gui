@@ -30,7 +30,6 @@ const DEFAULT_DEADLINE_SECONDS = 240;
 const SESSION: AgentFormOwnerInfo = {
   sessionId: 'session-1',
   projectDir: '/work/wigley',
-  deadlineSeconds: null,
 };
 
 function question(overrides: Record<string, unknown> = {}) {

@@ -51,10 +51,12 @@ export interface SessionList extends Omit<
   tools(): ToolDefinition[];
   onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
-  // The user's close, which every close guard must allow; returns whether the
-  // row is closed, true for a row already closed, emitting `closed` only for a
-  // row it closes. The session stays connected.
-  closeSession(sessionId: string): boolean;
+  // The user's close, which every close guard must allow; with `atOnce` it
+  // first runs every guard's `cancelHold`. Returns the first guard's reason
+  // for keeping the row, or null for a row it closes, a row already closed
+  // (a cancel's `release` may have closed it) and an unknown session, emitting
+  // `closed` only for a row it closes. The session stays connected.
+  closeSession(sessionId: string, atOnce: boolean): string | null;
   // The user's rename at `maxLength`: a title that normalizes to empty, or
   // null, clears the user title; one with a `titleProblem` throws its text.
   setUserTitle(
@@ -107,6 +109,9 @@ const NO_FOLDER_LABEL = 'session';
 const CODEX_NO_FOLDER_LABEL = 'Codex session';
 
 function groupOf(info: SessionInfo): string {
+  if (info.label !== undefined) {
+    return info.label;
+  }
   const noFolderLabel =
     info.harness === 'codex' ? CODEX_NO_FOLDER_LABEL : NO_FOLDER_LABEL;
   return info.projectDir === null
@@ -141,6 +146,7 @@ function rowOf(entry: SessionEntry): SessionRow {
     project: entry.project,
     harness: info.harness,
     marked: false,
+    markToast: null,
     projectDir: info.projectDir,
     hostSessionId: info.sessionId,
     titles: { ...entry.titles },
@@ -232,15 +238,17 @@ function routeCall(
 // comes back selected when the session's next mark comes within
 // RESELECT_WINDOW_MS of the release, unless in between the user activated a
 // row, a row was opened selected, a mark selected another session from none,
-// or `release` closed another selected row. `activateExistingRow` selects
+// or `release` closed another selected row. A mark that reaches a row not
+// selected stores its options as the row's `markToast` while that is null, and
+// an activate clears it. `activateExistingRow` selects
 // only a row the session holds and logs and ignores one with none. `mark`,
 // `activate`, `activateExistingRow`, `release` and `closeSession` write only what
 // changed; `mark`, `activate`, `activateExistingRow`
 // and `closeSession` log and ignore an unknown session, `release` silently
 // ignores a session it cannot act on. `release` and `closeSession` log and
 // keep a row a close guard refuses, and emit `closed` for a row they close;
-// `closeSession` returns true for a row it closes and for a known session
-// whose row is already closed, false otherwise. Each session's
+// `closeSession` returns the refusing guard's reason, else null. A guard's
+// `cancelHold` that throws is logged, and its `mayClose` then decides. Each session's
 // titles live on its entry, copied onto its row while it has one, and last
 // while the session does; so does its project, which starts as the group and
 // writes the row when its lookup changes the project of a session with a row,
@@ -253,7 +261,10 @@ function routeCall(
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   // Each registration its own object, so one function added twice is two.
-  const closeGuards = new Set<{ mayClose(sessionId: string): boolean }>();
+  const closeGuards = new Set<{
+    mayClose(sessionId: string): string | null;
+    cancelHold?(sessionId: string): void;
+  }>();
   const toolNames = new Set<string>();
   const toolsChanged = createListeners<void>();
   const entries = new Map<string, SessionEntry>();
@@ -291,7 +302,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // Writes `row` unmarked unless it is already held so, then selects it.
   const selectRow = (row: SessionRow) => {
-    if (row.marked || rows.get(row.sessionId) === undefined) {
+    if (row.marked || rows.get(row.sessionId) !== row) {
       rows.set(row.sessionId, { ...row, marked: false });
     }
     writeSelection(row.sessionId);
@@ -337,22 +348,45 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
   };
 
-  const everyGuardAllows = (sessionId: string) =>
-    [...closeGuards].every((guard) => guard.mayClose(sessionId));
+  // The first guard's reason for keeping the row, null when every one allows.
+  const firstRefusal = (sessionId: string): string | null => {
+    for (const guard of closeGuards) {
+      const reason = guard.mayClose(sessionId);
+      if (reason !== null) {
+        return reason;
+      }
+    }
+    return null;
+  };
 
   // The user's pick of the entry's row, adding it at the end when it has none:
-  // reports `activated`, then selects it and clears its mark. True when that
-  // wrote anything.
+  // reports `activated`, then selects it and clears its mark and mark toast.
+  // True when that wrote anything.
   const activateRow = (entry: SessionEntry) => {
     const sessionId = entry.session.id;
     deps.activated(sessionId);
     reselectOnReturn = null;
     const row = rows.get(sessionId) ?? rowOf(entry);
-    if (sessionId === selectedSessionId() && !row.marked) {
+    const isAnswered = !row.marked && row.markToast === null;
+    if (sessionId === selectedSessionId() && isAnswered) {
       return false;
     }
-    selectRow(row);
+    selectRow(row.markToast === null ? row : { ...row, markToast: null });
     return true;
+  };
+
+  // Runs every guard's `cancelHold`, a throw not skipping the rest; each throw
+  // is logged, and that guard's `mayClose` then decides.
+  const cancelHolds = (sessionId: string) => {
+    for (const guard of closeGuards) {
+      try {
+        guard.cancelHold?.(sessionId);
+      } catch (error) {
+        deps.log(
+          `cancelling what holds session ${sessionId} failed: ${errorText(error)}`,
+        );
+      }
+    }
   };
 
   // Removes the row, then emits `closed`.
@@ -644,7 +678,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         setHostSessionId: (newHostId) => setHostSessionId(entry, newHostId),
       };
     },
-    mark(sessionId) {
+    mark(sessionId, options) {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
         deps.log(`mark for unknown session ${sessionId} ignored`);
@@ -664,13 +698,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected or marked like any other.
-      const row = rows.get(sessionId) ?? rowOf(entry);
+      const held = rows.get(sessionId) ?? rowOf(entry);
+      const row =
+        held.markToast === null ? { ...held, markToast: options } : held;
       if (selectedSessionId() === null || isReturningToSelection) {
         reselectOnReturn = null;
         selectRow(row);
         return;
       }
-      if (!row.marked) {
+      if (!row.marked || row !== held) {
         rows.set(sessionId, { ...row, marked: true });
       }
     },
@@ -708,7 +744,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (!isReleasable) {
         return;
       }
-      if (!everyGuardAllows(sessionId)) {
+      if (firstRefusal(sessionId) !== null) {
         deps.log(`release for session ${sessionId} kept by a close guard`);
         return;
       }
@@ -717,8 +753,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       closeRow(sessionId);
     },
-    addCloseGuard(mayClose) {
-      const guard = { mayClose };
+    addCloseGuard(mayClose, cancelHold) {
+      const guard = { mayClose, cancelHold };
       closeGuards.add(guard);
       return {
         dispose: () => {
@@ -726,20 +762,27 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         },
       };
     },
-    closeSession(sessionId) {
+    closeSession(sessionId, atOnce) {
       if (!entries.has(sessionId)) {
         deps.log(`closeSession for unknown session ${sessionId} ignored`);
-        return false;
+        return null;
       }
       if (rows.get(sessionId) === undefined) {
-        return true;
+        return null;
       }
-      if (!everyGuardAllows(sessionId)) {
+      if (atOnce) {
+        cancelHolds(sessionId);
+      }
+      if (rows.get(sessionId) === undefined) {
+        return null;
+      }
+      const refusal = firstRefusal(sessionId);
+      if (refusal !== null) {
         deps.log(`closeSession for session ${sessionId} kept by a close guard`);
-        return false;
+        return refusal;
       }
       closeRow(sessionId);
-      return true;
+      return null;
     },
     label(sessionId) {
       const entry = entries.get(sessionId);

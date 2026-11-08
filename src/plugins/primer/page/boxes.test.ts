@@ -73,31 +73,31 @@ describe('primer boxes', () => {
     expect(shownBoxes(apply(setup(), { type: 'openReview' }))).toEqual([]);
   });
 
-  it.each<{ name: string; action: PrimerAction; keys: string[] }>([
+  it.each<{ name: string; actions: PrimerAction[]; keys: string[] }>([
     {
       name: 'a primer whose pane lost focus to a Chat pane',
-      action: { type: 'sessionActivated', sessionId: 'chat-session' },
+      actions: [{ type: 'sessionActivated', sessionId: 'chat-session' }],
       keys: ['p1/task/extra-1/item/2/comment'],
     },
     {
       name: 'the focused primer in the review',
-      action: { type: 'openReview' },
+      actions: [{ type: 'openReview' }],
       keys: [],
     },
     {
       name: 'the focused primer under the cancel prompt',
-      action: { type: 'askClose', sessionId: 'p1-session' },
+      actions: [{ type: 'openReview' }, { type: 'askCancel' }],
       keys: [],
     },
-  ])('draws the boxes of $name', ({ action, keys }) => {
+  ])('draws the boxes of $name', ({ actions, keys }) => {
     const onItem = apply(apply(setup(), { type: 'nextRow' }), {
       type: 'selectItem',
       item: 2,
     });
 
-    expect(primerViewBoxes(apply(onItem, action), 'p1').map(boxKey)).toEqual(
-      keys,
-    );
+    const state = actions.reduce(apply, onItem);
+
+    expect(primerViewBoxes(state, 'p1').map(boxKey)).toEqual(keys);
   });
 
   it('keys and describes one box of each field', () => {

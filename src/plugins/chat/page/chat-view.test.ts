@@ -143,7 +143,12 @@ function mounted(
   const toasts: [string, string][] = [];
   const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
-  const tab = { element: null as FakeElement | null };
+  const tab = {
+    element: null as FakeElement | null,
+    beforeClose: null as ((atOnce: boolean) => boolean) | null,
+  };
+  // The tab name each end-session confirmation opened for.
+  const confirms: string[] = [];
   const tabElements = new Map<string, FakeElement>();
   const sideParts = createPartStore<ChatSidePart>();
   const composerParts = createPartStore<ChatComposerPart>();
@@ -207,12 +212,18 @@ function mounted(
     paths: posixPaths,
     homeDir: '/w',
     sessions: {
-      addTab: (sessionId: string, added: { element: HTMLElement }) => {
+      addTab: (
+        sessionId: string,
+        added: {
+          element: HTMLElement;
+          beforeClose(atOnce: boolean): boolean;
+        },
+      ) => {
         readDuringAddTab.push(view.activeTime(sessionId));
         tab.element = asFake(added.element);
+        tab.beforeClose = (atOnce) => added.beforeClose(atOnce);
         tabElements.set(sessionId, tab.element);
         return {
-          setStatus: noEvent,
           select: noEvent,
           takeOver: () => ({ release: noEvent }),
           remove: noEvent,
@@ -273,6 +284,7 @@ function mounted(
     timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
     toast: (text: string, tone: string) => toasts.push([text, tone]),
+    confirm: { open: (name: string) => confirms.push(name) },
     visibleSessionRested: noEvent,
   } as unknown as ChatViewDeps);
   const ready = () => {
@@ -297,6 +309,7 @@ function mounted(
     keyRuns,
     logs,
     toasts,
+    confirms,
     activities,
     writers,
     ready,
@@ -927,6 +940,27 @@ describe('mountChatView slots', () => {
       expect(view.activeTimeCalls).toHaveLength(clockCalls);
     },
   );
+
+  it.each([
+    {
+      case: 'a plain close of a busy session asks',
+      atOnce: false,
+      mayClose: false,
+      confirms: 1,
+    },
+    {
+      case: 'at_once_close_of_a_busy_session_opens_no_confirm',
+      atOnce: true,
+      mayClose: true,
+      confirms: 0,
+    },
+  ])('chatView_BeforeClose: $case', ({ atOnce, mayClose, confirms }) => {
+    const view = mounted();
+    view.open(stateOf([], { running: true, activity: 'working' }));
+
+    expect(view.tab.beforeClose?.(atOnce)).toBe(mayClose);
+    expect(view.confirms).toHaveLength(confirms);
+  });
 
   it('chatView_ErrorRest_ToastsOnce', () => {
     const view = mounted();

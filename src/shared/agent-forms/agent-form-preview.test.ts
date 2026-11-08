@@ -67,7 +67,7 @@ function connect(info: Info): PreviewConnection {
   connects.push(info);
   const session: AgentFormOwner = {
     id: 'preview-row',
-    info: { sessionId: null, projectDir: null, deadlineSeconds: null },
+    info: { sessionId: null, projectDir: null },
   };
   return {
     session,

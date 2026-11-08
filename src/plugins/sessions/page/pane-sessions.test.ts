@@ -23,6 +23,7 @@ const ROWS: SessionRow[] = ['1', '2', '3', '4'].map((n) => ({
   project: 'project',
   harness: null,
   marked: false,
+  markToast: null,
   projectDir: null,
   hostSessionId: `h${n}`,
   titles: { user: null, agent: null, firstMessage: null },

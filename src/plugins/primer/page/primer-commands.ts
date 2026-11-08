@@ -23,7 +23,7 @@ import {
   closeFormFromMain,
   finishActiveForm,
   formById,
-  guardSessionClose,
+  mayCloseSessionForm,
   type SessionFormWords,
 } from '../../../shared/page/session-forms';
 import {
@@ -57,7 +57,6 @@ export interface PrimerCommandDeps {
   // Hands the finished primer to main; rejects with the reason when main
   // keeps it open.
   finish(primerId: string, end: AgentFormEnd<PrimerBody>): Promise<void>;
-  closeSession(sessionId: string): void;
   // Scrolls the active primer's card or review by `step`, down for 1 and up
   // for -1; null when no primer is shown.
   scrollPrimer(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
@@ -558,23 +557,12 @@ function submit(deps: PrimerCommandDeps) {
   finishActivePrimer(deps, 'review', 'submitted');
 }
 
-// `showPrimer` selects the session's Primer tab; `activate` selects the
-// session.
-export interface GuardCloseDeps extends Pick<
-  PrimerCommandDeps,
-  'store' | 'toast' | 'log'
-> {
-  showPrimer(sessionId: string): void;
-  activate(sessionId: string): void;
-}
-
-// A session closes only once its primer is gone, as guardSessionClose keeps
-// it.
-export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
-  return guardSessionClose(
-    { ...deps, showForm: deps.showPrimer, words: PRIMER_WORDS },
-    sessionId,
-  );
+// Whether the session's tab lets it close, as mayCloseSessionForm decides.
+export function mayClosePrimer(
+  deps: Pick<PrimerCommandDeps, 'store' | 'toast' | 'log'>,
+  sessionId: string,
+): boolean {
+  return mayCloseSessionForm({ ...deps, words: PRIMER_WORDS }, sessionId);
 }
 
 // Hands main the active primer's finish, as finishActiveForm sends it.
@@ -592,7 +580,7 @@ function finishActivePrimer(
 
 export type ClosePrimerFromMainDeps = Pick<
   PrimerCommandDeps,
-  'store' | 'closeSession' | 'toast' | 'log'
+  'store' | 'toast' | 'log'
 >;
 
 // Closes a primer main closed, as closeFormFromMain closes it.

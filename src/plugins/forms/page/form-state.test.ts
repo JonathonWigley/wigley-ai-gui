@@ -799,12 +799,12 @@ describe('sessionActivated', () => {
   it('dismisses a pending cancel prompt', () => {
     const state = run(
       two,
-      { type: 'askClose', sessionId: 'r1-session' },
+      { type: 'openReview' },
+      { type: 'askCancel' },
       { type: 'sessionActivated', sessionId: 'r2-session' },
     );
     expect(state.view).toBe('forms');
     expect(state.activeFormId).toBe('r2');
-    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('changes nothing for the session already active', () => {
@@ -826,35 +826,6 @@ describe('sessionActivated', () => {
       sessionId: 'r1-session',
     });
     expect(active(back).answers[0].choice).toBe(2);
-  });
-});
-
-describe('askClose', () => {
-  const two = initialState([presented('r1'), presented('r2')], 'r1-session');
-  const askClose: FormsAction = { type: 'askClose', sessionId: 'r1-session' };
-
-  it('opens the prompt from the form and keeping returns to the form', () => {
-    const asked = apply(two, askClose);
-    expect(asked.view).toBe('confirm');
-    expect(asked.confirmClosesSession).toBe(true);
-    const kept = apply(asked, { type: 'dismissConfirm' });
-    expect(kept.view).toBe('forms');
-    expect(kept.confirmClosesSession).toBe(false);
-  });
-
-  it('returns to the review when asked from the review', () => {
-    const asked = run(two, { type: 'openReview' }, askClose);
-    expect(asked.view).toBe('confirm');
-    expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
-  });
-
-  it('does nothing for another session', () => {
-    expect(apply(two, { type: 'askClose', sessionId: 'r2-session' })).toBe(two);
-  });
-
-  it('does nothing while the prompt is open', () => {
-    const asked = apply(two, askClose);
-    expect(apply(asked, askClose)).toBe(asked);
   });
 });
 
@@ -975,7 +946,6 @@ describe('cancel', () => {
   it('asks from the review, and dismissing returns to the review', () => {
     const asked = run(two, { type: 'openReview' }, { type: 'askCancel' });
     expect(asked.view).toBe('confirm');
-    expect(asked.confirmClosesSession).toBe(false);
     expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
   });
 
@@ -999,19 +969,7 @@ describe('sending', () => {
   const sendingReview = run(two, { type: 'openReview' }, submitting);
 
   it('marks the active round sending with its kind', () => {
-    expect(active(sendingReview).sending).toEqual({
-      kind: 'submitted',
-      closesSession: false,
-    });
-  });
-
-  it('marks a cancel the close prompt asked as closing its session', () => {
-    const state = run(
-      two,
-      { type: 'askClose', sessionId: 'r1-session' },
-      cancelling,
-    );
-    expect(active(state).sending?.closesSession).toBe(true);
+    expect(active(sendingReview).sending).toEqual({ kind: 'submitted' });
   });
 
   it("ignores the round's keys while it is sending", () => {
@@ -1020,7 +978,6 @@ describe('sending', () => {
       { type: 'closeReview' },
       { type: 'askCancel' },
       { type: 'reviewJump' },
-      { type: 'askClose', sessionId: 'r1-session' },
     ];
     for (const key of keys) {
       expect(apply(sendingReview, key)).toBe(sendingReview);

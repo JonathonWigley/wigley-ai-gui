@@ -10,6 +10,7 @@ function row(sessionId: string, hostSessionId: string | null): SessionRow {
     project: 'project',
     harness: 'claude',
     marked: false,
+    markToast: null,
     projectDir: null,
     hostSessionId,
     titles: { user: null, agent: null, firstMessage: null },

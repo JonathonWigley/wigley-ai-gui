@@ -697,7 +697,6 @@ describe('primer state', () => {
       { type: 'closeReview' },
       { type: 'askCancel' },
       { type: 'addItem', formId: 'p1', entryId: '1' },
-      { type: 'askClose', sessionId: 'p1-session' },
     ];
 
     for (const action of blocked) {
@@ -715,19 +714,6 @@ describe('primer state', () => {
     ).toBeNull();
   });
 
-  it('returns to the primer when the cancel prompt closing the session asked is kept', () => {
-    const asked = apply(stateWith(), {
-      type: 'askClose',
-      sessionId: 'p1-session',
-    });
-    expect(asked.view).toBe('confirm');
-
-    const kept = apply(asked, { type: 'dismissConfirm' });
-
-    expect(kept.view).toBe('primer');
-    expect(kept.confirmClosesSession).toBe(false);
-  });
-
   it("drops an open cancel prompt and shows the newly active session's primer", () => {
     const two = initialState(
       [presentedPrimer('p1'), presentedPrimer('p2')],
@@ -735,13 +721,13 @@ describe('primer state', () => {
     );
 
     const state = applyAll(two, [
-      { type: 'askClose', sessionId: 'p1-session' },
+      { type: 'openReview' },
+      { type: 'askCancel' },
       { type: 'sessionActivated', sessionId: 'p2-session' },
     ]);
 
     expect(state.view).toBe('primer');
     expect(state.activeFormId).toBe('p2');
-    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('shows the idle view once the active primer closes', () => {
@@ -755,7 +741,6 @@ describe('primer state', () => {
     expect(state.forms).toEqual([]);
     expect(state.activeFormId).toBeNull();
     expect(state.view).toBe('idle');
-    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('applies row actions only in view primer', () => {

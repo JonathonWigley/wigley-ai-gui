@@ -137,7 +137,7 @@ describe('roundViewBoxes', () => {
     },
     {
       name: 'no box for the focused round under the cancel prompt',
-      actions: [onBeta, { type: 'askClose', sessionId: 'r1-session' }],
+      actions: [onBeta, { type: 'openReview' }, { type: 'askCancel' }],
       roundId: 'r1',
       boxes: [],
     },

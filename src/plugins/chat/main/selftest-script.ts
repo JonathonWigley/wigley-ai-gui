@@ -1207,7 +1207,6 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       const relay = sessions.connect({
         sessionId: process.request.sessionId,
         projectDir: selftest,
-        deadlineSeconds: null,
         harness: 'claude',
       });
       previousRelay = relay;

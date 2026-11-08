@@ -51,6 +51,7 @@ const projectRow = (sessionId: string) => ({
   project: 'project',
   harness: 'claude' as const,
   marked: false,
+  markToast: null,
   projectDir: '/p',
   hostSessionId: null,
   titles: { user: null, agent: null, firstMessage: null },

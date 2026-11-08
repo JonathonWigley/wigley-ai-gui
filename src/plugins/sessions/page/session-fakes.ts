@@ -8,6 +8,7 @@ export function sessionRow(sessionId: string): SessionRow {
     project: 'project',
     harness: 'claude',
     marked: false,
+    markToast: null,
     projectDir: null,
     hostSessionId: null,
     titles: { user: null, agent: null, firstMessage: null },

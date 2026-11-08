@@ -62,7 +62,8 @@ import { sessionTitle } from './view-model';
 // box used last.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
-  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
+  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity' | 'addRowPart'>;
+  closesAtOnce(sessionId: string): boolean;
   beforeClose(sessionId: string): boolean;
   setScope(view: FormsState['view']): void;
   setResizeTarget(target: ResizeTarget | null): void;
@@ -90,8 +91,7 @@ interface ActiveLayouts {
 
 // `forgetSession` drops a session's Form tab entry and destroys its round views
 // once sessions dropped the tab, so the next render rebuilds a round still open
-// for the session in a new Form tab. `showForm` selects the session's Form tab,
-// a no-op when it has none. `setLayouts` hands `shown` to every open round
+// for the session in a new Form tab. `setLayouts` hands `shown` to every open round
 // view, which rebuilds when a layout it draws with changed, and rounds that
 // open later are built with it. A round view's throw does not skip the rest;
 // the first is rethrown once all have run. `rebuild` rebuilds every open round
@@ -102,7 +102,6 @@ interface ActiveLayouts {
 // destroys every open round view, giving each session back.
 export interface FormsView {
   forgetSession(sessionId: string): void;
-  showForm(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   rebuild(): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
@@ -127,6 +126,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     icon: 'checklist',
     className: 'form-tab',
     idleText: "No round open. The agent's next round opens here.",
+    statusPartId: 'forms.status',
+    closesAtOnce: (sessionId) => deps.closesAtOnce(sessionId),
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => setBaseScope(deps.store.get()),
     formShown: (sessionId, shown) =>
@@ -136,6 +137,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
         shown ? NEEDS_YOU_ACTIVITY : null,
       ),
   });
+  const statusPart = deps.sessions.addRowPart(tabs.statusPart);
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this round?',
@@ -202,7 +204,6 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       tabs.forget(sessionId);
       destroySessionRoundViews(sessionId, store.get(), shownRounds, tabs, deps);
     },
-    showForm: (sessionId) => tabs.select(sessionId),
     setLayouts(shown) {
       active.shown = shown;
       callEach(store.get().forms, (round) =>
@@ -221,6 +222,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       return roundView?.scrollBy(step, direction) ?? null;
     },
     dispose() {
+      statusPart.dispose();
       storeSubscription.dispose();
       for (const roundId of roundViews.keys()) {
         destroyRoundView(roundId, shownRounds, tabs, deps);

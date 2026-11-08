@@ -112,7 +112,6 @@ describe('set_session_title', () => {
       info: {
         sessionId: 'host-1',
         projectDir: null,
-        deadlineSeconds: null,
         harness: 'claude',
       },
     });

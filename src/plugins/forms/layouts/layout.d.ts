@@ -217,7 +217,7 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   roundNote(parent: HTMLElement): HTMLElement;
   // `Send answers`, the primary button, with its keys; a click sends the round.
   sendButton(parent: HTMLElement): HTMLButtonElement;
-  // `Cancel round`, with its keys; a click asks to cancel the round.
+  // `Cancel round`, with its keys; a click opens the round's cancel prompt.
   cancelButton(parent: HTMLElement): HTMLButtonElement;
 }
 

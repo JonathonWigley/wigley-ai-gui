@@ -34,17 +34,18 @@ import {
   tabsAfterRemove,
   tabsAfterSelect,
   tabsAfterTakeOver,
+  type TakeOver,
+  takeOversAfterRelease,
 } from './tabs';
 
-// A tab with the status it last set.
 interface Tab {
   view: SessionTabView;
-  status: string;
 }
 
 // A session's frame: its session, its tab bar over the sheet holding its
 // tabs' body and the text saying why no tab shows; its tab ids and selection,
-// and its tabs by id, both in strip order.
+// and its tabs by id, both in strip order; the take overs its tabs hold, one
+// per tab.
 interface Frame {
   sessionId: string;
   element: HTMLElement;
@@ -54,6 +55,7 @@ interface Frame {
   body: HTMLElement;
   tabs: TabsState;
   entries: Map<string, Tab>;
+  takeOvers: TakeOver[];
   drawnTabs: DrawnPart<SessionsPart>[];
   // The selected tab the strip last scrolled into view.
   scrolledTabId: string | null;
@@ -80,7 +82,7 @@ interface DrawnPane {
 }
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
-// change to a session's tabs, their selection or their statuses; `keys`
+// change to a session's tabs or their selection; `keys`
 // draws the key beside the text asking for a session to be picked; `parts`
 // draws the panes, the tab bars with the bar parts other plugins added, the
 // tabs and that text; `selectTab` runs on a tab's click.
@@ -127,7 +129,6 @@ export interface SessionTabsView {
   dropAll(): void;
   // The session's tabs, in strip order.
   tabsOf(sessionId: string): SessionTabView[];
-  statusesOf(sessionId: string): string[];
   selectedTabOf(sessionId: string): SessionTabView | null;
   select(sessionId: string, tabId: string): void;
 }
@@ -204,6 +205,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       body,
       tabs: NO_TABS,
       entries: new Map(),
+      takeOvers: [],
       drawnTabs: [],
       scrolledTabId: null,
       text: null,
@@ -430,6 +432,16 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     return frame?.entries.get(tab.view.id) === tab ? frame : undefined;
   };
 
+  // Gives back the take over `tabId` holds, if any, as its release does.
+  const release = (frame: Frame, tabId: string) => {
+    const held = frame.takeOvers.find((takeOver) => takeOver.tabId === tabId);
+    if (held === undefined) {
+      return;
+    }
+    frame.takeOvers = takeOversAfterRelease(frame.takeOvers, held);
+    setTabs(frame, tabsAfterRelease(frame.tabs, held));
+  };
+
   const remove = (frame: Frame, tab: Tab) => {
     tab.view.element.remove();
     frame.tabs = tabsAfterRemove(frame.tabs, tab.view.id);
@@ -490,7 +502,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     add(sessionId, view) {
       const frame = frameOf(sessionId);
-      const tab: Tab = { view, status: '' };
+      const tab: Tab = { view };
       const entries = new Map(frame.entries).set(view.id, tab);
       frame.tabs = tabsAfterAdd(
         frame.tabs,
@@ -503,14 +515,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       );
       frame.body.append(view.element);
       changed();
-      let latestTakeOver: { release(): void } | null = null;
       return {
-        setStatus(status) {
-          if (liveTab(sessionId, tab) !== undefined) {
-            tab.status = status;
-            changed();
-          }
-        },
         select() {
           if (liveTab(sessionId, tab) !== undefined) {
             select(sessionId, view.id);
@@ -522,27 +527,30 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
             return { release() {} };
           }
           const taken = tabsAfterTakeOver(live.tabs, view.id);
+          const isHeld = live.takeOvers.some(
+            (takeOver) => takeOver.tabId === view.id,
+          );
+          if (!isHeld) {
+            live.takeOvers = [...live.takeOvers, taken.takeOver];
+          }
           setTabs(live, taken.tabs);
+          // A handle releases once, so a stale one leaves a later take over.
           let isReleased = false;
-          latestTakeOver = {
+          return {
             release() {
               const stillLive = liveTab(sessionId, tab);
               if (isReleased || stillLive === undefined) {
                 return;
               }
               isReleased = true;
-              setTabs(
-                stillLive,
-                tabsAfterRelease(stillLive.tabs, taken.takeOver),
-              );
+              release(stillLive, view.id);
             },
           };
-          return latestTakeOver;
         },
         dispose() {
-          latestTakeOver?.release();
           const live = liveTab(sessionId, tab);
           if (live !== undefined) {
+            release(live, view.id);
             remove(live, tab);
           }
         },
@@ -565,10 +573,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     tabsOf: (sessionId) =>
       [...(frames.get(sessionId)?.entries.values() ?? [])].map(
         (tab) => tab.view,
-      ),
-    statusesOf: (sessionId) =>
-      [...(frames.get(sessionId)?.entries.values() ?? [])].map(
-        (tab) => tab.status,
       ),
     selectedTabOf(sessionId) {
       const frame = frames.get(sessionId);
@@ -608,7 +612,7 @@ const NO_SELECTION_TEXT: EmptyTextInput = {
 };
 
 const NOTHING_OPEN_TEXT: EmptyTextInput = {
-  text: "Nothing open yet: this session's first round opens a Form tab here",
+  text: 'Nothing open in this session yet',
   hasHint: false,
 };
 

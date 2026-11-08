@@ -8,11 +8,13 @@ import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
-import { activeForm } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  formClosesAtOnce,
+} from '../../../shared/page/session-forms';
 import {
   followRows,
   sessionsActiveSlot,
-  type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
@@ -29,7 +31,7 @@ import { focusActionFor, PRIMER_BOX_IDENTITY, type PrimerBox } from './boxes';
 import { readPrimerLayout } from './layout/read-primer-layout';
 import {
   closePrimerFromMain,
-  guardClose,
+  mayClosePrimer,
   primerCommandHandlers,
 } from './primer-commands';
 import {
@@ -81,11 +83,7 @@ function createBoxes(
 // follows the session the sessions plugin focuses, and a primer leaves only
 // when main closes it. The `Disposable` stops an `openForms` read still in
 // flight from showing its primers.
-function listenForPrimers(
-  api: PrimerApi,
-  store: PrimerStore,
-  sessions: SessionsPageExports,
-): Disposable {
+function listenForPrimers(api: PrimerApi, store: PrimerStore): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (primer) =>
     store.dispatch({ type: 'formShown', form: primer }),
@@ -94,7 +92,6 @@ function listenForPrimers(
     closePrimerFromMain(
       {
         store,
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
         toast,
         log,
       },
@@ -147,15 +144,10 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     const view = mountPrimerTab({
       areas: api.areas,
       sessions,
+      closesAtOnce: (sessionId) => formClosesAtOnce(store, sessionId),
       beforeClose: (sessionId) =>
-        guardClose(
-          {
-            store,
-            toast: services.toast,
-            log: services.log,
-            showPrimer: (primerSessionId) => view.showPrimer(primerSessionId),
-            activate: (activeSessionId) => sessions.activate(activeSessionId),
-          },
+        mayClosePrimer(
+          { store, toast: services.toast, log: services.log },
           sessionId,
         ),
       setScope: (scope) => api.keys.setScope(scope),
@@ -210,7 +202,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const primersRead = listenForPrimers(api, store, sessions);
+    const primersRead = listenForPrimers(api, store);
     const exports: PrimerPageExports = {
       activePrimer() {
         const primer = activeForm(store.get());
@@ -228,7 +220,6 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         store,
         boxes,
         finish: (primerId, end) => api.channel.invoke('finish', primerId, end),
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
         scrollPrimer: (step, direction) => view.scrollBy(step, direction),
         openPreview: () => api.channel.invoke('openPreview'),
         toast: services.toast,

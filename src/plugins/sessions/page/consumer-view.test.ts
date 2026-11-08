@@ -19,7 +19,6 @@ function fakeExports() {
   const exports: SessionsPageExports = {
     cutToTitleLimit: (text) => text,
     addTab: () => ({
-      setStatus: () => undefined,
       select: () => undefined,
       takeOver: () => ({ release: () => undefined }),
       isVisible: () => false,

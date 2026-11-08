@@ -29,6 +29,7 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   AgentSession,
+  MarkOptions,
   OpenOptions,
   SessionInfo,
   SessionTitles,
@@ -358,6 +359,9 @@ function setUp(
   const opened: SessionInfo[] = [];
   const openOptions: (OpenOptions | undefined)[] = [];
   const marked: string[] = [];
+  // Each mark's toast options, and the side-bar label of each row given one.
+  const markOptions: MarkOptions[] = [];
+  const rowLabels = new Map<string, string>();
   const activated: string[] = [];
   const announced: Announced[] = [];
   // Each slot change and `sessionRested`, in the order they left main.
@@ -401,7 +405,11 @@ function setUp(
         },
       };
     },
-    mark: (sessionId) => marked.push(sessionId),
+    mark: (sessionId, options) => {
+      marked.push(sessionId);
+      markOptions.push(options);
+    },
+    label: (sessionId) => rowLabels.get(sessionId) ?? null,
     activate: (sessionId) => activated.push(sessionId),
     setTitle: (sessionId, source, title) => {
       titleCalls.push([sessionId, source, title]);
@@ -470,7 +478,6 @@ function setUp(
     info: {
       sessionId: 'uuid-1',
       projectDir: PROJECT_DIR,
-      deadlineSeconds: null,
       harness: 'claude',
     },
   };
@@ -483,6 +490,8 @@ function setUp(
     opened,
     openOptions,
     marked,
+    markOptions,
+    rowLabels,
     activated,
     announced,
     store,
@@ -558,7 +567,6 @@ function connected(id: string, hostId: string): AgentSession {
     info: {
       sessionId: hostId,
       projectDir: '/w/app',
-      deadlineSeconds: null,
       harness: 'claude',
     },
   };
@@ -685,7 +693,6 @@ describe('createChatSessions', () => {
       {
         sessionId: 'uuid-1',
         projectDir: PROJECT_DIR,
-        deadlineSeconds: null,
         harness: 'claude',
       },
     ]);
@@ -889,7 +896,6 @@ describe('createChatSessions', () => {
       {
         sessionId: hostId,
         projectDir: '/w/app',
-        deadlineSeconds: null,
         harness: 'claude',
       },
     ]);
@@ -1535,6 +1541,25 @@ describe('createChatSessions', () => {
     expect(test.activated).toEqual([ROW_ID]);
     expect(test.windowShows()).toBe(1);
   });
+
+  it.each([
+    { label: null, text: 'Turn finished in app' },
+    { label: 'gamma 2', text: 'Turn finished in gamma 2' },
+  ])(
+    'turn finished marks with the folder name when no label: $text',
+    async ({ label, text }) => {
+      const test = await started();
+      if (label !== null) {
+        test.rowLabels.set(ROW_ID, label);
+      }
+      test.setFocused(false);
+
+      test.activity('working');
+      test.activity('idle');
+
+      expect(test.markOptions).toEqual([{ text, action: 'read it' }]);
+    },
+  );
 
   it('turnFinished_otherSessionSelected_alertsAndMarks', async () => {
     const test = await started();

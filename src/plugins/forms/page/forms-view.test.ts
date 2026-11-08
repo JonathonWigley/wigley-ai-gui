@@ -101,7 +101,6 @@ function formTabSetup(others: string[] = []) {
       addTab: (sessionId, view) => {
         tabs.set(sessionId, asFake(view.element));
         return {
-          setStatus: () => undefined,
           select: () => undefined,
           takeOver: () => ({ release: () => undefined }),
           isVisible: () => true,
@@ -110,7 +109,9 @@ function formTabSetup(others: string[] = []) {
       },
       setActivity: (sessionId, sourceId, activity) =>
         activities.push([sessionId, sourceId, activity]),
+      addRowPart: () => ({ dispose: () => undefined }),
     },
+    closesAtOnce: () => false,
     beforeClose: () => true,
     setScope: (view) => calls.push(['setScope', view]),
     setResizeTarget: (target) =>
@@ -194,15 +195,6 @@ describe('form tab under the cancel prompt', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it('shows the round behind a close prompt asked from the form', () => {
-    const { store, sessionId, tab } = formTabSetup();
-
-    store.dispatch({ type: 'askClose', sessionId });
-
-    expect(store.get().view).toBe('confirm');
-    expect(itemsPane(tab).hidden).toBe(false);
   });
 
   it('shows the review behind a cancel prompt asked from the review', () => {

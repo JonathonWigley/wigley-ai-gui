@@ -7,6 +7,7 @@ import {
 import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
+import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
 import {
@@ -41,12 +42,12 @@ import {
 } from './session-tabs-view';
 import { drawnRows, sidebarSections } from './sidebar-order';
 import { mountSidebarView } from './sidebar-view';
-import { rowChanges, rowStatus, stepSession } from './tabs';
+import { rowChanges, stepSession } from './tabs';
 
 // `activate` runs on a row click and `runFavorite` on a star's click, neither
 // while the preview shows; `selectTab` runs on a tab's click; `isModeShown`
-// reads whether Sessions mode shows; `tabsChanged` runs after any change to a session's tabs, their
-// selection or their statuses; `keys` draws the session, tab and pane
+// reads whether Sessions mode shows; `tabsChanged` runs after any change to a session's tabs or their
+// selection; `keys` draws the session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a press's release or outer pane key included,
@@ -152,8 +153,8 @@ export interface SessionsView {
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
 // draws in its side bar, and the root holding the chat panes. Each row's
-// second line follows its tabs' statuses. Both draw with `default` until the
-// first `setLayouts`.
+// tooltip ends with its row parts' tooltips. Both draw with `default` until
+// the first `setLayouts`.
 export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');
   const parts = createSessionsParts(deps);
@@ -224,6 +225,18 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     );
   };
 
+  // Each row part's tooltip for the session, in part order; a part that
+  // throws is logged and adds nothing.
+  const partTooltips = (sessionId: string): string[] =>
+    deps.rowParts.parts().flatMap((part) => {
+      try {
+        return part.tooltip?.(sessionId) ?? [];
+      } catch (error) {
+        deps.log(`row part ${part.id} tooltip failed: ${errorText(error)}`);
+        return [];
+      }
+    });
+
   const drawSidebar = () => {
     const titleMax = titleLimit(deps.titleMaxLength());
     if (preview !== null) {
@@ -245,7 +258,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       (row) => ({
         title: shownTitle(row.titles, titleMax),
         activity: activities.top(row.sessionId),
-        status: rowStatus(tabs.statusesOf(row.sessionId)),
+        partTooltips: () => partTooltips(row.sessionId),
         onScreen: elsewhere.has(row.sessionId),
       }),
       elsewhere,

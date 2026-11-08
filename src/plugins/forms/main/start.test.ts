@@ -36,7 +36,6 @@ describe('forms drive actions', () => {
         sessionId: 'drive-forms-1',
         projectDir: 'drive',
         harness: 'claude',
-        deadlineSeconds: null,
       },
     ]);
   });

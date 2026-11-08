@@ -89,7 +89,7 @@ export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
     SessionsMainExports,
-    'open' | 'mark' | 'activate' | 'setTitle' | 'titles'
+    'open' | 'mark' | 'activate' | 'setTitle' | 'titles' | 'label'
   >;
   selectedSessionId(): string | null;
   // Read at each session start.
@@ -707,7 +707,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       sessions.activate(sessionId);
       deps.window.show();
     });
-    sessions.mark(sessionId);
+    const label = sessions.label(sessionId) ?? path.basename(projectDir);
+    sessions.mark(sessionId, {
+      text: `Turn finished in ${label}`,
+      action: 'read it',
+    });
   }
 
   // Keeps the ids of the subagents and background tasks still running, so a
@@ -1353,7 +1357,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       {
         sessionId: hostId,
         projectDir,
-        deadlineSeconds: null,
         harness: CHAT_HARNESS_ID,
       },
       options,

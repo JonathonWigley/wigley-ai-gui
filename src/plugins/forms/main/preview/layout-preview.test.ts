@@ -120,9 +120,9 @@ describe('open', () => {
     expect(connects).toEqual([
       {
         sessionId: 'layout-preview',
-        projectDir: 'Layout preview',
-        deadlineSeconds: null,
+        projectDir: null,
         harness: null,
+        label: 'Layout preview',
       },
     ]);
     expect(calls.map((call) => call.args)).toEqual([PREVIEW_ROUND_ARGS]);

@@ -649,7 +649,6 @@ describe('chat main part', () => {
           info: {
             sessionId: 'host-relay',
             projectDir: '/p',
-            deadlineSeconds: null,
             harness: 'claude',
           },
         })

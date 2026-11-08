@@ -7,12 +7,15 @@ import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
-import { activeForm, formById } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  formById,
+  formClosesAtOnce,
+} from '../../../shared/page/session-forms';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import {
   followRows,
   sessionsActiveSlot,
-  type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
@@ -32,7 +35,7 @@ import { apply, buildBody, type FormsStore, initialState } from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
-  guardClose,
+  mayCloseRound,
 } from './forms-commands';
 import {
   createFormsEventLog,
@@ -76,11 +79,7 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
 // follows the session the sessions plugin focuses, and a round leaves only when
 // main closes it. Main's forms map to the page's rounds here. The `Disposable`
 // stops an `openForms` read still in flight from showing its rounds.
-function listenForRounds(
-  api: FormsApi,
-  store: FormsStore,
-  sessions: SessionsPageExports,
-): Disposable {
+function listenForRounds(api: FormsApi, store: FormsStore): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (form) =>
     store.dispatch({ type: 'formShown', form: presentedRoundOf(form) }),
@@ -89,7 +88,6 @@ function listenForRounds(
     closeRoundFromMain(
       {
         store,
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
         toast,
         log,
       },
@@ -144,15 +142,10 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     const view = mountFormsView({
       areas: api.areas,
       sessions,
+      closesAtOnce: (sessionId) => formClosesAtOnce(store, sessionId),
       beforeClose: (sessionId) =>
-        guardClose(
-          {
-            store,
-            toast: services.toast,
-            log: services.log,
-            showForm: (formSessionId) => view.showForm(formSessionId),
-            activate: (activeSessionId) => sessions.activate(activeSessionId),
-          },
+        mayCloseRound(
+          { store, toast: services.toast, log: services.log },
           sessionId,
         ),
       setScope: (formsView) => api.keys.setScope(formsView),
@@ -189,7 +182,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const roundsRead = listenForRounds(api, store, sessions);
+    const roundsRead = listenForRounds(api, store);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,
@@ -224,7 +217,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         store,
         boxes,
         finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
-        closeSession: (sessionId) => sessions.closeSession(sessionId),
         layouts: {
           openPreview: () => api.channel.invoke('openPreview'),
         },

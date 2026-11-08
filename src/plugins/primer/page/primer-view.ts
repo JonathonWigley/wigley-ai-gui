@@ -140,7 +140,8 @@ import type { PrimerStore } from './primer-store';
 // used last.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
-  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
+  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity' | 'addRowPart'>;
+  closesAtOnce(sessionId: string): boolean;
   beforeClose(sessionId: string): boolean;
   setScope(scope: PrimerScopeName): void;
   // Hands the resize keys the split of the focused pane, and the focus keys
@@ -165,15 +166,13 @@ export interface PrimerViewDeps {
 
 // `forgetSession` drops a session's Primer tab entry and destroys its primer
 // views once sessions dropped the tab, so the next render rebuilds a primer
-// still open for the session in a new Primer tab. `showPrimer` selects the
-// session's Primer tab, a no-op when it has none. `scrollBy` scrolls the
+// still open for the session in a new Primer tab. `scrollBy` scrolls the
 // active primer's card or review, whichever shows, down for 1 and up for -1;
 // null with no active primer. `setLayouts` draws every part whose picked
 // layout changed again, keeping the focused box. `dispose` destroys every open
 // primer view, giving each session back.
 export interface PrimerTab {
   forgetSession(sessionId: string): void;
-  showPrimer(sessionId: string): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
   setLayouts(shown: ShownLayouts<PrimerLayout>): void;
   dispose(): void;
@@ -303,6 +302,8 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     icon: 'lightbulb',
     className: 'primer-tab',
     idleText: "No primer open. The agent's next primer opens here.",
+    statusPartId: 'primer.status',
+    closesAtOnce: (sessionId) => deps.closesAtOnce(sessionId),
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => setScopeFor(store.get()),
     formShown: (sessionId, shown) =>
@@ -312,6 +313,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
         shown ? NEEDS_YOU_ACTIVITY : null,
       ),
   });
+  const statusPart = deps.sessions.addRowPart(tabs.statusPart);
   const dispatch = (action: PrimerAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this primer?',
@@ -390,12 +392,12 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
         }
       }
     },
-    showPrimer: (sessionId) => tabs.select(sessionId),
     setLayouts(shown) {
       shownLayouts = shown;
       render();
     },
     dispose() {
+      statusPart.dispose();
       storeSubscription.dispose();
       for (const primerId of primerViews.keys()) {
         destroyPrimerView(primerId, shownPrimers, tabs, deps);

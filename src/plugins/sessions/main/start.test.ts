@@ -91,7 +91,6 @@ describe('sessions drive actions', () => {
         sessionId: 'drive-session-1',
         projectDir: 'drive',
         harness: 'claude',
-        deadlineSeconds: null,
       },
     ]);
   });
@@ -112,7 +111,6 @@ describe('sessions drive actions', () => {
         sessionId: 's',
         projectDir: 'drive',
         harness: 'claude',
-        deadlineSeconds: null,
       },
     ]);
     expect(sessions.connectedInfo).toEqual([]);
@@ -179,7 +177,6 @@ function hostInfo(sessionId: string): SessionInfo {
   return {
     sessionId,
     projectDir: null,
-    deadlineSeconds: null,
     harness: 'claude',
   };
 }
@@ -318,12 +315,11 @@ describe('sessions main part', () => {
       const { session } = exports.connect({
         sessionId,
         projectDir,
-        deadlineSeconds: null,
         harness,
         profileDir: '/home/.claude-work',
       });
 
-      exports.mark(session.id);
+      exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       await new Promise((settle) => setImmediate(settle));
 
       expect(sessionName.mock.calls).toEqual(asked);
@@ -348,10 +344,9 @@ describe('sessions main part', () => {
       const { session } = exports.connect({
         sessionId: 'host-1',
         projectDir: '/work/folder',
-        deadlineSeconds: null,
         harness: 'claude',
       });
-      exports.mark(session.id);
+      exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       if (disposed) {
         await started.dispose?.();
       }
@@ -371,10 +366,12 @@ describe('sessions main part', () => {
     const { session } = viewOf(started).connect({
       sessionId: 'host-1',
       projectDir: null,
-      deadlineSeconds: null,
       harness: 'claude',
     });
-    viewOf(started).mark(session.id);
+    viewOf(started).mark(session.id, {
+      text: 'Round from folder',
+      action: 'answer',
+    });
     expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(1);
 
     await started.dispose?.();
@@ -389,7 +386,6 @@ describe('sessions main part', () => {
     const connected = exports.connect({
       sessionId: 'host-1',
       projectDir: null,
-      deadlineSeconds: null,
       harness: 'claude',
     });
     const context = { toolUseId: null, signal: new AbortController().signal };

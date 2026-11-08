@@ -24,8 +24,8 @@ export function sessionsMainView(
     ...exports,
     contributeTools: (tools, start) =>
       consumer.track(exports.contributeTools(tools, start)),
-    addCloseGuard: (mayClose) =>
-      consumer.track(exports.addCloseGuard(mayClose)),
+    addCloseGuard: (mayClose, cancelHold) =>
+      consumer.track(exports.addCloseGuard(mayClose, cancelHold)),
     connect: (info) => endedWith(consumer, exports.connect(info)),
     open: (info, options) => endedWith(consumer, exports.open(info, options)),
   };

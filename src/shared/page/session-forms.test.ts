@@ -30,7 +30,6 @@ function state(
     activeSessionId,
     view,
     confirmReturnView: 'review',
-    confirmClosesSession: false,
   };
 }
 

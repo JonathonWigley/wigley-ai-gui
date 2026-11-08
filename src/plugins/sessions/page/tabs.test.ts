@@ -3,13 +3,14 @@ import type { SessionsState } from '../contract';
 import {
   hasOtherSession,
   hasOtherTab,
-  isRoundToast,
+  isMarkToast,
   isSameVisibleTab,
+  closesAtOnce,
   mayClose,
   NO_TABS,
-  roundToastText,
+  markToastText,
   rowChanges,
-  rowStatus,
+  takeOversAfterRelease,
   showsEmptyText,
   showsNoSelectionText,
   stepSession,
@@ -34,6 +35,7 @@ function stateOf(
       project: 'project',
       harness: null,
       marked: false,
+      markToast: null,
       projectDir: null,
       hostSessionId: null,
       titles: { user: null, agent: null, firstMessage: null },
@@ -401,11 +403,34 @@ describe('tabs', () => {
     );
 
     const formFirst = tabsAfterRelease(docs.tabs, form.takeOver);
+    const [docsAfterForm] = takeOversAfterRelease(
+      [form.takeOver, docs.takeOver],
+      form.takeOver,
+    );
     expect(formFirst).toBe(docs.tabs);
     expect(formFirst.selectedTabId).toBe('docs');
-    expect(tabsAfterRelease(formFirst, docs.takeOver).selectedTabId).toBe(
-      'form',
+    expect(tabsAfterRelease(formFirst, docsAfterForm).selectedTabId).toBe(
+      'chat',
     );
+  });
+
+  it('takeOversAfterRelease drops the released one and hands its tab to those that remembered it', () => {
+    const takeOver = (tabId: string, previousTabId: string | null) => ({
+      tabId,
+      previousTabId,
+      selections: 3,
+    });
+
+    expect(
+      takeOversAfterRelease(
+        [
+          takeOver('form', 'chat'),
+          takeOver('docs', 'form'),
+          takeOver('x', 'y'),
+        ],
+        takeOver('form', 'chat'),
+      ),
+    ).toEqual([takeOver('docs', 'chat'), takeOver('x', 'y')]);
   });
 
   it('stacked take overs give back nothing once the user moved between them', () => {
@@ -426,14 +451,13 @@ describe('tabs', () => {
     expect(tabsAfterRelease(docsReleased, form.takeOver)).toBe(movedBack);
   });
 
-  it('rowStatus takes the last non-empty status in add order', () => {
-    expect(rowStatus(['a 1/2', '', 'b'])).toBe('b');
-    expect(rowStatus(['', ''])).toBeNull();
-  });
+  it('markToastText adds the keys and the action, or is the text alone with none bound', () => {
+    const mark = { text: 'Turn finished in x', action: 'read it' };
 
-  it('roundToastText names the keys, or only the session with none bound', () => {
-    expect(roundToastText('x', 'Space k s')).toMatch(/x.*Space k s/);
-    expect(roundToastText('x', null)).toContain('x');
+    expect(markToastText(mark, 'Space k s')).toBe(
+      'Turn finished in x — Space k s to read it',
+    );
+    expect(markToastText(mark, null)).toBe('Turn finished in x');
   });
 
   it('rowChanges lists added rows in their order and removed ids', () => {
@@ -451,12 +475,12 @@ describe('tabs', () => {
     expect(changes.changed.map((row) => row.sessionId)).toEqual(['f', 'b']);
   });
 
-  it('isRoundToast only when main selects from none while the mode is hidden', () => {
-    expect(isRoundToast(null, 'a', false)).toBe(true);
-    expect(isRoundToast(null, 'a', true)).toBe(false);
-    expect(isRoundToast('b', 'a', false)).toBe(false);
-    expect(isRoundToast(undefined, 'a', false)).toBe(false);
-    expect(isRoundToast(null, null, false)).toBe(false);
+  it('isMarkToast only when main selects from none while the mode is hidden', () => {
+    expect(isMarkToast(null, 'a', false)).toBe(true);
+    expect(isMarkToast(null, 'a', true)).toBe(false);
+    expect(isMarkToast('b', 'a', false)).toBe(false);
+    expect(isMarkToast(undefined, 'a', false)).toBe(false);
+    expect(isMarkToast(null, null, false)).toBe(false);
   });
 
   it('showsEmptyText and showsNoSelectionText', () => {
@@ -470,20 +494,35 @@ describe('tabs', () => {
     expect(showsNoSelectionText(stateOf(['a'], 'a'))).toBe(false);
   });
 
-  it('mayClose stops at the first guard that keeps the session', () => {
-    const calls: number[] = [];
+  it('first refusing tab asks and later tabs are not asked', () => {
+    const calls: [number, boolean][] = [];
     const guards = (answers: boolean[]) =>
       answers.map((answer, i) => ({
-        beforeClose: () => {
-          calls.push(i);
+        beforeClose: (atOnce: boolean) => {
+          calls.push([i, atOnce]);
           return answer;
         },
       }));
 
-    expect(mayClose(guards([true, false, true]))).toBe(false);
-    expect(calls).toEqual([0, 1]);
-    expect(mayClose([])).toBe(true);
-    expect(mayClose(guards([true, true]))).toBe(true);
+    expect(mayClose(guards([true, false, true]), true)).toBe(false);
+    expect(calls).toEqual([
+      [0, true],
+      [1, true],
+    ]);
+    expect(mayClose([], false)).toBe(true);
+    expect(mayClose(guards([true, true]), false)).toBe(true);
+  });
+
+  it.each([
+    { says: [undefined, false], atOnce: false },
+    { says: [], atOnce: false },
+    { says: [false, true], atOnce: true },
+  ])('closesAtOnce when any tab says so: $says', ({ says, atOnce }) => {
+    const views = says.map((said) =>
+      said === undefined ? {} : { closesAtOnce: () => said },
+    );
+
+    expect(closesAtOnce(views)).toBe(atOnce);
   });
 
   it('visibleTab is null while the mode is hidden, none with no tab, else the selected tab', () => {

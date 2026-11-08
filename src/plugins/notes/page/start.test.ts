@@ -101,6 +101,7 @@ describe('noteSessions', () => {
     project: 'project',
     harness: 'claude',
     marked: false,
+    markToast: null,
     projectDir: `/${sessionId}`,
     hostSessionId,
     titles: { user: null, agent: null, firstMessage: null },

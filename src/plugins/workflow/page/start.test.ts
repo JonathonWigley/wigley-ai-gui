@@ -255,6 +255,7 @@ describe('workflow page part', () => {
       project: 'project',
       harness: 'claude',
       marked: false,
+      markToast: null,
       projectDir: '/r',
       hostSessionId: `h-${sessionId}`,
       titles: { user: null, agent: null, firstMessage: null },

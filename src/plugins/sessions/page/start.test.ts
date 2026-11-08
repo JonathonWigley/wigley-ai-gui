@@ -58,22 +58,65 @@ function savedSplit(focusedId: 'a' | 'b'): UiState {
   ]);
 }
 
+// A part whose mode `show` takes the shown mode from Sessions mode.
+function otherModePart(): {
+  part: PagePart<PluginManifest>;
+  show(): void;
+} {
+  let handle: { show(): void } | null = null;
+  const part = {
+    manifest: {
+      ...sessionsPagePart.manifest,
+      id: 'other',
+      dependsOn: { main: [], page: [] },
+    },
+    start(api: PageApi<PluginManifest, never>) {
+      handle = api.modes.add({
+        id: 'other',
+        title: 'Other',
+        icon: 'book',
+        element: document.createElement('div'),
+        shown: () => undefined,
+        hidden: () => undefined,
+      });
+      return { commands: {} };
+    },
+  } as unknown as PagePart<PluginManifest>;
+  return { part, show: () => handle?.show() };
+}
+
+interface StartOptions {
+  // What main's `closeSession` answers.
+  closeRefusal?: string | null;
+  // Starts Sessions mode hidden, beside a mode `showOther` shows.
+  withOtherMode?: boolean;
+}
+
 // The part on the harness, its rows and selection written, up to the first
-// state's focus. `activations` holds each session the page asks main to activate.
+// state's focus. `activations` holds each session the page asks main to
+// activate, and `closes` each `closeSession` asked of main.
 async function startApplied(
   rowIds: string[],
   selected: string | null,
   uiState: UiState = fakeUiState(),
+  { closeRefusal = null, withOtherMode = false }: StartOptions = {},
 ) {
   const activations: unknown[] = [];
+  const closes: unknown[][] = [];
+  const other = otherModePart();
   const harness = startPagePart(sessionsPagePart, {
-    invoke: async (method, sessionId) => {
+    invoke: async (method, ...args) => {
       if (method === 'activate') {
-        activations.push(sessionId);
+        activations.push(args[0]);
+      }
+      if (method === 'closeSession') {
+        closes.push(args);
+        return closeRefusal;
       }
       return true;
     },
     services: { picker: fakeListPickerService(), uiState },
+    ...(withOtherMode ? { firstModeTaken: true, parts: [other.part] } : {}),
   });
   const rows = harness.state.publish(sessionsRowsSlot);
   const selection = harness.state.publish(sessionsSelectionSlot);
@@ -108,11 +151,42 @@ async function startApplied(
     active,
     activeNotices,
     activations,
+    closes,
     exports,
     addTab,
     uiState,
+    showOther: other.show,
   };
 }
+
+// A tab of `sessionId` with the given close answers, whose `beforeClose`,
+// `shown` and `hidden` calls land in `calls` as `<id>.<call>`.
+function closeTab(
+  setup: Awaited<ReturnType<typeof startApplied>>,
+  sessionId: string,
+  id: string,
+  calls: string[],
+  { mayClose = true, atOnce = false } = {},
+) {
+  return setup.exports.addTab(sessionId, {
+    id,
+    title: `Tab ${id}`,
+    icon: 'book',
+    element: document.createElement('div'),
+    closesAtOnce: () => atOnce,
+    beforeClose: (isAtOnce) => {
+      calls.push(`${id}.beforeClose(${isAtOnce})`);
+      return mayClose;
+    },
+    shown: () => calls.push(`${id}.shown`),
+    hidden: () => calls.push(`${id}.hidden`),
+  });
+}
+
+const toasts = (setup: Awaited<ReturnType<typeof startApplied>>) =>
+  setup.harness.logs
+    .map((line) => line.message)
+    .filter((message) => message.startsWith('toast'));
 
 // The sessions the panes hold as uiState saved them last.
 function savedPaneSessions(uiState: UiState): (string | null)[] {
@@ -449,4 +523,120 @@ describe('sessions page part', () => {
     expect(setup.active.get()).toBe('s1');
     await setup.harness.stop();
   });
+
+  it('refused_close_toasts_the_reason', async () => {
+    const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+      closeRefusal: "Finish or cancel label s1's round first",
+    });
+
+    setup.harness.started().commands.closeSession({ arg: undefined });
+    await settle();
+
+    expect(toasts(setup)).toEqual([
+      "toast info: Finish or cancel label s1's round first",
+    ]);
+    expect(setup.harness.logs.map((line) => line.message)).toContain(
+      'session close kept by main: label s1',
+    );
+    await setup.harness.stop();
+  });
+
+  it.each([
+    {
+      case: 'a tab says so',
+      atOnces: [false, true],
+      calls: ['a.beforeClose(true)', 'b.beforeClose(true)'],
+    },
+    {
+      case: 'no tab says so',
+      atOnces: [false, false],
+      calls: ['a.beforeClose(false)', 'b.beforeClose(false)'],
+    },
+  ])(
+    'close_key_passes_at_once_only_when_a_tab_says_so: $case',
+    async ({ atOnces, calls }) => {
+      const setup = await startApplied(['s1'], 's1');
+      const heard: string[] = [];
+      closeTab(setup, 's1', 'a', heard, { atOnce: atOnces[0] });
+      closeTab(setup, 's1', 'b', heard, { atOnce: atOnces[1] });
+      heard.length = 0;
+
+      setup.harness.started().commands.closeSession({ arg: undefined });
+      await settle();
+
+      expect(heard).toEqual(calls);
+      expect(setup.closes).toEqual([['s1', atOnces[1]]]);
+      await setup.harness.stop();
+    },
+  );
+
+  it('refusing_tab_stops_main_being_asked', async () => {
+    const setup = await startApplied(['s1'], 's1');
+    const heard: string[] = [];
+    closeTab(setup, 's1', 'docs', heard, { mayClose: false });
+    closeTab(setup, 's1', 'forms', heard, { atOnce: true });
+    heard.length = 0;
+
+    setup.harness.started().commands.closeSession({ arg: undefined });
+    await settle();
+
+    expect(heard).toEqual(['docs.beforeClose(true)']);
+    expect(setup.closes).toEqual([]);
+    await setup.harness.stop();
+  });
+
+  it('tab_shown_and_hidden_run_on_a_switch_and_on_mode_hide', async () => {
+    const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+      withOtherMode: true,
+    });
+    const { commands } = setup.harness.started();
+    const heard: string[] = [];
+    closeTab(setup, 's1', 'a', heard);
+    closeTab(setup, 's1', 'b', heard);
+    commands.showMode({ arg: undefined });
+    commands.selectTab({ arg: { sessionId: 's1', tab: 'a' } });
+    heard.length = 0;
+    const emitted = setup.harness.emitted.length;
+
+    commands.selectTab({ arg: { sessionId: 's1', tab: 'b' } });
+    setup.showOther();
+
+    expect(heard).toEqual(['a.hidden', 'b.shown', 'b.hidden']);
+    expect(
+      setup.harness.emitted
+        .slice(emitted)
+        .filter((each) => each.event === 'sessions.tabShown')
+        .map((each) => each.data),
+    ).toEqual([{ sessionId: 's1', tabId: 'b' }]);
+    await setup.harness.stop();
+  });
+
+  it.each([
+    { case: 'main opened it', isOpened: true, toasted: [] },
+    {
+      case: 'a mark selected it',
+      isOpened: false,
+      toasted: ['toast info: Round from label s1'],
+    },
+  ])(
+    'opening_a_selected_session_with_the_mode_hidden_toasts_nothing: $case',
+    async ({ isOpened, toasted }) => {
+      const setup = await startApplied([], null, fakeUiState(), {
+        withOtherMode: true,
+      });
+
+      if (isOpened) {
+        setup.harness.send('activated', { sessionId: 's1' });
+      }
+      setup.rows.set('s1', {
+        ...hostRow('s1'),
+        markToast: { text: 'Round from label s1', action: 'answer' },
+      });
+      setup.selection.set('s1');
+      await settle();
+
+      expect(toasts(setup)).toEqual(toasted);
+      await setup.harness.stop();
+    },
+  );
 });

@@ -172,7 +172,6 @@ export function sessionsSelfTestScript(
             sessionId: `${projectDir}-${run}`,
             projectDir,
             harness: DRIVE_SESSION_DEFAULTS.harness,
-            deadlineSeconds: DRIVE_SESSION_DEFAULTS.deadlineSeconds,
           },
           { select: false },
         ),

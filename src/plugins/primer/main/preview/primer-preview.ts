@@ -9,12 +9,12 @@ import type {
 import type { PrimerPayload } from '../../contract';
 import { PREVIEW_PRIMER_ARGS } from './preview-primer';
 
-// The row label is projectDir's basename.
+// No project, so the row and its title bar carry the label alone.
 const PREVIEW_SESSION: SessionInfo = {
   sessionId: 'primer-preview',
-  projectDir: 'Primer preview',
-  deadlineSeconds: null,
+  projectDir: null,
   harness: null,
+  label: 'Primer preview',
 };
 
 // `primer` is a service of the preview's own, whose forms raise no alert and

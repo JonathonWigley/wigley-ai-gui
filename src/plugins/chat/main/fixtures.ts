@@ -21,7 +21,6 @@ export function askFixturePermission(
       info: {
         sessionId: null,
         projectDir,
-        deadlineSeconds: null,
         harness: CHAT_HARNESS_ID,
       },
     })

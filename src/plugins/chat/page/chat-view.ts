@@ -406,7 +406,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
-      beforeClose: (closing) => mayClose(closing, deps),
+      beforeClose: (closing, atOnce) => mayClose(closing, deps, atOnce),
     });
     tabs.set(state.sessionId, tab);
     tab.side.sync();
@@ -731,7 +731,7 @@ function createTab(
   view: {
     isHeld(tab: HeldTab): boolean;
     shown(tab: HeldTab): void;
-    beforeClose(tab: HeldTab): boolean;
+    beforeClose(tab: HeldTab, atOnce: boolean): boolean;
   },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
@@ -842,7 +842,7 @@ function createTab(
     icon: 'comment',
     element: root,
     order: 2,
-    beforeClose: () => view.beforeClose(tab),
+    beforeClose: (atOnce) => view.beforeClose(tab, atOnce),
     shown: () => view.shown(tab),
   });
   tab.box = deps.editor.create(
@@ -1048,8 +1048,12 @@ function drawActivity(
 }
 
 // A session closes at once unless Claude is still working on it: then the
-// Chat tab shows and the end-session confirmation asks first.
-function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
+// Chat tab shows and the end-session confirmation asks first. A close another
+// tab asked to make at once asks nothing.
+function mayClose(tab: HeldTab, deps: ChatViewDeps, atOnce: boolean): boolean {
+  if (atOnce) {
+    return true;
+  }
   const isBusy =
     tab.state.running && tab.state.activity !== 'idle' && !tab.closeConfirmed;
   if (!isBusy) {

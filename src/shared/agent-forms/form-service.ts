@@ -1,14 +1,15 @@
 import path from 'node:path';
-import type {
-  AgentFormEndKind,
-  AgentFormListener,
-  AgentFormOwner,
-  AgentFormOwnerInfo,
-  AgentFormPresenter,
-  AgentFormService,
-  AgentFormSession,
-  AgentFormType,
-  AgentFormWake,
+import {
+  type AgentFormEndKind,
+  type AgentFormListener,
+  type AgentFormOwner,
+  type AgentFormOwnerInfo,
+  type AgentFormPresenter,
+  type AgentFormService,
+  type AgentFormSession,
+  type AgentFormType,
+  type AgentFormWake,
+  HOST_DEADLINE_FIELD,
 } from '../../contracts/agent-forms';
 import type { Timers } from '../../contracts/ambient';
 import type { AgentFormStore, SavedAgentForm } from './form-store';
@@ -86,13 +87,17 @@ interface SessionContext<Form, Body, Payload> {
   reportedUnreadable: Set<string>;
 }
 
+// The host's soft deadline when its record names a positive number of
+// seconds, else `defaultSeconds`.
 function deadlineSeconds(
   info: AgentFormOwnerInfo,
   defaultSeconds: number,
 ): number {
-  const hostSeconds = info.deadlineSeconds;
+  const hostSeconds = info.host?.[HOST_DEADLINE_FIELD];
   const hostNamedOne =
-    hostSeconds !== null && Number.isFinite(hostSeconds) && hostSeconds > 0;
+    typeof hostSeconds === 'number' &&
+    Number.isFinite(hostSeconds) &&
+    hostSeconds > 0;
   return hostNamedOne ? hostSeconds : defaultSeconds;
 }
 
@@ -371,6 +376,32 @@ function formFinishedUnheardText<Form, Body, Payload>(
   return `The user ${kind} the ${type.noun} "${type.heading(form)}" in the forms app. Call ${type.collectTool} for its answers.`;
 }
 
+// The user's submit or cancel, or a cancel for the closing session: the form
+// ends with `body`, leaves the window and wakes its waiting calls. A form no
+// call will return, made under the session's current host id, wakes the
+// session. The store logs a failed finish write rather than throwing, so the
+// answers still reach the waiting calls.
+function endForm<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  open: OpenForm<Form, Body>,
+  kind: AgentFormEndKind,
+  body: Body,
+): void {
+  open.end = { kind, body };
+  open.latestBody = body;
+  session.store.finish(open.record, kind, body);
+  closeInWindow(open, session.presenter);
+  const noCallWaits = open.callers === 0 && session.askTurn === null;
+  const madeUnderCurrentHost = session.formsHostId === session.info.sessionId;
+  wakeWaiters(open);
+  if (noCallWaits && madeUnderCurrentHost) {
+    session.wake.formFinishedUnheard(
+      session.sessionId,
+      formFinishedUnheardText(session.type, open.form, kind),
+    );
+  }
+}
+
 function formListener<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
@@ -384,28 +415,22 @@ function formListener<Form, Body, Payload>(
       // Throws when the disk write fails, so the page shows the draft unsaved.
       session.store.saveBody(open.record, open.latestBody);
     },
-    // The store logs a failed finish write rather than throwing, so the
-    // answers still reach the waiting calls. A form no call will return, made
-    // under the session's current host id, wakes the session.
     finish: (end) => {
       if (open.end !== null || open.closed) {
         return;
       }
-      const body = session.type.readBody(open.form, end.body);
-      open.end = { kind: end.kind, body };
-      open.latestBody = body;
-      session.store.finish(open.record, end.kind, body);
-      closeInWindow(open, session.presenter);
-      const noCallWaits = open.callers === 0 && session.askTurn === null;
-      const madeUnderCurrentHost =
-        session.formsHostId === session.info.sessionId;
-      wakeWaiters(open);
-      if (noCallWaits && madeUnderCurrentHost) {
-        session.wake.formFinishedUnheard(
-          session.sessionId,
-          formFinishedUnheardText(session.type, open.form, end.kind),
-        );
+      endForm(
+        session,
+        open,
+        end.kind,
+        session.type.readBody(open.form, end.body),
+      );
+    },
+    cancel: () => {
+      if (open.end !== null || open.closed) {
+        return;
       }
+      endForm(session, open, 'cancelled', open.latestBody);
     },
   };
 }

@@ -26,34 +26,61 @@ export interface AgentFormChannelPresenter<
 }
 
 // Shows forms on the page over the type's channel, each marked on its
-// session's row; keeps that row from closing while the form is open and
-// releases it when the form closes. Registers its channel handlers and close
-// guard once, which the plugin's stop removes. `source` names only the alert
-// open count; `announceTitle` titles each form's notification.
+// session's row with `markText` of the row's label and `markAction`; refuses
+// that row's close while the form is open, cancels the form when the close key
+// closes the session at once, and releases the row when the form closes.
+// Registers its channel handlers and close guard once, which the plugin's stop
+// removes. `source` names only the alert open count; `announceTitle` titles
+// each form's notification; `noun` names one form in the refusal.
 export function createAgentFormChannelPresenter<Form, Body>(deps: {
   channel: Pick<MainChannel<AgentFormChannel<Form, Body>>, 'handle' | 'send'>;
   alerts: Alerts;
   source: string;
   announceTitle: string;
+  noun: string;
+  markText(label: string): string;
+  markAction: string;
   window: { show(): void };
   log: PluginLog;
   sessions: AgentFormSessions;
 }): AgentFormChannelPresenter<Form, Body> {
-  const { channel, alerts, source, announceTitle, window, log, sessions } =
-    deps;
+  const {
+    channel,
+    alerts,
+    source,
+    announceTitle,
+    noun,
+    window,
+    log,
+    sessions,
+  } = deps;
   const open = new Map<string, OpenForm<Form, Body>>();
   const updateOpenCount = () =>
     alerts.setOpenCount(
       source,
       [...open.values()].filter((entry) => !entry.quiet).length,
     );
-  const hasOpenForm = (sessionId: string) =>
-    [...open.values()].some((entry) => entry.form.sessionId === sessionId);
+  const openFormsOf = (sessionId: string) =>
+    [...open.values()].filter((entry) => entry.form.sessionId === sessionId);
 
   // The form whose `finish` the page invoked, while that handler runs.
   let finishingFormId: string | null = null;
 
-  sessions.addCloseGuard((sessionId) => !hasOpenForm(sessionId));
+  const refusal = (sessionId: string) => {
+    const [held] = openFormsOf(sessionId);
+    return held === undefined
+      ? null
+      : `Finish or cancel ${held.form.label}'s ${noun} first`;
+  };
+  // Not a finish, so the page drops each form quietly.
+  const cancelHold = (sessionId: string) => {
+    for (const entry of openFormsOf(sessionId)) {
+      log(`closing the session cancels ${entry.form.label}`);
+      entry.listener.cancel();
+      close(entry.form.formId);
+    }
+  };
+  sessions.addCloseGuard(refusal, cancelHold);
 
   channel.handle('openForms', () =>
     [...open.values()].map((entry) => entry.form),
@@ -89,7 +116,10 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
     quiet: boolean,
   ) => {
     open.set(form.formId, { form, listener, quiet });
-    sessions.mark(form.sessionId);
+    sessions.mark(form.sessionId, {
+      text: deps.markText(sessions.label(form.sessionId) ?? form.label),
+      action: deps.markAction,
+    });
     channel.send('formShown', form);
     log(`form shown: ${form.label}`);
     if (quiet) {

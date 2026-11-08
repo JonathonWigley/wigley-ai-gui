@@ -1,3 +1,4 @@
+import { HOST_DEADLINE_FIELD } from '../../../contracts/agent-forms';
 import type { PageBind } from '../../../contracts/keymap';
 import type { OsName } from '../../../contracts/platform';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
@@ -652,12 +653,6 @@ const SECOND_SESSION_STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['<A-o>'], expect: '[sessions] showed Form tab in selftest 2' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel selftest · Second self-test round',
-  },
-  { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem' },
   { keys: ['<A-p>'], expect: '[forms] jumped to question 1' },
   stepToRow('<A-S-i>', 'selftest'),
@@ -689,14 +684,10 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   stepToRow('<A-S-i>', 'Layout preview'),
   {
     keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel Layout preview · Layout preview',
-  },
-  {
-    keys: ['y'],
     expect: '[sessions] activated Codex session',
+    alsoExpect: [/^\[forms\] closing the session cancels Layout preview$/],
     checksFit: true,
-    why: "Cancelling closes the session and selects its left neighbour in main's rows, the Codex session with no folder.",
+    why: "The close key cancels the open round and closes the session at once, which selects its left neighbour in main's rows, the Codex session with no folder.",
   },
   {
     keys: ['R'],
@@ -830,13 +821,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
   { keys: ['C'], expect: '[page] C ran forms.askCancel' },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   { keys: [' ', '?'], expect: '[page]  ? ran keys.toggleHelp' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel selftest · Self-test round',
-    why: 'The cancel prompt closes help.',
-  },
-  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   {
     keys: ['o', 'n', 'o', 't', 'e', 'Escape', 'Escape'],
     expect: '[forms] left the box',
@@ -850,12 +835,6 @@ const REVIEW_STEPS: SelfTestStep[] = [
 
 const SAMPLE_ROUND_AGAIN_STEPS: SelfTestStep[] = [
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel Layout preview · Layout preview',
-  },
-  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
 ];
 
 // Code and tables scroll in their own box; a Docs tab's paths and status line
@@ -1216,7 +1195,7 @@ export function formsSelfTestScript(
       sessionId,
       projectDir,
       harness,
-      deadlineSeconds: 120,
+      host: { [HOST_DEADLINE_FIELD]: 120 },
     });
   return {
     pageBinds: PAGE_BINDS,
@@ -1251,8 +1230,8 @@ export function formsSelfTestScript(
           {
             sessionId: idleSessionId,
             projectDir: null,
-            deadlineSeconds: 120,
             harness: 'codex',
+            host: { [HOST_DEADLINE_FIELD]: 120 },
           },
           { select: false },
         );
@@ -1319,7 +1298,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'second session',
-        why: 'The second session cycles its Form and Docs tabs, keeps its round when its cancel prompt is dismissed, and Option+p finds its untouched question.',
+        why: 'The second session cycles its Form and Docs tabs, and Option+p finds its untouched question.',
         steps: SECOND_SESSION_STEPS,
       },
       {
@@ -1329,7 +1308,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'cancelled preview',
-        why: "Cancelling the preview round closes its session and selects a Codex session with no folder, where no form keeps its scope; stepping back gives the first session's form its scope again.",
+        why: "The close key cancels the preview round and closes its session with no prompt, selecting a Codex session with no folder, where no form keeps its scope; stepping back gives the first session's form its scope again.",
         steps: CANCELLED_PREVIEW_STEPS,
       },
       {
@@ -1344,7 +1323,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'sample round again',
-        why: 'Reopening the sample round selects its new preview session, which then shows the cancel prompt that n dismisses.',
+        why: 'Reopening the sample round selects its new preview session.',
         steps: SAMPLE_ROUND_AGAIN_STEPS,
       },
     ],

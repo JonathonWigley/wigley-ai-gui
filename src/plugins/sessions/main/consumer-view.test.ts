@@ -7,7 +7,6 @@ import { sessionsMainView } from './consumer-view';
 const INFO: SessionInfo = {
   sessionId: 'host',
   projectDir: null,
-  deadlineSeconds: null,
   harness: 'claude',
 };
 

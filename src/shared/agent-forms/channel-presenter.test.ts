@@ -3,6 +3,7 @@ import type {
   AgentFormChannel,
   AgentFormEnd,
   AgentFormListener,
+  AgentFormMarkOptions,
   AgentFormSessions,
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
@@ -71,48 +72,70 @@ function fakeAlerts() {
   return { alerts, announced, counts };
 }
 
-// Records row calls into `calls` and keeps the close guards added.
-function fakeSessions(calls: string[]) {
-  const guards: ((sessionId: string) => boolean)[] = [];
+// Records row calls into `calls` and each mark's options into `marks`, keeps
+// the close guards added, and labels the rows `labels` names.
+function fakeSessions(calls: string[], labels: ReadonlyMap<string, string>) {
+  const guards: {
+    mayClose: (sessionId: string) => string | null;
+    cancelHold?: (sessionId: string) => void;
+  }[] = [];
+  const marks: AgentFormMarkOptions[] = [];
   const sessions: AgentFormSessions = {
-    mark: (sessionId) => calls.push(`mark ${sessionId}`),
+    mark: (sessionId, options) => {
+      calls.push(`mark ${sessionId}`);
+      marks.push(options);
+    },
     activateExistingRow: (sessionId) =>
       calls.push(`activateExistingRow ${sessionId}`),
-    addCloseGuard: (mayClose) => {
-      guards.push(mayClose);
+    addCloseGuard: (mayClose, cancelHold) => {
+      guards.push({ mayClose, cancelHold });
       return {
         dispose: () => undefined,
       };
     },
     release: (sessionId) => calls.push(`release ${sessionId}`),
+    label: (sessionId) => labels.get(sessionId) ?? null,
   };
-  const mayClose = (sessionId: string) =>
-    guards.every((guard) => guard(sessionId));
-  return { sessions, mayClose };
+  const refusal = (sessionId: string) =>
+    guards.map((guard) => guard.mayClose(sessionId)).find((r) => r !== null) ??
+    null;
+  const cancelHolds = (sessionId: string) => {
+    for (const guard of guards) {
+      guard.cancelHold?.(sessionId);
+    }
+  };
+  return { sessions, marks, refusal, cancelHolds };
 }
 
 function fakeListener() {
   const drafts: TestBody[] = [];
   const finishes: TestEnd[] = [];
+  let cancels = 0;
   const listener: AgentFormListener<TestBody> = {
     draft: (body) => drafts.push(body),
     finish: (end) => finishes.push(end),
+    cancel: () => {
+      cancels++;
+    },
   };
-  return { listener, drafts, finishes };
+  return { listener, drafts, finishes, cancels: () => cancels };
 }
 
-function setUp() {
+function setUp(labels: ReadonlyMap<string, string> = new Map()) {
   const calls: string[] = [];
   const page = fakeChannel(calls);
   const window = fakeWindow();
   const attention = fakeAlerts();
   const logged: string[] = [];
-  const tabs = fakeSessions(calls);
+  const tabs = fakeSessions(calls, labels);
   const presenter = createAgentFormChannelPresenter({
     channel: page.channel,
     alerts: attention.alerts,
     source: 'forms',
     announceTitle: 'New review round',
+    noun: 'round',
+    markText: (label) => `Round from ${label}`,
+    markAction: 'answer',
     window: window.window,
     log: (message: string) => logged.push(message),
     sessions: tabs.sessions,
@@ -129,7 +152,9 @@ function setUp() {
     window,
     attention,
     logged,
-    mayClose: tabs.mayClose,
+    marks: tabs.marks,
+    refusal: tabs.refusal,
+    cancelHolds: tabs.cancelHolds,
     presenter,
     openForms,
     finish,
@@ -197,20 +222,62 @@ describe('createAgentFormChannelPresenter', () => {
     expect(window.shown()).toBe(1);
   });
 
-  it("refuses to close a session's row while its form is open", () => {
-    const { mayClose, presenter, finish } = setUp();
+  it('open form refuses with its reason and closed form allows', () => {
+    const { refusal, presenter, finish } = setUp();
     presenter.show(FORM, fakeListener().listener);
     presenter.show(
       { ...FORM, formId: 'form-2', sessionId: 'app-2' },
       fakeListener().listener,
     );
 
-    expect(mayClose('app-1')).toBe(false);
-    expect(mayClose('app-3')).toBe(true);
+    expect(refusal('app-1')).toBe(
+      "Finish or cancel wigley-ai-gui · Pick a theme's round first",
+    );
+    expect(refusal('app-3')).toBeNull();
     finish('form-1', { kind: 'cancelled', body: BODY });
     presenter.close('form-2');
-    expect(mayClose('app-1')).toBe(true);
-    expect(mayClose('app-2')).toBe(true);
+    expect(refusal('app-1')).toBeNull();
+    expect(refusal('app-2')).toBeNull();
+  });
+
+  it('cancel hold cancels the sessions form and says not by finish', () => {
+    const { page, logged, refusal, cancelHolds, presenter } = setUp();
+    const held = fakeListener();
+    const other = fakeListener();
+    presenter.show(FORM, held.listener);
+    presenter.show(
+      { ...FORM, formId: 'form-2', sessionId: 'app-2' },
+      other.listener,
+    );
+    logged.length = 0;
+
+    cancelHolds('app-1');
+
+    expect(held.cancels()).toBe(1);
+    expect(other.cancels()).toBe(0);
+    expect(page.sent.at(-1)).toEqual([
+      'formClosed',
+      { formId: 'form-1', byFinish: false },
+    ]);
+    expect(logged).toEqual([
+      'closing the session cancels wigley-ai-gui · Pick a theme',
+    ]);
+    expect(refusal('app-1')).toBeNull();
+    expect(refusal('app-2')).not.toBeNull();
+  });
+
+  it.each([
+    { labels: new Map([['app-1', 'gamma 2']]), text: 'Round from gamma 2' },
+    {
+      labels: new Map<string, string>(),
+      text: 'Round from wigley-ai-gui · Pick a theme',
+    },
+  ])('mark words the toast with the row label: $text', ({ labels, text }) => {
+    const { marks, presenter } = setUp(labels);
+
+    presenter.show(FORM, fakeListener().listener);
+
+    expect(marks).toEqual([{ text, action: 'answer' }]);
   });
 
   it('serves open forms with their latest draft and passes drafts on', () => {
@@ -227,6 +294,7 @@ describe('createAgentFormChannelPresenter', () => {
   it("throws a draft's failed save out of the handler, so the page's invoke rejects", () => {
     const { presenter, saveDraft } = setUp();
     presenter.show(FORM, {
+      cancel: () => {},
       draft: () => {
         throw new Error('could not save form form-1: EACCES');
       },
@@ -271,8 +339,9 @@ describe('createAgentFormChannelPresenter', () => {
   });
 
   it("keeps a form open and rejects the page's finish when its listener throws", () => {
-    const { page, attention, mayClose, presenter, openForms, finish } = setUp();
+    const { page, attention, refusal, presenter, openForms, finish } = setUp();
     presenter.show(FORM, {
+      cancel: () => {},
       draft: () => {},
       finish: () => {
         throw new Error('form form-1 has no item 3');
@@ -285,13 +354,14 @@ describe('createAgentFormChannelPresenter', () => {
     expect(openForms()).toEqual([FORM]);
     expect(page.sent).toEqual([['formShown', FORM]]);
     expect(attention.counts).toEqual([['forms', 1]]);
-    expect(mayClose('app-1')).toBe(false);
+    expect(refusal('app-1')).not.toBeNull();
   });
 
   it('sends the page one close, by its finish, for a form its own finish closes', () => {
     const { page, presenter, finish } = setUp();
     const end: TestEnd = { kind: 'cancelled', body: BODY };
     presenter.show(FORM, {
+      cancel: () => {},
       draft: () => {},
       finish: () => presenter.close('form-1'),
     });
