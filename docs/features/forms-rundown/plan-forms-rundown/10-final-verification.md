@@ -1,6 +1,6 @@
 # 10 — Final verification and landing
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -127,3 +127,4 @@ Commit:    none; a fix found here is committed by the task that owns its file.
 
 ## Proof
 
+Commit e6a27daf · proof: on the rebased gui (main bc18cdfc): npm test 544 files/10205 tests, typecheck, lint (after 410b4c70 reflow), selftest forms and chat all pass; six forms screenshots read against DESIGN.md and match; live checks 1-8 pass (drive run forms-rundown); marketplace: check_manifests, --against origin/main (after 1.20.3 d4c4874), check_pointers, every unittest suite and claude plugin validate pass; landing runs at close · concerns: first forms selftest failed the fit check on span.notice-line-title (meant to ellipsize, not exempted) — fixed in e6a27daf (SCROLLS_ITSELF plus a full-text tooltip on both the default and app-drawn title)

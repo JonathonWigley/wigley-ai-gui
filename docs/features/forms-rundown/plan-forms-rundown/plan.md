@@ -251,7 +251,7 @@ Boundary rules:
 - [x] [Doc re-read](09-doc-re-read.md) — after 07, 08
 
 ### Wave 7
-- [ ] [Final verification](10-final-verification.md) — after 09; its § Landing runs at close
+- [x] [Final verification](10-final-verification.md) — after 09; its § Landing runs at close
 
 ## Run log
 
@@ -267,6 +267,7 @@ Review base: 21b036cb
 - 05 · 2871e979 · diff read: buildNoticesPane, NoticeLineInput, NoticesInput, NoticesKit.line, Layout.notices, PANES/read-layout notices, buildLayoutCard rollback, default notices pane and headless notice card, interim removed, za anchor on cursor line all present; typecheck passes; worker full npm test (10176) and lint pass · concerns: Enter on the notices stop also toggles the cursor line (from 04; vim key, no anchor); live look unchecked (head inside collapsible button, hidden empty summary, prompt position, editors in hidden bodies) — task 10
 - 07 · a0475c08 · diff read: summary renames incl. SELFTEST_LAYOUT input.summary, j/k expects now nextLine/prevLine (only PAGE_BINDS keeps nextItem), preview walk with preview-question, finding picks and round layouts re-walks, NOTICE_COMMENT_STEPS group, reconsider payload check all present; typecheck passes; worker lint passes · concerns: finding picks step 1 (Space k k) logs k ran forms.prevLine twice in one step — the race the task doc warns of; watch in task 10's self-test run; round layouts last step's why now names the notice comments group
 - 09 · a93dd7e3 · diff read: plugin-framework design.md za line fixed; every other named doc (AG/forms.md, AG/AGENTS.md, feature SKILL.md, triage.md, forms README, G/AGENTS.md, layouts design.md, keymap.md) checked and true, no edit in agents or marketplace; pointer check passed · concerns: none
+- 10 · e6a27daf · on the rebased gui (main bc18cdfc): npm test 544 files/10205 tests, typecheck, lint (after 410b4c70 reflow), selftest forms and chat all pass; six forms screenshots read against DESIGN.md and match; live checks 1-8 pass (drive run forms-rundown); marketplace: check_manifests, --against origin/main (after 1.20.3 d4c4874), check_pointers, every unittest suite and claude plugin validate pass; landing runs at close · concerns: first forms selftest failed the fit check on span.notice-line-title (meant to ellipsize, not exempted) — fixed in e6a27daf (SCROLLS_ITSELF plus a full-text tooltip on both the default and app-drawn title)
 ### Contract changes
 ### Rulings
 - Rebased the gui and agents branches onto main at preflight (9 and 1 commits behind); the docs-written-ahead commits are now gui 3c06d4c3 (was 4d679c5c) and agents 67c4697 (was 64ba2e3); review bases: gui 21b036cb, marketplace 3689c72, agents 67c4697 — work builds on origin's latest — a stale sha in a later brief would mislead a re-read · lead
@@ -285,3 +286,4 @@ Review base: 21b036cb
 - Rebased gui onto main bc18cdfc at task 10 (12 commits, incl. e38de06f dropping ask_round's item caps); keymap.md raw-key line merged both sides; group commits now 03 a4fca096, 01 5124b14d, 06 4e662d6d, 02 1cb7db0a, 04 35148c85, 05 b40572de, 07 dd2f5cb7, 09 44533956, 10 fix e6a27daf; gui review base now 3910924d (the plan commit) — work builds on origin's latest — a stale sha misleads the review range · lead
 ### Review rounds
 ### Test gate
+- gui: npm test 10205/10205, typecheck, lint, selftest --plugin forms and --plugin chat pass on HEAD 410b4c70 (rebased onto main bc18cdfc); marketplace: manifests (also vs origin/main), pointers, scripts/tests, docs-index, forms, plan, retro, unity-playtest, unity-ux-flow suites and plugin validate pass on d4c4874; agents: pointer check passes on a59ec37
