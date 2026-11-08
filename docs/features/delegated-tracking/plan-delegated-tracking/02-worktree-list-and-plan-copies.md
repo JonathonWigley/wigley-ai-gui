@@ -1,6 +1,6 @@
 # 02 — Worktree list and plan copies
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -181,3 +181,5 @@ Done when: `npm test` passes and `npm run lint` passes. The test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 8fa2e4c7 · proof: diff read: GitWorktree, worktrees, commonDir in git contract and process-git; PlanCopy, PlanCopyDeps, repoTop, planCopies, newestPlanCopy, readPlanCopy in src/shared/plan-copies.ts; full typecheck clean; git/backlog/docs/plan-copies tests pass (1368) · concerns: AGENTS.md git/ entry names worktrees but not commonDir (for 09)

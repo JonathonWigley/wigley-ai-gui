@@ -214,7 +214,7 @@ Boundary rules:
 - [x] [Subagent lines in the decoder](05-subagent-lines-in-decoder.md)
 
 ### Wave 2
-- [ ] [Worktree list and plan copies](02-worktree-list-and-plan-copies.md) — after 01
+- [x] [Worktree list and plan copies](02-worktree-list-and-plan-copies.md) — after 01
 
 ### Wave 3
 - [ ] [Heavy reads the newest plan copy](06-heavy-newest-plan-copy.md) — after 01, 02
@@ -237,6 +237,7 @@ Review base: 9980e669
 - 01 · dde8194a · diff read: TaskStatus, TASK_STATUSES, PlanTaskLine (file, status), PlanProgress, readPlanProgress(planText, taskTexts), readTaskStatus in src/shared/plan-progress.ts; plan-reader.ts gone; heavy + plan-progress tests pass (472); check-layers clean for its files · concerns: git mv staged the renames; oxfmt not yet run (lint gate at wave end); test helpers UNLINKED/linked() instead of literal rows
 - 04 fix · 97f9d4ff · layer check passes for workflow files; tests pass (54) · concerns: none
 - 05 · 9c23d58b · diff read: agentId on assistant/thinking entries; transcript skips subagent text; held ends, hand-back end, relisting in stream-decoder; follow-up removed; decoder/chat/agents tests pass; typecheck clean for its files · concerns: activity-runs.test.ts also needed agentId (not in Files); a subagent stream_event text block could show the dock as writing (decoder-only case); oxfmt not run
+- 02 · 8fa2e4c7 · diff read: GitWorktree, worktrees, commonDir in git contract and process-git; PlanCopy, PlanCopyDeps, repoTop, planCopies, newestPlanCopy, readPlanCopy in src/shared/plan-copies.ts; full typecheck clean; git/backlog/docs/plan-copies tests pass (1368) · concerns: AGENTS.md git/ entry names worktrees but not commonDir (for 09)
 ### Contract changes
 ### Rulings
 - Ended/aborted checks after the guard wait run only when a guard was registered at call time; with none the handler runs same-tick as before — Decisions call these checks new to the guard wait — once chat's guard lands every call takes the checks · group 03 · group 03
@@ -245,5 +246,6 @@ Review base: 9980e669
 - Task 04's nested-subagents test lives in main/agent-signals.test.ts (fix 97f9d4ff), not flow.test.ts as its Tests line says — the root may not import main/ — none · lead
 - A relisted subagent's agentReplied is rebuilt from kept model/context, so its contextWindow is the model's current window — matches later replies — a window learned off-roster shows one event early · group 05 · group 05
 - isDockStep keeps raw steps (no agentId) and main-agent steps — raw carries no agentId — none · group 05 · group 05
+- planCopies falls back to the copy at planDir with no log when git.worktrees rejects — task step 6 — a persistently failing worktree list goes unreported unless 06/07 log it · group 02 · group 02
 ### Review rounds
 ### Test gate

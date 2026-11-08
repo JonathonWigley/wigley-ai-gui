@@ -304,7 +304,10 @@ describe('createSessionList', () => {
     {
       case: 'skip first',
       guards: ['g1', 'g2'],
-      answers: { g1: { kind: 'skip', text: 'first says no' }, g2: { kind: 'run' } },
+      answers: {
+        g1: { kind: 'skip', text: 'first says no' },
+        g2: { kind: 'run' },
+      },
       result: {
         resolves: { content: [{ type: 'text', text: 'first says no' }] },
       },
@@ -341,7 +344,10 @@ describe('createSessionList', () => {
     {
       case: 'a guard disposed during its own answer',
       guards: ['g1', 'g2'],
-      answers: { g1: { kind: 'skip', text: 'still decides' }, g2: { kind: 'run' } },
+      answers: {
+        g1: { kind: 'skip', text: 'still decides' },
+        g2: { kind: 'run' },
+      },
       held: 'g1',
       whileHeld: ({ registrations }) => registrations[0].dispose(),
       result: {

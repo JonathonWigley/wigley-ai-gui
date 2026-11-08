@@ -889,9 +889,7 @@ function transcriptEntries(
   entries: readonly ChatEntry[],
   activityInTranscript: boolean,
 ): readonly ChatEntry[] {
-  return entries.filter((entry) =>
-    isInTranscript(entry, activityInTranscript),
-  );
+  return entries.filter((entry) => isInTranscript(entry, activityInTranscript));
 }
 
 // What a layout draws `entry` from: the entry; a result with its turn's step
