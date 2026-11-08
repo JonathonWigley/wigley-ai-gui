@@ -1,5 +1,5 @@
 import type { Files } from '../../contracts/files';
-import type { Git, GitCommit } from '../../contracts/git';
+import type { Git, GitCommit, GitWorktree } from '../../contracts/git';
 import type { Paths } from '../../contracts/paths';
 import type { ProcessRunner } from '../../contracts/processes';
 
@@ -70,6 +70,26 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         .split('\n')
         .map((gitPath) => fullGitPath(root, gitPath, deps.paths));
       return !deps.paths.samePath(gitDir, commonDir);
+    },
+    worktrees: async (root) =>
+      worktreeRecords(
+        await gitOutput(processes, 'worktree', [
+          '-C',
+          root,
+          'worktree',
+          'list',
+          '--porcelain',
+        ]),
+        deps.paths,
+      ),
+    commonDir: async (root) => {
+      const output = await gitOutput(processes, 'rev-parse', [
+        '-C',
+        root,
+        'rev-parse',
+        '--git-common-dir',
+      ]);
+      return fullGitPath(root, output.trim(), deps.paths);
     },
     hasUpstream: async (root) => {
       const result = await processes.run('git', [
@@ -299,6 +319,38 @@ function logCommits(output: string): GitCommit[] {
     commits.push({ sha, subject, at, paths });
   }
   return commits;
+}
+
+// The checkouts of a `worktree list --porcelain` run, whose records end at an
+// empty line and hold `<label>` or `<label> <value>` lines; git lists the main
+// tree first. A record with no `worktree` line is skipped.
+function worktreeRecords(output: string, paths: Paths): GitWorktree[] {
+  const trees: GitWorktree[] = [];
+  let path: string | null = null;
+  let branch: string | null = null;
+  const endRecord = () => {
+    if (path !== null) {
+      trees.push({ path, branch, isMain: trees.length === 0 });
+    }
+    path = null;
+    branch = null;
+  };
+  for (const line of output.split('\n')) {
+    if (line === '') {
+      endRecord();
+      continue;
+    }
+    const space = line.indexOf(' ');
+    const label = space === -1 ? line : line.slice(0, space);
+    const value = space === -1 ? '' : line.slice(space + 1);
+    if (label === 'worktree') {
+      path = paths.normalize(value);
+    } else if (label === 'branch') {
+      branch = value.replace(/^refs\/heads\//, '');
+    }
+  }
+  endRecord();
+  return trees;
 }
 
 // A path `git -C <root> rev-parse` printed, which is relative to `root`

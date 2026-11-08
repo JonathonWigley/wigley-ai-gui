@@ -136,6 +136,10 @@ function fakeGit() {
     originRepoName: vi.fn<Git['originRepoName']>(async () => null),
     currentBranch: vi.fn<Git['currentBranch']>(async () => 'main'),
     isLinkedWorktree: vi.fn<Git['isLinkedWorktree']>(async () => false),
+    worktrees: vi.fn<Git['worktrees']>(async () => [
+      { path: CLONE, branch: 'main', isMain: true },
+    ]),
+    commonDir: vi.fn<Git['commonDir']>(async () => `${CLONE}/.git`),
     hasUpstream: vi.fn<Git['hasUpstream']>(async () => true),
     changedPaths: vi.fn<Git['changedPaths']>(async () => []),
     unpushedPaths: vi.fn<Git['unpushedPaths']>(async () => []),

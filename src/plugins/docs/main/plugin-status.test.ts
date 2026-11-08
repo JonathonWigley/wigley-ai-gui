@@ -101,6 +101,10 @@ function cleanGit() {
     originRepoName: vi.fn<Git['originRepoName']>(async () => null),
     currentBranch: vi.fn<Git['currentBranch']>(async () => 'main'),
     isLinkedWorktree: vi.fn<Git['isLinkedWorktree']>(async () => false),
+    worktrees: vi.fn<Git['worktrees']>(async () => [
+      { path: ROOT, branch: 'main', isMain: true },
+    ]),
+    commonDir: vi.fn<Git['commonDir']>(async () => `${ROOT}/.git`),
     hasUpstream: vi.fn<Git['hasUpstream']>(async () => true),
     changedPaths: vi.fn<Git['changedPaths']>(async () => []),
     unpushedPaths: vi.fn<Git['unpushedPaths']>(async () => []),
