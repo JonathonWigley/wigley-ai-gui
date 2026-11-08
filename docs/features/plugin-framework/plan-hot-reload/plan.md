@@ -339,6 +339,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 ### Review rounds
 - Round 1 at ba07909d (db7bff7d..ba07909d), 9 lanes: NEEDS FIXES — 12 Important, 28 Minor, 1 pre-existing; every pick per AGENTS.md § Review (no form): fixes dispatched one worker per file; findings 5, 6, 12, 39, 41 to follow-ups. Report /tmp/claude-hot-reload/review-ba07909d.md
 - Re-review cycle 1 at 9ae7d88c (fix range 96304726..adf91312, 2 correctness lanes): every round-1 finding closed; NEEDS FIXES — 3 Minor (restart undo stops at the first throw, a repeat of R1#3; retry timer set after dispose; no test pins the pick-time status read). Fix cycle 2 dispatched. Report /tmp/claude-hot-reload/review-9ae7d88c.md
+- Re-review cycle 2 at d5300b54 (5b7ca45d, d5300b54): #1-#3 closed; 1 Minor (stale restart comment), lead-applied and compiled. PASS after the lead-applied fix. Repeat for step 8: the restart undo (R1#3, then the per-id start in cycle 2).
 ### Test gate
 - vitest whole suite after task 11 (HEAD 44e39dda): 539 files, 10378 tests passed, no type errors; filtered self-tests and drive checks are task 13's
 - filtered self-tests at 8916ae71, one run each: settings, forms, primer, docs, backlog, agent-lines, agent-skills, agent-strip, chat, notes, sessions, unity-pool, usage, workflow-heavy, workflow-light, workflow-medium — all passed first run (logs /tmp/claude-hot-reload/selftest/<id>.log)
