@@ -240,8 +240,9 @@ function routeCall(
 // `cancelHold` inside an at-once `closeSession`, or in between the user
 // activated a row, a row was opened selected, a mark selected another session
 // from none, or `release` closed another selected row. A mark that reaches a
-// row not selected stores its options as the row's `markToast` while that is null, and
-// an activate clears it. `activateExistingRow` selects
+// row not selected stores its options as the row's `markToast` unless the row
+// is still marked, so a toast left on a row a mark selected never outlives the
+// next mark; an activate clears it. `activateExistingRow` selects
 // only a row the session holds and logs and ignores one with none. `mark`,
 // `activate`, `activateExistingRow`, `release` and `closeSession` write only what
 // changed; `mark`, `activate`, `activateExistingRow`
@@ -700,8 +701,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected or marked like any other.
       const held = rows.get(sessionId) ?? rowOf(entry);
-      const row =
-        held.markToast === null ? { ...held, markToast: options } : held;
+      const row = held.marked ? held : { ...held, markToast: options };
       if (selectedSessionId() === null || isReturningToSelection) {
         reselectOnReturn = null;
         selectRow(row);

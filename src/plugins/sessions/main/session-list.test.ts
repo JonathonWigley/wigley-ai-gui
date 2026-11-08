@@ -782,6 +782,22 @@ describe('createSessionList', () => {
     expect(markToastOf()).toEqual(later);
   });
 
+  it('a mark replaces the toast a mark that selected the row left there', () => {
+    const { list } = setUp();
+    const a = connectWithRow(list, info('/work/x')).session.id;
+    const b = connectWithRow(list, info('/work/y')).session.id;
+    const later = { text: 'Turn finished in x', action: 'read it' };
+    const markToastOf = () =>
+      list.state().rows.find((row) => row.sessionId === a)?.markToast;
+    expect(list.state().selectedSessionId).toBe(a);
+    expect(markToastOf()).toEqual(MARK);
+
+    list.activate(b);
+    list.mark(a, later);
+
+    expect(markToastOf()).toEqual(later);
+  });
+
   it('starts a contribution added after a session connected, and routes its calls', async () => {
     const { list } = setUp();
     const connected = list.connect(info('/work/x'));

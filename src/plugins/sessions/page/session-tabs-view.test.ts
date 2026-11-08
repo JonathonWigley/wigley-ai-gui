@@ -78,7 +78,8 @@ function viewOverSavedPlace(saved: SessionsPlace) {
   const selected = () => view.tabs.selectedTabOf('s')?.id;
   const savedTabIds = () =>
     places.get('s')?.takeOvers.map((takeOver) => takeOver.tabId);
-  return { view, selected, savedTabIds };
+  const savedSelectedTabId = () => places.get('s')?.selectedTabId;
+  return { view, selected, savedTabIds, savedSelectedTabId };
 }
 
 let moves: { element: unknown; to: unknown }[];
@@ -404,22 +405,36 @@ describe('session tabs view', () => {
     },
   );
 
-  it('fresh_take_over_replaces_a_stale_saved_record', () => {
-    const { view, selected } = viewOverSavedPlace({
+  it.each([
+    {
+      case: 'the saved place selected another tab',
       selectedTabId: 'chat',
-      selections: 5,
-      takeOvers: [{ tabId: 'form', previousTabId: 'docs', selections: 0 }],
-    });
-    view.tabs.add('s', tabView('chat'));
-    view.tabs.add('s', tabView('docs'));
-    const form = view.tabs.add('s', tabView('form'));
+      previousTabId: 'docs',
+    },
+    {
+      case: 'only the restored add selected the taking tab',
+      selectedTabId: 'form',
+      previousTabId: 'chat',
+    },
+  ])(
+    'fresh_take_over_replaces_a_stale_saved_record ($case)',
+    ({ selectedTabId, previousTabId }) => {
+      const { view, selected } = viewOverSavedPlace({
+        selectedTabId,
+        selections: 5,
+        takeOvers: [{ tabId: 'form', previousTabId, selections: 0 }],
+      });
+      view.tabs.add('s', tabView('chat'));
+      view.tabs.add('s', tabView('docs'));
+      const form = view.tabs.add('s', tabView('form'));
 
-    const taken = form.takeOver();
-    expect(selected()).toBe('form');
-    taken.release();
+      const taken = form.takeOver();
+      expect(selected()).toBe('form');
+      taken.release();
 
-    expect(selected()).toBe('chat');
-  });
+      expect(selected()).toBe('chat');
+    },
+  );
 
   it('restored_take_over_with_no_saved_record_releases_nothing', () => {
     const { view, selected } = viewOverSavedPlace({
@@ -469,18 +484,20 @@ describe('session tabs view', () => {
   );
 
   it('late_tab_keeps_its_saved_record_past_the_first_set_tabs', () => {
-    const { view, selected } = viewOverSavedPlace({
+    const { view, selected, savedSelectedTabId } = viewOverSavedPlace({
       selectedTabId: 'form',
       selections: 0,
       takeOvers: [{ tabId: 'form', previousTabId: 'chat', selections: 0 }],
     });
     view.tabs.add('s', tabView('chat'));
     view.tabs.add('s', tabView('docs'));
+    expect(savedSelectedTabId()).toBe('form');
     const form = view.tabs.add('s', tabView('form'));
     expect(selected()).toBe('form');
 
     form.takeOver({ restored: true }).release();
 
     expect(selected()).toBe('chat');
+    expect(savedSelectedTabId()).toBe('chat');
   });
 });

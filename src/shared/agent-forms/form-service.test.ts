@@ -831,6 +831,14 @@ describe('the wake', () => {
       },
       expected: [['app-1', CANCELLED_TEXT]],
     },
+    {
+      case: "cancelled by its session's close after its only call returned a draft",
+      finishWithCallsAround: async (session) => {
+        const formId = await openPastDraft(session);
+        presenter.cancelHold(formId);
+      },
+      expected: [],
+    },
   ])(
     'wakes the session only when no call will return the form: $case',
     async ({ finishWithCallsAround, expected }) => {

@@ -377,15 +377,17 @@ function formFinishedUnheardText<Form, Body, Payload>(
 }
 
 // The user's submit or cancel, or a cancel for the closing session: the form
-// ends with `body`, leaves the window and wakes its waiting calls. A form no
-// call will return, made under the session's current host id, wakes the
-// session. The store logs a failed finish write rather than throwing, so the
-// answers still reach the waiting calls.
+// ends with `body`, leaves the window and wakes its waiting calls. A form the
+// user finished that no call will return, made under the session's current
+// host id, wakes the session; the closing session's cancel wakes none. The
+// store logs a failed finish write rather than throwing, so the answers still
+// reach the waiting calls.
 function endForm<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
   kind: AgentFormEndKind,
   body: Body,
+  endedBy: 'user' | 'sessionClose',
 ): void {
   open.end = { kind, body };
   open.latestBody = body;
@@ -394,7 +396,7 @@ function endForm<Form, Body, Payload>(
   const noCallWaits = open.callers === 0 && session.askTurn === null;
   const madeUnderCurrentHost = session.formsHostId === session.info.sessionId;
   wakeWaiters(open);
-  if (noCallWaits && madeUnderCurrentHost) {
+  if (noCallWaits && madeUnderCurrentHost && endedBy === 'user') {
     session.wake.formFinishedUnheard(
       session.sessionId,
       formFinishedUnheardText(session.type, open.form, kind),
@@ -424,13 +426,14 @@ function formListener<Form, Body, Payload>(
         open,
         end.kind,
         session.type.readBody(open.form, end.body),
+        'user',
       );
     },
     cancel: () => {
       if (open.end !== null || open.closed) {
         return;
       }
-      endForm(session, open, 'cancelled', open.latestBody);
+      endForm(session, open, 'cancelled', open.latestBody, 'sessionClose');
     },
   };
 }
