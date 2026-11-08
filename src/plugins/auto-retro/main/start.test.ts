@@ -1,0 +1,424 @@
+import { describe, expect, it } from 'vitest';
+import type { ProcessActivity } from '../../../contracts/agent';
+import { readIfPresent } from '../../../contracts/files';
+import type { RunMode } from '../../../contracts/plugin';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
+import {
+  type ChatMainEvents,
+  type ChatMainExports,
+  type ChatSessionInfo,
+  chatMainKey,
+  chatSessionSlot,
+  type LaunchRequest,
+  type SessionCloseReason,
+} from '../../chat/contract';
+import {
+  type SessionRow,
+  type SessionsMainExports,
+  sessionsMainKey,
+  sessionsRowsSlot,
+  type TitleSource,
+} from '../../sessions/contract';
+import { autoRetroStateSlot } from '../contract';
+import { QUEUE_FILE } from './queue-file';
+import { DEFAULT_SETTLE_SECONDS, RESTORE_WAIT_MS } from './retro-done';
+import type { RetroQueue } from './retro-queue';
+import { autoRetroMainPart } from './start';
+
+const QUEUE_PATH = `/data/auto-retro/${QUEUE_FILE}`;
+const SETTLE_MS = DEFAULT_SETTLE_SECONDS * 1000;
+
+const settled = () => new Promise((settle) => setImmediate(settle));
+
+function rowOf(sessionId: string, hostSessionId: string): SessionRow {
+  return {
+    sessionId,
+    label: sessionId,
+    project: 'wigley-agents',
+    harness: 'claude',
+    marked: false,
+    projectDir: '/home/me/wigley-agents',
+    hostSessionId,
+    titles: { user: null, agent: null, firstMessage: null },
+    profileDir: null,
+  };
+}
+
+function closedEvent(
+  hostSessionId: string,
+  reason: SessionCloseReason = 'user',
+): ChatMainEvents['sessionClosed'] {
+  return {
+    sessionId: `row-${hostSessionId}`,
+    hostSessionId,
+    projectDir: '/home/me/project',
+    profile: 'work',
+    titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
+    sent: true,
+    reason,
+  };
+}
+
+function sessionInfo(
+  sessionId: string,
+  activity: ProcessActivity,
+): ChatSessionInfo {
+  return {
+    sessionId,
+    projectDir: '/home/me/wigley-agents',
+    profile: 'work',
+    activity,
+    background: 0,
+    activeTime: { totalMs: 0, since: null },
+    running: true,
+    compaction: null,
+    repo: 'wigley-agents',
+    branch: 'main',
+    worktrees: [],
+  };
+}
+
+// The part on the harness, over a chat whose `launch` answers through
+// `answerLaunch` (by default: row `retro-<n>` with host `retro-host-<n>` set in
+// `sessions.rows`, then that row id) and records each launch and close, and a
+// sessions that records each title set. Every fake lives across a restart.
+function startPart(
+  options: {
+    runMode?: RunMode;
+    settings?: { folder: string; layout: string; settleSeconds: number };
+  } = {},
+) {
+  const launches: LaunchRequest[] = [];
+  const closes: [string, SessionCloseReason][] = [];
+  const titles: [string, TitleSource, string | null][] = [];
+  const settings = options.settings ?? {
+    folder: '~/wigley-agents',
+    layout: 'default',
+    settleSeconds: DEFAULT_SETTLE_SECONDS,
+  };
+  const harness = startMainPart(autoRetroMainPart, {
+    settings,
+    services: { runMode: options.runMode ?? 'live', homeDir: '/home/me' },
+    dependencies: [
+      fakeDependency(
+        chatMainKey,
+        () =>
+          ({
+            launch(request: LaunchRequest) {
+              launches.push(request);
+              return part.answerLaunch(request);
+            },
+            profiles: () => [{ name: 'work', configDir: '~/.claude-work' }],
+            close(sessionId: string, reason: SessionCloseReason) {
+              closes.push([sessionId, reason]);
+              return Promise.resolve();
+            },
+          }) as unknown as ChatMainExports,
+      ),
+      fakeDependency(
+        sessionsMainKey,
+        () =>
+          ({
+            setTitle(
+              sessionId: string,
+              source: TitleSource,
+              title: string | null,
+            ) {
+              titles.push([sessionId, source, title]);
+            },
+          }) as unknown as SessionsMainExports,
+      ),
+    ],
+  });
+  const rows = harness.state.publish(sessionsRowsSlot);
+  const sessions = harness.state.publish(chatSessionSlot);
+  const part = {
+    harness,
+    launches,
+    closes,
+    titles,
+    rows,
+    sessions,
+    answerLaunch: (_request: LaunchRequest): Promise<string> => {
+      const n = launches.length;
+      rows.set(`retro-${n}`, rowOf(`retro-${n}`, `retro-host-${n}`));
+      return Promise.resolve(`retro-${n}`);
+    },
+    state: () => harness.state.read(autoRetroStateSlot, 'test').get(),
+    messages: () => harness.logs.map((line) => line.message),
+    texts: () => launches.map((request) => request.message.text),
+    async queueFile(): Promise<RetroQueue | null> {
+      const text = await readIfPresent(harness.files, QUEUE_PATH);
+      return text === null ? null : (JSON.parse(text) as RetroQueue);
+    },
+    async close(host: string, reason: SessionCloseReason = 'user') {
+      harness.emit('chat.sessionClosed', closedEvent(host, reason));
+      await settled();
+    },
+    // Starts the launched row's first turn and reads it done.
+    async startedThenIdle(sessionId: string) {
+      harness.emit('chat.turnStarted', { sessionId });
+      await settled();
+      sessions.set(sessionId, sessionInfo(sessionId, 'idle'));
+    },
+  };
+  return part;
+}
+
+describe('autoRetroMainPart', () => {
+  it('sessionClosed_UserClose_LaunchesUnattendedAndTitlesTheRow', async () => {
+    const part = startPart();
+    await settled();
+
+    await part.close('h1');
+
+    expect(part.launches).toEqual([
+      {
+        projectDir: '/home/me/wigley-agents',
+        profile: 'work',
+        message: { text: '/wigley:retro auto h1', images: [] },
+        unattended: true,
+      },
+    ]);
+    expect(part.titles).toEqual([['retro-1', 'user', 'Fix login']]);
+    expect(part.state()).toEqual({ rows: ['retro-1'], queued: 0 });
+    expect((await part.queueFile())?.launched).toEqual(['retro-host-1']);
+    expect(part.messages()).toContain('launched retro retro-1 for h1');
+  });
+
+  it('sessionClosed_TwoCloses_LaunchesOneAtATime', async () => {
+    const part = startPart();
+    let resolveFirst = (_rowId: string) => undefined as void;
+    part.answerLaunch = () => {
+      part.rows.set('retro-1', rowOf('retro-1', 'retro-host-1'));
+      return new Promise((resolve) => {
+        resolveFirst = resolve;
+      });
+    };
+    await settled();
+
+    await part.close('h1');
+    await part.close('h2');
+
+    expect(part.launches).toHaveLength(1);
+    expect(part.state()?.queued).toBe(1);
+
+    resolveFirst('retro-1');
+    await settled();
+    await part.close('retro-host-1', 'finished');
+
+    expect(part.texts()).toEqual([
+      '/wigley:retro auto h1',
+      '/wigley:retro auto h2',
+    ]);
+    expect((await part.queueFile())?.launched).not.toContain('retro-host-1');
+  });
+
+  it('doneRow_AfterTheSettle_ClosesFinished', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    await part.startedThenIdle('retro-1');
+
+    part.harness.advance(3000);
+    part.sessions.set('retro-1', sessionInfo('retro-1', 'working'));
+    part.sessions.set('retro-1', sessionInfo('retro-1', 'idle'));
+    part.harness.advance(SETTLE_MS - 1);
+
+    expect(part.closes).toEqual([]);
+
+    part.harness.advance(1);
+
+    expect(part.closes).toEqual([['retro-1', 'finished']]);
+  });
+
+  it('restart_LaunchCutShort_LaunchesAgain', async () => {
+    const part = startPart();
+    part.answerLaunch = () => new Promise(() => undefined);
+    await settled();
+    await part.close('h1');
+
+    part.answerLaunch = () => new Promise(() => undefined);
+    await part.harness.restart();
+    await settled();
+
+    expect(part.texts()).toEqual([
+      '/wigley:retro auto h1',
+      '/wigley:retro auto h1',
+    ]);
+  });
+
+  it('restart_RestoredRetroRow_IsClaimedAndClosingItQueuesNothing', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    part.rows.delete('retro-1');
+    part.rows.set('retro-9', rowOf('retro-9', 'retro-host-1'));
+
+    await part.harness.restart();
+    await settled();
+
+    expect(part.state()?.rows).toEqual(['retro-9']);
+
+    part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+
+    await part.close('retro-host-1');
+
+    expect(part.launches).toHaveLength(1);
+    expect(part.state()?.queued).toBe(0);
+  });
+
+  it('restart_RestoredRowAlreadyIdle_ClosesWithoutANewValue', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    part.rows.delete('retro-1');
+    part.rows.set('retro-9', rowOf('retro-9', 'retro-host-1'));
+    part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
+
+    await part.harness.restart();
+    await settled();
+    part.harness.advance(SETTLE_MS - 1);
+
+    expect(part.closes).toEqual([]);
+
+    part.harness.advance(1);
+
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+  });
+
+  it('restart_RunningRowNeverRestored_IsDroppedAfter30s', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    await part.close('h2');
+    part.rows.delete('retro-1');
+
+    await part.harness.restart();
+    await settled();
+    part.harness.advance(RESTORE_WAIT_MS - 1);
+    await settled();
+
+    expect(part.launches).toHaveLength(1);
+
+    part.harness.advance(1);
+    await settled();
+
+    expect(part.messages()).toContain(
+      'dropped retro retro-host-1: its row did not come back',
+    );
+    expect(part.texts()).toEqual([
+      '/wigley:retro auto h1',
+      '/wigley:retro auto h2',
+    ]);
+  });
+
+  it('doneRow_IdleBeforeFirstTurn_IsNotClosed', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+
+    part.sessions.set('retro-1', sessionInfo('retro-1', 'idle'));
+    part.harness.advance(10_000);
+
+    expect(part.closes).toEqual([]);
+
+    await part.startedThenIdle('retro-1');
+    part.harness.advance(SETTLE_MS - 1);
+
+    expect(part.closes).toEqual([]);
+
+    part.harness.advance(1);
+
+    expect(part.closes).toEqual([['retro-1', 'finished']]);
+  });
+
+  it('doneRow_SettleSecondsZero_ClosesAtOnce', async () => {
+    const part = startPart({
+      settings: {
+        folder: '~/wigley-agents',
+        layout: 'default',
+        settleSeconds: 0,
+      },
+    });
+    await settled();
+    await part.close('h1');
+    await part.startedThenIdle('retro-1');
+
+    part.harness.advance(0);
+
+    expect(part.closes).toEqual([['retro-1', 'finished']]);
+  });
+
+  it('sessionCleared_ThenClose_LaunchesWithEveryId', async () => {
+    const part = startPart();
+    await settled();
+
+    part.harness.emit('chat.sessionCleared', {
+      sessionId: 'row-h1',
+      oldHostSessionId: 'h0',
+      newHostSessionId: 'h1',
+      projectDir: '/home/me/project',
+      profile: 'work',
+      titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
+      sent: true,
+    } satisfies ChatMainEvents['sessionCleared']);
+    await part.close('h1');
+
+    expect(part.texts()).toEqual(['/wigley:retro auto h0 h1']);
+  });
+
+  it('selfTestRunMode_UserClose_LaunchesNothing', async () => {
+    const part = startPart({ runMode: 'selfTest' });
+    await settled();
+
+    await part.close('h1');
+
+    expect(part.launches).toEqual([]);
+    expect(part.state()).toEqual({ rows: [], queued: 0 });
+  });
+
+  it('launchRejected_LogsAndLaunchesTheNext', async () => {
+    const part = startPart();
+    const autoRow = part.answerLaunch;
+    part.answerLaunch = (request) =>
+      request.message.text.endsWith(' h1')
+        ? Promise.reject(new Error('unknown profile'))
+        : autoRow(request);
+    await settled();
+
+    await part.close('h1');
+    await part.close('h2');
+
+    expect(part.messages()).toContain(
+      'retro launch failed for h1: unknown profile',
+    );
+    expect(part.texts()).toEqual([
+      '/wigley:retro auto h1',
+      '/wigley:retro auto h2',
+    ]);
+  });
+
+  it('unreadableQueueFile_IsNeverOverwritten', async () => {
+    const part = startPart();
+    await settled();
+    await part.harness.files.write(QUEUE_PATH, '{');
+
+    await part.harness.restart();
+    await settled();
+    await part.close('h1');
+
+    expect(await readIfPresent(part.harness.files, QUEUE_PATH)).toBe('{');
+    expect(
+      part
+        .messages()
+        .some((message) => message.startsWith('queue.json not read:')),
+    ).toBe(true);
+  });
+});

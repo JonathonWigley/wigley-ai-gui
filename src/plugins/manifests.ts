@@ -5,6 +5,7 @@ import { contextSourcesManifest } from './context-sources/manifest';
 import { agentStripManifest } from './agent-strip/manifest';
 import { agentsManifest } from './agents/manifest';
 import { autoCompactManifest } from './auto-compact/manifest';
+import { autoRetroManifest } from './auto-retro/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
 import { docsManifest } from './docs/manifest';
@@ -41,6 +42,7 @@ export const builtInManifests = [
   autoCompactManifest,
   sessionStashManifest,
   sessionLogManifest,
+  autoRetroManifest,
   agentsManifest,
   agentLinesManifest,
   agentStripManifest,

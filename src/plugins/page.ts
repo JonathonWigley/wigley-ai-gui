@@ -4,6 +4,7 @@ import { agentSkillsPagePart } from './agent-skills/page/start';
 import { contextSourcesPagePart } from './context-sources/page/start';
 import { agentStripPagePart } from './agent-strip/page/start';
 import { agentsPagePart } from './agents/page/start';
+import { autoRetroPagePart } from './auto-retro/page/start';
 import { backlogPagePart } from './backlog/page/start';
 import { chatPagePart } from './chat/page/start';
 import { docsPagePart } from './docs/page/start';
@@ -42,6 +43,7 @@ export const pageParts: readonly PagePart[] = [
   workflowLightPagePart,
   workflowMediumPagePart,
   unityPoolPagePart,
+  autoRetroPagePart,
   agentStripPagePart,
   agentSkillsPagePart,
   contextSourcesPagePart,
