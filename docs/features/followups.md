@@ -615,6 +615,16 @@ because the earlier items rewrite many of these tests anyway.
   `[sessions] activated Layout preview` (`src/plugins/primer/main/selftest-script.ts`). That line needs forms' Layout
   preview session, so the script passes only with `--plugin forms,primer` (from eb6f544b8). Either drop the wait, or
   have the script open the session it waits on.
+- **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts`) falls back to
+  the plan's own copy, with no log, when `git.worktrees` rejects, so a list that keeps failing hides every worktree
+  copy from Heavy and Backlog in silence. Log the rejection once per clone.
+- **Backlog reloads once per worktree edit** — *agent-ready*: each change under a linked worktree's `docs/features`
+  sends `changed`, and the Backlog page runs a full, uncoalesced load for each one (`src/plugins/backlog/main/start.ts`
+  `watchWorktrees`). Coalesce the page's `changed` reloads if a burst of worktree edits proves slow.
+- **A hand-back's join counts one step short** — *agent-ready*: in `src/main/claude-code/stream-decoder.ts`, a
+  non-empty turn right after a hand-back result puts its init in the hand-back turn's events entry, so its divider
+  counts one step fewer; a second hand-back right after the first does the same. Key the join on the next result
+  being empty rather than on the init.
 - **Docs editor-landing issues** — when the docs editor lands: an editor key sequence bound only in other scopes is
   taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in
   docs.…` while forms binds `<Esc>`. A row removed while its round stays open rebuilds that round's popup in a
