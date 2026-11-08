@@ -1,6 +1,6 @@
 # 01 — Core area focus
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -207,3 +207,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 5e5cca77 · proof: diff read (every Produces present or in Contract changes), typecheck pass, worker ran 6 touched test files (278 pass) · concerns: baseChanged row asserts ['outer left','side bar'] since baseChanged drops the view target; a hook moving DOM focus before its setScope while a stop holds the keys runs focusMain early (narrow sideBarOpenedOver); a click into main from the right bar runs focusMain on mousedown before the click picks its pane — live check; lint oxfmt fails on docs/keymap.md, pre-existing from docs-ahead 3e3c2fcb
