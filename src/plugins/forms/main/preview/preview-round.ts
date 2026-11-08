@@ -101,7 +101,7 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
     {
       title: 'Card width',
       summary:
-        'Pick how wide a card draws. Every card in the Form tab takes this width, so it sets how long each line of context runs.',
+        'Pick how wide a card draws. Every card in the form popup takes this width, so it sets how long each line of context runs.',
       context:
         'Cards fill the main area today. On a wide window a line of context runs past a hundred characters, and the eye loses its place at the start of the next line.\n\n' +
         'A cap keeps each line short. The rail and the space around the card stay as they are.\n\n' +
@@ -114,12 +114,12 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
     },
     {
       title:
-        'What the Form tab shows when a session has several rounds waiting and the user switches away and back mid-answer',
+        'What the form popup shows when a session has several rounds waiting and the user switches away and back mid-answer',
       summary:
-        'Choose which round the Form tab shows when the user comes back to a session that has several rounds waiting.',
+        'Choose which round the form popup shows when the user comes back to a session that has several rounds waiting.',
       context:
         'Each session keeps at most one open round. A round waiting behind it opens only once the open one finishes, so ' +
-        'the Form tab never holds two rounds of one session. The user can still switch to another session halfway ' +
+        'the form popup never holds two rounds of one session. The user can still switch to another session halfway ' +
         'through an answer and come back.\n\n' +
         'Switching sessions keeps every answer typed so far, and a re-sent round is pre-filled from its saved answers. So ' +
         'nothing is lost either way; the choice is only which round greets the user on the way back.\n\n' +

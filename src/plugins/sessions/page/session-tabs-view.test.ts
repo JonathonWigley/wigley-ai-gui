@@ -89,6 +89,7 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (run: () => void) =>
     pendingFrames.push(run),
   );
+  vi.stubGlobal('cancelAnimationFrame', () => undefined);
 });
 
 function runFrames() {
@@ -222,26 +223,6 @@ describe('session tabs view', () => {
     chat.dispose();
 
     expect(view.tabs.selectedTabOf('s')?.id).toBe('form');
-  });
-
-  it('releases a live takeover when the tab handle is disposed', () => {
-    const { view } = sessionsViewSetup();
-    const a = tabView('a');
-    view.tabs.add('s', a);
-    const handleOfB = view.tabs.add('s', tabView('b'));
-    view.tabs.select('s', 'a');
-    const takeOver = handleOfB.takeOver();
-    expect(view.tabs.selectedTabOf('s')?.id).toBe('b');
-
-    handleOfB.dispose();
-
-    expect(view.tabs.selectedTabOf('s')).toBe(a);
-    expect(view.tabs.tabsOf('s')).toEqual([a]);
-
-    takeOver.release();
-
-    expect(view.tabs.selectedTabOf('s')).toBe(a);
-    expect(view.tabs.tabsOf('s')).toEqual([a]);
   });
 
   it('a disposed view leaves no pane part or empty text live', () => {

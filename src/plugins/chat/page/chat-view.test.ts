@@ -204,7 +204,6 @@ function mounted(
         return {
           setStatus: noEvent,
           select: noEvent,
-          takeOver: () => ({ release: noEvent }),
           remove: noEvent,
           isVisible: () => false,
         };

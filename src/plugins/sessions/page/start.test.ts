@@ -150,6 +150,7 @@ describe('sessions page part', () => {
   beforeEach(() => {
     installFakeDom((name, value) => vi.stubGlobal(name, value));
     vi.stubGlobal('requestAnimationFrame', () => 0);
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
   });
   afterEach(() => {
     vi.unstubAllGlobals();

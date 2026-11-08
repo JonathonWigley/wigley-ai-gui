@@ -21,7 +21,7 @@ export interface FormSend {
 // What the lifecycle reads of one open form; a plugin's form state extends it.
 export interface SessionForm extends DraftRevisions {
   formId: string;
-  // The session whose tab the form fills.
+  // The session whose popup the form fills.
   sessionId: string;
   label: string;
   // Set from the send until main's close removes the form or the send fails;
@@ -201,7 +201,7 @@ export function paneView<FormView extends string>(
   return view === 'confirm' ? state.confirmReturnView : view;
 }
 
-// The view the session's tab draws its form in, focused or not: the active
+// The view the session's popup draws its form in, focused or not: the active
 // session's in `paneView`, every other session's in `formView`, the view it
 // opens in once its session is active; 'idle' for a session with no form.
 export function sessionPaneView<FormView extends string>(
@@ -310,7 +310,7 @@ function applyLifecycle<
 }
 
 // A form for the focused session becomes active; any other waits in the
-// background, drawn in its own tab. A form already open stays as it is.
+// background, drawn in its own popup. A form already open stays as it is.
 function showForm<Form extends SessionForm, FormView extends string>(
   state: SessionFormsState<Form, FormView>,
   shown: Form,
@@ -487,7 +487,7 @@ export function createSessionCloseAnswers(store: {
   };
 }
 
-// `showForm` selects the session's form tab; `activate` selects the session;
+// `showForm` opens the session's form popup; `activate` selects the session;
 // `closeAnswers` holds the prompt's answer to the close.
 export interface GuardSessionCloseDeps<
   Form extends SessionForm,
@@ -498,7 +498,7 @@ export interface GuardSessionCloseDeps<
 }
 
 // A session closes only once its form is gone: with its form active it
-// selects the session's form tab, so the confirm scope's keys are in force,
+// opens the session's form popup, so the confirm scope's keys are in force,
 // and asks to cancel the form, answering with the prompt's answer: true once
 // the confirmed cancel closed the form, false once the user keeps it. A close
 // while the prompt already asks waits on the same answer. A form open in the

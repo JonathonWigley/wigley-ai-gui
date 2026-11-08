@@ -126,7 +126,7 @@ function setup(
     toast,
     log,
   });
-  // Each Form tab the guard selected, with the store's view at that moment.
+  // Each form popup the guard opened, with the store's view at that moment.
   const shownForms: { sessionId: string; view: string }[] = [];
   const showForm = (sessionId: string) =>
     shownForms.push({ sessionId, view: store.get().view });
@@ -886,7 +886,7 @@ describe('formsCommandHandlers', () => {
     expect(activated).toEqual([]);
   });
 
-  it("the close guard selects the session's Form tab before the prompt shows", () => {
+  it("the close guard opens the session's form popup before the prompt shows", () => {
     const { store, shownForms, guardClose } = setup();
 
     guardClose('r1-session');

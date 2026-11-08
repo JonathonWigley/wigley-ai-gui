@@ -7,7 +7,7 @@ import {
 } from '../contract';
 
 const OPEN_PRIMER_DESCRIPTION =
-  "Open the feature-primer form in the wigley-ai-gui app's Primer tab, " +
+  "Open the feature-primer form in the wigley-ai-gui app's primer popup, " +
   "pre-filled with the agent's triage, and wait for the user's answers. " +
   "Send the eighteen primer rows (group 'primer') and then the standing " +
   "tasks (group 'standing') other than the edge-case sweep, which the agent " +

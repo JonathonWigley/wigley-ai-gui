@@ -41,9 +41,9 @@ import {
 import { pickLayout } from '../../../shared/page/layout-host/pick';
 import { saveLabel, saveState } from '../../../shared/page/autosave';
 import {
-  createSessionFormTabs,
-  type SessionFormTabs,
-} from '../../../shared/page/session-form-tabs';
+  createSessionFormPopups,
+  type SessionFormPopups,
+} from '../../../shared/page/session-form-popups';
 import {
   activeForm,
   formOfSession,
@@ -129,11 +129,10 @@ import {
 import type { PrimerStore } from './primer-store';
 
 // `beforeClose` answers whether a session may close, at once or once its
-// cancel prompt is answered. `setScope` sets the
-// key scope to `scopeOf` the state while a Primer tab is the visible tab;
-// `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors
-// each key hint the view and its layout draw and reads the keys a layout asks
-// for. `run` runs a button's command; `commands` is what a layout's
+// cancel prompt is answered. `setScope` sets the key scope to `scopeOf` the
+// state while a primer popup is the visible surface; `pushConfirmScope` lays
+// the cancel prompt's scope over it. `keys` anchors each key hint the view and
+// its layout draw and reads the keys a layout asks for. `run` runs a button's command; `commands` is what a layout's
 // `kit.command` reaches. `platform` is the OS the layouts' key hints draw for.
 // `uiState` keeps the tasks and items columns' widths, which every primer's
 // columns open at. `timers` runs the splits' resize prompt linger. Each primer
@@ -141,7 +140,7 @@ import type { PrimerStore } from './primer-store';
 // used last.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
-  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
+  sessions: Pick<SessionsPageExports, 'addPopup' | 'setActivity'>;
   beforeClose(sessionId: string): boolean | Promise<boolean>;
   setScope(scope: PrimerScopeName): void;
   // Hands the resize keys the split of the focused pane, and the focus keys
@@ -164,15 +163,15 @@ export interface PrimerViewDeps {
   log: PluginLog;
 }
 
-// `forgetSession` drops a session's Primer tab entry and destroys its primer
-// views once sessions dropped the tab, so the next render rebuilds a primer
-// still open for the session in a new Primer tab. `showPrimer` selects the
-// session's Primer tab, a no-op when it has none. `scrollBy` scrolls the
+// `forgetSession` drops a session's primer popup entry and destroys its primer
+// views once sessions dropped the popup, so the next render rebuilds a primer
+// still open for the session in a new primer popup. `showPrimer` opens the
+// session's primer popup, a no-op when it has none. `scrollBy` scrolls the
 // active primer's card or review, whichever shows, down for 1 and up for -1;
 // null with no active primer. `setLayouts` draws every part whose picked
 // layout changed again, keeping the focused box. `dispose` destroys every open
-// primer view, giving each session back.
-export interface PrimerTab {
+// primer view.
+export interface PrimerPopups {
   forgetSession(sessionId: string): void;
   showPrimer(sessionId: string): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
@@ -180,7 +179,7 @@ export interface PrimerTab {
   dispose(): void;
 }
 
-// One open primer's DOM in its session's Primer tab. `update` draws it for
+// One open primer's DOM in its session's primer popup. `update` draws it for
 // the primer and the view whose pane shows: under the cancel prompt, the view
 // keeping the primer returns to. `resizeTarget` is the split the resize keys
 // move while `pane` has focus: the outer split for the tasks column, the inner
@@ -275,15 +274,15 @@ const RAIL_WIDTH_KEY = 'primer-rail-width';
 const NO_TASK_ITEMS = 'Select a task to see its items.';
 const NO_ITEMS = 'No items. Press a on the task card to add one.';
 
-// The whole primer UI: each primer drawn in its session's Primer tab, focused
-// or not, and the cancel prompt in the overlay layer, serving the active
-// primer, which alone takes keys. Every store change
-// renders it; a change a render's own dispatch makes renders again once that
-// render ends. While a Primer tab is the visible tab the key scope follows
-// the state; the cancel prompt pushes its own scope over it and is dismissed
-// when another view sets the scope. Each part draws through the layouts the
-// last `setLayouts` handed it, `default` alone until the first.
-export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
+// The whole primer UI: each primer drawn in its session's primer popup,
+// focused or not, and the cancel prompt in the overlay layer, serving the
+// active primer, which alone takes keys. Every store change renders it; a
+// change a render's own dispatch makes renders again once that render ends.
+// While a primer popup is the visible surface the key scope follows the
+// state; the cancel prompt pushes its own scope over it and is dismissed when
+// another view sets the scope. Each part draws through the layouts the last
+// `setLayouts` handed it, `default` alone until the first.
+export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
   const { areas, store, boxes } = deps;
   moveRailWidth(deps.uiState);
   const primerViews = new Map<string, PrimerFormView>();
@@ -297,13 +296,12 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     deps.setResizeTarget(resizeTargetOf(state, primerViews));
     deps.setFocusTarget(hasPanes(state) ? focusTarget : null);
   };
-  const tabs = createSessionFormTabs({
-    addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
-    tabId: 'primer',
+  const popups = createSessionFormPopups({
+    addPopup: (sessionId, popup) => deps.sessions.addPopup(sessionId, popup),
+    popupId: 'primer',
     title: 'Primer',
     icon: 'lightbulb',
     className: 'primer-tab',
-    idleText: "No primer open. The agent's next primer opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => setScopeFor(store.get()),
     formShown: (sessionId, shown) =>
@@ -345,12 +343,12 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     syncPrimerViews(
       state,
       shownPrimers,
-      tabs,
+      popups,
       deps,
       dispatch,
       () => shownLayouts,
     );
-    tabs.sync((sessionId) => {
+    popups.sync((sessionId) => {
       const primer = formOfSession(state, sessionId);
       return primer === undefined ? null : sessionTitle(primer);
     });
@@ -360,7 +358,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
         ?.update(primer, sessionPaneView(state, primer.sessionId, 'primer'));
     }
     confirm.setBaseScope(() => {
-      if (tabs.isShown()) {
+      if (popups.isShown()) {
         setScopeFor(state);
       }
     });
@@ -391,14 +389,14 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   render();
   return {
     forgetSession(sessionId) {
-      tabs.forget(sessionId);
+      popups.forget(sessionId);
       for (const primer of store.get().forms) {
         if (primer.sessionId === sessionId) {
-          destroyPrimerView(primer.formId, shownPrimers, tabs, deps);
+          destroyPrimerView(primer.formId, shownPrimers, deps);
         }
       }
     },
-    showPrimer: (sessionId) => tabs.select(sessionId),
+    showPrimer: (sessionId) => popups.open(sessionId),
     setLayouts(shown) {
       shownLayouts = shown;
       render();
@@ -406,7 +404,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     dispose() {
       storeSubscription.dispose();
       for (const primerId of primerViews.keys()) {
-        destroyPrimerView(primerId, shownPrimers, tabs, deps);
+        destroyPrimerView(primerId, shownPrimers, deps);
       }
     },
     scrollBy(step, direction) {
@@ -474,27 +472,27 @@ interface PrimerViews {
   dropTargets: Map<string, Disposable>;
 }
 
-// A primer view per open primer, in its session's Primer tab: built when the
-// primer appears, adding the Primer tab when the session has none and taking
-// over the session with it, and registered as a drop target; destroyed with
-// its editors when the primer leaves.
+// A primer view per open primer, in its session's primer popup: built when the
+// primer appears, opening the popup, which is added when the session has none,
+// and registered as a drop target; destroyed with its editors when the primer
+// leaves.
 function syncPrimerViews(
   state: PrimerState,
   primerViews: PrimerViews,
-  tabs: SessionFormTabs,
+  popups: SessionFormPopups,
   deps: PrimerViewDeps,
   dispatch: (action: PrimerAction) => void,
   shown: () => ShownLayouts<PrimerLayout>,
 ) {
   for (const primerId of primerViews.views.keys()) {
     if (!state.forms.some((primer) => primer.formId === primerId)) {
-      destroyPrimerView(primerId, primerViews, tabs, deps);
+      destroyPrimerView(primerId, primerViews, deps);
     }
   }
   for (const primer of state.forms) {
     if (!primerViews.views.has(primer.formId)) {
       const primerView = createPrimerFormView(
-        (root) => tabs.mount(primer.sessionId, root),
+        (root) => popups.mount(primer.sessionId, root),
         primer,
         deps,
         dispatch,
@@ -505,7 +503,6 @@ function syncPrimerViews(
         primer.formId,
         addPrimerDropTarget(primer.formId, primerView, deps),
       );
-      tabs.takeOver(primer.formId, primer.sessionId);
     }
   }
 }
@@ -529,12 +526,10 @@ function addPrimerDropTarget(
 }
 
 // Disposes its drop target and its view's anchors, destroys its editors and
-// forgets its boxes, removes the view, and releases its take over, giving its
-// session back.
+// forgets its boxes, and removes the view.
 function destroyPrimerView(
   primerId: string,
   primerViews: PrimerViews,
-  tabs: SessionFormTabs,
   deps: Pick<PrimerViewDeps, 'boxes'>,
 ) {
   const primerView = primerViews.views.get(primerId);
@@ -548,7 +543,6 @@ function destroyPrimerView(
   deps.boxes.forgetForm(primerId);
   primerView.element.remove();
   primerViews.views.delete(primerId);
-  tabs.release(primerId);
 }
 
 // Two nested splits, tasks | (items | card): the outer split holds the tasks

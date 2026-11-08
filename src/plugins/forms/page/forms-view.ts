@@ -23,9 +23,9 @@ import {
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
 import {
-  createSessionFormTabs,
-  type SessionFormTabs,
-} from '../../../shared/page/session-form-tabs';
+  createSessionFormPopups,
+  type SessionFormPopups,
+} from '../../../shared/page/session-form-popups';
 import {
   activeForm,
   formOfSession,
@@ -52,7 +52,7 @@ import { sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close, at once or once its
 // cancel prompt is answered. `setScope` sets the
-// key scope to the forms view while a Form tab is the visible tab, and
+// key scope to the forms view while a form popup is the visible surface, and
 // `setResizeTarget` then sets the divider the resize keys move: the shown
 // round's split, or null while idle. `pushConfirmScope` lays the cancel
 // prompt's scope over it. `platform` is the OS key hints are drawn for;
@@ -63,7 +63,7 @@ import { sessionTitle } from './view-model';
 // box used last.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
-  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
+  sessions: Pick<SessionsPageExports, 'addPopup' | 'setActivity'>;
   beforeClose(sessionId: string): boolean | Promise<boolean>;
   setScope(view: FormsState['view']): void;
   setResizeTarget(target: ResizeTarget | null): void;
@@ -89,10 +89,10 @@ interface ActiveLayouts {
   shown: ShownLayouts<Layout>;
 }
 
-// `forgetSession` drops a session's Form tab entry and destroys its round views
-// once sessions dropped the tab, so the next render rebuilds a round still open
-// for the session in a new Form tab. `showForm` selects the session's Form tab,
-// a no-op when it has none. `setLayouts` hands `shown` to every open round
+// `forgetSession` drops a session's form popup entry and destroys its round
+// views once sessions dropped the popup, so the next render rebuilds a round
+// still open for the session in a new form popup. `showForm` opens the
+// session's form popup, a no-op when it has none. `setLayouts` hands `shown` to every open round
 // view, which rebuilds when a layout it draws with changed, and rounds that
 // open later are built with it. A round view's throw does not skip the rest;
 // the first is rethrown once all have run. `rebuild` rebuilds every open round
@@ -100,7 +100,7 @@ interface ActiveLayouts {
 // review column is added or removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
 // up for -1; null when no round is active or it has no view yet. `dispose`
-// destroys every open round view, giving each session back.
+// destroys every open round view.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   showForm(sessionId: string): void;
@@ -110,24 +110,23 @@ export interface FormsView {
   dispose(): void;
 }
 
-// The whole forms UI: each round drawn in its session's Form tab, focused or
+// The whole forms UI: each round drawn in its session's form popup, focused or
 // not, and the cancel prompt in the overlay layer, serving the active round,
 // which alone takes keys. Every store change re-renders it; editors live in
-// the round views and survive every render. While a Form tab is the visible
-// tab the key scope follows the view; the cancel prompt pushes its own scope
-// over it and is dismissed when another view sets the scope. While the round
-// sends, that dismiss waits: a failed send dismisses the prompt, and a sent
-// round closes it with the round. Round views start on the default layout
-// alone.
+// the round views and survive every render. While a form popup is the
+// visible surface the key scope follows the view; the cancel prompt pushes its
+// own scope over it and is dismissed when another view sets the scope. While
+// the round sends, that dismiss waits: a failed send dismisses the prompt, and
+// a sent round closes it with the round. Round views start on the default
+// layout alone.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
-  const tabs = createSessionFormTabs({
-    addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
-    tabId: 'form',
+  const popups = createSessionFormPopups({
+    addPopup: (sessionId, popup) => deps.sessions.addPopup(sessionId, popup),
+    popupId: 'form',
     title: 'Form',
     icon: 'checklist',
     className: 'form-tab',
-    idleText: "No round open. The agent's next round opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => setBaseScope(deps.store.get()),
     formShown: (sessionId, shown) =>
@@ -176,8 +175,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       return;
     }
     const state = store.get();
-    syncRoundViews(state, shownRounds, tabs, active, deps, dispatch);
-    tabs.sync((sessionId) => {
+    syncRoundViews(state, shownRounds, popups, active, deps, dispatch);
+    popups.sync((sessionId) => {
       const round = formOfSession(state, sessionId);
       return round === undefined ? null : sessionTitle(round);
     });
@@ -187,7 +186,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
         ?.update(round, sessionPaneView(state, round.sessionId, 'forms'));
     }
     confirm.setBaseScope(() => {
-      if (tabs.isShown()) {
+      if (popups.isShown()) {
         setBaseScope(state);
       }
     });
@@ -200,10 +199,10 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   render();
   return {
     forgetSession(sessionId) {
-      tabs.forget(sessionId);
-      destroySessionRoundViews(sessionId, store.get(), shownRounds, tabs, deps);
+      popups.forget(sessionId);
+      destroySessionRoundViews(sessionId, store.get(), shownRounds, deps);
     },
-    showForm: (sessionId) => tabs.select(sessionId),
+    showForm: (sessionId) => popups.open(sessionId),
     setLayouts(shown) {
       active.shown = shown;
       callEach(store.get().forms, (round) =>
@@ -224,7 +223,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     dispose() {
       storeSubscription.dispose();
       for (const roundId of roundViews.keys()) {
-        destroyRoundView(roundId, shownRounds, tabs, deps);
+        destroyRoundView(roundId, shownRounds, deps);
       }
     },
   };
@@ -237,32 +236,31 @@ interface RoundViews {
   dropTargets: Map<string, Disposable>;
 }
 
-// A round view per open round, in its session's Form tab: built when the
-// round appears, adding the Form tab when the session has none and taking
-// over the session with it, and registered as a drop target; destroyed with
-// its editors when the round leaves.
+// A round view per open round, in its session's form popup: built when the
+// round appears, opening the popup, which is added when the session has none,
+// and registered as a drop target; destroyed with its editors when the round
+// leaves.
 function syncRoundViews(
   state: FormsState,
   roundViews: RoundViews,
-  tabs: SessionFormTabs,
+  popups: SessionFormPopups,
   active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
   for (const roundId of roundViews.views.keys()) {
     if (!state.forms.some((round) => round.formId === roundId)) {
-      destroyRoundView(roundId, roundViews, tabs, deps);
+      destroyRoundView(roundId, roundViews, deps);
     }
   }
   for (const round of state.forms) {
     if (!roundViews.views.has(round.formId)) {
-      const roundView = showRound(round, tabs, active, deps, dispatch);
+      const roundView = showRound(round, popups, active, deps, dispatch);
       roundViews.views.set(round.formId, roundView);
       roundViews.dropTargets.set(
         round.formId,
         addRoundDropTarget(round.formId, roundView, deps),
       );
-      tabs.takeOver(round.formId, round.sessionId);
     }
   }
 }
@@ -289,23 +287,21 @@ function destroySessionRoundViews(
   sessionId: string,
   state: FormsState,
   roundViews: RoundViews,
-  tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   for (const round of state.forms) {
     if (round.sessionId === sessionId && roundViews.views.has(round.formId)) {
-      destroyRoundView(round.formId, roundViews, tabs, deps);
+      destroyRoundView(round.formId, roundViews, deps);
     }
   }
 }
 
 // Destroys the round's editors and forgets its boxes, disposes its drop
-// target, removes its view, disposes its anchors and stops it following
-// keymap changes, and releases its take over, giving its session back.
+// target, removes its view, and disposes its anchors and stops it following
+// keymap changes.
 function destroyRoundView(
   roundId: string,
   roundViews: RoundViews,
-  tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   deps.boxes.destroyForm(roundId);
@@ -316,18 +312,17 @@ function destroyRoundView(
   roundView?.dispose();
   roundView?.element.remove();
   roundViews.views.delete(roundId);
-  tabs.release(roundId);
 }
 
 function showRound(
   round: RoundState,
-  tabs: SessionFormTabs,
+  popups: SessionFormPopups,
   active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ): RoundView {
   return createRoundView(
-    (root) => tabs.mount(round.sessionId, root),
+    (root) => popups.mount(round.sessionId, root),
     round,
     active.shown,
     {

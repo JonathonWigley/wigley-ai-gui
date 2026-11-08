@@ -442,7 +442,7 @@ function jumpToUnanswered(
   }
 }
 
-// `showForm` selects the session's Form tab; `activate` selects the session;
+// `showForm` opens the session's form popup; `activate` selects the session;
 // `closeAnswers` holds the cancel prompt's answer to the close.
 export interface GuardCloseDeps extends Pick<
   FormsCommandDeps,

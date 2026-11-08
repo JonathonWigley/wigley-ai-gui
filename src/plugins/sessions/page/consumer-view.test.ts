@@ -22,7 +22,6 @@ function fakeExports() {
     addTab: () => ({
       setStatus: () => undefined,
       select: () => undefined,
-      takeOver: () => ({ release: () => undefined }),
       isVisible: () => false,
       dispose: () => {
         disposes.tab++;

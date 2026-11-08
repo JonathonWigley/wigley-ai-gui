@@ -104,7 +104,7 @@ export const primerManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The primer layout that draws the Primer tab: a folder name in the primer's layouts folder, or default.",
+        "The primer layout that draws the primer popup: a folder name in the primer's layouts folder, or default.",
     },
   },
   themeTokens: {},

@@ -312,24 +312,21 @@ export interface SessionTabView {
 
 // `setStatus` sets the tab's line in its session's sidebar row. `select`
 // selects the tab inside its session, never changing the selected session.
-// `takeOver` selects the tab inside its session and returns a release; the
-// first release selects the tab selected before the take over, unless a tab
-// was selected since (by the user or `select`, even back to this one), another
-// tab's take over holds the session, or that tab is gone. `isVisible` reads,
-// at the moment of the call, whether this tab is the visible tab. `dispose`
-// releases the latest take over this handle gave out, then removes the tab.
-// Each call on a tab already dropped does nothing.
+// `isVisible` reads, at the moment of the call, whether this tab is the
+// visible tab. `dispose` removes the tab. Each call on a tab already dropped
+// does nothing.
 export interface SessionTabHandle extends Disposable {
   setStatus(status: string): void;
   select(): void;
-  takeOver(): { release(): void };
   isVisible(): boolean;
 }
 
 // A popup a plugin opens over a session's tabs while it has something for the
 // user. The layout's `popup` part frames `element`; `title` and `icon`, a
 // Codicon name, name it in the session's hidden bar. `beforeClose` answers
-// whether the session may close now, false keeping it, asked after the tabs'.
+// whether the session may close now, false keeping it, asked after the tabs';
+// a promise answers once the popup has asked the user (forms' and primer's
+// cancel prompt).
 // `shown` runs each time this popup becomes the visible surface: the top open
 // popup of the focused chat pane's session while Sessions mode shows. Its
 // plugin sets its base key scope and moves focus there; sessions focuses
@@ -340,7 +337,7 @@ export interface SessionPopupView {
   title: string;
   icon: string;
   element: HTMLElement;
-  beforeClose(): boolean;
+  beforeClose(): boolean | Promise<boolean>;
   shown(): void;
 }
 

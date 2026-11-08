@@ -131,7 +131,7 @@ function setup(
   };
   const handlers = primerCommandHandlers(deps);
   const focusTarget = primerFocusTarget(deps);
-  // Each Primer tab the guard selected, and each session it selected.
+  // Each primer popup the guard opened, and each session it selected.
   const shownPrimers: string[] = [];
   const activated: string[] = [];
   const run = (

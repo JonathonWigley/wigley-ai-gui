@@ -42,7 +42,7 @@ import {
 } from './primer-events';
 import { buildBody, initialState } from './primer-state';
 import { createPrimerStore, type PrimerStore } from './primer-store';
-import { mountPrimerTab } from './primer-view';
+import { mountPrimerPopups } from './primer-view';
 
 type PrimerApi = PageApi<
   typeof primerManifest,
@@ -120,13 +120,13 @@ function listenForPrimers(
   };
 }
 
-// Shows each agent primer in its session's Primer tab and sends the user's
+// Shows each agent primer in its session's primer popup and sends the user's
 // edits back to main: drafts as the edits pause, the finish on send or cancel.
-// While a Primer tab is the visible tab, the key scope, the resize keys'
+// While a primer popup is the visible surface, the key scope, the resize keys'
 // split and the focus keys' panes follow the primer view.
 // A session with an open primer closes only through the cancel prompt. Every
 // store change emits the primer page events it makes, each logged as it goes;
-// other plugins read the active primer through the exports. The tab draws
+// other plugins read the active primer through the exports. The popup draws
 // through the primer layout `primer.layout` names, redrawing as it or the
 // layout changes.
 export const primerPagePart: PagePart<typeof primerManifest> = {
@@ -139,7 +139,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     );
     const closeAnswers = createSessionCloseAnswers(store);
     const boxes = createBoxes(api, store);
-    const view = mountPrimerTab({
+    const view = mountPrimerPopups({
       areas: api.areas,
       sessions,
       beforeClose: (sessionId) =>

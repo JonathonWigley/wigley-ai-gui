@@ -309,7 +309,7 @@ export function submitProblems(primer: OpenPrimer): string[] {
   return [...slugProblem, ...nameProblems];
 }
 
-// The session row's status for the Primer tab: the feature's name and how
+// The session row's status for the primer popup: the feature's name and how
 // many tasks have a need other than unclear.
 export function sessionTitle(primer: OpenPrimer): string {
   const decided = primer.entries.filter(
@@ -318,7 +318,7 @@ export function sessionTitle(primer: OpenPrimer): string {
   return `${primer.feature.name} ${decided}/${primer.entries.length}`;
 }
 
-// The scope the Primer tab's keys fire in for this state.
+// The scope the primer popup's keys fire in for this state.
 export function scopeOf(state: PrimerState): PrimerScopeName {
   if (state.view === 'primer') {
     return activeForm(state)?.pane ?? 'idle';

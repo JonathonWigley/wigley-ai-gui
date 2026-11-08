@@ -1,17 +1,12 @@
-/* A session's Form tab holds its round views and the idle state. */
+/* A session's form popup holds its round views. */
 .form-tab {
   height: 100%;
 }
 
-.form-tab > .ui-empty {
-  height: 100%;
-  align-content: center;
-}
-
-/* :where() scopes these rules to the Form tab and adds no specificity, so a
+/* :where() scopes these rules to the form popup and adds no specificity, so a
    layout's own layout.css overrides them. */
 
-/* A round fills its session's Form tab: a split with the rail in its start
+/* A round fills its session's form popup: a split with the rail in its start
    pane, on the sheet colour, and the round's main column in its end pane. */
 :where(.form-tab) .round {
   height: 100%;

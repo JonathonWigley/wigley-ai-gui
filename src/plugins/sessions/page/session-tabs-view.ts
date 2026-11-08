@@ -38,10 +38,8 @@ import {
   showsNoSelectionText,
   type TabsState,
   tabsAfterAdd,
-  tabsAfterRelease,
   tabsAfterRemove,
   tabsAfterSelect,
-  tabsAfterTakeOver,
 } from './tabs';
 
 // A tab with the status it last set.
@@ -52,12 +50,14 @@ interface Tab {
 
 // A popup with the status it last set, whether it is open, whether the
 // animation frame after its add ran (until then it draws closed, so its slide
-// up runs), and its drawn `popup` part, whose body holds its element.
+// up runs) and that frame's id while it waits, and its drawn `popup` part,
+// whose body holds its element.
 interface Popup {
   view: SessionPopupView;
   status: string;
   isOpen: boolean;
   hasEntered: boolean;
+  enterFrame: number | null;
   part: DrawnPart<PopupPart>;
 }
 
@@ -562,6 +562,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 
   const removePopup = (frame: Frame, popup: Popup) => {
+    cancelEnterFrame(popup);
     disposePart(popup.part);
     popup.view.element.remove();
     frame.popups = frame.popups.filter((held) => held !== popup);
@@ -590,6 +591,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     disposeText(frame);
     frame.bar.dispose();
     for (const popup of frame.popups) {
+      cancelEnterFrame(popup);
       popup.part.dispose();
     }
     frame.popupBar?.dispose();
@@ -652,7 +654,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       );
       frame.body.append(view.element);
       changed();
-      let latestTakeOver: { release(): void } | null = null;
       return {
         setStatus(status) {
           if (liveTab(sessionId, tab) !== undefined) {
@@ -665,31 +666,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
             select(sessionId, view.id);
           }
         },
-        takeOver() {
-          const live = liveTab(sessionId, tab);
-          if (live === undefined) {
-            return { release() {} };
-          }
-          const taken = tabsAfterTakeOver(live.tabs, view.id);
-          setTabs(live, taken.tabs);
-          let isReleased = false;
-          latestTakeOver = {
-            release() {
-              const stillLive = liveTab(sessionId, tab);
-              if (isReleased || stillLive === undefined) {
-                return;
-              }
-              isReleased = true;
-              setTabs(
-                stillLive,
-                tabsAfterRelease(stillLive.tabs, taken.takeOver),
-              );
-            },
-          };
-          return latestTakeOver;
-        },
         dispose() {
-          latestTakeOver?.release();
           const live = liveTab(sessionId, tab);
           if (live !== undefined) {
             remove(live, tab);
@@ -719,12 +696,14 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         status: '',
         isOpen: true,
         hasEntered: false,
+        enterFrame: null,
         part: drawPopup(frame, view),
       };
       frame.popups = [...frame.popups, popup];
       blurFocusInTabs(frame);
       changed();
-      requestAnimationFrame(() => {
+      popup.enterFrame = requestAnimationFrame(() => {
+        popup.enterFrame = null;
         const live = livePopup(sessionId, popup);
         if (live !== undefined) {
           popup.hasEntered = true;
@@ -901,4 +880,11 @@ function drawTab(
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));
   return drawn;
+}
+
+function cancelEnterFrame(popup: Popup) {
+  if (popup.enterFrame !== null) {
+    cancelAnimationFrame(popup.enterFrame);
+    popup.enterFrame = null;
+  }
 }

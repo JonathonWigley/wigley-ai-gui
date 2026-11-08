@@ -517,7 +517,7 @@ function submit(deps: PrimerCommandDeps) {
   finishActivePrimer(deps, 'review', 'submitted');
 }
 
-// `showPrimer` selects the session's Primer tab; `activate` selects the
+// `showPrimer` opens the session's primer popup; `activate` selects the
 // session.
 export interface GuardCloseDeps extends Pick<
   PrimerCommandDeps,
