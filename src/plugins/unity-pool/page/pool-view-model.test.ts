@@ -789,7 +789,7 @@ describe('panelInput', () => {
     { case: 'first', cursor: 0, marked: ['clone 2'] },
     { case: 'a queue ticket', cursor: 2, marked: ['ticket 1'] },
     { case: 'none', cursor: null, marked: [] },
-    { case: 'past the last', cursor: 9, marked: [] },
+    { case: 'past the last', cursor: 9, marked: ['ticket 1'] },
   ])("marks the cursor's session holder only: $case", ({ cursor, marked }) => {
     const input = panelInput(
       cursorPool,

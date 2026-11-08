@@ -101,8 +101,8 @@ export function poolOfRow(
 // The panel of `pool` at `now`: each clone in number order with its holder matched to `rows`, the queue in order,
 // and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action's `run` calls
 // `actions.run` with its clone, and a session holder's `select` calls `actions.select` with its row id. `cursor` is
-// the keyboard cursor's index in `sessionHolders` order, its holder alone marked `isCursor`; null, or past the last
-// holder, marks none.
+// the keyboard cursor's index in `sessionHolders` order, clamped to the last holder, its holder alone marked
+// `isCursor`; null marks none.
 export function panelInput(
   pool: PoolState,
   rows: readonly PoolRow[],
@@ -146,8 +146,9 @@ export function panelInput(
       blocking: clones.filter((clone) => clone.blocking).length,
     },
   };
+  const holders = sessionHolders(input);
   const cursorHolder =
-    cursor === null ? undefined : sessionHolders(input)[cursor];
+    cursor === null ? undefined : holders[Math.min(cursor, holders.length - 1)];
   if (cursorHolder !== undefined) {
     cursorHolder.isCursor = true;
   }

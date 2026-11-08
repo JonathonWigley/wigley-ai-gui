@@ -92,8 +92,9 @@ export interface SessionsViewDeps extends Omit<
 // The Sessions list: the side bar's rows as a keyboard pane, its cursor a
 // session row apart from the selected one. `enter` gives the list the keys,
 // the cursor on the selected row, else the first drawn row, the rows box
-// focused, and returns the cursor's row; `leave` puts the cursor back on the
-// selected row, takes the ring off and returns whether the list held the keys;
+// focused, and returns the cursor's row; `leave` takes the cursor's ring and
+// prompt off, the cursor reading the selected row again, and returns whether
+// the list held the keys;
 // `move` steps the cursor in drawn order (`movedCursor`) and returns its row;
 // `cursorSessionId` reads the cursor's session, the selected one while the
 // list does not hold the keys; `refocus` focuses the rows box again while the
@@ -115,6 +116,8 @@ export interface SessionPanes {
   tree(): PaneTree;
   sessions(): PaneSessions;
   focusedPaneId(): string;
+  // The focused pane's slot, which holds its tab area.
+  focusedPaneSlot(): HTMLElement;
   // The focused pane's session; null for an empty pane.
   focusedSessionId(): string | null;
   // Shows `sessionId` in pane `paneId`, null emptying it; the frame it showed
@@ -245,8 +248,8 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     deps.keys.anchor,
   );
   let state: SessionsState | null = null;
-  // The list cursor while the list holds the keys; out of the list it sits on
-  // the selected row, which each draw reads.
+  // The list cursor while the list holds the keys; out of the list it has no
+  // row, and `cursorSessionId` reads the selected row.
   let cursor: { sessionId: string | null; hasKeys: boolean } = {
     sessionId: null,
     hasKeys: false,
@@ -326,12 +329,13 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       }
     }
     drawnOrder = order;
-    sidebar.render(drawn.state, drawn.sections, drawn.rowStateOf, drawn.skip, {
-      sessionId: cursor.hasKeys
-        ? cursor.sessionId
-        : (drawn.state?.selectedSessionId ?? null),
-      hasKeys: cursor.hasKeys,
-    });
+    sidebar.render(
+      drawn.state,
+      drawn.sections,
+      drawn.rowStateOf,
+      drawn.skip,
+      cursor,
+    );
     if (movedTo !== undefined) {
       deps.cursorMoved(movedTo);
     }
@@ -430,6 +434,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     tree: () => treeView.tree(),
     sessions: () => assigned,
     focusedPaneId: () => treeView.tree().focusedId,
+    focusedPaneSlot: () => treeView.slot(treeView.tree().focusedId),
     focusedSessionId: () => assigned.get(treeView.tree().focusedId) ?? null,
     load(paneId, sessionId) {
       assigned.set(paneId, sessionId);

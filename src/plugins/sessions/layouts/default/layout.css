@@ -285,8 +285,8 @@
 }
 
 /* The cursor prompt takes the card's full width on a line of its own,
-   wrapping when it has no room. Out of the list's scope its keys hide in
-   place, so the selected card keeps its height. */
+   wrapping when it has no room. Only the cursor's card draws it, while the
+   list holds the keys. */
 .session-row-actions {
   display: flex;
   flex-wrap: wrap;

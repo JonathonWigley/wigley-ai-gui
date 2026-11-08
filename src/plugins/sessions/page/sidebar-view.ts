@@ -48,7 +48,7 @@ export interface SidebarEvents {
 }
 
 // The side bar list's cursor: the row it sits on, null for none, and whether
-// the list holds the keys, which rings that row.
+// the list holds the keys, which rings and prompts that row.
 export interface SidebarCursor {
   sessionId: string | null;
   hasKeys: boolean;
@@ -66,10 +66,10 @@ export interface SidebarView {
   dispose(): void;
   // `sections` are the rows to draw, in order; `rowStateOf` reads what a
   // session's row draws; `skip` holds the sessions a session step passes over,
-  // which decide whether its prompts show; `cursor`'s row ends in the cursor
-  // prompt and, while the list holds the keys, carries `is-cursor` and scrolls
-  // into view. While a drag runs the last call waits, and draws once the drag
-  // ends.
+  // which decide whether its prompts show; while the list holds the keys,
+  // `cursor`'s row ends in the cursor prompt and carries `is-cursor`, and it
+  // scrolls into view when the cursor moved or the keys just arrived. While a
+  // drag runs the last call waits, and draws once the drag ends.
   render(
     state: SessionsState | null,
     sections: SidebarSections<SessionRow>,
@@ -134,11 +134,11 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // Favorites and Recent `section`s, each holding a `group` per project over its
 // `row`s. The rows box carries `has-favorites` while Favorites holds a group,
 // and `is-reordering` while a group header drags; it takes focus by script
-// alone (`tabIndex` -1) while the list holds the keys. The view keeps each
-// row's click, which activates its session, its tooltip, the selected row's
-// mark, the cursor's ring and prompt (`s favorite  r rename  d close`, with
-// `K up  J down` on a favorite's row, named with `anchor`), each star's click
-// and each header's tooltip and drag.
+// alone (`tabIndex` -1) while the list holds the keys, drawing no outline of
+// its own. The view keeps each row's click, which activates its session, its
+// tooltip, the selected row's mark, the cursor's ring and prompt
+// (`s favorite  r rename  d close`, with `K up  J down` on a favorite's row,
+// named with `anchor`), each star's click and each header's tooltip and drag.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
@@ -165,6 +165,8 @@ export function mountSidebarView(
     const drawn = parts.sideBar(host);
     drawn.built.sessionEdge?.classList.add('is-no-target');
     drawn.built.rows.tabIndex = -1;
+    // The cursor's card draws the focus ring, so the rows box draws none.
+    drawn.built.rows.style.outline = 'none';
     return drawn;
   };
   let pane = drawPane();
@@ -172,6 +174,9 @@ export function mountSidebarView(
   let groups: DrawnPart<DrawnGroup>[] = [];
   let sections: DrawnPart<SectionPane>[] = [];
   let shownFavorites: string[] = [];
+  // The row last scrolled into view while the list held the keys, null while
+  // it does not or since the pane was drawn again.
+  let scrolledTo: string | null = null;
   // The draw a running drag holds back, the last asked for.
   let heldDraw: (() => void) | null = null;
   // The tick that sets `is-reordering`: a `dragstart` that changes layout can
@@ -229,7 +234,7 @@ export function mountSidebarView(
     );
     dragReorder.item(drawn.built.element, drawn.built.header, project, kind);
     for (const session of group.rows) {
-      const isCursor = session.sessionId === cursor.sessionId;
+      const isCursor = cursor.hasKeys && session.sessionId === cursor.sessionId;
       const row = drawRow(
         parts,
         drawn.built.rows,
@@ -242,10 +247,7 @@ export function mountSidebarView(
           prompt: isFavorite ? favoritePrompt : otherPrompt,
         },
       );
-      row.built.element.classList.toggle(
-        'is-cursor',
-        isCursor && cursor.hasKeys,
-      );
+      row.built.element.classList.toggle('is-cursor', isCursor);
       rows.push(row);
     }
   };
@@ -282,6 +284,7 @@ export function mountSidebarView(
     element: host,
     redrawPane() {
       heldDraw = null;
+      scrolledTo = null;
       disposeRows();
       pane.dispose();
       pane = drawPane();
@@ -325,11 +328,12 @@ export function mountSidebarView(
           rowStateOf,
           cursor,
         );
-        if (cursor.hasKeys) {
+        if (cursor.hasKeys && cursor.sessionId !== scrolledTo) {
           rows
             .find((row) => row.built.element.classList.contains('is-cursor'))
             ?.built.element.scrollIntoView({ block: 'nearest' });
         }
+        scrolledTo = cursor.hasKeys ? cursor.sessionId : null;
       };
       if (dragReorder.isDragging()) {
         heldDraw = draw;

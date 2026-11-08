@@ -52,8 +52,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
 // and draws a needs you label for `marked` only while no activity is set; `status` is the row's status text, null for none, which `default` shows only in the tooltip, and the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
-// the focused one; `isPrompted` is true on the list cursor's row, which ends in the cursor prompt: the selected row while
-// the list does not hold the keys.
+// the focused one; `isPrompted` is true on the list cursor's row while the list holds the keys, which ends in the cursor
+// prompt; no row is prompted while the list does not hold the keys.
 export interface SessionRowInput {
   sessionId: string;
   title: string | null;

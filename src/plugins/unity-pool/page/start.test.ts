@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import {
+  FakeElement,
+  installFakeDom,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   deferred,
   fakeDependency,
@@ -20,6 +24,7 @@ import {
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, PanelInput } from '../layouts/layout';
+import { sessionHolders } from './pool-view-model';
 import { unityPoolPagePart } from './start';
 
 const ROW_ID = 'row-1';
@@ -50,11 +55,28 @@ const UNHELD_CLONE: PoolClone = {
 };
 
 // The part on the harness, over fakes that file each handle with
-// `consumer.track` as the real views do. `invoke` answers main's channel.
+// `consumer.track` as the real views do. `invoke` answers main's channel;
+// `focuses` receives the right-bar `focus` of each contribution with one.
 function startOnHarness(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
+  focuses: (() => void)[] = [],
 ) {
-  return startPagePart(unityPoolPagePart, {
+  const part: typeof unityPoolPagePart = {
+    ...unityPoolPagePart,
+    start(api) {
+      const contribute = api.areas.rightBar.contribute;
+      vi.spyOn(api.areas.rightBar, 'contribute').mockImplementation(
+        (element, options) => {
+          if (options?.focus !== undefined) {
+            focuses.push(options.focus);
+          }
+          return contribute(element, options);
+        },
+      );
+      return unityPoolPagePart.start(api);
+    },
+  };
+  return startPagePart(part, {
     invoke,
     dependencies: [
       fakeDependency(
@@ -73,13 +95,18 @@ const SNAPSHOT: PoolSnapshot = {
   pools: [{ pool: 'p', updatedAt: 0, clones: [UNHELD_CLONE], queue: [] }],
 };
 
-// A layout that records each panel drawn, and the harness showing it.
+// A layout that records each panel drawn, its root carrying `is-cursor` while
+// a holder is the cursor's, and the harness showing it.
 function captureLayout(harness: ReturnType<typeof startOnHarness>) {
   const panels: PanelInput[] = [];
   const capture: Layout = {
     panel(parent, input) {
       panels.push(input);
       const root = document.createElement('div');
+      root.classList.toggle(
+        'is-cursor',
+        sessionHolders(input).some((holder) => holder.isCursor),
+      );
       parent.append(root);
       return { element: root };
     },
@@ -172,5 +199,76 @@ describe('unityPoolPagePart', () => {
       }),
     );
     expect(runs).toEqual([['hold', 'p', 1]]);
+  });
+
+  // Clones 1 and 2 claimed by rows A and B, B shown, the panel drawn, over
+  // the fake DOM with focus.
+  function twoHolders() {
+    installFocusFakeDom(vi.stubGlobal);
+    const focuses: (() => void)[] = [];
+    const harness = startOnHarness(() => Promise.resolve(null), focuses);
+    const panels = captureLayout(harness);
+    const rows = harness.state.publish(sessionsRowsSlot);
+    const claimed = (number: number, row: string): PoolClone => ({
+      ...UNHELD_CLONE,
+      number,
+      path: `/x/repo-${number}`,
+      claim: { kind: 'agent', session: null, row, since: 0, renewedAt: 0 },
+    });
+    for (const [sessionId, label, number] of [
+      ['row-a', 'A', 1],
+      ['row-b', 'B', 2],
+    ] as const) {
+      rows.set(sessionId, {
+        ...ROW,
+        sessionId,
+        label,
+        projectDir: `/x/repo-${number}`,
+      });
+    }
+    harness.state.publish(sessionsActiveSlot).set('row-b');
+    harness.state.publish(unityPoolSnapshotSlot).set({
+      pools: [
+        {
+          pool: 'p',
+          updatedAt: 0,
+          clones: [claimed(1, 'row-a'), claimed(2, 'row-b')],
+          queue: [],
+        },
+      ],
+    });
+    harness.emit('core.pageReady', null);
+    const cursorLabels = () =>
+      sessionHolders(panels[panels.length - 1])
+        .filter((holder) => holder.isCursor)
+        .map((holder) => holder.label);
+    return { harness, focuses, cursorLabels };
+  }
+
+  // Breaks: `heldCloneCursor` dropped for `0`, or fed another session.
+  it('focus_PutsTheCursorOnTheShownSessionsHolder', () => {
+    const { focuses, cursorLabels } = twoHolders();
+
+    focuses[0]();
+
+    expect(cursorLabels()).toEqual(['B']);
+  });
+
+  // Breaks: the scroll run on every redraw, yanking a wheel scroll back, or
+  // skipped on a move.
+  it('cursorScroll_OnlyOnTheKeysArrivalOrAMove', () => {
+    const { harness, focuses } = twoHolders();
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    const scrolls: number[] = [];
+    const { commands } = harness.started();
+
+    focuses[0]();
+    scrolls.push(scrolled.mock.calls.length);
+    harness.advance(60_000);
+    scrolls.push(scrolled.mock.calls.length);
+    commands.cursorUp({ arg: undefined });
+    scrolls.push(scrolled.mock.calls.length);
+
+    expect(scrolls).toEqual([1, 1, 2]);
   });
 });

@@ -562,7 +562,7 @@ describe('the sessions list', () => {
   }
 
   // What the side bar draws of the list: the rows ringed as the cursor, and
-  // the prompted row with how many keys its cursor prompt names.
+  // the prompted rows with how many keys each cursor prompt names.
   function drawnList({ sideBar }: Setup) {
     const rows = drawnRows(sideBar);
     const idOf = (row: FakeElement) => row.title.replace(/.*label /, '');
@@ -585,14 +585,14 @@ describe('the sessions list', () => {
     act: (setup: Setup) => unknown;
     result: unknown;
     ringed: string[];
-    prompted: { row: string; keys: number };
+    prompted: { row: string; keys: number }[];
   }>([
     {
       case: 'enter puts the cursor on the selected row',
       act: ({ view }) => view.list.enter()?.sessionId,
       result: 'b',
       ringed: ['b'],
-      prompted: { row: 'b', keys: 5 },
+      prompted: [{ row: 'b', keys: 5 }],
     },
     {
       case: 'a move to the last row takes the ring and a Recent prompt',
@@ -602,10 +602,10 @@ describe('the sessions list', () => {
       },
       result: 'c',
       ringed: ['c'],
-      prompted: { row: 'c', keys: 3 },
+      prompted: [{ row: 'c', keys: 3 }],
     },
     {
-      case: 'leave takes the ring off and prompts the selected row',
+      case: 'leave takes the ring and the prompt off',
       act: ({ view }) => {
         view.list.enter();
         view.list.move('last');
@@ -613,7 +613,7 @@ describe('the sessions list', () => {
       },
       result: true,
       ringed: [],
-      prompted: { row: 'b', keys: 5 },
+      prompted: [],
     },
     {
       case: 'a second leave does nothing',
@@ -624,7 +624,7 @@ describe('the sessions list', () => {
       },
       result: false,
       ringed: [],
-      prompted: { row: 'b', keys: 5 },
+      prompted: [],
     },
   ])(
     'sessionList_EntryMovesAndLeave: $case',
@@ -633,9 +633,32 @@ describe('the sessions list', () => {
 
       expect(act(setup)).toEqual(result);
 
-      expect(drawnList(setup)).toEqual({ ringed, prompted: [prompted] });
+      expect(drawnList(setup)).toEqual({ ringed, prompted });
     },
   );
+
+  // Breaks: the scroll run on every draw, yanking a wheel scroll back, or
+  // skipped on a move.
+  it('sessionList_ScrollsTheCursorOnlyOnEntryOrAMove', () => {
+    const setup = listSetup();
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    const scrolls: number[] = [];
+
+    setup.view.list.enter();
+    scrolls.push(scrolled.mock.calls.length);
+    setup.view.render(
+      stateWith([
+        rowIn('a', 'gamma'),
+        rowIn('b', 'gamma'),
+        rowIn('c', 'alpha'),
+      ]),
+    );
+    scrolls.push(scrolled.mock.calls.length);
+    setup.view.list.move('last');
+    scrolls.push(scrolled.mock.calls.length);
+
+    expect(scrolls).toEqual([1, 1, 2]);
+  });
 
   it('sessionList_RowLeaving_MovesTheCursorAndReports', () => {
     const setup = listSetup();

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoreEvents } from '../../../contracts/core-state';
 import type {
+  CommandInfo,
   PageApi,
   PagePart,
   PluginManifest,
@@ -62,15 +63,38 @@ function savedSplit(focusedId: 'a' | 'b'): UiState {
   ]);
 }
 
-// The part on the harness, its rows and selection written, up to the first
+// The part with `chat.focusBox` known to its keys; `runs` holds each command
+// it runs.
+function withFocusBox(runs: unknown[]): typeof sessionsPagePart {
+  return {
+    ...sessionsPagePart,
+    start(api) {
+      const command = api.keys.command;
+      vi.spyOn(api.keys, 'command').mockImplementation((id) =>
+        id === 'chat.focusBox'
+          ? ({ id, plugin: 'chat' } as CommandInfo)
+          : command(id),
+      );
+      const run = api.commands.run;
+      vi.spyOn(api.commands, 'run').mockImplementation((...args) => {
+        runs.push(args[0]);
+        return run(...args);
+      });
+      return sessionsPagePart.start(api);
+    },
+  };
+}
+
+// `part` on the harness, its rows and selection written, up to the first
 // state's focus. `activations` holds each session the page asks main to activate.
 async function startApplied(
   rowIds: string[],
   selected: string | null,
   uiState: UiState = fakeUiState(),
+  part: typeof sessionsPagePart = sessionsPagePart,
 ) {
   const activations: unknown[] = [];
-  const harness = startPagePart(sessionsPagePart, {
+  const harness = startPagePart(part, {
     invoke: async (method, sessionId) => {
       if (method === 'activate') {
         activations.push(sessionId);
@@ -390,13 +414,14 @@ describe('the sessions list in the page part', () => {
 
   const MODE_ID = 'sessions.sessions';
 
-  // The part with `rowIds` applied and `selected` shown, its side bar shown.
+  // `part` with `rowIds` applied and `selected` shown, its side bar shown.
   async function startWithList(
     rowIds: string[],
     selected: string | null,
     uiState?: UiState,
+    part?: typeof sessionsPagePart,
   ) {
-    const setup = await startApplied(rowIds, selected, uiState);
+    const setup = await startApplied(rowIds, selected, uiState, part);
     setup.harness.setSideBarShown(true);
     const mode = setup.harness.mode(MODE_ID);
     const { commands } = setup.harness.started();
@@ -433,8 +458,45 @@ describe('the sessions list in the page part', () => {
     await setup.harness.stop();
   });
 
+  // Breaks: `focusMain` blurring a click's focus in the focused pane (the
+  // chat box), or keeping a focus left outside it.
+  it.each([
+    { case: 'inside the focused pane stays', inPane: true, kept: true },
+    { case: 'outside the focused pane blurs', inPane: false, kept: false },
+  ])(
+    'focusMain_KeepsOnlyAFocusInTheFocusedPane: $case',
+    async ({ inPane, kept }) => {
+      const setup = await startWithList(['s1'], 's1');
+      const tabElement = document.createElement('div');
+      const shown = vi.fn();
+      setup.exports.addTab('s1', {
+        id: 'tab',
+        title: 'Tab',
+        icon: 'book',
+        element: tabElement,
+        beforeClose: () => true,
+        shown,
+      });
+      const focused = inPane ? tabElement : document.createElement('div');
+      focused.focus();
+      shown.mockClear();
+
+      setup.mode.focusMain();
+
+      expect(document.activeElement === focused).toBe(kept);
+      expect(shown).toHaveBeenCalledTimes(1);
+      await setup.harness.stop();
+    },
+  );
+
   it('paneKeyFocused_ReshowsTheTab', async () => {
-    const setup = await startWithList(['s1', 's2'], 's1', savedSplit('a'));
+    const runs: unknown[] = [];
+    const setup = await startWithList(
+      ['s1', 's2'],
+      's1',
+      savedSplit('a'),
+      withFocusBox(runs),
+    );
     setup.addTab('s1');
     const shownS2 = setup.addTab('s2');
     const start = setup.harness.logs.length;
@@ -444,9 +506,7 @@ describe('the sessions list in the page part', () => {
     // Once as the visible tab changes, once more as the keys reach the pane.
     expect(shownS2).toHaveBeenCalledTimes(2);
     expect(setup.linesFrom(start)).toContain('keys to pane label s2');
-    expect(
-      setup.harness.commandRuns.some((run) => run.id === 'chat.focusBox'),
-    ).toBe(false);
+    expect(runs).not.toContain('chat.focusBox');
     await setup.harness.stop();
   });
 

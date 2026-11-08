@@ -143,6 +143,9 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     let hasKeys = false;
     let cursor = 0;
     let cursorHolders: HolderInput[] = [];
+    // The cursor last scrolled into view while the panel held the keys, null
+    // while it does not.
+    let scrolledCursor: number | null = null;
     // True once the part stopped: a reply from main that lands later draws nothing.
     let isDisposed = false;
 
@@ -250,6 +253,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       const last = panel;
       hasKeys = false;
       cursorHolders = [];
+      scrolledCursor = null;
       panelContribution = null;
       panel = null;
       shownPool = null;
@@ -272,22 +276,18 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         select: (sessionId: string) => sessions.activate(sessionId),
       };
       const poolRows = [...rows.all().values()];
-      const pending = pendingOf(pool.pool);
-      const holderCount = sessionHolders(
-        panelInput(pool, poolRows, now, pending, actions, null),
-      ).length;
-      cursor = Math.min(cursor, Math.max(0, holderCount - 1));
       const input = withShownPaths(
         panelInput(
           pool,
           poolRows,
           now,
-          pending,
+          pendingOf(pool.pool),
           actions,
           hasKeys ? cursor : null,
         ),
       );
       cursorHolders = sessionHolders(input);
+      cursor = Math.min(cursor, Math.max(0, cursorHolders.length - 1));
       const last = panel;
       panel = null;
       callEach<() => void>(
@@ -309,11 +309,13 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         focus: focusPanel,
         left: leavePanel,
       });
-      if (hasKeys) {
+      // Scrolled only on a move or the keys' arrival, so a wheel scroll stays.
+      if (hasKeys && cursor !== scrolledCursor) {
         panelSlot
           .querySelector('.is-cursor')
           ?.scrollIntoView({ block: 'nearest' });
       }
+      scrolledCursor = hasKeys ? cursor : null;
       if (pool.pool !== shownPool) {
         shownPool = pool.pool;
         lastCountsText = null;
