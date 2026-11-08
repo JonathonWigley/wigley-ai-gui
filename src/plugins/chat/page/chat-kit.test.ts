@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatEntry, ChatImage } from '../../../contracts/agent';
+import {
+  MAIN_AGENT_ID,
+  type ChatEntry,
+  type ChatImage,
+} from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import {
   asFake,
@@ -17,6 +21,7 @@ const ASSISTANT: ChatEntry = {
   kind: 'assistant',
   id: 'a1',
   at: 1000,
+  agentId: MAIN_AGENT_ID,
   text: 'hi',
   streaming: false,
   raw: [],

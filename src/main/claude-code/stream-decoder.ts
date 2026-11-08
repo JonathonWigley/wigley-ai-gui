@@ -164,6 +164,14 @@ interface SubagentFacts {
   sentWindow: number | null;
 }
 
+// What an agent's `agentSpawned` is built from: the agent it runs under and the
+// JSON that names its facts, an Agent call's input or a revive's
+// `task_started`.
+interface SpawnRecord {
+  parentAgentId: string;
+  source: Json;
+}
+
 function emptyLine(): DecodedLine {
   return {
     entries: [],
@@ -308,7 +316,7 @@ export function createStreamDecoder(
   // each mapped to the agent that made the call.
   const pendingAgents = new Map<string, string>();
   // Background Agent calls whose launch receipt came, waiting for their end
-  // event.
+  // event and then for the tasks they own.
   const launchedAgents = new Set<string>();
   // The agent each pending tool call runs under, by tool call id.
   const toolAgents = new Map<string, string>();
@@ -324,13 +332,27 @@ export function createStreamDecoder(
     string,
     { started: Json; parentAgentId: string }
   >();
-  // Tasks started and not yet ended, by `task_id`.
-  const startedTasks = new Set<string>();
+  // Tasks started and not yet ended, by `task_id`, each mapped to the agent
+  // that owns it.
+  const startedTasks = new Map<string, string>();
+  // The end of each launched subagent that came while it owned a running task,
+  // by its Agent call id: true when the end was ok. The agent's last owned
+  // task's end releases it.
+  const heldEnds = new Map<string, boolean>();
+  // Each agent's spawn, by its id, kept for good: a later `agentSpawned` for
+  // the agent repeats its facts.
+  const spawnRecords = new Map<string, SpawnRecord>();
+  // Launched subagents that ended `done` and are not listed again: a later line
+  // of one lists it again.
+  const revivableAgents = new Set<string>();
+  // Subagents a late line listed again, which no end event follows: a result
+  // ends each one that has no tool call or Agent call open.
+  const relistedAgents = new Set<string>();
   // Each subagent's reply spends by message id, by its Agent call id: null for
   // a reply whose model has no list price.
   const replySpends = new Map<string, Map<string, number | null>>();
-  // Each subagent with a known model, by its Agent call id, until it ends. A
-  // late reply may re-create an ended one's entry, which nothing reads again.
+  // Each subagent with a known model, by its Agent call id, kept past its end
+  // for a later listing of it.
   const subagentFacts = new Map<string, SubagentFacts>();
   // The context windows results have named, by `modelUsage` key.
   const modelWindows = new Map<string, number>();
@@ -344,6 +366,10 @@ export function createStreamDecoder(
   let turnEvents: RawEntry | null = null;
   // True from a result until the next turn's init.
   let betweenTurns = false;
+  // True from a subagent's hand-back result to the next result: the turn
+  // Claude may run after it, an empty one as measured, has its init and its
+  // empty result join the hand-back turn's events entry.
+  let isAfterHandback = false;
   // True from a compaction's boundary to the next result, while its
   // `<local-command-stdout>` replay, which the compaction entry stands for, may
   // come.
@@ -437,13 +463,16 @@ export function createStreamDecoder(
   }
 
   // A spawn's facts come from `source`, an Agent call's input or a revive's
-  // `task_started`, which name them alike.
+  // `task_started`, which name them alike. The agent's first spawn keeps its
+  // `source`: a later one names only a new parent.
   function reportSpawn(
     agentId: string,
     parentAgentId: string,
-    source: Json,
+    newSource: Json,
     out: DecodedLine,
   ) {
+    const source = spawnRecords.get(agentId)?.source ?? newSource;
+    spawnRecords.set(agentId, { parentAgentId, source });
     const agentType = asString(source.subagent_type) || DEFAULT_AGENT_TYPE;
     const definition = definitionOf(agentType);
     out.agentEvents.push({
@@ -459,16 +488,20 @@ export function createStreamDecoder(
   }
 
   // A revived subagent runs in the background under its first Agent call's id,
-  // and nothing reports it spawned but this. One still running stays as it is.
+  // and nothing reports it spawned but this. One still running stays listed,
+  // and an end held for it is dropped: the revived work ends it.
   function respawnAgent(
     agentCallId: string,
     parentAgentId: string,
     started: Json,
     out: DecodedLine,
   ) {
+    heldEnds.delete(agentCallId);
+    relistedAgents.delete(agentCallId);
     if (pendingAgents.has(agentCallId) || launchedAgents.has(agentCallId)) {
       return;
     }
+    revivableAgents.delete(agentCallId);
     launchedAgents.add(agentCallId);
     reportSpawn(agentCallId, parentAgentId, started, out);
     out.agentEvents.push({ type: 'agentLaunched', agentId: agentCallId });
@@ -585,19 +618,26 @@ export function createStreamDecoder(
   // on it: the agent finishes first, then its calls breadth-first, each level
   // in its parents' order and then in spawn order under each parent. A launched
   // background call waits for its own end event. Each ending agent's open tool
-  // calls fail just ahead of its `agentFinished`, and its kept facts go.
+  // calls fail just ahead of its `agentFinished`, and its held end goes. A
+  // launched agent that ends `done` may be listed again by a later line.
   function finishAgent(agentId: string, isOk: boolean, out: DecodedLine) {
     const ending = [agentId];
     for (let index = 0; index < ending.length; index += 1) {
       const endingId = ending[index];
+      const isDone = isOk && endingId === agentId;
+      const wasLaunched = launchedAgents.has(endingId);
       pendingAgents.delete(endingId);
       launchedAgents.delete(endingId);
-      subagentFacts.delete(endingId);
+      heldEnds.delete(endingId);
+      relistedAgents.delete(endingId);
+      if (wasLaunched && isDone) {
+        revivableAgents.add(endingId);
+      }
       failOpenTools(endingId, out);
       out.agentEvents.push({
         type: 'agentFinished',
         agentId: endingId,
-        outcome: isOk && endingId === agentId ? 'done' : 'failed',
+        outcome: isDone ? 'done' : 'failed',
       });
       for (const [callId, parentAgentId] of pendingAgents) {
         if (parentAgentId === endingId) {
@@ -694,8 +734,92 @@ export function createStreamDecoder(
     const taskId = asString(event.task_id);
     unpairedRevives.delete(taskId);
     const id = subagentTasks.get(taskId) ?? asString(event.tool_use_id);
-    if (pendingAgents.has(id) || launchedAgents.has(id)) {
+    if (pendingAgents.has(id)) {
       finishAgent(id, event.status === 'completed', out);
+    }
+    if (launchedAgents.has(id)) {
+      endLaunchedAgent(id, event.status === 'completed', out);
+    }
+  }
+
+  // A launched subagent's end waits while it owns a running task; the first end
+  // that waits is kept, and a later one does nothing.
+  function endLaunchedAgent(agentId: string, isOk: boolean, out: DecodedLine) {
+    if (heldEnds.has(agentId)) {
+      return;
+    }
+    if (ownsRunningTask(agentId)) {
+      heldEnds.set(agentId, isOk);
+      return;
+    }
+    finishAgent(agentId, isOk, out);
+  }
+
+  function ownsRunningTask(agentId: string): boolean {
+    for (const ownerId of startedTasks.values()) {
+      if (ownerId === agentId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // A line of a subagent that ended `done` after its launch lists it again: its
+  // kept spawn, its launch, and its kept facts, ahead of the line's own events.
+  // The line's agent is its `parent_tool_use_id`, else its `agent_id`'s Agent
+  // call.
+  function listAgainIfRevivable(event: Json, out: DecodedLine) {
+    const agentId =
+      typeof event.parent_tool_use_id === 'string'
+        ? event.parent_tool_use_id
+        : subagentTasks.get(asString(event.agent_id));
+    const isRevived =
+      agentId !== undefined &&
+      revivableAgents.has(agentId) &&
+      !launchedAgents.has(agentId);
+    if (!isRevived) {
+      return;
+    }
+    revivableAgents.delete(agentId);
+    launchedAgents.add(agentId);
+    relistedAgents.add(agentId);
+    const record = spawnRecords.get(agentId);
+    if (record !== undefined) {
+      reportSpawn(agentId, record.parentAgentId, record.source, out);
+    }
+    out.agentEvents.push({ type: 'agentLaunched', agentId });
+    const facts = subagentFacts.get(agentId);
+    if (facts !== undefined) {
+      reportSubagentFacts(agentId, facts.model, facts.contextTokens, out);
+    }
+  }
+
+  // A result ends every listed-again subagent with no tool call open `done`,
+  // its end held while it owns a running task; one mid-call, a pending Agent
+  // call included, waits for a later result.
+  function endRelistedAgents(out: DecodedLine) {
+    const callOwners = new Set([
+      ...toolAgents.values(),
+      ...pendingAgents.values(),
+    ]);
+    for (const agentId of relistedAgents) {
+      if (!callOwners.has(agentId)) {
+        endLaunchedAgent(agentId, true, out);
+      }
+    }
+  }
+
+  // A subagent's hand-back turn's result names the subagent's `task_id` and
+  // ends it `done`.
+  function finishByHandback(event: Json, out: DecodedLine) {
+    const origin = asJson(event.origin);
+    if (origin.kind !== 'peer' || origin.handback !== true) {
+      return;
+    }
+    const taskId = asString(origin.senderTaskId) || asString(origin.from);
+    const agentId = subagentTasks.get(taskId);
+    if (agentId !== undefined && launchedAgents.has(agentId)) {
+      endLaunchedAgent(agentId, true, out);
     }
   }
 
@@ -714,12 +838,13 @@ export function createStreamDecoder(
     if (taskType === '' || startedTasks.has(taskId)) {
       return;
     }
-    startedTasks.add(taskId);
+    const agentId =
+      subagentTasks.get(asString(event.parent_task_id)) ?? MAIN_AGENT_ID;
+    startedTasks.set(taskId, agentId);
     out.agentEvents.push({
       type: 'taskStarted',
       taskId,
-      agentId:
-        subagentTasks.get(asString(event.parent_task_id)) ?? MAIN_AGENT_ID,
+      agentId,
       description: asString(event.description),
       command:
         asString(
@@ -760,16 +885,24 @@ export function createStreamDecoder(
     respawnAgent(agentCallId, revive.parentAgentId, revive.started, out);
   }
 
+  // A task's end releases its owner's held end when it was the owner's last
+  // running task.
   function finishTask(event: Json, out: DecodedLine) {
     const taskId = asString(event.task_id);
-    if (!startedTasks.delete(taskId)) {
+    const ownerId = startedTasks.get(taskId);
+    if (ownerId === undefined) {
       return;
     }
+    startedTasks.delete(taskId);
     out.agentEvents.push({
       type: 'taskFinished',
       taskId,
       outcome: event.status === 'completed' ? 'done' : 'failed',
     });
+    const heldOk = heldEnds.get(ownerId);
+    if (heldOk !== undefined && !ownsRunningTask(ownerId)) {
+      finishAgent(ownerId, heldOk, out);
+    }
   }
 
   // A turn's result fails every Agent call the main agent made that is still
@@ -834,7 +967,7 @@ export function createStreamDecoder(
     }
     out.entries.push(
       GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype))
-        ? gathered(event, event.subtype === 'init')
+        ? gathered(event, event.subtype === 'init' && !isAfterHandback)
         : rawEntry(event),
     );
     const error = event.compact_error;
@@ -871,6 +1004,7 @@ export function createStreamDecoder(
       const entry: TextEntry = {
         kind,
         id: `${ID_PREFIXES[kind]}-${messageId}-${String(inner.index)}`,
+        agentId: stream ?? MAIN_AGENT_ID,
         text: '',
         streaming: true,
         raw: [event],
@@ -944,6 +1078,7 @@ export function createStreamDecoder(
     const entry: TextEntry = {
       kind,
       id: `${ID_PREFIXES[kind]}-${messageId}-f${position}`,
+      agentId: agentOf(event),
       text,
       streaming: false,
       raw: [event],
@@ -998,6 +1133,7 @@ export function createStreamDecoder(
     const message = asJson(event.message);
     out.responseStarted = isMainModelReply(event, message);
     pairRevive(event, out);
+    listAgainIfRevivable(event, out);
     readReplyUsage(event, message, out);
     reportSubagentReply(event, message, out);
     if (message.model === SYNTHETIC_MODEL) {
@@ -1033,6 +1169,7 @@ export function createStreamDecoder(
   // after a compaction's boundary; any other text (the interrupt marker, a
   // compaction's summary) joins the turn's events.
   function decodeUser(event: Json, out: DecodedLine) {
+    listAgainIfRevivable(event, out);
     const content = asJson(event.message).content;
     const toolResults = asArray(content)
       .map((block) => asJson(block))
@@ -1062,10 +1199,15 @@ export function createStreamDecoder(
   // the last one has no turn share, so its cost is null. A result ends the
   // turn's open blocks, and its events entry takes events until the next init.
   // Every result ends a turn of the main conversation, an unrequested one
-  // included, and teaches the windows its `modelUsage` names.
+  // included, and teaches the windows its `modelUsage` names; a hand-back's
+  // result also ends its subagent, and every result ends the subagents late
+  // lines listed again. The empty result after a hand-back's draws no divider:
+  // it joins the events entry.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
     failPendingAgents(out);
+    finishByHandback(event, out);
+    endRelistedAgents(out);
     learnWindows(asJson(event.modelUsage));
     reportChangedWindows(out);
     out.agentEvents.push({ type: 'turnEnded' });
@@ -1073,9 +1215,8 @@ export function createStreamDecoder(
     out.turnEnded = true;
     out.turnUsage = turnUsageOf(event, lastMainModel);
     out.turnFailed = isError;
-    out.turnUnrequested = UNREQUESTED_ORIGINS.has(
-      asString(asJson(event.origin).kind),
-    );
+    const origin = asJson(event.origin);
+    out.turnUnrequested = UNREQUESTED_ORIGINS.has(asString(origin.kind));
     out.turnOpener =
       typeof event.user_message_uuid === 'string'
         ? event.user_message_uuid
@@ -1094,17 +1235,27 @@ export function createStreamDecoder(
       costUsd = totalCost - lastTotalCost;
       lastTotalCost = totalCost;
     }
-    resultCount += 1;
-    out.entries.push({
-      kind: 'result',
-      id: `result-${resultCount}`,
-      stopReason: hasStopReason
-        ? (event.stop_reason as string)
-        : asString(event.subtype),
-      costUsd,
-      durationMs: numberOrNull(event.duration_ms),
-      raw: [event],
-    });
+    const isEmptyFollowUp =
+      isAfterHandback &&
+      origin.kind === 'task-notification' &&
+      event.result === '' &&
+      event.num_turns === 0;
+    isAfterHandback = origin.kind === 'peer' && origin.handback === true;
+    if (isEmptyFollowUp) {
+      out.entries.push(gathered(event));
+    } else {
+      resultCount += 1;
+      out.entries.push({
+        kind: 'result',
+        id: `result-${resultCount}`,
+        stopReason: hasStopReason
+          ? (event.stop_reason as string)
+          : asString(event.subtype),
+        costUsd,
+        durationMs: numberOrNull(event.duration_ms),
+        raw: [event],
+      });
+    }
     betweenTurns = true;
     isAfterBoundary = false;
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../workflow/contract';
 import { foldFlow, newFlow } from '../workflow/flow';
-import type { PlanProgress } from './plan-reader';
+import type { PlanProgress } from '../../shared/plan-progress';
 import {
   EMPTY_HEAVY_STATE,
   HEAVY_WORKFLOW_ID,
@@ -53,16 +53,38 @@ const PROGRESS: PlanProgress = {
   reviewRounds: 1,
   title: 'Plan A',
   tasks: [
-    { wave: 1, text: 'first', done: true },
-    { wave: 2, text: 'second', done: false },
-    { wave: 2, text: 'third', done: false },
+    { wave: 1, text: 'first', done: true, file: null, status: null },
+    { wave: 2, text: 'second', done: false, file: null, status: null },
+    { wave: 2, text: 'third', done: false, file: null, status: null },
   ],
 };
+// A state whose progress holds the one task line `task`, as a saved flow may.
+function stateWithTask(task: object): unknown {
+  return { ...EMPTY_HEAVY_STATE, progress: { ...PROGRESS, tasks: [task] } };
+}
+
 const PROGRESS_RETITLED_TASK: PlanProgress = {
   ...PROGRESS,
   tasks: [
     PROGRESS.tasks[0],
     { ...PROGRESS.tasks[1], text: 'renamed' },
+    PROGRESS.tasks[2],
+  ],
+};
+
+const PROGRESS_TASK_RUNNING: PlanProgress = {
+  ...PROGRESS,
+  tasks: [
+    PROGRESS.tasks[0],
+    { ...PROGRESS.tasks[1], status: 'in progress' },
+    PROGRESS.tasks[2],
+  ],
+};
+const PROGRESS_TASK_LINKED: PlanProgress = {
+  ...PROGRESS,
+  tasks: [
+    PROGRESS.tasks[0],
+    { ...PROGRESS.tasks[1], file: '02-second.md' },
     PROGRESS.tasks[2],
   ],
 };
@@ -224,6 +246,34 @@ const FOLD_ROWS: {
     expected: flowWith({
       planDir: PLAN_X,
       progress: PROGRESS_RETITLED_TASK,
+      reviewRoundsAtMake: 0,
+    }),
+  },
+  {
+    name: 'planChanged with a changed task status replaces progress',
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: planChanged(PROGRESS_TASK_RUNNING),
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS_TASK_RUNNING,
+      reviewRoundsAtMake: 0,
+    }),
+  },
+  {
+    name: 'planChanged with a changed task file replaces progress',
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: planChanged(PROGRESS_TASK_LINKED),
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS_TASK_LINKED,
       reviewRoundsAtMake: 0,
     }),
   },
@@ -422,15 +472,30 @@ describe('heavyStateOf', () => {
       name: 'a progress of the wrong shape',
       state: { ...EMPTY_HEAVY_STATE, progress: { checked: 1 } },
     },
+    {
+      name: 'a task line with a status not a task status',
+      state: stateWithTask({ ...PROGRESS.tasks[0], status: 'paused' }),
+    },
+    {
+      name: 'a task line with file but no status',
+      state: stateWithTask({ wave: 1, text: 'first', done: true, file: null }),
+    },
+    {
+      name: 'a task line with neither file nor status',
+      state: stateWithTask({ wave: 1, text: 'first', done: true }),
+    },
   ])('heavyStateOf_BadShape_ReadsEmpty ($name)', ({ state }) => {
     expect(heavyStateOf({ ...newFlow('s1', '/r'), state })).toBe(
       EMPTY_HEAVY_STATE,
     );
   });
 
-  it('a valid state reads as that object', () => {
-    const state: HeavyState = { ...EMPTY_HEAVY_STATE, progress: PROGRESS };
-
+  it.each([
+    {
+      name: 'a state with progress',
+      state: { ...EMPTY_HEAVY_STATE, progress: PROGRESS },
+    },
+  ])('heavyStateOf_ValidState_ReadsThatObject ($name)', ({ state }) => {
     expect(heavyStateOf({ ...newFlow('s1', '/r'), state })).toBe(state);
   });
 

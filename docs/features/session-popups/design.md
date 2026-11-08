@@ -40,9 +40,9 @@ one key away while the form waits.
 ## Open, hidden and gone
 
 ```
-            addPopup                 hide / <Leader>vf
+            addPopup                 hide / <Leader>bp
   (none) ───────────────▶  open  ◀─────────────────────▶  hidden
-                            │       open / <Leader>vf /     │
+                            │       open / <Leader>bp /     │
                             │       click on the bar        │
                             └────────── dispose ────────────┴──▶ gone
 ```
@@ -67,7 +67,7 @@ one key away while the form waits.
   popup is the visible surface: its `shown` runs and sets the base key scope, and `isVisible` reads true. No tab of
   that session is visible then. When the popup hides or goes, the selected tab becomes visible again and its `shown`
   runs, so the chat's keys come back.
-- **`<Leader>vf` hides or shows the popup** (`sessions.togglePopup`, scope `any`), from the page and from a box in
+- **`<Leader>bp` hides or shows the popup** (`sessions.togglePopup`, scope `any`), from the page and from a box in
   normal mode. On the focused session: an open popup hides; else the last hidden popup opens; with none it logs and
   does nothing. It sits in the `v` view group beside the other show and hide keys.
 - **Focus leaves the tab under it.** When a popup becomes visible, a text box under it in the session's tabs loses

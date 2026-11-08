@@ -262,8 +262,8 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       api.services.appInstance.id,
     );
     const exports: SessionsMainExports = {
-      contributeTools(tools, start) {
-        const contribution = list.contributeTools(tools, start);
+      contributeTools(tools, start, options) {
+        const contribution = list.contributeTools(tools, start, options);
         if (opened !== null) {
           try {
             writeEndpointFiles(endpointDir, opened.endpoint, list.tools());
@@ -282,6 +282,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose, cancelHold) =>
         list.addCloseGuard(mayClose, cancelHold),
+      addToolCallGuard: (guard) => list.addToolCallGuard(guard),
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
@@ -294,6 +295,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         titles: exports.titles,
         maxLength: () => titleLimit(api.settings().titleMaxLength),
       }),
+      { mainAgentOnly: true },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, exports, (listener) =>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent } from '../../../contracts/agent';
-import type { SessionFlow, WorkflowSignal } from '../contract';
-import { newFlow } from '../flow';
+import { isBusy, type SessionFlow, type WorkflowSignal } from '../contract';
+import { foldFlow, newFlow } from '../flow';
 import { signalOf } from './agent-signals';
 
 const FLOW = newFlow('s1', '/r');
@@ -138,7 +138,7 @@ const ROWS: {
     expected: [{ type: 'subagentStarted', agentId: 'a1' }],
   },
   {
-    name: "a subagent's own agentSpawned gives nothing",
+    name: "a subagent's own agentSpawned starts a subagent",
     event: {
       type: 'agentSpawned',
       at: 1,
@@ -152,7 +152,7 @@ const ROWS: {
     },
     flow: running('a1'),
     fromCurrentHost: true,
-    expected: [],
+    expected: [{ type: 'subagentStarted', agentId: 'a2' }],
   },
   {
     name: 'agentFinished of a running subagent finishes it',
@@ -205,5 +205,49 @@ const ROWS: {
 describe('signalOf', () => {
   it.each(ROWS)('$name', ({ event, flow, fromCurrentHost, expected }) => {
     expect(signalOf(event, flow, fromCurrentHost)).toEqual(expected);
+  });
+});
+
+describe('nested subagents', () => {
+  function spawned(agentId: string, parentAgentId: string): AgentEvent {
+    return {
+      type: 'agentSpawned',
+      at: 1,
+      agentId,
+      parentAgentId,
+      agentType: 'worker',
+      description: 'd',
+      name: 'worker',
+      model: null,
+      effort: null,
+    };
+  }
+
+  function finished(agentId: string): AgentEvent {
+    return { type: 'agentFinished', at: 2, agentId, outcome: 'done' };
+  }
+
+  function foldEvent(flow: SessionFlow, event: AgentEvent): SessionFlow {
+    return signalOf(event, flow, true).reduce(
+      (folded, signal) => foldFlow(folded, signal, []),
+      flow,
+    );
+  }
+
+  it('nestedSubagents_SpawnAndFinish_BusyUntilTheLastEnds', () => {
+    let flow = FLOW;
+    for (const event of [
+      spawned('a1', 'main'),
+      spawned('a2', 'a1'),
+      finished('a2'),
+    ]) {
+      flow = foldEvent(flow, event);
+    }
+    expect(flow.runningSubagents).toEqual(['a1']);
+    expect(isBusy(flow)).toBe(true);
+
+    flow = foldEvent(flow, finished('a1'));
+    expect(flow.runningSubagents).toEqual([]);
+    expect(isBusy(flow)).toBe(false);
   });
 });

@@ -66,7 +66,7 @@ interview on 2026-10-23; this file is the record of both.
 ## Flow
 
 ```
- Space k n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
+ Space b n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
                  │                     newest first, or the folder dialog), then profile (skipped with one profile),
                  │                     then sign-in when that profile is signed out, then a new session or one of the
                  │                     folder's saved sessions to resume; a registered resume section sits at the top of
@@ -364,7 +364,7 @@ interview on 2026-10-23; this file is the record of both.
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
-  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>:`) ends the process of every owned session chat holds
+  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>bX`) ends the process of every owned session chat holds
   and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
@@ -410,7 +410,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
-- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
+- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
   starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
   profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`

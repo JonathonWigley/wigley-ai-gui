@@ -716,7 +716,7 @@ function openOrStepIn(
     return setExpanded(state, path, true);
   }
   const rows = visibleRows(state, matcher);
-  const firstTask = rows[rows.indexOf(row) + 1];
+  const firstTask = rows[rows.findIndex((each) => each.key === row.key) + 1];
   return firstTask?.kind === 'task'
     ? { ...state, selectedKey: firstTask.key }
     : state;

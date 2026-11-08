@@ -16,8 +16,11 @@
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
 }
 
-:where(.form-tab) .round-main > * {
-  max-width: var(--wg-prose-measure);
+/* The round's column takes the pane's whole width, its markdown included, so
+   a visual, table or code block in a card is never squeezed to the prose
+   measure. */
+:where(.form-tab) .round-main .md {
+  max-width: none;
 }
 
 @media (max-width: 800px) {

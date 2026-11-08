@@ -1,5 +1,9 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
-import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
+import {
+  type ChatEntry,
+  type ChatEntryKind,
+  MAIN_AGENT_ID,
+} from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
@@ -1065,21 +1069,23 @@ function disposePartSlots(partSlots: Map<string, PartSlot<SlotPartName>>) {
   }
 }
 
-// Whether `entry` gets a slot: steps only while activity shows in the transcript.
+// Whether `entry` gets a slot: steps only while activity shows in the
+// transcript, and a subagent's text and thinking never.
 function isInTranscript(
   entry: ChatEntry,
   activityInTranscript: boolean,
 ): boolean {
-  return activityInTranscript || !isStep(entry);
+  const isSubagentText =
+    (entry.kind === 'assistant' || entry.kind === 'thinking') &&
+    entry.agentId !== MAIN_AGENT_ID;
+  return !isSubagentText && (activityInTranscript || !isStep(entry));
 }
 
 function transcriptEntries(
   entries: readonly ChatEntry[],
   activityInTranscript: boolean,
 ): readonly ChatEntry[] {
-  return activityInTranscript
-    ? entries
-    : entries.filter((entry) => isInTranscript(entry, activityInTranscript));
+  return entries.filter((entry) => isInTranscript(entry, activityInTranscript));
 }
 
 // What a layout draws `entry` from: the entry; a result with its turn's step

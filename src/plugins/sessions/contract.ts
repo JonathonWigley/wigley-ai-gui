@@ -183,16 +183,38 @@ export interface MarkOptions {
   action: string;
 }
 
+// One tool call, as a tool-call guard sees it. `sessionId` is the app's own id (AgentSession.id).
+export interface GuardedToolCall {
+  readonly sessionId: string;
+  readonly tool: string;
+  readonly toolUseId: string | null;
+  readonly mainAgentOnly: boolean;
+}
+
+export type ToolCallVerdict =
+  | { readonly kind: 'run' }
+  | { readonly kind: 'skip'; readonly text: string };
+
+export type ToolCallGuard = (call: GuardedToolCall) => Promise<ToolCallVerdict>;
+
+export interface ContributeToolsOptions {
+  readonly mainAgentOnly?: boolean;
+}
+
 export interface SessionsMainExports {
   // Starts the contribution's tool session in every live session, and in each
   // session that connects later. The handle's `dispose` ends those tool
   // sessions and frees the tool names; a second `dispose` does nothing. Throws
   // on a tool name another contribution already holds, or one this contribution
   // lists twice. A `start` that throws for a live session ends the tool sessions
-  // already started, leaves no contribution, and rethrows.
+  // already started, leaves no contribution, and rethrows. `mainAgentOnly` true
+  // marks each of the contribution's tools main-agent-only, which every
+  // tool-call guard reads from the call; absent or false marks none. The marks
+  // go with the tool names when the handle disposes.
   contributeTools(
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
+    options?: ContributeToolsOptions,
   ): Disposable;
   // Connects the session with no row, writing none, or joins the owned
   // session whose host id the info carries; `mark` or `activate` adds a
@@ -242,6 +264,24 @@ export interface SessionsMainExports {
     mayClose: (sessionId: string) => string | null,
     cancelHold?: (sessionId: string) => void,
   ): Disposable;
+  // Every call of a contributed tool, from a connected session, an owned one or
+  // its joined relay, asks each guard in registration order, one at a time,
+  // awaiting each answer before asking the next; every guard sees every call,
+  // whether or not its tool is main-agent-only. A call of a tool no
+  // contribution holds rejects without asking any. The first `skip` resolves
+  // the call with its text as a success, the handler not run and no later guard
+  // asked; a guard that rejects makes the call reject with its error, the same
+  // way. When every guard answers `run`, the handler runs, unless while the
+  // guards answered the tool's contribution was disposed (rejects `Unknown
+  // tool:`), the session ended (rejects `Session ended`), the session moved off
+  // the host id a joined relay's call came under (rejects `moved from host`) or
+  // the call's signal aborted (rejects with its reason). A guard disposed
+  // while a call awaits it still decides that call; a guard disposed before
+  // its turn in a call is not asked, and no later call asks it. Each call is
+  // its own
+  // registration, so one function added twice is asked twice until both
+  // handles are disposed; a second `dispose` does nothing.
+  addToolCallGuard(guard: ToolCallGuard): Disposable;
   // Stores the source's title, normalized, or clears it for null or a string
   // that normalizes to empty; checks no limit, which callers own. A changed
   // value writes the session's row when it has one and emits `titleChanged`

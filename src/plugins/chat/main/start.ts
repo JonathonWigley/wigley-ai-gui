@@ -49,6 +49,7 @@ import { PERMISSION_TOOLS } from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
+import { callerGuard, createToolCallers } from './tool-callers';
 import {
   START_SESSION_TOOL,
   startSessionToolSession,
@@ -304,6 +305,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       queued: api.state.publish(chatQueuedSlot),
       returned: api.state.publish(chatReturnedSlot),
     });
+    const toolCallers = createToolCallers(services.timers);
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
@@ -319,10 +321,18 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       alerts: services.alerts,
       window: services.window,
       git: services.git,
+      files: services.files,
+      toolCallers,
       log: services.log,
       clock: services.clock,
       sessionHost: services.sessionHost,
     });
+    sessions.addToolCallGuard(
+      callerGuard({
+        callers: toolCallers,
+        owns: (sessionId) => chat.hostSessionIdOf(sessionId) !== null,
+      }),
+    );
     const preview = createChatPreview({
       sessions,
       slots,
@@ -429,6 +439,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const endWaits = new Map<string, () => void>();
     api.events.on('sessions.ended', ({ sessionId }) => {
       chat.sessionEnded(sessionId);
+      toolCallers.forget(sessionId);
       endWaits.get(sessionId)?.();
       endWaits.delete(sessionId);
     });
@@ -543,6 +554,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       exports,
       dispose: () => {
         const lastSave = chat.detachAll();
+        toolCallers.stop();
         accounts.cancelRunning();
         for (const resolveWait of endWaits.values()) {
           resolveWait();

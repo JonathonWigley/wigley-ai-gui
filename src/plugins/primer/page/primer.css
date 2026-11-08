@@ -43,8 +43,10 @@
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
 }
 
-.primer-tab .primer-card > * {
-  max-width: var(--wg-prose-measure);
+/* The card and the review take the pane's whole width, their markdown
+   included, so a visual in them is never squeezed to the prose measure. */
+.primer-tab .md {
+  max-width: none;
 }
 
 @media (max-width: 800px) {

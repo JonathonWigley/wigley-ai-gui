@@ -53,7 +53,11 @@ function item(title: string): FollowupItem {
   };
 }
 
-// One repo with one home holding two follow-ups and one plan.
+// The plan's newest copy, in a linked worktree, and its task's.
+const PLAN_COPY = '/wt/docs/features/feature/plan-p/plan.md';
+const TASK_COPY = '/wt/docs/features/feature/plan-p/01-t.md';
+
+// One repo with one home holding two follow-ups and one plan of one task.
 const READ: BacklogRead = {
   homes: [
     {
@@ -71,13 +75,21 @@ const READ: BacklogRead = {
       plans: [
         {
           path: `${ROOT}/feature/plan-p/plan.md`,
+          copyPath: PLAN_COPY,
           feature: 'feature',
           title: 'Plan',
           checked: 0,
           total: 0,
           target: null,
           written: null,
-          tasks: [],
+          tasks: [
+            {
+              path: `${ROOT}/feature/plan-p/01-t.md`,
+              copyPath: TASK_COPY,
+              title: 'Task',
+              status: null,
+            },
+          ],
         },
       ],
       features: [],
@@ -135,11 +147,14 @@ type ScopeCall =
 // open and its first follow-up selected. `calls` logs every `setScope`,
 // `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
 // the core's focus key toward `direction` on the last focus target set.
-// `targets` holds every drop target the view registered. `runs` holds each
-// command a click ran with its arg, `logs` each line logged and `picked` the
-// count of `homePicked` calls.
+// `targets` holds every drop target the view registered; `readDocs` each
+// path the view read through the channel; `openedDocs` each path it asked
+// Docs to open. `runs` holds each command a click ran with its arg, `logs`
+// each line logged and `picked` the count of `homePicked` calls.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
+  const readDocs: string[] = [];
+  const openedDocs: string[] = [];
   const runs: [string, unknown][] = [];
   const logs: string[] = [];
   const picked = { count: 0 };
@@ -151,7 +166,12 @@ async function backlogSetup() {
   const anchors = recorded.anchors;
   const { keys } = recorded;
   const channel = {
-    invoke: async (method: string) => (method === 'load' ? READ : ''),
+    invoke: async (method: string, ...args: unknown[]) => {
+      if (method === 'readDoc') {
+        readDocs.push(String(args[0]));
+      }
+      return method === 'load' ? READ : '';
+    },
   } as unknown as PageChannel<BacklogChannel>;
   const view = createBacklogView({
     channel,
@@ -185,7 +205,7 @@ async function backlogSetup() {
       run: () => undefined,
     },
     tags: () => ['agent-ready', 'later'],
-    openDoc: () => undefined,
+    openDoc: (path) => openedDocs.push(path),
     setScope: (scope) => calls.push(['setScope', scope]),
     setResizeTarget: (target) =>
       calls.push(['setResizeTarget', target === null ? null : 'target']),
@@ -235,6 +255,8 @@ async function backlogSetup() {
     calls,
     move,
     targets,
+    readDocs,
+    openedDocs,
     runs,
     logs,
     picked,
@@ -378,6 +400,35 @@ describe('backlog view layouts', () => {
 
       expect(findAll(detail, 'mine-detail')).toHaveLength(1);
       expect(detail.scrollTop).toBe(120);
+    },
+  );
+
+  it("a plan's detail reads its newest copy", async () => {
+    const { view, readDocs } = await backlogSetup();
+
+    view.commands.listBottom();
+    await settle();
+
+    expect(readDocs).toEqual([PLAN_COPY]);
+  });
+
+  // `expand` opens the plan's task rows, the task row then being the bottom.
+  it.each([
+    { case: 'a plan', expand: false, opened: `${ROOT}/feature/plan-p/plan.md` },
+    { case: 'a task', expand: true, opened: `${ROOT}/feature/plan-p/01-t.md` },
+  ])(
+    'Open in Docs on $case opens the index copy, not the newest',
+    async ({ expand, opened }) => {
+      const { view, openedDocs } = await backlogSetup();
+      view.commands.listBottom();
+      if (expand) {
+        view.commands.open();
+        view.commands.listBottom();
+      }
+
+      view.commands.openInDocs();
+
+      expect(openedDocs).toEqual([opened]);
     },
   );
 

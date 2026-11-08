@@ -22,7 +22,7 @@ import {
   heavyStateOf,
   withHeavyState,
 } from '../contract';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import { PREVIEW_SAMPLES } from './preview';
 import { workflowHeavyPagePart } from './start';
 

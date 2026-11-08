@@ -14,6 +14,7 @@ import type { RowActivity, SessionPart } from '../../sessions/contract';
 import {
   type ActionInput,
   type ChecklistGroup,
+  type ChecklistItem,
   type ChecklistView,
   type ChipInput,
   defaultChecklist,
@@ -694,8 +695,8 @@ function checklistOf(
 }
 
 // The checklist's groups in order: each with every item done is finished, the
-// first other is the current group, whose open items show `openItemState`, and
-// the rest are later.
+// first other is the current group, whose open items show `openItemState`
+// unless an item says it is not running, and the rest are later.
 function partitionedGroups(
   groups: readonly ChecklistGroup[],
   openItemState: MarkState,
@@ -721,9 +722,16 @@ function sideGroup(
     title: group.title,
     items: group.items.map((item) => ({
       text: item.text,
-      state: item.done ? 'done' : openItemState,
+      state: itemState(item, openItemState),
     })),
   };
+}
+
+function itemState(item: ChecklistItem, openItemState: MarkState): MarkState {
+  if (item.done) {
+    return 'done';
+  }
+  return item.running === false ? PENDING : openItemState;
 }
 
 function logOnce(

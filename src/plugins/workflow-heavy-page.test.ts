@@ -55,7 +55,7 @@ import {
 } from './workflow-heavy/contract';
 import defaultLayout from './workflow-heavy/layouts/default/layout.js';
 import { workflowHeavyPagePart } from './workflow-heavy/page/start';
-import type { PlanProgress } from './workflow-heavy/plan-reader';
+import type { PlanProgress, TaskStatus } from '../shared/plan-progress';
 
 const NO_SECTION = { setSummary: () => undefined };
 
@@ -84,6 +84,8 @@ function progressOf(
       wave: index + 1,
       text: `task ${index + 1}.${at + 1}`,
       done: false,
+      file: null,
+      status: null,
     })),
   );
   tasks.forEach((task, index) => {
@@ -136,14 +138,22 @@ const BUSY: Record<string, FlowFields> = {
   subagent: { runningSubagents: ['agent-1'] },
 };
 
-// A plan of `tasks`, `[wave, done]` each, its tasks named by position
+// A plan of `tasks`, `[wave, done, status?]` each, its tasks named by position
 // (`w3.2` is wave 3's second task; `t.1` the first under no wave heading).
-function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
+function planOf(
+  tasks: [wave: number | null, done: boolean, status?: TaskStatus][],
+): PlanProgress {
   const seen = new Map<number | null, number>();
-  const lines = tasks.map(([wave, done]) => {
+  const lines = tasks.map(([wave, done, status = null]) => {
     const at = (seen.get(wave) ?? 0) + 1;
     seen.set(wave, at);
-    return { wave, done, text: `${wave === null ? 't' : `w${wave}`}.${at}` };
+    return {
+      wave,
+      done,
+      text: `${wave === null ? 't' : `w${wave}`}.${at}`,
+      file: null,
+      status,
+    };
   });
   return {
     checked: lines.filter((line) => line.done).length,
@@ -821,7 +831,7 @@ describe('Heavy over the engine page part', () => {
         title: 'Wave 3',
         items: [
           { text: 'w3.1', state: 'done' },
-          { text: 'w3.2', state: 'running' },
+          { text: 'w3.2', state: 'pending' },
         ],
       },
       laterGroups: [
@@ -830,11 +840,32 @@ describe('Heavy over the engine page part', () => {
       ],
     },
     {
-      name: 'make not busy',
+      name: 'make busy, w3.1 and w4.1 in progress',
+      stage: 'make',
+      busy: 'turn',
+      plan: planOf([
+        [3, false, 'in progress'],
+        [3, false],
+        [4, false, 'in progress'],
+      ]),
+      finishedGroups: [],
+      currentGroup: {
+        title: 'Wave 3',
+        items: [
+          { text: 'w3.1', state: 'running' },
+          { text: 'w3.2', state: 'pending' },
+        ],
+      },
+      laterGroups: [
+        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+      ],
+    },
+    {
+      name: 'make not busy, w3.1 in progress',
       stage: 'make',
       busy: 'none',
       plan: planOf([
-        [3, false],
+        [3, false, 'in progress'],
         [4, false],
       ]),
       finishedGroups: [],
@@ -850,7 +881,7 @@ describe('Heavy over the engine page part', () => {
       name: 'review busy runs no tasks',
       stage: 'review',
       busy: 'turn',
-      plan: planOf([[3, false]]),
+      plan: planOf([[3, false, 'in progress']]),
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
@@ -873,7 +904,7 @@ describe('Heavy over the engine page part', () => {
       ],
       currentGroup: {
         title: 'Wave 1',
-        items: [{ text: 'w1.1', state: 'paused' }],
+        items: [{ text: 'w1.1', state: 'pending' }],
       },
       laterGroups: [
         {
@@ -898,7 +929,7 @@ describe('Heavy over the engine page part', () => {
         title: 'Tasks',
         items: [
           { text: 't.1', state: 'done' },
-          { text: 't.2', state: 'running' },
+          { text: 't.2', state: 'pending' },
         ],
       },
       laterGroups: [],
@@ -916,7 +947,7 @@ describe('Heavy over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Tasks',
-        items: [{ text: 't.1', state: 'paused' }],
+        items: [{ text: 't.1', state: 'pending' }],
       },
       laterGroups: [
         {

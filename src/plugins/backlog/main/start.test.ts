@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Git } from '../../../contracts/git';
+import type { Files } from '../../../contracts/files';
+import type { Git, GitWorktree } from '../../../contracts/git';
 import {
   type FollowupDraft,
   followupTitleProblem,
@@ -31,6 +32,15 @@ const CLONE = '/dev/r';
 const HOME = `${CLONE}/docs/features`;
 const FOLLOWUPS = `${HOME}/followups.md`;
 const UI_FOLLOWUPS = `${HOME}/followups/ui.md`;
+const PLAN_DIR = `${HOME}/f/plan-p`;
+const PLAN = `${PLAN_DIR}/plan.md`;
+const MAIN_TREE: GitWorktree = { path: CLONE, branch: 'main', isMain: true };
+const WORKTREE: GitWorktree = {
+  path: `${CLONE}/.worktrees/w`,
+  branch: 'w',
+  isMain: false,
+};
+const WORKTREE_PLAN_DIR = `${WORKTREE.path}/docs/features/f/plan-p`;
 
 const FOLLOWUPS_TEXT = [
   '# Follow-ups — r',
@@ -124,6 +134,12 @@ function indexRead(entries: IndexEntry[]): SourceRead {
   };
 }
 
+// A plan.md holding `boxes` under `## Tasks`, each a line such as
+// `- [x] [01 — A](01-a.md)`.
+function planText(...boxes: string[]): string {
+  return ['# P — plan', '', '## Tasks', '', ...boxes, ''].join('\n');
+}
+
 function missingFile(path: string): Error {
   return Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' });
 }
@@ -136,6 +152,10 @@ function fakeGit() {
     originRepoName: vi.fn<Git['originRepoName']>(async () => null),
     currentBranch: vi.fn<Git['currentBranch']>(async () => 'main'),
     isLinkedWorktree: vi.fn<Git['isLinkedWorktree']>(async () => false),
+    worktrees: vi.fn<Git['worktrees']>(async () => [
+      { path: CLONE, branch: 'main', isMain: true },
+    ]),
+    commonDir: vi.fn<Git['commonDir']>(async () => `${CLONE}/.git`),
     hasUpstream: vi.fn<Git['hasUpstream']>(async () => true),
     changedPaths: vi.fn<Git['changedPaths']>(async () => []),
     unpushedPaths: vi.fn<Git['unpushedPaths']>(async () => []),
@@ -166,11 +186,18 @@ function firstFollowupDraft(read: BacklogRead): FollowupDraft {
 // docs event at backlog. `links` maps a symlinked path to its real path.
 // `calls` lists each docs read, write and trash in order; a path in `refuse`
 // makes its `writeDoc` or `writeBytes` reject with that reason. `listed` is
-// what `Files.list` reads.
+// what `Files` reads, `realPath` aside, seeded with every `disk` file at time
+// 0; `setTime` sets the modified time its next writes stamp.
 function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
-  const listed = createMemoryFiles();
+  let time = 0;
+  const listed = createMemoryFiles({ now: () => time });
+  for (const [path, text] of files) {
+    // The memory write stores before its first await, so the seed is in place
+    // when this returns.
+    void listed.write(path, text);
+  }
   const calls: [string, string][] = [];
   const refuse = new Map<string, string>();
   const refusing = (path: string) => {
@@ -235,7 +262,11 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       git,
       files: {
         realPath: async (path: string) => links.get(path) ?? path,
-        list: listed.list,
+        read: (path: string) => listed.read(path),
+        modified: (path: string) => listed.modified(path),
+        stat: (path: string) => listed.stat(path),
+        list: (...args: Parameters<Files['list']>) => listed.list(...args),
+        watch: (...args: Parameters<Files['watch']>) => listed.watch(...args),
       },
       paths: posixPaths,
       clock: { now: () => NOW },
@@ -263,6 +294,9 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     calls,
     refuse,
     listed,
+    setTime: (next: number) => {
+      time = next;
+    },
     files,
     links,
     watched,
@@ -430,15 +464,244 @@ describe('backlog main part', () => {
     expect(read.homes[0].plans).toEqual([
       {
         path: planPath,
+        copyPath: planPath,
         feature: 'backlog',
         title,
-        checked: 2,
-        total: 9,
+        checked: 0,
+        total: 0,
         target: 'gui `main`',
         written: '2026-10-26',
         tasks: [],
       },
     ]);
+  });
+
+  it.each<{
+    name: string;
+    meta: { checked: number; total: number };
+    tasks: [file: string, status: string][];
+    files: [path: string, text: string, time: number][];
+    trees: GitWorktree[];
+    plan: {
+      copyPath: string;
+      checked: number;
+      total: number;
+      tasks: [copyPath: string, status: string | null][];
+    };
+  }>([
+    {
+      name: 'boxes under Tasks only',
+      meta: { checked: 0, total: 9 },
+      tasks: [],
+      files: [
+        [
+          PLAN,
+          [
+            '# P — plan',
+            '',
+            '## Preconditions',
+            '',
+            '- [x] ready',
+            '',
+            '## Tasks',
+            '',
+            '- [x] one',
+            '- [ ] two',
+            '- [ ] three',
+            '',
+          ].join('\n'),
+          0,
+        ],
+      ],
+      trees: [MAIN_TREE],
+      plan: { copyPath: PLAN, checked: 1, total: 3, tasks: [] },
+    },
+    {
+      name: 'a newer worktree copy',
+      meta: { checked: 0, total: 2 },
+      tasks: [
+        ['01-a.md', 'not started'],
+        ['02-b.md', 'not started'],
+      ],
+      files: [
+        [PLAN, planText('- [ ] [A](01-a.md)', '- [ ] [B](02-b.md)'), 0],
+        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 0],
+        [
+          `${WORKTREE_PLAN_DIR}/plan.md`,
+          planText('- [ ] [A](01-a.md)', '- [x] [B](02-b.md)'),
+          10,
+        ],
+        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: in progress\n', 10],
+        [`${WORKTREE_PLAN_DIR}/02-b.md`, 'Status: done\n', 10],
+      ],
+      trees: [MAIN_TREE, WORKTREE],
+      plan: {
+        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
+        checked: 1,
+        total: 2,
+        tasks: [
+          [`${WORKTREE_PLAN_DIR}/01-a.md`, 'in progress'],
+          [`${WORKTREE_PLAN_DIR}/02-b.md`, 'done'],
+        ],
+      },
+    },
+    {
+      name: 'an equal-time worktree copy',
+      meta: { checked: 2, total: 9 },
+      tasks: [['01-a.md', 'done']],
+      files: [
+        [PLAN, planText('- [ ] [A](01-a.md)', '- [ ] [B](02-b.md)'), 10],
+        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 10],
+        [
+          `${WORKTREE_PLAN_DIR}/plan.md`,
+          planText('- [ ] [A](01-a.md)', '- [x] [B](02-b.md)'),
+          10,
+        ],
+        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: in progress\n', 10],
+      ],
+      trees: [MAIN_TREE, WORKTREE],
+      plan: {
+        copyPath: PLAN,
+        checked: 0,
+        total: 2,
+        tasks: [[`${PLAN_DIR}/01-a.md`, 'not started']],
+      },
+    },
+    {
+      name: 'a task no line names keeps its index status',
+      meta: { checked: 0, total: 9 },
+      tasks: [
+        ['01-a.md', 'not started'],
+        ['09-extra.md', 'done'],
+      ],
+      files: [
+        [PLAN, planText('- [x] [A](01-a.md)'), 0],
+        [`${PLAN_DIR}/01-a.md`, 'Status: done\n', 0],
+        [`${PLAN_DIR}/09-extra.md`, 'Status: not started\n', 0],
+      ],
+      trees: [MAIN_TREE],
+      plan: {
+        copyPath: PLAN,
+        checked: 1,
+        total: 1,
+        tasks: [
+          [`${PLAN_DIR}/01-a.md`, 'done'],
+          [`${PLAN_DIR}/09-extra.md`, 'done'],
+        ],
+      },
+    },
+    {
+      name: 'an unreadable copy status keeps the index status',
+      meta: { checked: 0, total: 9 },
+      tasks: [['01-a.md', 'blocked']],
+      files: [
+        [PLAN, planText('- [ ] [A](01-a.md)'), 0],
+        [`${PLAN_DIR}/01-a.md`, 'Status: blocked\n', 0],
+      ],
+      trees: [MAIN_TREE],
+      plan: {
+        copyPath: PLAN,
+        checked: 0,
+        total: 1,
+        tasks: [[`${PLAN_DIR}/01-a.md`, 'blocked']],
+      },
+    },
+    {
+      name: 'a worktree copy reads its own status, a task it does not link the index',
+      meta: { checked: 0, total: 9 },
+      tasks: [
+        ['01-a.md', 'not started'],
+        ['09-extra.md', 'done'],
+      ],
+      files: [
+        [PLAN, planText('- [ ] [A](01-a.md)'), 0],
+        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 0],
+        [`${PLAN_DIR}/09-extra.md`, 'Status: done\n', 0],
+        [`${WORKTREE_PLAN_DIR}/plan.md`, planText('- [ ] [A](01-a.md)'), 10],
+        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: blocked\n', 10],
+      ],
+      trees: [MAIN_TREE, WORKTREE],
+      plan: {
+        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
+        checked: 0,
+        total: 1,
+        tasks: [
+          [`${WORKTREE_PLAN_DIR}/01-a.md`, null],
+          [`${PLAN_DIR}/09-extra.md`, 'done'],
+        ],
+      },
+    },
+  ])(
+    'load_PlanProgress_FromTheNewestCopy ($name)',
+    async ({ meta, tasks, files, trees, plan }) => {
+      const backlog = startBacklog(
+        [
+          entry('plan', PLAN, { feature: 'f', ...meta }),
+          ...tasks.map(([file, status]) =>
+            entry('task', `${PLAN_DIR}/${file}`, { plan: 'p', status }),
+          ),
+        ],
+        { [PLAN]: '# P — plan\n' },
+      );
+      backlog.git.worktrees.mockResolvedValue(trees);
+      for (const [path, text, time] of files) {
+        backlog.setTime(time);
+        await backlog.listed.write(path, text);
+      }
+
+      const read = await backlog.invoke<BacklogRead>('load');
+
+      expect(
+        read.homes[0].plans.map(
+          ({ copyPath, checked, total, tasks: rows }) => ({
+            copyPath,
+            checked,
+            total,
+            tasks: rows.map((task) => [task.copyPath, task.status]),
+          }),
+        ),
+      ).toEqual([plan]);
+    },
+  );
+
+  it('load_PlansInOneClone_ListWorktreesOnce', async () => {
+    const otherPlan = `${HOME}/g/plan-q/plan.md`;
+    const backlog = startBacklog(
+      [
+        entry('plan', PLAN, { feature: 'f' }),
+        entry('plan', otherPlan, { feature: 'g' }),
+      ],
+      { [PLAN]: planText('- [ ] one'), [otherPlan]: planText('- [ ] two') },
+    );
+    backlog.git.worktrees.mockResolvedValue([MAIN_TREE, WORKTREE]);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0].plans.map((plan) => plan.total)).toEqual([1, 1]);
+    expect(backlog.git.worktrees).toHaveBeenCalledTimes(1);
+  });
+
+  it('load_PlanCopyFails_LoggedAndSkipped', async () => {
+    const backlog = startBacklog(
+      [entry('plan', PLAN, { feature: 'f', checked: 0, total: 1 })],
+      { [PLAN]: planText('- [ ] [A](01-a.md)') },
+    );
+    const { list } = backlog.listed;
+    vi.spyOn(backlog.listed, 'list').mockImplementation(
+      async (folder, options) => {
+        if (folder === PLAN_DIR) {
+          throw Object.assign(new Error(`EACCES: ${folder}`), {
+            code: 'EACCES',
+          });
+        }
+        return list(folder, options);
+      },
+    );
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0].plans).toEqual([]);
+    expect(backlog.logged).toEqual([expect.stringContaining(PLAN)]);
   });
 
   it('load_PlanWithoutWrittenDate_WrittenNull', async () => {
@@ -714,6 +977,56 @@ describe('backlog main part', () => {
     backlog.watched.find((watch) => watch.path === FOLLOWUPS)?.changed();
 
     expect(backlog.sent).toEqual([['changed', { homeRoot: HOME }]]);
+  });
+
+  it.each<{ name: string; seed: string[]; write: string; sends: boolean }>([
+    {
+      name: 'a linked worktree copy edited',
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${WORKTREE_PLAN_DIR}/01-a.md`,
+      sends: true,
+    },
+    {
+      name: 'a worktree added',
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${CLONE}/.git/worktrees/x/HEAD`,
+      sends: true,
+    },
+    {
+      name: 'the first worktree added',
+      seed: [`${CLONE}/.git/HEAD`],
+      write: `${CLONE}/.git/worktrees/x/HEAD`,
+      sends: true,
+    },
+    {
+      name: "a worktree's git state changed",
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${CLONE}/.git/worktrees/w/index`,
+      sends: false,
+    },
+    {
+      name: 'the main checkout edited',
+      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
+      write: `${PLAN_DIR}/01-a.md`,
+      sends: false,
+    },
+  ])('watch_$name_SendsChanged $sends', async ({ seed, write, sends }) => {
+    const backlog = startBacklog([entry('plan', PLAN, { feature: 'f' })], {
+      [PLAN]: planText('- [ ] [A](01-a.md)'),
+    });
+    backlog.git.worktrees.mockResolvedValue([MAIN_TREE, WORKTREE]);
+    for (const path of [`${WORKTREE_PLAN_DIR}/plan.md`, ...seed]) {
+      await backlog.listed.write(path, 'x');
+    }
+    await backlog.invoke('load');
+
+    await backlog.listed.write(write, 'y');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(backlog.sent.length > 0).toBe(sends);
+    expect(backlog.sent).toEqual(
+      backlog.sent.map(() => ['changed', { homeRoot: HOME }]),
+    );
   });
 
   it('watch_Reload_DisposesTheLastLoadsWatches', async () => {

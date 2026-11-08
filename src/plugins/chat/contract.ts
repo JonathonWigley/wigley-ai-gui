@@ -177,9 +177,10 @@ export interface ChatSessionInfo {
   // The clone's checked-out branch, or its short commit on a detached HEAD;
   // null outside a clone, and until the first read.
   branch: string | null;
-  // The git worktrees the session's agents wrote files in, by name, in the
-  // order of their first write (`worktreeNameOf` in main). Kept after the
-  // worktree is removed; [] until a write lands in one.
+  // The git worktrees the session's agents wrote files in or named the root of
+  // in a Bash command, by name, in the order of their first touch
+  // (`worktreeNameOf` and `worktreesInCommand` in main). Kept after the
+  // worktree is removed; [] until one is touched.
   worktrees: string[];
 }
 

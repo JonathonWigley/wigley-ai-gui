@@ -14,6 +14,7 @@ import {
   type SessionControl,
   type UserMessage,
 } from '../../../contracts/agent';
+import type { GitWorktree } from '../../../contracts/git';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   createFakeAgentHarness,
@@ -333,13 +334,60 @@ async function flush() {
 const NO_CLONE: ChatSessionsDeps['git'] = {
   topLevel: () => Promise.resolve(null),
   currentBranch: () => Promise.resolve(null),
+  worktrees: () => Promise.resolve([]),
 };
+
+const FIX_ROOT = '/repos/.worktrees/fix';
+
+// The checkouts of the clone at `/repos/clone`: its main tree, then a linked
+// worktree at each of `linked`.
+function checkoutsOf(linked: readonly string[]): GitWorktree[] {
+  return [
+    { path: '/repos/clone', branch: 'main', isMain: true },
+    ...linked.map((root) => ({
+      path: root,
+      branch: null,
+      isMain: false,
+    })),
+  ];
+}
+
+// The clone at `/repos/clone` on `main`, whose linked worktrees the test
+// changes through `linked`.
+function worktreesGit(linked: string[]): ChatSessionsDeps['git'] {
+  return {
+    topLevel: () => Promise.resolve('/repos/clone'),
+    currentBranch: () => Promise.resolve('main'),
+    worktrees: () => Promise.resolve(checkoutsOf(linked)),
+  };
+}
+
+function toolEntry(
+  id: string,
+  name: string,
+  input: unknown,
+  result: { text: string; isError: boolean } | null = null,
+): ChatEntry {
+  return {
+    kind: 'tool',
+    id,
+    at: 1000,
+    agentId: MAIN_AGENT_ID,
+    toolUseId: `tu-${id}`,
+    name,
+    input,
+    summary: '',
+    result,
+    raw: [],
+  };
+}
 
 function setUp(
   options: {
     harnesses?: FakeAgentHarness[];
     clockNow?: number;
     git?: ChatSessionsDeps['git'];
+    files?: ChatSessionsDeps['files'];
     sessionHost?: ChatSessionsDeps['sessionHost'];
   } = {},
 ) {
@@ -369,6 +417,11 @@ function setUp(
   const store = createSlotStore(() => undefined);
   store.onWrite((change) => timeline.push(change));
   const emitted: Emitted[] = [];
+  // Each `noteToolStarted` call and each emit, in the order chat made them.
+  const notesAndEmits: (
+    | { noted: [string, string, string] }
+    | { emitted: Emitted }
+  )[] = [];
   let ownedEnds = 0;
   let windowShows = 0;
   let isFocused = true;
@@ -456,6 +509,7 @@ function setUp(
     emit: (event, data) => {
       const each = { event, data } as Emitted;
       emitted.push(each);
+      notesAndEmits.push({ emitted: each });
       onEmit(each);
     },
     alerts: {
@@ -469,6 +523,11 @@ function setUp(
       isFocused: () => isFocused,
     },
     git: options.git ?? NO_CLONE,
+    files: options.files ?? { realPath: (file) => Promise.resolve(file) },
+    toolCallers: {
+      noteToolStarted: (sessionId, toolUseId, agentId) =>
+        notesAndEmits.push({ noted: [sessionId, toolUseId, agentId] }),
+    },
     log,
     clock,
     sessionHost: options.sessionHost ?? sessionHost,
@@ -498,6 +557,7 @@ function setUp(
     timeline,
     messages: () => messagesFrom(timeline),
     emitted,
+    notesAndEmits,
     agentSession,
     archived,
     saved,
@@ -573,7 +633,15 @@ function connected(id: string, hostId: string): AgentSession {
 }
 
 function assistant(id: string, text: string): ChatEntry {
-  return { kind: 'assistant', id, at: 1000, text, streaming: false, raw: [] };
+  return {
+    kind: 'assistant',
+    id,
+    at: 1000,
+    agentId: MAIN_AGENT_ID,
+    text,
+    streaming: false,
+    raw: [],
+  };
 }
 
 const IDLE_SEND: UserMessage = { text: 'idle send', images: [] };
@@ -1648,6 +1716,223 @@ describe('createChatSessions', () => {
     }
 
     expect(test.chat.sessions()[0].worktrees).toEqual(['app-fix', 'docs-fix']);
+  });
+
+  it('agentEvent_ToolStarted_NotesItsAgentBeforeTheEmit', async () => {
+    const test = await started();
+    test.notesAndEmits.length = 0;
+
+    test.process.events.agentEvent({
+      type: 'toolStarted',
+      at: 1000,
+      agentId: 'subagent-1',
+      toolUseId: 't1',
+      tool: 'mcp__wigley-forms__set_workflow_step',
+      summary: '',
+    });
+
+    expect(
+      test.notesAndEmits.map((each) =>
+        'noted' in each ? each.noted : each.emitted.event,
+      ),
+    ).toEqual([[ROW_ID, 't1', 'subagent-1'], 'agentEvent']);
+  });
+
+  it('bashEntry_NamesALinkedWorktreeRoot_ListsIt', async () => {
+    const test = await started({ git: worktreesGit([FIX_ROOT]) });
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command: `ls ${FIX_ROOT}` }),
+    );
+    test.process.events.entry(
+      toolEntry('b', 'Bash', { command: 'ls /repos/clone' }),
+    );
+    test.process.events.entry(
+      toolEntry('c', 'Read', {
+        file_path: `${FIX_ROOT}/src/a.ts`,
+        command: `ls ${FIX_ROOT}/x`,
+      }),
+    );
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['fix']);
+  });
+
+  it('bashEntry_NamesARootThroughTheFolderSymlink_ListsIt', async () => {
+    const test = await started({
+      git: worktreesGit(['/private/work/app-wt']),
+      files: {
+        realPath: (file) =>
+          Promise.resolve(file.startsWith('/work') ? `/private${file}` : file),
+      },
+    });
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command: 'ls /work/app-wt' }),
+    );
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['app-wt']);
+  });
+
+  it.each([
+    {
+      case: 'InputNull_ListsNothing',
+      entries: [toolEntry('a', 'Bash', null)],
+      worktrees: [],
+    },
+    {
+      case: 'CommandNotAString_ListsNothing',
+      entries: [toolEntry('a', 'Bash', { command: 7 })],
+      worktrees: [],
+    },
+    {
+      case: 'PutTwice_ListsOnce',
+      entries: [
+        toolEntry('a', 'Bash', { command: `ls ${FIX_ROOT}` }),
+        toolEntry(
+          'a',
+          'Bash',
+          { command: `ls ${FIX_ROOT}` },
+          {
+            text: 'src',
+            isError: false,
+          },
+        ),
+      ],
+      worktrees: ['fix'],
+    },
+  ])('bashEntry_$case', async ({ entries, worktrees }) => {
+    const test = await started({ git: worktreesGit([FIX_ROOT]) });
+
+    for (const entry of entries) {
+      test.process.events.entry(entry);
+    }
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(worktrees);
+  });
+
+  // `rootReads` counts the roots reads after the row's open read.
+  it.each([
+    {
+      case: 'GitWorktreeAdd_ReadsAgain',
+      command: 'git worktree add x',
+      rootReads: 1,
+    },
+    {
+      case: 'GitDashCWorktreeList_ReadsAgain',
+      command: 'git -C /repos/clone worktree list',
+      rootReads: 1,
+    },
+    {
+      case: 'PathUnderDotWorktrees_ReadsNothing',
+      command: `cd ${FIX_ROOT} && git status`,
+      rootReads: 0,
+    },
+    {
+      case: 'PathUnderClaudeWorktrees_ReadsNothing',
+      command: 'ls /repos/clone/.claude/worktrees/b',
+      rootReads: 0,
+    },
+  ])('bashEntryResult_$case', async ({ command, rootReads }) => {
+    let reads = 0;
+    const test = await started({
+      git: {
+        ...worktreesGit([FIX_ROOT]),
+        worktrees: () => {
+          reads += 1;
+          return Promise.resolve(checkoutsOf([FIX_ROOT]));
+        },
+      },
+    });
+    const readsAtOpen = reads;
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command }, { text: '', isError: false }),
+    );
+    await flush();
+
+    expect(reads - readsAtOpen).toBe(rootReads);
+  });
+
+  it('replay_BashEntries_StartNoRootsReadAndListOnceTheOpenReadLands', async () => {
+    const rootReads: ((worktrees: GitWorktree[]) => void)[] = [];
+    const test = setUp({
+      git: {
+        ...worktreesGit([]),
+        worktrees: () =>
+          new Promise((resolve) => {
+            rootReads.push(resolve);
+          }),
+      },
+    });
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay: (events) => {
+        events.entry(
+          toolEntry(
+            'a',
+            'Bash',
+            { command: 'git worktree add /repos/.worktrees/late' },
+            { text: '', isError: false },
+          ),
+        );
+        events.entry(toolEntry('b', 'Bash', { command: `ls ${FIX_ROOT}` }));
+      },
+    });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(rootReads).toHaveLength(1);
+    expect(test.chat.sessions()[0].worktrees).toEqual([]);
+    rootReads[0](checkoutsOf([FIX_ROOT]));
+    await flush();
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['fix']);
+  });
+
+  it('replay_ToolStarted_NotesItsAgent', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay: (events) =>
+        events.agentEvent({
+          type: 'toolStarted',
+          at: 1000,
+          agentId: 'subagent-1',
+          toolUseId: 't1',
+          tool: 'mcp__wigley-forms__set_workflow_step',
+          summary: '',
+        }),
+    });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(
+      test.notesAndEmits.flatMap((each) =>
+        'noted' in each ? [each.noted] : [],
+      ),
+    ).toEqual([[ROW_ID, 't1', 'subagent-1']]);
+  });
+
+  it('bashEntry_BeforeTheRootsRead_ListsOnceTheReadLands', async () => {
+    let settleRead: (worktrees: GitWorktree[]) => void = () => undefined;
+    const test = await started({
+      git: {
+        ...worktreesGit([]),
+        worktrees: () =>
+          new Promise((resolve) => {
+            settleRead = resolve;
+          }),
+      },
+    });
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command: `ls ${FIX_ROOT}` }),
+    );
+    expect(test.chat.sessions()[0].worktrees).toEqual([]);
+    settleRead(checkoutsOf([FIX_ROOT]));
+    await flush();
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['fix']);
   });
 
   it('processExit_BackgroundWorkRunning_ClearsBackground', async () => {
@@ -3592,6 +3877,7 @@ describe('createChatSessions branch', () => {
     return {
       topLevel: () => Promise.resolve('/repos/clone'),
       currentBranch: () => Promise.resolve(branch.current),
+      worktrees: () => Promise.resolve([]),
     };
   }
 
@@ -3611,6 +3897,15 @@ describe('createChatSessions branch', () => {
       },
       sent: [],
       logged: 'branch not read in app: git did not start',
+    },
+    {
+      case: 'worktrees rejects',
+      git: {
+        ...cloneGit({ current: 'main' }),
+        worktrees: () => Promise.reject(new Error('git did not start')),
+      },
+      sent: [{ sessionId: ROW_ID, repo: 'clone', branch: 'main' }],
+      logged: 'worktrees not read in app: git did not start',
     },
   ])('branchRead_$case', async ({ git, sent, logged }) => {
     const test = await started({ git });
@@ -3641,13 +3936,47 @@ describe('createChatSessions branch', () => {
     ]);
   });
 
-  // `reads` holds each branch read still open, oldest first.
+  it('agentEvent_TurnEnded_ReadsTheWorktreeRootsAgain', async () => {
+    const linked: string[] = [];
+    const test = await started({ git: worktreesGit(linked) });
+    linked.push('/repos/.worktrees/late');
+
+    test.process.events.agentEvent(TURN_ENDED);
+    await flush();
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command: 'ls /repos/.worktrees/late' }),
+    );
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['late']);
+  });
+
+  it('bashWorktreeCommand_ResultLands_ReadsTheWorktreeRootsAgain', async () => {
+    const linked: string[] = [];
+    const test = await started({ git: worktreesGit(linked) });
+    const add = 'git worktree add /repos/.worktrees/late';
+    test.process.events.entry(toolEntry('a', 'Bash', { command: add }));
+    linked.push('/repos/.worktrees/late');
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command: add }, { text: '', isError: false }),
+    );
+    await flush();
+    test.process.events.entry(
+      toolEntry('b', 'Bash', { command: 'ls /repos/.worktrees/late' }),
+    );
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['late']);
+  });
+
+  // `reads` holds each branch read still open, oldest first; `rootReads` each
+  // worktree roots read.
   it.each([
     {
       case: 'older read settles after a newer',
       settle: async (
         test: Awaited<ReturnType<typeof started>>,
         reads: ((branch: string) => void)[],
+        _rootReads: ((worktrees: GitWorktree[]) => void)[],
       ) => {
         test.process.events.agentEvent(TURN_ENDED);
         await flush();
@@ -3663,6 +3992,7 @@ describe('createChatSessions branch', () => {
       settle: async (
         test: Awaited<ReturnType<typeof started>>,
         reads: ((branch: string) => void)[],
+        _rootReads: ((worktrees: GitWorktree[]) => void)[],
       ) => {
         test.chat.closed(ROW_ID, 'user');
         reads[0]('main');
@@ -3675,9 +4005,26 @@ describe('createChatSessions branch', () => {
       settle: async (
         test: Awaited<ReturnType<typeof started>>,
         reads: ((branch: string) => void)[],
+        _rootReads: ((worktrees: GitWorktree[]) => void)[],
       ) => {
         test.chat.detachAll();
         reads[0]('main');
+      },
+      sent: [],
+      shown: null,
+    },
+    {
+      case: 'roots read settles after its row closed',
+      settle: async (
+        test: Awaited<ReturnType<typeof started>>,
+        _reads: ((branch: string) => void)[],
+        rootReads: ((worktrees: GitWorktree[]) => void)[],
+      ) => {
+        test.process.events.entry(
+          toolEntry('a', 'Bash', { command: `ls ${FIX_ROOT}` }),
+        );
+        test.chat.closed(ROW_ID, 'user');
+        rootReads[0](checkoutsOf([FIX_ROOT]));
       },
       sent: [],
       shown: null,
@@ -3686,20 +4033,31 @@ describe('createChatSessions branch', () => {
     'branchRead_StaleRead_ChangesNothing ($case)',
     async ({ settle, sent, shown }) => {
       const reads: ((branch: string) => void)[] = [];
+      const rootReads: ((worktrees: GitWorktree[]) => void)[] = [];
       const git: ChatSessionsDeps['git'] = {
         topLevel: () => Promise.resolve('/repos/clone'),
         currentBranch: () =>
           new Promise((resolve) => {
             reads.push(resolve);
           }),
+        worktrees: () =>
+          new Promise((resolve) => {
+            rootReads.push(resolve);
+          }),
       };
       const test = await started({ git });
 
-      await settle(test, reads);
+      await settle(test, reads, rootReads);
       await flush();
 
       expect(test.sent('branch')).toEqual(sent);
       expect(test.chat.sessions()[0]?.branch ?? null).toBe(shown);
+      const worktreesWritten = test.timeline.flatMap((item) =>
+        'value' in item && item.id === chatSessionSlot.id
+          ? ((item.value as ChatSessionInfo | undefined)?.worktrees ?? [])
+          : [],
+      );
+      expect(worktreesWritten).toEqual([]);
     },
   );
 });

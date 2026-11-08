@@ -183,17 +183,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   `fake: hold`. The dock now draws in the session hub, and these measurements predate that move; recheck both sizes
   before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
   c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
-- **Background subagent misattributed and dropped early** — *needs a feature plan*: two faults a real session showed
-  on 2026-11-03, a haiku background subagent under an Opus main told to run `sleep 90`. Take the first one first; it
-  misattributes who said what. (1) The subagent's replies show in the main transcript as the main agent's: the
-  decoder's text entries read no `parent_tool_use_id` (`decodeTextBlock`, `src/main/claude-code/stream-decoder.ts`).
-  Only a background subagent was seen doing this; check a foreground one. To decide: where a subagent's text belongs,
-  such as its strip box or nowhere. (2) A subagent waiting on its own background shell lost its strip box about 80 s
-  before it really ended, then replied and handed back with no box. The box follows `agentFinished`, which for a
-  launched subagent comes from `task_notification` (`finishByNotification`; `docs/features/agent-chat/claude-stream.md`
-  § its end event notes the measurement). The raw line was not captured, so capture it first. To decide: whether a late
-  reply lists the subagent again, or its box waits for the shells it owns. Source session: Claude Code
-  2294388c-6fcc-4d43-a794-070e11683453 in /Users/jonathonwigley/Documents/ai-dev
 
 - **A quit can lose a session's open run time** — *needs a feature plan*: chat's final save at quit is not waited for
   (`detachAll`, `chat-sessions.ts`), and `src/main/main.ts` lets the user's quit exit without waiting, so a cut write
@@ -639,6 +628,16 @@ because the earlier items rewrite many of these tests anyway.
   `[sessions] activated Layout preview` (`src/plugins/primer/main/selftest-script.ts`). That line needs forms' Layout
   preview session, so the script passes only with `--plugin forms,primer` (from eb6f544b8). Either drop the wait, or
   have the script open the session it waits on.
+- **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts`) falls back to
+  the plan's own copy, with no log, when `git.worktrees` rejects, so a list that keeps failing hides every worktree
+  copy from Heavy and Backlog in silence. Log the rejection once per clone.
+- **Backlog reloads once per worktree edit** — *agent-ready*: each change under a linked worktree's `docs/features`
+  sends `changed`, and the Backlog page runs a full, uncoalesced load for each one (`src/plugins/backlog/main/start.ts`
+  `watchWorktrees`). Coalesce the page's `changed` reloads if a burst of worktree edits proves slow.
+- **A hand-back's join counts one step short** — *agent-ready*: in `src/main/claude-code/stream-decoder.ts`, a
+  non-empty turn right after a hand-back result puts its init in the hand-back turn's events entry, so its divider
+  counts one step fewer; a second hand-back right after the first does the same. Key the join on the next result
+  being empty rather than on the init.
 - **Docs editor-landing issues** — when the docs editor lands: an editor key sequence bound only in other scopes is
   taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in
   docs.…` while forms binds `<Esc>`. A row removed while its round stays open rebuilds that round's popup in a

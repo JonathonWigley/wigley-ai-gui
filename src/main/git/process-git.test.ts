@@ -1,5 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -191,6 +197,75 @@ describe('createProcessGit', () => {
     );
 
     expect(await test.git.isLinkedWorktree(ROOT)).toBe(true);
+  });
+
+  it.each([
+    {
+      name: 'main, a branch and a detached tree',
+      output:
+        `worktree /Users/u/dev/m\nHEAD ${SHA_A}\nbranch refs/heads/main\n\n` +
+        `worktree /Users/u/dev/.worktrees/m-x/\nHEAD ${SHA_B}\nbranch refs/heads/feature/x\n\n` +
+        `worktree /Users/u/dev/m-d\nHEAD ${SHA_A}\ndetached\n\n`,
+      trees: [
+        { path: '/Users/u/dev/m', branch: 'main', isMain: true },
+        {
+          path: '/Users/u/dev/.worktrees/m-x',
+          branch: 'feature/x',
+          isMain: false,
+        },
+        { path: '/Users/u/dev/m-d', branch: null, isMain: false },
+      ],
+    },
+    {
+      name: 'a bare main and a locked tree',
+      output:
+        'worktree /Users/u/dev/m.git\nbare\n\n' +
+        `worktree /Users/u/dev/m-l\nHEAD ${SHA_A}\nbranch refs/heads/l\nlocked\n\n`,
+      trees: [
+        { path: '/Users/u/dev/m.git', branch: null, isMain: true },
+        { path: '/Users/u/dev/m-l', branch: 'l', isMain: false },
+      ],
+    },
+  ])(
+    'worktrees_PorcelainOutput_MainFirstWithBranches ($name)',
+    async ({ output, trees }) => {
+      const test = setUp();
+      test.processes.script(
+        'git',
+        git('worktree', 'list', '--porcelain'),
+        exited(0, output),
+      );
+
+      expect(await test.git.worktrees(ROOT)).toEqual(trees);
+    },
+  );
+
+  it('worktrees_ExitsNonZero_RejectsNamingTheRun', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('worktree', 'list', '--porcelain'),
+      exited(128, '', 'fatal: not a git repository'),
+    );
+
+    await expect(test.git.worktrees(ROOT)).rejects.toThrow(
+      'git worktree exited 128: fatal: not a git repository',
+    );
+  });
+
+  it.each([
+    { name: 'relative', printed: '.git\n' },
+    { name: 'absolute', printed: '/Users/u/dev/m/.git\n' },
+    { name: 'relative through a parent', printed: '../m/.git\n' },
+  ])('commonDir_PrintedPath_FullPath ($name)', async ({ printed }) => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('rev-parse', '--git-common-dir'),
+      exited(0, printed),
+    );
+
+    expect(await test.git.commonDir(ROOT)).toBe('/Users/u/dev/m/.git');
   });
 
   it('hasUpstream_ExitCode_TrueOnlyOnZero', async () => {
@@ -620,6 +695,35 @@ describe('createProcessGit over a real clone', () => {
 
       expect(await adapter.isLinkedWorktree(main)).toBe(false);
       expect(await adapter.isLinkedWorktree(linked)).toBe(true);
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'worktreesAndCommonDir_MainCloneAndWorktreeAdded_MainFirstAndOneCommonDir',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      const linked = path.join(root, 'linked');
+      const main = path.join(root, 'main');
+      mkdirSync(main);
+      await run('-C', main, 'init', '--quiet');
+      writeFileSync(path.join(main, 'a.md'), '');
+      await run('-C', main, 'add', '--', 'a.md');
+      await run('-C', main, 'commit', '--quiet', '-m', 'first');
+      await run('-C', main, 'worktree', 'add', '--quiet', linked);
+
+      expect(
+        (await adapter.worktrees(main)).map((tree) => [
+          realpathSync(tree.path),
+          tree.isMain,
+        ]),
+      ).toEqual([
+        [realpathSync(main), true],
+        [realpathSync(linked), false],
+      ]);
+      const commonDir = realpathSync(path.join(main, '.git'));
+      expect(realpathSync(await adapter.commonDir(main))).toBe(commonDir);
+      expect(realpathSync(await adapter.commonDir(linked))).toBe(commonDir);
     },
   );
 

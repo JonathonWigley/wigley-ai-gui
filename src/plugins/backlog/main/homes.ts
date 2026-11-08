@@ -55,6 +55,7 @@ function addEntry(build: HomeBuild, entry: IndexEntry): void {
   } else if (entry.kind === 'plan') {
     shape.plans.push({
       path: entry.path,
+      copyPath: entry.path,
       feature: metaString(entry, 'feature') ?? '',
       checked: metaNumber(entry, 'checked'),
       total: metaNumber(entry, 'total'),
@@ -87,6 +88,7 @@ function attachTasks(build: HomeBuild, paths: Paths): void {
     );
     owner?.tasks.push({
       path: entry.path,
+      copyPath: entry.path,
       title: entry.title,
       status: metaString(entry, 'status'),
     });

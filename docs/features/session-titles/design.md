@@ -26,7 +26,7 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 
 | Source | Set by | When |
 |---|---|---|
-| `user` | the rename dialog (`<Leader>rr`) | the user submits a name; an empty submit clears it |
+| `user` | the rename dialog (`<Leader>br`) | the user submits a name; an empty submit clears it |
 | `agent` | the `set_session_title` MCP tool | the agent calls it |
 | `firstMessage` | chat main; sessions main for a connected session | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), or the resumed session's title on resume; a connected session's name in its harness (`AgentHarness.sessionName`), read each time a form opens or its row is activated |
 
@@ -72,7 +72,7 @@ hello names, unless their agent calls the tool on its own. A session with neithe
 
 ## Renaming by hand
 
-`<Leader>rr` (`sessions.renameSession`, the leader `r` group, "rename") opens a one-line dialog over
+`<Leader>br` (`sessions.renameSession`, the leader `b` group, "session") opens a one-line dialog over
 the focused pane's session, prefilled with the title the row would show uncut (`user`, else `agent`, else
 `firstMessage` in full). Enter submits it as the `user`
 title and Esc cancels; an empty submit clears the `user` title. A title past the limit keeps the

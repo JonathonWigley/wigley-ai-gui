@@ -279,14 +279,14 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   workflow. The section's title is `Plan` for Heavy and `Checklist` for Light and Medium.
   - Heavy's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
     checklist folds finished waves into one row, shows the current wave in full, and shows each later wave as one line.
-    A task whose task document reads `Status: in progress` shows running; every other open task shows pending.
+    A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
   - Light's and Medium's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
   - The trail stays on the strip alone.
 
   `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides with
   the hub: while the Chat tab is narrower than 640 px, set in the chat layout's CSS, so the transcript keeps a readable
-  width in a split, and on `<Leader>vs`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
+  width in a split, and on `<Leader>bh`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
   the mouse and keeps its scroll while the pane is out of view or hidden.
 
 Primer and explore share the first step: the one the session is in, otherwise Explore. Plan ready and make share the

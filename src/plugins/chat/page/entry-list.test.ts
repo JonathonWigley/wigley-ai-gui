@@ -106,10 +106,11 @@ const notice = (id: string): ChatEntry => ({
   tone: 'info',
   raw: [],
 });
-const assistant = (text: string): ChatEntry => ({
+const assistant = (text: string, agentId = MAIN_AGENT_ID): ChatEntry => ({
   kind: 'assistant',
   id: 'a1',
   at: 1000,
+  agentId,
   text,
   streaming: false,
   raw: [],
@@ -247,10 +248,11 @@ const user = (id: string): Extract<ChatEntry, { kind: 'user' }> => ({
   delivery: null,
   raw: [],
 });
-const thinking = (id: string): ChatEntry => ({
+const thinking = (id: string, agentId = MAIN_AGENT_ID): ChatEntry => ({
   kind: 'thinking',
   id,
   at: 1000,
+  agentId,
   text: 'hmm',
   streaming: false,
   raw: [],
@@ -1229,6 +1231,18 @@ describe('activity hidden', () => {
     everyKind.forEach(put);
     list.rebuild(entries());
   };
+  const subagentText = [
+    { ...assistant('found it', 'b1'), id: 'sa1' },
+    thinking('sk1', 'b1'),
+  ];
+  const putAllAndSubagentTextThenRebuild = ({
+    list,
+    put,
+    entries,
+  }: ListSetUp) => {
+    [...everyKind, ...subagentText].forEach(put);
+    list.rebuild(entries());
+  };
 
   // The focused stop's id: an entry's, a run's, or a pending row's message's.
   const stopId = (stop: EntryListStop) => {
@@ -1274,6 +1288,58 @@ describe('activity hidden', () => {
       case: 'activity in the transcript, rebuilt',
       shown: () => activityShown(),
       act: putAllThenRebuild,
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot chat-activity-slot',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
+      ],
+      kinds: [
+        'chat-user',
+        'chat-activity',
+        'chat-tool',
+        'chat-thinking',
+        'chat-assistant',
+        'chat-permission',
+        'chat-result',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'n1'],
+      focused: 'n1',
+    },
+    {
+      case: 'subagent text and thinking, default layout, rebuilt',
+      shown: defaultShown,
+      act: putAllAndSubagentTextThenRebuild,
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
+      ],
+      kinds: [
+        'chat-user',
+        'chat-assistant',
+        'chat-permission',
+        'chat-result',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'a1', 'p1', 'n1'],
+      focused: 'n1',
+    },
+    {
+      case: 'subagent text and thinking, activity in the transcript, rebuilt',
+      shown: () => activityShown(),
+      act: putAllAndSubagentTextThenRebuild,
       slots: [
         'chat-entry-slot',
         'chat-entry-slot chat-activity-slot',
@@ -1824,8 +1890,12 @@ const userText = (id: string, text: string): ChatEntry => ({
   delivery: null,
   raw: [],
 });
-const assistantText = (id: string, text: string): ChatEntry => ({
-  ...assistant(text),
+const assistantText = (
+  id: string,
+  text: string,
+  agentId = MAIN_AGENT_ID,
+): ChatEntry => ({
+  ...assistant(text, agentId),
   id,
 });
 

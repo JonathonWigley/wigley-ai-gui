@@ -8,6 +8,7 @@ import {
 } from '../../../shared/page/test-dom';
 import type { RowActivity } from '../../sessions/contract';
 import type {
+  ChecklistItem,
   ChipInput,
   MarkState,
   PageStage,
@@ -631,6 +632,81 @@ describe('workflow view over several workflows', () => {
       expect(section.summaries.at(-1)).toBe(summary);
     },
   );
+
+  const RUNNING_STAGE: Partial<PageStage> = {
+    runsTasks: true,
+    status: () => 'running',
+  };
+
+  it.each<{
+    name: string;
+    item: ChecklistItem;
+    stage: Partial<PageStage>;
+    state: MarkState;
+  }>([
+    {
+      name: 'a running item runs while the stage runs',
+      item: { text: 'a', done: false, running: true },
+      stage: RUNNING_STAGE,
+      state: 'running',
+    },
+    {
+      name: 'a running item pauses while the stage pauses',
+      item: { text: 'a', done: false, running: true },
+      stage: { runsTasks: true, status: () => 'paused' },
+      state: 'paused',
+    },
+    {
+      name: 'a running item waits in a stage that runs no tasks',
+      item: { text: 'a', done: false, running: true },
+      stage: { runsTasks: false, status: () => 'running' },
+      state: 'pending',
+    },
+    {
+      name: 'an item not running waits',
+      item: { text: 'a', done: false, running: false },
+      stage: RUNNING_STAGE,
+      state: 'pending',
+    },
+    {
+      name: 'an item with no flag shows the stage',
+      item: { text: 'a', done: false },
+      stage: RUNNING_STAGE,
+      state: 'running',
+    },
+    {
+      name: 'a done item is done though running',
+      item: { text: 'a', done: true, running: true },
+      stage: RUNNING_STAGE,
+      state: 'done',
+    },
+  ])('SidePane_ItemRunning_PicksTheMark ($name)', ({ item, stage, state }) => {
+    const { view, workflows, put } = setUp();
+    const heavy = stubWorkflow('heavy', stageOf('build', 'Build', 10, stage), {
+      checklist: () => ({
+        title: 'Plan',
+        checked: 0,
+        total: 2,
+        groups: [
+          {
+            title: 'Wave 1',
+            items: [item, { text: 'b', done: false, running: false }],
+          },
+        ],
+      }),
+    });
+    workflows.push(heavy.workflow);
+    view
+      .sidePartFor(heavy.workflow)
+      .build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
+
+    put(flowOf('heavy'));
+
+    expect(heavy.sidePanes.at(-1)?.currentGroup?.items).toEqual([
+      { text: 'a', state },
+      { text: 'b', state: 'pending' },
+    ]);
+  });
 
   it('HasChecklist_ReadsHasPlan', () => {
     const { view, workflows, put } = setUp();

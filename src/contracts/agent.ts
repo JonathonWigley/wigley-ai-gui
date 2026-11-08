@@ -75,6 +75,9 @@ export type ChatEntry =
       kind: 'assistant';
       id: string;
       at: number;
+      // The agent that wrote the text: MAIN_AGENT_ID for the session's own agent, else the subagent's id the agent
+      // events use (Claude: the Agent call's id, the line's `parent_tool_use_id`).
+      agentId: string;
       text: string;
       streaming: boolean;
       raw: unknown[];
@@ -83,6 +86,9 @@ export type ChatEntry =
       kind: 'thinking';
       id: string;
       at: number;
+      // The agent that wrote the text: MAIN_AGENT_ID for the session's own agent, else the subagent's id the agent
+      // events use (Claude: the Agent call's id, the line's `parent_tool_use_id`).
+      agentId: string;
       text: string;
       streaming: boolean;
       raw: unknown[];
@@ -270,7 +276,8 @@ export type AgentEvent =
   | ContextBreakdownAgentEvent
   | { type: 'sessionStarted'; at: number }
   | { type: 'sessionEnded'; at: number }
-  // `name` is the label the agent was given, its type when none; `model` and `effort` are null when unknown.
+  // `name` is the label the agent was given, its type when none; `model` and `effort` are null when unknown. An agent
+  // that finished may be spawned again under the same id: it runs again until its next `agentFinished`.
   | {
       type: 'agentSpawned';
       at: number;
@@ -305,11 +312,12 @@ export type AgentEvent =
       autocompactLimit: number | null;
     }
   // A subagent now runs in the background: its Agent call returned at launch, and it runs on until its `agentFinished`.
+  // Its `agentFinished` comes only after every task it owns has its `taskFinished`.
   | { type: 'agentLaunched'; at: number; agentId: string }
   // A process an agent started that runs apart from its turn (a background command). `agentId` is the agent that
-  // started it, MAIN_AGENT_ID or a subagent's id. A task outlives its turn and its agent: it ends only on its own
-  // `taskFinished` or `sessionEnded`. `command` is the shell command the task runs, the whole text; null when the
-  // harness links the task to none.
+  // started it, MAIN_AGENT_ID or a subagent's id. A task outlives its turn and its agent, and a background subagent's
+  // end waits for it: it ends only on its own `taskFinished` or `sessionEnded`. `command` is the shell command the task
+  // runs, the whole text; null when the harness links the task to none.
   | {
       type: 'taskStarted';
       at: number;
