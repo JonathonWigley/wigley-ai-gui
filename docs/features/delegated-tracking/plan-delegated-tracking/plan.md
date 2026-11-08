@@ -225,7 +225,7 @@ Boundary rules:
 - [x] [Doc re-read](09-doc-re-read.md)
 
 ### Wave 5
-- [ ] [Final verification](10-final-verification.md)
+- [x] [Final verification](10-final-verification.md)
 
 ## Run log
 
@@ -242,6 +242,7 @@ Review base: 9980e669
 - 08 · 4b3f3339 · diff read; Produces present (createToolCallers, callerGuard, worktreesInCommand, guard wired in start.ts); chat tests 46 files 1454 passed; full typecheck/lint held for 06's in-progress heavy files · concerns: doc sentence on the worktree-add command not matching is untrue: the post-result roots read re-matches that command, so the new worktree lists from the add itself; stale-read row is a timeline check; startChatPart fixture has no services.git, so open-time reads log rejections
 - 09 · bc88a5d5 · diff read: three AGENTS.md lines match the git contract, plan-watch and the guard wiring; the other seven docs read against the code and held; follow-up already gone; lint clean · concerns: no doc names chat listing a worktree a Bash command names (worktreesInCommand); no line is stale on it, so none was added
 - 06 · beb53a5c, 09310eb8 · diff read; Produces present (ChecklistItem.running, itemState, plan watch over copies/commonDir/worktrees); first proof failed 5 stale rows in workflow-heavy-page.test.ts, re-dispatched and fixed by test update; full typecheck, lint, and suite 540 files 10235 tests pass · concerns: the worktree-added row cannot prove the worktrees-folder watch exists, since MemoryFiles reports nested changes as the subfolder name; self-test held for the gate; review-busy row now passes via running:false rather than the stage
+- 10 · e58a4601 (fix for check 6) · selftest --plugin workflow-heavy,backlog,agent-strip,workflow-light,chat: 41 groups all passed; live checks 1-5 pass (evidence in scratch: check1-side-pane.png, check2, check3-backlog.png, check4 pipe seq 156/159 skip text, check5 task_notification seq 324); check 6 failed on a /tmp symlink spelling, fixed in e58a4601, rerun PASS (check6-rerun.png, log 'repo6 wrote in worktree repo6-wt2'); real-Claude spend 0.77 + 0.29 USD · concerns: Backlog task row shows the worktree copy's status but its detail pane shows the main checkout's doc; empty 'Turn ended' divider after a final hand-back (likely CLI); only a symlink at or above the row folder is mapped
 ### Contract changes
 ### Rulings
 - Ended/aborted checks after the guard wait run only when a guard was registered at call time; with none the handler runs same-tick as before — Decisions call these checks new to the guard wait — once chat's guard lands every call takes the checks · group 03 · group 03
@@ -261,5 +262,7 @@ Review base: 9980e669
 - 06: a worktrees report closes the worktrees watch when that folder is gone · group 06
 - 06: startPartsInHarnesses also gets NO_CLONE_GIT · group 06
 - 06: stale page-test rows updated to the decided pending mark, not the code · group 06
+- 10: check 6 defect fixed under 08's rules: roots also spelled under the row folder's spelling via realPath; root match case-insensitive like worktreeNameOf · group 10
 ### Review rounds
 ### Test gate
+- Unit: full suite 540 files 10235+ tests pass after every group; chat 46 files 1460 after e58a4601. Self-test: --plugin workflow-heavy,backlog,agent-strip,workflow-light,chat, 41 groups pass (task 10; picked as the touched plugins per writing-tests § Picking tests for a gate; sessions and workflow are covered by chat's and the workflow plugins' groups). Live: task 10 checks 1-6 pass, 6 after its fix. Typecheck and lint clean.

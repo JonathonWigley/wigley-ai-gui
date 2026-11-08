@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -70,3 +70,5 @@ failed check has its defect fixed and the check run again.
 Commit:    none, unless a fix lands
 
 ## Proof
+
+Commit e58a4601 (fix for check 6) · proof: selftest --plugin workflow-heavy,backlog,agent-strip,workflow-light,chat: 41 groups all passed; live checks 1-5 pass (evidence in scratch: check1-side-pane.png, check2, check3-backlog.png, check4 pipe seq 156/159 skip text, check5 task_notification seq 324); check 6 failed on a /tmp symlink spelling, fixed in e58a4601, rerun PASS (check6-rerun.png, log 'repo6 wrote in worktree repo6-wt2'); real-Claude spend 0.77 + 0.29 USD · concerns: Backlog task row shows the worktree copy's status but its detail pane shows the main checkout's doc; empty 'Turn ended' divider after a final hand-back (likely CLI); only a symlink at or above the row folder is mapped
