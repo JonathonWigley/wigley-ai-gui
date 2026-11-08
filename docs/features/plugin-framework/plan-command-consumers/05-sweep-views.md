@@ -1,6 +1,6 @@
 # 05 — Sweep: docs, notes, backlog, settings, unity-pool
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -227,3 +227,4 @@ One commit: `Docs, notes, backlog, settings, unity-pool: every click runs a comm
 
 ## Proof
 
+Commit 30e9fd24 · proof: diff read (14 commands with target-naming args across docs, notes, backlog, settings, unity-pool); typecheck 0 and lint clean over the whole tree at the Wave 2 end; worker: vitest 10101 pass, filtered selftests docs/notes/backlog/settings/unity-pool pass, no expect line moved · concerns: docs.followLink arg widened to {viewId, href, docPath, docLine, title} ('' for absent fields, since checkCommandArg has no optional fields); a Linked from or Recent changes row pointing at the shown doc now scrolls within it instead of re-opening it; docs.editSectionAt keeps 'view' while the new docs commands use 'viewId'; one blocked npx call (nothing ran); files beyond the list: docs list-pane.ts, layout.d.ts comments, notes-page-fakes.ts

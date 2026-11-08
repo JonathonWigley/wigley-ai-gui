@@ -138,7 +138,7 @@ Each sweep task lists the commands it adds under Produces, each as `<plugin>.<sh
 - [x] [Sweep: forms and primer](02-sweep-forms-primer.md) — after 01
 - [x] [Sweep: chat](03-sweep-chat.md) — after 01
 - [x] [Sweep: agent-strip, visual, keys, shell](04-sweep-small.md) — after 01
-- [ ] [Sweep: docs, notes, backlog, settings, unity-pool](05-sweep-views.md) — after 01
+- [x] [Sweep: docs, notes, backlog, settings, unity-pool](05-sweep-views.md) — after 01
 
 ### Wave 3
 - [ ] [Workflow stage actions as commands](06-workflow-actions.md) — after 05
@@ -167,6 +167,7 @@ Review base: 69550804
 - 04 · eeeb3d9d · diff read (six commands with args present: agent-strip.toggleBoxAt, visual.expand, sessions.selectRow/selectTab/favoriteProjectAt, core modes.show); worker: vitest 862 pass in touched areas, selftest agent-strip+sessions pass, lint clean in its files; whole-tree typecheck deferred to the Wave 2 end (peer workers in flight) · concerns: SessionsViewDeps gains selectTab beyond the plan; plugin-part-harness gains PagePartHarness.picked; one blocked npx call (local vitest, nothing downloaded); visual and keys have no self-test script
 - 02 · 39302cc7 · diff read (eight forms *At/focus/rail/review commands with args, three primer commands, Kit.run and LayoutAction gone, Kit.position present); worker: typecheck clean in forms/primer, 883 forms+primer tests pass, selftest forms and forms,primer pass; whole-tree typecheck at the Wave 2 end · concerns: primer self-test alone fails one step that needs forms' Layout preview session (pre-existing ordering); Don't ask click now acts on the clicked item (intended); primer card mark goes through handler's boxIn wrapping; one blocked npx --no-install tsc (local, nothing downloaded); followups.md:47 stale (names kit.run, runLayoutAction) — for task 10
 - 03 · e00e6b00 · diff read (nine chat click commands with session-naming args, runKey wiring, card.ts headClicked); worker: typecheck clean in chat, layer and style checks clean, 1532 chat tests pass, selftest chat 23/23 pass; whole-tree typecheck at the Wave 2 end · concerns: check-layers.mts gains a chat sublayer so chat-commands.test.ts imports src/plugins/keymap.ts (outside the Files list); shared card.ts gains an optional headClicked param
+- 05 · 30e9fd24 · diff read (14 commands with target-naming args across docs, notes, backlog, settings, unity-pool); typecheck 0 and lint clean over the whole tree at the Wave 2 end; worker: vitest 10101 pass, filtered selftests docs/notes/backlog/settings/unity-pool pass, no expect line moved · concerns: docs.followLink arg widened to {viewId, href, docPath, docLine, title} ('' for absent fields, since checkCommandArg has no optional fields); a Linked from or Recent changes row pointing at the shown doc now scrolls within it instead of re-opening it; docs.editSectionAt keeps 'view' while the new docs commands use 'viewId'; one blocked npx call (nothing ran); files beyond the list: docs list-pane.ts, layout.d.ts comments, notes-page-fakes.ts
 ### Contract changes
 ### Rulings
 - Review base is 69550804, not c3a76bdb: the Docs wiki merge landed on main between preflight and the first dispatch. Tasks 05 and 08 re-grep the docs plugin, which that merge rewrote (main-page, list-page, list-pane, section-edit, wiki-main-source, tree-view).
@@ -175,5 +176,6 @@ Review base: 69550804
 - Task 01 contract changes: kitCommandsOf also takes services.log; new RuntimeCommands.infoOf, read by PageApi.keys.command; new src/renderer/shell/shell-commands.ts; docs gains docs.editSectionAt {view, anchor} and loses SectionEditControlKit/openSection; unity-pool gains hold/release {pool, clone}; registerPickerCommands throws 'no picker for owner <owner>' (the registry logs it). · group 01
 - User settled task 06's four open calls, each as recommended and as 06 is written: runAction stays the seam behind workflow.stageAction; keys and buttons both run workflow.stageAction and the runCommand export goes; Light and Medium keep their rejecting stubs; Heavy's closed main-side actions record stays behind its channel.
 - CommandKey constants take the tree's ...Command suffix (agentStripToggleBoxAtCommand, visualExpandCommand, sessionsSelectRowCommand, sessionsSelectTabCommand, sessionsFavoriteProjectAtCommand); core keys keep the SCREAMING style (MODES_SHOW, as PICKER_CHOOSE_ROW). · group 04
+- Task 05 adds the Docs wiki clicks the plan predates (switchTreeView, openListRow, createMain) to the sweep, per the 'every click runs a command' decision. · group 05
 ### Review rounds
 ### Test gate

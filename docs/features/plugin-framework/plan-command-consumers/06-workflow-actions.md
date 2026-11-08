@@ -1,6 +1,6 @@
 # 06 — Workflow stage actions as commands
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)
