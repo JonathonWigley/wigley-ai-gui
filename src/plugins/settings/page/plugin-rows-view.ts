@@ -26,11 +26,21 @@ function pluginListLeaf(ctx: RowContext): SettingLeaf {
   return leaf;
 }
 
-// Writes `status`'s plugin off. A running plugin asks the switch first, and a
-// reason refuses with nothing written; Settings' own row refuses without
-// asking.
+// The status of plugin `id` as the plugin switch last wrote it.
+function currentStatus(id: string, ctx: RowContext): PluginStatus {
+  const status = ctx.plugins().find((each) => each.id === id);
+  if (status === undefined) {
+    throw new Error(`The plugin switch lists no ${id} plugin`);
+  }
+  return status;
+}
+
+// Commits `layer`, which switches `status`'s plugin off. A running plugin asks
+// the switch first, and a reason or a rejected ask writes nothing; Settings'
+// own row refuses without asking.
 async function switchOff(
   status: PluginStatus,
+  layer: Record<string, unknown>,
   ctx: RowContext,
   expectedText: string | null,
 ): Promise<void> {
@@ -39,18 +49,18 @@ async function switchOff(
       ctx.refuse(SELF_OFF_REFUSAL);
       return;
     }
-    const reason = await ctx.mayDisable(status.id);
+    let reason: string | null;
+    try {
+      reason = await ctx.mayDisable(status.id);
+    } catch {
+      // `ctx.mayDisable` logged and toasted the rejection.
+      return;
+    }
     if (reason !== null) {
       ctx.refuse(reason);
       return;
     }
   }
-  const layer = withPluginSwitched(
-    ctx.settingsLayer(),
-    pluginListLeaf(ctx),
-    status.id,
-    false,
-  );
   ctx.commitSettings(layer, { expectedText });
 }
 
@@ -67,18 +77,18 @@ function pluginRow(
       label: (item) => String(item),
       selected: status.on ? 0 : 1,
       chosen(isOn, expectedText) {
-        if (!isOn) {
-          // A rejected ask was logged and toasted by `ctx.mayDisable`.
-          switchOff(status, ctx, expectedText).catch(() => undefined);
-          return;
-        }
+        const current = currentStatus(status.id, ctx);
         const layer = withPluginSwitched(
           ctx.settingsLayer(),
           pluginListLeaf(ctx),
-          status.id,
-          true,
+          current.id,
+          isOn,
         );
-        ctx.commitSettings(layer, { expectedText });
+        if (isOn) {
+          ctx.commitSettings(layer, { expectedText });
+          return;
+        }
+        void switchOff(current, layer, ctx, expectedText);
       },
     });
   return {

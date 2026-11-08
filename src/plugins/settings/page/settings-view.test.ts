@@ -658,8 +658,13 @@ describe('createSettingsView', () => {
 
   const PLUGINS_INDEX = 2;
 
-  function status(id: string, label: string, on: boolean): PluginStatus {
-    return { id, label, description: `Adds ${label}.`, on, neededBy: [] };
+  function status(
+    id: string,
+    label: string,
+    on: boolean,
+    neededBy: readonly string[] = [],
+  ): PluginStatus {
+    return { id, label, description: `Adds ${label}.`, on, neededBy };
   }
 
   // Settings open on its Plugins section, the picker open on `pluginId`'s row.
@@ -790,5 +795,22 @@ describe('createSettingsView', () => {
     view.pluginsChanged();
 
     expect(values()).toEqual(['false']);
+  });
+
+  it('pluginRow_NeededByARunningPlugin_DrawsTheLock', async () => {
+    const { view, sheet } = await shownView({
+      schema: pluginsSchema([]),
+      plugins: () => [
+        status('gallery', 'Gallery', true, ['b']),
+        status('b', 'Bee', true),
+      ],
+    });
+
+    view.openSectionAt(PLUGINS_INDEX);
+
+    const lock = only(sheet, 'settings-row-lock');
+    expect(lock.textContent).toBe('Needed by Bee');
+    expect(lock.title).toBe('Needed by Bee');
+    expect(only(sheet, 'settings-row-end--locked')).toBe(lock.parentNode);
   });
 });

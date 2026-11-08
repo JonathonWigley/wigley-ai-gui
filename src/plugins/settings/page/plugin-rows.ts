@@ -12,7 +12,9 @@ export const PLUGIN_LIST_PATH = 'plugins.disabled';
 // section, it could come back only by a hand edit.
 export const SETTINGS_LOCKED_TEXT = 'Edit settings.json to turn off';
 
-// `Needed by <label>, <label>` for a plugin that runs and that running plugins depend on, else null.
+// `Needed by <label>, <label>` for a plugin that runs and that running plugins
+// depend on, and `Edit settings.json to turn off` on Settings' own row while
+// it runs; else null.
 export function lockedText(
   status: PluginStatus,
   statuses: readonly PluginStatus[],
