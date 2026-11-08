@@ -8,6 +8,7 @@ import { autoCompactManifest } from './auto-compact/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
 import { docsManifest } from './docs/manifest';
+import { docsSessionTabManifest } from './docs-session-tab/manifest';
 import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
@@ -47,6 +48,7 @@ export const builtInManifests = [
   contextSourcesManifest,
   keysManifest,
   docsManifest,
+  docsSessionTabManifest,
   galleryManifest,
   settingsManifest,
   backlogManifest,

@@ -7,6 +7,7 @@ import { agentsPagePart } from './agents/page/start';
 import { backlogPagePart } from './backlog/page/start';
 import { chatPagePart } from './chat/page/start';
 import { docsPagePart } from './docs/page/start';
+import { docsSessionTabPagePart } from './docs-session-tab/page/start';
 import { formsPagePart } from './forms/page/start';
 import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
@@ -45,6 +46,7 @@ export const pageParts: readonly PagePart[] = [
   agentSkillsPagePart,
   contextSourcesPagePart,
   docsPagePart,
+  docsSessionTabPagePart,
   galleryPagePart,
   settingsPagePart,
   backlogPagePart,

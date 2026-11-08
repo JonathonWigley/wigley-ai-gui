@@ -5,85 +5,18 @@ import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
   dataEmitted,
-  fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import {
-  type SessionsPageExports,
-  sessionsPageKey,
-  sessionsRowsSlot,
-  type SessionTabHandle,
-  type SessionTabView,
-} from '../../sessions/contract';
-import { type DocsPageExports, sessionSourceId } from '../contract';
+import type { DocsPageExports } from '../contract';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
-
-const projectRow = (sessionId: string) => ({
-  sessionId,
-  label: sessionId,
-  project: 'project',
-  harness: 'claude' as const,
-  marked: false,
-  projectDir: '/p',
-  hostSessionId: null,
-  titles: { user: null, agent: null, firstMessage: null },
-  profileDir: null,
-});
-
-// What throws the next time one is disposed, once.
-interface ThrowsNext {
-  anchor: boolean;
-  tab: boolean;
-}
-
-function disposeThrowingOn(
-  throwsNext: ThrowsNext,
-  part: keyof ThrowsNext,
-): () => void {
-  return () => {
-    if (throwsNext[part]) {
-      throwsNext[part] = false;
-      throw new Error(`${part} gone`);
-    }
-  };
-}
-
-// `tabs` holds each tab's title and `liveTabs` each undisposed tab by session;
-// its handle files under the dependent.
-function fakeSessions(
-  tabs: string[],
-  liveTabs: Map<string, SessionTabView>,
-  throwsNext: ThrowsNext,
-) {
-  const throwFromDispose = disposeThrowingOn(throwsNext, 'tab');
-  return fakeDependency(
-    sessionsPageKey,
-    (consumer) =>
-      ({
-        addTab(sessionId: string, tab: SessionTabView) {
-          tabs.push(tab.title);
-          liveTabs.set(sessionId, tab);
-          return consumer.track({
-            dispose() {
-              liveTabs.delete(sessionId);
-              throwFromDispose();
-            },
-          } as SessionTabHandle);
-        },
-      }) as unknown as SessionsPageExports,
-  );
-}
 
 function startDocsPage(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
 ) {
   installFocusFakeDom(vi.stubGlobal);
-  const tabs: string[] = [];
-  const liveTabs = new Map<string, SessionTabView>();
-  const throwsNext: ThrowsNext = { anchor: false, tab: false };
   const picker = fakeListPickerService();
   const harness = startPagePart(docsPagePart, {
     services: {
@@ -95,14 +28,12 @@ function startDocsPage(
         ...NO_FENCES,
       },
     },
-    dependencies: [fakeSessions(tabs, liveTabs, throwsNext)],
-    anchorDispose: disposeThrowingOn(throwsNext, 'anchor'),
     firstModeTaken: true,
     invoke,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, tabs, liveTabs, throwsNext, picker };
+  return { harness, exportsTo, picker };
 }
 
 type DocsPage = ReturnType<typeof startDocsPage>;
@@ -137,46 +68,6 @@ describe('docs page part lifecycle', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  it.each([
-    { state: 'fresh start', sessionAdded: false, tabCount: 0 },
-    { state: 'one Docs tab held', sessionAdded: true, tabCount: 1 },
-  ])(
-    'stop_LeavesNoLiveRegistration ($state)',
-    async ({ sessionAdded, tabCount }) => {
-      const { harness, tabs } = startDocsPage();
-      if (sessionAdded) {
-        harness.state.publish(sessionsRowsSlot).set('s1', projectRow('s1'));
-        harness.emit('core.pageReady', null);
-      }
-
-      await harness.stop();
-
-      expect(tabs).toHaveLength(tabCount);
-      expect(harness.counts()).toEqual(noCounts);
-    },
-  );
-
-  it.each([
-    { part: 'anchor' as const, error: 'anchor gone' },
-    { part: 'tab' as const, error: 'tab gone' },
-  ])(
-    'stop_OneSessionsTeardownThrows_TearsDownEveryView ($part)',
-    async ({ part, error }) => {
-      const { harness, throwsNext } = startDocsPage();
-      const rows = harness.state.publish(sessionsRowsSlot);
-      for (const sessionId of ['s1', 's2']) {
-        rows.set(sessionId, projectRow(sessionId));
-      }
-      harness.emit('core.pageReady', null);
-      expect(harness.counts().observers).toBeGreaterThan(0);
-      throwsNext[part] = true;
-
-      await expect(harness.stop()).rejects.toThrow(error);
-
-      expect(harness.counts()).toEqual(noCounts);
-    },
-  );
 
   it('start_ModeSlotChanges_TracksDocsModeShown', async () => {
     const { harness } = startDocsPage();
@@ -288,37 +179,53 @@ describe('docs page part lifecycle', () => {
     },
   );
 
-  it('rows_HostChangedOrRemoved_ReachOnlyThatRowsView', async () => {
-    const rebuilt: unknown[] = [];
-    const { harness, liveTabs } = startDocsPage(async (method, ...args) => {
-      if (method === 'rebuildIndex') {
-        rebuilt.push(args[0]);
-      }
-      return method === 'pluginStatus'
-        ? { clones: [] }
-        : { document: null, message: null, title: 'index', canRebuild: false };
-    });
-    const rows = harness.state.publish(sessionsRowsSlot);
-    const observersOfNone = harness.counts().observers;
-    for (const sessionId of ['s1', 's2']) {
-      rows.set(sessionId, projectRow(sessionId));
-    }
-    harness.emit('core.pageReady', null);
-    for (const tab of liveTabs.values()) {
-      tab.shown?.();
-    }
+  it('stop_FreshStart_LeavesNoLiveRegistration', async () => {
+    const { harness } = startDocsPage();
 
-    rows.set('s1', { ...projectRow('s1'), hostSessionId: 'moved' });
-    await vi.waitFor(() => expect(rebuilt).toEqual([sessionSourceId('s1')]));
-
-    const observersOfBoth = harness.counts().observers;
-    rows.delete('s1');
-    expect([...liveTabs.keys()]).toEqual(['s2']);
-    expect(harness.counts().observers - observersOfNone).toBe(
-      (observersOfBoth - observersOfNone) / 2,
-    );
     await harness.stop();
+
+    expect(harness.counts()).toEqual(noCounts);
   });
+
+  it.each([
+    { state: 'before its first show', isShown: false, rebuilt: [] },
+    { state: 'after its first show', isShown: true, rebuilt: ['source'] },
+  ])(
+    'sourceReplaced_AddedView_RebuildsOnlyOnceShown ($state)',
+    async ({ isShown, rebuilt }) => {
+      const invoked: unknown[][] = [];
+      const { harness, exportsTo } = startDocsPage(async (method, ...args) => {
+        invoked.push([method, ...args]);
+        return method === 'pluginStatus'
+          ? { clones: [] }
+          : {
+              document: null,
+              message: null,
+              title: 'index',
+              canRebuild: false,
+            };
+      });
+      const view = exportsTo(createRegistrations()).addView('source', {
+        isVisible: () => true,
+      });
+      if (isShown) {
+        view.shown();
+        await vi.waitFor(() =>
+          expect(invoked).toContainEqual(['loadIndex', 'source']),
+        );
+      }
+
+      view.sourceReplaced();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        invoked
+          .filter(([method]) => method === 'rebuildIndex')
+          .map(([, sourceId]) => sourceId),
+      ).toEqual(rebuilt);
+      await harness.stop();
+    },
+  );
 
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startDocsPage();

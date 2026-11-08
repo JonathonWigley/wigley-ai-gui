@@ -156,8 +156,9 @@ function lineArg(args: JsonObject): number | null {
 }
 
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
-// opens a session in its repo, whose row shows its Docs tab. Each takes
-// `loadStates` to add a doc per non-launch index load state and
+// opens a session in its repo, whose row shows its Docs tab with
+// `docs-session-tab` on (disabled by default; the self-test starts it). Each
+// takes `loadStates` to add a doc per non-launch index load state and
 // `indexDelayMs` to make the stand-in index script wait before answering.
 // `docs.openDoc` asks the page to open a doc in Docs mode.
 export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
@@ -181,7 +182,7 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
   });
   drive.add('connectSession', {
     description:
-      'Rewrites the docs fixture and opens a session in its repo in the background, activating its row on its Docs tab; sessionId defaults to drive-docs-<n>, and one another session already holds is refused; loadStates and indexDelayMs as docs.seed takes them.',
+      'Rewrites the docs fixture and opens a session in its repo in the background, activating its row on its Docs tab with docs-session-tab on (disabled by default; the self-test starts it); sessionId defaults to drive-docs-<n>, and one another session already holds is refused; loadStates and indexDelayMs as docs.seed takes them.',
     args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
     async run(rawArgs) {
       await started;
@@ -263,7 +264,9 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       sessionSources.set(id, added);
     };
     api.events.on('sessions.connected', addSessionSource);
-    // The new source holds no entries until the session's Docs tab loads it.
+    // The new source holds no entries until the session's Docs tab, with
+    // `docs-session-tab` on (disabled by default; the self-test starts it),
+    // loads it.
     api.events.on('sessions.hostSessionChanged', (session) => {
       const source = sessionSources.get(session.id);
       if (source === undefined) {

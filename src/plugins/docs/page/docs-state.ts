@@ -13,18 +13,19 @@ import type { PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import { matchesSubstring } from '../../../shared/matches-substring';
 import { codeUnitOrder } from '../code-unit-order';
-import type {
-  CloneStatus,
-  DocKind,
-  FileStatus,
-  IndexContext,
-  IndexDocument,
-  IndexEntry,
-  IndexHarness,
-  IndexHeading,
-  LoadState,
-  LoadStateRecord,
-  PluginStatusRead,
+import {
+  type CloneStatus,
+  type DocKind,
+  type FileStatus,
+  type IndexContext,
+  type IndexDocument,
+  type IndexEntry,
+  type IndexHarness,
+  type IndexHeading,
+  type LoadState,
+  type LoadStateRecord,
+  type PluginStatusRead,
+  UNSAVED_TEXT,
 } from '../contract';
 import {
   INDEX_HARNESSES,
@@ -596,7 +597,7 @@ export function renameRecord(
     : { type: 'renamed', from: skill, to: paths.parent(renamed) };
 }
 
-export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
+export { UNSAVED_TEXT };
 
 // Why a doc opens read-only: a third-party download (`plugin` null for a
 // synced skill), or an installed copy of the user's plugin with no file in

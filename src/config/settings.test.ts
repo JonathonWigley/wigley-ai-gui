@@ -7,4 +7,10 @@ describe('defaultSettingsFor', () => {
       '/x/claude',
     );
   });
+
+  it('defaultSettingsFor_PluginsDisabled_HoldsDocsSessionTab', () => {
+    expect(
+      defaultSettingsFor({ claude: '/x/claude' }).plugins.disabled,
+    ).toContain('docs-session-tab');
+  });
 });
