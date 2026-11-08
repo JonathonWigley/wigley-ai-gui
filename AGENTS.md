@@ -58,8 +58,8 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
   must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes and layouts hot
-  reload and plugins are compiled in with no runtime loader; new code is written so the rest can land without
-  reworking it.
+  reload, and plugins start and stop live from the `plugins.disabled` switch; a changed plugin's code still needs a
+  runtime loader, which is the next plan, and new code is written so it can land without reworking it.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
@@ -85,7 +85,7 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
                  record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
-                 readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots and `CoreEvents`;
+                 readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
                  `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
@@ -156,7 +156,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
                  module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
-  plugins/       the main-side plugin API: per-plugin channel routing and services
+  plugins/       the main-side plugin API: per-plugin channel routing and services; `plugin-switch.ts`: the live
+                 switch over `plugins.disabled`; `applied-plugins.ts`: the list the parts run on, which the served config carries
+  page-parts.ts  asks the page's plugin host to stop, start or check its parts, over `bridge:plugin-parts`
+  quit-wait.ts   the quit's hold in every mode and its `quit is waiting on …` log
   state/         the slot holder (`slot-holder.ts`): every slot's value, page-owned ones included, in main's memory, each
                  change numbered for the page mirror; `window-focus-slot.ts` writes `core.windowFocused`
   runtime-wiring.ts the runtime commands' wiring: each process's catalog slot merged into the served config, the
@@ -197,7 +200,8 @@ src/main/        core main process; main.ts is its composition root
 src/session-host/ the session host process, its own composition root and build entry: owns every agent process,
                  logs their pipes, ends idle ones while no app is connected → imports only src/contracts,
                  and src/shared; no electron import
-src/preload/     the Bridge, exposed as window.wigley
+src/preload/     exposes only a one-time claim (`bridge-claim.ts`, as `window.wigley.claim()`) that hands the Bridge to the
+                 page's first caller
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes; `shell-chrome.ts` draws the
                  title bar's context, dev tag and config problems and the activity bar's items through the shell's
@@ -391,22 +395,36 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   every key names a declared command running in the key's process (page and editor keys a page command; app,
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
-  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
-  a page part starts on every page load. The plugin host's `stop(id)` stops the plugin's dependents first, in
-  reverse start order, then awaits the part's `dispose` and disposes its registrations. Quit stops every main
-  part this way, and from its first task on main sends the page no plugin message: those stops end rows the next
-  start restores, and a page told of it would save them as gone (panes, recency).
+  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts at app
+  launch and a page part on every page load, and either starts or stops live after that. The plugin host's
+  `start(ids)` starts the named parts in dependency order and throws, starting none, when one depends on a part not
+  started; `stop(id)` stops the plugin's dependents first, in reverse start order, then awaits the part's `dispose`
+  and disposes its registrations; `restart(id)` stops the plugin with its dependents and starts them again, new
+  registrations and the same slots. A part's optional `ready()` runs once every part of its process has started,
+  and after a live start once the parts that start brought up have started: put work that needs its siblings
+  started there, not in `start`. A part's optional `mayStop()` gives a reason in words the user reads when it must
+  not stop now (a round is open); the switch asks it before a switch-off, and a restart and quit do not. Quit
+  stops every main part this way, waits for every stop in every mode, and logs `quit is waiting on <ids>` after 5
+  seconds; from its first task on main sends the page no plugin message: those stops end rows the next start
+  restores, and a page told of it would save them as gone (panes, recency).
 - **A registration** — a listener, a handler, a contribution, a scope, a mode, a timer, a watch, a command —
   returns a `Disposable` (`src/contracts/disposable.ts`), so a plugin can stop and start again. The plugin API
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,
   `files.watch`, `processes.run`, editors, alert counts), and the host disposes them when the plugin stops. A
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
   DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
-- **A disabled plugin** is one named in the core setting `plugins.disabled`: the plugin host starts none of its parts.
-  Both parts follow the list as it stood at app start, and the served config holds none of its commands or binds, so
-  help, which-key and Settings' keymap section list none. Naming a plugin that a started plugin depends on is a config
-  problem, so the last good config stays. A view that can be switched off is its own plugin over a data plugin that
-  stays on (`docs/features/chat-bar/design.md` § Optional plugins).
+- **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list
+  applies live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list: it stops the page
+  parts first (the page answers over `bridge:plugin-parts`), then the main parts, clears the owners' slots, starts
+  main parts first, then page parts, and sets the applied list the served config carries, which holds none of a
+  disabled plugin's commands or binds, so help, which-key and Settings' keymap section list none. A plugin that a
+  running plugin depends on is locked (`neededBy` names the dependents), and naming it is a config problem, so the
+  last good config stays. A part's `mayStop` refusal is also held as a `settings.json` config problem, and the
+  switch asks again every 2 seconds until the part lets go or the list changes. Settings' Plugins section
+  (`src/plugins/settings/page/plugin-rows*.ts`) switches plugins from the `core.plugins` slot, shows what locks
+  a row, and drive actions `core.stopPlugin`, `core.startPlugin` and `core.restartPlugin` do the same for a run. A view that can be
+  switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
+  plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
@@ -419,20 +437,23 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
   writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
   `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
-  included, so the value outlives an owner's stop and a page reload, not an app restart. A page plugin keeps what a reload
+  included, so the value outlives an owner's restart and a page reload, not an app restart. A plugin the switch turns off has
+  its slots cleared (`clearOwner`); a restart keeps them. A page plugin keeps what a reload
   restores — a draft, a selected row, a view — in a `<id>.place` slot it writes as the state changes and reads at
   start (`chat.place` with `chat.draftImages`, `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). A
   restore that settles after the part's start returns and can move the key base goes to `api.restores.track` (docs'
   reopened doc once its view shows, forms' and primer's open forms read, sessions' first placing of the panes), and
-  `api.restores.onSettled` hears the page load's restores settle: `core.pageReady` emitted and no tracked restore
-  pending (`PageRestores` in `src/contracts/plugin.ts`). A key base change before then is a restore's, so notes'
+  `api.restores.onSettled` hears the page load's restores settle: every part's `ready()` ran and no tracked restore
+  pending (`PageRestores` in `src/contracts/plugin.ts`). The restores belong to a page load: the page calls
+  `pageHost.ready(); restores.partsReady()` once the page's parts started at load, and a part started live later
+  gets no new restore window. A key base change before then is a restore's, so notes'
   restored popup stays open through it. `sessions.activity` clears
   itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
   the first panes are placed. A new start publishes the
   same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
   reads a slot or hears an event lists its owner in the manifest's `reads`, which carries no start order. A value
   belongs in a slot and a moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`,
-  `core.windowFocused` and the two runtime command catalogs (`src/contracts/core-state.ts`)
+  `core.windowFocused`, `core.plugins` (each built-in plugin's label, whether it runs and what depends on it) and the two runtime command catalogs (`src/contracts/core-state.ts`)
   (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
@@ -442,8 +463,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
   `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
-  the publisher's `contract.ts`, and the core's own (`core.pageReady`, `CoreEvents`) in
-  `src/contracts/core-state.ts`, which any part hears with no `dependsOn` entry. A state change a late reader wants is
+  the publisher's `contract.ts`, and the core has no events of its own: a part that needs
+  its siblings started uses `ready()`. A state change a late reader wants is
   a slot, and an event is the moment: a note filed, a doc saved, a turn started or finished, a message sent, a help
   overlay opened. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
@@ -730,7 +751,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and
   `openExternal` (an http or https link in the default app; main refuses any other). The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
-  `services.homeDir`.
+  `services.homeDir`. A plugin cannot replace a core service: each is built at one place in its composition root, and
+  plugins extend it through its seams.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
   runs on, the page by the served `platform.os`. Page and shared code that joins, splits or shows a full path calls it,
@@ -779,7 +801,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   types) and `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the
   layout (the owner's setting — `<plugin>.layout`, or the core `shell.layout` — and `default` when unset), checks it
   with the owner's reader, draws each part, rolls back a part that throws and draws it with `default`, redraws on a
-  reload, and refreshes every show on each config change. A layout draws every pane and every repeated row, card or
+  reload, and refreshes every show on each config change. The page claims the Bridge once at start, so a layout reaches the app only through its kit, and no `window.wigley` holds the Bridge; this is no sandbox, since a layout shares the page's DOM. A layout draws every pane and every repeated row, card or
   entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every part a layout
   draws carries `data-layout="<name>"` and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet
   link, so a layout's CSS selects under its own name and restyles nothing another layout drew; the default's CSS is one
