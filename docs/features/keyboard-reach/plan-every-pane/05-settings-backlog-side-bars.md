@@ -1,6 +1,6 @@
 # 05 — Settings sections and Backlog homes on the core side-bar rule
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 5 · Depends on: 01
 Plan: [plan.md](plan.md)

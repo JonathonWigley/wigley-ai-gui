@@ -1,6 +1,6 @@
 # 04 — Docs side bar through the core, and the doc's right column as a pane
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -287,3 +287,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d74620f7 · proof: diff read (Produces present; focusDoc landed as focusMain), typecheck pass; worker ran 5 test files (398 pass), lint pass, selftest --plugin docs pass · concerns: dialog-from-column step not added (no dialog key reachable from docs.aside); no unit row for DocsView.focusMain's column branch (no docs-view.test.ts); isTreeOwnPane false for machine view by addedViewOf; asideSightLost moves DOM focus only when view active and focus not outside the doc pane
