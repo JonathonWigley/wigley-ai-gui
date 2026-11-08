@@ -1,6 +1,6 @@
 # 12 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -58,3 +58,5 @@ Done when: each doc listed is re-read and true; the greps above hold; § Hot rel
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 9aef9ed7 · proof: diff read: each listed doc edited, followups items removed/added; the task's three greps hold (pageReady grep excludes plan-command-consumers, Wave 3's folder); lint clean · concerns: session-clock/design.md fixed outside the file list; the Plugins row shows true/false (not on/off) and the docs say so; no followup for mainStartList (still used) or the repeated config-applied log line

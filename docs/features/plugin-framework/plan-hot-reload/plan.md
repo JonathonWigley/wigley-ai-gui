@@ -289,7 +289,7 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 - [x] [AGENTS.md and the follow-ups](11-agents-md.md) — after 09, 10
 
 ### Wave 8
-- [ ] [Doc re-read](12-doc-re-read.md) — after 11
+- [x] [Doc re-read](12-doc-re-read.md) — after 11
 
 ### Wave 9
 - [ ] [Final verification](13-final-verification.md) — after 12
@@ -310,6 +310,7 @@ Review base: db7bff7db57d13e92537e80719d425160bb094fa
 - 10 · a35b2ea7 · diff read: QUIT_WAIT_LOG_MS and logSlowQuit present, runQuitTasks holds in every mode and calls logSlowQuit once; typecheck clean; worker ran quit-wait.test.ts, 8 passed · concerns: the logSlowQuit 'once' is shown only by the single timer set; quitStep added beyond the Produces as the testable step
 - 09 · c2f84175 · diff read: mayDisable on the channel and main handler, plugin-rows (PLUGIN_LIST_PATH, lockedText, withPluginSwitched, matchesPlugin), plugin-rows-view, pluginRow in layout.d.ts/default layout/read-layout, self-test groups plugin switch and locked plugin in, disabled plugins out, both design docs; typecheck and lint clean; worker ran src/plugins/settings, 13 files 142 tests passed · concerns: PickTrue test asserts { plugins: { disabled: [] } } where the task said {}; the gallery self-test write carries the outside-edits group's stale keySequenceTimeoutMs; filter usage first row plugin:usage unverified until the self-test runs; settings design.md has no Plugins rows section and DESIGN.md § Settings no Tag line (tasks 11/12); setting-rows.ts exports userValue and keymap-view.test.ts fake gained three members (outside the file list)
 - 11 · 0a4cec12 · diff read: each entry the task names is edited, plus the page restores sentence (partsReady) and the module map (plugin-switch, applied-plugins, page-parts, quit-wait); drive action ids checked (driveFor('core') + stopPlugin); lint clean · concerns: for review: several rewrapped AGENTS.md lines run past the file's wrap width (slot, layout, disabled-plugin entries)
+- 12 · 9aef9ed7 · diff read: each listed doc edited, followups items removed/added; the task's three greps hold (pageReady grep excludes plan-command-consumers, Wave 3's folder); lint clean · concerns: session-clock/design.md fixed outside the file list; the Plugins row shows true/false (not on/off) and the docs say so; no followup for mainStartList (still used) or the repeated config-applied log line
 ### Contract changes
 - check-layers src/main/config layers: as planned unchanged → gains src/main/plugins · why: user-config.ts imports appliedCommands and AppliedPlugins · consumers: 08 (plugin-switch.ts in src/main/plugins must not import src/main/config, or the layers cycle) · group 06
 - 07: chat's rule and wording live on the view as ChatTabs.mayStop(rows), start.ts passes rows.all().values(); the ?? sessionId label fallback never applies. createForms returns presenter typed AgentFormChannelPresenter<Round, FormBody>.
