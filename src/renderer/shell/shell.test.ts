@@ -7,6 +7,7 @@ import { recordingAnchors } from '../../shared/page/layout-host/test-layouts';
 import {
   asHtml,
   FakeElement,
+  FocusFakeElement,
   installFakeDom,
   installFocusFakeDom,
   ScrollerFakeElement,
@@ -510,6 +511,50 @@ describe('mountShell', () => {
       shell.rightBarHolds(asHtml(outside)),
     ]).toEqual([true, false]);
   });
+
+  // Breaks when a turn ended by a base change leaves the DOM focus, and its
+  // caret, in the right bar, or when the blur reaches focus outside it.
+  it.each([
+    { row: 'focus inside the contribution', focusInside: true },
+    { row: 'focus outside it', focusInside: false },
+  ])(
+    'mountShell_RightBarStopLeft_BlursOnlyWhatTheContributionHolds: $row',
+    ({ focusInside }) => {
+      const doc = installFocusFakeDom((name, value) =>
+        vi.stubGlobal(name, value),
+      );
+      Object.assign(doc, {
+        documentElement: { style: { setProperty: () => undefined } },
+      });
+      stubShellGlobals();
+      const shell = mountShell(
+        asHtml(new FakeElement('div')),
+        measuredLayout(DEFAULT_EDGES),
+        stateOver(new Map()),
+        NO_TIMERS,
+        recordingAnchors().keys,
+      );
+      const panel = new FocusFakeElement('div');
+      const row = new FocusFakeElement('div');
+      const outside = new FocusFakeElement('div');
+      panel.append(row);
+      const heldAtLeft: boolean[] = [];
+      shell.areas.rightBar.contribute(asHtml(panel), {
+        focus: () => row.focus(),
+        left: () => heldAtLeft.push(doc.activeElement === row),
+      });
+      const [stop] = shell.rightBarStops();
+      stop.focus();
+      if (!focusInside) {
+        outside.focus();
+      }
+
+      stop.left?.();
+
+      expect(heldAtLeft).toEqual([focusInside]);
+      expect(doc.activeElement).toBe(focusInside ? null : outside);
+    },
+  );
 
   it('mountShell_RightBarStopDisposed_TellsOnce', () => {
     const { shell } = mountMeasuredShell();

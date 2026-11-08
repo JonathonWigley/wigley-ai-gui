@@ -391,10 +391,16 @@ export interface Area {
 // is the first stop, or Alt+j/Alt+k reach it from the stop before or after.
 // It sets the contribution's own key scope, draws its cursor and moves the DOM
 // focus into the contribution's element. The turn ends when the DOM focus
-// leaves the right bar (a click into main, a mode change), Alt+h moves back to
-// main, a base scope change the core did not make runs, or the contribution is
-// disposed; the core calls `left` each time, and on a disposal holding the
-// keys it calls the shown mode's `focusMain`.
+// leaves the right bar (a click into main, on a focusable spot or not, a mode
+// change), Alt+h moves back to main, a base scope change the core did not make
+// runs, or the contribution is disposed; the core calls `left` each time, then
+// blurs the focused element if the contribution's element still holds it. The
+// core calls the shown mode's `focusMain` on Alt+h, when the DOM focus left for
+// no element, when it landed on an element whose view set no base scope of its
+// own, and on a disposal holding the keys. While a scope is pushed (a
+// dialog, a picker, help) the DOM focus moving into its overlay leaves the turn
+// running, and a disposal ends it but holds `focusMain` until no scope is
+// pushed.
 export interface RightBarOptions extends ContributeOptions {
   focus?(): void;
   left?(): void;

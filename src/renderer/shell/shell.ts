@@ -14,6 +14,7 @@ import type {
 } from '../../contracts/plugin';
 import type { UiState } from '../../contracts/ui-state';
 import { createListeners } from '../../shared/listeners';
+import { blurFocusedElement } from '../../shared/page/dom';
 import { NO_ANCHOR } from '../../shared/page/ui/key-anchors';
 import { createSplitDivider } from '../../shared/page/ui/split';
 import { clampSplitWidth } from '../../shared/page/ui/split-width';
@@ -115,8 +116,10 @@ export type ShellAreas = Record<Exclude<AreaName, 'rightBar'>, Area> & {
 // `rightbar-width` tokens again, after a theme is applied, and redraws each
 // bar at its token while the user has stored no width for it.
 // `rightBarStops` lists one `RightBarStop` per right-bar contribution that
-// passed `focus`, in the right bar's drawn order, top to bottom. A stop's
-// contribution `dispose` takes it out of that list, then tells each
+// passed `focus`, in the right bar's drawn order, top to bottom; a stop's
+// `left` runs the contribution's, then blurs the focused element when the
+// contribution still holds it. A stop's contribution `dispose` takes it out
+// of that list, then tells each
 // `onRightBarStopRemoved` listener once. `rightBarHolds` is whether `node` is
 // in the right bar's element. `dispose` disposes both dividers, stops
 // watching the root's width and removes both handles.
@@ -401,16 +404,27 @@ export function mountShell(
 
   const stopsRemoved = createListeners<RightBarStop>();
 
-  // A stop for a right-bar contribution that passed `focus`.
+  // A stop for a right-bar contribution that passed `focus`. Its `left` runs
+  // the contribution's own, then blurs the focused element when `element`
+  // still holds it, so a turn the contribution did not end keeps no caret.
   const stopFor = (
     name: AreaName,
+    element: HTMLElement,
     options: RightBarOptions | undefined,
   ): RightBarStop | undefined => {
     const focus = options?.focus;
     if (name !== 'rightBar' || focus === undefined) {
       return undefined;
     }
-    return { focus, left: options?.left };
+    return {
+      focus,
+      left() {
+        options?.left?.();
+        if (element.contains(document.activeElement)) {
+          blurFocusedElement();
+        }
+      },
+    };
   };
 
   const createArea = (name: AreaName): RightBarArea => {
@@ -430,7 +444,7 @@ export function mountShell(
         );
         element.dataset.align = placement.align;
         track.insertBefore(element, following?.element ?? null);
-        const stop = stopFor(name, options);
+        const stop = stopFor(name, element, options);
         const contribution: Contribution = { element, placement, stop };
         live.splice(index, 0, contribution);
         updateHidden(name);

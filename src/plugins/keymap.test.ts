@@ -8,6 +8,7 @@ import {
   mergeKeymap,
   withoutPluginBinds,
 } from '../shared/plugin-manifests';
+import { LIST_PICKER_COMMANDS } from '../shared/list-picker-commands';
 import { defaultKeymap, LIST_PICKER_SCOPES } from './keymap';
 import { manifests } from './manifests';
 
@@ -49,40 +50,24 @@ describe('defaultKeymap', () => {
       defaultKeymap.binds.find((bind) => bind.keys === keys)?.command,
     ).toBe(command);
   });
-  it.each(LIST_PICKER_SCOPES)(
-    'listPickerBinds_%s_BindsTheSharedSet',
-    (scope) => {
-      const plugin = scope.split('.')[0];
-      const inScope = defaultKeymap.binds
-        .filter((bind) => bind.scope === scope)
-        .map((bind) => ({
-          keys: bind.keys,
-          where: 'where' in bind ? bind.where : undefined,
-          mode: 'mode' in bind ? bind.mode : undefined,
-          command: bind.command,
-        }));
-      const page = (keys: string, command: string) => ({
-        keys,
-        where: undefined,
-        mode: undefined,
-        command: `${plugin}.${command}`,
-      });
 
-      expect(inScope).toEqual(
-        expect.arrayContaining([
-          page('j', 'pickerDown'),
-          page('k', 'pickerUp'),
-          page('gg', 'pickerTop'),
-          page('G', 'pickerBottom'),
-          page('<CR>', 'pickerChoose'),
-          page('l', 'pickerChoose'),
-          page('/', 'pickerFilter'),
-          page('<Esc>', 'pickerCancel'),
-          { ...page('<CR>', 'pickerChoose'), where: 'box' },
-          { ...page('<CR>', 'pickerChoose'), mode: 'insert' },
-          { ...page('<Esc>', 'pickerList'), where: 'box' },
-        ]),
-      );
+  // Breaks when a plugin takes the list-picker commands but its picker scope
+  // is missing from LIST_PICKER_SCOPES, so its picker gets no keys.
+  it.each(
+    manifests
+      .filter((manifest) =>
+        Object.keys(LIST_PICKER_COMMANDS).every(
+          (command) => command in manifest.commands,
+        ),
+      )
+      .map((manifest) => ({ id: manifest.id, scopes: manifest.scopes })),
+  )(
+    'listPickerScopes_HoldThePickerScopeOfEveryPluginTakingItsCommands: $id',
+    ({ id, scopes }) => {
+      const pickerScope = `${id}.picker`;
+
+      expect(Object.keys(scopes ?? {})).toContain('picker');
+      expect(LIST_PICKER_SCOPES as readonly string[]).toContain(pickerScope);
     },
   );
 });

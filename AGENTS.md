@@ -547,8 +547,12 @@ round; primer: an open primer), since main, not the page, decides.
   side bar through the mode's `focusSideBar`, right to the right bar's first contribution that took `focus`, Alt+j/k
   between such contributions, and back to main from either through the mode's `focusMain`. The core keeps which
   area holds the keys and resets it to main on every base scope change it did not make, so a click into main ends
-  an area's turn; the right bar's turn also ends when the DOM focus moves out of it, and the core then calls the
-  contribution's `left`. A narrow mode's side bar opened over main holds the keys as the side area. A hidden side bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
+  an area's turn; the right bar's turn also ends when the DOM focus moves out of it, to an element or to none (a click
+  on no focusable spot in main), and the core then calls the contribution's `left` and blurs whatever the
+  contribution still holds focused; focus gone to no element, or to an element whose view sets no base scope of its own
+  as the focus move settles, also runs the mode's `focusMain`. Under a pushed scope
+  the focus moving into its overlay leaves the turn running, and a disposed stop holding the keys gives main its keys
+  back only once no scope is pushed. A narrow mode's side bar opened over main holds the keys as the side area. A hidden side bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
   the pane left behind keeps the caret. The core does nothing at the outer edge but log `no pane <direction>`.
   While a scope is pushed (a dialog, a confirm, a picker, help) the core asks neither and logs
   `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses

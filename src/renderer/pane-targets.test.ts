@@ -39,6 +39,9 @@ const NO_AREAS: PaneAreas = {
   rightBarStops: () => [],
 };
 
+// A `defer` that runs at once, for tests no deferred work reaches.
+const runNow = (run: () => void) => run();
+
 // `null` leaves the target unset.
 type Answer = boolean | null;
 
@@ -117,6 +120,7 @@ describe('createPaneTargets', () => {
         () => pushed,
         fakes.log,
         NO_AREAS,
+        runNow,
       );
       if (view !== null) {
         targets.setResizeTarget(fakes.resizer('view', view));
@@ -202,6 +206,7 @@ describe('createPaneTargets', () => {
         () => pushed,
         fakes.log,
         NO_AREAS,
+        runNow,
       );
       if (view !== null) {
         targets.setFocusTarget(fakes.mover('view', view));
@@ -261,6 +266,7 @@ describe('createPaneTargets', () => {
         () => false,
         fakes.log,
         NO_AREAS,
+        runNow,
       );
 
       act(targets, fakes.resizer('view', true), {
@@ -279,6 +285,7 @@ describe('createPaneTargets', () => {
       () => false,
       fakes.log,
       NO_AREAS,
+      runNow,
     );
     targets.setResizeTarget(fakes.resizer('view resize', true));
     targets.setFocusTarget(fakes.mover('view focus', true));
@@ -317,6 +324,7 @@ describe('createPaneTargets', () => {
       }),
     );
     let liveStops = stops;
+    const deferred: (() => void)[] = [];
     const targets: PaneTargets = createPaneTargets(
       fakes.resizer('side bar resize', true),
       () => isPushed,
@@ -332,6 +340,7 @@ describe('createPaneTargets', () => {
         focusMain: () => fakes.asked.push('main'),
         rightBarStops: () => liveStops,
       },
+      (run) => deferred.push(run),
     );
     targets.setFocusTarget(fakes.mover('view', false));
     targets.setOuterPanes({
@@ -345,9 +354,17 @@ describe('createPaneTargets', () => {
       push: () => {
         isPushed = true;
       },
+      pop: () => {
+        isPushed = false;
+      },
       remove(stop: RightBarStop) {
         liveStops = liveStops.filter((live) => live !== stop);
         targets.stopRemoved(stop);
+      },
+      flush() {
+        for (const run of deferred.splice(0)) {
+          run();
+        }
       },
       clear() {
         fakes.asked.length = 0;
@@ -547,6 +564,39 @@ describe('createPaneTargets', () => {
       logged: ['focus in the right bar'],
     },
     {
+      // Breaks when a removal under a pushed scope runs focusMain at once,
+      // whose base change closes the overlay, or never gives main the keys.
+      case: 'the holding stop removed under a pushed scope',
+      act(fakes) {
+        fakes.targets.focus('right');
+        fakes.clear();
+        fakes.push();
+        fakes.remove(fakes.stops[0]);
+        fakes.targets.pushedScopesClosed();
+        fakes.asked.push('popped');
+        fakes.pop();
+        fakes.targets.pushedScopesClosed();
+        fakes.targets.pushedScopesClosed();
+      },
+      asked: ['left 1', 'popped', 'main'],
+      logged: ['focus back in main'],
+    },
+    {
+      // Breaks when a base change under the overlay leaves main owed the keys.
+      case: 'the holding stop removed under a pushed scope, then a base change',
+      act(fakes) {
+        fakes.targets.focus('right');
+        fakes.clear();
+        fakes.push();
+        fakes.remove(fakes.stops[0]);
+        fakes.targets.baseChanged();
+        fakes.pop();
+        fakes.targets.pushedScopesClosed();
+      },
+      asked: ['left 1'],
+      logged: [],
+    },
+    {
       case: 'removed while the side area holds',
       act(fakes) {
         fakes.targets.focus('left');
@@ -572,46 +622,99 @@ describe('createPaneTargets', () => {
     case: string;
     act(fakes: AreaFakes): void;
     asked: string[];
+    logged: string[];
   }>([
     {
-      case: 'focus left the right bar while a stop holds',
+      // Breaks when the stop's scope stays in force once no view set its own.
+      case: 'focus landed on an element whose view sets no scope',
       act: (fakes) => fakes.targets.focusLeftRightBar(),
       asked: ['left 1', 'main'],
+      logged: ['focus back in main'],
+    },
+    {
+      // Breaks when focusMain overrides the scope the clicked view set.
+      case: 'focus landed on an element whose view sets its scope',
+      act(fakes) {
+        fakes.targets.focusLeftRightBar();
+        fakes.targets.baseChanged();
+      },
+      asked: ['left 1'],
+      logged: ['focus back in main'],
+    },
+    {
+      // Breaks when the deferred focusMain changes the base under an overlay.
+      case: 'focus landed outside, then a scope is pushed',
+      act(fakes) {
+        fakes.targets.focusLeftRightBar();
+        fakes.push();
+      },
+      asked: ['left 1'],
+      logged: ['focus back in main'],
+    },
+    {
+      case: 'focus dropped from the right bar to no element',
+      act: (fakes) => fakes.targets.focusDroppedFromRightBar(),
+      asked: ['left 1', 'main'],
+      logged: ['focus back in main'],
     },
     {
       case: 'a base change, then focus left the right bar',
       act(fakes) {
         fakes.targets.baseChanged();
         fakes.targets.focusLeftRightBar();
+        fakes.targets.focusDroppedFromRightBar();
       },
       asked: ['left 1'],
+      logged: [],
+    },
+    {
+      // Breaks when an overlay taking the focus over a stop runs focusMain,
+      // whose base change closes the overlay.
+      case: 'focus left the right bar under a pushed scope',
+      act(fakes) {
+        fakes.push();
+        fakes.targets.focusLeftRightBar();
+        fakes.targets.focusDroppedFromRightBar();
+      },
+      asked: [],
+      logged: [],
     },
     {
       case: 'Alt+j to the next stop',
       act: (fakes) => fakes.targets.focus('down'),
       asked: ['left 1', 'stop 2'],
+      logged: ['focus in the right bar'],
     },
     {
       case: 'Alt+h back to main',
       act: (fakes) => fakes.targets.focus('left'),
       asked: ['left 1', 'main'],
+      logged: ['focus back in main'],
     },
-  ])("ends a right-bar stop's turn with its left: $case", ({ act, asked }) => {
-    const fakes = areaTargets({ stops: 2, hasLeft: true });
-    fakes.targets.focus('right');
-    fakes.clear();
+  ])(
+    "ends a right-bar stop's turn with its left, but not under a pushed scope: $case",
+    ({ act, asked, logged }) => {
+      const fakes = areaTargets({ stops: 2, hasLeft: true });
+      fakes.targets.focus('right');
+      fakes.clear();
 
-    act(fakes);
+      act(fakes);
+      fakes.flush();
+      fakes.flush();
 
-    expect(fakes.asked).toEqual(asked);
-  });
+      expect(fakes.asked).toEqual(asked);
+      expect(fakes.logged).toEqual(logged);
+    },
+  );
 
   it('ignores focus leaving the right bar while main or the side bar holds the keys', () => {
     const fakes = areaTargets({ sideBar: true, stops: 2, hasLeft: true });
 
     fakes.targets.focusLeftRightBar();
+    fakes.targets.focusDroppedFromRightBar();
     fakes.targets.focus('left');
     fakes.targets.focusLeftRightBar();
+    fakes.targets.focusDroppedFromRightBar();
 
     expect(fakes.asked).toEqual(['view left', 'outer left', 'side bar']);
   });

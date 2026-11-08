@@ -259,10 +259,16 @@ async function start() {
       focusMain: () => modes.focusMain(),
       rightBarStops: () => shell.rightBarStops(),
     },
+    queueMicrotask,
   );
   // Targets a view set under the previous base belong to a view no longer in
   // force, and the base change ends an area's turn.
   scopeStack.onBaseChange(() => paneTargets.baseChanged());
+  scopeStack.onChange(() => {
+    if (!scopeStack.anyPushed()) {
+      paneTargets.pushedScopesClosed();
+    }
+  });
   shell.onRightBarStopRemoved((stop) => paneTargets.stopRemoved(stop));
   document.addEventListener('focusin', (event) => {
     const isInRightBar =
@@ -270,6 +276,24 @@ async function start() {
     if (!isInRightBar) {
       paneTargets.focusLeftRightBar();
     }
+  });
+  // A click on no focusable spot sends the focus to the body with no
+  // `focusin`; a window blur also has no `relatedTarget` but keeps
+  // `activeElement`, so the check waits until the focus move is done.
+  document.addEventListener('focusout', (event) => {
+    const isLeavingForNothing =
+      event.relatedTarget === null &&
+      event.target instanceof Node &&
+      shell.rightBarHolds(event.target);
+    if (!isLeavingForNothing) {
+      return;
+    }
+    queueMicrotask(() => {
+      const active = document.activeElement;
+      if (active === null || active === document.body) {
+        paneTargets.focusDroppedFromRightBar();
+      }
+    });
   });
   const drops = createDropTargets({
     document,

@@ -43,10 +43,17 @@ export interface PaneAreas {
 // area's turn. `stopRemoved` ends the turn of the stop holding the keys, with
 // `focusMain`; another stop's removal does nothing. `sideBarOpened` holds the
 // side bar as the area, for a narrow mode's side bar opened over main.
-// `focusLeftRightBar` hears the DOM focus move outside the right bar: while a
-// stop holds the keys, it gives them back to main with `focusMain`. Every end
-// of a stop's turn calls its `left`. `release` empties every slot holding
-// `target`, by identity, and leaves a slot holding anything else.
+// `focusLeftRightBar` hears the DOM focus land on an element outside the right
+// bar: while a stop holds the keys, it gives the area back to main, then, once
+// `defer` runs, calls `focusMain` unless a base scope change came first (the
+// element's view set its own) or a scope is pushed. `focusDroppedFromRightBar` hears
+// it leave the right bar for no element: the stop's turn ends with
+// `focusMain`. While `isScopePushed()` both do nothing, the pushed scope's
+// overlay holding the DOM focus over the stop's turn, and `stopRemoved` ends
+// the turn but holds `focusMain` until `pushedScopesClosed` runs with no scope
+// pushed; a base change first drops it. Every end of a stop's turn calls its
+// `left`. `release` empties every slot holding `target`, by identity, and
+// leaves a slot holding anything else.
 export interface PaneTargets {
   setResizeTarget(target: ResizeTarget | null): void;
   setFocusTarget(target: FocusTarget | null): void;
@@ -55,6 +62,8 @@ export interface PaneTargets {
   stopRemoved(stop: RightBarStop): void;
   sideBarOpened(): void;
   focusLeftRightBar(): void;
+  focusDroppedFromRightBar(): void;
+  pushedScopesClosed(): void;
   release(target: ResizeTarget | FocusTarget | OuterPanes): void;
   resize(direction: PaneDirection): void;
   focus(direction: PaneDirection): void;
@@ -67,12 +76,19 @@ export function createPaneTargets(
   isScopePushed: () => boolean,
   log: (message: string) => void,
   areas: PaneAreas,
+  defer: (run: () => void) => void,
 ): PaneTargets {
   let resizeTarget: ResizeTarget | null = null;
   let focusTarget: FocusTarget | null = null;
   let outerPanes: OuterPanes | null = null;
   let area: FocusArea = 'main';
   let heldStop: RightBarStop | null = null;
+  // Set when a held stop was removed under a pushed scope: main's pane gets
+  // the keys back once no scope is pushed.
+  let isMainOwed = false;
+  // Set while a turn ended by focus landing outside the right bar waits to
+  // see whether the element's view sets its own base scope.
+  let isAwaitingView = false;
 
   // Ends the held stop's turn, if any, and gives main the area; the caller
   // decides whether main's pane gets the keys back.
@@ -80,6 +96,8 @@ export function createPaneTargets(
     const stop = heldStop;
     area = 'main';
     heldStop = null;
+    isMainOwed = false;
+    isAwaitingView = false;
     stop?.left?.();
   };
 
@@ -158,10 +176,17 @@ export function createPaneTargets(
     baseChanged() {
       resizeTarget = null;
       focusTarget = null;
+      isAwaitingView = false;
       endStopTurn();
     },
     stopRemoved(stop) {
-      if (area === 'right' && heldStop === stop) {
+      if (area !== 'right' || heldStop !== stop) {
+        return;
+      }
+      if (isScopePushed()) {
+        endStopTurn();
+        isMainOwed = true;
+      } else {
         backToMain();
       }
     },
@@ -171,8 +196,29 @@ export function createPaneTargets(
       log('focus in the side bar');
     },
     focusLeftRightBar() {
-      if (area === 'right') {
+      if (area !== 'right' || isScopePushed()) {
+        return;
+      }
+      endStopTurn();
+      log('focus back in main');
+      isAwaitingView = true;
+      defer(() => {
+        if (isAwaitingView && !isScopePushed()) {
+          areas.focusMain();
+        }
+        isAwaitingView = false;
+      });
+    },
+    focusDroppedFromRightBar() {
+      if (area === 'right' && !isScopePushed()) {
         backToMain();
+      }
+    },
+    pushedScopesClosed() {
+      if (isMainOwed && !isScopePushed()) {
+        isMainOwed = false;
+        areas.focusMain();
+        log('focus back in main');
       }
     },
     release(target) {

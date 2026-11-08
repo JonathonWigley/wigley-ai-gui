@@ -872,31 +872,37 @@ describe('createPageApi services.picker', () => {
     };
   }
 
-  it.each([
-    { case: 'with a filter', filter: true },
-    { case: 'with no filter', filter: false },
-  ])('picker_WithFilter_AnchorsOneFilterHintPerScope: $case', ({ filter }) => {
-    const { picker, anchored } = pickerApi();
-    let scope = 'picker';
-    const list = picker.create({ scope: () => scope, filter });
+  // Opens `list` three times, the third in scope `resume`, and returns the
+  // first filter hint drawn in it at each open, or null.
+  function hintsAcrossOpens(
+    list: ReturnType<ReturnType<typeof pickerApi>['picker']['create']>,
+    setScope: (scope: string) => void,
+  ) {
     const hintIn = () =>
       findAll(asFake(list.element), 'ui-picker-key')[0] ?? null;
-
     list.open(REQUEST);
     const pickerHint = hintIn();
     list.close();
     list.open(REQUEST);
     const pickerHintAgain = hintIn();
     list.close();
-    scope = 'resume';
+    setScope('resume');
     list.open(REQUEST);
-    const resumeHint = hintIn();
+    return { pickerHint, pickerHintAgain, resumeHint: hintIn() };
+  }
 
-    if (!filter) {
-      expect(anchored).toEqual([]);
-      expect([pickerHint, resumeHint]).toEqual([null, null]);
-      return;
-    }
+  it('picker_WithFilter_AnchorsOneFilterHintPerScope', () => {
+    const { picker, anchored } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope, filter: true });
+
+    const { pickerHint, pickerHintAgain, resumeHint } = hintsAcrossOpens(
+      list,
+      (next) => {
+        scope = next;
+      },
+    );
+
     expect(
       anchored.map(({ command, scope: anchoredIn }) => [command, anchoredIn]),
     ).toEqual([
@@ -908,6 +914,19 @@ describe('createPageApi services.picker', () => {
       pickerHint,
       resumeHint,
     ]);
+  });
+
+  it('picker_WithNoFilter_AnchorsNoFilterHint', () => {
+    const { picker, anchored } = pickerApi();
+    let scope = 'picker';
+    const list = picker.create({ scope: () => scope, filter: false });
+
+    const { pickerHint, resumeHint } = hintsAcrossOpens(list, (next) => {
+      scope = next;
+    });
+
+    expect(anchored).toEqual([]);
+    expect([pickerHint, resumeHint]).toEqual([null, null]);
   });
 
   it.each([
