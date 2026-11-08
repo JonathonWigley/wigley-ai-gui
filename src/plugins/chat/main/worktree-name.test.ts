@@ -1,7 +1,11 @@
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  type ResolvedFolder,
   rootSpellings,
+  runsGitWorktree,
   worktreeNameOf,
   worktreesInCommand,
 } from './worktree-name';
@@ -125,19 +129,93 @@ describe('worktreesInCommand', () => {
   });
 });
 
+describe('runsGitWorktree', () => {
+  it.each<{ case: string; command: string; runs: boolean }>([
+    { case: 'Add', command: 'git worktree add ../wt -b x', runs: true },
+    {
+      case: 'AfterCd',
+      command: 'cd /r/app && git worktree list',
+      runs: true,
+    },
+    {
+      case: 'WithDashC',
+      command: 'git -C /r/app worktree remove /r/.worktrees/a',
+      runs: true,
+    },
+    {
+      case: 'WithQuotedDashC',
+      command: 'git -C "/r/my app" worktree prune',
+      runs: true,
+    },
+    {
+      case: 'WithConfigAndFlag',
+      command: 'git -c core.x=1 --no-pager worktree list',
+      runs: true,
+    },
+    { case: 'GitByPath', command: '/usr/bin/git worktree list', runs: true },
+    {
+      case: 'PathUnderDotWorktrees',
+      command: 'ls /r/.worktrees/a && git status',
+      runs: false,
+    },
+    {
+      case: 'PathUnderClaudeWorktrees',
+      command: 'cat /r/app/.claude/worktrees/b/src/x.ts',
+      runs: false,
+    },
+    {
+      case: 'GitFolderPath',
+      command: 'ls /r/app/.git/worktrees',
+      runs: false,
+    },
+    {
+      case: 'OtherGitSubcommand',
+      command: 'git log --grep worktree',
+      runs: false,
+    },
+    {
+      case: 'WordInsideAnotherWord',
+      command: 'git worktrees',
+      runs: false,
+    },
+    { case: 'LongerCommandName', command: 'legit worktree', runs: false },
+  ])('runsGitWorktree_$case', ({ command, runs }) => {
+    expect(runsGitWorktree(command)).toBe(runs);
+  });
+});
+
 describe('rootSpellings', () => {
+  // `link` and each folder above it, deepest first, resolved by `real`.
+  function foldersUp(
+    link: string,
+    real: (folder: string) => string,
+  ): ResolvedFolder[] {
+    const folders: ResolvedFolder[] = [];
+    for (let folder = link; ; folder = path.dirname(folder)) {
+      folders.push({ folder, realFolder: real(folder) });
+      if (folder === path.dirname(folder)) {
+        return folders;
+      }
+    }
+  }
+  // `from` and every path under it resolve under `to`.
+  const linked =
+    (from: string, to: string) =>
+    (folder: string): string =>
+      folder === from || folder.startsWith(`${from}/`)
+        ? to + folder.slice(from.length)
+        : folder;
+
   it.each<{
     case: string;
     roots: string[];
-    folder: string;
-    realFolder: string;
+    folders: ResolvedFolder[];
     expected: string[];
   }>([
     {
       case: 'SymlinkedTop_AddsFolderSpelling',
       roots: ['/private/tmp/c/repo-wt', '/private/tmp/c/repo/.worktrees/b'],
-      folder: '/tmp/c/repo',
-      realFolder: '/private/tmp/c/repo',
+      folders: foldersUp('/tmp/c/repo', linked('/tmp', '/private/tmp')),
       expected: [
         '/private/tmp/c/repo-wt',
         '/tmp/c/repo-wt',
@@ -148,25 +226,37 @@ describe('rootSpellings', () => {
     {
       case: 'SymlinkedInnerFolder_MapsOntoLink',
       roots: ['/Volumes/d/real/app-wt'],
-      folder: '/Users/u/link/app',
-      realFolder: '/Volumes/d/real/app',
+      folders: foldersUp(
+        '/Users/u/link/app',
+        linked('/Users/u/link', '/Volumes/d/real'),
+      ),
       expected: ['/Volumes/d/real/app-wt', '/Users/u/link/app-wt'],
     },
     {
       case: 'RootOutsideTheResolvedPart_OneSpelling',
       roots: ['/srv/wt/app-fix'],
-      folder: '/Users/u/link/app',
-      realFolder: '/Volumes/d/real/app',
+      folders: foldersUp(
+        '/Users/u/link/app',
+        linked('/Users/u/link', '/Volumes/d/real'),
+      ),
       expected: ['/srv/wt/app-fix'],
+    },
+    {
+      case: 'LinkNamedAsItsTarget_RootBesideTheTargetOneSpelling',
+      roots: ['/Users/u/dev/.worktrees/agents-fix'],
+      folders: foldersUp(
+        '/Users/u/agents',
+        linked('/Users/u/agents', '/Users/u/dev/agents'),
+      ),
+      expected: ['/Users/u/dev/.worktrees/agents-fix'],
     },
     {
       case: 'NoSymlink_OneSpelling',
       roots: ['/u/dev/.worktrees/a', '/u/dev/b'],
-      folder: '/u/dev/app',
-      realFolder: '/u/dev/app',
+      folders: foldersUp('/u/dev/app', (folder) => folder),
       expected: ['/u/dev/.worktrees/a', '/u/dev/b'],
     },
-  ])('rootSpellings_$case', ({ roots, folder, realFolder, expected }) => {
-    expect(rootSpellings(roots, folder, realFolder)).toEqual(expected);
+  ])('rootSpellings_$case', ({ roots, folders, expected }) => {
+    expect(rootSpellings(roots, folders)).toEqual(expected);
   });
 });

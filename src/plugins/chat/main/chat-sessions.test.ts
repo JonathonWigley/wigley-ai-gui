@@ -1737,7 +1737,7 @@ describe('createChatSessions', () => {
       git: worktreesGit(['/private/work/app-wt']),
       files: {
         realPath: (file) =>
-          Promise.resolve(file === PROJECT_DIR ? `/private${file}` : file),
+          Promise.resolve(file.startsWith('/work') ? `/private${file}` : file),
       },
     });
 
@@ -1750,17 +1750,17 @@ describe('createChatSessions', () => {
 
   it.each([
     {
-      case: 'InputNull',
+      case: 'InputNull_ListsNothing',
       entries: [toolEntry('a', 'Bash', null)],
       worktrees: [],
     },
     {
-      case: 'CommandNotAString',
+      case: 'CommandNotAString_ListsNothing',
       entries: [toolEntry('a', 'Bash', { command: 7 })],
       worktrees: [],
     },
     {
-      case: 'PutTwice_OnceMore',
+      case: 'PutTwice_ListsOnce',
       entries: [
         toolEntry('a', 'Bash', { command: `ls ${FIX_ROOT}` }),
         toolEntry(
@@ -1775,7 +1775,7 @@ describe('createChatSessions', () => {
       ],
       worktrees: ['fix'],
     },
-  ])('bashEntry_$case_ListsNothing', async ({ entries, worktrees }) => {
+  ])('bashEntry_$case', async ({ entries, worktrees }) => {
     const test = await started({ git: worktreesGit([FIX_ROOT]) });
 
     for (const entry of entries) {
@@ -1783,6 +1783,109 @@ describe('createChatSessions', () => {
     }
 
     expect(test.chat.sessions()[0].worktrees).toEqual(worktrees);
+  });
+
+  // `rootReads` counts the roots reads after the row's open read.
+  it.each([
+    {
+      case: 'GitWorktreeAdd_ReadsAgain',
+      command: 'git worktree add x',
+      rootReads: 1,
+    },
+    {
+      case: 'GitDashCWorktreeList_ReadsAgain',
+      command: 'git -C /repos/clone worktree list',
+      rootReads: 1,
+    },
+    {
+      case: 'PathUnderDotWorktrees_ReadsNothing',
+      command: `cd ${FIX_ROOT} && git status`,
+      rootReads: 0,
+    },
+    {
+      case: 'PathUnderClaudeWorktrees_ReadsNothing',
+      command: 'ls /repos/clone/.claude/worktrees/b',
+      rootReads: 0,
+    },
+  ])('bashEntryResult_$case', async ({ command, rootReads }) => {
+    let reads = 0;
+    const test = await started({
+      git: {
+        ...worktreesGit([FIX_ROOT]),
+        worktrees: () => {
+          reads += 1;
+          return Promise.resolve(checkoutsOf([FIX_ROOT]));
+        },
+      },
+    });
+    const readsAtOpen = reads;
+
+    test.process.events.entry(
+      toolEntry('a', 'Bash', { command }, { text: '', isError: false }),
+    );
+    await flush();
+
+    expect(reads - readsAtOpen).toBe(rootReads);
+  });
+
+  it('replay_BashEntries_StartNoRootsReadAndListOnceTheOpenReadLands', async () => {
+    const rootReads: ((worktrees: GitWorktree[]) => void)[] = [];
+    const test = setUp({
+      git: {
+        ...worktreesGit([]),
+        worktrees: () =>
+          new Promise((resolve) => {
+            rootReads.push(resolve);
+          }),
+      },
+    });
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay: (events) => {
+        events.entry(
+          toolEntry(
+            'a',
+            'Bash',
+            { command: 'git worktree add /repos/.worktrees/late' },
+            { text: '', isError: false },
+          ),
+        );
+        events.entry(toolEntry('b', 'Bash', { command: `ls ${FIX_ROOT}` }));
+      },
+    });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(rootReads).toHaveLength(1);
+    expect(test.chat.sessions()[0].worktrees).toEqual([]);
+    rootReads[0](checkoutsOf([FIX_ROOT]));
+    await flush();
+
+    expect(test.chat.sessions()[0].worktrees).toEqual(['fix']);
+  });
+
+  it('replay_ToolStarted_NotesItsAgent', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay: (events) =>
+        events.agentEvent({
+          type: 'toolStarted',
+          at: 1000,
+          agentId: 'subagent-1',
+          toolUseId: 't1',
+          tool: 'mcp__wigley-forms__set_workflow_step',
+          summary: '',
+        }),
+    });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(
+      test.notesAndEmits.flatMap((each) =>
+        'noted' in each ? [each.noted] : [],
+      ),
+    ).toEqual([[ROW_ID, 't1', 'subagent-1']]);
   });
 
   it('bashEntry_BeforeTheRootsRead_ListsOnceTheReadLands', async () => {

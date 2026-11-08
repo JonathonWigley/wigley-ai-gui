@@ -142,7 +142,9 @@ Decisions:
   last segment (`path.basename`), which equals what `worktreeNameOf` gives for a root at `.worktrees/<name>`.
 - The match is case-insensitive, as `worktreeNameOf` matches, with the separators `git worktree list` prints. Each root
   is matched under git's spelling and under the row folder's own (`rootSpellings`, from `Files.realPath` of the
-  folder), so `/tmp/repo-wt` counts for a root git lists as `/private/tmp/repo-wt` (fix 08-2). A relative path
+  folder and of each folder above it: a root under a folder's resolved path is spelled through the deepest such
+  folder), so `/tmp/repo-wt` counts for a root git lists as `/private/tmp/repo-wt` (fix 08-2), and a root beside a
+  symlink's target that shares the link's name keeps one spelling (review fix 9). A relative path
   (`cd .worktrees/a`) or a `~` path does not count.
 - A read-only command counts (design review).
 - A Bash touch lists any linked worktree root by its last segment, wherever the root sits; `fileWritten` lists only a
@@ -156,8 +158,8 @@ Decisions:
   `deps.git.topLevel(projectDir)`. For null it sets the roots to `[]`. Otherwise it reads `deps.git.worktrees(top)` and
   keeps the `path` of each worktree whose `isMain` is false. Only the latest read applies. A read that settles after the
   row closed or after `detachAll` changes nothing. A rejection logs `worktrees not read in <folder name>: <error text>`
-  and keeps the roots it had. When a read applies, match every text in `bashCommands` against the new roots and call
-  `addWorktree` for each name. So a Bash entry that arrived before a read settled (a fresh row's first entries, or the
+  and keeps the roots it had. When a read applies, match every text in `bashCommands` against the new roots the row
+  does not list yet, each command lowercased once per read, and call `addWorktree` for each name. So a Bash entry that arrived before a read settled (a fresh row's first entries, or the
   entries a re-attach replays) still lists its worktree once the roots land.
 - `noteWorktree(session, filePath)` splits: a new `addWorktree(session, name)` holds today's add (no duplicate, order of
   first touch, `setInfo({ worktrees })`). `noteWorktree` calls it with `worktreeNameOf(filePath)` when not null.
@@ -168,11 +170,13 @@ Decisions:
   agent's `fileWritten` does. A tool entry put again (its result landing) adds nothing new, since a listed name is not
   added twice.
 - A worktree made mid-turn joins the roots in the same turn: when a Bash entry arrives with `entry.result !== null`,
-  `command.includes('worktree')` (case-sensitive) and no replay running (`!replay.isReplaying`, the same rule as the
-  turn-end read), call `readWorktreeRoots(session)`. A later put of the same entry reads again; that costs one git call
-  and changes nothing. `wigley:make` lead turns run for hours
-  and add worktrees inside one turn, so a read only at turn end misses every command of that turn. The command that
-  makes a worktree and names it in the same text is not matched; the commands after its result are.
+  a command that runs `git worktree` (`runsGitWorktree` in `worktree-name.ts`: the word `git`, git's own options such
+  as `-C <path>`, then the word `worktree`; a path under `.worktrees/` or `.claude/worktrees/` does not count, review
+  fix 7) and no replay running (`!replay.isReplaying`, the same rule as the turn-end read), call
+  `readWorktreeRoots(session)`. A later put of the same entry reads again; that costs one git call and changes
+  nothing. `wigley:make` lead turns run for hours and add worktrees inside one turn, so a read only at turn end misses
+  every command of that turn. When that read lands it re-matches every seen command, the add itself included, so a
+  worktree the command makes and names in the same text lists from that command.
 - `chat/contract.ts`, the comment on `worktrees` (today: `The git worktrees the session's agents wrote files in …`):
   say the session's agents wrote files in them or named their root in a Bash command; reword "first write" to "first
   touch" and "until a write lands in one" to "until one is touched".

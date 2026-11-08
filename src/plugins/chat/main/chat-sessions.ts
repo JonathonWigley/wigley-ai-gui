@@ -86,7 +86,9 @@ import {
 import type { RecentFolders } from './recent-folders';
 import type { ToolCallers } from './tool-callers';
 import {
+  type ResolvedFolder,
   rootSpellings,
+  runsGitWorktree,
   worktreeNameOf,
   worktreesInCommand,
 } from './worktree-name';
@@ -112,7 +114,7 @@ export interface ChatSessionsDeps {
   alerts: Pick<Alerts, 'announce'>;
   window: { show(): void; isFocused(): boolean };
   // Reads each row's repo, branch and linked worktrees at its open and after
-  // each turn, and the worktrees again after a Bash call naming `worktree`.
+  // each turn, and the worktrees again after a Bash call runs `git worktree`.
   git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
   // Resolves the row's folder at each worktree read, so a root git lists
   // resolved also matches under the folder's own spelling.
@@ -406,7 +408,7 @@ interface HeldSession {
   // Worktree reads started in this row, numbering them; only the latest applies.
   worktreeReads: number;
   // The command of each Bash call the row has seen, each text once.
-  bashCommands: string[];
+  bashCommands: Set<string>;
   // The id of the row's last process start or attach; never cleared, so after
   // an exit it still names the ended process.
   processId: string | null;
@@ -1479,7 +1481,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       branchReads: 0,
       worktreeRoots: [],
       worktreeReads: 0,
-      bashCommands: [],
+      bashCommands: new Set(),
       processId: opening.processId,
       launchControls: opening.launchControls,
       launchResume: opening.launchResume,
@@ -1563,9 +1565,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
-  // Lists each worktree a Bash call's command names. A call that ran a
-  // `worktree` command reads the roots again, so a worktree it made lists in
-  // the same turn.
+  // Lists each worktree a Bash call's command names. A call that ran
+  // `git worktree` reads the roots again, so a worktree it made lists in the
+  // same turn.
   function noteBashCommand(
     session: HeldSession,
     entry: ChatEntry,
@@ -1578,21 +1580,19 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (command === null) {
       return;
     }
-    if (!session.bashCommands.includes(command)) {
-      session.bashCommands.push(command);
-    }
+    session.bashCommands.add(command);
     for (const name of worktreesInCommand(command, session.worktreeRoots)) {
       addWorktree(session, name);
     }
     const ranAWorktreeCommand =
-      entry.result !== null && command.includes('worktree');
+      entry.result !== null && runsGitWorktree(command);
     if (ranAWorktreeCommand && !isReplaying) {
       readWorktreeRoots(session);
     }
   }
 
-  // Reads the clone's linked worktree roots, and lists each worktree a seen
-  // Bash command names under them. A read that a later one started after, or
+  // Reads the clone's linked worktree roots, and lists each worktree not yet
+  // listed that a seen Bash command names under them. A read that a later one started after, or
   // that settles after the row closed or `detachAll`, changes nothing; a
   // failed read keeps the roots the row had.
   function readWorktreeRoots(session: HeldSession) {
@@ -1608,10 +1608,21 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           return;
         }
         session.worktreeRoots = roots;
+        const { worktrees } = session.slots.info();
+        let unlisted = roots.filter(
+          (root) => !worktrees.includes(path.basename(root)),
+        );
         for (const command of session.bashCommands) {
-          for (const name of worktreesInCommand(command, roots)) {
+          if (unlisted.length === 0) {
+            break;
+          }
+          const names = worktreesInCommand(command, unlisted);
+          for (const name of names) {
             addWorktree(session, name);
           }
+          unlisted = unlisted.filter(
+            (root) => !names.includes(path.basename(root)),
+          );
         }
       },
       (error: unknown) =>
@@ -1622,21 +1633,40 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The top folder of each linked worktree of the clone holding `projectDir`,
-  // under git's spelling and `projectDir`'s (`rootSpellings`); [] outside a
-  // clone.
+  // under git's spelling and `projectDir`'s (`rootSpellings`, from the resolved
+  // path of `projectDir` and each folder above it); [] outside a clone.
   async function linkedWorktreeRootsOf(projectDir: string): Promise<string[]> {
     const top = await deps.git.topLevel(projectDir);
     if (top === null) {
       return [];
     }
-    const [worktrees, realProjectDir] = await Promise.all([
+    const [worktrees, folders] = await Promise.all([
       deps.git.worktrees(top),
-      deps.files.realPath(projectDir),
+      resolvedFoldersUp(projectDir),
     ]);
     const roots = worktrees
       .filter((worktree) => !worktree.isMain)
       .map((worktree) => worktree.path);
-    return rootSpellings(roots, projectDir, realProjectDir);
+    return rootSpellings(roots, folders);
+  }
+
+  // `folder` and each folder above it, deepest first, each with its resolved
+  // path.
+  function resolvedFoldersUp(folder: string): Promise<ResolvedFolder[]> {
+    const folders: string[] = [];
+    for (
+      let each = folder;
+      !folders.includes(each);
+      each = path.dirname(each)
+    ) {
+      folders.push(each);
+    }
+    return Promise.all(
+      folders.map(async (each) => ({
+        folder: each,
+        realFolder: await deps.files.realPath(each),
+      })),
+    );
   }
 
   // Reads the row's repo and branch, and writes them when either changed.
