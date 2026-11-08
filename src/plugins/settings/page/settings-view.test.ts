@@ -677,9 +677,11 @@ describe('createSettingsView', () => {
     return shown;
   }
 
+  // `drawnOn` is the status the row draws with; the pick always sees it on.
   it.each([
     {
       name: 'no reason',
+      drawnOn: true,
       reason: null,
       written: [{ plugins: { disabled: ['gallery'] } }],
       refused: [],
@@ -687,22 +689,39 @@ describe('createSettingsView', () => {
     },
     {
       name: 'a reason',
+      drawnOn: true,
       reason: 'Gallery is needed by X',
       written: [],
       refused: ['refused settings.json: Gallery is needed by X'],
       toasts: [['Gallery is needed by X', 'error']],
     },
+    {
+      name: 'off at draw, on at pick',
+      drawnOn: false,
+      reason: null,
+      written: [{ plugins: { disabled: ['gallery'] } }],
+      refused: [],
+      toasts: [],
+    },
   ])(
     'pluginRow_PickFalse_AsksMayDisableFirst: $name',
-    async ({ reason, written: expected, refused, toasts: expectedToasts }) => {
+    async ({
+      drawnOn,
+      reason,
+      written: expected,
+      refused,
+      toasts: expectedToasts,
+    }) => {
+      let galleryOn = drawnOn;
       const { view, written, asked, logs, toasts } = await pickerOnPlugin(
         'gallery',
         {
           schema: pluginsSchema([]),
-          plugins: () => [status('gallery', 'Gallery', true)],
+          plugins: () => [status('gallery', 'Gallery', galleryOn)],
           mayDisable: async () => reason,
         },
       );
+      galleryOn = true;
 
       view.commands.pickerDown();
       view.commands.pickerChoose();
