@@ -1,6 +1,6 @@
 # 05 — Settings sections and Backlog homes on the core side-bar rule
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -241,3 +241,5 @@ placement check and runtime and visual checks are Task 10's (Final verification)
 Commit:    one commit for the group
 
 ## Proof
+
+Commit bb601a25 · proof: diff read (Produces present), typecheck pass; worker ran settings/backlog/keymap tests (291 pass), lint pass, selftest --plugin settings and --plugin backlog pass · concerns: Backlog focusMain ends with syncFocus(always) not render(true): an unchanged state sets no scope again (no path found where that matters); pick-comment prose edits beyond Produces

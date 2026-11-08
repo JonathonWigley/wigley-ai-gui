@@ -216,7 +216,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Docs side bar and right column](04-docs-side-bar-and-aside.md) — after 01
 
 ### Wave 5
-- [ ] [Settings and Backlog side bars](05-settings-backlog-side-bars.md) — after 01
+- [x] [Settings and Backlog side bars](05-settings-backlog-side-bars.md) — after 01
 
 ### Wave 6
 - [ ] [Chat tab panes](06-chat-tab-panes.md) — after 01
@@ -242,6 +242,7 @@ Review base: 1a938e2f
 - 02 · 9c50228e · diff read (Produces present, five binds found), typecheck pass; worker ran pool-view-model tests (70 pass), lint pass, selftest --plugin unity-pool pass · concerns: no typed HolderInput literals existed to gain isCursor; drawPanel builds panelInput twice per draw to clamp the cursor; re-entry step cannot tell the shown session's holder from index 0 (one holder in the fixture); inline panelSlot.style.outline='none' to stop :focus-visible drawing a second ring
 - 03 · 8173424e · diff read (12 binds, SessionList, SidebarCursor, cursor rules, keyFocused, isPrompted/cursorPrompt present; follow-up removed), typecheck pass; worker ran 1026+212 tests, lint, selftest sessions and unity-pool pass · concerns: sessions-view-fakes.ts edited outside Files for the two deps; paneKeyFocused_ReshowsTheTab's no-focusBox check is weak (harness cannot run it); an Alt pane move runs the new tab's shown twice; selected card always one line taller (hidden prompt line) — visual check; right-bar focusin and list focusin-in-main listeners can both run on one move (disjoint state)
 - 04 · d74620f7 · diff read (Produces present; focusDoc landed as focusMain), typecheck pass; worker ran 5 test files (398 pass), lint pass, selftest --plugin docs pass · concerns: dialog-from-column step not added (no dialog key reachable from docs.aside); no unit row for DocsView.focusMain's column branch (no docs-view.test.ts); isTreeOwnPane false for machine view by addedViewOf; asideSightLost moves DOM focus only when view active and focus not outside the doc pane
+- 05 · bb601a25 · diff read (Produces present), typecheck pass; worker ran settings/backlog/keymap tests (291 pass), lint pass, selftest --plugin settings and --plugin backlog pass · concerns: Backlog focusMain ends with syncFocus(always) not render(true): an unchanged state sets no scope again (no path found where that matters); pick-comment prose edits beyond Produces
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 - SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
@@ -261,5 +262,6 @@ Review base: 1a938e2f
 - list overlay ends with Space p f unfavoriting panes-b so the script ends with no favorites · group 03 · group 03
 - 04: right column focused self-test step uses checksFit 'held' — the min-width fit check takes the column out of sight and hands keys to the doc · group 04
 - 04: a click on an On this page row focuses the doc; Enter on a section row also logs doc focused · group 04
+- 05: Backlog shared homes/list binds written as one flatMap over [backlog.homes, backlog.list]; h / a i d t T o stay list-only · group 05
 ### Review rounds
 ### Test gate

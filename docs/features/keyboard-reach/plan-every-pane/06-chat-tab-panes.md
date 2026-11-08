@@ -1,6 +1,6 @@
 # 06 — Chat tab panes: transcript, box and session hub on the focus keys
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 01
 Plan: [plan.md](plan.md)
