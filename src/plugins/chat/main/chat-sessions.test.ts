@@ -1663,24 +1663,31 @@ describe('createChatSessions', () => {
       expect(test.markOptions).toEqual([{ text, action: 'read it' }]);
     },
   );
-  it('turnFinished_unattendedRow_NoAlertNoMark', async () => {
-    const test = setUp();
-    test.chat.launch({
-      projectDir: PROJECT_DIR,
-      profile: DEFAULT_PROFILES[0].name,
-      message: { text: 'go', images: [] },
-      unattended: true,
-    });
-    await flush();
-    test.setFocused(false);
-    const { events } = test.harness.processes[0];
 
-    events.activity('working');
-    events.activity('idle');
+  it.each([
+    { given: 'unattended: true', flag: { unattended: true }, alerts: 0 },
+    { given: 'unattended absent', flag: {}, alerts: 1 },
+  ])(
+    'turnFinished_LaunchedRow_AlertsByUnattended: $given → $alerts alerts',
+    async ({ flag, alerts }) => {
+      const test = setUp();
+      const sessionId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: DEFAULT_PROFILES[0].name,
+        message: { text: 'go', images: [] },
+        ...flag,
+      });
+      await flush();
+      test.setFocused(false);
+      const { events } = test.harness.processes[0];
 
-    expect(test.announced).toEqual([]);
-    expect(test.marked).toEqual([]);
-  });
+      events.activity('working');
+      events.activity('idle');
+
+      expect(test.announced).toHaveLength(alerts);
+      expect(test.marked).toEqual(alerts === 0 ? [] : [sessionId]);
+    },
+  );
 
   it('turnFinished_otherSessionSelected_alertsAndMarks', async () => {
     const test = await started();
@@ -2846,12 +2853,20 @@ describe('createChatSessions', () => {
     {
       given: 'unattended: true',
       flag: { unattended: true },
-      unattended: true,
+      reply: JSON.stringify({ behavior: 'deny', message: UNATTENDED_REASON }),
+      answer: { allowed: false, reason: UNATTENDED_REASON },
+      sentByPrompt: [],
     },
-    { given: 'unattended absent', flag: {}, unattended: false },
+    {
+      given: 'unattended absent',
+      flag: {},
+      reply: 'pending',
+      answer: null,
+      sentByPrompt: ['waiting'],
+    },
   ])(
-    'permission_LaunchedRow_AnswersByUnattended: $given',
-    async ({ flag, unattended }) => {
+    'permission_LaunchedRow_AnswersByUnattended: $given → $reply',
+    async ({ flag, reply, answer, sentByPrompt }) => {
       const test = setUp();
       test.chat.launch({
         projectDir: PROJECT_DIR,
@@ -2861,6 +2876,7 @@ describe('createChatSessions', () => {
       });
       await flush();
       test.harness.processes[0].events.activity('working');
+      const activitiesBefore = test.sent('activity').length;
 
       const call = test.chat
         .permissionToolSession(test.agentSession)
@@ -2870,20 +2886,17 @@ describe('createChatSessions', () => {
         });
       const result = await settled(call);
 
-      const activities = test.sent('activity').map((sent) => sent.activity);
-      if (unattended) {
-        expect(replyText(result)).toBe(
-          JSON.stringify({ behavior: 'deny', message: UNATTENDED_REASON }),
-        );
-        expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-          kind: 'permission',
-          answer: { allowed: false, reason: UNATTENDED_REASON },
-        });
-        expect(activities).not.toContain('waiting');
-      } else {
-        expect(result).toBe('pending');
-        expect(activities.at(-1)).toBe('waiting');
-      }
+      expect(result === 'pending' ? result : replyText(result)).toBe(reply);
+      expect(test.sent('entry').at(-1)?.entry).toMatchObject({
+        kind: 'permission',
+        answer,
+      });
+      expect(
+        test
+          .sent('activity')
+          .slice(activitiesBefore)
+          .map((sent) => sent.activity),
+      ).toEqual(sentByPrompt);
     },
   );
 
@@ -3545,11 +3558,14 @@ describe('createChatSessions saved sessions', () => {
     ]);
   });
 
-  it('save_LaunchedRow_RecordKeepsUnattended', async () => {
+  it.each([
+    { given: 'as launched', clear: false },
+    { given: 'after a clear', clear: true },
+  ])('save_LaunchedRow_RecordKeepsUnattended: $given', async ({ clear }) => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
 
-    test.chat.launch({
+    const launchedId = test.chat.launch({
       projectDir: PROJECT_DIR,
       profile: 'personal',
       message: { text: 'go', images: [] },
@@ -3557,6 +3573,10 @@ describe('createChatSessions saved sessions', () => {
     });
     test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
     await flush();
+    if (clear) {
+      test.chat.clear(launchedId);
+      await flush();
+    }
 
     expect(
       test.saved.last()?.sessions.map((saved) => saved.unattended),
