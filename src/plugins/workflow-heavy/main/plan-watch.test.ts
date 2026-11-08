@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { FileStat, FileWatch } from '../../../contracts/files';
 import {
   createMemoryFiles,
   type MemoryFiles,
@@ -19,6 +20,7 @@ const PLAN_TICKED = '# Plan A — plan\n\n## Tasks\n\n- [x] one\n- [x] two\n';
 const W_PLAN_DIR = '/w/docs/features/x/plan-a';
 const W2_PLAN_DIR = '/w2/docs/features/x/plan-a';
 const GIT_FOLDER = '/r/.git';
+const WORKTREES_FOLDER = `${GIT_FOLDER}/worktrees`;
 const PLAN_GONE = heavySignal({ type: 'planGone' });
 
 // A three-task plan with its first `ticks` tasks ticked.
@@ -81,6 +83,69 @@ function startWatch(files: WatchDeps['files'], git = NO_CLONE) {
     signal: (_sessionId, signal) => signals.push(signal),
   });
   return { watch, signals };
+}
+
+// `files` whose open watches `openFolders` lists, one entry per watch;
+// `fail` ends each open watch on a folder as a failing watcher does, disposing
+// it and then calling its `onError`. While `holdStats` is on, a stat of git's
+// `worktrees` folder is taken at once and settles when `releaseStats` runs.
+function trackedFiles(files: MemoryFiles) {
+  const open: { folder: string; dispose(): void; onError?(): void }[] = [];
+  let heldStats: (() => void)[] | null = null;
+  const tracked: WatchDeps['files'] = {
+    ...files,
+    watch: (folder, onChange, options) => {
+      const inner = files.watch(folder, onChange, options);
+      const watch: FileWatch = {
+        dispose: () => {
+          inner.dispose();
+          const index = open.indexOf(entry);
+          if (index !== -1) {
+            open.splice(index, 1);
+          }
+        },
+      };
+      const entry = {
+        folder,
+        dispose: watch.dispose,
+        onError: () => options?.onError?.(new Error('watcher failed')),
+      };
+      open.push(entry);
+      return watch;
+    },
+    stat: async (path) => {
+      const stat = await files.stat(path);
+      if (heldStats === null || path !== WORKTREES_FOLDER) {
+        return stat;
+      }
+      const held = heldStats;
+      return new Promise<FileStat | null>((settle) => {
+        held.push(() => settle(stat));
+      });
+    },
+  };
+  return {
+    files: tracked,
+    openFolders: () => open.map((watch) => watch.folder).sort(),
+    fail: (folder: string) => {
+      for (const watch of open.filter((each) => each.folder === folder)) {
+        watch.dispose();
+        watch.onError?.();
+      }
+    },
+    holdStats: () => {
+      heldStats = [];
+    },
+    // Settles the held stats newest first, and stops holding.
+    releaseStats: async () => {
+      const held = heldStats ?? [];
+      heldStats = null;
+      for (const settle of held.reverse()) {
+        settle();
+        await settled();
+      }
+    },
+  };
 }
 
 function changed(
@@ -266,6 +331,7 @@ describe('createPlanWatch', () => {
       added: '/w',
       step: (_watch: PlanWatch, files: MemoryFiles) =>
         files.write(`${GIT_FOLDER}/worktrees/w/gitdir`, '/w/.git'),
+      deafGitFolder: false,
       signals: [changed(PLAN_ONE), changed(PLAN_ONE), changed(PLAN_ALL)],
     },
     {
@@ -273,6 +339,7 @@ describe('createPlanWatch', () => {
       listed: ['/r'],
       added: '/w',
       step: async (watch: PlanWatch) => watch.check('s1'),
+      deafGitFolder: false,
       signals: [changed(PLAN_ONE), changed(PLAN_ONE), changed(PLAN_ALL)],
     },
     {
@@ -281,6 +348,7 @@ describe('createPlanWatch', () => {
       added: '/w',
       step: (_watch: PlanWatch, files: MemoryFiles) =>
         files.write(`${GIT_FOLDER}/index`, 'index'),
+      deafGitFolder: false,
       signals: [changed(PLAN_ONE)],
     },
     {
@@ -289,11 +357,14 @@ describe('createPlanWatch', () => {
       added: '/w2',
       step: (_watch: PlanWatch, files: MemoryFiles) =>
         files.write(`${GIT_FOLDER}/worktrees/w2/gitdir`, '/w2/.git'),
+      // The git folder watch hears the nested write as `worktrees`, as Node's
+      // may not, so only the `worktrees` watch can bring the new copy in.
+      deafGitFolder: true,
       signals: [changed(PLAN_ONE), changed(PLAN_ONE), changed(PLAN_ALL)],
     },
   ])(
     'listAgain_WorktreeAdded_WatchesTheNewCopy ($by)',
-    async ({ listed, added, step, signals: expected }) => {
+    async ({ listed, added, step, deafGitFolder, signals: expected }) => {
       const { files, writeAt } = clockedFiles();
       await files.write(`${GIT_FOLDER}/HEAD`, 'ref: refs/heads/main');
       if (listed.includes('/w')) {
@@ -304,7 +375,22 @@ describe('createPlanWatch', () => {
         await writeAt(5, `${planDir}/plan.md`, PLAN_TWO);
       }
       const checkouts = [...listed];
-      const { watch, signals } = startWatch(files, cloneGit(checkouts));
+      const watchedFiles: WatchDeps['files'] = deafGitFolder
+        ? {
+            ...files,
+            watch: (folder, onChange, options) =>
+              files.watch(
+                folder,
+                (path) => {
+                  if (folder !== GIT_FOLDER || path !== 'worktrees') {
+                    onChange(path);
+                  }
+                },
+                options,
+              ),
+          }
+        : files;
+      const { watch, signals } = startWatch(watchedFiles, cloneGit(checkouts));
       watch.follow('s1', PLAN_DIR);
       await settled();
 
@@ -315,6 +401,70 @@ describe('createPlanWatch', () => {
       await settled();
 
       expect(signals).toEqual(expected);
+    },
+  );
+
+  it.each([
+    {
+      name: 'the worktrees folder removed',
+      act: async (
+        _subject: ReturnType<typeof trackedFiles>,
+        files: MemoryFiles,
+      ) => {
+        files.remove(WORKTREES_FOLDER);
+      },
+      open: [GIT_FOLDER, PLAN_DIR, W_PLAN_DIR],
+    },
+    {
+      name: 'two worktrees syncs settling out of order',
+      act: async (
+        subject: ReturnType<typeof trackedFiles>,
+        files: MemoryFiles,
+      ) => {
+        subject.holdStats();
+        await files.write(`${WORKTREES_FOLDER}/w/locked`, 'locked');
+        await settled();
+        files.remove(WORKTREES_FOLDER);
+        await settled();
+        await subject.releaseStats();
+      },
+      open: [GIT_FOLDER, PLAN_DIR, W_PLAN_DIR],
+    },
+    {
+      name: 'the git folder watch failed',
+      act: async (subject: ReturnType<typeof trackedFiles>) =>
+        subject.fail(GIT_FOLDER),
+      open: [GIT_FOLDER, WORKTREES_FOLDER, PLAN_DIR, W_PLAN_DIR],
+    },
+    {
+      name: 'the worktrees watch failed',
+      act: async (subject: ReturnType<typeof trackedFiles>) =>
+        subject.fail(WORKTREES_FOLDER),
+      open: [GIT_FOLDER, WORKTREES_FOLDER, PLAN_DIR, W_PLAN_DIR],
+    },
+    {
+      name: 'a copy watch failed',
+      act: async (subject: ReturnType<typeof trackedFiles>) =>
+        subject.fail(W_PLAN_DIR),
+      open: [GIT_FOLDER, WORKTREES_FOLDER, PLAN_DIR, W_PLAN_DIR],
+    },
+  ])(
+    'follow_WatchedFolderChangesOrFails_KeepsOneWatchOnEachFolder ($name)',
+    async ({ act, open }) => {
+      const files = createMemoryFiles();
+      await files.write(`${GIT_FOLDER}/HEAD`, 'ref: refs/heads/main');
+      await files.write(`${WORKTREES_FOLDER}/w/gitdir`, '/w/.git');
+      await files.write(PLAN_FILE, PLAN);
+      await files.write(`${W_PLAN_DIR}/plan.md`, PLAN);
+      const subject = trackedFiles(files);
+      const { watch } = startWatch(subject.files, cloneGit(['/r', '/w']));
+      watch.follow('s1', PLAN_DIR);
+      await settled();
+
+      await act(subject, files);
+      await settled();
+
+      expect(subject.openFolders()).toEqual([...open].sort());
     },
   );
 

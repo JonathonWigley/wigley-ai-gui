@@ -23,11 +23,14 @@ import { heavySignal } from '../contract';
 // `check` lists the copies again and reads the newest, for a delete or a new
 // worktree the OS watcher may not report; it does nothing while the watch is
 // still opening or after `planGone` closed it. A change to git's worktree list
-// lists the copies again too. A missing folder is never watched, since
-// `Files.watch` creates the folder it is given. A read or a list that settles
-// after the session's watch moved or closed, or after a newer one of its kind
-// started, is dropped. A watch that fails to open is logged and forgotten, so
-// the next `follow` of its folder tries again.
+// lists the copies again too, and each list reopens a git folder watch that
+// failed and opens or closes the `worktrees` watch with its folder; a copy
+// watch that fails lists again, which reopens it. A missing folder is never
+// watched, since `Files.watch` creates the folder it is given. A read, list,
+// git folder watch or `worktrees` sync that settles after the session's watch
+// moved or closed, or after a newer one of its kind started, is dropped. A
+// watch that fails to open is logged and forgotten, so the next `follow` of
+// its folder tries again.
 export interface PlanWatch {
   follow(sessionId: string, planDir: string | null): void;
   check(sessionId: string): void;
@@ -40,7 +43,10 @@ interface Watched {
   status: 'opening' | 'open' | 'gone';
   // One watch per copy's folder, and one on `planDir` while it is a folder.
   copyWatches: FileWatch[];
-  // Git's shared folder of the clone, and its `worktrees` folder.
+  // Git's shared folder of the clone, set when its watch opens; the watch on
+  // it, null outside a clone, until it opens and after it failed; and the
+  // watch on its `worktrees` folder while that exists.
+  commonDir: string | null;
   gitWatch: FileWatch | null;
   worktreesWatch: FileWatch | null;
 }
@@ -61,13 +67,15 @@ export function createPlanWatch(deps: {
   const { git, files, paths, log } = deps;
   const copyDeps: PlanCopyDeps = { git, files, paths };
   const watched = new Map<string, Watched>();
-  // Bumped each time a session's watch moves or closes: a read or a list
-  // started under an earlier generation is dropped.
+  // Bumped each time a session's watch moves or closes: a call started under
+  // an earlier generation is dropped.
   const generations = new Map<string, number>();
-  // The number of the session's newest read, and of its newest list: an older
-  // one is dropped.
+  // The number of the session's newest call of each kind: an older one is
+  // dropped.
   const latestReads = new Map<string, number>();
   const latestLists = new Map<string, number>();
+  const latestGitWatches = new Map<string, number>();
+  const latestWorktreesSyncs = new Map<string, number>();
 
   const generationOf = (sessionId: string) => generations.get(sessionId) ?? 0;
 
@@ -98,16 +106,21 @@ export function createPlanWatch(deps: {
     entry.worktreesWatch = null;
   };
 
-  // Closes the session's watch and drops every read and list still in flight
-  // for it.
+  // Closes the session's watch and drops every call still in flight for it.
   const close = (sessionId: string) => {
     const entry = watched.get(sessionId);
     if (entry !== undefined) {
       disposeWatches(entry);
     }
     watched.delete(sessionId);
-    latestReads.delete(sessionId);
-    latestLists.delete(sessionId);
+    for (const latest of [
+      latestReads,
+      latestLists,
+      latestGitWatches,
+      latestWorktreesSyncs,
+    ]) {
+      latest.delete(sessionId);
+    }
     nextGeneration(sessionId);
   };
 
@@ -118,8 +131,9 @@ export function createPlanWatch(deps: {
     deps.signal(sessionId, heavySignal({ type: 'planGone' }));
   };
 
-  const logFailure = (entry: Watched) => (error: unknown) => {
-    log(`plan.md not read in ${entry.planDir}: ${errorText(error)}`);
+  // Logs a failed step, `failed` naming it.
+  const logFailure = (entry: Watched, failed: string) => (error: unknown) => {
+    log(`${failed} in ${entry.planDir}: ${errorText(error)}`);
   };
 
   const read = (sessionId: string, entry: Watched) => {
@@ -143,7 +157,7 @@ export function createPlanWatch(deps: {
         signalGone(sessionId, entry);
       }
     };
-    readNewest().catch(logFailure(entry));
+    readNewest().catch(logFailure(entry, 'plan.md not read'));
   };
 
   // The folders that hold the plan's copies: `planDir` while it is a folder,
@@ -165,7 +179,8 @@ export function createPlanWatch(deps: {
     return candidates.filter((_, index) => stats[index]?.isFolder === true);
   };
 
-  // A watch on each folder; when one throws, the ones it opened are disposed.
+  // A watch on each folder that reads on a change and drops itself and lists
+  // again when it fails; when one throws, the ones it opened are disposed.
   const watchCopyFolders = (
     sessionId: string,
     entry: Watched,
@@ -174,12 +189,16 @@ export function createPlanWatch(deps: {
     const opened: FileWatch[] = [];
     try {
       for (const folder of folders) {
-        opened.push(
-          files.watch(folder, () => read(sessionId, entry), {
-            recursive: false,
-            onError: () => read(sessionId, entry),
-          }),
-        );
+        const watch = files.watch(folder, () => read(sessionId, entry), {
+          recursive: false,
+          onError: () => {
+            entry.copyWatches = entry.copyWatches.filter(
+              (copyWatch) => copyWatch !== watch,
+            );
+            listAgain(sessionId, entry);
+          },
+        });
+        opened.push(watch);
       }
     } catch (error) {
       for (const watch of opened) {
@@ -191,8 +210,18 @@ export function createPlanWatch(deps: {
   };
 
   // Lists the copies again and moves the copy watches to them, then reads; a
-  // failure keeps the copy watches it had.
+  // failure keeps the copy watches it had. Reopens the git folder watch when
+  // it has none, else syncs the `worktrees` watch with its folder.
   const listAgain = (sessionId: string, entry: Watched) => {
+    if (entry.gitWatch === null || entry.commonDir === null) {
+      watchGitFolder(sessionId, entry).catch(
+        logFailure(entry, 'git folder not watched'),
+      );
+    } else {
+      syncWorktreesWatch(sessionId, entry, entry.commonDir).catch(
+        logFailure(entry, 'git worktrees folder not watched'),
+      );
+    }
     const isCurrent = startCall(sessionId, latestLists);
     const list = async () => {
       const copies = await planCopies(entry.planDir, copyDeps);
@@ -207,20 +236,21 @@ export function createPlanWatch(deps: {
       entry.copyWatches = opened;
       read(sessionId, entry);
     };
-    list().catch(logFailure(entry));
+    list().catch(logFailure(entry, 'plan copies not listed'));
   };
 
   // Keeps a watch on git's `worktrees` folder while it exists: its entries are
   // the linked worktrees, which a watch of git's folder may not hear change.
+  // A watch that fails drops itself and lists again, which reopens it.
   const syncWorktreesWatch = async (
     sessionId: string,
     entry: Watched,
     commonDir: string,
   ) => {
-    const generation = generationOf(sessionId);
+    const isCurrent = startCall(sessionId, latestWorktreesSyncs);
     const worktrees = paths.join(commonDir, WORKTREES);
     const folder = await files.stat(worktrees);
-    if (generationOf(sessionId) !== generation) {
+    if (!isCurrent()) {
       return;
     }
     if (folder?.isFolder !== true) {
@@ -228,26 +258,27 @@ export function createPlanWatch(deps: {
       entry.worktreesWatch = null;
       return;
     }
-    entry.worktreesWatch ??= files.watch(
-      worktrees,
-      () => listAgain(sessionId, entry),
-      {
-        recursive: false,
-        onError: () => {
+    if (entry.worktreesWatch !== null) {
+      return;
+    }
+    const watch = files.watch(worktrees, () => listAgain(sessionId, entry), {
+      recursive: false,
+      onError: () => {
+        if (entry.worktreesWatch === watch) {
           entry.worktreesWatch = null;
-          listAgain(sessionId, entry);
-        },
+        }
+        listAgain(sessionId, entry);
       },
-    );
+    });
+    entry.worktreesWatch = watch;
   };
 
   // Watches the git folder every checkout of the plan's clone shares, listing
-  // the copies again when its worktree list changes; none outside a clone.
-  const watchGitFolder = async (
-    sessionId: string,
-    entry: Watched,
-    isCurrent: () => boolean,
-  ) => {
+  // the copies again when its worktree list changes, then syncs the
+  // `worktrees` watch; none outside a clone. A watch that fails drops itself
+  // and lists again, which reopens it.
+  const watchGitFolder = async (sessionId: string, entry: Watched) => {
+    const isCurrent = startCall(sessionId, latestGitWatches);
     const top = await repoTop(entry.planDir, copyDeps);
     if (top === null) {
       return;
@@ -257,19 +288,26 @@ export function createPlanWatch(deps: {
     if (!isCurrent() || folder?.isFolder !== true) {
       return;
     }
-    const onWorktreesChange = () => {
-      syncWorktreesWatch(sessionId, entry, commonDir).catch(logFailure(entry));
-      listAgain(sessionId, entry);
-    };
-    entry.gitWatch = files.watch(
+    entry.gitWatch?.dispose();
+    const watch = files.watch(
       commonDir,
       (changed) => {
         if (changed === WORKTREES) {
-          onWorktreesChange();
+          listAgain(sessionId, entry);
         }
       },
-      { recursive: false, onError: () => listAgain(sessionId, entry) },
+      {
+        recursive: false,
+        onError: () => {
+          if (entry.gitWatch === watch) {
+            entry.gitWatch = null;
+          }
+          listAgain(sessionId, entry);
+        },
+      },
     );
+    entry.gitWatch = watch;
+    entry.commonDir = commonDir;
     await syncWorktreesWatch(sessionId, entry, commonDir);
   };
 
@@ -279,6 +317,7 @@ export function createPlanWatch(deps: {
       planDir,
       status: 'opening',
       copyWatches: [],
+      commonDir: null,
       gitWatch: null,
       worktreesWatch: null,
     };
@@ -296,7 +335,7 @@ export function createPlanWatch(deps: {
         return;
       }
       entry.copyWatches = watchCopyFolders(sessionId, entry, folders);
-      await watchGitFolder(sessionId, entry, isCurrent);
+      await watchGitFolder(sessionId, entry);
       if (!isCurrent()) {
         return;
       }
@@ -307,7 +346,7 @@ export function createPlanWatch(deps: {
       if (isCurrent()) {
         close(sessionId);
       }
-      logFailure(entry)(error);
+      logFailure(entry, 'plan watch not opened')(error);
     });
   };
 
