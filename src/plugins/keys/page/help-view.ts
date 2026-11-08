@@ -6,8 +6,10 @@ import type { Drawn, KeysParts } from './layout/keys-parts';
 
 // `setSections` replaces the listed sections, open or closed.
 // `layoutsChanged` draws the body again at once while help shows, and at the
-// next `show` while it is hidden.
+// next `show` while it is hidden. `scroller` is the dialog's panel, the
+// element that scrolls the body.
 export interface HelpView {
+  readonly scroller: HTMLElement;
   show(): void;
   hide(): void;
   setSections(sections: HelpSection[]): void;
@@ -41,6 +43,7 @@ export function mountHelpView(
   draw();
   overlay.contribute(dialog.element);
   return {
+    scroller: dialog.panel,
     show() {
       if (isStale) {
         draw();

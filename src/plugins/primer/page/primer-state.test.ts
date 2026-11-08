@@ -195,7 +195,7 @@ describe('primer state', () => {
   it.each<{
     from: string;
     start: (state: PrimerState) => PrimerState;
-    action: 'nextRow' | 'prevRow';
+    action: 'nextRow' | 'prevRow' | 'firstRow' | 'lastRow';
     expected: { selectedTask: TaskRow; selectedItem: number | null } | 'same';
   }>([
     {
@@ -263,6 +263,48 @@ describe('primer state', () => {
       start: (state) => focus(onItemOf1(state, 1), 'card'),
       action: 'nextRow',
       expected: { selectedTask: TASK_1, selectedItem: 2 },
+    },
+    {
+      from: 'tasks, task 1',
+      start: (state) => onTask(state, 1),
+      action: 'lastRow',
+      expected: {
+        selectedTask: { kind: 'task', entryId: 'extra-1' },
+        selectedItem: 1,
+      },
+    },
+    {
+      from: 'tasks, task s1',
+      start: (state) => onTask(state, 2),
+      action: 'firstRow',
+      expected: { selectedTask: { kind: 'feature' }, selectedItem: null },
+    },
+    {
+      from: 'items, task 1 item 1',
+      start: (state) => onItemOf1(state, 1),
+      action: 'lastRow',
+      expected: { selectedTask: TASK_1, selectedItem: 2 },
+    },
+    {
+      from: 'items, task 1 last item',
+      start: (state) => onItemOf1(state, 2),
+      action: 'firstRow',
+      expected: { selectedTask: TASK_1, selectedItem: 1 },
+    },
+    {
+      from: 'card from tasks, task 1',
+      start: (state) => focus(onTask(state, 1), 'card'),
+      action: 'lastRow',
+      expected: {
+        selectedTask: { kind: 'task', entryId: 'extra-1' },
+        selectedItem: 1,
+      },
+    },
+    {
+      from: 'card from items, task 1 last item',
+      start: (state) => focus(onItemOf1(state, 2), 'card'),
+      action: 'firstRow',
+      expected: { selectedTask: TASK_1, selectedItem: 1 },
     },
   ])(
     "steps the stepped column's rows: $from, $action",
@@ -763,6 +805,87 @@ describe('primer state', () => {
 
     expect(review.view).toBe('review');
     expect(apply(review, { type: 'nextRow' })).toBe(review);
+    expect(apply(review, { type: 'lastRow' })).toBe(review);
+  });
+
+  // Review rows: `1` (0), `s1` (1), `extra-1` (2).
+  it.each<{
+    name: string;
+    actions: PrimerAction[];
+    expected: Partial<{
+      view: PrimerState['view'];
+      reviewRow: number;
+      pane: PrimerPane;
+      cardColumn: PrimerColumn;
+      selectedTask: TaskRow;
+    }>;
+  }>([
+    {
+      name: 'reviewNext from 0',
+      actions: [{ type: 'reviewNext' }],
+      expected: { view: 'review', reviewRow: 1 },
+    },
+    {
+      name: 'reviewPrev at 0',
+      actions: [{ type: 'reviewPrev' }],
+      expected: { view: 'review', reviewRow: 0 },
+    },
+    {
+      name: 'reviewBottom, then reviewNext',
+      actions: [{ type: 'reviewBottom' }, { type: 'reviewNext' }],
+      expected: { view: 'review', reviewRow: 2 },
+    },
+    {
+      name: 'reviewBottom, then reviewTop',
+      actions: [{ type: 'reviewBottom' }, { type: 'reviewTop' }],
+      expected: { view: 'review', reviewRow: 0 },
+    },
+    {
+      name: 'reviewJump on row 1',
+      actions: [{ type: 'reviewNext' }, { type: 'reviewJump' }],
+      expected: {
+        view: 'primer',
+        pane: 'tasks',
+        cardColumn: 'tasks',
+        selectedTask: { kind: 'task', entryId: 's1' },
+      },
+    },
+    {
+      name: 'openReview again after a move',
+      actions: [
+        { type: 'reviewBottom' },
+        { type: 'closeReview' },
+        { type: 'openReview' },
+      ],
+      expected: { view: 'review', reviewRow: 0 },
+    },
+  ])('reviewRows_MoveAndJump: $name', ({ actions, expected }) => {
+    const opened = apply(focus(onTask(stateWith(), 1), 'items'), {
+      type: 'openReview',
+    });
+
+    const state = applyAll(opened, actions);
+
+    const { reviewRow, pane, cardColumn, selectedTask } = primerOf(state);
+    expect({
+      view: state.view,
+      reviewRow,
+      pane,
+      cardColumn,
+      selectedTask,
+    }).toMatchObject(expected);
+  });
+
+  it.each<PrimerAction['type']>([
+    'reviewNext',
+    'reviewPrev',
+    'reviewTop',
+    'reviewBottom',
+    'reviewJump',
+  ])('reviewRows_%s_ChangesNothingOutsideTheReview', (type) => {
+    const state = onTask(stateWith(), 1);
+
+    expect(apply(state, { type } as PrimerAction)).toBe(state);
   });
 
   it('lists the slug problem, then each unnamed extra task', () => {

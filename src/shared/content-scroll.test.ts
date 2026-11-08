@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  edgeText,
   isScrolledToEnd,
   scrollContent,
   scrollStepPx,
   scrollText,
+  scrollToEdge,
 } from './content-scroll';
 
 // One line of 14px prose at 1.55 leading.
@@ -125,5 +127,27 @@ describe('scrollText', () => {
     expect(
       scrollText('the form', 'line', 1, { moved: false, atEnd: true }),
     ).toContain('the form');
+  });
+});
+
+describe('scrollToEdge', () => {
+  it.each([
+    { edge: 'top' as const, from: 300, top: 0 },
+    { edge: 'end' as const, from: 300, top: 600 },
+  ])('scrollToEdge_$edge_LandsAtThatEdge', ({ edge, from, top }) => {
+    const box = scroller(from);
+
+    scrollToEdge(box, edge);
+
+    expect(box.scrollTop).toBe(top);
+  });
+});
+
+describe('edgeText', () => {
+  it.each([
+    { edge: 'top' as const, text: 'scrolled the detail to the top' },
+    { edge: 'end' as const, text: 'scrolled the detail to the end' },
+  ])('edgeText_$edge_NamesTheEdge', ({ edge, text }) => {
+    expect(edgeText('the detail', edge)).toBe(text);
   });
 });

@@ -15,6 +15,8 @@ export const formsManifest = definePlugin({
   commands: {
     nextItem: { label: 'next item', group: 'items', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },
+    firstItem: { label: 'first item', group: 'items', runsIn: 'page' },
+    lastItem: { label: 'last item', group: 'items', runsIn: 'page' },
     nextUnanswered: {
       label: 'next unanswered item',
       group: 'items',
@@ -76,6 +78,8 @@ export const formsManifest = definePlugin({
     },
     reviewNext: { label: 'next row', group: 'review', runsIn: 'page' },
     reviewPrev: { label: 'previous row', group: 'review', runsIn: 'page' },
+    reviewTop: { label: 'first row', group: 'review', runsIn: 'page' },
+    reviewBottom: { label: 'last row', group: 'review', runsIn: 'page' },
     reviewJump: {
       label: 'go to the item',
       group: 'review',

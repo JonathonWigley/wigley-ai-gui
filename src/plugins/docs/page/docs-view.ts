@@ -116,6 +116,8 @@ export interface DocsViewCommands {
   lineUp(): void;
   halfPageDown(): void;
   halfPageUp(): void;
+  scrollTop(): void;
+  scrollEnd(): void;
   edit(): void;
   editSection(): void;
   prevSection(): void;
@@ -1441,6 +1443,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     lineUp: () => doc.scrollBy('line', -1),
     halfPageDown: () => doc.scrollBy('halfPage', 1),
     halfPageUp: () => doc.scrollBy('halfPage', -1),
+    scrollTop: () => doc.scrollToEdge('top'),
+    scrollEnd: () => doc.scrollToEdge('end'),
     edit: () => doc.edit(),
     editSection: () => doc.editSection(),
     prevSection: () => doc.moveSection(-1),

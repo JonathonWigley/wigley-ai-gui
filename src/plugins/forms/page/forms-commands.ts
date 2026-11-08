@@ -109,6 +109,8 @@ export function formsCommandHandlers(
     closeReview: plain({ type: 'closeReview' }),
     reviewNext: plain({ type: 'reviewNext' }),
     reviewPrev: plain({ type: 'reviewPrev' }),
+    reviewTop: plain({ type: 'reviewTop' }),
+    reviewBottom: plain({ type: 'reviewBottom' }),
     reviewJump: plain({ type: 'reviewJump' }),
     askCancel: plain({ type: 'askCancel' }),
     dismissConfirm: plain({ type: 'dismissConfirm' }),
@@ -180,6 +182,8 @@ export function formsCommandHandlers(
     halfPageUp: () => scrollForm(deps, 'halfPage', -1),
     nextItem: (context) => moveItem(deps, context, { type: 'nextItem' }),
     prevItem: (context) => moveItem(deps, context, { type: 'prevItem' }),
+    firstItem: (context) => moveItem(deps, context, { type: 'firstItem' }),
+    lastItem: (context) => moveItem(deps, context, { type: 'lastItem' }),
     nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
     prevUnanswered: (context) => jumpToUnanswered(deps, context, -1),
     openReview: (context) => {

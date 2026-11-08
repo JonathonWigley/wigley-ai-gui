@@ -28,7 +28,13 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
-import { scrollContent, scrollText } from '../../../shared/content-scroll';
+import {
+  edgeText,
+  type ScrollEdge,
+  scrollContent,
+  scrollText,
+  scrollToEdge,
+} from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import {
   type ConfirmBodyParts,
@@ -1221,6 +1227,10 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     );
     deps.log(scrollText('the detail', step, direction, scroll));
   };
+  const scrollDetailTo = (edge: ScrollEdge) => {
+    scrollToEdge(detailPane, edge);
+    deps.log(edgeText('the detail', edge));
+  };
 
   const openInDocs = () => {
     const shown = actedRow(store.get(), matcher);
@@ -1289,6 +1299,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     lineUp: () => scrollDetail('line', -1),
     halfPageDown: () => scrollDetail('halfPage', 1),
     halfPageUp: () => scrollDetail('halfPage', -1),
+    scrollTop: () => scrollDetailTo('top'),
+    scrollEnd: () => scrollDetailTo('end'),
     save() {
       save().catch((error) => {
         deps.log(`write failed: ${errorText(error)}`);

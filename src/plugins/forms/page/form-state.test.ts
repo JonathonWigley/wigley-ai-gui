@@ -771,6 +771,24 @@ describe('item navigation', () => {
     expect(focusedItem(active(back))).toEqual({ kind: 'question', index: 1 });
   });
 
+  it('firstItem and lastItem focus the rail ends', () => {
+    const start = onNotice(mixedRound());
+    const middle = apply(start, { type: 'nextItem' });
+
+    const last = apply(middle, { type: 'lastItem' });
+    const first = apply(last, { type: 'firstItem' });
+
+    expect({
+      last: focusedItem(active(last)),
+      first: focusedItem(active(first)),
+      firstAgain: apply(first, { type: 'firstItem' }) === first,
+    }).toEqual({
+      last: { kind: 'question', index: 2 },
+      first: focusedItem(active(start)),
+      firstAgain: true,
+    });
+  });
+
   it('focusItem ignores a position outside the rail', () => {
     const state = mixedRound();
     expect(apply(state, { type: 'focusItem', item: 3 })).toBe(state);
@@ -881,6 +899,22 @@ describe('review', () => {
       { type: 'reviewNext' },
     );
     expect(active(last).reviewRow).toBe(2);
+  });
+
+  it('reviewBottom and reviewTop put the cursor on the last and first rows', () => {
+    const opened = apply(findingRound(), { type: 'openReview' });
+
+    const bottom = apply(opened, { type: 'reviewBottom' });
+    const top = apply(bottom, { type: 'reviewTop' });
+
+    expect([active(bottom).reviewRow, active(top).reviewRow]).toEqual([2, 0]);
+  });
+
+  it('reviewTop and reviewBottom change nothing outside the review', () => {
+    const forms = apply(findingRound(), { type: 'nextItem' });
+
+    expect(apply(forms, { type: 'reviewBottom' })).toBe(forms);
+    expect(apply(forms, { type: 'reviewTop' })).toBe(forms);
   });
 
   // Rail positions: 0 notice N1, 1 finding F1, 2 question Q1.
@@ -1345,6 +1379,7 @@ describe('item actions outside the forms view', () => {
     expect(apply(inReview, { type: 'choose', number: 1 })).toBe(inReview);
     expect(apply(inReview, { type: 'toggleNotApplicable' })).toBe(inReview);
     expect(apply(inReview, { type: 'nextItem' })).toBe(inReview);
+    expect(apply(inReview, { type: 'lastItem' })).toBe(inReview);
   });
 
   it('still update the round note text in the review', () => {

@@ -414,6 +414,28 @@ describe('primer tab under the cancel prompt', () => {
   });
 });
 
+describe('primer review cursor', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('review_CursorRow_DrawsIsCursorOnItsBlock', () => {
+    const { store, tab } = primerTabSetup();
+    store.dispatch({ type: 'openReview' });
+
+    store.dispatch({ type: 'reviewNext' });
+
+    const taskBlocks = findAll(
+      pane(tab, 'primer-review-body'),
+      'primer-review-block',
+    ).slice(1);
+    expect(
+      taskBlocks.map((block) => block.classList.contains('is-cursor')),
+    ).toEqual([false, true, false]);
+  });
+});
+
 describe('primer tabs of several sessions', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {

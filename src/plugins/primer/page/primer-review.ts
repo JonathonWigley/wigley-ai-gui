@@ -9,8 +9,8 @@ import type { ReviewInput, ReviewTaskInput } from '../layouts/layout';
 import {
   FEATURE_FIELDS,
   type OpenPrimer,
+  reviewEntries,
   submitProblems,
-  taskRows,
 } from './primer-state';
 
 export interface ReviewTallies {
@@ -71,13 +71,11 @@ export function reviewTallies(primer: OpenPrimer): ReviewTallies {
 }
 
 // The review body's input: the tallies, what blocks a send, the feature's
-// fields and the tasks in tasks column order.
+// fields and the tasks in tasks column order, the review cursor's marked.
 export function reviewInput(primer: OpenPrimer): ReviewInput {
-  const entries = new Map(primer.entries.map((entry) => [entry.id, entry]));
-  const tasks = taskRows(primer).flatMap((row) => {
-    const entry = row.kind === 'task' ? entries.get(row.entryId) : undefined;
-    return entry === undefined ? [] : [reviewTask(entry)];
-  });
+  const tasks = reviewEntries(primer).map((entry, row) =>
+    reviewTask(entry, row === primer.reviewRow),
+  );
   return {
     tallies: reviewTallies(primer),
     problems: submitProblems(primer),
@@ -89,9 +87,10 @@ export function reviewInput(primer: OpenPrimer): ReviewInput {
   };
 }
 
-function reviewTask(entry: PrimerEntry): ReviewTaskInput {
+function reviewTask(entry: PrimerEntry, isCursor: boolean): ReviewTaskInput {
   return {
     id: entry.id,
+    isCursor,
     name: taskName(entry),
     need: entry.need,
     comment: entry.comment,

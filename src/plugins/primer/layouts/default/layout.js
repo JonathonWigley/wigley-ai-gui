@@ -53,6 +53,7 @@ function talliesText(tallies) {
  */
 function reviewTask(parent, task, kit) {
   const block = kit.el(parent, 'section', 'primer-review-block');
+  block.classList.toggle('is-cursor', task.isCursor);
   const head = kit.el(block, 'div', 'primer-review-task-head');
   kit.el(head, 'span', 'primer-review-task-name', task.name);
   kit.needTag(head, task.need);

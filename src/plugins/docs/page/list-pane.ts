@@ -1,4 +1,5 @@
 import { callEach } from '../../../shared/call-each';
+import type { ScrollEdge } from '../../../shared/content-scroll';
 import { element } from '../../../shared/page/dom';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import { rowAction } from '../../../shared/page/ui/row';
@@ -24,6 +25,8 @@ export interface ListPane {
   isShown(): boolean;
   // Steps the cursor through every row in group order, stopping at both ends.
   move(by: 1 | -1): void;
+  // Puts the cursor on the first row for `top`, the last for `end`.
+  moveToEdge(edge: ScrollEdge): void;
   openCursor(): void;
   // Whether the page holds focus: the cursor's row shows `is-cursor` while so.
   setFocused(isFocused: boolean): void;
@@ -98,6 +101,15 @@ export function createListPane(deps: ListPaneDeps): ListPane {
     });
   };
 
+  const moveCursorTo = (row: DrawnRow | undefined) => {
+    if (shown === null || row === undefined) {
+      return;
+    }
+    setCursor(shown, row.entryId);
+    markCursor();
+    scrollToCursor();
+  };
+
   return {
     show(content) {
       disposeDrawn();
@@ -139,12 +151,10 @@ export function createListPane(deps: ListPaneDeps): ListPane {
       }
       const cursor = cursorOf(shown);
       const index = rows.findIndex((row) => row.entryId === cursor);
-      const next = rows.at(Math.max(0, Math.min(rows.length - 1, index + by)));
-      if (next !== undefined) {
-        setCursor(shown, next.entryId);
-        markCursor();
-        scrollToCursor();
-      }
+      moveCursorTo(rows.at(Math.max(0, Math.min(rows.length - 1, index + by))));
+    },
+    moveToEdge(edge) {
+      moveCursorTo(edge === 'top' ? rows.at(0) : rows.at(-1));
     },
     openCursor() {
       const cursor = cursorOf(shown);

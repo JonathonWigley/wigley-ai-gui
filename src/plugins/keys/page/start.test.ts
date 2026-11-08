@@ -11,6 +11,36 @@ import {
 import { keysManifest } from '../manifest';
 import { keysPagePart } from './start';
 
+// Help's panel as a scroller that clamps `scrollTop` as an element does, set
+// back to 100 of 1000 before each case.
+const helpScroller = vi.hoisted(() => {
+  let top = 100;
+  return {
+    scrollHeight: 1000,
+    clientHeight: 400,
+    get scrollTop() {
+      return top;
+    },
+    set scrollTop(value: number) {
+      top = Math.min(Math.max(value, 0), 600);
+    },
+  };
+});
+
+vi.mock('./help-view', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./help-view')>();
+  return {
+    mountHelpView: (...args: Parameters<typeof actual.mountHelpView>) => ({
+      ...actual.mountHelpView(...args),
+      scroller: helpScroller,
+    }),
+  };
+});
+
+vi.mock('../../../shared/page/text-line', () => ({
+  textLineHeightPx: () => 20,
+}));
+
 const KEYMAP: Keymap = {
   editor: { leader: ' ', remaps: [], binds: [] },
   page: [],
@@ -113,4 +143,27 @@ describe('keys page part', () => {
       expect(harness.hintsShown()).toBe(true);
     },
   );
+
+  it.each([
+    { command: 'lineDown', line: 'scrolled the key help down a line' },
+    { command: 'lineUp', line: 'scrolled the key help up a line' },
+    {
+      command: 'halfPageDown',
+      line: 'scrolled the key help down half a page',
+    },
+    {
+      command: 'halfPageUp',
+      line: 'scrolled the key help up half a page to the top',
+    },
+    { command: 'scrollTop', line: 'scrolled the key help to the top' },
+    { command: 'scrollEnd', line: 'scrolled the key help to the end' },
+  ] as const)('helpScroll_$command_LogsItsLine', async ({ command, line }) => {
+    helpScroller.scrollTop = 100;
+    const harness = startPagePart(keysPagePart);
+
+    harness.started().commands[command]({ arg: undefined });
+
+    expect(harness.logs.map(({ message }) => message)).toContain(line);
+    await harness.stop();
+  });
 });

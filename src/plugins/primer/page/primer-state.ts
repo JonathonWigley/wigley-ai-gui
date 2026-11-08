@@ -63,6 +63,9 @@ export interface OpenPrimer extends SessionForm {
   // The column whose selection the card shows; equals `pane` while a column
   // has focus.
   cardColumn: PrimerColumn;
+  // The review's cursor, 0-based in reviewEntries(primer); 0 as the review
+  // opens.
+  reviewRow: number;
   // Each add-item box's text, by entry id; not part of the body until the
   // box commits it as an item.
   newItemTexts: Readonly<Record<string, string>>;
@@ -76,6 +79,8 @@ export type PrimerState = SessionFormsState<OpenPrimer, 'primer'>;
 type PrimerOwnAction =
   | { type: 'nextRow' }
   | { type: 'prevRow' }
+  | { type: 'firstRow' }
+  | { type: 'lastRow' }
   // `row` is a position in taskRows(primer).
   | { type: 'selectTask'; row: number }
   // `item` is 1-based in the selected task's items.
@@ -91,7 +96,14 @@ type PrimerOwnAction =
   | { type: 'showTarget'; formId: string; target: TextTarget }
   | { type: 'setText'; formId: string; target: TextTarget; value: string }
   // Commits each task's add-item text as an item, then opens the review.
-  | { type: 'openReview' };
+  | { type: 'openReview' }
+  | { type: 'reviewNext' }
+  | { type: 'reviewPrev' }
+  | { type: 'reviewTop' }
+  | { type: 'reviewBottom' }
+  // Closes the review on the cursor's task, selected in the focused tasks
+  // column.
+  | { type: 'reviewJump' };
 
 export type PrimerAction =
   | SessionFormsAction<PresentedPrimer>
@@ -120,6 +132,8 @@ export const TASK_GROUPS: [PrimerGroup, string][] = [
 const PRIMER_VIEW_ACTIONS: ReadonlySet<PrimerOwnAction['type']> = new Set([
   'nextRow',
   'prevRow',
+  'firstRow',
+  'lastRow',
   'selectTask',
   'selectItem',
   'setNeed',
@@ -129,6 +143,15 @@ const PRIMER_VIEW_ACTIONS: ReadonlySet<PrimerOwnAction['type']> = new Set([
   'toggleInclude',
   'showTarget',
   'openReview',
+]);
+
+// The actions that apply only in view 'review'.
+const REVIEW_VIEW_ACTIONS: ReadonlySet<PrimerOwnAction['type']> = new Set([
+  'reviewNext',
+  'reviewPrev',
+  'reviewTop',
+  'reviewBottom',
+  'reviewJump',
 ]);
 
 export function initialState(
@@ -142,7 +165,8 @@ export function initialState(
 }
 
 // Returns `state` itself when the action changes nothing. Row, pane, include
-// and target actions and `openReview` apply only in view 'primer'. While the
+// and target actions and `openReview` apply only in view 'primer', the review
+// cursor's actions only in view 'review'. While the
 // active primer is sending, only the lifecycle's sending actions and the
 // boxes' text apply.
 export const apply = createSessionFormsReducer<
@@ -158,7 +182,10 @@ export const apply = createSessionFormsReducer<
 });
 
 function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
-  if (PRIMER_VIEW_ACTIONS.has(action.type) && state.view !== 'primer') {
+  const isOutOfView =
+    (PRIMER_VIEW_ACTIONS.has(action.type) && state.view !== 'primer') ||
+    (REVIEW_VIEW_ACTIONS.has(action.type) && state.view !== 'review');
+  if (isOutOfView) {
     return state;
   }
   const active = state.activeFormId;
@@ -167,6 +194,14 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
       return updateForm(state, active, (primer) => moveRow(primer, 1));
     case 'prevRow':
       return updateForm(state, active, (primer) => moveRow(primer, -1));
+    case 'firstRow':
+      return updateForm(state, active, (primer) =>
+        placeRow(primer, (_row, first) => first),
+      );
+    case 'lastRow':
+      return updateForm(state, active, (primer) =>
+        placeRow(primer, (_row, _first, last) => last),
+      );
     case 'selectTask':
       return updateForm(state, active, (primer) =>
         selectTaskAt(primer, action.row),
@@ -206,8 +241,36 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
     case 'openReview':
       return active === null
         ? state
-        : updateForm({ ...state, view: 'review' }, active, addNewItems);
+        : updateForm({ ...state, view: 'review' }, active, (primer) =>
+            withReviewRow(addNewItems(primer), 0),
+          );
+    case 'reviewNext':
+      return updateForm(state, active, (primer) =>
+        moveReviewRow(primer, (row) => row + 1),
+      );
+    case 'reviewPrev':
+      return updateForm(state, active, (primer) =>
+        moveReviewRow(primer, (row) => row - 1),
+      );
+    case 'reviewTop':
+      return updateForm(state, active, (primer) =>
+        moveReviewRow(primer, () => 0),
+      );
+    case 'reviewBottom':
+      return updateForm(state, active, (primer) =>
+        moveReviewRow(primer, (_row, last) => last),
+      );
+    case 'reviewJump':
+      return reviewJump(state);
   }
+}
+
+// The review's task rows, in tasks column order.
+export function reviewEntries(primer: OpenPrimer): PrimerEntry[] {
+  return taskRows(primer).flatMap((row) => {
+    const entry = row.kind === 'task' ? entryOf(primer, row.entryId) : null;
+    return entry === null ? [] : [entry];
+  });
 }
 
 // The Feature row, then the tasks of each group in TASK_GROUPS order, each
@@ -370,6 +433,7 @@ function restorePrimer(presented: PresentedPrimer): OpenPrimer {
     selectedItem: null,
     pane: 'tasks',
     cardColumn: 'tasks',
+    reviewRow: 0,
     newItemTexts: {},
     revision: 0,
     savingRevision: null,
@@ -387,18 +451,59 @@ function edited(primer: OpenPrimer, change: Partial<OpenPrimer>): OpenPrimer {
 // Steps the stepped column's selection `step` rows, clamped at both ends:
 // a task row of the tasks column, or an item of the selected task.
 function moveRow(primer: OpenPrimer, step: number): OpenPrimer {
+  return placeRow(primer, (row, first, last) =>
+    Math.min(Math.max(row + step, first), last),
+  );
+}
+
+// Selects the stepped column's row `pick` returns from the selected row and
+// the column's first and last: a position in taskRows(primer), or a 1-based
+// item of the selected task; nothing on a task with no item selected.
+function placeRow(
+  primer: OpenPrimer,
+  pick: (row: number, first: number, last: number) => number,
+): OpenPrimer {
   if (steppedColumn(primer) === 'tasks') {
-    const lastRow = taskRows(primer).length - 1;
-    const row = Math.min(Math.max(taskPosition(primer) + step, 0), lastRow);
-    return withTask(primer, taskRows(primer)[row]);
+    const rows = taskRows(primer);
+    return withTask(
+      primer,
+      rows[pick(taskPosition(primer), 0, rows.length - 1)],
+    );
   }
   const item = primer.selectedItem;
   const count = selectedEntry(primer)?.items.length ?? 0;
   if (item === null) {
     return primer;
   }
-  const next = Math.min(Math.max(item + step, 1), count);
+  const next = pick(item, 1, count);
   return next === item ? primer : { ...primer, selectedItem: next };
+}
+
+function withReviewRow(primer: OpenPrimer, row: number): OpenPrimer {
+  return row === primer.reviewRow ? primer : { ...primer, reviewRow: row };
+}
+
+// Sets the review cursor to the row `pick` returns from the cursor's row and
+// the last row, clamped to the review's rows.
+function moveReviewRow(
+  primer: OpenPrimer,
+  pick: (row: number, last: number) => number,
+): OpenPrimer {
+  const last = Math.max(reviewEntries(primer).length - 1, 0);
+  const row = Math.min(Math.max(pick(primer.reviewRow, last), 0), last);
+  return withReviewRow(primer, row);
+}
+
+function reviewJump(state: PrimerState): PrimerState {
+  const primer = activeForm(state);
+  const entryId =
+    primer === null ? undefined : reviewEntries(primer)[primer.reviewRow]?.id;
+  if (entryId === undefined) {
+    return state;
+  }
+  return updateForm({ ...state, view: 'primer' }, state.activeFormId, (open) =>
+    withFocus(withTask(open, { kind: 'task', entryId }), 'tasks'),
+  );
 }
 
 // Selects `row` and, when the task changes, its first item, or none when it

@@ -1,7 +1,7 @@
 import type { ContentScroll, ScrollStep } from '../contracts/editor';
 
 // The part of an element a vertical scroll reads and sets.
-interface Scroller {
+export interface Scroller {
   scrollTop: number;
   readonly scrollHeight: number;
   readonly clientHeight: number;
@@ -33,6 +33,20 @@ export function scrollContent(
     moved: scroller.scrollTop !== before,
     atEnd: isScrolledToEnd(scroller, direction),
   };
+}
+
+// The two ends `gg` and `G` scroll a pane to.
+export type ScrollEdge = 'top' | 'end';
+
+// Scrolls `scroller` to `edge` at once.
+export function scrollToEdge(scroller: Scroller, edge: ScrollEdge): void {
+  scroller.scrollTop = edge === 'top' ? 0 : scroller.scrollHeight;
+}
+
+// The log text for a scroll of `what` to `edge`, e.g. `scrolled the detail to
+// the end`, logged whether or not the pane moved.
+export function edgeText(what: string, edge: ScrollEdge): string {
+  return `scrolled ${what} to the ${edge}`;
 }
 
 // At the bottom for 1 and the top for -1, within 1px, since `scrollTop` can

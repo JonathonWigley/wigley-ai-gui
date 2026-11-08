@@ -2551,6 +2551,65 @@ describe('createDocView', () => {
       expect(followPlace.mock.calls).toEqual([[DOC, null]]);
     });
 
+    it.each([
+      {
+        state: 'doc at the top',
+        edge: 'end' as const,
+        setUp: async (view: DocView) => view.open(target(null)),
+        expected: {
+          scrollTop: 900,
+          cursor: [],
+          logs: ['scrolled notes.md to the end'],
+        },
+      },
+      {
+        state: 'doc partway down',
+        edge: 'top' as const,
+        setUp: async (view: DocView) => view.open(target(null)),
+        expected: {
+          scrollTop: 0,
+          cursor: [],
+          logs: ['scrolled notes.md to the top'],
+        },
+      },
+      {
+        state: 'list page',
+        edge: 'end' as const,
+        setUp: async (view: DocView) => view.showPage(list(['a', 'b', 'c'])),
+        expected: { scrollTop: 40, cursor: ['c'], logs: [] },
+      },
+      {
+        state: 'editor open',
+        edge: 'end' as const,
+        setUp: async (view: DocView) => {
+          await view.open(target(null));
+          view.edit(1);
+        },
+        expected: {
+          scrollTop: 40,
+          cursor: [],
+          logs: ['notes.md did not scroll: the editor is open'],
+        },
+      },
+    ])('scrollToEdge_$state', async ({ edge, setUp, expected }) => {
+      const { view, deps } = pageView();
+      const logs: string[] = [];
+      deps.log = (line) => logs.push(line);
+      await setUp(view);
+      const pane = scroller(view.element);
+      Object.assign(pane, { scrollHeight: 900 });
+      pane.scrollTop = 40;
+      logs.length = 0;
+
+      view.scrollToEdge(edge);
+
+      expect({
+        scrollTop: pane.scrollTop,
+        cursor: selectedRows(view),
+        logs,
+      }).toEqual(expected);
+    });
+
     it('scroll_ListShown_MovesTheCursorAndNotThePane', () => {
       const { view } = pageView();
       view.showPage(list(['a', 'b']));

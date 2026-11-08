@@ -613,6 +613,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         lineUp: onActiveView('lineUp'),
         halfPageDown: onActiveView('halfPageDown'),
         halfPageUp: onActiveView('halfPageUp'),
+        scrollTop: onActiveView('scrollTop'),
+        scrollEnd: onActiveView('scrollEnd'),
         edit: onActiveView('edit'),
         editSection: onActiveView('editSection'),
         prevSection: onActiveView('prevSection'),

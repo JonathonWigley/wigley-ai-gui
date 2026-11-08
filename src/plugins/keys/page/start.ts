@@ -1,8 +1,17 @@
 import './keys.css';
 import { coreScopeSlot } from '../../../contracts/core-state';
+import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
+import {
+  edgeText,
+  type ScrollEdge,
+  scrollContent,
+  scrollText,
+  scrollToEdge,
+} from '../../../shared/content-scroll';
 import { element } from '../../../shared/page/dom';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageEvents } from '../contract';
@@ -33,7 +42,8 @@ type KeysApi = PageApi<
 // prompt inside it, which opens help. Each draws through the `keys.layout`
 // layout: help and the Keys button draw again on a new set, which-key at its
 // next show. Each reads the keymap and settings as they are now, and help
-// redraws when the keymap changes. The core holds the anchors: this part tells
+// redraws when the keymap changes; help's line, half-page and edge scrolls
+// step its panel, logging how far it went. The core holds the anchors: this part tells
 // it the `showHints` setting. Records each scope in force and checks it against
 // the core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
 // `document` listener `dispose` removes.
@@ -109,6 +119,20 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       }
     };
 
+    const scrollHelp = (step: ScrollStep, direction: 1 | -1) => {
+      const scroll = scrollContent(
+        help.scroller,
+        step,
+        direction,
+        textLineHeightPx(help.scroller),
+      );
+      services.log(scrollText('the key help', step, direction, scroll));
+    };
+    const scrollHelpTo = (edge: ScrollEdge) => {
+      scrollToEdge(help.scroller, edge);
+      services.log(edgeText('the key help', edge));
+    };
+
     const keysButtonSlot = element('span', 'keys-title-bar-slot');
     api.areas.titleBar.contribute(keysButtonSlot, { align: 'end' });
     let keysButton: Drawn = parts.titleBarButton(keysButtonSlot);
@@ -180,6 +204,12 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           api.events.emit('helpOpened', null);
         },
         closeHelp,
+        lineDown: () => scrollHelp('line', 1),
+        lineUp: () => scrollHelp('line', -1),
+        halfPageDown: () => scrollHelp('halfPage', 1),
+        halfPageUp: () => scrollHelp('halfPage', -1),
+        scrollTop: () => scrollHelpTo('top'),
+        scrollEnd: () => scrollHelpTo('end'),
       },
     };
   },

@@ -358,6 +358,21 @@ describe('backlog view layouts', () => {
     },
   );
 
+  it('scrollEnd_DetailShown_ScrollsItToTheEndAndLogs', async () => {
+    const { view, sheet, logged } = await backlogSetup();
+    const [detail] = findAll(sheet, 'backlog-detail');
+    Object.assign(detail, { scrollHeight: 900 });
+    detail.scrollTop = 40;
+    logged.length = 0;
+
+    view.commands.scrollEnd();
+
+    expect({ scrollTop: detail.scrollTop, logged }).toEqual({
+      scrollTop: 900,
+      logged: ['scrolled the detail to the end'],
+    });
+  });
+
   it('a reload keeps the open filter text and focus', async () => {
     const { view, sheet } = await backlogSetup();
     view.commands.filter();

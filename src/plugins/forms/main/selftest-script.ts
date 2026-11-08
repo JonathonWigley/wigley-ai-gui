@@ -251,14 +251,14 @@ const GALLERY_STEPS: SelfTestStep[] = [
     },
     screenshot: 'gallery-full',
   },
-  { keys: ['G'], expect: '[gallery] scrolled to the end' },
+  { keys: ['G'], expect: '[gallery] scrolled the gallery to the end' },
   {
     keys: ['t'],
     expect: '[gallery] transparency reduced',
   },
   {
     keys: ['g', 'g'],
-    expect: '[gallery] scrolled to the top',
+    expect: '[gallery] scrolled the gallery to the top',
     screenshot: 'gallery-reduced-0',
   },
   {
@@ -274,9 +274,11 @@ const GALLERY_STEPS: SelfTestStep[] = [
     keys: ['<C-S-k>'],
     expect: '[gallery] scrolled the gallery up half a page',
   },
-  { keys: ['g', 'g'], expect: '[gallery] scrolled to the top' },
+  { keys: ['g', 'g'], expect: '[gallery] scrolled the gallery to the top' },
   { keys: ['<C-S-k>'], expect: '[gallery] the gallery did not scroll up' },
   { keys: ['<C-j>'], expect: '[gallery] scrolled the gallery down a line' },
+  { keys: ['j'], expect: '[gallery] scrolled the gallery down a line' },
+  { keys: ['k'], expect: '[gallery] scrolled the gallery up a line' },
   {
     keys: ['<C-k>'],
     expect: '[gallery] scrolled the gallery up a line to the top',
@@ -818,6 +820,23 @@ const REVIEW_STEPS: SelfTestStep[] = [
     expect: '[page]  ? ran keys.toggleHelp',
     checksFit: true,
   },
+  { keys: ['j'], expect: '[keys] scrolled the key help down a line' },
+  { keys: ['k'], expect: '[keys] scrolled the key help up a line to the top' },
+  { keys: ['G'], expect: '[keys] scrolled the key help to the end' },
+  { keys: ['g', 'g'], expect: '[keys] scrolled the key help to the top' },
+  {
+    keys: ['<C-S-j>'],
+    expect: '[keys] scrolled the key help down half a page',
+  },
+  {
+    keys: ['<C-S-k>'],
+    expect: '[keys] scrolled the key help up half a page to the top',
+  },
+  { keys: ['<C-j>'], expect: '[keys] scrolled the key help down a line' },
+  {
+    keys: ['<C-k>'],
+    expect: '[keys] scrolled the key help up a line to the top',
+  },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
@@ -845,11 +864,15 @@ const REVIEW_STEPS: SelfTestStep[] = [
   },
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
+  { keys: ['G'], expect: '[page] G ran forms.reviewBottom' },
+  { keys: ['g', 'g'], expect: '[page] gg ran forms.reviewTop' },
   { keys: ['o', '<D-Enter>'], expect: '[forms] submitted' },
 ];
 
 const SAMPLE_ROUND_AGAIN_STEPS: SelfTestStep[] = [
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
+  { keys: ['G'], expect: '[page] G ran forms.lastItem' },
+  { keys: ['g', 'g'], expect: '[page] gg ran forms.firstItem' },
   {
     keys: ['<D-w>'],
     expect:
@@ -1279,7 +1302,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'gallery',
-        why: "Gallery mode pages to the end and back under full and reduced transparency, Sessions mode shows under both, and the shell swaps to the gallery's test layout and back.",
+        why: "Gallery mode pages to the end and back under full and reduced transparency, j and k step it a line, Sessions mode shows under both, and the shell swaps to the gallery's test layout and back.",
         steps: GALLERY_STEPS,
       },
       {
@@ -1339,12 +1362,12 @@ export function formsSelfTestScript(
       },
       {
         name: 'review',
-        why: "The review opens in forms' scope, where help and the cancel prompt open and close without leaving it, the Round note takes text, Enter jumps back to an item, and Cmd+Enter sends the round.",
+        why: "The review opens in forms' scope, where help scrolls on its j, k, gg, G and Ctrl keys, help and the cancel prompt open and close without leaving it, the Round note takes text, Enter jumps back to an item, and Cmd+Enter sends the round.",
         steps: REVIEW_STEPS,
       },
       {
         name: 'sample round again',
-        why: 'Reopening the sample round selects its new preview session, which then shows the cancel prompt that n dismisses.',
+        why: 'Reopening the sample round selects its new preview session, where G and gg focus its last and first items, and which then shows the cancel prompt that n dismisses.',
         steps: SAMPLE_ROUND_AGAIN_STEPS,
       },
     ],

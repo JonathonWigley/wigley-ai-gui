@@ -1,7 +1,13 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
-import { scrollContent, scrollText } from '../../../shared/content-scroll';
+import {
+  edgeText,
+  type ScrollEdge,
+  scrollContent,
+  scrollText,
+  scrollToEdge,
+} from '../../../shared/content-scroll';
 import { blurFocusedElement } from '../../../shared/page/dom';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import defaultLayout from '../layouts/default/layout.js';
@@ -25,7 +31,7 @@ type GalleryApi = PageApi<
 // target; each new layout set redraws it. `t` there switches the page's
 // transparency override between reduced and full, which lasts until the page
 // loads again and writes no settings; `g g` and `G` scroll the gallery's sheet
-// to its top and end, and the line and half-page scrolls step it, logging
+// to its top and end, and `j`/`k` and the line and half-page scrolls step it, logging
 // whether they reached the end or the top. `Space z s` swaps the whole shell to
 // the test layout and, pressed again, back; leaving the gallery keeps the swap.
 export const galleryPagePart: PagePart<typeof galleryManifest> = {
@@ -92,8 +98,10 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
 
     // The swap in force, null while the default layout is mounted.
     let swappedLayout: Disposable | null = null;
-    const scrollSheetTo = (top: number) =>
-      view.sheet.scrollTo({ top, behavior: 'instant' });
+    const scrollSheetTo = (edge: ScrollEdge) => {
+      scrollToEdge(view.sheet, edge);
+      log(edgeText('the gallery', edge));
+    };
     const scrollSheet = (step: ScrollStep, direction: 1 | -1) => {
       const scroll = scrollContent(
         view.sheet,
@@ -128,14 +136,8 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
           swappedLayout = null;
           log('shell layout restored');
         },
-        scrollTop() {
-          scrollSheetTo(0);
-          log('scrolled to the top');
-        },
-        scrollEnd() {
-          scrollSheetTo(view.sheet.scrollHeight);
-          log('scrolled to the end');
-        },
+        scrollTop: () => scrollSheetTo('top'),
+        scrollEnd: () => scrollSheetTo('end'),
         lineDown: () => scrollSheet('line', 1),
         lineUp: () => scrollSheet('line', -1),
         halfPageDown: () => scrollSheet('halfPage', 1),

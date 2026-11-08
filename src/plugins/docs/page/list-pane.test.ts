@@ -121,6 +121,19 @@ describe('createListPane', () => {
   });
 
   it.each([
+    { edge: 'top' as const, expected: 'a' },
+    { edge: 'end' as const, expected: 'c' },
+  ])('moveToEdge_$edge_PutsTheCursorOnThatRow', ({ edge, expected }) => {
+    const { pane, cursor } = setUp();
+    pane.show(THREE_ROWS);
+    pane.move(1);
+
+    pane.moveToEdge(edge);
+
+    expect(cursor()).toEqual([expected]);
+  });
+
+  it.each([
     {
       name: 'same place, same rows',
       next: content('p', [['a', 'b']]),

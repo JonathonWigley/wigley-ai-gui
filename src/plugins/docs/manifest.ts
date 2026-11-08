@@ -76,6 +76,8 @@ export const docsManifest = definePlugin({
       group: 'doc',
       runsIn: 'page',
     },
+    scrollTop: { label: 'scroll to the top', group: 'doc', runsIn: 'page' },
+    scrollEnd: { label: 'scroll to the end', group: 'doc', runsIn: 'page' },
     edit: { label: 'edit the doc', group: 'doc', runsIn: 'page' },
     editSection: { label: 'edit this section', group: 'doc', runsIn: 'page' },
     prevSection: { label: 'previous section', group: 'doc', runsIn: 'page' },

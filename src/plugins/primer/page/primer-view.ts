@@ -559,7 +559,8 @@ function destroyPrimerView(
 // The card is drawn again, its boxes destroyed and mounted again and its
 // anchors disposed, only when `cardKeyOf` changes or the layout picked for its
 // part changes; the review body is drawn again while it shows, when the
-// primer or the review's pick changed, over a footer built once. `attach`
+// primer (its review cursor included) or the review's pick changed, over a
+// footer built once, and a moved cursor's task scrolled into sight. `attach`
 // places the root in the page once, before any editor mounts. `shown` reads
 // the layouts the parts are picked from now.
 function createPrimerFormView(
@@ -663,10 +664,17 @@ function createPrimerFormView(
       const isReviewStale =
         current !== reviewPrimer || !isSamePick(reviewPart?.pick, reviewPick);
       if (isReview && isReviewStale) {
+        const isCursorMoved =
+          reviewPrimer !== null && reviewPrimer.reviewRow !== current.reviewRow;
         reviewPrimer = current;
         reviewPart?.dispose();
         reviewBody.replaceChildren();
         reviewPart = drawReview(reviewBody, current, reviewPick, partDeps);
+        if (isCursorMoved) {
+          reviewBody
+            .querySelector('.is-cursor')
+            ?.scrollIntoView({ block: 'nearest' });
+        }
       }
     },
     scrollBy(step, direction) {

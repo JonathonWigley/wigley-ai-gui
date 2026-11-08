@@ -97,6 +97,8 @@ export function primerCommandHandlers(
   return {
     nextRow: handler((box) => moveRow(deps, box, { type: 'nextRow' })),
     prevRow: handler((box) => moveRow(deps, box, { type: 'prevRow' })),
+    firstRow: handler((box) => moveRow(deps, box, { type: 'firstRow' })),
+    lastRow: handler((box) => moveRow(deps, box, { type: 'lastRow' })),
     needYes: handler(() => setNeed(deps, 'yes')),
     needNo: handler(() => setNeed(deps, 'no')),
     needUnclear: handler(() => setNeed(deps, 'unclear')),
@@ -132,6 +134,11 @@ export function primerCommandHandlers(
     closeReview: handler(() =>
       changeView(deps, { type: 'closeReview' }, 'primer', 'review closed'),
     ),
+    reviewNext: dispatchOnly({ type: 'reviewNext' }),
+    reviewPrev: dispatchOnly({ type: 'reviewPrev' }),
+    reviewTop: dispatchOnly({ type: 'reviewTop' }),
+    reviewBottom: dispatchOnly({ type: 'reviewBottom' }),
+    reviewJump: handler(() => reviewJump(deps)),
     submit: handler(() => submit(deps)),
     askCancel: dispatchOnly({ type: 'askCancel' }),
     dismissConfirm: dispatchOnly({ type: 'dismissConfirm' }),
@@ -173,6 +180,12 @@ function showBoxTarget(store: PrimerStore, box: PrimerBox | undefined) {
 }
 
 // The active primer, or null outside view 'primer' or with none.
+// The card row's name, null with no active primer.
+function selectedRowName(state: PrimerState): string | null {
+  const primer = activeForm(state);
+  return primer === null ? null : rowName(cardRow(primer));
+}
+
 function shownPrimer(state: PrimerState): OpenPrimer | null {
   return state.view === 'primer' ? activeForm(state) : null;
 }
@@ -196,13 +209,9 @@ function moveRow(
   action: PrimerAction,
 ) {
   commitNewItem(deps, box);
-  const selectedName = (state: PrimerState) => {
-    const primer = activeForm(state);
-    return primer === null ? null : rowName(cardRow(primer));
-  };
-  const before = selectedName(deps.store.get());
+  const before = selectedRowName(deps.store.get());
   deps.store.dispatch(action);
-  const after = selectedName(deps.store.get());
+  const after = selectedRowName(deps.store.get());
   if (after !== null && after !== before) {
     deps.log(`selected ${after}`);
   }
@@ -487,6 +496,17 @@ function scrollPrimer(
       ? 'no primer to scroll'
       : scrollText('the primer', step, direction, scroll),
   );
+}
+
+// Closes the review on the cursor's task, logging `selected <name>` when the
+// card's row changed, as `moveRow` does.
+function reviewJump(deps: PrimerCommandDeps) {
+  const before = selectedRowName(deps.store.get());
+  changeView(deps, { type: 'reviewJump' }, 'primer', 'review closed');
+  const after = selectedRowName(deps.store.get());
+  if (after !== null && after !== before) {
+    deps.log(`selected ${after}`);
+  }
 }
 
 // Logs `line` when the action moved the view to `to`.

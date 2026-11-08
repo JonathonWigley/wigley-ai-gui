@@ -8,6 +8,8 @@ export const primerManifest = definePlugin({
   commands: {
     nextRow: { label: 'next row', group: 'rows', runsIn: 'page' },
     prevRow: { label: 'previous row', group: 'rows', runsIn: 'page' },
+    firstRow: { label: 'first row', group: 'rows', runsIn: 'page' },
+    lastRow: { label: 'last row', group: 'rows', runsIn: 'page' },
     needYes: { label: 'needed', group: 'need', runsIn: 'page' },
     needNo: { label: 'not needed', group: 'need', runsIn: 'page' },
     needUnclear: { label: 'unclear', group: 'need', runsIn: 'page' },
@@ -59,6 +61,11 @@ export const primerManifest = definePlugin({
       group: 'review',
       runsIn: 'page',
     },
+    reviewNext: { label: 'next task', group: 'review', runsIn: 'page' },
+    reviewPrev: { label: 'previous task', group: 'review', runsIn: 'page' },
+    reviewTop: { label: 'first task', group: 'review', runsIn: 'page' },
+    reviewBottom: { label: 'last task', group: 'review', runsIn: 'page' },
+    reviewJump: { label: 'jump to the task', group: 'review', runsIn: 'page' },
     submit: { label: 'send the primer', group: 'review', runsIn: 'page' },
     askCancel: {
       label: 'cancel the primer',

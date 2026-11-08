@@ -69,6 +69,8 @@ export const backlogManifest = definePlugin({
       group: 'detail',
       runsIn: 'page',
     },
+    scrollTop: { label: 'scroll to the top', group: 'detail', runsIn: 'page' },
+    scrollEnd: { label: 'scroll to the end', group: 'detail', runsIn: 'page' },
     save: { label: 'save the follow-up', group: 'editor', runsIn: 'page' },
     cancelEdit: { label: 'cancel the edit', group: 'editor', runsIn: 'page' },
     leaveBox: { label: 'leave the box', group: 'editor', runsIn: 'page' },

@@ -17,6 +17,20 @@ export const keysManifest = definePlugin({
   commands: {
     toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
     closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },
+    lineDown: { label: 'scroll a line down', group: 'help', runsIn: 'page' },
+    lineUp: { label: 'scroll a line up', group: 'help', runsIn: 'page' },
+    halfPageDown: {
+      label: 'scroll half a page down',
+      group: 'help',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll half a page up',
+      group: 'help',
+      runsIn: 'page',
+    },
+    scrollTop: { label: 'scroll to the top', group: 'help', runsIn: 'page' },
+    scrollEnd: { label: 'scroll to the end', group: 'help', runsIn: 'page' },
   },
   scopes: { help: 'In help' },
   settings: {

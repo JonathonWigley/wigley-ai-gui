@@ -130,8 +130,10 @@ export interface ItemsInput {
   empty: string | null;
 }
 
+// `isCursor` is true on the one task under the review's cursor (`j`/`k`, `gg`/`G`; `Enter` jumps to it).
 export interface ReviewTaskInput {
   id: string;
+  isCursor: boolean;
   name: string;
   need: PrimerNeed;
   comment: string;

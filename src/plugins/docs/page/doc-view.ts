@@ -16,7 +16,13 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
-import { scrollContent, scrollText } from '../../../shared/content-scroll';
+import {
+  edgeText,
+  type ScrollEdge,
+  scrollContent,
+  scrollText,
+  scrollToEdge,
+} from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { fileStamp } from '../../../shared/file-stamp';
 import { element } from '../../../shared/page/dom';
@@ -249,6 +255,10 @@ export interface DocView {
   // moved; for the editor, once its scroll has settled, also the line at the
   // top of sight after a line scroll and whether the cursor moved.
   scrollBy(step: ScrollStep, direction: 1 | -1): void;
+  // Moves the cursor to the first or last row on a list page, logging nothing;
+  // else scrolls the pane to `edge` and logs it, refusing while the editor is
+  // open.
+  scrollToEdge(edge: ScrollEdge): void;
   // Focuses the open editor, else the pane.
   focus(): void;
   hasUnsavedEdits(): boolean;
@@ -2037,6 +2047,19 @@ export function createDocView(deps: DocViewDeps): DocView {
         .catch((error) =>
           deps.log(`not scrolled ${name}: ${errorText(error)}`),
         );
+    },
+    scrollToEdge(edge) {
+      if (listPane.isShown()) {
+        listPane.moveToEdge(edge);
+        return;
+      }
+      const name = shown?.name ?? 'the doc pane';
+      if (editor !== null) {
+        deps.log(`${name} did not scroll: the editor is open`);
+        return;
+      }
+      scrollToEdge(pane, edge);
+      deps.log(edgeText(name, edge));
     },
     focus() {
       if (editor !== null) {

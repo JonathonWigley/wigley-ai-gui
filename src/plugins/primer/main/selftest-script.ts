@@ -75,6 +75,14 @@ const PRIMER_STEPS: SelfTestStep[] = [
     why: 'The card steps the column it came from.',
   },
   {
+    keys: ['j'],
+    expect: '[primer] selected item 2 on task 2',
+    why: 'j on the card steps the column it came from, as Ctrl+l does.',
+  },
+  { keys: ['k'], expect: '[primer] selected item 1 on task 2' },
+  { keys: ['G'], expect: '[primer] selected item 2 on task 2' },
+  { keys: ['g', 'g'], expect: '[primer] selected item 1 on task 2' },
+  {
     keys: ['a', 'P', 'o', 'l', 'i', 's', 'h', 'Escape', 'Escape'],
     expect: '[primer] added item 3 on task 2',
     why: "a on an item card shows its task's card and focuses the add-item box; leaving the box adds the item.",
@@ -106,7 +114,8 @@ const EXTRA_TASK_STEPS: SelfTestStep[] = [
   { keys: ['D'], expect: '[primer] removed extra task extra-1' },
 ];
 
-// The review opens, closes and opens again; the cancel prompt opens from the
+// The review opens, its cursor moves and Enter jumps to its task, it opens
+// again, closes and opens again; the cancel prompt opens from the
 // review's cancel key and from closing the session, and is dismissed each
 // time; the review submits, which closes the session's row.
 const REVIEW_STEPS: SelfTestStep[] = [
@@ -116,6 +125,20 @@ const REVIEW_STEPS: SelfTestStep[] = [
     checksFit: true,
     screenshot: 'review',
   },
+  {
+    keys: ['j'],
+    expect: '[page] j ran primer.reviewNext',
+    checksFit: true,
+    screenshot: 'review-cursor',
+  },
+  { keys: ['G'], expect: '[page] G ran primer.reviewBottom' },
+  { keys: ['g', 'g'], expect: '[page] gg ran primer.reviewTop' },
+  {
+    keys: ['Enter'],
+    expect: '[primer] review closed',
+    why: "Enter jumps to the cursor's task in the tasks column.",
+  },
+  { keys: [' ', ' '], expect: '[primer] review opened' },
   { keys: ['Escape'], expect: '[primer] review closed' },
   { keys: [' ', ' '], expect: '[primer] review opened' },
   { keys: ['C'], expect: '[page] C ran primer.askCancel', checksFit: true },
@@ -246,7 +269,7 @@ export function primerSelfTestScript(
       },
       {
         name: 'review and cancel',
-        why: 'Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; sending the primer closes its row with no prompt.',
+        why: "j, G and gg move the review's cursor and Enter jumps to its task. Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; sending the primer closes its row with no prompt.",
         steps: REVIEW_STEPS,
       },
       {

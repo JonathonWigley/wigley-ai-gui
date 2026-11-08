@@ -899,6 +899,8 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['<C-k>'], expect: '[docs] SKILL.md did not scroll up' },
     { keys: ['<C-S-j>'], expect: '[docs] SKILL.md did not scroll down' },
     { keys: ['<C-S-k>'], expect: '[docs] SKILL.md did not scroll up' },
+    { keys: ['G'], expect: '[docs] scrolled SKILL.md to the end' },
+    { keys: ['g', 'g'], expect: '[docs] scrolled SKILL.md to the top' },
     {
       keys: ['i'],
       expect: '[docs] refused to edit SKILL.md in the plugin cache',
@@ -1199,7 +1201,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'plugin cache',
-      why: "The scroll keys reach a plugin's cached SKILL.md, too short to scroll, and i refuses to edit it in the plugin cache.",
+      why: "The scroll keys and gg and G reach a plugin's cached SKILL.md, too short to scroll, and i refuses to edit it in the plugin cache.",
       steps: pluginCache,
     },
     {

@@ -221,6 +221,28 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: 'Esc leaves insert mode, then the box, then cancels the unchanged editor.',
     },
   ];
+  const detailAndTagPicker: SelfTestStep[] = [
+    { keys: ['<A-l>'], expect: '[backlog] detail focused' },
+    { keys: ['G'], expect: '[backlog] scrolled the detail to the end' },
+    { keys: ['g', 'g'], expect: '[backlog] scrolled the detail to the top' },
+    { keys: ['<A-h>'], expect: '[backlog] list focused' },
+    {
+      keys: ['j'],
+      expect: '[backlog] selected Plain item',
+      why: 'Reopening the git home in the side bar keys group put the cursor on its first row, so j leaves it for gg to return.',
+    },
+    { keys: ['g', 'g'], expect: '[backlog] selected Ready item' },
+    { keys: ['T'], expect: '[backlog] picker shown: Tags' },
+    { keys: ['G'], expect: '[page] G ran backlog.pickerBottom' },
+    { keys: ['g', 'g'], expect: '[page] gg ran backlog.pickerTop' },
+    { keys: ['/'], expect: '[backlog] picker filter: Tags' },
+    { keys: ['Escape', 'Escape'], expect: '[backlog] picker list: Tags' },
+    {
+      keys: ['Escape'],
+      expect: '[page] Escape ran backlog.pickerCancel',
+      why: 'Closing the picker writes no tag.',
+    },
+  ];
   return [
     {
       name: 'open',
@@ -266,6 +288,11 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       name: 'side bar keys',
       why: 'Option+h and Option+l move between the list, the homes and the detail; h still reaches the homes and Option+l steps out of them; l on a home opens it keeping focus and Enter opens it focusing the list; the open editor ignores the pane keys.',
       steps: sideBarKeys,
+    },
+    {
+      name: 'detail and tag picker',
+      why: 'In the detail gg and G scroll to its top and end; the tag picker takes the shared list keys, its filter included, and Esc closes it unchosen.',
+      steps: detailAndTagPicker,
     },
   ];
 }

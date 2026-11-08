@@ -89,6 +89,8 @@ export type TextTarget =
 export type ItemAction =
   | { type: 'nextItem' }
   | { type: 'prevItem' }
+  | { type: 'firstItem' }
+  | { type: 'lastItem' }
   // `item` is a rail position.
   | { type: 'focusItem'; item: number }
   // `number` is 1-based: a question's choice, or a finding's entry down its
@@ -110,6 +112,8 @@ type FormsOwnAction =
   | { type: 'openReview' }
   | { type: 'reviewNext' }
   | { type: 'reviewPrev' }
+  | { type: 'reviewTop' }
+  | { type: 'reviewBottom' }
   // Without `row`, jumps to the review cursor's row.
   | { type: 'reviewJump'; row?: number }
   // `item` is a rail position; the review's rail sends it for a notice, which
@@ -213,6 +217,10 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
       return moveReviewRow(state, 1);
     case 'reviewPrev':
       return moveReviewRow(state, -1);
+    case 'reviewTop':
+      return placeReviewRow(state, () => 0);
+    case 'reviewBottom':
+      return placeReviewRow(state, (_row, lastRow) => lastRow);
     case 'reviewJump':
       return jumpToReviewRow(state, action.row);
     case 'reviewJumpItem':
@@ -512,12 +520,23 @@ function openReview(state: FormsState): FormsState {
 }
 
 function moveReviewRow(state: FormsState, step: number): FormsState {
+  return placeReviewRow(state, (row, lastRow) =>
+    Math.min(Math.max(row + step, 0), lastRow),
+  );
+}
+
+// Sets the review cursor to the row `pick` returns from the cursor's row and
+// the last answerable row; nothing outside the review.
+function placeReviewRow(
+  state: FormsState,
+  pick: (row: number, lastRow: number) => number,
+): FormsState {
   if (state.view !== 'review') {
     return state;
   }
   return updateForm(state, state.activeFormId, (round) => {
     const lastRow = Math.max(answerableItems(round.round).length - 1, 0);
-    const row = Math.min(Math.max(round.reviewRow + step, 0), lastRow);
+    const row = pick(round.reviewRow, lastRow);
     return row === round.reviewRow ? round : { ...round, reviewRow: row };
   });
 }
@@ -565,6 +584,10 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
       return moveFocus(round, 1);
     case 'prevItem':
       return moveFocus(round, -1);
+    case 'firstItem':
+      return focusAt(round, 0);
+    case 'lastItem':
+      return focusAt(round, railItems(round.round).length - 1);
     case 'focusItem':
       return focusAt(round, action.item);
     case 'choose':
