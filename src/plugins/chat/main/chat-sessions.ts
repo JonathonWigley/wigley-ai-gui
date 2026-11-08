@@ -83,7 +83,8 @@ import {
   readPermissionRequest,
 } from './permission-tool';
 import type { RecentFolders } from './recent-folders';
-import { worktreeNameOf } from './worktree-name';
+import type { ToolCallers } from './tool-callers';
+import { worktreeNameOf, worktreesInCommand } from './worktree-name';
 
 export const TURN_FINISHED_TITLE = 'Turn finished';
 
@@ -105,8 +106,11 @@ export interface ChatSessionsDeps {
   emit: PluginEvents<ChatMainEvents>['emit'];
   alerts: Pick<Alerts, 'announce'>;
   window: { show(): void; isFocused(): boolean };
-  // Reads each row's repo and branch at its open and after each turn.
-  git: Pick<Git, 'topLevel' | 'currentBranch'>;
+  // Reads each row's repo, branch and linked worktrees at its open and after
+  // each turn, and the worktrees again after a Bash call naming `worktree`.
+  git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
+  // Told the agent of each `toolStarted`, before chat emits it.
+  toolCallers: Pick<ToolCallers, 'noteToolStarted'>;
   log: PluginLog;
   // Stamps the `at` of the notices and permission entries chat makes itself,
   // and times each session's active time.
@@ -388,6 +392,12 @@ interface HeldSession {
   exit: { code: number | null; error: string | null } | null;
   // Branch reads started in this row, numbering them; only the latest applies.
   branchReads: number;
+  // The clone's linked worktree roots, from the latest worktree read.
+  worktreeRoots: readonly string[];
+  // Worktree reads started in this row, numbering them; only the latest applies.
+  worktreeReads: number;
+  // The command of each Bash call the row has seen, each text once.
+  bashCommands: string[];
   // The id of the row's last process start or attach; never cleared, so after
   // an exit it still names the ended process.
   processId: string | null;
@@ -432,6 +442,15 @@ const OLDER_HOST_REFUSAL_TEXT =
   'This session is still finishing in another app version. Send again once it ends.';
 
 const STOPPED_TEXT = 'Session stopped. Your next message resumes this session.';
+
+// A Bash call input's `command`, when it holds a string.
+function commandOf(input: unknown): string | null {
+  const command =
+    typeof input === 'object' && input !== null && 'command' in input
+      ? input.command
+      : null;
+  return typeof command === 'string' ? command : null;
+}
 
 function missingProfileText(name: string): string {
   return `Profile ${name} is not in chat's profiles setting; add it back to resume this session.`;
@@ -1188,6 +1207,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         if (isLive(session, processStart)) {
           session.slots.putEntry(rowEntryOf(entry, processStart));
           takeIn(session, entry.id);
+          noteBashCommand(session, entry, replay.isReplaying);
         }
       },
       controls(controls) {
@@ -1243,6 +1263,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         // its `sessionEnded`.
         const endsTheSession = event.type === 'sessionEnded' && !isDetached;
         const isLiveEvent = isLive(session, processStart);
+        // A replayed call too, so a subagent's call from while the app was
+        // closed still reads as that subagent's.
+        if (isLiveEvent && event.type === 'toolStarted') {
+          deps.toolCallers.noteToolStarted(
+            sessionId,
+            event.toolUseId,
+            event.agentId,
+          );
+        }
         if (isLiveEvent || endsTheSession) {
           deps.emit('agentEvent', {
             sessionId,
@@ -1262,6 +1291,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         const endsALiveTurn = isLiveEvent && event.type === 'turnEnded';
         if (endsALiveTurn && !replay.isReplaying) {
           readBranch(session);
+          readWorktreeRoots(session);
         }
         if (isLiveEvent && event.type === 'compactionStarted') {
           compactionStarted(session, event);
@@ -1438,6 +1468,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       compactionReason: null,
       exit: null,
       branchReads: 0,
+      worktreeRoots: [],
+      worktreeReads: 0,
+      bashCommands: [],
       processId: opening.processId,
       launchControls: opening.launchControls,
       launchResume: opening.launchResume,
@@ -1452,6 +1485,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     held.set(sessionId, session);
     takeOverSkipped(session);
     readBranch(session);
+    readWorktreeRoots(session);
     return session;
   }
 
@@ -1504,13 +1538,91 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Adds the worktree holding `filePath` to the row's worktrees, when it is in
-  // one the row does not list yet.
+  // one.
   function noteWorktree(session: HeldSession, filePath: string) {
     const name = worktreeNameOf(filePath);
+    if (name !== null) {
+      addWorktree(session, name);
+    }
+  }
+
+  // Adds `name` to the row's worktrees when the row does not list it yet.
+  function addWorktree(session: HeldSession, name: string) {
     const { worktrees } = session.slots.info();
-    if (name !== null && !worktrees.includes(name)) {
+    if (!worktrees.includes(name)) {
       session.slots.setInfo({ worktrees: [...worktrees, name] });
     }
+  }
+
+  // Lists each worktree a Bash call's command names. A call that ran a
+  // `worktree` command reads the roots again, so a worktree it made lists in
+  // the same turn.
+  function noteBashCommand(
+    session: HeldSession,
+    entry: ChatEntry,
+    isReplaying: boolean,
+  ) {
+    if (entry.kind !== 'tool' || entry.name !== 'Bash') {
+      return;
+    }
+    const command = commandOf(entry.input);
+    if (command === null) {
+      return;
+    }
+    if (!session.bashCommands.includes(command)) {
+      session.bashCommands.push(command);
+    }
+    for (const name of worktreesInCommand(command, session.worktreeRoots)) {
+      addWorktree(session, name);
+    }
+    const ranAWorktreeCommand =
+      entry.result !== null && command.includes('worktree');
+    if (ranAWorktreeCommand && !isReplaying) {
+      readWorktreeRoots(session);
+    }
+  }
+
+  // Reads the clone's linked worktree roots, and lists each worktree a seen
+  // Bash command names under them. A read that a later one started after, or
+  // that settles after the row closed or `detachAll`, changes nothing; a
+  // failed read keeps the roots the row had.
+  function readWorktreeRoots(session: HeldSession) {
+    session.worktreeReads += 1;
+    const read = session.worktreeReads;
+    const { projectDir } = session.slots.info();
+    linkedWorktreeRootsOf(projectDir).then(
+      (roots) => {
+        const isLatestRead =
+          held.get(session.sessionId) === session &&
+          session.worktreeReads === read;
+        if (isDetached || !isLatestRead) {
+          return;
+        }
+        session.worktreeRoots = roots;
+        for (const command of session.bashCommands) {
+          for (const name of worktreesInCommand(command, roots)) {
+            addWorktree(session, name);
+          }
+        }
+      },
+      (error: unknown) =>
+        log(
+          `worktrees not read in ${path.basename(projectDir)}: ${errorText(error)}`,
+        ),
+    );
+  }
+
+  // The top folder of each linked worktree of the clone holding `projectDir`;
+  // [] outside a clone.
+  async function linkedWorktreeRootsOf(projectDir: string): Promise<string[]> {
+    const top = await deps.git.topLevel(projectDir);
+    if (top === null) {
+      return [];
+    }
+    const worktrees = await deps.git.worktrees(top);
+    return worktrees
+      .filter((worktree) => !worktree.isMain)
+      .map((worktree) => worktree.path);
   }
 
   // Reads the row's repo and branch, and writes them when either changed.

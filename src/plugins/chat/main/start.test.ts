@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentHarness, AgentStart } from '../../../contracts/agent';
+import type {
+  AgentEvent,
+  AgentHarness,
+  AgentStart,
+} from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
@@ -25,6 +29,7 @@ import {
   sessionsSelectionSlot,
   type SessionTitles,
   type TitleSource,
+  type ToolCallGuard,
   type ToolDefinition,
   type ToolResult,
   type ToolSession,
@@ -39,6 +44,7 @@ import {
 } from '../contract';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart } from './start';
+import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
 
 // A chat holding one session, `held`, whose permission calls wait until the
 // test replies to them, and `held` resting when `running` is false; `calls`
@@ -207,7 +213,8 @@ describe('chat drive actions', () => {
 // `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
 // returns is called. Paths compare equal ignoring a trailing `/`.
-// `contributions` holds each `contributeTools` call's arguments.
+// `contributions` holds each `contributeTools` call's arguments, and
+// `toolCallGuards` each guard `addToolCallGuard` got.
 // `exports` is the part's main exports. `sessionHost` is a fake host whose `list`
 // is `options.list` when given, and `timers` a manual `Timers`. `options.data`
 // replaces the data folder. `holdConnects` holds each promise held, `harnessAttaches`
@@ -235,6 +242,7 @@ function startChatPart(
   const startIdleCompactMinTokens: (number | null)[] = [];
   const processEvents: {
     ended: (exit: { code: number; error: string | null }) => void;
+    agentEvent: (event: AgentEvent) => void;
   }[] = [];
   let processEnd = Promise.resolve();
   const holdProcessEnds = () => {
@@ -273,14 +281,20 @@ function startChatPart(
     sessionHost.list = options.list;
   }
   const timerRuns = new Map<number, () => void>();
+  // Each timer's delay, by handle, while it is pending.
+  const timerDelays = new Map<number, number>();
   let lastTimer = 0;
   const timers: Timers = {
-    set: (run) => {
+    set: (run, ms) => {
       lastTimer += 1;
       timerRuns.set(lastTimer, run);
+      timerDelays.set(lastTimer, ms);
       return lastTimer;
     },
-    clear: (handle) => timerRuns.delete(handle),
+    clear: (handle) => {
+      timerRuns.delete(handle);
+      timerDelays.delete(handle);
+    },
   };
   const heldConnects: Promise<unknown>[] = [];
   let settingsListener: (settings: unknown) => void = () => undefined;
@@ -292,7 +306,12 @@ function startChatPart(
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
   }[] = [];
+  const toolCallGuards: ToolCallGuard[] = [];
   const sessions = {
+    addToolCallGuard: (guard: ToolCallGuard) => {
+      toolCallGuards.push(guard);
+      return { dispose: () => undefined };
+    },
     contributeTools: (
       tools: ToolDefinition[],
       start: (session: AgentSession) => ToolSession,
@@ -425,9 +444,11 @@ function startChatPart(
     processKill,
     sessionHost,
     timerRuns,
+    timerDelays,
     heldConnects,
     harnessAttaches,
     contributions,
+    toolCallGuards,
     settingsChange: (settings: unknown) => settingsListener(settings),
   };
 }
@@ -716,6 +737,43 @@ describe('chat main part', () => {
     await chat.exports.clear('row-1');
 
     expect(chat.starts.count).toBe(2);
+  });
+
+  it('toolCallGuard_SubagentCall_SkipsUntilTheRowEnds', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    await settle();
+    chat.processEvents[0].agentEvent({
+      type: 'toolStarted',
+      at: 0,
+      agentId: 'subagent-1',
+      toolUseId: 't1',
+      tool: 'mcp__wigley-forms__set_workflow_step',
+      summary: '',
+    });
+    const [guard] = chat.toolCallGuards;
+    const call = {
+      sessionId: 'row-1',
+      tool: 'set_workflow_step',
+      toolUseId: 't1',
+      mainAgentOnly: true,
+    };
+
+    await expect(guard(call)).resolves.toEqual({
+      kind: 'skip',
+      text: SUBAGENT_CALL_TEXT,
+    });
+
+    chat.listeners.get('sessions.ended')?.({ sessionId: 'row-1' });
+    const timersBefore = new Set(chat.timerRuns.keys());
+    const verdict = guard(call);
+    const waits = [...chat.timerDelays].filter(
+      ([handle]) => !timersBefore.has(handle),
+    );
+    expect(waits.map(([, ms]) => ms)).toEqual([CALLER_WAIT_MS]);
+    chat.timerRuns.get(waits[0][0])?.();
+
+    await expect(verdict).resolves.toEqual({ kind: 'run' });
   });
 
   it("exports_CloseSessionsIn_EndsTheFolder'sSessions_ResolvesOnceTheyEnded", async () => {
@@ -1054,6 +1112,7 @@ function startChatOnHarness() {
       git: {
         topLevel: () => Promise.resolve(null),
         currentBranch: () => Promise.resolve(null),
+        worktrees: () => Promise.resolve([]),
       } as never,
     },
     dependencies: [
@@ -1062,6 +1121,7 @@ function startChatOnHarness() {
         (consumer) =>
           ({
             contributeTools: () => consumer.track({ dispose() {} }),
+            addToolCallGuard: () => consumer.track({ dispose() {} }),
             holdConnects() {},
             open: () => {
               rows += 1;

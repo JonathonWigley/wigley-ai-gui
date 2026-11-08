@@ -18,3 +18,34 @@ export function worktreeNameOf(filePath: string): string | null {
   }
   return null;
 }
+
+// The name (last segment) of each root whose full path `command` holds, in the
+// order of `roots`, each once. A root counts where the text after it ends or
+// goes on with a character no file name segment continues with.
+export function worktreesInCommand(
+  command: string,
+  roots: readonly string[],
+): string[] {
+  const names: string[] = [];
+  for (const root of roots) {
+    const name = path.basename(root);
+    if (holdsRoot(command, root) && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+function holdsRoot(command: string, root: string): boolean {
+  for (
+    let index = command.indexOf(root);
+    index !== -1;
+    index = command.indexOf(root, index + 1)
+  ) {
+    const next = command.charAt(index + root.length);
+    if (!/[A-Za-z0-9._-]/.test(next)) {
+      return true;
+    }
+  }
+  return false;
+}
