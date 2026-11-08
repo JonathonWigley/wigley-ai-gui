@@ -86,7 +86,7 @@ The commit `Document the settled design for hot reload (Wave 4 steps 1 and 2)` h
 
  restart (drive action):  page stop(id) ─► main stop(id) ─► main start(stopped) ─► page start(stopped); slots kept
 
- quit:         before-quit held ─► stopAll() settles ─► app quits
+ quit:         will-quit held ─► stopAll() settles ─► app quits
                after 5 s still stopping ─► stderr `wigley-ai-gui quit: quit is waiting on <ids>`
                a second quit during the hold: the live app keeps waiting; a drive run exits at once
 ```
@@ -97,7 +97,7 @@ From the interview rounds of 2026-11-07 (the reasons are in `plugin-framework/de
 
 - The raw bridge is closed through a one-time claim. It is not a sandbox: layouts still share the DOM.
 - Core services are not replaceable by a plugin. Each service has one construction point in its composition root.
-- A restart stops the dependents first and starts every one it stopped again, in start order. No export proxy.
+- A restart stops the dependents first and starts every one it stopped again, in `parts` list order, dependencies first. No export proxy.
 - `ready()` on the part replaces `core.pageReady`. The event is removed.
 - `mayStop()` on the part refuses a switch-off while the part holds open work, with a reason.
 - A plugin that switched-on plugins depend on is locked, with "needed by" naming them.
@@ -110,7 +110,7 @@ From the interview rounds of 2026-11-07 (the reasons are in `plugin-framework/de
   - The served config follows the applied list: a plugin that is off leaves help, which-key and Settings.
   - Chat switched off works as at quit: the agent processes go on in the session host.
   - Drive actions stop, start and restart a plugin. No user reload key in this plan.
-  - A switch-off that `mayStop` refuses shows as a config problem (the title bar badge and toast), and the applied list stays. Settings asks the switch before it writes, so its own write is never refused after the fact.
+  - A switch-off that `mayStop` refuses shows as a config problem (the title bar badge and toast), and the applied list stays. Settings asks the switch before it writes, so its write is refused before it lands; a part that takes on open work between the ask and the apply still refuses through the config problem.
 
 ### Out of scope
 
@@ -162,7 +162,7 @@ export interface PluginHost<Started> {
 }
 ```
 
-Pinned by task 02: `start` throws `Plugin "<id>" depends on plugin "<dependency>", which is not started`; an id with no part in this process is ignored, and a dependency with no part here is allowed. When one start in `start(ids)` throws, the parts already started stay started and get no `ready()`. A `ready()` that throws is logged and the host goes on. `restart` rejects, starting nothing, when its stop rejects. Since `start(ids)` calls `ready` itself, the composition roots call `host.ready()` only at launch and page load (task 05).
+Pinned by task 02: `start` throws `Plugin "<id>" depends on plugin "<dependency>", which is not started`; an id with no part in this process is ignored, and a dependency with no part here is allowed. When one start in `start(ids)` throws, the parts already started stay started and get no `ready()`. A `ready()` that throws is logged and the host goes on. `restart` rejects, starting nothing, when its stop rejects. Once `stopAll` began, `start` throws `Plugin host is stopping`. Since `start(ids)` calls `ready` itself, the composition roots call `host.ready()` only at launch and page load (task 05).
 
 **Slot clear** (task 03). `src/contracts/state.ts`: `SlotChange` gains `| { id: string; kind: 'cleared' }`. `SlotStore` (`src/shared/state/slot-store.ts`) gains `clearOwner(pluginId: string): void`: it empties every slot whose id starts with `${pluginId}.` (a value slot reads `undefined`, a keyed or list slot holds no entry), tells the `on` listeners once per entry it removes (a value slot `(undefined)`, a keyed slot `(key, undefined)`, a list slot `(key, {kind:'delete'})`; an empty slot tells none), sends one `{id, kind:'cleared'}` per slot on the wire, and throws `Slot "<id>" is held by a live part` when a live writer holds one. `SlotHolder` (`src/main/state/slot-holder.ts`) gains `clearOwner(pluginId: string): void`, which numbers each `cleared` change for the page mirror as it numbers every other change.
 
@@ -179,7 +179,7 @@ export interface AppliedPlugins {
 }
 ```
 
-`served()` in `main.ts` reads `disabled()` in place of the frozen `startList`, and `userConfig.schema()` filters its commands by it too (`UserConfigDeps.applied: Pick<AppliedPlugins, 'disabled'>`). `applied-plugins.ts` also exports `withAppliedList(config, disabled)` and `appliedCommands(commands, disabled)`. The served config carries the applied list as `settings.plugins.disabled`, and main strips the binds of every plugin that is off, so the page takes no step per push; `startedPluginsConfig(config, has)` drops its `loadList` argument, `loadConfig` returns `applied`, `createWindow` takes it, and `withMainStartList` goes (task 06). The store keeps serving the user's own list to the switch.
+`served()` in `main.ts` reads `disabled()` in place of the frozen `startList`, and `userConfig.schema()` filters its commands by it too (`UserConfigDeps.applied: Pick<AppliedPlugins, 'disabled'>`). `applied-plugins.ts` also exports `withAppliedList(config, disabled)` and `appliedCommands(commands, disabled)`. The served config carries the applied list as `settings.plugins.disabled`, and main strips the binds of every plugin that is off, so the page takes no step per push; `startedPluginsConfig(config, notStarted, has)` renames `loadList` to `notStarted` (the page passes `[]`, and task 08 the page parts not started yet), `loadConfig` returns `applied`, `createWindow` takes it, and `withMainStartList` goes (task 06). The store keeps serving the user's own list to the switch.
 
 **Page parts requests** (task 08, `src/contracts/bridge.ts`):
 
@@ -208,7 +208,7 @@ export interface PluginSwitch {
 
 `PluginSwitch extends PluginSwitchService`, which `src/contracts/plugin.ts` declares (`mayDisable` only), since contracts import nothing from main. Task 08 also adds, each with its full signature in its task document:
 
-- `createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch` in `plugin-switch.ts`; its deps are the main host, the page request, the `AppliedPlugins`, `slots.clearOwner`, the `core.plugins` writer, the manifests, `problem(message | null)`, `servedChanged()` and the log.
+- `createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch` in `plugin-switch.ts`; its deps are the main host, the page request, the `AppliedPlugins`, `slots.clearOwner`, the `core.plugins` writer, the manifests, `problem(message | null)`, `servedChanged()`, `timers` (a refused switch-off is retried every `PLUGIN_RETRY_MS = 2000`) and the log. Task 08 also adds `answerPluginParts(host, request, deps)` in new `src/renderer/plugin-parts-answer.ts`, which `renderer.ts` wires to `onPluginParts`.
 - `createPageParts(deps): PageParts { request(request) }` in new `src/main/page-parts.ts`, over the channels `BRIDGE_CHANNELS.pluginParts` (`'bridge:plugin-parts'`) and `pluginPartsDone` (`'bridge:plugin-parts-done'`).
 - `addPluginSwitchActions(drive, deps): Disposable` in new `src/main/plugins/plugin-switch-drive.ts`: the drive actions `core.stopPlugin` and `core.startPlugin` (they write `plugins.disabled` in settings.json) and `core.restartPlugin`, each with args `{ id: string }`.
 - `ConfigStore.setPluginsProblem(message: string | null): void` and `RuntimeWiring.servedChanged(): void`.
@@ -233,11 +233,11 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
 
 **Settings' ask** (task 09): the settings plugin's channel gains `mayDisable(pluginId: string): Promise<string | null>`, which its main part answers through the switch. The switch reaches settings main as a main service, `services.pluginSwitch: PluginSwitchService` (task 08 adds it to `MainServices`).
 
-**Quit wait** (task 10, new `src/main/quit-wait.ts`, tested beside it): `QUIT_WAIT_LOG_MS = 5000` and `logSlowQuit(work: Promise<unknown>, stopping: () => readonly string[], timers: Timers, log: Log): void`, on the `Timers` main.ts already builds. A module-level `let stoppingParts` in main.ts, set by `createWindow`, lets the module-level `runQuitTasks` reach the main host's `stopping()`.
+**Quit wait** (task 10, new `src/main/quit-wait.ts`, tested beside it): `QUIT_WAIT_LOG_MS = 5000`, `quitStep(runMode, quitStarted): 'start' | 'exit' | 'hold'` and `logSlowQuit(work: Promise<unknown>, stopping: () => readonly string[], timers: Timers, log: Log): void`, on the `Timers` main.ts already builds. A module-level `let stoppingParts` in main.ts, set by `createWindow`, lets the module-level `runQuitTasks` reach the main host's `stopping()`.
 
 **Log lines** other tasks and the self-test wait on, written verbatim:
 
-- `[plugin-host] stopping <id>` (exists, kept)
+- `[plugin-host] stopping <id>`, once per part, from `stopAll` (exists) and now from `stop(id)` too, so a restart's dependents show in the log
 - `[plugin-host] ready of <id> failed: <error>`
 - `[plugin-switch] off <id>` and `[plugin-switch] on <id>`, once per plugin a switch stops or starts
 - `[plugin-switch] refused <id>: <reason>`, `[plugin-switch] restarted <id>`, `[plugin-switch] failed: <error>`, and from the page `[plugin-switch] page <kind> failed: <error>` and `[plugin-switch] page <kind> ended with the page`

@@ -29,7 +29,7 @@ Produces:
 - `definePlugin`'s parameter type in `src/shared/define-plugin.ts` gains `label: string; description: string;` after `id: Id;`. Both are required. Its comment gains one sentence: `` `label` and `description` name the plugin in Settings' Plugins section. ``
 
 Decisions:
-- **Sentence case.** plan.md says "title case", but its example `Agent lines` is sentence case. The brief settles sentence case: the first word capitalised, a proper name (`Unity`) kept.
+- **Sentence case.** The first word capitalised, a proper name (`Unity`) kept.
 - **The words are copy.** The agent wrote them from each manifest's header comment and the `AGENTS.md` Architecture list. The user can change them later. Write each one verbatim from the table.
 - **No runtime check.** The compiler requires both fields. `definePlugin` adds no throw for a blank string; the content check in Tests covers the shipped manifests.
 - **Settings' section titles stay.** `userConfigSchema` in `src/main/config/user-config.ts` keeps `capitalised(manifest.id)` for each plugin's settings section. This task changes nothing the user sees.

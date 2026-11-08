@@ -9,7 +9,7 @@ Files:
 - modify `src/contracts/state.ts` (`SlotChange`)
 - modify `src/shared/state/slot-store.ts` · test `src/shared/state/slot-store.test.ts`
 - modify `src/main/state/slot-holder.ts` · test `src/main/state/slot-holder.test.ts`
-- read `src/renderer/state/page-state.ts`: no change. Its `applyNewer` hands every pushed change to `store.applyRemote`, so a `cleared` change from main applies there once `applyRemote` takes it.
+- test `src/renderer/state/page-state.test.ts` (one row added); read `src/renderer/state/page-state.ts`: no change. Its `applyNewer` hands every pushed change to `store.applyRemote`, so a `cleared` change from main applies there once `applyRemote` takes it.
 
 Consumes:
 - `SlotStore`, `createSlotStore`, `applyChange`, `listenerArguments`, `tellListeners` in `src/shared/state/slot-store.ts`; `createSlotHolder` in `src/main/state/slot-holder.ts` (the tree holds them).
@@ -26,6 +26,8 @@ Decisions:
 - **A cleared slot keeps its kind.** A value slot reads `undefined`. A keyed slot's `all()` is an empty map, and `readById(id).get()` is `[]`. A list slot's `get(key)` is `[]` for every key, and `readById(id).get()` is `[]`. The next `publish` of the same key succeeds and reads `undefined` (or `[]`).
 - **What a reader hears (agent).** A keyed or list listener's signature carries a key, so one call per slot has no key to give. Each listener hears the clear as the deletes it is: a value slot's listener hears `(undefined)` once; a keyed slot's listener hears `(key, undefined)` once per entry, in first-set order; a list slot's listener hears `(key, { kind: 'delete' })` once per key, in first-set order. `readById` listeners hear the same arguments. So a reader such as `followRows` runs its `removed` per entry with no new code.
 - **An empty slot is no change.** A value slot that reads `undefined`, or a keyed or list slot with no entry, is skipped: no `onWrite`, no listener, no `seq`. This matches "a delete of an absent key is no change".
+- **Every slot empties before anyone hears.** `clearOwner` first empties every matching slot, then for each slot tells `onWrite` and queues its listeners through `tellListeners`. A listener of one slot that reads a sibling slot of the same owner finds it empty. A throw from `onWrite` follows the existing rule: the state stays updated and no listener runs.
+- **Only main clears.** `SlotHolder.applyPageWrite` logs `ignored a cleared change from the page: <id>` under source `state` and ignores a `kind: 'cleared'` change, so main and the page stay in step.
 - **The wire carries one change per slot.** For each slot it empties, `clearOwner` tells `onWrite` once with `{ id, kind: 'cleared' }`, then tells that slot's listeners, as a writer's change does. `applyRemote({ id, kind: 'cleared' })` empties the slot and tells the listeners the same way, and does not tell `onWrite`. `applyRemote` of `cleared` for an absent slot creates no slot and runs nothing. `applyRemote` checks no claim, as today.
 - **The holder numbers each clear.** `SlotHolder.clearOwner(pluginId)` calls `store.clearOwner(pluginId)`. The holder's existing `onWrite` listener then gives each `cleared` change the next `seq` and pushes it. The push covers every slot under the owner, page-owned slots included, so the page mirror empties them too. Update the `SlotHolder` comment: `push` sends main writers' changes and every `cleared` change.
 - No caller calls `clearOwner` in this task. Task 08's switch calls `SlotHolder.clearOwner` for each plugin it switches off.
@@ -43,6 +45,10 @@ Tests:
   - `{ case: 'clear of empty slots', act: (store) => { store.publish(keyedKey).dispose(); store.publish(listKey).dispose(); store.clearOwner('p'); } }`
   - `{ case: 'remote clear of an absent slot', act: (store) => store.applyRemote({ id: 'p.k', kind: 'cleared' }) }`
 - Turn `applyRemote_TellsListenersAndNotOnWrite` into an `it.each` with two rows. Row `value` is the test as it stands. Row `cleared`: after `applyRemote({ id: 'p.v', kind: 'value', value: 5 })`, `applyRemote({ id: 'p.v', kind: 'cleared' })` makes the value listener hear `[5, undefined]`, `writes` stays `[]`, and `get()` reads `undefined`.
+- Add to the `applyRemote` table: row `cleared keyed`, a keyed slot with two entries, whose listener hears `(key, undefined)` once per entry; row `cleared list`, a list slot with two keys, whose listener hears `(key, {kind:'delete'})` once per key. Each asserts `writes` stays `[]`.
+- Add to the first `clearOwner` test: a listener of `p.v` reads `p.k` and finds it empty. Break: slots are emptied one at a time between listeners.
+- New in `slot-holder.test.ts`: `applyPageWrite_Cleared_IsIgnoredAndLogged`: the slot keeps its value, `seq` does not move, and the log holds the line.
+- New row in `page-state.test.ts`: a pushed `[seq, { id, kind: 'cleared' }]` empties the mirror's slot and tells its listener.
 - New in `slot-holder.test.ts`: `clearOwner_PushesEachClearedSlotWithNextSeq`. `holder.store.publish(mainSlot)` sets `1` and is disposed (seq 1); `holder.applyPageWrite(pageChange)` (seq 2); `holder.store.publish({ id: 'q.v', process: 'main', kind: 'value' })` sets `7` (seq 3). Clear the pushes, then `holder.clearOwner('p')`. Assert pushes equal `[[4, { id: 'p.v', kind: 'cleared' }], [5, { id: 'p.page', kind: 'cleared' }]]`, `holder.snapshot().seq` is `5`, and `holder.snapshot().slots['q.v']` is `{ kind: 'value', value: 7 }`.
 
 Done when: `npm run typecheck` passes; the test gate runs `slot-store.test.ts`, `slot-holder.test.ts` and `src/renderer/state/page-state.test.ts`.

@@ -41,8 +41,12 @@ Decisions:
 - **`stop(pluginId)`** behaves as today, and resolves to the ids it stopped, in stop order: the list `stopOrder` gives (dependents newest first, then the part). It resolves to `[]` for a part not started. When a step throws, it still rejects with the first error, as today.
 - **`restart(pluginId)`** awaits `stop(pluginId)`, then calls `start` with the ids it stopped, and resolves to those ids in stop order. Each part gets new registrations and new views, so a dependent that asks `dependency` gets the new provider's exports. Slots are untouched. When the stop rejects, `restart` rejects with that error and starts nothing.
 - **`mayStop(pluginIds)`** asks the started parts that `pluginIds` names, in start order, and returns the first non-null reason as `"<id>: <reason>"`. A part with no `mayStop`, or a named id not started, gives no reason. It returns `null` when no part gives one. A `mayStop` that throws reaches the caller.
+- **`stop(pluginId)` logs `stopping <id>`** for each part it stops, in stop order, as `stopAll` does, so a restart shows every dependent it took down.
 - **`stopping()`** returns the ids in `inFlight` now, in the order their stops began.
-- `stopAll` and the `stopping <id>` log line stay as they are.
+- `stopAll` and the `stopping <id>` log line stay as they are, with one addition: the host records that `stopAll` began, and from then `start(ids)` throws `Plugin host is stopping` and starts nothing. Reason: quit waits with no cap, a `settings.json` edit during the wait reaches the switch, and nothing would stop a part started after the final stop's snapshot.
+- **An id whose stop is in flight.** `start(ids)` skips it, since it is still in `started`, as for any started id. The switch's one queue never asks for it.
+- **The order `restart` starts in.** `start(ids)`'s one rule: `parts` list order, dependencies first. It is not the previous `started` order, which an earlier restart may have changed.
+- **A rejected stop.** `stop` rejects without the ids it stopped; a caller reads `host.started` for what is left. Say so in `stop`'s comment.
 - Update the doc comments on `PluginHost` and `startPlugins` to say each rule above.
 
 GIVEN parts `a` and `b` (depends on `a`) are both disabled WHEN `start(['b', 'a'])` runs THEN `a` starts, then `b`, then `a.ready()`, then `b.ready()`
@@ -60,6 +64,11 @@ Tests (all in `src/shared/plugin-host.test.ts`, named in the file's sentence sty
 - New `'start throws, starting nothing, when a named part depends on a part not started and not named'`: parts `[part('a'), part('b', ['a'])]`, disabled `['a', 'b']`. `start(['b'])` throws `'Plugin "b" depends on plugin "a", which is not started'`; the start callback recorded no call; `host.started.size` is `0`.
 - New `'ready calls each started part's ready in start order, and logs a throw and goes on'`: parts `[part('b', ['a']), part('a'), part('c')]`, with `b`'s `ready` throwing `new Error('b ready failed')`. `host.ready()` does not throw; the ready calls are `['a', 'b', 'c']`; the log holds `'plugin-host: ready of b failed: b ready failed'`.
 - New `'restart stops the part and its dependents, then starts them again with new registrations and views'`: parts `[part('a', [], exports), part('b', ['a']), part('d')]`, where each `a` start returns `exports` that give `{ run: <start count of a> }`, and `b`'s start records `context.dependency('a')`. `restart('a')` resolves `['b', 'a']`; `b` recorded `[{ run: 1 }, { run: 2 }]`; the registrations `b` got on its second start are not the first (`not.toBe`); `[...host.started.keys()]` equals `['d', 'a', 'b']`.
+- New `'restart starts in parts order, not the previous start order'`: parts `[part('a'), part('b', ['a']), part('c', ['a'])]`; `restart('b')`, then `restart('a')`; `[...host.started.keys()]` equals `['a', 'b', 'c']`. Break: restart replays `started` order.
+- New `'restart rejects and starts nothing when its stop rejects'`: `b`'s dispose throws; `restart('b')` rejects with that error and `host.started` has no `b`.
+- New `'a start that throws leaves earlier candidates started and runs no ready'`: `start(['x', 'y'])` with `y`'s start throwing; it rethrows, `x` is started, and no `ready` ran.
+- New `'a ready that throws inside start(ids) is logged and not rethrown'`: `start(['x'])` with `x`'s `ready` throwing does not throw and logs `ready of x failed: …`.
+- New `'start after stopAll began throws'`: call `stopAll()` (not awaited), then `start(['x'])` throws `Plugin host is stopping`; `x` is not started.
 - New `it.each` `'mayStop returns the first reason a named started part gives, in start order'`. Parts `a` (reason `'a is busy'`), `b` (reason `'a round is open'`), `c` (no `mayStop`), started in that order. Rows:
   - ids `['b', 'a']` → `'a: a is busy'`
   - ids `['b', 'c']` → `'b: a round is open'`

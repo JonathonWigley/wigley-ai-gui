@@ -6,7 +6,7 @@ Wave: 3 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)
 
 Files:
-- modify, core: `src/renderer/renderer.ts` · `src/main/main.ts` · `src/contracts/core-state.ts` · `src/shared/plugin-part-harness.test-support.ts`
+- modify, core: `src/renderer/renderer.ts` · `src/main/main.ts` · `src/contracts/core-state.ts` · `src/shared/plugin-part-harness.test-support.ts` (`HostedStart` gains `ready?(): void`, and the `reals` wrapper in `partLifecycle` passes `ready: () => started.ready?.()` through, so `PartHarness.ready()` reaches each real part's `ready`, not only the part under test's)
 - modify, the page parts that hear `core.pageReady` (measured at plan time, re-verify with `grep -rln pageReady src/plugins --include='*.ts' | grep -v test`): `src/plugins/<id>/page/start.ts` for agent-lines, agent-skills, agent-strip, chat, docs, notes, sessions, unity-pool, usage and workflow; and `src/plugins/chat/page/chat-view.ts`
 - test, the tests that emit or capture it (measured at plan time, re-verify with `grep -rln pageReady src --include='*.ts' | grep test`): `src/plugins/agent-lines/page/start.test.ts` · `agent-skills/page/start.test.ts` · `agent-strip/page/start.test.ts` · `chat/page/start.test.ts` · `chat/page/chat-view.test.ts` · `docs/page/start.test.ts` · `forms/page/start.test.ts` · `primer/page/start.test.ts` · `sessions/page/start.test.ts` · `unity-pool/page/start.test.ts` · `usage/page/start.test.ts` · `workflow/page/start.test.ts` (each under `src/plugins/`) · `src/plugins/workflow-heavy-page.test.ts` · `src/shared/state/slot-store.test-d.ts`
 

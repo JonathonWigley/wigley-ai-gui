@@ -18,6 +18,7 @@ Files:
 - modify `src/plugins/settings/layouts/default/layout.js` (`pluginRow`)
 - modify `src/plugins/settings/main/selftest-script.ts` (two groups in, one out)
 - modify `docs/features/layouts/design.md` (the `settings` row of the owners table)
+- modify `docs/features/settings/design.md`: the sections line becomes Core, then one per plugin that declares settings, then Plugins, then Keymap; the filter bullet gains `plugin rows by label and id, fuzzy`
 - read `src/plugins/settings/manifest.ts`: no change. `ReadableOwner` in `src/contracts/plugin.ts` admits `'core'`, so `api.state.read(corePluginsSlot)` needs no `reads` entry.
 
 Consumes:
@@ -57,7 +58,7 @@ Produces:
   }
   ```
   and `SettingsLayout` gains `pluginRow?(parent: HTMLElement, input: PluginRowInput, kit: RowKit): HTMLElement;`, commented `// One per plugin, into rowList, in the Plugins section.`
-- `src/plugins/settings/page/settings-view.ts`: `RowInputs` gains `pluginRow: PluginRowInput`. `RowContext` gains `plugins(): readonly PluginStatus[]` and `mayDisable(pluginId: string): Promise<string | null>`. `SettingsViewDeps` gains `plugins(): readonly PluginStatus[]`. `SettingsView` gains `pluginsChanged(): void`.
+- `src/plugins/settings/page/settings-view.ts`: `RowInputs` gains `pluginRow: PluginRowInput`. `RowContext` gains `plugins(): readonly PluginStatus[]`, `mayDisable(pluginId: string): Promise<string | null>` and `refuse(reason: string): void`, which logs `refused settings.json: <reason>` and toasts `<reason>` in tone `error`, as `commit`'s `refused` path does (share one helper). A `mayDisable` that rejects is caught: it logs `write failed: <error>` and toasts it, as `commitQuietly` does, and writes nothing. `SettingsViewDeps` gains `plugins(): readonly PluginStatus[]`. `SettingsView` gains `pluginsChanged(): void`.
 - The section id `plugins` and title `Plugins`. The row key `plugin:<id>`.
 - The self-test screenshots `settings-plugins.png`, `settings-plugin-off.png` and `settings-plugin-locked.png`.
 
@@ -112,6 +113,8 @@ Tests:
   - `matchesPlugin_` `it.each`: query `gal` on label `Gallery` → true; query `usage` on id `usage-tab-line` → true; query `usage` on a status whose description holds `usage` and whose label and id do not → false.
 - `src/plugins/settings/page/settings-view.test.ts`:
   - `pluginRow_PickFalse_AsksMayDisableFirst` `it.each`: `mayDisable` resolves null → `writeSettings` is invoked once with `{ plugins: { disabled: ['gallery'] } }`; `mayDisable` resolves `'Gallery is needed by X'` → no `writeSettings`, the log holds `refused settings.json: Gallery is needed by X`, the toast is `['Gallery is needed by X', 'error']`. Break: Settings writes before it asks.
+  - `pluginRow_PickFalseOnSettings_RefusesWithoutAsking`: no `mayDisable` call, nothing written, toast `['Settings cannot switch itself off: edit settings.json', 'error']`.
+  - `pluginRow_MayDisableRejects_LogsAndWritesNothing`.
   - `pluginRow_PickTrue_WritesWithoutAsking`: no `mayDisable` call; `writeSettings` heard `{}` with fallback `['gallery']`.
   - `sections_ListPluginsBeforeKeymap_AndCoreHasNoListRow`: the section rows read `[...schema titles, 'Plugins', 'Keymap']`; Core's row keys hold no `plugins.disabled`.
   - `pluginsChanged_PluginsSectionOpen_Redraws`: a new `plugins()` list with gallery off redraws the gallery row with `value: 'false'`.

@@ -34,7 +34,8 @@ Produces:
 Decisions:
 - **The live app holds the quit (user).** Quit waits for every quit task to settle, with no cap. `runQuitTasks` holds the live app's quit the way it holds a drive run's: it calls `event.preventDefault()`, and calls `app.exit(0)` once the quit work settles. Every run mode that reaches `runQuitTasks` now holds. The self-test does not reach it: its exit skips `will-quit`, as today.
 - **A second quit during the hold (agent).** A drive run exits at once on a second `will-quit`, as today, since the drive CLI's SIGTERM must end the run. The live app keeps the hold: a second `will-quit` while `quitWork` is not null calls `event.preventDefault()` and returns. It starts no second quit work. Reason: the user rejected a cap because quitting past a hung stop cuts the save the wait is for, and a second Cmd+Q would do just that.
-- **The 5-second line (user).** `runQuitTasks` calls `logSlowQuit(work, stoppingParts, timers, quitLog)` once, on the first `will-quit`, in every run mode that holds. At quit the page has gone, so the main host is the only host still stopping parts.
+- **The quit step is a pure function (agent).** `quit-wait.ts` also exports `quitStep(runMode: RunMode, quitStarted: boolean): 'start' | 'exit' | 'hold'`: the first quit starts in every mode; a second quit in a drive run exits; a second quit in the live app holds. `runQuitTasks` acts on it, so the drive-versus-live split has a test.
+- **The 5-second line (user). `runQuitTasks` calls `logSlowQuit(work, stoppingParts, timers, quitLog)` once, on the first `will-quit`, in every run mode that holds. At quit the page has gone, so the main host is the only host still stopping parts.
   - `runQuitTasks` is module-level, and `mainHost` is a local of `createWindow`. Add a module-level `let stoppingParts: () => readonly string[] = () => [];` beside `quitTasks`. `createWindow` sets it to `() => mainHost?.stopping() ?? []` where it declares `mainHost`. Before the window exists, it reads `[]`.
   - The line names only the parts in flight at that moment. `stopAll` stops one part at a time, so a hung stop shows as its one id.
   - When `stopping()` is empty at 5 s (a quit task other than a part's stop is slow), no line is logged.
@@ -46,6 +47,8 @@ Decisions:
 GIVEN a quit whose main part `chat` has not finished stopping WHEN 5 seconds pass THEN stderr gets `wigley-ai-gui quit: quit is waiting on chat` once, and the app quits once the stop settles
 GIVEN a quit whose tasks settle in 1 second WHEN the quit runs THEN no `quit is waiting` line is written and the app quits
 GIVEN the live app is holding its quit WHEN the user quits again THEN the app keeps waiting
+
+- `quitStep_` `it.each`: (live, false) → `start`; (drive, false) → `start`; (drive, true) → `exit`; (live, true) → `hold`. Break: a second Cmd+Q cuts the save, or a drive run hangs on SIGTERM.
 
 Tests (`src/main/quit-wait.test.ts`, with a fake `Timers` that records each `set` and `clear` and runs a set callback on demand; a deferred promise for `work`):
 - `it.each` `logSlowQuit_TimerFires_LogsStoppingIdsOnce`. Rows:

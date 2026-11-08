@@ -11,8 +11,8 @@ Files:
 - modify `src/plugins/primer/main/start.ts` · test `src/plugins/primer/main/start.test.ts`
 - modify `src/plugins/docs/page/start.ts` · test `src/plugins/docs/page/start.test.ts`
 - modify `src/plugins/notes/page/start.ts` and `src/plugins/notes/page/popup.ts` · test `src/plugins/notes/page/start.test.ts`
-- modify `src/plugins/backlog/page/start.ts` · test `src/plugins/backlog/page/start.test.ts`
-- modify `src/plugins/chat/page/start.ts` and the chat page file that holds each session's draft (find it after Wave 3 task 08: the writer of `chat.place`) · test beside it
+- modify `src/plugins/backlog/page/start.ts` and `src/plugins/backlog/page/backlog-view.ts` · test `src/plugins/backlog/page/start.test.ts`
+- modify `src/plugins/chat/page/start.ts` and `src/plugins/chat/page/chat-view.ts` · test `src/plugins/chat/page/chat-view.test.ts`
 
 Consumes:
 - `MainStart<M>.mayStop?(): string | null` and `PageStart<M>.mayStop?(): string | null` in `src/contracts/plugin.ts`: a reason the part must not stop now, in words the user reads, or null; the switch asks it before a switch-off; a restart and quit do not ask ← 02.
@@ -55,9 +55,9 @@ Decisions:
 - Docs' main part holds no open work: each write goes to disk at once.
 
 **Notes, backlog and chat: typed text not yet kept holds the plugin (lead).** A switch-off clears the plugin's slots and ends its page part, so each of these would lose what the user typed. The user chose a refusal over a lost edit.
-- `notes`: the popup's draft is not saved (`saveState(draft)` from `src/shared/page/autosave.ts` is `'unsaved'` or `'saving'`). The popup gains `mayStop(): string | null`, and the part returns it. Reason: `Wait for the note to finish saving`. Autosave sends the edit within `autosaveDelayMs`, so the next try passes.
-- `backlog`: an editor is open (`state.editor` not null in `backlog-state.ts`) and its text differs from the text it opened with (`initial`). Reason: `Save or close the follow-up you are editing first`. An editor opened and left unchanged gives null.
-- `chat`: a session's draft box holds text or an image (read where Wave 3 task 08 writes `chat.place`). The first such session in the rows order gives the reason `Send or clear the draft in <label>'s chat first`, `<label>` read as docs reads it. The running agent processes do not hold chat: they go on in the session host.
+- `notes`: the popup's draft is not saved (`saveState(draft)` from `src/shared/page/autosave.ts` is not `'saved'`: unsaved, saving, held back while the popup is locked, or after a failed save). The popup gains `mayStop(): string | null`, and the part returns it. Reason: `Wait for the note to finish saving`. A failed save holds the plugin until it saves or the popup is cleared, since losing the note is what the refusal guards.
+- `backlog`: an editor is open (`store.get().editor` not null in `createBacklogView`) and `isDraftChanged(editor)` from `backlog-state.ts` is true, so the title, line and tags boxes all count. The view gains `mayStop(): string | null`, and `start.ts` returns `mayStop: () => view.mayStop()`. Reason: `Save or close the follow-up you are editing first`. An editor opened and left unchanged gives null.
+- `chat`: a session's live draft box holds text whose `trim()` is not empty, or the tab holds an attached image. Read the live box and attachments through `chat-view.ts`'s tabs, not the `chat.place` slot, which is a reload mirror that may lag a keystroke. The first such session in `sessionsRowsSlot` order gives the reason `Send or clear the draft in <label>'s chat first`, `<label>` read as docs reads it. The running agent processes do not hold chat: they go on in the session host.
 - `settings`: each edit writes its layer file at once, and it holds nothing.
 - Every other plugin holds no state the user typed. The implementer adds no other plugin.
 
@@ -84,6 +84,8 @@ Tests:
 - `primer/main/start.test.ts`: the same row through `openPrimer`, with `'s primer first`.
 - `docs/page/start.test.ts`: new `it.each` table `mayStop_$case`, in the file's naming style. Each row seeds `docsPlaceSlot` before the start (Wave 3 task 08's reload pattern: publish, set, dispose the writer, then start), with `edits: { path: '/w/plan.md', text: 'new', baseText: 'old' }` for one view id, and a sessions row `s1` labelled `gamma 2`:
 
+  Each row awaits the restore (the file's read and the pane's open) before `mayStop()`, as Wave 3's `restored_edits_refuse_the_close` does; re-check that test's pattern after Wave 3 lands.
+
   | Case | Seeded view id | Expected |
   |---|---|---|
   | `NoEdits_Null` | none | `null` |
@@ -91,7 +93,7 @@ Tests:
   | `SessionTabEdits_NamesTheSession` | `sessionSourceId('s1')` | `Save or discard the edits to plan.md in gamma 2's Docs tab first` |
 
   It catches a view skipped, a session named by its id where a label exists, and the full path in place of the file name.
-- `notes/page/start.test.ts`, `backlog/page/start.test.ts` and chat's draft test: one `it.each` table each, rows `nothing typed → null` and `typed and not kept → the reason`; backlog adds `editor open, unchanged → null`, notes adds `saved → null`. It catches a reason given for an untouched editor and a saved note still holding the plugin.
+- `notes/page/start.test.ts`, `backlog/page/start.test.ts` and chat's draft test: one `it.each` table each, rows `nothing typed → null` and `typed and not kept → the reason`; backlog adds `editor open, unchanged → null`, notes adds `saved → null` and `failed save (unsaved, saveError set) → the reason`; chat adds `whitespace only → null` and `an image with no text → the reason`. It catches a reason given for an untouched editor and a saved note still holding the plugin.
 
 Done when: `grep -n 'mayStop' src/plugins/forms/main/start.ts src/plugins/primer/main/start.ts src/plugins/docs/page/start.ts src/plugins/notes/page/start.ts src/plugins/backlog/page/start.ts src/plugins/chat/page/start.ts src/shared/agent-forms/channel-presenter.ts` prints a line in each file; compiles; the test gate runs the tests above. The filtered self-test runs `npm run selftest -- --plugin forms --plugin primer --plugin docs --plugin notes --plugin backlog --plugin chat`. The switch's refusal on screen is task 08's, and its live check is in [13](13-final-verification.md).
 Commit: one commit for the group.

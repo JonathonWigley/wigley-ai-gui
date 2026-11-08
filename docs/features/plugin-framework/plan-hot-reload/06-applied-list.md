@@ -35,7 +35,7 @@ Produces, in `src/main/plugins/applied-plugins.ts`:
   4. Every other field as it was: `scopes`, `pluginSettings`, `problems`, `theme`.
 - **Added beyond plan.md:** `export function appliedCommands(commands: Readonly<Record<CommandId, CommandInfo>>, disabled: readonly string[]): Record<CommandId, CommandInfo>`: step 3 alone. `withAppliedList` calls it, and so does `userConfig`.
 - **Added beyond plan.md:** `UserConfigDeps.applied: Pick<AppliedPlugins, 'disabled'>` in `src/main/config/user-config.ts`.
-- **Changed signature:** `startedPluginsConfig(config: AppConfig, has: (id: CommandId) => boolean): AppConfig` in `src/renderer/started-config.ts`. The `loadList` parameter goes.
+- **Changed signature:** `startedPluginsConfig(config: AppConfig, notStarted: readonly string[], has: (id: CommandId) => boolean): AppConfig` in `src/renderer/started-config.ts`. `loadList` becomes `notStarted`: the plugins whose page part the page host has not started. The page passes `[]` in this task, since main strips the binds of every plugin that is off; task 08 passes the page parts its host has not started yet, during a live start.
 
 Decisions:
 
@@ -65,9 +65,9 @@ It passes `applied` to `createUserConfig({ ...deps, store, settingInfo, applied 
 **`user-config.ts`.** `withRuntime` sets `commands: appliedCommands(deps.store.current().commands, deps.applied.disabled())`. `defaultBindLayers` and `defaultAccelerators` stay: Settings draws a keymap row only for a command in `schema.commands`, so a switched-off plugin's binds draw no row.
 
 **The page.**
-- `renderer.ts`: the `pageLoadList` const and its comment `Read once at page load: a changed list reaches the page parts on the next load.` (measured at lines 121-124) go. `startedPluginsConfig(served, hasHandler)` builds the first config. `startPlugins(…)` takes `served.settings.plugins.disabled` as its `disabled` argument, with the comment `` // Main serves the applied list in `plugins.disabled`, and no command or bind of those plugins. `` `applyPush` becomes `(next) => applyStartedPush(startedPluginsConfig(next, hasHandler))`.
+- `renderer.ts`: the `pageLoadList` const and its comment `Read once at page load: a changed list reaches the page parts on the next load.` (measured at lines 121-124) go. `startedPluginsConfig(served, [], hasHandler)` builds the first config. `startPlugins(…)` takes `served.settings.plugins.disabled` as its `disabled` argument, with the comment `` // Main serves the applied list in `plugins.disabled`, and no command or bind of those plugins. `` `applyPush` becomes `(next) => applyStartedPush(startedPluginsConfig(next, [], hasHandler))`.
 - plan.md says the page "reads the applied list from each push". Each push does carry it in `settings.plugins.disabled`. The page needs no per-push step for it, because main already removed those plugins' page binds. Task 08 starts and stops page parts through main's requests, not from the push.
-- `started-config.ts`: `startedPluginsConfig` keeps only `withoutUnhandledRuntimeBinds(config.keymap, config.commands, has, 'page')`. Its comment becomes: `` `config` as the page runs it: without the page binds of the runtime commands `has` finds no handler for, every other field as it was. Main has already removed the binds of the plugins that are off. ``
+- `started-config.ts`: `startedPluginsConfig` keeps its body, with `loadList` renamed `notStarted`. Its comment becomes: `` `config` as the page runs it: without the page and editor binds of the plugins in `notStarted` and of the runtime commands `has` finds no handler for, every other field as it was. Main has already removed the binds of the plugins that are off. ``
 
 **What the user sees change (the user's settled answer: a switched-off plugin's commands and keys leave the served config).**
 - Help, which-key and Settings' keymap section no longer list a command of a plugin in `plugins.disabled`. Today they list it, with no key.
@@ -93,7 +93,7 @@ Tests:
   The `OneOff` row catches commands dropped before the binds (the page bind `qPage` would stay), and the `NoneOff` row catches the user's list joined in (it would serve `['p']`).
 - `applied-plugins.test.ts`: `createAppliedPlugins_Set_KeepsItsOwnCopy`: `set(list)`, then `list.push('x')`; `disabled()` equals the list before the push. It catches an aliased array.
 - `selftest-config.test.ts`: the `withMainStartList` describe goes (moved above). The `mainStartList` table stays as it is: `SelfTest_StartsEvery` → `[]`, `NotSelfTest_KeepsTheList` → `['a']`.
-- `started-config.test.ts`: the `startedPluginsConfig_$case` table (`UnstartedPlugin_DropsItsBinds`, `NoneUnstarted_KeepsTheKeymap`) goes, since main owns that rule now. `startedPluginsConfig_RuntimeBindWithNoHandler_Dropped` stays, called as `startedPluginsConfig(withRuntime, (id) => id !== 'r.gone')`; it still asserts `started.keymap.page` equals `[]`.
+- `started-config.test.ts`: the `startedPluginsConfig_$case` table (`UnstartedPlugin_DropsItsBinds`, `NoneUnstarted_KeepsTheKeymap`) stays, its list argument passed as `notStarted`. `startedPluginsConfig_RuntimeBindWithNoHandler_Dropped` stays, called with `[]`.
 - `user-config.test.ts`: new `schema_AppliedPluginCommands_AreNotListed`, beside `schema_RuntimeCommands_AreListed` (measured at line 809). The `create` helper (line 127) gains an `applied` argument, default `{ disabled: () => [] }`. With manifests `p` and `q` each declaring a command and `applied.disabled()` returning `['p']`, `schema().commands` has no key starting `p.` and holds `q`'s command. It catches Settings left reading the store's unfiltered commands.
 - `config-store.test.ts`: no change, since the store does not change.
 

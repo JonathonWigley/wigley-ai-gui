@@ -19,7 +19,10 @@ Files:
 - modify `src/main/config/config-store.ts` (`setPluginsProblem`) · test `src/main/config/config-store.test.ts`
 - modify `src/main/runtime-wiring.ts` (`servedChanged`) · test `src/main/runtime-wiring.test.ts`
 - modify `src/main/main.ts` (the wiring)
-- modify `src/renderer/renderer.ts` (the page's answer, the page binds rule)
+- modify `src/renderer/renderer.ts` (wiring the page's answer, the page binds rule)
+- create `src/renderer/plugin-parts-answer.ts` · test `src/renderer/plugin-parts-answer.test.ts` (the page's answer as a function of the host)
+- test `src/renderer/started-config.test.ts` (one row)
+- test `src/preload/preload.test.ts` (one table)
 - modify `src/config/settings.ts` (the `plugins.disabled` description)
 
 Consumes:
@@ -91,7 +94,7 @@ Decisions:
 - **`disabledDependencyProblem` walks the disabled list (agent).** It walks `disabled` in list order. For the first id whose `neededBy(id, disabled, manifests)` is not empty, it returns `"plugins.disabled" names "<id>", which "<first neededBy id>" depends on.` — the text it returns today. An id no manifest has disables nothing. It returns null when no id has a dependent left on. Today it walks the manifests; the message is the same for every row of the existing test.
 - **A `mayStop` refusal is a config problem (lead).** The parts keep running. The applied list stays. The problem shows as the title bar badge and the toast, as a broken file does. The text is `"plugins.disabled" names "<id>", which cannot stop now: <reason>`. `<id>` is the text before the first `: ` of the host's answer, and `<reason>` is the rest.
 - **How the switch adds the problem (agent).** `ConfigStore.setPluginsProblem(message)` holds one message or null. While it holds one, `rebuild` serves `{ file: 'settings.json', message }` in `problems`, after the watch problem and before the file problems. A call that changes the held message queues a rebuild, as `setRuntime` does. A call with the held message does nothing. `settings.json` itself still applies: only the plugin list does not.
-- **The listener calls `apply` on every config change (agent).** `main.ts` adds `store.onChanged((config) => …)` after `wireRuntime`. It calls `pluginSwitch.apply(config.settings.plugins.disabled)`. A rejection logs `failed: <errorText(error)>` under source `plugin-switch`. So a refused switch-off is asked again on the next config change, and applies once the part lets it go. An apply with nothing to change does nothing.
+- **The listener calls `apply` on every config change (agent).** `main.ts` adds `store.onChanged((config) => …)` after `wireRuntime`. It calls `pluginSwitch.apply(config.settings.plugins.disabled)`. A rejection logs `failed: <errorText(error)>` under source `plugin-switch`. After a refusal the switch holds the refused list as pending and asks again every 2 seconds (`PLUGIN_RETRY_MS = 2000`, on the injected `Timers`, a dep `timers: Timers`), so it applies once the part lets go and the badge clears with no further edit. A config change replaces the pending list; an apply that succeeds or has nothing to change clears it. An apply with nothing to change does nothing.
 - **Under the self-test the default list is empty (agent).** `configStoreDeps` serves `defaults` whose `plugins.disabled` is `[]` when `runMode === 'selfTest'`. The self-test starts every plugin, so the store's list and the applied list agree at start, and the listener stops nothing. Without this, the first config change would switch off `agent-lines` and `usage-tab-line`. Settings' rows then take `[]` as the default too.
 - **A part started live under the self-test gets no self-test host (agent).** `selfTestFor` in `startMainParts` returns null once the launch start returned. `SelfTestHost.run` throws for a script handed over after the handover closed, so a live start of `settings` would throw. Add `let isLaunchStartDone = false` in `createWindow`, set it to true right after `startMainParts` returns, and read it in `selfTestFor`.
 - **Chat switched off works as at quit (lead).** Chat's `dispose` runs as it is: `detachAll` detaches the held processes, which go on in the session host. A live stop does not set `hasQuitStarted`. The plugin channels, the slot push and page commands keep sending to the page, so the page hears the rows close. Nothing in the switch names chat.
@@ -101,7 +104,9 @@ Decisions:
 - **Binds leave before handlers and come after them (agent).** A switch-off sets the applied list and calls `servedChanged()` before any part stops. So the push strips the plugin's binds while its handlers still exist, and `requireRegistered` on the page finds every bound command. A switch-on calls `servedChanged()` after the main start and before the page start. The page strips the page binds of every plugin with a page part its host has not started (§ The page). So the binds of a page part not yet started never reach `requireRegistered`.
 - **Runtime catalog and keymap (agent).** A stopped part's runtime commands and binds leave with its registrations. The catalog slot change re-feeds the store, as today. `servedChanged()` re-applies main's keys, since an applied-list change is not a store change.
 - **Drive actions (lead).** `core.stopPlugin` and `core.startPlugin` write `plugins.disabled` in `settings.json`, so the store's list and the switch stay one source of truth. The listener then applies the change. `core.restartPlugin` calls `PluginSwitch.restart`. Wait on `[plugin-switch] off <id>`, `on <id>` or `restarted <id>`.
-- **One apply at a time (agent).** `apply` and `restart` run in one queue, each after the one before it settles. Each `apply` diffs against the applied list when it runs.
+- **Unknown ids (agent).** `createAppliedPlugins` gets the start list with the ids no manifest has dropped (main.ts filters it), and every `applied.set` takes known ids only. So `served().settings.plugins.disabled` holds known ids alone.
+- **The `mayDisable` voice (agent).** A `mayStop` reason reaches Settings as `<label> cannot switch off now: <reason>`, the host's `<id>: ` prefix replaced by the plugin's label, matching the lock's `<label> is needed by …`.
+- **One apply at a time (agent). `apply` and `restart` run in one queue, each after the one before it settles. Each `apply` diffs against the applied list when it runs.
 
 ### The apply
 
@@ -117,7 +122,10 @@ Decisions:
 5. When `on` is not empty: `main.start(on)`. Then call `applied.set(next)`, where `next` is `disabled` with the unknown ids dropped, and `servedChanged()`. Then `page({ kind: 'start', ids: on })`. Log `on <id>` for each id of `on`, in order.
 6. Write `status` (§ Status). Call `problem(null)`. Clear the last refusal. Resolve null.
 
-When a step throws, `apply` rejects with that error. The steps after it do not run. The status is written in a `finally`, from the applied list, so it always shows what the list says.
+When a step throws, `apply` rejects with that error, and the steps after it do not run, with these rules so no part is left half on:
+- Step 4: the page's `stop` reply lists what stopped even when a stop threw (§ The page). When `main.stop` rejects, `clearOwner` still runs for each id of `off` that `main` no longer has started, and the error is rethrown. The applied list keeps naming `off`, so the next apply does not re-stop them.
+- Step 5: when `main.start(on)` throws, the switch calls `main.stop(id)` for each id of `on` that is now started, in reverse, then rethrows. The applied list still names them, so a later apply tries again from clean.
+- `restart`: a page stop that threw still returns what it stopped, and the switch starts that list again. The status is written in a `finally`, from the applied list, so it always shows what the list says.
 
 For an apply with both, the order is 2, 3, 4, 5. After step 5, or after step 4 when `on` is empty, the applied list equals `next`.
 
@@ -136,14 +144,16 @@ For an apply with both, the order is 2, 3, 4, 5. After step 5, or after step 4 w
 - `mayStop` replies `{ reason: host.mayStop(ids) }`.
 - `stop` calls `await host.stop(id)` for each id in order and replies `{ stopped }`, each stopped id once, in the order stopped.
 - `start` calls `host.start(ids)`, which calls `ready()` on each part it started. It replies `{ started }`: the ids in `host.started` after the call that were not there before. Then it applies the last push again (`applyPush(last pushed config)`, or the start config when no push came), so the started parts' binds join.
-- An answer that throws logs `page <kind> failed: <errorText(error)>` under source `plugin-switch`, and replies the empty reply of its kind: `{ reason: null }`, `{ stopped: [] }`, `{ started: [] }`.
-- **The page binds rule.** The page's `applyPush` strips the page and editor binds of the plugins in the push's applied list and of every plugin in `pageParts` whose part the host has not started: `startedPluginsConfig(next, [...applied list, ...not started], hasHandler)`.
+- An answer that throws logs `page <kind> failed: <errorText(error)>` under source `plugin-switch`. A `stop` replies the ids it stopped before the throw; `mayStop` replies `{ reason: null }` and `start` the ids started before the throw.
+- These answers live in `answerPluginParts(host, request, deps): Promise<PluginPartsReply>` in `src/renderer/plugin-parts-answer.ts`, so they have a test; `renderer.ts` only wires it.
+- **The page reconciles at load.** At the end of the page's `start()`, where the held push is applied, the page stops each started part that the push's `settings.plugins.disabled` names and starts each page part it does not name that the host has not started. So a reload that raced an `apply` still ends running what the list says.
+- **The page binds rule.** The page's `applyPush` strips the page and editor binds of the plugins in the push's applied list and of every plugin in `pageParts` whose part the host has not started: `startedPluginsConfig(next, notStarted, hasHandler)`, where `notStarted` is every plugin in `pageParts` whose part the host has not started (main has already stripped the plugins that are off).
 
 ### Main to page (`page-parts.ts`, `preload.ts`)
 
 - Copy `createPageCommands`' pattern. `request` numbers each request and sends `BRIDGE_CHANNELS.pluginParts` with `(number, request)`. The preload calls the answer and sends `BRIDGE_CHANNELS.pluginPartsDone` with `(number, reply)`. Main resolves the waiting request.
 - While `catalog.get()?.started` is not true, the request waits, and it is sent when `started` turns true.
-- With `page()` null, `request` resolves the empty reply of its kind at once.
+- With `page()` null, `request` resolves the empty reply of its kind at once. A waiting request re-reads `page()` when `started` turns true, and resolves empty when it is null then.
 - When `started` goes from true to false, each waiting request resolves its empty reply, and logs `page <kind> ended with the page` under source `plugin-switch`. A new page reads the applied list from the served config, so it starts what the list says.
 - `main.ts` passes `page: () => (hasQuitStarted ? null : livePage(window))`.
 
@@ -185,11 +195,17 @@ Tests:
   - `apply_MayStopRefuses_ChangesNothingAndSetsTheProblem`, rows main refuses and page refuses, each with `forms: a round is open in s1`: resolves `'forms: a round is open in s1'`; `calls` holds no `applied`, `stop` or `clearOwner`; `problem` heard `['"plugins.disabled" names "forms", which cannot stop now: a round is open in s1']`; log `['refused forms: a round is open in s1']`.
   - `apply_SameRefusalTwice_LogsOnce`: two applies refused the same way log one `refused` line.
   - `apply_AfterARefusal_ClearsTheProblem`: a refused apply, then the page lets go, then the same apply: `problem` heard the message, then `null`.
+  - `apply_OffAndOn_RunsStepsTwoToFive`: applied `['b']`, `apply(['a'])`: calls run a's mayStop, applied + servedChanged, a's stops and clearOwner, then b's main start, applied + servedChanged, page start.
+  - `apply_StepFails_LeavesNoPartHalfOn` rows: main stop rejects → `clearOwner` ran for the id main no longer holds, and apply rejects; main start throws after starting `a` of `['a', 'b']` → `main stop a` ran, and apply rejects.
+  - `apply_Refused_RetriesOnTheTimer`: a refusal sets one timer of `PLUGIN_RETRY_MS`; firing it after the part lets go applies the list and clears the problem.
   - `apply_Overlapping_RunsOneAtATime`: a second apply called while the first's page stop is held runs no call until the first resolves.
   - `apply_UnknownIdOrNoChange_DoesNothing`: `apply(['zzz'])` with nothing applied makes no call and resolves null.
   - `status_AfterApply_HoldsEachPlugin`, manifests `usage` and `usage-tab-line` (`dependsOn.page: ['usage']`): at creation `[{ id: 'usage', …, on: true, neededBy: ['usage-tab-line'] }, { id: 'usage-tab-line', …, on: true, neededBy: [] }]`; after `apply(['usage-tab-line'])` usage's `neededBy` is `[]` and usage-tab-line's `on` is false.
-  - `mayDisable_` `it.each`: already off → null; needed → `'Usage is needed by Usage tab line'` (with those labels in the fixture); main refuses → its answer; page refuses → its answer; none → null.
+  - `mayDisable_` `it.each`: already off → null; needed → `'Usage is needed by Usage tab line'` (with those labels in the fixture); main refuses `forms: a round is open` → `Forms cannot switch off now: a round is open` (label `Forms` in the fixture); page refuses → the same shape; none → null.
   - `restart_KeepsSlotsAndStartsWhatItStopped`: page stop replies `['b', 'a']`, main stop resolves `['b', 'a']`: `calls` is `['page stop a', 'main stop a', 'main start b,a', 'page start b,a']`; no `clearOwner`; log `['restarted a']`. Row: an applied-off id rejects `Plugin "a" is off`.
+- `src/renderer/plugin-parts-answer.test.ts`: `it.each` over a fake host: `stop` replies each id once in stop order; `start` replies the ids new in `host.started`; a `stop` that throws on the second id replies the first and logs `page stop failed: …`.
+- `src/renderer/started-config.test.ts`: a row where `notStarted` names a plugin: its page and editor binds drop, a started plugin's stay.
+- `src/preload/preload.test.ts`: `onPluginParts_AnswerSettles_SendsDone`, rows: a reply is sent with its number; a rejecting answer sends nothing and does not throw.
 - `src/main/page-parts.test.ts`: `request_WaitsForStartedThenResolvesTheReply` (sent only after the catalog's `started` turns true; resolves the done reply); `request_PageEndsOrNoPage_ResolvesEmpty`, rows `mayStop` → `{ reason: null }`, `stop` → `{ stopped: [] }`, `start` → `{ started: [] }`, for no page and for `started` falling.
 - `src/main/plugins/plugin-switch-drive.test.ts`: `stopAndStart_WriteThePluginList` rows: layer `{}` with `disabled()` `['agent-lines']`, stop `gallery` writes `{ plugins: { disabled: ['agent-lines', 'gallery'] } }`; layer `{ plugins: { disabled: ['gallery'] } }`, start `gallery` writes `{ plugins: { disabled: [] } }`; `args_BadOrUnknown_Rejects` rows `{}` → `stopPlugin takes { id: string }`, `{ id: 'zzz' }` → `No plugin "zzz"`.
 - `src/main/config/config-store.test.ts`: `setPluginsProblem_HeldMessage_IsServedAfterTheWatchProblem`: after `setPluginsProblem('x')` and the rebuild, `current().problems` holds `{ file: 'settings.json', message: 'x' }`; after `setPluginsProblem(null)` it does not; a second call with `'x'` publishes nothing.

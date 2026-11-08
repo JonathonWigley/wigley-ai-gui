@@ -22,12 +22,16 @@ Decisions:
 - § Architecture, "**A layout**": add one sentence. The page claims the Bridge once at start, so a layout reaches the app only through its kit, and no `window.wigley` holds the Bridge. Say it is not a sandbox: a layout shares the page's DOM.
 - § Architecture, "**An ambient service**" or "**A third-party tool**", whichever reads better: one sentence that a plugin cannot replace a core service. Each is built at one place in its composition root, and plugins extend it through its seams.
 - The `src/preload/` line that says `the Bridge, exposed as window.wigley`: the preload now exposes only the claim, and the page claims the Bridge once.
+- The `core-state.ts` line in the module map (`the core's own slots and CoreEvents`): `CoreEvents` goes with task 05.
+- § Architecture, "**A slot**" ends with the list of the core's own slots: add `core.plugins`.
+- The module map: add `src/preload/bridge-claim.ts`, `src/main/plugins/plugin-switch.ts`, `src/main/plugins/applied-plugins.ts`, `src/main/page-parts.ts` and `src/main/quit-wait.ts` where the map lists files at that depth; where it lists only folders, add none.
 - § Architecture, "**A setting**" and "**The user config folder**": check each for text the switch made untrue.
 - § Running and testing: name the plugin drive actions task 08 added, only if the drive entry lists actions by name (read it first).
 - The Contents lines at the top: update the § Architecture line only if a new topic joined it.
 - Check before landing. Any failure stops the task and reports a concern:
   - `grep -n "pageReady" AGENTS.md` prints nothing.
-  - `grep -n "next app start\|next page load" AGENTS.md` prints no line about `plugins.disabled`.
+  - `grep -n "follows the list on each\|on each app start" AGENTS.md` prints nothing (today's stale line reads `A page part follows the list on each page load, a main part on each app start`).
+  - `grep -n "CoreEvents" AGENTS.md` prints nothing.
   - `grep -rn "window\.wigley" src --include='*.ts' --include='*.js'` prints only the claim in `src/renderer/renderer.ts` and the comment on `Bridge` in `src/contracts/bridge.ts`.
 
 GIVEN an agent reads `AGENTS.md` WHEN it adds a page part that needs its siblings started THEN the "A plugin" entry tells it to use `ready()`.
