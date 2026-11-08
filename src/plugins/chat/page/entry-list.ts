@@ -155,7 +155,8 @@ export interface EntryList {
   // Reads whether the shown layouts put activity in the transcript, and builds
   // every entry that shows and every pending row again with the shown layouts,
   // keeping the focus, each entry's open expanders by id and each run's open
-  // state.
+  // state. The new draw moves the slots, so it scrolls as `scrollToFocus` does,
+  // or puts a held `restorePlace` value back.
   rebuild(entries: readonly ChatEntry[]): void;
   // Draws one pending row per message after the last entry, in order,
   // updating a row whose message it already holds and removing the rest.
@@ -543,6 +544,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     tellPlace();
   };
 
+  const scrollToFocus = () => drawFocus(focus.following ? 'bottom' : 'slot');
+
   // Runs the live run's part update with the time now, and arms the next tick.
   const runTick = () => {
     tick = null;
@@ -614,7 +617,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       ),
       'list',
     );
-    drawFocus(focus.following ? 'bottom' : 'slot');
+    scrollToFocus();
   };
 
   // Draws `messages` as the pending rows, in order, after the entries.
@@ -863,7 +866,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       observeSlot(deps.turnLine);
       putQueued(queued);
       changed();
-      applySavedPlace();
+      if (savedPlace === null) {
+        scrollToFocus();
+      } else {
+        applySavedPlace();
+      }
     },
     setQueued(queued) {
       putQueued(queued);
@@ -935,9 +942,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         : { text: kept.join('\n\n'), blockCount: kept.length };
     },
     followBottom,
-    scrollToFocus() {
-      drawFocus(focus.following ? 'bottom' : 'slot');
-    },
+    scrollToFocus,
     scrollBy(step, direction) {
       const scroll = scrollContent(
         list,

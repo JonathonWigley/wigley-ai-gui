@@ -29,6 +29,7 @@ import { createChatLayouts } from './chat-layouts';
 import {
   createEntryList,
   type EntryList,
+  type EntryListPlace,
   type EntryListStop,
   sourceOfLines,
 } from './entry-list';
@@ -563,9 +564,30 @@ describe('entry list', () => {
   const notices = [notice('n1'), notice('n2'), notice('n3')];
   const withRun = [user('u1'), tool('t1'), tool('t2'), assistant('done')];
 
+  // Draws one marked block per top, each a 10px box there, which a scroll into
+  // view moves to 80px, inside the list's 100px band.
+  const blocksAt =
+    (...tops: number[]): AnyBuilder =>
+    (parent, _input, kit) => {
+      const root = kit.el(parent, 'div', 'marked');
+      tops.forEach((top, index) => {
+        const block = asFake(kit.el(root, 'div')) as FocusFakeElement;
+        block.dataset.mdLines = `${index},${index + 1}`;
+        block.rectTop = top;
+        block.rectHeight = 10;
+        block.scrollIntoView = () => {
+          block.rectTop = 80;
+        };
+      });
+      return { element: root };
+    };
+
   // `thenActivity`: the restore lands on the default layout, and a layout with
-  // activity in the transcript shows after it; `movesFirst`: what the user does
-  // before that layout shows.
+  // activity in the transcript shows after it; `assistantDraws`: the assistant
+  // builders of the two layouts, `default`'s when left out; `movesFirst`: what
+  // the user does before that layout shows; `isScrolledAfter`: a scroll event
+  // after it, as the restore's own scroll event fires a frame late. `block` is
+  // the cursor's block, none when left out.
   it.each<{
     name: string;
     held: ChatEntry[];
@@ -573,8 +595,11 @@ describe('entry list', () => {
     openRuns?: string[];
     isRestoredFirst?: boolean;
     thenActivity?: boolean;
+    assistantDraws?: [first: AnyBuilder, withActivity: AnyBuilder];
     movesFirst?: (list: EntryList, scroller: FakeElement) => void;
+    isScrolledAfter?: boolean;
     focused: EntryListStop;
+    block?: number;
   }>([
     {
       name: 'a held stop',
@@ -633,6 +658,40 @@ describe('entry list', () => {
       },
       focused: { kind: 'entry', entry: assistant('done') },
     },
+    {
+      name: 'a run stop the first layout does not draw, a toggle of no expander first',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (list) => list.toggleExpander('gone', 0),
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+    },
+    {
+      name: 'a run stop the first layout does not draw, a cancel of no range first',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (list) => list.cancelRange(),
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+    },
+    {
+      name: 'a block stop the layout with activity draws lower, past the band',
+      held: withRun,
+      stopId: 'a1#1',
+      thenActivity: true,
+      assistantDraws: [blocksAt(10, 30), blocksAt(50, 150)],
+      isScrolledAfter: true,
+      focused: { kind: 'entry', entry: assistant('done') },
+      block: 1,
+    },
   ])(
     'restored_stop_that_no_entry_holds_falls_back ($name)',
     ({
@@ -641,15 +700,29 @@ describe('entry list', () => {
       openRuns = [],
       isRestoredFirst = false,
       thenActivity = false,
+      assistantDraws,
       movesFirst,
+      isScrolledAfter = false,
       focused,
+      block = null,
     }) => {
+      installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
       vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
-      const { list, layouts } = setUpList(defaultShown());
-      const scroller = asFake(list.element) as FakeElement & {
+      const [firstAssistant, activityAssistant] = assistantDraws ?? [];
+      const { list, layouts } = setUpList(
+        firstAssistant === undefined
+          ? defaultShown()
+          : withUser<ChatLayout>(
+              defaultLayout,
+              { entries: { assistant: firstAssistant } },
+              'blocks',
+            ),
+      );
+      const scroller = asFake(list.element) as FocusFakeElement & {
         scrollHeight: number;
         clientHeight: number;
       };
+      scroller.rectHeight = 100;
       scroller.scrollHeight = 400;
       scroller.clientHeight = 100;
       const place = {
@@ -666,11 +739,29 @@ describe('entry list', () => {
       }
       movesFirst?.(list, scroller);
       if (thenActivity) {
-        layouts.set(activityShown());
+        layouts.set(
+          activityShown(
+            activityAssistant === undefined
+              ? {}
+              : { entries: { assistant: activityAssistant } },
+          ),
+        );
         list.rebuild(held);
       }
+      if (isScrolledAfter) {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      }
 
+      const cursorBlock = list.focusedBlock();
       expect(list.focused()).toEqual(focused);
+      expect(
+        cursorBlock === null
+          ? null
+          : asFake(cursorBlock).parentNode!.children.indexOf(
+              asFake(cursorBlock),
+            ),
+      ).toBe(block);
     },
   );
 
@@ -1458,6 +1549,100 @@ describe('slots and focus', () => {
     expect(placeChanges.count).toBe(0);
     expect(list.place()).toBe(place);
   });
+
+  // The list holds the user entry, a run of two tools (each drawing one
+  // expander) and the answer, unless `isHeldLater`: then `change` brings them.
+  // `before` runs before the read that `change` follows.
+  it.each<{
+    name: string;
+    isHeldLater?: boolean;
+    before?: (list: EntryList) => void;
+    change: (list: EntryList, held: ChatEntry[]) => void;
+    place: EntryListPlace;
+  }>([
+    {
+      name: 'a move',
+      change: (list) => list.move(-1),
+      place: {
+        focus: { stopId: 'activity:t1', following: false, anchorId: null },
+        openRuns: [],
+        openExpanders: {},
+      },
+    },
+    {
+      name: 'a run opened',
+      change: (list) => list.toggleRun('activity:t1'),
+      place: {
+        focus: { stopId: 'a1', following: true, anchorId: null },
+        openRuns: ['activity:t1'],
+        openExpanders: {},
+      },
+    },
+    {
+      name: 'a run closed',
+      before: (list) => list.toggleRun('activity:t1'),
+      change: (list) => list.toggleRun('activity:t1'),
+      place: {
+        focus: { stopId: 'a1', following: true, anchorId: null },
+        openRuns: [],
+        openExpanders: {},
+      },
+    },
+    {
+      name: 'an expander toggled',
+      change: (list) => list.toggleExpander('t2', 0),
+      place: {
+        focus: { stopId: 'a1', following: true, anchorId: null },
+        openRuns: [],
+        openExpanders: { t2: [true] },
+      },
+    },
+    {
+      name: 'the focused entry toggled',
+      before: (list) => {
+        list.toggleRun('activity:t1');
+        list.moveFocusTo('t1');
+      },
+      change: (list) => list.toggleFocused(),
+      place: {
+        focus: { stopId: 't1', following: false, anchorId: null },
+        openRuns: ['activity:t1'],
+        openExpanders: { t1: [true] },
+      },
+    },
+    {
+      name: 'a rebuild restoring the saved expanders',
+      isHeldLater: true,
+      before: (list) =>
+        list.restorePlace({
+          focus: { stopId: 't2', following: false, anchorId: null },
+          openRuns: ['activity:t1'],
+          openExpanders: { t2: [true] },
+        }),
+      change: (list, held) => list.rebuild(held),
+      place: {
+        focus: { stopId: 't2', following: false, anchorId: null },
+        openRuns: ['activity:t1'],
+        openExpanders: { t2: [true] },
+      },
+    },
+  ])(
+    'place_AfterChange_ReflectsIt ($name)',
+    ({ isHeldLater = false, before, change, place }) => {
+      const { list } = setUpList(activityShown());
+      const held = [user('u1'), tool('t1'), tool('t2'), assistant('done')];
+      if (!isHeldLater) {
+        list.rebuild(held);
+      }
+      before?.(list);
+      const read = list.place();
+
+      change(list, held);
+
+      expect(list.place()).not.toBe(read);
+      expect(list.place()).toEqual(place);
+    },
+  );
 
   it.each<{
     case: string;

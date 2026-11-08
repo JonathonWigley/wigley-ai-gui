@@ -252,6 +252,8 @@ export interface CollapsibleCardOptions {
 export interface CollapsibleCard {
   element: HTMLElement;
   isOpen(): boolean;
+  // Opens or closes the card on screen only. A reload reopens what the user's toggle (a click on its head, Enter on
+  // the entry) or the entry's draw or update left open; a `setOpen` at any other time stays off the saved place.
   setOpen(open: boolean): void;
 }
 
