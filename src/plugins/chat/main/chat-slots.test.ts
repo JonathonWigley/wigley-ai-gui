@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { ChatEntry } from '../../../contracts/agent';
 import type { SlotChange } from '../../../contracts/state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
-import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  createSlotStore,
+  type SlotStore,
+} from '../../../shared/state/slot-store';
 import {
   chatCommandsSlot,
   chatControlsSlot,
@@ -13,7 +16,11 @@ import {
   chatSessionSlot,
   type QueuedMessage,
 } from '../contract';
-import { createChatSlots, type SessionSlots } from './chat-slots';
+import {
+  type ChatSlotWriters,
+  createChatSlots,
+  type SessionSlots,
+} from './chat-slots';
 
 const NOTICE: ChatEntry = {
   kind: 'notice',
@@ -51,19 +58,23 @@ const STATE: ChatSessionState = {
   worktrees: [],
 };
 
-// Chat's slots over a real store; `changes` holds each write in order.
-function setUp() {
-  const store = createSlotStore(() => undefined);
-  const changes: SlotChange[] = [];
-  store.onWrite((change) => changes.push(change));
-  const slots = createChatSlots({
+function writersOf(store: SlotStore): ChatSlotWriters {
+  return {
     session: store.publish(chatSessionSlot),
     entries: store.publish(chatEntriesSlot),
     controls: store.publish(chatControlsSlot),
     commands: store.publish(chatCommandsSlot),
     queued: store.publish(chatQueuedSlot),
     returned: store.publish(chatReturnedSlot),
-  });
+  };
+}
+
+// Chat's slots over a real store; `changes` holds each write in order.
+function setUp() {
+  const store = createSlotStore(() => undefined);
+  const changes: SlotChange[] = [];
+  store.onWrite((change) => changes.push(change));
+  const slots = createChatSlots(writersOf(store));
   return { store, changes, slots };
 }
 
@@ -85,6 +96,26 @@ describe('createChatSlots', () => {
       'chat.returned',
       'chat.session',
     ]);
+  });
+
+  it('dropKept_KeysAnEarlierRunLeft_DeletesThemSessionKeyFirst', () => {
+    const store = createSlotStore(() => undefined);
+    const changes: SlotChange[] = [];
+    store.onWrite((change) => changes.push(change));
+    const earlier = writersOf(store);
+    createChatSlots(earlier).open(STATE);
+    createChatSlots(earlier).open({ ...STATE, sessionId: 'row-2' });
+    for (const writer of Object.values(earlier)) {
+      writer.dispose();
+    }
+    const restarted = createChatSlots(writersOf(store));
+    changes.length = 0;
+
+    restarted.dropKept();
+
+    expect(changes).toHaveLength(12);
+    expect(changes[0]).toMatchObject({ id: 'chat.session', key: 'row-1' });
+    expect(store.read(chatSessionSlot, 'test').all().size).toBe(0);
   });
 
   it('chatSlots_SessionCloses_DeletesSessionKeyFirst', () => {

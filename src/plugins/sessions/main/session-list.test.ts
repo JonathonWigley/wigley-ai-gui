@@ -1516,6 +1516,21 @@ describe('createSessionList', () => {
     expect(list.state().selectedSessionId).toBeNull();
   });
 
+  it('open with a row id takes it back, and refuses one already held', () => {
+    const { list } = setUp();
+
+    const reopened = list.open(owned('host-1'), {
+      select: false,
+      rowId: 'kept-row',
+    });
+
+    expect(reopened.session.id).toBe('kept-row');
+    expect(() =>
+      list.open(owned('host-2'), { select: false, rowId: 'kept-row' }),
+    ).toThrow(/kept-row/);
+    expect(list.state().rows.map((row) => row.sessionId)).toEqual(['kept-row']);
+  });
+
   it('starts the contributed tool sessions when an owned session opens', () => {
     const { list } = setUp();
     const contribution = fakeContribution();

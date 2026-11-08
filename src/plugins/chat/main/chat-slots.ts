@@ -51,9 +51,12 @@ export interface SessionSlots {
 }
 
 // `open` writes the session's lists, then `chat.session` last, so a reader that
-// finds the session key finds its lists.
+// finds the session key finds its lists. `dropKept` deletes, in all six slots,
+// `chat.session` first, the key of every session an earlier run of chat left
+// in them: a restart keeps a plugin's slots.
 export interface ChatSlots {
   open(state: ChatSessionState): SessionSlots;
+  dropKept(): void;
 }
 
 // The key `open` wrote, which only `close` deletes.
@@ -64,8 +67,22 @@ function required<V>(value: V | undefined, slot: string, key: string): V {
   return value;
 }
 
+function deleteKeys(writers: ChatSlotWriters, sessionId: string) {
+  writers.session.delete(sessionId);
+  writers.entries.delete(sessionId);
+  writers.controls.delete(sessionId);
+  writers.commands.delete(sessionId);
+  writers.queued.delete(sessionId);
+  writers.returned.delete(sessionId);
+}
+
 export function createChatSlots(writers: ChatSlotWriters): ChatSlots {
   return {
+    dropKept() {
+      for (const sessionId of writers.session.all().keys()) {
+        deleteKeys(writers, sessionId);
+      }
+    },
     open(state) {
       const { sessionId } = state;
       const {
@@ -177,12 +194,7 @@ export function createChatSlots(writers: ChatSlotWriters): ChatSlots {
             return;
           }
           detached = read();
-          writers.session.delete(sessionId);
-          writers.entries.delete(sessionId);
-          writers.controls.delete(sessionId);
-          writers.commands.delete(sessionId);
-          writers.queued.delete(sessionId);
-          writers.returned.delete(sessionId);
+          deleteKeys(writers, sessionId);
         },
       };
     },

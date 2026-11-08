@@ -304,6 +304,7 @@ function record(
     confirmedPicks: {},
     returnedDrops: [],
     activeMs: 0,
+    rowId: null,
     ...fields,
   };
 }
@@ -445,7 +446,7 @@ function setUp(
       }
       opened.push(info);
       openOptions.push(options);
-      const id = `row-${opened.length}`;
+      const id = options?.rowId ?? `row-${opened.length}`;
       titles.set(id, { ...NO_TITLES });
       return {
         session: { id, info },
@@ -3086,12 +3087,16 @@ describe('createChatSessions', () => {
 });
 
 describe('createChatSessions saved sessions', () => {
-  it('restore_SavedSnapshot_OpensRestingRowsInOrder', () => {
+  it('restore_SavedSnapshot_OpensRestingRowsInOrderUnderSavedRowIds', () => {
     const test = setUp();
 
     test.chat.restore(
       {
-        sessions: [record('host-a'), record('host-b'), record('host-c')],
+        sessions: [
+          record('host-a'),
+          record('host-b', { rowId: 'kept-row' }),
+          record('host-c'),
+        ],
         selectedHostSessionId: 'host-b',
       },
       [],
@@ -3104,10 +3109,10 @@ describe('createChatSessions saved sessions', () => {
     ]);
     expect(test.openOptions).toEqual([
       { select: false },
-      { select: false },
+      { select: false, rowId: 'kept-row' },
       { select: false },
     ]);
-    expect(test.activated).toEqual(['row-2']);
+    expect(test.activated).toEqual(['kept-row']);
     expect(test.chat.sessions().map((state) => state.running)).toEqual([
       false,
       false,
@@ -3400,6 +3405,7 @@ describe('createChatSessions saved sessions', () => {
         confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
+        rowId: ROW_ID,
       },
     ]);
   });
@@ -4232,6 +4238,7 @@ describe('createChatSessions clear', () => {
           confirmedPicks: { model: 'fake-large' },
           returnedDrops: [],
           activeMs: 0,
+          rowId: ROW_ID,
         },
       ],
       selectedHostSessionId: 'uuid-2',

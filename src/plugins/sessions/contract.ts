@@ -171,9 +171,12 @@ export interface OwnedSession {
 }
 
 // `select` false opens a session in the background: its row is added unmarked
-// and the selected row stays as it was.
+// and the selected row stays as it was. `rowId` is the id the session's row
+// had before a restart of its owner or of sessions, which the row takes back;
+// left out, the row gets a new one.
 export interface OpenOptions {
   select: boolean;
+  rowId?: string;
 }
 
 // What a mark asks the user: the page's toast reads `<text>`, or
@@ -225,8 +228,8 @@ export interface SessionsMainExports {
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.
-  // Throws when `info.sessionId` is null or any session already holds that
-  // host id.
+  // Throws when `info.sessionId` is null, any session already holds that
+  // host id, or one already holds `options.rowId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets

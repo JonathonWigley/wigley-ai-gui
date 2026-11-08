@@ -34,6 +34,10 @@ export interface SavedSession {
   // The row's active time at the snapshot, its open span included. A restored
   // row's clock starts paused at it; a file written without it reads as 0.
   activeMs: number;
+  // The row's id when the snapshot was taken, which the restored row takes
+  // back, so a restart of chat or sessions keeps every reader's hold on it;
+  // null in a file written without it.
+  rowId: string | null;
 }
 
 // The titles of a session that has none.
@@ -55,7 +59,8 @@ type LaterSavedField =
   | 'controls'
   | 'confirmedPicks'
   | 'returnedDrops'
-  | 'activeMs';
+  | 'activeMs'
+  | 'rowId';
 
 type StoredSession = Omit<SavedSession, LaterSavedField> &
   Partial<Pick<SavedSession, LaterSavedField>>;
@@ -101,7 +106,7 @@ function isSavedMessage(value: unknown): boolean {
   );
 }
 
-function isOptionalProcessId(value: unknown): boolean {
+function isOptionalId(value: unknown): boolean {
   return value === undefined || value === null || typeof value === 'string';
 }
 
@@ -167,7 +172,7 @@ function isStoredSession(value: unknown): value is StoredSession {
     typeof value.sent === 'boolean' &&
     typeof value.busy === 'boolean' &&
     (value.titles === undefined || isSessionTitles(value.titles)) &&
-    isOptionalProcessId(value.processId) &&
+    isOptionalId(value.processId) &&
     isOptionalMessages(value.queued) &&
     isOptionalMessages(value.returned) &&
     isOptionalStringRecord(value.launchControls) &&
@@ -176,7 +181,8 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalControlList(value.controls) &&
     isOptionalStringRecord(value.confirmedPicks) &&
     isOptionalStrings(value.returnedDrops) &&
-    isOptionalActiveMs(value.activeMs)
+    isOptionalActiveMs(value.activeMs) &&
+    isOptionalId(value.rowId)
   );
 }
 
@@ -218,6 +224,7 @@ function parseSavedSessions(text: string): SavedSessions {
       confirmedPicks: stored.confirmedPicks ?? {},
       returnedDrops: stored.returnedDrops ?? [],
       activeMs: stored.activeMs ?? 0,
+      rowId: stored.rowId ?? null,
     })),
     selectedHostSessionId,
   };

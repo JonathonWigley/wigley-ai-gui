@@ -228,7 +228,8 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // Connected and owned sessions and the sidebar rows main holds for them. A
 // connected session has no row until `mark` or `activate` adds it at the end,
 // and `release` closes that row again; an owned session gets its row at open,
-// selected unless opened with `select` false, is joined by each relay carrying
+// under the `rowId` it was opened with, else a new id, selected unless opened
+// with `select` false, is joined by each relay carrying
 // its host id without a row of its own, a newer relay taking the join from an
 // older one, moves to a new host id by its `setHostSessionId()`, which retires
 // the old id and its relay, and ends only by its `end()`. Each session keeps
@@ -423,10 +424,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
   };
 
-  // Builds and holds the session's entry and starts its project lookup, adding
-  // no row; a throwing contribution start leaves no entry.
-  const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
-    const session: AgentSession = { id: deps.randomHex(), info };
+  // Builds and holds the session's entry under `id`, else a new id, and starts
+  // its project lookup, adding no row; a throwing contribution start leaves no
+  // entry.
+  const addEntry = (
+    info: SessionInfo,
+    owned: boolean,
+    id: string = deps.randomHex(),
+  ): SessionEntry => {
+    const session: AgentSession = { id, info };
     const group = groupOf(info);
     const entry: SessionEntry = {
       session,
@@ -723,7 +729,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (entriesHolding(hostId).length > 0) {
         throw new Error(`Host session ${hostId} is already open`);
       }
-      const entry = addEntry(info, true);
+      const rowId = options?.rowId;
+      if (rowId !== undefined && entries.has(rowId)) {
+        throw new Error(`Session ${rowId} is already open`);
+      }
+      const entry = addEntry(info, true, rowId);
       rows.set(entry.session.id, rowOf(entry));
       if (options?.select !== false) {
         writeSelection(entry.session.id);

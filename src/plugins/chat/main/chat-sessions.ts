@@ -143,8 +143,9 @@ export interface ChatSessions {
   // message; returns the row's sessionId. Throws before opening anything on
   // an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
-  // Opens a row for each saved session in order, unselected, with its saved
-  // titles, queued messages and returned messages, then activates the saved selection. A row whose
+  // Opens a row for each saved session in order, unselected, under its saved
+  // row id, with its saved titles, queued messages and returned messages, then
+  // activates the saved selection. A row whose
   // process `hosted` lists running in the current host re-attaches to it; any
   // other row rests, unheld when the host may still run its process (`hosted`
   // null: the host list is unknown). With the list unknown a saved busy turn may
@@ -597,6 +598,7 @@ function savedSessionOf(
     confirmedPicks: Object.fromEntries(session.confirmedPicks),
     returnedDrops: [...session.returnedDrops],
     activeMs: activeMsAt(activeTime, now),
+    rowId: session.sessionId,
   };
 }
 
@@ -617,7 +619,8 @@ function firstMessageTitleOf(text: string): string {
 // the folder's saved sessions it can resume; and
 // the open sessions it saves across a relaunch, re-attaching to each process
 // the session host still runs. A session's state lives in the slots
-// (`session.slots`), and `send` carries only the moment a row rests.
+// (`session.slots`), which creation clears of the rows an earlier run left,
+// and `send` carries only the moment a row rests.
 export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const { sessions, send, log } = deps;
   // Insertion order is open order, the sidebar's order for chat's rows.
@@ -635,6 +638,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // Records the restore skipped that hold queued or returned messages, saved unchanged so
   // the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
+  // A restart keeps a plugin's slots: a row the restore does not open again
+  // would stay in them.
+  deps.slots.dropKept();
   // One object per `addInstructions` call, in registration order.
   const instructionRegistrations = new Set<{ text: string }>();
   // One object per `addSendGate` call, in registration order.
@@ -2588,7 +2594,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           activeMs: record.activeMs,
           origin: 'restored',
         },
-        { select: false },
+        record.rowId === null
+          ? { select: false }
+          : { select: false, rowId: record.rowId },
       );
     } catch (error) {
       log(`session ${hostSessionId} not restored: ${errorText(error)}`);
