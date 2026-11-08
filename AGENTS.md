@@ -432,7 +432,8 @@ round; primer: an open primer), since main, not the page, decides.
   editing the default layout or adding a plugin; track sizes are theme tokens, except the side and right bars' widths, which
   open at their tokens and then are the user's, resized through the split core and kept in `uiState`
   (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, stays hidden
-  while empty, and takes contributions through `api.areas.rightBar`. In a window too narrow for both bars beside `main`,
+  while empty, and takes contributions through `api.areas.rightBar`; a contribution with rows to act on passes
+  `focus` with it, which sets its own key scope and cursor, and becomes a stop for the core's focus keys. In a window too narrow for both bars beside `main`,
   the side bar narrows to its least width first; the right bar then narrows to its own, and lies over `main`'s end when
   the room left with the side bar at its least width is less than its least width and `main`'s. Only the side bar
   resizes by keys; the right bar by drag alone.
@@ -444,7 +445,9 @@ round; primer: an open primer), since main, not the page, decides.
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
   shown mode when its side bar hides (`sideBarHidden`) or opens over the content (`sideBarOpenedOver`), and its plugin
   moves focus out of or into the side bar there; a window narrowing hides it without telling, so focus survives a
-  narrow-and-widen round trip. A hidden mode keeps its state,
+  narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
+  focuses its list, and every mode gives `focusMain`, which gives main's last pane back its scope and focus; the
+  core's focus keys reach the side bar and the right bar only through these (A focus target, below). A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
@@ -482,7 +485,9 @@ round; primer: an open primer), since main, not the page, decides.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
   the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane (one section per workflow, `Plan` for Heavy and `Checklist` for the others),
-  the agent-skills plugin's list and the context-sources plugin's breakdown are three. A side part takes no key scope and no stop.
+  the agent-skills plugin's list and the context-sources plugin's breakdown are three. A side part takes no key scope and no stop: the hub is a pane of chat's
+  own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
+  folding one.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.
 - **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
@@ -538,7 +543,12 @@ round; primer: an open primer), since main, not the page, decides.
   inside a view, as smart-splits does between Neovim and tmux. A view hands it over with
   `api.panes.setFocusTarget(target)` beside its resize target, and every base scope change drops it too. Its
   `move(direction)` moves focus to the view's own pane that way and returns true, or returns false at the view's edge;
-  the core then moves to the outer pane that way, and does nothing at the outer edge but log `no pane <direction>`.
+  the core then moves to the outer pane that way, then, at main's edge, to the **areas**: left to the shown mode's
+  side bar through the mode's `focusSideBar`, right to the right bar's first contribution that took `focus`, Alt+j/k
+  between such contributions, and back to main from either through the mode's `focusMain`. The core keeps which
+  area holds the keys and resets it to main on every base scope change it did not make, so a click into main ends
+  an area's turn. A hidden side bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
+  the pane left behind keeps the caret. The core does nothing at the outer edge but log `no pane <direction>`.
   While a scope is pushed (a dialog, a confirm, a picker, help) the core asks neither and logs
   `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses
   the pushed scope, or move focus behind it. **The outer panes** are the

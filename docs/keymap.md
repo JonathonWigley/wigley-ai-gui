@@ -53,9 +53,10 @@ hjkl is the direction in every layer; the modifier picks the verb.
   view that scrolls its content takes them: they scroll one line of the text the view shows
   (its prose's line height, the editor's own line in the editor), key repeat supplying the
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
-  views are the doc, its editor too while editing, the chat transcript, the form and its review,
-  the primer card and its review, the Backlog list and detail, and the gallery; the docs
-  tree takes both pairs and scrolls the doc beside it.
+  views are the doc, its editor too while editing, the chat transcript, the session hub, an open
+  agent-strip box's tool list, the form and its review, the primer card and its review, the Backlog
+  list and detail, the gallery and the key help; the docs tree takes both pairs and scrolls the doc
+  beside it.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
@@ -75,16 +76,30 @@ hjkl is the direction in every layer; the modifier picks the verb.
   A new main view adds its scope to that list in `src/plugins/keymap.ts`. While a box's completion popup is open,
   both keys move the popup's selection instead, ahead of every bind.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
-  between a view's own panes (the docs tree and the doc, while the tree shows; the Backlog list and detail, the Settings
-  sections and rows, and the primer popup's tasks, items and card columns), then, at the view's edge,
-  to the neighbouring chat pane in Sessions mode. Focus stops at the outer edge, and stays put while
-  any scope is pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the
-  core's `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every
-  scope; a view takes part through its focus target (AGENTS.md § Architecture), never a bind of its own.
+  between a view's own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and
+  detail, the primer popup's tasks, items and card columns, and a Chat tab's transcript, box and
+  session hub), then, at the view's edge, to the neighbouring chat pane in Sessions mode, then, at main's edge, to
+  the shown mode's side bar on the left (the Sessions list, the docs tree, the Backlog homes, the Settings sections)
+  and the right bar on the right (each part of it that has rows, Alt+j/k between them). From the side bar Alt+l, and
+  from the right bar Alt+h, return to main's last pane. A hidden side bar or right bar is no stop: focus stops at the
+  outer edge, and stays put while any scope is pushed over the view (a dialog, a confirm, a picker, a filter box,
+  help). The commands are the core's `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`,
+  bound in every scope; a view takes part through its focus target, a mode's side bar through the mode, and a right
+  bar part through its contribution (AGENTS.md § Architecture), never a bind of its own. Each move takes the
+  keyboard with it: the box or list of the pane left behind keeps no focus.
+- **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
+  focus in the list (the docs tree, the Sessions list, the Backlog homes, the Settings sections). The Sessions
+  list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
+  and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.
+- **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
+- **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line
+  where the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its
+  review, the gallery and the key help.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
   moves its left one; `Alt+Shift+j`/`Alt+Shift+k` move the pane's lower divider down and up, else its
-  upper one. Key repeat supplies the speed. A press resizes the view's own focused pane first, then
+  upper one. Key repeat supplies the speed. A press resizes the view's own focused pane first (a Chat tab's session
+  hub included), then
   the focused chat pane, then the side bar (left and right only): with no split pane focused and one
   chat pane (a Chat tab, Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side
   bar. A view's divider that is hidden (its split stacked, or its start pane hidden) passes the press on. A divider
@@ -128,7 +143,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves          |
 | `r`                | rename                               | `rr` rename the focused session                                                                                                                                                                                                                                                             |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                                                                                               |
-| `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog)                                                                                   |
+| `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `ci` show the attached images (`x` removes the shown one), `cy` copy the sign-in link (sign-in dialog) |
 | `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear                                                                                                                                                                                                              |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                                                                                                                                                          |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                                                                             |
