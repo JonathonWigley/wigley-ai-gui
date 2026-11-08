@@ -56,7 +56,7 @@ user closes a row ──► chat.sessionClosed (reason user, sent true)
 
 The sessions plugin draws its side bar as sections: Favorites, Recent, and every section a plugin registers through
 the sessions page export `addSection`. `auto-retro` registers Retro, always last, which claims the rows it launched.
-A section shows only while it holds a row, or its header has something to say.
+A plugin's section shows only while it claims a row.
 
 - Rows sit flat, with no project groups: every retro runs in `~/wigley-agents`.
 - A row's title is the title of the session it analyzes, and the sessions layout draws a claimed row muted, with a

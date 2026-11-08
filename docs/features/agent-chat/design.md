@@ -359,10 +359,10 @@ interview on 2026-10-23; this file is the record of both.
   untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
-  new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
-  the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
+  new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. A
+  close of its row removes its record — the user's, a failed start's, `closeSessionsIn`'s, or chat main's `close`; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
   app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>bX`) ends the process of every owned session chat holds
@@ -483,7 +483,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
   and shows as a permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
-  answering the oldest pending permission of the session on screen.
+  answering the oldest pending permission of the session on screen. A row launched `unattended` answers each
+  prompt itself with a deny at once, naming the unattended run as the reason, and shows the denied entry.
 - **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a
   permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
   seen.
