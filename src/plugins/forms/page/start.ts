@@ -140,8 +140,8 @@ function listenForRounds(
 
 // Shows each agent round in its session's Form tab and sends the user's answers
 // back to main; while a Form tab is the visible tab, the key scope follows the
-// forms view. A session with an open round closes only through the cancel
-// prompt. Each round draws with the layouts it names, the user's layout and
+// forms view. The close key on a session with an open round cancels the round
+// and closes the session at once; a round being sent keeps its session. Each round draws with the layouts it names, the user's layout and
 // `default`, loaded from main's set again whenever the set, the setting or the
 // open rounds change. Every store change emits the forms page events it makes,
 // each logged as it goes; other plugins read the open rounds and add card parts

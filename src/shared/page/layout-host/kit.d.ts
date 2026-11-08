@@ -139,7 +139,7 @@ export interface BaseKit {
   // A key hint for `keys` as `keys(command)` returns it, drawn for the platform.
   kbd(parent: HTMLElement, keys: string): HTMLElement;
   // `button.ui-button`, variant `secondary` when left out; never takes focus. `keys` draws its hint after the label. A
-  // click runs `command`, a qualified id, with `options.arg`. An id no plugin registers, or an `arg` the command does not
+  // click runs `command`, a qualified id, with `options.arg`. An id the app does not know, or an `arg` the command does not
   // declare, throws while the part builds, and the part falls back to `default`.
   button(
     parent: HTMLElement,

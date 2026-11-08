@@ -5,8 +5,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // and in a side pane beside the transcript, with the main action on `<Leader>ww`.
 // Main folds the agent events and the steps `set_workflow_step` reports into each
 // session's flow. Each workflow is its own plugin, which names its stages, its
-// layouts and its commands. `stageAction` runs a stage action for the session its
-// arg names, as every stage button, fold and stage key does, so it has no key.
+// layouts and its commands. `stageAction` runs a stage action for the session and
+// action its arg names; every stage button, fold and stage key runs it, and it
+// has no key of its own.
 export const workflowManifest = definePlugin({
   id: 'workflow',
   dependsOn: {

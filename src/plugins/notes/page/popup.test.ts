@@ -946,7 +946,7 @@ describe('note popup', () => {
     },
     { name: 'a locked draft', arg: 'a', locks: true, logged: null },
   ])(
-    'removeSession_OtherIdOrLockedDraft_KeepsTheSession ($name)',
+    'removeSession_RemovesOnlyTheAttachedUnlockedSession ($name)',
     async ({ arg, locks, logged }) => {
       const harness = await openPopup({
         ...DRAFT,

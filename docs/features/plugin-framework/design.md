@@ -203,10 +203,10 @@ and 2 have landed and their plan folder is gone. `plan-command-consumers/` holds
   numbered choice`. `keymap.json` can still bind any of them.
 - **A page reload keeps the user's work and place in every plugin:** chat's draft and images, forms, primer, docs with
   its unsaved edits, notes, backlog and settings, and sessions' selected tab in each session. Page slots write on each
-  change. The 400 ms autosaves that go to main flush on `pagehide`. Four limits stand: an open markup session in notes
-  or forms does not return (the fields do), box focus and vim insert mode do not return, a Settings row's open edit
-  box loses its typed text (cursor and filter return), and page slots live in main's memory, so an app restart loses
-  them.
+  change. The 400 ms autosaves that go to main flush on `pagehide`. Limits stand, each a follow-up in `followups.md`:
+  among them, an open markup session in notes or forms does not return (the fields do), box focus and vim insert mode
+  do not return, a Settings row's open edit box loses its typed text (cursor and filter return), and page slots live
+  in main's memory, so an app restart loses them.
 - **The two close seams each have one job.** Main's `addCloseGuard` refuses and returns the reason sessions shows as a
   toast, and it alone holds forms' and primer's open round. A tab's `beforeClose` stays for what the page knows or must
   ask (chat's confirm, docs' unsaved edits, a form being sent). One seam only was rejected: a guard in main cannot wait

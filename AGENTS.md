@@ -358,8 +358,8 @@ its rows across a relaunch, re-attaching each one whose process the session host
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
 guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
 an open primer), since main, not the page, decides. The user's close key ends the hold first: a tab that
-`closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through with no prompt. A close that
-holds nothing at once, such as the review's Cancel prompt, leaves the session open.
+`closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through with no prompt. The review's
+Cancel prompt is a different act: it cancels the round and leaves the session open.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes (each with the title help shows over its keys), settings

@@ -12,9 +12,11 @@ import { workflowStageActionCommand } from '../../contract';
 import type { MarkState, WorkflowKit } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
 
-// The command the main action's button runs.
+// The action the main action's button sends `workflow.stageAction`, as
+// `<Leader>ww` does.
 export const MAIN_ACTION = 'mainAction';
-// The command the fold runs, which only changes what the side pane shows.
+// The action the fold sends `workflow.stageAction`, which only changes what the
+// side pane shows.
 export const TOGGLE_FINISHED_WAVES = 'toggleFinishedWaves';
 // The class of the list whose scroll the view keeps across a draw.
 export const SIDE_LIST_CLASS = 'workflow-side-list';

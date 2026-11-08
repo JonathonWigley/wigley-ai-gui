@@ -717,7 +717,7 @@ because the earlier items rewrite many of these tests anyway.
   text: `forms/manifest.test.ts` (every bind), `finding-origins.test.ts` and `tool-definitions.test.ts` (action
   words, `maxItems`, description sentences; build a local origin table and assert the derived functions),
   `verdict.test.ts` chip text, `formats.test.ts` `F1`/`N2`, `view-model.test.ts` `Saving…`, sessions' `harnessText`
-  and `roundToastText`, `languages.test.ts`'s `@codemirror/language-data` aliases, and docs'
+  and `markToastText`, `languages.test.ts`'s `@codemirror/language-data` aliases, and docs'
   `nameProblem_Rules_PinnedMessages` unless those messages are a contract.
 - **One test naming style** — *agent-ready*: sentences. `Name_Case_Result` names remain in `main-api.test.ts`,
   `layout-loader.test.ts`, `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`,
@@ -777,10 +777,6 @@ because the earlier items rewrite many of these tests anyway.
   wigley-ai-gui.
 - **Sessions header wraps at the side bar's least width** — *agent-ready*: `Sessions` draws as `Session` / `s` at
   160 px in the default layout. Its markup predates the session groups work. Source session: Claude Code
-  e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
-- **Preview's sample statuses read as chat's** — *agent-ready*: `PREVIEW_STATUSES` in
-  `src/plugins/sessions/page/preview.ts` holds `working` and `waiting for permission`, though chat no longer sends a
-  status and a row's second line now shows only a form's or primer's. Source session: Claude Code
   e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
 - **The session clock counts a machine's sleep** — *needs a feature plan*: spans are wall-clock (`src/shared/active-time.ts`),
   so a lid closed during a turn or background work adds the whole sleep to the row's run time. Fixing it needs a power

@@ -98,7 +98,7 @@ export interface LeafMarks {
 // wiki view holds a second tree, the user's whole own list, which its rows read
 // while a filter is on. A new tree keeps the expanded ids, the selection and the
 // filter; the first tree with rows expands `defaultExpandedIds` and selects its
-// first row. A later All pages tree that first shows the Starred group expands
+// first row, unless a reloaded page's place was put back, which it takes instead. A later All pages tree that first shows the Starred group expands
 // it, and a later wiki tree expands each new group. In the wiki view with no
 // filter, a selection that names no row moves to the first row.
 //

@@ -1,6 +1,10 @@
 import './settings.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 import { placeWrites } from '../../../shared/page/place-slot';
 import { qualify } from '../../../shared/plugin-manifests';
 import {
@@ -14,10 +18,6 @@ import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
 import { readSettingsLayout } from './layout/read-layout';
 import { createSettingsView } from './settings-view';
-import {
-  keyRunner,
-  kitCommandsOf,
-} from '../../../shared/page/layout-host/base-kit';
 
 type SettingsApi = PageApi<typeof settingsManifest, SettingsChannel>;
 
