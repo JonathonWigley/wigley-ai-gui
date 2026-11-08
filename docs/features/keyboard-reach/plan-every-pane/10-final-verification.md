@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 10 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -100,3 +100,5 @@ re-ran; checks 1–2 and the real-keyboard pass are named in the report for the 
 Commit:    a fix only, per failing check, with its test
 
 ## Proof
+
+Commit none · proof: report read: gate passed (typecheck, lint, npm test 10396 pass, filtered selftest over 10 plugins 1190 PASS 0 FAIL); checks 3-43 pass with log/screenshot evidence; no fixes; checks 1-2 and real keyboard handed off · concerns: unity-pool Enter on another session's holder leaves DOM focus on the panel slot (keys reach the tab, no focus-back line); a click into main from the panel logs no focus back in main; selected Sessions card's hidden prompt line wraps to ~44px blank in a 151px side bar and the reserved space follows the cursor; out of scope: chat composer paints over the right bar at 480px, Sessions header wraps at least width, badge card clips at 210-250px, Linked from label flush with the column ring

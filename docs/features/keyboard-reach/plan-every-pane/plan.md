@@ -231,7 +231,7 @@ Every code task edits `src/plugins/keymap.ts`, so the code tasks run one per wav
 - [x] [Doc re-read](09-doc-re-read.md) — after 01–08
 
 ### Wave 10
-- [ ] [Final verification](10-final-verification.md) — after 09
+- [x] [Final verification](10-final-verification.md) — after 09
 
 ## Run log
 
@@ -247,6 +247,7 @@ Review base: 1a938e2f
 - 07 · cb0c7f2d · diff read (Produces present), typecheck pass; worker ran 7 test files (477 pass), lint pass, selftest --plugin chat,agent-strip pass · concerns: test-dom.ts and chat default layout.test.ts edited outside Files; x hint placement unchecked until Task 10's whole run; images fixture polls chat.sessions every 20ms up to 10s
 - 08 · 5a4594e2 4e4ea888 · diff read per half (Produces present, no pickerPick/pickerClose left in src), typecheck pass each; workers ran the touched tests (all pass; 08a's slip also ran the whole vitest suite, 10358 pass), lint pass, filtered selftests settings, chat, sessions, backlog, docs, notes, forms, primer pass · concerns: page-api filter-hint test has a branch inside its table; theme picker has one row, so its j/G/gg steps move nothing; keys start test vi.mocks help-view for the whole file; primer review-cursor ring not looked at; stale line numbers in the task doc (sessions start.ts:805, backlog-view.ts:343); past plan doc plan-command-consumers/01 still names pickerPick
 - 09 · ad4b5ec6 · diff read (two lines fixed, both true of the code); worker checked every listed claim, lint pass · concerns: None
+- 10 · none · report read: gate passed (typecheck, lint, npm test 10396 pass, filtered selftest over 10 plugins 1190 PASS 0 FAIL); checks 3-43 pass with log/screenshot evidence; no fixes; checks 1-2 and real keyboard handed off · concerns: unity-pool Enter on another session's holder leaves DOM focus on the panel slot (keys reach the tab, no focus-back line); a click into main from the panel logs no focus back in main; selected Sessions card's hidden prompt line wraps to ~44px blank in a 151px side bar and the reserved space follows the cursor; out of scope: chat composer paints over the right bar at 480px, Sessions header wraps at least width, badge card clips at 210-250px, Linked from label flush with the column ring
 ### Contract changes
 - focus leaving the right bar: a document focusin listener inside the core → PaneTargets.focusLeftRightBar() + Shell.rightBarHolds(node), the one listener in renderer.ts · why: keeps pane-targets.ts DOM-free and node-env testable · consumers: 02 (gets left through it) · group 01
 - SessionsParts.row (internal): (parent, input) → (parent, input, cursorPrompt) · why: the prompt element reaches the row kit's appSlot · consumers: none · group 03
@@ -276,5 +277,7 @@ Review base: 1a938e2f
 - 08: lead split the Batch into two sequential dispatches — (a) the list-picker key set, then (b)-(e) — since both halves share keymap.ts and the manifests and one worker would read past the sizing point; one commit per dispatch
 - 08: .ui-picker-key margin-inline-start auto; down/up no-ops while the picker is closed; cancel label becomes close in four pickers · group 08
 - 08: backlog detail-and-tag-picker group gains j → selected Plain item before gg (side bar keys leaves the cursor on the first row) · group 08
+- 10: checks 7 (mode change), 10 and 20 (editor half) have no live route; settled from code paths and unit tests · group 10
 ### Review rounds
 ### Test gate
+- npm test whole suite 10396 pass; typecheck and lint pass; selftest --plugin sessions,docs,backlog,settings,unity-pool,chat,agent-strip,primer,forms,notes 1190 PASS 0 FAIL (task 10). Whole self-test (placement check) waits on the user's ask.
