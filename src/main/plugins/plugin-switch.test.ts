@@ -45,8 +45,9 @@ interface SetupOptions {
 // `<side> <kind> <ids>` to `calls`, with the applied list, `clearOwner` and
 // `servedChanged` pushing to the same list. `main` and `page` hold what the
 // fakes answer, and a test changes them between calls. A refusal answers only
-// for a request naming its id, and a stop that rejects still forgets the part,
-// as the host does.
+// for a request naming its id, and a main stop forgets each part it replies
+// with even when it rejects, as the host does. `page.mayStopHold` holds a
+// page `mayStop` and `page.hold` a page stop.
 function setup({ manifests, applied: initial = [] }: SetupOptions) {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -69,6 +70,7 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
     refusal: null as string | null,
     stopReply: null as string[] | null,
     hold: null as Promise<void> | null,
+    mayStopHold: null as Promise<void> | null,
   };
   const applied = createAppliedPlugins(initial);
   const fakeTimers: Timers = {
@@ -93,11 +95,14 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
       },
       async stop(id) {
         calls.push(`main stop ${id}`);
-        started.delete(id);
+        const stopped = main.stopReply ?? [id];
+        for (const each of stopped) {
+          started.delete(each);
+        }
         if (main.stopRejects === id) {
           throw new Error(`stop of ${id} failed`);
         }
-        return main.stopReply ?? [id];
+        return stopped;
       },
       start(ids) {
         calls.push(`main start ${ids.join(',')}`);
@@ -112,6 +117,7 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
     async page(request: PluginPartsRequest): Promise<PluginPartsReply> {
       calls.push(`page ${request.kind} ${request.ids.join(',')}`);
       if (request.kind === 'mayStop') {
+        await page.mayStopHold;
         return { reason: refusalFor(page.refusal, request.ids) };
       }
       if (request.kind === 'stop') {
@@ -478,47 +484,102 @@ describe('createPluginSwitch', () => {
     expect(logs).toEqual(['[plugin-switch] restarted a']);
   });
 
+  const DEPENDS_ON_X = { main: ['x'], page: [] };
+
   it.each([
     {
       case: 'main stop rejects',
+      manifests: [manifest('a'), manifest('b')],
+      id: 'a',
       fail: { stopRejects: 'a' },
       calls: ['page stop a', 'main stop a', 'main start a', 'page start a'],
+      logs: [],
     },
     {
       case: 'main start throws',
+      manifests: [manifest('a'), manifest('b')],
+      id: 'a',
       fail: { startThrowsAt: 'a' },
-      calls: [
-        'page stop a',
-        'main stop a',
-        'main start a',
-        'main start a',
-        'page start a',
+      calls: ['page stop a', 'main stop a', 'main start a', 'main start a'],
+      logs: ['[plugin-switch] failed: start of a failed'],
+    },
+    {
+      case: 'one dependent fails to start again',
+      manifests: [
+        manifest('z', { dependsOn: DEPENDS_ON_X }),
+        manifest('x'),
+        manifest('y', { dependsOn: DEPENDS_ON_X }),
       ],
+      id: 'x',
+      pageStopped: ['z', 'y', 'x'],
+      fail: {
+        stopReply: ['z', 'y', 'x'],
+        stopRejects: 'x',
+        startThrowsAt: 'y',
+      },
+      calls: [
+        'page stop x',
+        'main stop x',
+        'main start x',
+        'main start z',
+        'main start y',
+        'page start z,x',
+      ],
+      logs: ['[plugin-switch] failed: start of y failed'],
     },
   ])('restart_StepFails_StartsWhatItStopped: $case', async (row) => {
-    const switched = setup({ manifests: [manifest('a'), manifest('b')] });
+    const switched = setup({ manifests: row.manifests });
     Object.assign(switched.main, row.fail);
+    switched.page.stopReply = row.pageStopped ?? null;
 
-    await expect(switched.pluginSwitch.restart('a')).rejects.toThrow(/failed$/);
+    await expect(switched.pluginSwitch.restart(row.id)).rejects.toThrow(
+      /failed$/,
+    );
 
     expect(switched.calls).toEqual(row.calls);
+    expect(switched.logs).toEqual(row.logs);
   });
 
-  it('dispose_ClearsTheRetryAndLaterCallsDoNothing', async () => {
+  it.each([
+    {
+      case: 'refused before dispose',
+      refusesAfterDispose: false,
+      timers: [PLUGIN_RETRY_MS],
+      cleared: [1],
+    },
+    {
+      case: 'refused after dispose',
+      refusesAfterDispose: true,
+      timers: [],
+      cleared: [],
+    },
+  ])('dispose_ClearsTheRetryAndLaterCallsDoNothing: $case', async (row) => {
     const { pluginSwitch, page, timers, cleared, calls } = setup({
       manifests: FORMS,
     });
+    const held = heldPage();
     page.refusal = REFUSAL;
-    await pluginSwitch.apply(['forms']);
-    page.refusal = null;
+    page.mayStopHold = row.refusesAfterDispose ? held.hold : null;
+    const refused = pluginSwitch.apply(['forms']);
+    await expect.poll(() => calls.at(-1)).toBe('page mayStop forms');
+    if (!row.refusesAfterDispose) {
+      await refused;
+    }
     const callsAtDispose = calls.length;
 
     pluginSwitch.dispose();
-    timers[0].run();
+    held.release();
+    const refusal = await refused;
+    page.refusal = null;
+    for (const timer of timers) {
+      timer.run();
+    }
     const applied = await pluginSwitch.apply(['notes']);
     await pluginSwitch.restart('forms');
 
-    expect(cleared).toEqual([1]);
+    expect(refusal).toBe(REFUSAL);
+    expect(timers.map(({ ms }) => ms)).toEqual(row.timers);
+    expect(cleared).toEqual(row.cleared);
     expect(applied).toBe(null);
     expect(calls.slice(callsAtDispose)).toEqual([]);
   });

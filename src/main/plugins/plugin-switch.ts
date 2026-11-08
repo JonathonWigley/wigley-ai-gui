@@ -13,7 +13,7 @@ import type {
 import type { SlotWriter } from '../../contracts/state';
 import { errorText } from '../../shared/error-text';
 import type { PluginHost } from '../../shared/plugin-host';
-import { neededBy } from '../../shared/plugin-manifests';
+import { dependencyOrder, neededBy } from '../../shared/plugin-manifests';
 import type { AppliedPlugins } from './applied-plugins';
 
 // How often a refused switch-off asks again, until the part lets go or the
@@ -92,6 +92,7 @@ function stoppedOf(reply: PluginPartsReply): readonly string[] {
 export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   const { main, applied, manifests } = deps;
   const known = new Set(manifests.map((manifest) => manifest.id));
+  const startOrder = dependencyOrder(manifests).map((manifest) => manifest.id);
   const label = (id: string) =>
     manifests.find((manifest) => manifest.id === id)?.label ?? id;
   let lastRefusal: string | null = null;
@@ -252,7 +253,9 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         clearRetry();
         return null;
       }
-      retryHandle ??= deps.timers.set(retry, PLUGIN_RETRY_MS);
+      if (!isDisposed) {
+        retryHandle ??= deps.timers.set(retry, PLUGIN_RETRY_MS);
+      }
       return refusal;
     });
 
@@ -271,26 +274,32 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     return applyQueued(() => disabled);
   };
 
-  // Starts each of `mainIds` that main no longer runs, then the page parts of
-  // `pageIds`, which the page skips where started; a start that throws is
-  // logged.
+  // Starts each of `mainIds` that main no longer runs, one at a time in
+  // dependency order, then the page parts of `pageIds` whose plugin has no
+  // main part in `mainIds` or whose main part runs again; the page skips
+  // those started. A start that throws is logged.
   const startWhatStopped = async (
     mainIds: readonly string[],
     pageIds: readonly string[],
   ) => {
-    const mainStopped = mainIds.filter((id) => !main.started.has(id));
-    try {
-      if (mainStopped.length > 0) {
-        main.start(mainStopped);
+    for (const id of startOrder) {
+      if (!mainIds.includes(id) || main.started.has(id)) {
+        continue;
       }
-    } catch (error) {
-      deps.log(SOURCE, `failed: ${errorText(error)}`);
+      try {
+        main.start([id]);
+      } catch (error) {
+        deps.log(SOURCE, `failed: ${errorText(error)}`);
+      }
     }
-    if (pageIds.length === 0) {
+    const pageStarts = pageIds.filter(
+      (id) => !mainIds.includes(id) || main.started.has(id),
+    );
+    if (pageStarts.length === 0) {
       return;
     }
     try {
-      await deps.page({ kind: 'start', ids: pageIds });
+      await deps.page({ kind: 'start', ids: pageStarts });
     } catch (error) {
       deps.log(SOURCE, `failed: ${errorText(error)}`);
     }
