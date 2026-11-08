@@ -29,6 +29,7 @@ function row(titles: SessionTitles = NO_TITLES): SessionRow {
     projectDir: null,
     hostSessionId: null,
     titles,
+    profileDir: null,
   };
 }
 

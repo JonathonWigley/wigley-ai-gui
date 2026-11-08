@@ -30,6 +30,7 @@ const projectRow = (sessionId: string) => ({
   projectDir: '/p',
   hostSessionId: null,
   titles: { user: null, agent: null, firstMessage: null },
+  profileDir: null,
 });
 
 // What throws the next time one is disposed, once.

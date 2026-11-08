@@ -53,6 +53,7 @@ function sampleRow(
     projectDir: null,
     hostSessionId: null,
     titles: PREVIEW_TITLES[sessionId] ?? NO_TITLES,
+    profileDir: null,
   };
 }
 

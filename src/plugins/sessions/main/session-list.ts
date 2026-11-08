@@ -37,6 +37,9 @@ export interface SessionListDeps {
   projectName(projectDir: string): Promise<string | null>;
   // The name the session's harness shows for it; null when it has none.
   hostSessionName(info: SessionInfo): Promise<string | null>;
+  // The session's config folder as its harness resolves it; null when the app
+  // runs no such harness.
+  configFolder(info: SessionInfo): string | null;
 }
 
 // The session list and its rows. `tools` lists every contributed tool in
@@ -97,6 +100,8 @@ interface SessionEntry {
   retiredHostIds: Set<string>;
   // The source of the row's titles, kept while the row is closed.
   titles: SessionTitles;
+  // Fixed at connect.
+  profileDir: string | null;
 }
 
 // A mark this soon after `release` closed the session's selected row is a
@@ -144,6 +149,7 @@ function rowOf(entry: SessionEntry): SessionRow {
     projectDir: info.projectDir,
     hostSessionId: info.sessionId,
     titles: { ...entry.titles },
+    profileDir: entry.profileDir,
   };
 }
 
@@ -400,6 +406,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       joinedBy: null,
       retiredHostIds: new Set(),
       titles: { user: null, agent: null, firstMessage: null },
+      profileDir: deps.configFolder(info),
     };
     entries.set(session.id, entry);
     if (info.projectDir !== null) {

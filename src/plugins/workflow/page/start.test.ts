@@ -208,6 +208,7 @@ describe('workflow page part', () => {
       projectDir: '/r',
       hostSessionId: `h-${sessionId}`,
       titles: { user: null, agent: null, firstMessage: null },
+      profileDir: null,
     };
   }
 

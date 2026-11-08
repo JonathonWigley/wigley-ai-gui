@@ -55,8 +55,8 @@ export interface SessionInfo {
   deadlineSeconds: number | null;
   // Null when the relay did not say, or named a harness the app does not know.
   harness: Harness | null;
-  // A connected session's harness config folder, as `AgentStart` holds one, which
-  // a form source has no use for; absent for the harness default.
+  // The session's harness config folder, as `AgentStart` holds one, which a form
+  // source has no use for; absent for the harness default.
   profileDir?: string;
 }
 
@@ -261,6 +261,9 @@ export interface SessionRow {
   projectDir: string | null;
   hostSessionId: string | null;
   titles: SessionTitles;
+  // The session's config folder as its harness resolves it, fixed at connect;
+  // null when the app runs no such harness.
+  profileDir: string | null;
 }
 
 export interface SessionsState {

@@ -36,6 +36,14 @@ function owned(hostId: string, projectDir = '/work/x'): SessionInfo {
   };
 }
 
+// A claude session's config folder as the fake harness resolves it; null for
+// any other harness.
+function resolvedFolder(session: SessionInfo): string | null {
+  return session.harness === 'claude'
+    ? `resolved:${session.profileDir ?? 'default'}`
+    : null;
+}
+
 const CONTEXT: ToolCallContext = {
   toolUseId: null,
   signal: new AbortController().signal,
@@ -104,6 +112,7 @@ function setUp(
     },
     projectName,
     hostSessionName,
+    configFolder: resolvedFolder,
   });
   states.length = 0;
   selections.length = 0;
@@ -575,6 +584,7 @@ describe('createSessionList', () => {
           projectDir: '/work/x',
           hostSessionId: null,
           titles: NO_TITLES,
+          profileDir: null,
         },
       ],
       selectedSessionId: '00000002',
@@ -935,6 +945,7 @@ describe('createSessionList', () => {
       activated: () => undefined,
       projectName: async () => null,
       hostSessionName: async () => null,
+      configFolder: () => null,
     });
 
     expect(written).toEqual(writes);
@@ -958,6 +969,7 @@ describe('createSessionList', () => {
           projectDir: '/work/x',
           hostSessionId: 'host-1',
           titles: NO_TITLES,
+          profileDir: 'resolved:default',
         },
       ],
       selectedSessionId: '00000001',
@@ -966,6 +978,31 @@ describe('createSessionList', () => {
     expect(emitted).toEqual([
       ['connected', { id: '00000001', info: owned('host-1'), owned: true }],
     ]);
+  });
+
+  it.each([
+    {
+      name: 'a claude session in a profile',
+      session: { ...info('/work/x', 'claude'), profileDir: '~/.claude-personal' },
+      profileDir: 'resolved:~/.claude-personal',
+    },
+    {
+      name: 'a claude session with no profile',
+      session: info('/work/x', 'claude'),
+      profileDir: 'resolved:default',
+    },
+    {
+      name: 'a session of a harness the app does not run',
+      session: info('/work/x', 'codex'),
+      profileDir: null,
+    },
+  ])('connect_RowCarriesTheResolvedConfigFolder ($name)', ({ session, profileDir }) => {
+    const { list } = setUp();
+
+    const { session: connected } = list.connect(session);
+    list.mark(connected.id);
+
+    expect(list.state().rows[0].profileDir).toBe(profileDir);
   });
 
   it('selects the opened row over the selected one', () => {

@@ -477,6 +477,9 @@ export interface AgentHarness {
     projectDir: string,
     profileDir: string | null,
   ): Promise<string | null>;
+  // The config folder `profileDir` (as `AgentStart` holds it) names, as the harness resolves it; null names the
+  // harness's default.
+  configFolder(profileDir: string | null): string;
   // Whether `profileDir` (as `AgentStart` holds it) is signed in, and as whom.
   accountStatus(profileDir: string | null): Promise<AccountStatus>;
   // Starts a sign-in to `profileDir`.

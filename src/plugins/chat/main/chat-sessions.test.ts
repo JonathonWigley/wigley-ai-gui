@@ -687,6 +687,7 @@ describe('createChatSessions', () => {
         projectDir: PROJECT_DIR,
         deadlineSeconds: null,
         harness: 'claude',
+        profileDir: '~/.claude-personal',
       },
     ]);
     expect(test.harness.processes.map((process) => process.request)).toEqual([
@@ -891,6 +892,7 @@ describe('createChatSessions', () => {
         projectDir: '/w/app',
         deadlineSeconds: null,
         harness: 'claude',
+        profileDir: '~/.claude',
       },
     ]);
     const [state] = test.sent('sessionStarted');

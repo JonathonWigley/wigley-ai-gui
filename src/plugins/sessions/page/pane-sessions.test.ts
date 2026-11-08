@@ -26,6 +26,7 @@ const ROWS: SessionRow[] = ['1', '2', '3', '4'].map((n) => ({
   projectDir: null,
   hostSessionId: `h${n}`,
   titles: { user: null, agent: null, firstMessage: null },
+  profileDir: null,
 }));
 
 // p1 shows s1, p2 shows s2, p3 is empty.

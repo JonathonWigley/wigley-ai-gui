@@ -168,6 +168,7 @@ function rowOf(sessionId: string): SessionRow {
     projectDir: '/p/proj',
     hostSessionId: null,
     titles: { user: null, agent: null, firstMessage: null },
+    profileDir: null,
   };
 }
 

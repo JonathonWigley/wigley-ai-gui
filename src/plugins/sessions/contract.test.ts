@@ -13,6 +13,7 @@ function row(sessionId: string, hostSessionId: string | null): SessionRow {
     projectDir: null,
     hostSessionId,
     titles: { user: null, agent: null, firstMessage: null },
+    profileDir: null,
   };
 }
 

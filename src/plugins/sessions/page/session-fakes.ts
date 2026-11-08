@@ -11,6 +11,7 @@ export function sessionRow(sessionId: string): SessionRow {
     projectDir: null,
     hostSessionId: null,
     titles: { user: null, agent: null, firstMessage: null },
+    profileDir: null,
   };
 }
 

@@ -1139,6 +1139,8 @@ export function createClaudeCodeHarness(
         projectsFolder(deps, projectDir, profileDir),
         sessionId,
       ),
+    configFolder: (profileDir) =>
+      claudeConfigFolder(profileDir, deps.env, deps.homeDir, deps.paths),
     accountStatus: (profileDir) => readAuthStatus(deps, profileDir),
     logIn: (profileDir, events) => startLogIn(deps, profileDir, events),
     logOut: (profileDir) => logOut(deps, profileDir),

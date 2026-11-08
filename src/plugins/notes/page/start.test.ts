@@ -104,6 +104,7 @@ describe('noteSessions', () => {
     projectDir: `/${sessionId}`,
     hostSessionId,
     titles: { user: null, agent: null, firstMessage: null },
+    profileDir: null,
   });
   const noteSession = (sessionId: string, hostSessionId: string) => ({
     sessionId,

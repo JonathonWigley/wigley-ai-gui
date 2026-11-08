@@ -40,6 +40,7 @@ const ROW: SessionRow = {
   projectDir: null,
   hostSessionId: 'host-1',
   titles: { user: null, agent: null, firstMessage: null },
+  profileDir: null,
 };
 
 const SESSION: ChatSessionState = {

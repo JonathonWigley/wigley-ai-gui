@@ -1066,6 +1066,9 @@ function fakeHistory(sessionId: string): ChatEntry[] {
   ];
 }
 
+// The config folder the fake names for a session with no profile.
+export const FAKE_DEFAULT_CONFIG_FOLDER = '~/.fake-agent';
+
 export function createFakeAgentHarness(
   clock: Clock,
   files: Pick<Files, 'write' | 'trash'>,
@@ -1977,6 +1980,7 @@ export function createFakeAgentHarness(
       });
       return () => release();
     },
+    configFolder: (profileDir) => profileDir ?? FAKE_DEFAULT_CONFIG_FOLDER,
     async accountStatus(profileDir) {
       return statusOf(profileDir);
     },
