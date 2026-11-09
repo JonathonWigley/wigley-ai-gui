@@ -214,6 +214,15 @@ export interface ContributeToolsOptions {
   readonly mainAgentOnly?: boolean;
 }
 
+// A project name for a session folder, or null when the namer names none.
+export type ProjectNamer = (projectDir: string) => string | null;
+
+// `changed()` re-asks every row's project; `dispose` removes the namer and
+// re-asks every row without it.
+export interface ProjectNamerHandle extends Disposable {
+  changed(): void;
+}
+
 export interface SessionsMainExports {
   // Starts the contribution's tool session in every live session, and in each
   // session that connects later. The handle's `dispose` ends those tool
@@ -264,8 +273,8 @@ export interface SessionsMainExports {
   // `closed`; a guard refusing keeps the row and logs. An unknown or owned
   // session, or one with no row, is left alone without a log line.
   release(sessionId: string): void;
-  // The session's side-bar label (`gamma 2`), kept while its row is closed;
-  // null for a session not connected.
+  // The session's side-bar label (`gamma 2`), kept while its row is closed and
+  // changed by `relocate`; null for a session not connected.
   label(sessionId: string): string | null;
   // The user closing a session's row, or `release`, asks every guard first,
   // and the row stays while any answers a reason, the first of which the page
@@ -305,6 +314,23 @@ export interface SessionsMainExports {
   // A copy of the session's titles, kept while its row is closed; null for a
   // session not connected.
   titles(sessionId: string): SessionTitles | null;
+  // Adds a namer for every row's project. A session with a folder takes the
+  // name of the newest namer that answers non-null for it, namers asked newest
+  // first and none after the first answer; a namer that throws is logged and
+  // counts as null. With no name it takes its folder's origin repo name once
+  // that lookup lands, else the folder's name. Adding asks nothing: the handle's
+  // `changed()` re-asks every session, and its first `dispose` removes the
+  // namer and re-asks every session; `changed()` after that does nothing. Each
+  // call is its own registration, so one function added twice is two namers.
+  addProjectNamer(namer: ProjectNamer): ProjectNamerHandle;
+  // Moves an owned session whose process has not started to `projectDir`: the
+  // caller must call it before that process starts, which sessions cannot
+  // check. Changes `projectDir` inside the session's one info object, so every
+  // holder of it sees the new folder, renumbers its label in the new folder,
+  // re-reads its project there, writes its row and emits `relocated`. The
+  // folder it already holds does nothing. Throws for a session the list does not
+  // hold, and for a connected one, writing nothing.
+  relocate(sessionId: string, projectDir: string): void;
   // Holds each relay's connect until `until` settles, up to a bound, so a
   // relaunched relay joins the row a plugin is about to open rather than
   // opening its own. Only a relay's hello waits: `connect` does not.
@@ -327,6 +353,9 @@ export interface ConnectedSessionEvent extends AgentSession {
 // allowing; the session itself stays until it ends.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
 // after the row write that carries it, with the session's info already updated.
+// `relocated` is an owned session moved to another folder before its process
+// started, emitted after the row write that carries it, with the session's info
+// already updated.
 // `titleChanged` is a session's titles changing, after the row write that carries
 // them when the session has a row.
 export interface SessionsMainEvents extends EventShape {
@@ -334,6 +363,7 @@ export interface SessionsMainEvents extends EventShape {
   ended: { sessionId: string };
   closed: { sessionId: string };
   hostSessionChanged: AgentSession;
+  relocated: AgentSession;
   titleChanged: { sessionId: string; titles: SessionTitles };
 }
 
@@ -343,15 +373,16 @@ export interface SessionsMainEvents extends EventShape {
 // `markToast` is the toast of the last mark that found the row unmarked, kept
 // until an activate clears it;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
-// when the session connects, `hostSessionId` also changed by the owner through
-// `setHostSessionId`. `titles` are the session's titles, kept across a host id
+// when the session connects, `projectDir` also changed by the owner through
+// `relocate`, `hostSessionId` through `setHostSessionId`. `titles` are the session's titles, kept across a host id
 // change.
 export interface SessionRow {
   sessionId: string;
   label: string;
-  // The session's project: the origin repo name of its folder, else the
-  // folder's name, else the no-folder label. Set to the fallback at connect and
-  // changed once when the lookup lands.
+  // The session's project: the newest registered namer's name for its folder,
+  // else the origin repo name of its folder, else the folder's name, else the
+  // no-folder label. Re-asked at each namer's `changed()` and `dispose()`, at
+  // the lookup's landing and at `relocate`.
   project: string;
   harness: Harness | null;
   marked: boolean;
@@ -648,7 +679,8 @@ export const sessionsPlaceSlot: KeyedSlotKey<
 // Main's rows, keyed by each row's `sessionId`, in the order main added them. In
 // one list operation main writes every row, then the selection, then emits its
 // events, all in one synchronous block. A row's `label` (`gamma 2`) is fixed for
-// its life. It holds rows with an owner too; the Sessions page leaves them out.
+// its life, except at a `relocate`, which renumbers it in its new folder. It
+// holds rows with an owner too; the Sessions page leaves them out.
 export const sessionsRowsSlot: KeyedSlotKey<SessionRow, 'main', 'sessions'> = {
   id: 'sessions.rows',
   process: 'main',

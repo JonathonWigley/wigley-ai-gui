@@ -11,6 +11,7 @@ import {
   type AgentSession,
   type ConnectedSession,
   type OwnedSession,
+  type ProjectNamer,
   type SessionInfo,
   type SessionsMainEvents,
   type SessionsMainExports,
@@ -36,7 +37,8 @@ export interface SessionListDeps {
   selection: SlotWriter<string | null>;
   // The user activated a session; called before the writes it causes.
   activated(sessionId: string): void;
-  // The project of a session in `projectDir`; null when the folder has none.
+  // The origin repo name of `projectDir`, the project a row takes when no namer
+  // names its folder; null when the folder has none.
   projectName(projectDir: string): Promise<string | null>;
   // The name the session's harness shows for it; null when it has none.
   hostSessionName(info: SessionInfo): Promise<string | null>;
@@ -73,7 +75,8 @@ export interface SessionList extends Omit<
   // Ends every session the list holds, connected and owned, each as its own
   // `end()` does, a throw not skipping the rest, then throws the first error.
   endAll(): void;
-  // The plugin's stop: a project lookup landing after it changes nothing.
+  // The plugin's stop: a project lookup landing after it, and a namer's
+  // `changed()` or `dispose()`, change nothing.
   stop(): void;
 }
 
@@ -86,14 +89,21 @@ interface Contribution {
 // tool name routed to the tool session that serves it.
 interface SessionEntry {
   session: AgentSession;
-  // Fixed at connect: the project folder's last segment, else `Codex session`
-  // for a Codex session or `session`.
+  // Set at connect and again by `relocate`: the `label` override, else the
+  // project folder's last segment, else `Codex session` for a Codex session or
+  // `session`.
   group: string;
-  // 1 for the first of its group, which reads without a number.
+  // Set at connect and again by `relocate`; 1 for the first of its group,
+  // which reads without a number.
   number: number;
-  // Starts as `group` and takes the folder's project name when its lookup
-  // lands, kept while the row is closed.
+  // The row's project: `namedProject`, else `originProject`, else `group`;
+  // kept while the row is closed.
   project: string;
+  // The namers' last answer for the folder; null for none or no folder.
+  namedProject: string | null;
+  // The folder's origin repo name; null until its lookup lands, and again
+  // after a `relocate`.
+  originProject: string | null;
   toolSessions: Map<Contribution, ToolSession>;
   toolRoutes: Map<string, ToolSession>;
   // Started by `open`; `joinedBy` names the relay handle holding the join,
@@ -149,6 +159,12 @@ function freeNumber(entries: Iterable<SessionEntry>, group: string): number {
     number++;
   }
   return number;
+}
+
+function projectOf(
+  entry: Pick<SessionEntry, 'namedProject' | 'originProject' | 'group'>,
+): string {
+  return entry.namedProject ?? entry.originProject ?? entry.group;
 }
 
 function labelOf(entry: SessionEntry): string {
@@ -267,9 +283,13 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // `closeSession` returns the refusing guard's reason, else null. A guard's
 // `cancelHold` that throws is logged, and its `mayClose` then decides. Each session's
 // titles live on its entry, copied onto its row while it has one, and last
-// while the session does; so does its project, which starts as the group and
-// writes the row when its lookup changes the project of a session with a row,
-// until `stop`. Each `mark` and `activate` of a connected session reads its
+// while the session does; so does its project: the newest registered namer's
+// name for its folder, else its folder's origin repo name once that lookup
+// lands, else the group, asked again at each namer's `changed()` and `dispose()`
+// and at the lookup's landing, writing the row of a session whose project
+// changed, until `stop`. `relocate` moves an owned session to another folder,
+// renumbering its label there, asking its project again and starting the new
+// folder's lookup; the old folder's late landing changes nothing. Each `mark` and `activate` of a connected session reads its
 // harness's name for it into its `firstMessage` title, until `stop`.
 // The rows and the selection live in the writers, whose slots outlive a stop, so
 // creation clears them. One operation runs in one synchronous block: every row
@@ -286,6 +306,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const mainAgentOnlyByTool = new Map<string, boolean>();
   // Each registration its own object, so one function added twice is two.
   const toolCallGuards = new Set<{ guard: ToolCallGuard }>();
+  // Each registration its own object, so one function added twice is two.
+  const projectNamers = new Set<{ namer: ProjectNamer }>();
   const toolsChanged = createListeners<void>();
   const entries = new Map<string, SessionEntry>();
   const { rows, selection } = deps;
@@ -422,33 +444,74 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('closed', { sessionId });
   };
 
-  // Asks for the project of the entry's folder; a null, a rejection or a landing
-  // after `stop` keeps the fallback.
+  // The name the newest namer answering non-null gives `projectDir`, else null;
+  // a namer that throws is logged and counts as null.
+  const namedProjectOf = (projectDir: string | null): string | null => {
+    if (projectDir === null) {
+      return null;
+    }
+    for (const registration of [...projectNamers].reverse()) {
+      try {
+        const name = registration.namer(projectDir);
+        if (name !== null) {
+          return name;
+        }
+      } catch (error) {
+        deps.log(`project namer failed for ${projectDir}: ${errorText(error)}`);
+      }
+    }
+    return null;
+  };
+
+  // Sets the entry's project from what it holds, writing its row only when the
+  // project changed.
+  const updateProject = (entry: SessionEntry) => {
+    const project = projectOf(entry);
+    if (project === entry.project) {
+      return;
+    }
+    entry.project = project;
+    const row = rows.get(entry.session.id);
+    if (row !== undefined) {
+      rows.set(entry.session.id, { ...row, project });
+    }
+  };
+
+  // Asks the namers again for every entry, with or without a row, until `stop`.
+  const reaskNamers = () => {
+    if (isStopped) {
+      return;
+    }
+    for (const entry of entries.values()) {
+      entry.namedProject = namedProjectOf(entry.session.info.projectDir);
+      updateProject(entry);
+    }
+  };
+
+  // Asks for the origin repo name of the entry's folder; a rejection is logged,
+  // and a landing after `stop`, after the session's end or for a folder the
+  // session no longer holds changes nothing.
   const lookUpProject = (entry: SessionEntry, projectDir: string) => {
-    const appId = entry.session.id;
     deps.projectName(projectDir).then(
       (name) => {
-        if (isStopped) {
+        const isStale =
+          isStopped ||
+          entries.get(entry.session.id) !== entry ||
+          entry.session.info.projectDir !== projectDir;
+        if (isStale) {
           return;
         }
-        const isNewProject = name !== null && name !== entry.project;
-        if (!isNewProject) {
-          return;
-        }
-        entry.project = name;
-        const row = rows.get(appId);
-        if (row !== undefined) {
-          rows.set(appId, { ...row, project: name });
-        }
+        entry.originProject = name;
+        updateProject(entry);
       },
       (error: unknown) =>
         deps.log(`project of ${projectDir} not read: ${errorText(error)}`),
     );
   };
 
-  // Builds and holds the session's entry under `id`, else a new id, and starts
-  // its project lookup, adding no row; a throwing contribution start leaves no
-  // entry.
+  // Builds and holds the session's entry under `id`, else a new id, its project
+  // already the namers' answer, and starts its origin lookup, adding no row; a
+  // throwing contribution start leaves no entry.
   const addEntry = (
     info: SessionInfo,
     owned: boolean,
@@ -457,11 +520,14 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   ): SessionEntry => {
     const session: AgentSession = { id, info };
     const group = groupOf(info);
+    const namedProject = namedProjectOf(info.projectDir);
     const entry: SessionEntry = {
       session,
       group,
       number: freeNumber(entries.values(), group),
-      project: group,
+      project: projectOf({ namedProject, originProject: null, group }),
+      namedProject,
+      originProject: null,
       ...startToolSessions(contributions, session, deps.log),
       owned,
       joinedBy: null,
@@ -581,6 +647,46 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     }
     deps.log(`owned session ${appId} now host ${newHostId}`);
     deps.emit('hostSessionChanged', entry.session);
+  };
+
+  // Changes `projectDir` inside the session's one info object, so every holder
+  // of it sees the new folder, then gives the entry the new folder's label and
+  // project; `SessionsMainExports.relocate` states the rules.
+  const relocate = (sessionId: string, projectDir: string) => {
+    const entry = entries.get(sessionId);
+    if (entry === undefined) {
+      throw new Error(`relocate for unknown session ${sessionId}`);
+    }
+    if (!entry.owned) {
+      throw new Error(
+        `relocate for session ${sessionId}, which no plugin opened`,
+      );
+    }
+    const { info } = entry.session;
+    if (info.projectDir === projectDir) {
+      return;
+    }
+    info.projectDir = projectDir;
+    entry.group = groupOf(info);
+    const otherEntries = [...entries.values()].filter(
+      (other) => other !== entry,
+    );
+    entry.number = freeNumber(otherEntries, entry.group);
+    entry.originProject = null;
+    entry.namedProject = namedProjectOf(projectDir);
+    entry.project = projectOf(entry);
+    lookUpProject(entry, projectDir);
+    const row = rows.get(sessionId);
+    if (row !== undefined) {
+      rows.set(sessionId, {
+        ...row,
+        projectDir,
+        label: labelOf(entry),
+        project: entry.project,
+      });
+    }
+    deps.log(`owned session ${sessionId} moved to ${projectDir}`);
+    deps.emit('relocated', entry.session);
   };
 
   const setTitle: SessionsMainExports['setTitle'] = (
@@ -952,6 +1058,23 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       const entry = entries.get(sessionId);
       return entry === undefined ? null : { ...entry.titles };
     },
+    addProjectNamer(namer) {
+      const registration = { namer };
+      projectNamers.add(registration);
+      return {
+        changed: () => {
+          if (projectNamers.has(registration)) {
+            reaskNamers();
+          }
+        },
+        dispose: () => {
+          if (projectNamers.delete(registration)) {
+            reaskNamers();
+          }
+        },
+      };
+    },
+    relocate,
     setUserTitle(sessionId, title, maxLength) {
       const isClearing = title === null || normalizedTitle(title) === '';
       const problem = isClearing ? null : titleProblem(title, maxLength);

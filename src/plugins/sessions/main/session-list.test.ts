@@ -8,6 +8,8 @@ import {
   type Harness,
   type MarkOptions,
   type OwnedSession,
+  type ProjectNamer,
+  type ProjectNamerHandle,
   type SessionInfo,
   sessionsRowsSlot,
   sessionsSelectionSlot,
@@ -200,6 +202,22 @@ function deferred<T>(): Deferred<T> {
 }
 
 type SessionList = ReturnType<typeof setUp>['list'];
+
+// A namer answering from `answers` by folder, recording each folder asked in
+// `asked`: a folder it lacks answers null, and an Error is thrown.
+function namerFrom(
+  answers: Record<string, string | null | Error>,
+  asked: string[] = [],
+): ProjectNamer {
+  return (projectDir) => {
+    asked.push(projectDir);
+    const answer = answers[projectDir] ?? null;
+    if (answer instanceof Error) {
+      throw answer;
+    }
+    return answer;
+  };
+}
 type FakeClock = ReturnType<typeof setUp>['clock'];
 
 // Connects a session and marks it, so it holds a row.
@@ -2762,6 +2780,404 @@ describe('createSessionList', () => {
       expect(logged).toEqual(expectedLogged);
     },
   );
+
+  // Each row registers `namers` oldest first, connects and marks `sessions`,
+  // then lands every lookup with `landing`. `asked` holds the folders each namer
+  // was asked for, in registration order.
+  it.each<{
+    name: string;
+    namers: Record<string, string | null | Error>[];
+    sessions: SessionInfo[];
+    landing: string | null;
+    projectsAtConnect: string[];
+    projects: string[];
+    asked: string[][];
+    logged: string[];
+  }>([
+    {
+      name: "a namer's name shows at connect and outlasts the lookup",
+      namers: [{ '/work/ng-2': 'New Games' }],
+      sessions: [info('/work/ng-2')],
+      landing: 'new-games-prototypes',
+      projectsAtConnect: ['New Games'],
+      projects: ['New Games'],
+      asked: [['/work/ng-2']],
+      logged: [],
+    },
+    {
+      name: "a namer's null leaves the origin lookup",
+      namers: [{}],
+      sessions: [info('/work/ng-2')],
+      landing: 'new-games-prototypes',
+      projectsAtConnect: ['ng-2'],
+      projects: ['new-games-prototypes'],
+      asked: [['/work/ng-2']],
+      logged: [],
+    },
+    {
+      name: 'the newest namer wins',
+      namers: [{ '/work/a': 'Older' }, { '/work/a': 'Newer' }],
+      sessions: [info('/work/a')],
+      landing: 'repo',
+      projectsAtConnect: ['Newer'],
+      projects: ['Newer'],
+      asked: [[], ['/work/a']],
+      logged: [],
+    },
+    {
+      name: "a newer namer's null asks the older",
+      namers: [{ '/work/a': 'Older' }, {}],
+      sessions: [info('/work/a')],
+      landing: 'repo',
+      projectsAtConnect: ['Older'],
+      projects: ['Older'],
+      asked: [['/work/a'], ['/work/a']],
+      logged: [],
+    },
+    {
+      name: 'a throwing namer is logged and counts as null',
+      namers: [{ '/work/a': 'Older' }, { '/work/a': new Error('bad rule') }],
+      sessions: [info('/work/a')],
+      landing: 'repo',
+      projectsAtConnect: ['Older'],
+      projects: ['Older'],
+      asked: [['/work/a'], ['/work/a']],
+      logged: ['project namer failed for /work/a: bad rule'],
+    },
+    {
+      name: 'no folder asks no namer',
+      namers: [{ '/work/a': 'Named' }],
+      sessions: [info(null)],
+      landing: null,
+      projectsAtConnect: ['session'],
+      projects: ['session'],
+      asked: [[]],
+      logged: [],
+    },
+  ])(
+    'rowProjectFollowsTheNamers: $name',
+    async ({
+      namers,
+      sessions,
+      landing,
+      projectsAtConnect,
+      projects,
+      asked,
+      logged: expectedLogged,
+    }) => {
+      const lookups: Deferred<string | null>[] = [];
+      const { list, logged } = setUp(() => {
+        const lookup = deferred<string | null>();
+        lookups.push(lookup);
+        return lookup.promise;
+      });
+      const askedByNamer = namers.map(() => [] as string[]);
+      namers.forEach((answers, index) =>
+        list.addProjectNamer(namerFrom(answers, askedByNamer[index])),
+      );
+      sessions.forEach((session) => connectWithRow(list, session));
+
+      expect(rowProjects(list.state())).toEqual(projectsAtConnect);
+      lookups.forEach((lookup) => lookup.resolve(landing));
+      await new Promise((settle) => setImmediate(settle));
+
+      expect(rowProjects(list.state())).toEqual(projects);
+      expect(askedByNamer).toEqual(asked);
+      expect(logged).toEqual(expectedLogged);
+    },
+  );
+
+  // One namer answering from `answers`, starting `/work/a` → `P`, over rows in
+  // `/work/a` and `/work/b`, their lookups landed `repo-a` and `repo-b` when
+  // `landed`. `rowsWritten` names the rows the act wrote, by folder; the act
+  // writes nothing else.
+  it.each<{
+    name: string;
+    landed: boolean;
+    act: (scene: {
+      list: SessionList;
+      handle: ProjectNamerHandle;
+      answer(next: Record<string, string>): void;
+      clearCalls(): void;
+    }) => void;
+    projects: string[];
+    rowsWritten: ('a' | 'b')[];
+  }>([
+    {
+      name: 'changed with a new name rewrites only that row',
+      landed: true,
+      act: ({ handle, answer }) => {
+        answer({ '/work/a': 'Q' });
+        handle.changed();
+      },
+      projects: ['Q', 'repo-b'],
+      rowsWritten: ['a'],
+    },
+    {
+      name: 'changed to null falls back to the landed origin',
+      landed: true,
+      act: ({ handle, answer }) => {
+        answer({});
+        handle.changed();
+      },
+      projects: ['repo-a', 'repo-b'],
+      rowsWritten: ['a'],
+    },
+    {
+      name: 'changed to null before the lookup lands falls back to the folder',
+      landed: false,
+      act: ({ handle, answer }) => {
+        answer({});
+        handle.changed();
+      },
+      projects: ['a', 'b'],
+      rowsWritten: ['a'],
+    },
+    {
+      name: 'changed with nothing new writes nothing',
+      landed: true,
+      act: ({ handle }) => handle.changed(),
+      projects: ['P', 'repo-b'],
+      rowsWritten: [],
+    },
+    {
+      name: 'dispose re-asks without the namer',
+      landed: true,
+      act: ({ handle }) => handle.dispose(),
+      projects: ['repo-a', 'repo-b'],
+      rowsWritten: ['a'],
+    },
+    {
+      name: 'changed after dispose writes nothing',
+      landed: true,
+      act: ({ handle, answer, clearCalls }) => {
+        handle.dispose();
+        answer({ '/work/b': 'Z' });
+        clearCalls();
+        handle.changed();
+      },
+      projects: ['repo-a', 'repo-b'],
+      rowsWritten: [],
+    },
+    {
+      name: 'a second dispose writes nothing',
+      landed: true,
+      act: ({ handle, clearCalls }) => {
+        handle.dispose();
+        clearCalls();
+        handle.dispose();
+      },
+      projects: ['repo-a', 'repo-b'],
+      rowsWritten: [],
+    },
+    {
+      name: 'changed after stop writes nothing',
+      landed: true,
+      act: ({ list, handle, answer }) => {
+        list.stop();
+        answer({ '/work/a': 'Q' });
+        handle.changed();
+      },
+      projects: ['P', 'repo-b'],
+      rowsWritten: [],
+    },
+  ])(
+    'projectNamerHandle_ReasksEveryRow: $name',
+    async ({ landed, act, projects, rowsWritten }) => {
+      const lookups = new Map<string, Deferred<string | null>>();
+      const { list, calls } = setUp((projectDir) => {
+        const lookup = deferred<string | null>();
+        lookups.set(projectDir, lookup);
+        return lookup.promise;
+      });
+      let answers: Record<string, string> = { '/work/a': 'P' };
+      const handle = list.addProjectNamer(
+        (projectDir) => answers[projectDir] ?? null,
+      );
+      const idsByFolder = {
+        a: connectWithRow(list, info('/work/a')).session.id,
+        b: connectWithRow(list, info('/work/b')).session.id,
+      };
+      if (landed) {
+        lookups.get('/work/a')?.resolve('repo-a');
+        lookups.get('/work/b')?.resolve('repo-b');
+        await new Promise((settle) => setImmediate(settle));
+      }
+      calls.length = 0;
+
+      act({
+        list,
+        handle,
+        answer: (next) => {
+          answers = next;
+        },
+        clearCalls: () => {
+          calls.length = 0;
+        },
+      });
+
+      expect(rowProjects(list.state())).toEqual(projects);
+      expect(calls).toEqual(
+        rowsWritten.map((folder) => `rows set ${idsByFolder[folder]}`),
+      );
+    },
+  );
+
+  it('changed_SessionWithNoRow_ItsNextRowCarriesTheNewName', () => {
+    const { list, states } = setUp();
+    let answer = 'P';
+    const handle = list.addProjectNamer(() => answer);
+    const { session } = list.connect(info('/work/a'));
+
+    answer = 'Q';
+    handle.changed();
+
+    expect(states).toEqual([]);
+    list.mark(session.id, MARK);
+    expect(rowProjects(list.state())).toEqual(['Q']);
+  });
+
+  // Each row opens `opened` selected after a contribution, then `arrange`,
+  // then moves it to `/work/ng-3` and lands the lookups `landings` names.
+  it.each<{
+    name: string;
+    opened?: SessionInfo;
+    arrange?: (list: SessionList) => void;
+    namers?: Record<string, string | null | Error>[];
+    landings?: Record<string, string>;
+    label: string;
+    project: string;
+  }>([
+    {
+      name: "takes the new folder's label and its lookup",
+      landings: { '/work/ng-3': 'new-games-prototypes' },
+      label: 'ng-3',
+      project: 'new-games-prototypes',
+    },
+    {
+      name: "numbers the label among the new folder's sessions",
+      arrange: (list) => {
+        connectWithRow(list, info('/work/ng-3'));
+      },
+      label: 'ng-3 2',
+      project: 'ng-3',
+    },
+    {
+      name: 'a namer names the new folder',
+      namers: [{ '/work/ng-3': 'New Games' }],
+      label: 'ng-3',
+      project: 'New Games',
+    },
+    {
+      name: "the old folder's late lookup changes nothing",
+      landings: { '/work/ng-1': 'old-repo' },
+      label: 'ng-3',
+      project: 'ng-3',
+    },
+    {
+      name: 'a label override stays the group',
+      opened: { ...owned('host-1', '/work/ng-1'), label: 'chat' },
+      label: 'chat',
+      project: 'chat',
+    },
+  ])(
+    'relocate_OwnedRow_MovesItsFolderLabelAndProject: $name',
+    async ({
+      opened = owned('host-1', '/work/ng-1'),
+      arrange,
+      namers = [],
+      landings = {},
+      label,
+      project,
+    }) => {
+      const lookups = new Map<string, Deferred<string | null>[]>();
+      const { list, calls, emitted } = setUp((projectDir) => {
+        const lookup = deferred<string | null>();
+        lookups.set(projectDir, [...(lookups.get(projectDir) ?? []), lookup]);
+        return lookup.promise;
+      });
+      const contribution = fakeContribution();
+      list.contributeTools([tool('ask')], contribution.start);
+      namers.forEach((answers) => list.addProjectNamer(namerFrom(answers)));
+      const { session } = list.open(opened);
+      list.setTitle(session.id, 'agent', 'Agent title');
+      arrange?.(list);
+      const rowBefore = list
+        .state()
+        .rows.find((row) => row.sessionId === session.id);
+      calls.length = 0;
+      emitted.length = 0;
+
+      list.relocate(session.id, '/work/ng-3');
+      expect(calls).toEqual([`rows set ${session.id}`, 'emit relocated']);
+      for (const [projectDir, answer] of Object.entries(landings)) {
+        lookups.get(projectDir)?.forEach((lookup) => lookup.resolve(answer));
+      }
+      await new Promise((settle) => setImmediate(settle));
+
+      const state = list.state();
+      expect(state.rows.find((row) => row.sessionId === session.id)).toEqual({
+        ...rowBefore,
+        projectDir: '/work/ng-3',
+        label,
+        project,
+      });
+      expect(state.selectedSessionId).toBe(session.id);
+      expect(contribution.startedInfos[0].projectDir).toBe('/work/ng-3');
+      expect(emitted).toEqual([['relocated', session]]);
+      expect(session.info.projectDir).toBe('/work/ng-3');
+    },
+  );
+
+  it('relocate_FreesTheOldFoldersNumber', () => {
+    const { list } = setUp();
+    const { session } = list.open(owned('host-1', '/work/ng-1'));
+
+    list.relocate(session.id, '/work/ng-3');
+    connectWithRow(list, info('/work/ng-1'));
+
+    expect(labels(list.state())).toEqual(['ng-3', 'ng-1']);
+  });
+
+  it.each<{ name: string; arrange: (list: SessionList) => string }>([
+    { name: 'an unknown id', arrange: () => 'nope' },
+    {
+      name: 'a connected session',
+      arrange: (list) => connectWithRow(list, info('/work/a')).session.id,
+    },
+    {
+      name: 'an owned session after its end',
+      arrange: (list) => {
+        const opened = list.open(owned('host-1'));
+        opened.end();
+        return opened.session.id;
+      },
+    },
+  ])(
+    'relocate_NotOwnedOrUnknown_ThrowsAndWritesNothing: $name',
+    ({ arrange }) => {
+      const { list, states, emitted } = setUp();
+      const sessionId = arrange(list);
+      const statesBefore = states.length;
+
+      expect(() => list.relocate(sessionId, '/work/b')).toThrow(sessionId);
+
+      expect(states).toHaveLength(statesBefore);
+      expect(emitted.map(([event]) => event)).not.toContain('relocated');
+    },
+  );
+
+  it('relocate_SameFolder_WritesNothing', () => {
+    const { list, states, logged, emitted } = setUp();
+    const { session } = list.open(owned('host-1', '/work/ng-1'));
+    states.length = 0;
+
+    list.relocate(session.id, '/work/ng-1');
+
+    expect(states).toEqual([]);
+    expect(logged).toEqual([]);
+    expect(emitted.map(([event]) => event)).not.toContain('relocated');
+  });
 });
 
 describe("a connected session's harness name", () => {

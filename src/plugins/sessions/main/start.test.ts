@@ -463,6 +463,47 @@ describe('sessions main part', () => {
     expect(bystanderView.titles(hostOne.session.id)).not.toBeNull();
   });
 
+  it('addProjectNamer_DependentStops_RowsReaskedWithoutIt', () => {
+    const state = createSlotStore(() => undefined);
+    const started = startSessionsPart(10, { state });
+    const dependent = createRegistrations();
+    const rowProjects = () =>
+      [...state.read(sessionsRowsSlot, 'test').all().values()].map(
+        (row) => row.project,
+      );
+    viewOf(started).open({
+      sessionId: 'host-1',
+      projectDir: '/p/clone',
+      harness: 'claude',
+    });
+
+    viewOf(started, dependent)
+      .addProjectNamer((projectDir) =>
+        projectDir === '/p/clone' ? 'Named' : null,
+      )
+      .changed();
+    expect(rowProjects()).toEqual(['Named']);
+
+    dependent.dispose();
+    expect(rowProjects()).toEqual(['clone']);
+  });
+
+  it('relocate_ThroughAView_OnlyForSessionsThatViewOpened', () => {
+    const state = createSlotStore(() => undefined);
+    const started = startSessionsPart(10, { state });
+    const viewA = viewOf(started);
+    const viewB = viewOf(started);
+    const { id } = viewA.open(hostInfo('host-a')).session;
+    const rowFolder = () =>
+      state.read(sessionsRowsSlot, 'test').get(id)?.projectDir;
+
+    expect(() => viewB.relocate(id, '/elsewhere')).toThrow(id);
+    expect(rowFolder()).toBeNull();
+
+    viewA.relocate(id, '/elsewhere');
+    expect(rowFolder()).toBe('/elsewhere');
+  });
+
   it('keeps a contribution live when the endpoint files cannot be written', async () => {
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'sessions-start-'));
     const logged: string[] = [];

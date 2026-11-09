@@ -36,12 +36,16 @@ function ownedWith(consumer: Registrations, owned: OwnedSession): OwnedSession {
 }
 
 // One dependent's view of sessions' main exports: every tool contribution,
-// close guard and tool-call guard it adds, and every session it connects or
-// opens, is filed under its registrations.
+// close guard, tool-call guard and project namer it adds, and every session it
+// connects or opens, is filed under its registrations. Its `relocate` acts only
+// on a session this dependent opened.
 export function sessionsMainView(
   exports: SessionsMainExports,
   consumer: Registrations,
 ): SessionsMainExports {
+  // The app ids of the sessions this view's `open` returned, until each ends
+  // or is kept.
+  const openedIds = new Set<string>();
   return {
     ...exports,
     contributeTools: (tools, start, options) =>
@@ -50,7 +54,32 @@ export function sessionsMainView(
       consumer.track(exports.addCloseGuard(mayClose, cancelHold)),
     addToolCallGuard: (guard) =>
       consumer.track(exports.addToolCallGuard(guard)),
+    addProjectNamer: (namer) => consumer.track(exports.addProjectNamer(namer)),
     connect: (info) => endedWith(consumer, exports.connect(info)),
-    open: (info, options) => ownedWith(consumer, exports.open(info, options)),
+    open: (info, options) => {
+      const owned = exports.open(info, options);
+      const id = owned.session.id;
+      openedIds.add(id);
+      const ownEnd = owned.end;
+      const ownKeep = owned.keep;
+      // Wrapped before filing, so the dependent's stop forgets the id too.
+      owned.end = () => {
+        openedIds.delete(id);
+        ownEnd.call(owned);
+      };
+      owned.keep = () => {
+        openedIds.delete(id);
+        ownKeep.call(owned);
+      };
+      return ownedWith(consumer, owned);
+    },
+    relocate: (sessionId, projectDir) => {
+      if (!openedIds.has(sessionId)) {
+        throw new Error(
+          `relocate for session ${sessionId}, which this plugin did not open`,
+        );
+      }
+      exports.relocate(sessionId, projectDir);
+    },
   };
 }

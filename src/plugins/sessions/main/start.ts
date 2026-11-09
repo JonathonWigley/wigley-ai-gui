@@ -240,7 +240,8 @@ export function addDriveActions(
 
 // Owns agent sessions: the relay they connect through, the tools other
 // plugins contribute for them and its own `set_session_title`, their sidebar
-// rows, and the sessions layouts.
+// rows and the project each row groups under, from the namers other plugins
+// register, and the sessions layouts.
 // A contribution reaches every live session, and each one added rewrites the
 // endpoint files, so a relay that starts the app finds every tool listed. A
 // disposal and a stop leave the files, which a relay serves while the app is
@@ -286,6 +287,8 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
+      addProjectNamer: (namer) => list.addProjectNamer(namer),
+      relocate: (sessionId, projectDir) => list.relocate(sessionId, projectDir),
       holdConnects: (until) => hold.hold(until),
     };
     exports.contributeTools(
