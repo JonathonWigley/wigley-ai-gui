@@ -21,6 +21,11 @@ Checks:
 - low-confidence path: the same session while a turn runs shows no Needs you. When the label clears as the next turn
   starts, the label wiring is proved.
 - low-confidence path: Large's plan ready still shows `Ready to make` and not Needs you.
+- low-confidence path: a Small or Medium paused row's chip draws no stage tag (the layout guard 01 adds, unseen by
+  the page tests).
+
+The self-test screenshots of Small's and Large's flows (for example `small-build-checklist`) may now show a Needs you
+row; they assert log lines only, so a changed picture is expected, not a finding.
 
 Done when: each check's capture is read and matches, or the mismatch is a finding for the review.
 Commit:    none

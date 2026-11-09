@@ -34,6 +34,8 @@ Each command runs from the repo root. Re-run each one before the first dispatch.
 - The existing row-label table holds the row `{ stage: 'make', fields: {}, word: null, tag: true }`:
   `grep -n "stage: 'make', fields: {}, word: null, tag: true" src/plugins/workflow-large-page.test.ts`.
 - `src/plugins/workflow/contract.test.ts` does not exist: `test ! -e src/plugins/workflow/contract.test.ts`.
+- Only Large's chip reads `onRowLabel`: `grep -n "onRowLabel\|stageTag" src/plugins/workflow-*/layouts/default/layout.js`
+  prints Large's guard (line 111) and an unguarded `kit.stageTag` in Small and Medium (line 63).
 
 ## Docs written ahead
 
@@ -80,7 +82,8 @@ Decisions:
 - Interview Decided notice "finishes flag" is replaced by the paused-status rule above: same stages excluded, no new
   field.
 - When the row shows the paused-run label, the chip leaves out its stage tag (`onRowLabel`), the same as for plan
-  ready's and closed's labels today.
+  ready's and closed's labels today. Only Large's layout reads `onRowLabel` today; Small's and Medium's gain the same
+  guard, which `docs/features/workflow/design.md` § Row chip already states for every built-in layout (cold read).
 
 Out of scope:
 
@@ -93,6 +96,8 @@ Out of scope:
 - modify `src/plugins/workflow/contract.ts` — `PAUSED_RUN_ACTIVITY` and the new branch in `shownRowActivity`
 - create `src/plugins/workflow/contract.test.ts` — the rule's table at the seam that owns it
 - modify `src/plugins/workflow-large-page.test.ts` — the existing row-label table's `make` row
+- modify `src/plugins/workflow-small/layouts/default/layout.js` and `src/plugins/workflow-medium/layouts/default/layout.js`
+  — the `onRowLabel` guard on the stage tag, with a row each in their `layout.test.ts`
 - Boundary: the workflow contract already imports `RowActivity` and `NEEDS_YOU_ACTIVITY`'s module
   (`src/plugins/sessions/contract.ts`); no new import crosses a layer.
 
