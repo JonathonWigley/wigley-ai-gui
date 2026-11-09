@@ -35,11 +35,12 @@ export interface ProblemStoreDeps {
 // logging a file that does not parse. `writeBuildFile` writes only under
 // `.build/` and resolves the absolute path written. `watch` reports the slug of
 // each change under `problems/`, null when the change names none; it starts
-// watching, which makes `problems/`, at the store's first `slugs` call, and
+// watching, which makes `problems/`, once `startWatching` has been called, and
 // logs a watch that cannot start.
 export interface ProblemStore {
   folder(): string;
   buildFolder(): string;
+  startWatching(): void;
   slugs(): Promise<string[]>;
   hasProblem(slug: string): Promise<boolean>;
   readProblem(slug: string): Promise<Problem>;
@@ -65,19 +66,22 @@ export function createProblemStore(deps: ProblemStoreDeps): ProblemStore {
   const submissionsFolder = (slug: string) =>
     paths.join(problemsFolder(), slug, SUBMISSIONS_FOLDER);
   const buildFolder = () => paths.join(deps.folder(), BUILD_FOLDER);
-  let hasListed = false;
-  // The starts of the watches made before the first `slugs` call.
+  let isWatching = false;
+  // The starts of the watches made before `startWatching`.
   const waitingWatches = new Set<() => void>();
 
   return {
     folder: () => deps.folder(),
     buildFolder,
-    async slugs() {
-      if (!hasListed) {
-        hasListed = true;
-        waitingWatches.forEach((start) => start());
-        waitingWatches.clear();
+    startWatching() {
+      if (isWatching) {
+        return;
       }
+      isWatching = true;
+      waitingWatches.forEach((start) => start());
+      waitingWatches.clear();
+    },
+    async slugs() {
       const entries = await files.list(problemsFolder(), { recursive: false });
       return entries
         .filter((entry) => entry.kind === 'folder')
@@ -160,7 +164,7 @@ export function createProblemStore(deps: ProblemStoreDeps): ProblemStore {
           log(`watch not started: ${errorText(error)}`);
         }
       };
-      if (hasListed) {
+      if (isWatching) {
         start();
       } else {
         waitingWatches.add(start);

@@ -90,6 +90,27 @@ describe('practice main part', () => {
     });
   });
 
+  it('a chat clear before any list starts no watch', async () => {
+    const harness = startPractice();
+
+    harness.emit('chat.sessionCleared', {
+      sessionId: 'row-9',
+      oldHostSessionId: 'host-1',
+      newHostSessionId: 'host-2',
+      projectDir: '/home/u/elsewhere',
+      profile: 'default',
+      titles: {},
+      sent: false,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await harness.files.write(
+      `${PRACTICE_FOLDER}/problems/two-sum/notes.md`,
+      'idea',
+    );
+
+    expect(harness.sent).toEqual([]);
+  });
+
   it('start wires the tools and hears chat', async () => {
     const harness = startPractice();
     await writeProblem(harness.files, TWO_SUM);

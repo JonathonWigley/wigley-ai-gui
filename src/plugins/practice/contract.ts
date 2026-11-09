@@ -119,8 +119,8 @@ export interface OpenedProblem {
 // page saves `solution.cpp` before it invokes `run` or `submit`. `open` is
 // idempotent: it starts the first attempt when the problem has none, and a
 // fresh one only when the problem is due and its current attempt started
-// before the due date, keeping the old `solution.cpp` as
-// `solution.<previous attempt id>.cpp`.
+// before the due date, keeping the old `solution.cpp`, when it exists and
+// differs from the stub, as `solution.<previous attempt id>.cpp`.
 export interface PracticeChannel extends ChannelShape {
   invoke: {
     list(): Promise<ProblemSummary[]>;

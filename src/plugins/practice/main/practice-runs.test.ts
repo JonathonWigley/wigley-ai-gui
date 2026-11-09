@@ -256,4 +256,17 @@ describe('createPracticeRuns', () => {
     expect(runs.lastResult('two-sum')).toEqual({ kind: 'submit', result });
     expect(runs.lastResult('counter')).toBeNull();
   });
+
+  it('submit records nothing when the judge rejects', async () => {
+    const judge: Judge = {
+      judge: async () => {
+        throw new Error('clang++ not found');
+      },
+    };
+    const { store, runs } = await setUp(TWO_SUM, judge);
+
+    await expect(runs.submit('two-sum')).rejects.toThrow('clang++ not found');
+    expect(await store.submissions('two-sum')).toEqual([]);
+    expect(runs.lastResult('two-sum')).toBeNull();
+  });
 });

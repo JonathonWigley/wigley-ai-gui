@@ -35,9 +35,10 @@ export interface ProgressDeps {
 // attempt started before the due day, writing the stub to `solution.cpp`
 // then; a due problem's `solution.cpp` that is not the stub is kept first as
 // `solution.<previous attempt id>.cpp`. Otherwise it writes nothing. `peek`
-// marks the current attempt peeked and drops the ladder to its first step. `recordSubmission` writes the
-// submission and moves the status, and the ladder one step on the attempt's
-// first clean Accepted. Every write runs one at a time, in call order.
+// marks the current attempt peeked and drops the ladder to its first step.
+// `recordSubmission` writes the submission and moves the status, and the
+// ladder one step on the attempt's first clean Accepted. Every write runs one
+// at a time, in call order.
 export interface Progress {
   read(slug: string): Promise<ProgressFile>;
   summary(slug: string, problem: Problem): Promise<ProblemSummary>;

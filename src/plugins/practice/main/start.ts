@@ -39,14 +39,13 @@ type PracticeApi = MainApi<
 >;
 
 // Serves the page the practice folder's problems through the problem store,
-// progress and the judge, and from the first list watches `problems/`, sending
-// `changed` with the slug of each change; a change of the `folder` setting
-// moves the watch. Runs
-// the import and interviewer sessions through chat, hearing chat's session
-// events, and gives every session the `add_practice_problem` and
-// `read_practice_state` tools. Registers the Practice layout contract. Hands
-// the self-test its script, telling it of each submit, and offers a drive run
-// the `writeFixture` action.
+// progress and the judge, and from the page's first `list` watches
+// `problems/`, sending `changed` with the slug of each change; a change of the
+// `folder` setting moves the watch. Runs the import and interviewer sessions
+// through chat, hearing chat's session events, and gives every session the
+// `add_practice_problem` and `read_practice_state` tools. Registers the
+// Practice layout contract. Hands the self-test its script, telling it of each
+// submit, and offers a drive run the `writeFixture` action.
 export const practiceMainPart: MainPart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
@@ -124,7 +123,10 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
             compiler: () => api.settings().compiler,
             reload,
           });
-    channel.handle('list', () => listProblems(store, progress, services.log));
+    channel.handle('list', () => {
+      store.startWatching();
+      return listProblems(store, progress, services.log);
+    });
     channel.handle('open', (slug) => openProblem(store, progress, slug));
     channel.handle('saveCode', (slug, text) =>
       store.writeText(slug, 'solution.cpp', text),

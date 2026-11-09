@@ -80,7 +80,7 @@ describe('createProblemStore', () => {
     const { files, store } = setUp();
     const slugs: (string | null)[] = [];
     const watch = store.watch((slug) => slugs.push(slug));
-    await store.slugs();
+    store.startWatching();
 
     await files.write(`${PRACTICE_FOLDER}/${row.path}`, 'x');
     await files.write(`${PRACTICE_FOLDER}/.build/two-sum/driver.cpp`, 'x');
@@ -90,22 +90,24 @@ describe('createProblemStore', () => {
   });
 
   it.each([
-    { name: 'made before the first slugs call', listsFirst: false },
-    { name: 'made after it', listsFirst: true },
-  ])('watch starts at the first slugs call: $name', async ({ listsFirst }) => {
+    { name: 'made before startWatching', startsFirst: false },
+    { name: 'made after it', startsFirst: true },
+  ])('watch starts at startWatching: $name', async ({ startsFirst }) => {
     const { files, store } = setUp();
-    if (listsFirst) {
-      await store.slugs();
+    await store.slugs();
+    if (startsFirst) {
+      store.startWatching();
     }
     const slugs: (string | null)[] = [];
     const watch = store.watch((slug) => slugs.push(slug));
 
     await files.write(`${PRACTICE_FOLDER}/problems/early/x`, 'x');
     await store.slugs();
+    store.startWatching();
     await files.write(`${PRACTICE_FOLDER}/problems/late/x`, 'x');
     watch.dispose();
 
-    expect(slugs).toEqual(listsFirst ? ['early', 'late'] : ['late']);
+    expect(slugs).toEqual(startsFirst ? ['early', 'late'] : ['late']);
   });
 
   it('submissions come newest first', async () => {
