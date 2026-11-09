@@ -430,7 +430,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `fg-tertiary` line under its row. The process list follows under a heading row naming the columns, the sorted one
   marked: one row per group or process, its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of
   them; the keyboard cursor's row takes `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show
-  its processes under it. A process with no GPU reading shows a dash in its GPU column. Under a 260px container query
+  its processes under it. A process with no GPU reading shows a dash in its GPU column. Under a 360px container query
   each meter takes two lines and a row's cells drop under its name.
 - **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
   (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token

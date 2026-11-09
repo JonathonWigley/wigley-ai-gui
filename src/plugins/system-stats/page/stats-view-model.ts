@@ -37,8 +37,8 @@ export function isGroup(row: StatsProcessRow): boolean {
   return row.kind !== 'process';
 }
 
-// The first `max(1, processRows)` top-level rows sorted by `sort`, each open group followed by its processes sorted
-// the same way; `moreRows` counts the top-level rows cut.
+// The top-level rows sorted by `sort`: every Chat session group, and the first `max(1, processRows)` of the other
+// rows, each open group followed by its processes sorted the same way; `moreRows` counts the top-level rows cut.
 export function visibleRows(
   rows: readonly StatsProcessRow[],
   sort: StatsSortColumn,
@@ -46,7 +46,17 @@ export function visibleRows(
   processRows: number,
 ): { rows: VisibleRow[]; moreRows: number } {
   const compare = byColumn(sort);
-  const shown = [...rows].sort(compare).slice(0, Math.max(1, processRows));
+  const otherRowsCap = Math.max(1, processRows);
+  const shown: StatsProcessRow[] = [];
+  let otherRowsShown = 0;
+  for (const row of [...rows].sort(compare)) {
+    if (row.kind === 'session') {
+      shown.push(row);
+    } else if (otherRowsShown < otherRowsCap) {
+      shown.push(row);
+      otherRowsShown++;
+    }
+  }
   const visible: VisibleRow[] = [];
   for (const row of shown) {
     visible.push({ row, depth: 0, parentId: null });

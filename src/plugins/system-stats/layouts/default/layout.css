@@ -128,11 +128,12 @@
 /* A narrow bar: each meter takes two lines (label and value, then the Meter
    and the Sparkline), and each row's cells drop under its name, the cell lines
    sharing one width at every depth so their columns line up. */
-@container system-stats-panel (width < 260px) {
+@container system-stats-panel (width < 360px) {
   [data-layout-owner='system-stats'][data-layout='default']
     .system-stats-meters {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: var(--wg-space-0_5);
   }
 
