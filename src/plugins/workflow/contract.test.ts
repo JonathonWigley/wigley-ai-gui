@@ -23,7 +23,16 @@ function stageWith(
   status: StageStatus | null,
   rowActivity: RowActivity | undefined,
 ): PageStage {
-  return { status: () => status, rowActivity } as PageStage;
+  return {
+    id: 'build',
+    label: 'Build',
+    inStepper: true,
+    order: 10,
+    actions: [],
+    detail: () => '',
+    status: () => status,
+    rowActivity,
+  };
 }
 
 describe('shownRowActivity', () => {
