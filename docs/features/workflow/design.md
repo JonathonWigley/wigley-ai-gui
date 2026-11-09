@@ -88,7 +88,9 @@ Running means the flow is busy: a turn or a subagent at any depth runs. A permis
   relaunch or a crash. It clears and sends make again; make reads its own Run log back.
 - **Open plan** opens `plan.md` in Docs mode (`openDoc`).
 - **Retro** sends `/wigley:retro` in the same session, which holds the run's context.
-- **Dismiss** returns a closed session to idle. A closed session also leaves on its next flow skill.
+- **Dismiss** returns a closed session to idle. A closed session also leaves on its next flow skill, and goes back to
+  the stage it closed from (make, review or fix) when its plan folder is read again: the folder left with a branch
+  switch or checkout and came back, so the run never ended.
 
 The last `plan.md` written in a session is its plan. `wigley:make`'s argument names the plan when it is a plan
 folder. Only the main agent moves the stage, with one exception: a subagent's write of a `plan-*/plan.md` names the

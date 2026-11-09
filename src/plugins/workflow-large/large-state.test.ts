@@ -29,6 +29,7 @@ function flowWith(fields: FlowFields): SessionFlow {
     progress,
     reviewRoundsAtMake,
     countdownEndsAt,
+    closedFrom,
     ...flow
   } = fields;
   return {
@@ -42,6 +43,7 @@ function flowWith(fields: FlowFields): SessionFlow {
       progress: progress ?? null,
       reviewRoundsAtMake: reviewRoundsAtMake ?? null,
       countdownEndsAt: countdownEndsAt ?? null,
+      closedFrom: closedFrom ?? null,
     },
   };
 }
@@ -595,6 +597,51 @@ const FOLD_ROWS: {
     expected: UNCHANGED,
   },
   {
+    name: 'planGone in review closes the run and keeps the stage it closed from',
+    flow: flowWith({ stage: 'review', planDir: PLAN_X, progress: PROGRESS }),
+    signal: largeSignal({ type: 'planGone' }),
+    expected: flowWith({
+      stage: 'closed',
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      closedFrom: 'review',
+    }),
+  },
+  {
+    name: 'the plan read again reopens a closed run in the stage it closed from',
+    flow: flowWith({
+      stage: 'closed',
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+      closedFrom: 'fix',
+    }),
+    signal: planChanged({ ...PROGRESS, reviewRounds: 2 }),
+    expected: flowWith({
+      stage: 'fix',
+      planDir: PLAN_X,
+      progress: { ...PROGRESS, reviewRounds: 2 },
+      reviewRoundsAtMake: 0,
+      closedFrom: 'fix',
+    }),
+  },
+  {
+    name: 'the plan read again leaves a closed run saved with no stage it closed from closed',
+    flow: flowWith({
+      stage: 'closed',
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: planChanged({ ...PROGRESS, reviewRounds: 2 }),
+    expected: flowWith({
+      stage: 'closed',
+      planDir: PLAN_X,
+      progress: { ...PROGRESS, reviewRounds: 2 },
+      reviewRoundsAtMake: 0,
+    }),
+  },
+  {
     name: 'a signal nothing answers changes nothing',
     flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
     signal: largeSignal({ type: 'planGone' }),
@@ -685,6 +732,7 @@ describe('largeStateOf', () => {
       ...state,
       planReported: false,
       unreportedPlanDir: null,
+      closedFrom: null,
     });
   });
 

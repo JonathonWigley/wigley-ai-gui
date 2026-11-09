@@ -61,7 +61,8 @@ export function sameLargeState(a: unknown, b: unknown): boolean {
     left.unreportedPlanDir === right.unreportedPlanDir &&
     left.progress === right.progress &&
     left.reviewRoundsAtMake === right.reviewRoundsAtMake &&
-    left.countdownEndsAt === right.countdownEndsAt
+    left.countdownEndsAt === right.countdownEndsAt &&
+    left.closedFrom === right.closedFrom
   );
 }
 
@@ -113,6 +114,9 @@ function applyEnteredStage(
   }
   if (entered.id !== flow.stage) {
     next.countdownEndsAt = null;
+    if (entered.stage?.finishes === true) {
+      next.closedFrom = flow.stage;
+    }
     if (entered.id === IDLE_STAGE) {
       clearPlan(next);
     }
@@ -200,6 +204,7 @@ function clearPlan(next: LargeState): void {
   next.planReported = false;
   next.unreportedPlanDir = null;
   next.progress = null;
+  next.closedFrom = null;
 }
 
 function folderNameOf(folder: string): string {

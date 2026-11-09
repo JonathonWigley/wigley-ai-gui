@@ -903,6 +903,7 @@ describe('workflowLargeMainPart', () => {
     expect(workflow.lastLarge()?.progress).toEqual(
       readPlanProgress(PLAN_TICKED, new Map()),
     );
+    expect(workflow.lastFlow()?.stage).toBe('make');
   });
 
   it('StepTool_Large', async () => {

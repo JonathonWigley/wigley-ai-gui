@@ -6,6 +6,7 @@ import { isJsonObject } from '../../shared/json';
 import type {
   MainStage,
   SessionFlow,
+  StageId,
   WorkflowSignal,
 } from '../workflow/contract';
 import {
@@ -36,6 +37,11 @@ export interface LargeState {
   reviewRoundsAtMake: number | null;
   // Epoch ms; non-null only while the auto-start counts down.
   countdownEndsAt: number | null;
+  // The stage the run last closed from: a closed run's plan folder read again
+  // reopens the run there. Kept after the run reopens, since the engine runs the
+  // stage rules again on the folded state; null until a close, once the plan
+  // clears, and in a flow saved before it.
+  closedFrom: StageId | null;
 }
 
 export const EMPTY_LARGE_STATE: LargeState = {
@@ -45,23 +51,27 @@ export const EMPTY_LARGE_STATE: LargeState = {
   progress: null,
   reviewRoundsAtMake: null,
   countdownEndsAt: null,
+  closedFrom: null,
 };
 
 // `state` when it has Large's shape, a missing `planReported` read false and a
-// missing `unreportedPlanDir` null; else the empty state. A state holding both
-// is returned as is.
+// missing `unreportedPlanDir` or `closedFrom` null; else the empty state. A
+// state holding all three is returned as is.
 export function largeStateIn(state: unknown): LargeState {
   if (!isSavedLargeState(state)) {
     return EMPTY_LARGE_STATE;
   }
   const holdsEveryField =
-    state.planReported !== undefined && state.unreportedPlanDir !== undefined;
+    state.planReported !== undefined &&
+    state.unreportedPlanDir !== undefined &&
+    state.closedFrom !== undefined;
   return holdsEveryField
     ? (state as LargeState)
     : {
         ...state,
         planReported: state.planReported ?? false,
         unreportedPlanDir: state.unreportedPlanDir ?? null,
+        closedFrom: state.closedFrom ?? null,
       };
 }
 
@@ -137,9 +147,11 @@ export interface WorkflowLargeChannel extends ChannelShape {
   messages: Record<never, never>;
 }
 
-// Large's state as a flow saved before the report fields may hold it.
-type SavedLargeState = Omit<LargeState, 'planReported' | 'unreportedPlanDir'> &
-  Partial<Pick<LargeState, 'planReported' | 'unreportedPlanDir'>>;
+// Large's state as a flow saved before the report fields or `closedFrom` may
+// hold it.
+type LaterField = 'planReported' | 'unreportedPlanDir' | 'closedFrom';
+type SavedLargeState = Omit<LargeState, LaterField> &
+  Partial<Pick<LargeState, LaterField>>;
 
 function isSavedLargeState(value: unknown): value is SavedLargeState {
   return (
@@ -151,7 +163,8 @@ function isSavedLargeState(value: unknown): value is SavedLargeState {
       isStringOrNull(value.unreportedPlanDir)) &&
     (value.progress === null || isPlanProgress(value.progress)) &&
     isNumberOrNull(value.reviewRoundsAtMake) &&
-    isNumberOrNull(value.countdownEndsAt)
+    isNumberOrNull(value.countdownEndsAt) &&
+    (value.closedFrom === undefined || isStringOrNull(value.closedFrom))
   );
 }
 

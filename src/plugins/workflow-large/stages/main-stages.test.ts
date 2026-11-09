@@ -37,6 +37,7 @@ function flowIn(stage: string): SessionFlow {
       planReported: false,
       progress: PROGRESS,
       reviewRoundsAtMake: 0,
+      closedFrom: 'review',
     },
   );
 }
@@ -156,8 +157,8 @@ const RULE_ROWS: readonly {
   { id: 'fix', signals: ['report:fix'], fromStages: ['make', 'review'] },
   {
     id: 'closed',
-    signals: ['planGone'],
-    fromStages: ['make', 'review', 'fix'],
+    signals: ['planGone', 'planChanged'],
+    fromStages: ['make', 'review', 'fix', 'closed'],
   },
 ];
 

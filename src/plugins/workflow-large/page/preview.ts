@@ -82,6 +82,7 @@ export function previewFlow(
     progress,
     reviewRoundsAtMake: null,
     countdownEndsAt: countdown ? now + autoStartSeconds * 1000 : null,
+    closedFrom: null,
   };
   return {
     sessionId,
