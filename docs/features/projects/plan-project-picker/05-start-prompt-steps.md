@@ -16,6 +16,10 @@ Files:
 - modify `src/plugins/chat/page/picker-row.ts` — the two new lists' row inputs
 - modify `src/plugins/chat/page/resume-items.ts` — `sessionItems` for a step with no single folder · test
   `src/plugins/chat/page/resume-items.test.ts`
+- modify `src/plugins/chat/page/picker.ts` — `PickerRequest.keepFilter?: boolean`, passed to `list.open`; with it
+  set and the picker already open, `open` skips `blurFocusedElement()` so the filter box keeps focus · test
+  `src/plugins/chat/page/picker.test.ts` when it exists (one row: a `keepFilter` open reaches `list.open` and blurs
+  nothing)
 - modify `src/contracts/list-picker.ts` — `ListPickerRequest.keepFilter` · modify `src/shared/page/list-picker.ts` ·
   test `src/shared/page/list-picker.test.ts`
 
@@ -78,22 +82,28 @@ export function branchRowInput(branch: string): PickerItemInput;
     from the shown one (same names in the same order is no change), and with `keepFilter: true`, so a filter the
     user typed while the fetch ran survives the reopen.
   - **`ListPickerRequest.keepFilter?: boolean`** (new, `src/contracts/list-picker.ts`, with a comment): when `open`
-    runs while the picker is already open, the filter text stays and the new list opens filtered by it, the cursor
-    on `selected` when that item passes the filter, else on the first item that does. Left out, or with the picker
+    runs while the picker is already open, the filter text (read from the open state's filter, not the editor)
+    stays, and the new list opens filtered by it; the cursor goes on `selected` when that item is among the visible
+    indexes, else on the first visible index in the matcher's ranked order. A plain `filterPicker` over the new state
+    puts the cursor on the best match, which is not this rule. Left out, or with the picker
     closed, `open` clears the filter as today. In `list-picker.ts` `open`, skip `filter?.setText('')` under that
     condition and apply the kept text to the new state the way a typed change does. Test (`list-picker.test.ts`,
     one `it.each` `open_KeepFilter_…` table): open `['main','protos/a','protos/b']`, type `protos`, reopen with
     `['main','protos/b','protos/c','protos/a']` and `selected` 3 → filter text `protos`, visible rows `protos/b`,
-    `protos/c`, `protos/a`, cursor on `protos/a`; the same with `keepFilter` left out → filter empty, all four rows
+    `protos/c`, `protos/a` as a set (the order is the matcher's), cursor on `protos/a`; the same with `keepFilter` left out → filter empty, all four rows
     visible. Breaks caught: the filter cleared anyway; the text kept but the list drawn unfiltered; the cursor on a
     hidden item.
   - The cached read answering after the refresh is ignored.
-  - A read that rejects is logged (`branches not read: <reason>`); when both reject, the prompt toasts
-    `Branches not listed: <reason of the refresh>` and opens nothing.
+  - A read that rejects is logged (`branches not read: <reason>`); an answer of `[]` counts as a rejection with the
+    reason `no branches on origin` (the provider answers `[]` rather than rejecting when no clone lists). When both
+    reject, the prompt toasts `Branches not listed: <reason of the refresh>` and opens nothing. Test row in
+    `branchStep_BothReject_Toasts` (make it `it.each`): both answer `[]` → toast `Branches not listed: no branches on
+    origin`, no `Branch` picker.
   - Either answer arriving after the prompt opened again is dropped through `isStale`.
   - Picking a branch goes on to the profile.
 - **Profile**: a project with `profile` set skips the Profile step and goes to the sign-in check under the
-  `ChatProfile` of that name. A fixed profile not in `deps.profiles()` toasts
+  `ChatProfile` of that name. A fixed profile not in `context.profiles` (the snapshot taken at open) toasts, at the
+  project's pick — before any `branches` call —
   `Profile <profile> of <project name> is not in chat's profiles setting` and starts nothing. A project with no
   `profile` takes today's rules (one profile asks nothing): a folder project pre-selects with
   `preselectedProfile(profiles, recent, expandTilde(folder), paths)`; a pool project pre-selects row 0, since the
@@ -193,7 +203,7 @@ pinnedBranches: ['main'] }`, `aiDev: ChatProject = { kind: 'folder', name: 'Wigl
   | fixed profile skips the step | New Games, `main` picked | no `Profile` picker; `accountStatus` asked for `work` |
   | folder project pre-selects its last use | Wigley AI Dev | `Profile` picker, `selected` 1 |
   | pool project with no profile | New Games with `profile: null` | `Profile` picker, `selected` 0 |
-  | fixed profile not in settings | New Games with `profile: 'gone'` | toast `Profile gone of New Games is not in chat's profiles setting`, nothing started |
+  | fixed profile not in settings | New Games with `profile: 'gone'` | toast `Profile gone of New Games is not in chat's profiles setting`, no `branches` call, nothing started |
 
   Breaks: the Profile step asked for a fixed profile; pre-selection matched against the unexpanded `~` folder.
 - `projectSessionStep_ListsTheProjectsSessions_ResumesInEachRowsFolder` — `projectPastSessions` answers two rows in

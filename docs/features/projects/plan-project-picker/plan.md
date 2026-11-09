@@ -123,6 +123,7 @@ Existing files modified:
 - `src/plugins/sessions/contract.ts`, `src/plugins/sessions/main/session-list.ts`, `src/plugins/sessions/main/start.ts`,
   `src/plugins/sessions/main/consumer-view.ts` (01)
 - `src/plugins/docs/main/start.ts`, `src/plugins/workflow/main/start.ts` (01b)
+- the design docs of workflow, docs-browser, session-log, usage and session-stash, where stale (06)
 - `src/plugins/chat/contract.ts`, `src/plugins/chat/manifest.ts`, `src/plugins/chat/main/start.ts` (02, 03)
 - `src/plugins/chat/main/chat-sessions.ts`, `src/plugins/chat/main/start-session-tool.ts`,
   `src/plugins/chat/main/chat-slots.ts` (`SessionSlots.relocate`), `src/plugins/usage/main/selftest-script.test.ts`
@@ -131,7 +132,8 @@ Existing files modified:
   `src/plugins/unity-pool/main/pool-cli.ts`, `src/plugins/unity-pool/main/start.ts`,
   `src/plugins/unity-pool/manifest.ts` (doc comment only) (04)
 - `src/plugins/chat/page/start-prompt.ts`, `src/plugins/chat/page/start-prompt-items.ts`,
-  `src/plugins/chat/page/picker-row.ts`, `src/plugins/chat/page/resume-items.ts`, `src/contracts/list-picker.ts`,
+  `src/plugins/chat/page/picker-row.ts`, `src/plugins/chat/page/resume-items.ts`, `src/plugins/chat/page/picker.ts`,
+  `src/contracts/list-picker.ts`,
   `src/shared/page/list-picker.ts` (05)
 
 New files:

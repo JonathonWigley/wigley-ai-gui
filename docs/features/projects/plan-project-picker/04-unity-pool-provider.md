@@ -65,8 +65,10 @@ Produces:
   recurses into submodules, so using it would mean two contract changes (a new listing method and a second fetch)
   for one plugin's need. The provider already holds the runner for the CLI, so one `FakeProcesses` scripts every run
   in its tests, and the plan's File Structure lists no git file.
-- **The branch listing carries the commit date.** `git -C <clone> for-each-ref --sort=-committerdate
-  --format=%(committerdate:unix) %(refname:short) refs/remotes/origin`: each clone fetched at its own time, so a
+- **The branch listing carries the commit date.** The run is `git` with args, exactly: `['-C', <clone>,
+  'for-each-ref', '--sort=-committerdate', '--format=%(committerdate:unix) %(refname:short)',
+  'refs/remotes/origin']` (the format is one argument); the refresh's fetch is `git` with `['-C', <lowest clone>,
+  'fetch', '--no-recurse-submodules', 'origin']`. Tests script `FakeProcesses` with these argv: each clone fetched at its own time, so a
   merge by position alone cannot order a branch one clone has newer. `mergeOriginBranches` keeps each name's newest
   date across clones and sorts by it, newest first, ties by name (`localeCompare`), so the order is the same whatever
   order the clones answer in.
@@ -94,6 +96,17 @@ Produces:
   `message`; no JSON → `cli-failed` with the last stderr line, else `unity-pool exited <code>`. A missing script →
   `no-cli` (`unity-pool not found at <script>`), running nothing. A rejection while `signal` is aborted →
   `{ ok: false, error: 'cancelled', message: 'claim cancelled' }`; any other rejection → `cli-failed` with its text.
+- **A cancelled claim releases what it may have taken.** The CLI can be killed after it granted a clone (during the
+  branch switch, README § Branch sync on claim), leaving the clone held by a session id that never starts. After a
+  claim settles `cancelled`, the provider runs `unity-pool release --json` (no pool or number: "releases this
+  session's claim", README § Commands) through the same runner with the same `setEnv` ids and `unsetEnv`, with no
+  signal and the panel's run timeout; a clone with no claim releases as a no-op. Its answer is logged
+  (`claim <pool> <branch> cancelled; release: <ok | error: message>`) and never changes the claim's `cancelled`
+  answer. A release that refuses (`dirty`, a half-done switch) leaves the clone to the pool's expiry and stranded
+  rules. Test: `claim_Cancelled_ReleasesUnderTheSameIds` — abort a scripted claim; the next recorded run is the
+  release argv with `setEnv` `{ CLAUDE_CODE_SESSION_ID: 'host-1', WIGLEY_SESSION_ROW: 'row-1' }`, and the claim
+  answers `cancelled` whether the release answers ok or rejects (two rows). Break: the release skipped, or run
+  without the ids (releasing nothing, or refused `no-session`).
 - **`diverged`**: the CLI's JSON carries no `path` on a failure (README § Commands), and the watch's snapshot may lag
   the CLI's write, so the provider reads the state file afresh (`readPool`) and takes the clone whose
   `claim.session === hostSessionId`: found → `{ ok: true, path: clone.path, note: message }`; none, or `readPool`
@@ -229,6 +242,11 @@ Names follow the files' `subject_Case_Result` style. Every git and python run is
   in `p`, then one for `host-1` in pool `q`: `queued` not called; then a ticket for `host-1` in `p` twice: called
   once; settle the claim, send the same snapshot: still once. Breaks: firing per snapshot; matching on another
   pool's ticket; a settled claim still listening.
+- `poolProvider_Claim_Diverged_ReadsTheStateFile` (`start.test.ts`, through the real `start.ts` wiring) — a script file
+  at the platform default path; a state file (`poolStateText`) for pool `p` where clone 2 is claimed by `host-1`; the
+  harness's `FakeProcesses` scripts the claim run to answer `{"ok": false, "error": "diverged", "message": "m"}`;
+  the registered provider's `claim` answers `{ ok: true, path: <clone 2>, note: 'm' }`. Break: `readPool` reading the
+  wrong path or checking the wrong state kind, so every `diverged` falls back to the error.
 - `claim_SignalAndDispose_AbortTheRun` — `it.each` over `'chat aborts'` and `'provider disposed'`: the `runClaim`
   double's signal reads `aborted` true after the action. Break: chat's signal not passed through, so closing the row
   leaves the CLI waiting.
