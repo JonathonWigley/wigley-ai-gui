@@ -51,7 +51,7 @@ folder project, or a name an earlier entry took is left out, and the log names t
 
 - A pool project goes to **Branch**: its pinned branches, then every other branch on origin, newest commit first,
   filtered as the user types (`/`). The list opens from the refs each clone last fetched, and refreshes once a
-  background fetch lands.
+  background fetch lands, keeping the cursor's branch and any filter typed meanwhile.
 - A project with no `profile` goes to **Profile**; a project with one passes it over. The sign-in check runs either
   way.
 - The session step lists the project's saved sessions from every folder it covers — for a pool project, all its
@@ -69,7 +69,10 @@ that id exists only once the row is open:
    `WIGLEY_SESSION_ROW` set to the row's id. The agent's own hooks renew the claim from its first tool call, and
    `/clear` hands it to the fresh session as for any claim.
 3. When the claim lands, chat moves the row to the clone it got (`sessions.relocate`) and starts the agent there, so
-   its `AGENTS.md`, skills and transcript are the clone's from the first message.
+   its `AGENTS.md`, skills and transcript are the clone's from the first message. Sessions emits `relocated`, so
+   plugins that copied the folder at connect (docs, workflow) take the clone, and chat fires `sessionOpened` only
+   now, with the clone as the folder; a row whose claim never lands fires neither `sessionOpened` nor
+   `sessionClosed`.
 
 Closing the row while the claim runs cancels the claim: the provider stops the CLI, and a queue ticket nobody polls
 drops after two minutes. A claim that fails (`dirty`, `unknown-branch`, `no-cli`, `internal`) leaves the row resting
