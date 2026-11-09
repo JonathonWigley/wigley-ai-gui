@@ -183,7 +183,7 @@ src/main/        core main process; main.ts is its composition root
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
-                 ProcessRunner
+                 ProcessRunner; `limitRuns` caps how many of a runner's programs run at once (git's runner: 4)
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
