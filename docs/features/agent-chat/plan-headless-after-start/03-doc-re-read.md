@@ -16,12 +16,13 @@ Produces:  docs that match the code; wigley-agents `headless-tool` ready to merg
    result lines it quotes must match `set-headless-tool.ts`). Fix every stale line and commit each repo's fixes.
 2. Grep the gui repo's docs (`docs/`, `DESIGN.md`, `AGENTS.md`) and the marketplace's
    `plugins/wigley/scripts/forms/README.md` for "New headless session", "headless session" at start, and "at
-   session start", and fix any line still saying a session can start headless from the prompt.
-3. Once the gui branch has merged into main (WigleyRepos.md § Landing), rebase wigley-agents' `headless-tool` onto
-   its main and fast-forward main to it, in the same landing as the app's push, so the rule never names a tool the
-   installed app lacks for longer than the install.
+   session start", and fix any line still saying a session can start headless from the prompt. The marketplace
+   README had no such line at plan time: expect no edit there, and open no marketplace worktree unless the grep hits.
+3. Merge nothing here. Both `headless-tool` branches merge at `wigley:make`'s landing, after task 04 and the
+   review: gui first, then wigley-agents' branch rebased onto its main and fast-forwarded, in the same landing as
+   the app's push, so the rule never names a tool the installed app lacks for longer than the install.
 
-Done when: each doc matches the code; both branches merged per § Landing
+Done when: each doc matches the code; both `headless-tool` branches ready to merge
 Commit:    one commit per repo for the fixes, when there are any
 
 ## Proof
