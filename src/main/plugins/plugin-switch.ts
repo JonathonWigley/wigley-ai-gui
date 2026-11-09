@@ -42,7 +42,10 @@ export const PLUGIN_RETRY_MS = 2000;
 // its place), and a page part that fails, each show as the plugin's problem
 // in `core.plugins` and in the config's plugin problems; a plugin that runs no
 // version stays in the applied list until a later entry or its dependency
-// starts it.
+// starts it. A reload or restart starts on the page the plugin and each
+// dependent it paused that runs, so a page part whose earlier start failed
+// starts again; a page start that starts a part clears the problem an earlier
+// page start recorded for it.
 export interface PluginSwitch extends PluginSwitchService {
   // Applies a new disabled list: refuses with the host's `<id>: <reason>` when
   // a part `mayStop` refuses (a config problem, retried every
@@ -59,15 +62,16 @@ export interface PluginSwitch extends PluginSwitchService {
   // shows (neededBy, then mayStop), or null.
   mayDisable(pluginId: string): Promise<string | null>;
   // Stops `pluginId` and its dependents, page parts first, then starts what
-  // stopped, main parts first; their slots are kept. Their binds leave first:
-  // it sets them as the applied paused list and pushes the served config
-  // before the page stop, and clears the list and pushes again after the main
-  // start, before the page start. When a step throws, it starts again each
-  // main part it stopped, one at a time, logging a start that throws, and each
-  // page part whose main part runs again or that has no main part, then clears
-  // the paused list and pushes when it is still set, then rejects. Rejects
-  // for a plugin that is off or that the config does not hold, pushing
-  // nothing.
+  // stopped, main parts first, and the page parts of `pluginId` and its
+  // dependents, a part whose earlier page start failed included; their slots
+  // are kept. Their binds leave first: it sets them as the applied paused list
+  // and pushes the served config before the page stop, and clears the list and
+  // pushes again after the main start, before the page start. When a step
+  // throws, it starts again each main part it stopped, one at a time, logging
+  // a start that throws, and each paused page part whose main part runs again
+  // or that has no main part, then clears the paused list and pushes when it
+  // is still set, then rejects. Rejects for a plugin that is off or that the
+  // config does not hold, pushing nothing.
   restart(pluginId: string): Promise<void>;
   // Resolves once the switch's queue holds no work.
   settled(): Promise<void>;
@@ -142,10 +146,6 @@ function reasonOf(reply: PluginPartsReply): string | null {
   return 'reason' in reply ? reply.reason : null;
 }
 
-function stoppedOf(reply: PluginPartsReply): readonly string[] {
-  return 'stopped' in reply ? reply.stopped : [];
-}
-
 // A page `start` reply's problems; a reply with none counts as none.
 function startProblemsOf(reply: PluginPartsReply): readonly CatalogProblem[] {
   return 'problems' in reply ? reply.problems : [];
@@ -199,6 +199,8 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     applied.disabled().filter((id) => !deps.configDisabled().includes(id)),
   );
   const startProblems = new Map<string, string>();
+  // The start problem the last page start of each id recorded, by id.
+  const pageProblems = new Map<string, string>();
   // The entry whose code last started cleanly, by id.
   const lastGood = new Map(
     config
@@ -302,10 +304,21 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
       catalog.entries().map((entry) => inPlace.get(idOf(entry)) ?? entry),
     );
 
+  // Starts `ids` on the page, which skips a part already started. The
+  // problem an earlier page start recorded for one of `ids` clears when it is
+  // still the id's problem; the reply's problems replace it.
   const pageStart = async (ids: readonly string[]) => {
     const reply = await deps.page({ kind: 'start', ids });
+    for (const id of ids) {
+      const recorded = pageProblems.get(id);
+      if (recorded !== undefined && startProblems.get(id) === recorded) {
+        startProblems.delete(id);
+      }
+      pageProblems.delete(id);
+    }
     for (const { id, message } of startProblemsOf(reply)) {
       startProblems.set(id, message);
+      pageProblems.set(id, message);
     }
   };
 
@@ -436,6 +449,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   const forget = (id: string) => {
     withheld.delete(id);
     startProblems.delete(id);
+    pageProblems.delete(id);
     lastGood.delete(id);
     inPlace.delete(id);
     handled.delete(id);
@@ -638,12 +652,16 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   };
 
   // Reload steps 2 to 10: an id that runs swaps its part with its binds and
-  // its dependents' paused.
+  // its dependents' paused. The page start names every paused id that runs,
+  // not only those the page stop stopped: a page part whose start failed is
+  // held but not started, so the stop does not name it or the dependents its
+  // failed start skipped.
   const reloadRunning = async (id: string, next: CatalogEntry) => {
-    applied.setPaused([
+    const paused = [
       id,
       ...dependentsOf(id, applied.disabled(), admittedManifests()),
-    ]);
+    ];
+    applied.setPaused(paused);
     deps.servedChanged();
     try {
       await setPlugins();
@@ -666,9 +684,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         );
         return;
       }
-      const pageStopped = stoppedOf(
-        await deps.page({ kind: 'stop', ids: [id] }),
-      );
+      await deps.page({ kind: 'stop', ids: [id] });
       if (isDisposed) {
         return;
       }
@@ -694,7 +710,9 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         }
         recordReloadProblem(id, reply);
       }
-      const pageStarts = pageStopped.filter((each) => !withheld.has(each));
+      const pageStarts = paused.filter(
+        (each) => !applied.disabled().includes(each),
+      );
       if (pageStarts.length > 0) {
         await pageStart(pageStarts);
         if (isDisposed) {
@@ -1031,28 +1049,27 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         }
         const manifests = admittedManifests();
         const mainBefore = idsWhere(manifests, (id) => main.started.has(id));
-        let pageStopped: readonly string[] = [];
         let isDone = false;
         // The binds leave while the handlers exist, and main's come back once
-        // its handlers exist again; the page start brings the page's back.
-        applied.setPaused([
+        // its handlers exist again; the page start brings the page's back. It
+        // names every paused id, as a reload's does.
+        const paused = [
           pluginId,
           ...dependentsOf(pluginId, applied.disabled(), manifests),
-        ]);
+        ];
+        applied.setPaused(paused);
         deps.servedChanged();
         try {
-          pageStopped = stoppedOf(
-            await deps.page({ kind: 'stop', ids: [pluginId] }),
-          );
+          await deps.page({ kind: 'stop', ids: [pluginId] });
           const mainStopped = await main.stop(pluginId);
           main.start(mainStopped);
           unpause();
-          await pageStart(pageStopped);
+          await pageStart(paused);
           isDone = true;
           deps.log(SOURCE, `restarted ${pluginId}`);
         } finally {
           if (!isDone) {
-            await startWhatStopped(mainBefore, pageStopped);
+            await startWhatStopped(mainBefore, paused);
             if (applied.paused().length > 0) {
               unpause();
             }

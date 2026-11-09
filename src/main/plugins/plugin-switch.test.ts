@@ -770,7 +770,7 @@ describe('createPluginSwitch', () => {
         'paused',
         'servedChanged',
         'page reload u',
-        'page start d,u',
+        'page start u,d',
       ],
       row: { origin: 'user', on: true, problem: null },
     },
@@ -899,7 +899,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'paused',
         'servedChanged',
-        'page start d,u',
+        'page start u,d',
       ],
       u: { on: true, problem: 'Did not start: boom' },
       log: 'reload of u failed: Did not start: boom; the last good version runs',
@@ -929,7 +929,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'paused',
         'servedChanged',
-        'page start d,u',
+        'page start u,d',
       ],
       u: { on: true, problem: 'Commands and handlers differ: missing go' },
       log: 'reload of u failed: Commands and handlers differ: missing go; the last good version runs',
@@ -972,7 +972,7 @@ describe('createPluginSwitch', () => {
         'paused',
         'servedChanged',
         'page reload u',
-        'page start d,u',
+        'page start u,d',
       ],
       u: { on: true, problem: 'page.js failed: boom' },
       log: 'reloaded u',
@@ -999,6 +999,49 @@ describe('createPluginSwitch', () => {
       expect(switched.logs.at(-1)).toBe(`[plugin-switch] ${row.log}`);
     },
   );
+
+  // A page part whose start failed is held but not started, so the page stop
+  // names nothing: the start must still bring it and its page dependent up.
+  it.each([
+    {
+      case: 'a good reload',
+      act: (switched: ReturnType<typeof setup>) =>
+        changeCatalog(switched, [
+          user('u', { revision: 2 }),
+          switched.catalog.entries[1],
+        ]),
+    },
+    {
+      case: 'a restart',
+      act: (switched: ReturnType<typeof setup>) =>
+        switched.pluginSwitch.restart('u'),
+    },
+  ])('pageStartFailed_ThenStartsThePageAgain: $case', async (row) => {
+    const switched = setup({
+      entries: [
+        user('u'),
+        user('d', { manifest: { dependsOn: { main: [], page: ['u'] } } }),
+      ],
+      applied: ['u', 'd'],
+      disabled: [],
+    });
+    switched.page.startProblems = [
+      { id: 'u', message: 'Page part did not start: boom' },
+    ];
+    await switched.pluginSwitch.settled();
+    expect(switched.row('u')?.problem).toBe('Page part did not start: boom');
+    switched.page.startProblems = [];
+    switched.page.stopReply = [];
+    const before = switched.calls.length;
+
+    await row.act(switched);
+
+    const pageStarts = switched.calls
+      .slice(before)
+      .filter((call) => call.startsWith('page start'));
+    expect(pageStarts).toEqual(['page start u,d']);
+    expect(switched.row('u')?.problem).toBe(null);
+  });
 
   it('catalogChange_ReloadStartFails_NoLastGoodStaysStopped', async () => {
     // A built-in that came back after its replacement failed, and now fails
@@ -1447,7 +1490,7 @@ describe('createPluginSwitch', () => {
       'main start b,a',
       'paused',
       'servedChanged',
-      'page start b,a',
+      'page start a,b',
     ]);
     expect(logs).toEqual(['[plugin-switch] restarted a']);
   });
@@ -1511,7 +1554,7 @@ describe('createPluginSwitch', () => {
         'main start x',
         'main start z',
         'main start y',
-        'page start z,x',
+        'page start x,z',
         'paused',
         'servedChanged',
       ],
