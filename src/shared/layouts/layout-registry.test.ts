@@ -88,6 +88,20 @@ function withFailingWatch(
   };
 }
 
+// `inner` whose watch reports no change and adds its options' `onMissed` to
+// `missed`.
+function withUnreportedWatch(inner: Files, missed: (() => void)[]): Files {
+  return {
+    ...inner,
+    watch: (_folder, _onChange, options) => {
+      if (options?.onMissed !== undefined) {
+        missed.push(options.onMissed);
+      }
+      return { dispose() {} };
+    },
+  };
+}
+
 // `files` whose watch reports each change as the top entry's name only, as
 // Node's `fs.watch` reports a folder renamed or moved inside the watched one.
 function withFolderNameWatch(inner: Files): Files {
@@ -398,6 +412,52 @@ describe('watch', () => {
       expect(sent[0].changed).toBe('default');
       expect(defaultIn(sent[0])).toMatchObject({ builtIn: false, hasCss });
       expect(defaultIn(sent[0])?.revision).toBeGreaterThan(startRevision);
+    },
+  );
+
+  // Each row changes the folders with no event reported, then both watches
+  // report that they may have missed changes.
+  it.each<{ change: string; arrange: () => Promise<void>; changed: string[] }>([
+    {
+      change: 'a save in beta',
+      arrange: () => files.write('beta/layout.js', '// saved'),
+      changed: ['beta'],
+    },
+    { change: 'nothing', arrange: async () => {}, changed: [] },
+    {
+      change: 'a new layout',
+      arrange: () => writeLayouts('gamma'),
+      changed: ['gamma'],
+    },
+    {
+      change: 'a save in the default folder',
+      arrange: () => writeDefaultFiles('layout.css'),
+      changed: ['default'],
+    },
+  ])(
+    'watch_MissedChange_ListsAgainOnlyWhatChanged: $change',
+    async ({ arrange, changed }) => {
+      let now = 1;
+      files = createMemoryFiles({ now: () => now });
+      clone = createMemoryFiles({ now: () => now });
+      defaultFolder = scopedFiles(clone, DEFAULT_PATH, posixPaths);
+      await writeLayouts('alpha', 'beta');
+      await writeDefaultFiles('layout.js');
+      const missed: (() => void)[] = [];
+      await start(
+        withUnreportedWatch(files, missed),
+        LAYOUT_TYPES,
+        withUnreportedWatch(defaultFolder, missed),
+      );
+      now = 2;
+      await arrange();
+
+      for (const reportMissed of missed) {
+        reportMissed();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(sent.map((set) => set.changed)).toEqual(changed);
     },
   );
 

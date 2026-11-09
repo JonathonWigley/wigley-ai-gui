@@ -190,7 +190,8 @@ src/main/        core main process; main.ts is its composition root
                  and `claude -p /usage` (the plan usage poll), and asks each session for `get_context_usage` and
                  `get_settings` → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
-                 rename, trash, folder lists and watching, behind Files
+                 rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
+                 drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none

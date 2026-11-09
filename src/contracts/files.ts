@@ -25,6 +25,11 @@ export interface WatchOptions {
   recursive?: boolean;
   // Called once when watching fails after it started.
   onError?(error: unknown): void;
+  // Called when the watch may have dropped changes, so the caller compares
+  // what it watches against what it last read. The Node adapter calls it on
+  // macOS 100 ms after the last of a burst of other watches in the process
+  // opening or closing; the memory adapter never calls it.
+  onMissed?(): void;
 }
 
 // UTF-8 text files read whole or by their first bytes, written whole or

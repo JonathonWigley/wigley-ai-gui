@@ -38,6 +38,18 @@ const WATCH_QUIET_MS = 100;
 // The temp file `write` renames over its target: `.<name>.<8 hex>.tmp`.
 const TEMP_FILE = /^\..+\.[0-9a-f]{8}\.tmp$/;
 
+// Every macOS watch the process holds open. Node watches each folder through
+// one FSEvents stream per process, rebuilt whenever a watch opens or closes,
+// and the rebuild drops the events the old stream had not yet delivered.
+const liveMacWatches = new Set<{ missed(): void }>();
+
+// Tells every live macOS watch that it may have missed changes.
+function announceStreamRebuilt(): void {
+  for (const watch of liveMacWatches) {
+    watch.missed();
+  }
+}
+
 export interface NodeFilesOptions {
   // Moves a path to the OS Trash; main.ts passes Electron's shell.trashItem,
   // or a recursive rm under the self-test and a drive run.
@@ -257,12 +269,27 @@ function watchDebounced(
       }, WATCH_QUIET_MS),
     );
   });
+  let missedTimer: NodeJS.Timeout | undefined;
+  const live = {
+    missed() {
+      clearTimeout(missedTimer);
+      missedTimer = setTimeout(() => options?.onMissed?.(), WATCH_QUIET_MS);
+    },
+  };
+  if (os === 'macos') {
+    announceStreamRebuilt();
+    liveMacWatches.add(live);
+  }
   const dispose = () => {
     watcher.close();
     for (const timer of pending.values()) {
       clearTimeout(timer);
     }
     pending.clear();
+    clearTimeout(missedTimer);
+    if (liveMacWatches.delete(live)) {
+      announceStreamRebuilt();
+    }
   };
   let failed = false;
   // A listener stays attached after the first error, since an `'error'` an

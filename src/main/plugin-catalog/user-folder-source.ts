@@ -45,6 +45,12 @@ const REVISION_NAME = /^\d+$/;
 // The names editors give swap, backup and temporary files.
 const EDITOR_TEMP_FILE = /(~|\.swp|\.swx|\.tmp)$/;
 
+// Whether `name`, in the plugins folder, can name a plugin: names starting
+// with `_` or `.` hold shared files instead.
+function isPluginName(name: string): boolean {
+  return !name.startsWith('_') && !name.startsWith('.');
+}
+
 // Whether `path`, in a plugin folder, lies under a name starting with `.`,
 // which a load leaves out of its copy.
 function isHidden(path: string): boolean {
@@ -64,6 +70,9 @@ type MainImport = { module: Record<string, unknown> } | { problem: string };
 // the folder to `<user data>/plugin-code/<id>/<revision>/` and imports the
 // copy's `main.js`, so every load, its relative imports included, is a new
 // module. A load never throws: a problem resolves `failed` with its message.
+// When the watch may have dropped changes (`onMissed`), each folder that came,
+// went, or whose files' paths or modified times differ from its last load
+// loads as a reported change would.
 export function createUserFolderSource(
   deps: UserFolderSourceDeps,
 ): WatchedPluginSource {
@@ -72,6 +81,11 @@ export function createUserFolderSource(
   const revisions = new Map<string, number>();
   // The ids whose last load was `loaded` or `failed`.
   const held = new Set<string>();
+  // Each held id's files as `fingerprintOf` read them just before its last
+  // load.
+  const fingerprints = new Map<string, string | null>();
+  // Whether `loadAll` ran, which loads every folder it finds.
+  let hasLoadedAll = false;
   // Two loads never interleave.
   const loads = createSerialQueue();
 
@@ -128,6 +142,21 @@ export function createUserFolderSource(
       }
     }
     return found;
+  };
+
+  // The files a load of `id` copies, each with its modified time, as one
+  // string; null when they cannot be listed or read.
+  const fingerprintOf = async (id: string): Promise<string | null> => {
+    try {
+      const stamps: string[] = [];
+      for (const path of (await filesToCopy(id)).sort()) {
+        const modified = await pluginsFolder.modified(`${id}/${path}`);
+        stamps.push(`${path}\t${modified}`);
+      }
+      return stamps.join('\n');
+    } catch {
+      return null;
+    }
   };
 
   // Copies `filesToCopy` and resolves the copied paths, relative to the copy.
@@ -249,6 +278,8 @@ export function createUserFolderSource(
   // Loads the id and notes whether the source holds it now. A problem `load`
   // did not foresee fails the load.
   const trackedLoad = async (id: string): Promise<TrackedLoad> => {
+    // Read before the load copies, so a save during the load differs from it.
+    const fingerprint = await fingerprintOf(id);
     let result: SourceLoad;
     try {
       result = await load(id);
@@ -258,8 +289,10 @@ export function createUserFolderSource(
     const announced = result.kind !== 'gone' || held.has(id);
     if (result.kind === 'gone') {
       held.delete(id);
+      fingerprints.delete(id);
     } else {
       held.add(id);
+      fingerprints.set(id, fingerprint);
     }
     return { load: result, announced };
   };
@@ -280,6 +313,37 @@ export function createUserFolderSource(
       }
       return isPresent === held.has(id) ? null : trackedLoad(id);
     });
+
+  const listPluginNames = async (): Promise<string[]> =>
+    (await pluginsFolder.list(ROOT))
+      .map((entry) => entry.path)
+      .filter(isPluginName);
+
+  // The ids whose folder came or went since the source last loaded them
+  // (`isSave` false), and the held ids whose files differ from their last
+  // load (`isSave` true). A folder no load has seen counts as come only once
+  // `loadAll` ran.
+  const changedSinceLoad = async (): Promise<
+    { id: string; isSave: boolean }[]
+  > => {
+    const names = await listPluginNames();
+    const changed: { id: string; isSave: boolean }[] = [];
+    for (const id of new Set([...names, ...held])) {
+      const isPresent = (await pluginsFolder.stat(id))?.isFolder === true;
+      const isHeld = held.has(id);
+      if (isPresent !== isHeld) {
+        if (isHeld || hasLoadedAll) {
+          changed.push({ id, isSave: false });
+        }
+      } else if (
+        isPresent &&
+        (await fingerprintOf(id)) !== fingerprints.get(id)
+      ) {
+        changed.push({ id, isSave: true });
+      }
+    }
+    return changed;
+  };
 
   const watch = (listener: (load: SourceLoad) => void) => {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -305,7 +369,7 @@ export function createUserFolderSource(
     const onChange = (changed: string) => {
       const segments = changed.split('/');
       const id = segments[0];
-      if (id.startsWith('_') || id.startsWith('.')) {
+      if (!isPluginName(id)) {
         return;
       }
       const isSave = segments.length > 1;
@@ -317,6 +381,12 @@ export function createUserFolderSource(
       if (isLayoutSave || isSkippedSave) {
         return;
       }
+      settleLater(id, isSave);
+    };
+
+    // Loads `id` once `PLUGIN_SETTLE_MS` pass with no other change to it: as
+    // a save when `isSave`, else only when its folder came or went.
+    const settleLater = (id: string, isSave: boolean) => {
       if (isSave) {
         savedIds.add(id);
       }
@@ -327,6 +397,24 @@ export function createUserFolderSource(
       );
     };
 
+    // The watch may have dropped changes, so each id that changed since its
+    // last load settles as a change the watch reported would.
+    const rescan = () => {
+      void loads
+        .run(changedSinceLoad)
+        .then((changed) => {
+          if (disposed) {
+            return;
+          }
+          for (const { id, isSave } of changed) {
+            settleLater(id, isSave);
+          }
+        })
+        .catch((error: unknown) =>
+          log(LOG_SOURCE, `plugins rescan failed: ${errorText(error)}`),
+        );
+    };
+
     const logWatchFailed = (error: unknown) =>
       log(LOG_SOURCE, `plugins watch failed: ${errorText(error)}`);
 
@@ -334,6 +422,7 @@ export function createUserFolderSource(
     try {
       fileWatch = pluginsFolder.watch(ROOT, onChange, {
         onError: logWatchFailed,
+        onMissed: rescan,
       });
     } catch (error) {
       logWatchFailed(error);
@@ -354,10 +443,9 @@ export function createUserFolderSource(
 
   return {
     loadAll: async () => {
-      const names = (await pluginsFolder.list(ROOT))
-        .map((entry) => entry.path)
-        .filter((name) => !name.startsWith('_') && !name.startsWith('.'))
-        .sort((a, b) => a.localeCompare(b));
+      const names = (await listPluginNames()).sort((a, b) =>
+        a.localeCompare(b),
+      );
       const loads: SourceLoad[] = [];
       for (const name of names) {
         const { load: loaded } = await loadInTurn(name);
@@ -365,6 +453,7 @@ export function createUserFolderSource(
           loads.push(loaded);
         }
       }
+      hasLoadedAll = true;
       return loads;
     },
     watch,

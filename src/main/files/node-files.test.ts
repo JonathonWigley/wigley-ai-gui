@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isMissingFile } from '../../contracts/files';
+import type { OsName } from '../../contracts/platform';
 import { describeFilesContract } from '../../shared/files-contract.test-support';
 import { osPlatform } from '../../shared/os-platform';
 import { createNodeFiles } from './node-files';
@@ -216,6 +217,40 @@ describe('createNodeFiles', () => {
 
     expect(reports).toEqual([]);
   });
+
+  // Breaks if a watch opening or closing on macOS stops telling the other
+  // live watches they may have missed changes, or tells the watch itself.
+  it.each<{ os: OsName; missedAfterOpen: number; missedAfterClose: number }>([
+    { os: 'macos', missedAfterOpen: 1, missedAfterClose: 2 },
+    { os: 'linux', missedAfterOpen: 0, missedAfterClose: 0 },
+  ])(
+    'watch_AnotherWatchOpensThenCloses_CallsOnMissedOnMacOS: $os',
+    async ({ os, missedAfterOpen, missedAfterClose }) => {
+      const osFiles = createNodeFiles({ trashItem: async () => {}, os });
+      let firstMissed = 0;
+      let secondMissed = 0;
+      const first = osFiles.watch(root, () => {}, {
+        onMissed: () => (firstMissed += 1),
+      });
+      try {
+        const second = osFiles.watch(path.join(root, 'other'), () => {}, {
+          onMissed: () => (secondMissed += 1),
+        });
+        await waitMs(3 * QUIET_MS);
+        const afterOpen = firstMissed;
+        second.dispose();
+        await waitMs(3 * QUIET_MS);
+
+        expect([afterOpen, firstMissed, secondMissed]).toEqual([
+          missedAfterOpen,
+          missedAfterClose,
+          0,
+        ]);
+      } finally {
+        first.dispose();
+      }
+    },
+  );
 
   it.skipIf(!canSymlink)(
     'stat_FileFolderAndLink_IsFolderAndIsLink',

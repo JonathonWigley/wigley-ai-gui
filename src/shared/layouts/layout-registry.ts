@@ -1,4 +1,8 @@
-import type { Files, FileWatch } from '../../contracts/files';
+import {
+  type Files,
+  type FileWatch,
+  isMissingFile,
+} from '../../contracts/files';
 import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../error-text';
@@ -10,7 +14,10 @@ import { createSerialQueue } from '../serial-queue';
 // the new set, naming that layout as changed; so does renaming, moving or
 // deleting a layout's whole folder. `default` is live while the owner's
 // default folder holds `layout.js`, and built in otherwise; a save of its
-// `layout.js` or `layout.css` sends the set naming `default`. A watch failure
+// `layout.js` or `layout.css` sends the set naming `default`. When a watch
+// may have dropped changes, each layout folder whose files' paths or modified
+// times differ from its last listing, and a default whose `layout.js` or
+// `layout.css` does, lists again as a reported change would. A watch failure
 // is logged, and saves then go unseen until the next start; a default watch
 // that fails to start leaves the user layouts listed and watched.
 export interface LayoutRegistry {
@@ -90,6 +97,27 @@ async function listDefaultFiles(defaultFolder: Files): Promise<DefaultFiles> {
   return { hasCode: names.has(DEFAULT_CODE), hasCss: names.has(DEFAULT_STYLE) };
 }
 
+// The modified time of `path` in `files`, as a stamp line; null when it is
+// missing.
+async function stampOf(files: Files, path: string): Promise<string | null> {
+  try {
+    return `${path}\t${await files.modified(path)}`;
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+// The default folder's `layout.js` and `layout.css` stamps, as one string.
+async function defaultStampOf(defaultFolder: Files): Promise<string> {
+  const lines = await Promise.all(
+    [DEFAULT_CODE, DEFAULT_STYLE].map((file) => stampOf(defaultFolder, file)),
+  );
+  return lines.join('\n');
+}
+
 async function isFolder(files: Files): Promise<boolean> {
   return (await files.stat(ROOT))?.isFolder === true;
 }
@@ -133,6 +161,29 @@ export async function startLayoutRegistry(
       .map((name) => ({ name, hasCss: files.has(`${name}/layout.css`) }));
   };
 
+  // Each layout folder's layout files with their modified times, by folder
+  // name, `default` left out.
+  const readStamps = async (): Promise<Map<string, string>> => {
+    const byName = new Map<string, string[]>();
+    for (const entry of await folder.list(ROOT, { recursive: true })) {
+      const slash = entry.path.indexOf('/');
+      const fileName = entry.path.slice(entry.path.lastIndexOf('/') + 1);
+      const name = entry.path.slice(0, slash);
+      const isLayoutFile =
+        entry.kind === 'file' &&
+        slash !== -1 &&
+        name !== DEFAULT_NAME &&
+        isLayoutFileName(fileName);
+      const stamp = isLayoutFile ? await stampOf(folder, entry.path) : null;
+      if (stamp !== null) {
+        byName.set(name, [...(byName.get(name) ?? []), stamp]);
+      }
+    }
+    return new Map(
+      [...byName].map(([name, lines]) => [name, lines.sort().join('\n')]),
+    );
+  };
+
   // Gives every listed user layout the registry has not seen revision 1.
   const holdListing = (layouts: ListedLayout[]): ListedLayout[] => {
     for (const layout of layouts) {
@@ -155,6 +206,7 @@ export async function startLayoutRegistry(
 
   await folder.write('layout.d.ts', userLayoutTypes(deps.layoutTypes));
   let listed = holdListing(await listLayouts());
+  const stamps = await readStamps();
   // `Files.watch` makes a missing folder, so a default folder missing at start
   // stays unwatched until the next start.
   const watchedDefault =
@@ -165,6 +217,8 @@ export async function startLayoutRegistry(
     watchedDefault === null
       ? BUILT_IN_DEFAULT
       : defaultEntryOf(await listDefaultFiles(watchedDefault));
+  let defaultStamp =
+    watchedDefault === null ? '' : await defaultStampOf(watchedDefault);
 
   const entry = (layout: ListedLayout): LayoutEntry => ({
     name: layout.name,
@@ -182,6 +236,12 @@ export async function startLayoutRegistry(
   // when `name` is a layout now or was one before; a folder that never held a
   // layout sends nothing.
   const relist = async (name: string): Promise<void> => {
+    const stamp = (await readStamps()).get(name);
+    if (stamp === undefined) {
+      stamps.delete(name);
+    } else {
+      stamps.set(name, stamp);
+    }
     const layouts = await listLayouts();
     const wasListed = listed.some((layout) => layout.name === name);
     const isListed = layouts.some((layout) => layout.name === name);
@@ -197,6 +257,7 @@ export async function startLayoutRegistry(
   // Lists the default folder again and announces `default` when it is live
   // now or was before; a change while it stays built in sends nothing.
   const relistDefault = async (watched: Files): Promise<void> => {
+    defaultStamp = await defaultStampOf(watched);
     const files = await listDefaultFiles(watched);
     if (defaultEntry.builtIn && !files.hasCode) {
       return;
@@ -233,9 +294,26 @@ export async function startLayoutRegistry(
     relistInTurn(name);
   };
 
+  // Lists again each layout folder whose stamps differ from its last listing.
+  const relistChanged = async (): Promise<void> => {
+    const now = await readStamps();
+    const names = new Set([...stamps.keys(), ...now.keys()]);
+    for (const name of names) {
+      if (stamps.get(name) !== now.get(name)) {
+        await relist(name);
+      }
+    }
+  };
+
   const watch = folder.watch(ROOT, onChange, {
     onError: (error) =>
       log(logSource, `layouts watch failed: ${errorText(error)}`),
+    onMissed: () =>
+      listings
+        .run(relistChanged)
+        .catch((error: unknown) =>
+          log(logSource, `layouts not rescanned: ${errorText(error)}`),
+        ),
   });
 
   const logDefaultWatchFailed = (error: unknown) =>
@@ -244,23 +322,32 @@ export async function startLayoutRegistry(
   // Not recursive: a change in a subfolder reports the subfolder's name, which
   // is neither file a default loads.
   const watchDefault = (watched: Files): FileWatch | null => {
+    const relistDefaultInTurn = (isDue: () => Promise<boolean>) =>
+      listings
+        .run(async () => {
+          if (await isDue()) {
+            await relistDefault(watched);
+          }
+        })
+        .catch((error: unknown) =>
+          log(logSource, `layout default not reloaded: ${errorText(error)}`),
+        );
     try {
       return watched.watch(
         ROOT,
         (changed) => {
-          if (changed !== DEFAULT_CODE && changed !== DEFAULT_STYLE) {
-            return;
+          if (changed === DEFAULT_CODE || changed === DEFAULT_STYLE) {
+            relistDefaultInTurn(async () => true);
           }
-          listings
-            .run(() => relistDefault(watched))
-            .catch((error: unknown) =>
-              log(
-                logSource,
-                `layout default not reloaded: ${errorText(error)}`,
-              ),
-            );
         },
-        { recursive: false, onError: logDefaultWatchFailed },
+        {
+          recursive: false,
+          onError: logDefaultWatchFailed,
+          onMissed: () =>
+            relistDefaultInTurn(
+              async () => (await defaultStampOf(watched)) !== defaultStamp,
+            ),
+        },
       );
     } catch (error) {
       logDefaultWatchFailed(error);

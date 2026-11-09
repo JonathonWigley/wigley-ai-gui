@@ -439,6 +439,63 @@ describe('createUserFolderSource', () => {
       },
     );
 
+    // Each row changes the plugins folder with no event reported, against a
+    // source that loaded `notes` and `tasks`, then the watch reports that it
+    // may have missed changes.
+    it.each<{
+      change: string;
+      arrange: () => Promise<void> | void;
+      loads: string[];
+    }>([
+      {
+        change: 'a save in notes',
+        arrange: () => plugins.write('notes/main.js', '// saved'),
+        loads: ['notes'],
+      },
+      { change: 'nothing', arrange: () => {}, loads: [] },
+      {
+        change: 'a new folder',
+        arrange: () => writePlugin('fresh'),
+        loads: ['fresh'],
+      },
+      {
+        change: 'notes deleted',
+        arrange: () => plugins.remove('notes'),
+        loads: ['gone'],
+      },
+    ])(
+      'loads after a missed change only what changed since its load: $change',
+      async ({ arrange, loads: expected }) => {
+        plugins = createMemoryFiles({ now: () => Date.now() });
+        await writePlugin('notes');
+        await writePlugin('tasks');
+        let reportMissed: () => void = () => {};
+        const unreported: Files = {
+          ...plugins,
+          watch: (_folder, _onChange, options) => {
+            reportMissed = options?.onMissed ?? (() => {});
+            return { dispose() {} };
+          },
+        };
+        const source = createSource(unreported);
+        await source.loadAll();
+        const loads: SourceLoad[] = [];
+        source.watch((load) => loads.push(load));
+        await vi.advanceTimersByTimeAsync(1);
+        await arrange();
+
+        reportMissed();
+        await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
+        await loadsDone(source);
+
+        expect(
+          loads.map((load) =>
+            load.kind === 'loaded' ? load.entry.manifest.id : load.kind,
+          ),
+        ).toEqual(expected);
+      },
+    );
+
     it('reports a deleted folder as gone, once', async () => {
       await writePlugin('notes');
       await plugins.write('stray/data.json', '{}');

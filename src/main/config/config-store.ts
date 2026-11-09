@@ -46,9 +46,11 @@ import type { UserSettings } from './user-settings';
 // The served config, kept current with the user config folder.
 // `onChanged` listeners run, in registration order, each time a change to a
 // config file changes the served config, after `current` returns the new one.
-// `dispose` stops watching the folder and drops every listener; `current`
-// keeps returning the last config. A rebuild already running when `dispose`
-// is called publishes nothing and runs no further rebuild.
+// When the watch may have dropped changes, the store reads its files again as
+// a change does. `dispose` stops watching the folder and drops every
+// listener; `current` keeps returning the last config. A rebuild already
+// running when `dispose` is called publishes nothing and runs no further
+// rebuild.
 // `setRuntime` hands over both processes' runtime commands and binds, re-serving
 // as a file change does, once for a burst in one tick. `runtime` reads those
 // catalogs and the runtime binds in force.
@@ -650,6 +652,7 @@ export async function loadConfigStore(
           reportWatchFailure(error);
           requestRebuild();
         },
+        onMissed: requestRebuild,
       },
     );
   } catch (error) {

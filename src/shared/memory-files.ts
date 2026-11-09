@@ -7,9 +7,10 @@ import { relativeSegments } from './scoped-files';
 // the watches over it at once, with no debounce, so a test drives a save by
 // writing; a rename reports each moved file's old path and its new one. A
 // watch with `recursive: false` reports a change under a subfolder as the
-// subfolder's name, once per call. A watch never fails, so it never calls its
-// `onError`. There are no links, so `stat` reports none and `realPath` returns
-// the path's stored spelling. Names are case-sensitive.
+// subfolder's name, once per call. A watch never fails or misses a change, so
+// it never calls its `onError` or `onMissed`. There are no links, so `stat`
+// reports none and `realPath` returns the path's stored spelling. Names are
+// case-sensitive.
 export interface MemoryFiles extends Files {
   // Deletes the file at `path`, or the folder at `path` and everything under
   // it; the folder holding `path` stays.
