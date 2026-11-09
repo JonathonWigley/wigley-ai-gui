@@ -155,6 +155,13 @@ export interface BaseKit {
   setDotStatus(dot: HTMLElement, status: DotStatus): void;
   // `span.ui-meter`: a small bar filled to `percent` (0–100) in `tone`.
   meter(parent: HTMLElement, percent: number, tone: MeterTone): HTMLElement;
+  // `span.ui-sparkline`: a line of `values` (0–100, oldest first) in `tone`, the tone of the meter beside it; the line
+  // spans the part's width whatever the count. To redraw, call it again in a fresh parent part.
+  sparkline(
+    parent: HTMLElement,
+    values: readonly number[],
+    tone: MeterTone,
+  ): HTMLElement;
   // `.ui-row`: a list or tree row. The app sets `is-selected` and `is-cursor` on the rows it keeps the cursor on.
   row(parent: HTMLElement, options: KitRowOptions): HTMLElement;
   // `p.ui-empty`: one line saying what to do, then `hint`, the key or action that does it.

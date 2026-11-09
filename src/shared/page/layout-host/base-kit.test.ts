@@ -550,6 +550,28 @@ describe('createBaseKit', () => {
     expect(node.attributes.get('aria-valuenow')).toBe('42');
   });
 
+  it('sparkline_AppendsALineInItsTone', () => {
+    const { kit } = kitOver(null);
+    const parent = new FakeElement('div');
+
+    const node = asFake(
+      kit.sparkline(asHtml(parent), [10, 55, 100], 'critical'),
+    );
+
+    expect(parent.childNodes).toEqual([node]);
+    expect(node.className).toBe('ui-sparkline');
+    expect(node.dataset.tone).toBe('critical');
+    expect(node.attributes.get('aria-hidden')).toBe('true');
+    const [svg] = node.children;
+    expect(node.children).toEqual([svg]);
+    expect(svg.attributes.get('class')).toBe('ui-sparkline-svg');
+    expect(svg.attributes.get('viewBox')).toBe('0 0 2 100');
+    const [line] = svg.children;
+    expect(svg.children).toEqual([line]);
+    expect(line.attributes.get('class')).toBe('ui-sparkline-line');
+    expect(line.attributes.get('points')).toBe('0,90 1,45 2,0');
+  });
+
   it('section_BlankText_DrawsNothing', () => {
     const { kit } = kitOver('docs.tree');
     const parent = new FakeElement('div');

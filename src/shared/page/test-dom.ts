@@ -363,6 +363,7 @@ export function installFakeDom(
   stubGlobal('window', new FakeWindow('window'));
   stubGlobal('document', {
     createElement: (tag: string) => new FakeElement(tag),
+    createElementNS: (_namespace: string, tag: string) => new FakeElement(tag),
   });
   stubGlobal(
     'ResizeObserver',
