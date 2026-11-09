@@ -266,9 +266,10 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   `raised`, so the built-in sessions layout draws it as a tinted Tag in place of a finished turn's `Done`, with a status
   edge on the card, one step under the solid Tag of an `urgent` Needs you. Its rank sits above chat's done and below chat's working, so a running turn, an error and a waiting round still
   take the label.
-- **Paused run** — every other stage of a run, while the flow is paused, sets Needs you (`attention`, `urgent`) at
-  rank 18, so a session that stopped mid-run says so even when the agent asked in chat rather than in a round. A stage
-  that ends its run (its `finishes`: Small's and Medium's Done, Large's Closed) and Large's idle set none. The rank
+- **Paused run** — a stage whose status reads paused, and which declares no `rowActivity` of its own, sets Needs you
+  (`attention`, `urgent`) at rank 18, so a session that stopped mid-run says so even when the agent asked in chat
+  rather than in a round. A stage that ends its run (Small's and Medium's Done, Large's Closed) reads done, plan ready
+  reads ready and Large's idle has no status, so none of them sets it. The rank
   sits under chat's working, so a session waiting on its own background command or Monitor still reads Working, and
   under chat's error, so an unseen error shows first. It lasts until a turn or a subagent starts; viewing the session
   leaves it.
