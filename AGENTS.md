@@ -340,7 +340,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout); `docs/features/practice/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
-                 permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
+                 permission_prompt, start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
                  layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its project, folder, profile, sign-in and session steps), layouts/ (the chat Layout contract

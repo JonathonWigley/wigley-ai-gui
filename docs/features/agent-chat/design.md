@@ -422,8 +422,9 @@ interview on 2026-10-23; this file is the record of both.
   Project, Branch and Other folder steps are `docs/features/projects/design.md` § Start prompt — or, through Other
   folder…, the folder, then the profile (a single profile is not asked, nor one the project fixes; the last profile
   used in a folder is pre-selected). With no projects in settings, it opens on the folder step. Esc at any step
-  starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt, and after the profile and any sign-in its
-  session step holds only New session and New headless session, with the cursor on New session. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
+  starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt, lists no saved sessions, and after the
+  profile and any sign-in starts a new session at once. A session starts headless only from its own Headless chip or
+  its agent's `set_headless` call, after it starts (§ Headless from an agent). The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
   one line per folder, its newest use and the profile of that use kept. A path that is no longer a folder, one that
   sits in an OS temp folder (`MainServices.tempFolders`), and one whose check fails (logged) are left out, and the list
@@ -518,9 +519,10 @@ interview on 2026-10-23; this file is the record of both.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
-- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the projects and above the new-session line. After the project or folder and the profile, the start prompt's session step offers a new session, a new
-  headless session, or one of the project's or folder's saved sessions; a project or folder with no saved sessions shows the step
-  with the two new-session lines alone. Saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
+- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the projects and above the new-session line. After the project or folder and the profile, the start prompt's session step offers a new session or one of
+  the project's or folder's saved sessions and resume-section rows; a step that would hold the New session line alone
+  (no saved sessions, a listing that failed, or `Ctrl+n`) is skipped, and the session starts at once. A resumed
+  session that was headless resumes headless. Saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay or on a row another plugin owns is left out, and picking one that has a chat row selects that row
   instead of opening a second; a resume onto a held row whose owner is not the request's rejects, naming both),
   resume with their earlier conversation read from the transcript. A resume lists the session host first, so a session
@@ -533,6 +535,13 @@ interview on 2026-10-23; this file is the record of both.
 - **Self-test**: the self-test host takes one script per plugin and runs them in plugin start order, so chat's
   steps live in chat's own script over the fake adapter. The give-back rule is pinned by the tabs unit tests; the
   swap with a real round is a live check in the final verification.
+- **Headless from an agent**: the `set_headless` MCP tool, which chat contributes main-agent only beside
+  `start_session`, sets the calling session's headless flag (`headless`: true or false) through the same `setHeadless`
+  the Headless chip runs, so the chip, the row tag and the forms auto-answer follow at once. Turning it on returns
+  `HEADLESS_NOTE` and turning it off `HEADLESS_OFF_NOTE`, the lines the agent already reads its state from; a call
+  from a session chat does not own (a terminal session on the relay) returns an error, since only an app session has
+  the flag. The agent calls it on the user's word (`~/wigley-agents/workflows.md` § Headless), which is why the start
+  prompt offers no headless line.
 - **Starting a session from an agent**: the `start_session` MCP tool opens a chat session through the same background
   launch Notes and Workflow use, so the row appears without taking focus. It takes `prompt`, then `folder` or
   `project` (not both), and `profile`
