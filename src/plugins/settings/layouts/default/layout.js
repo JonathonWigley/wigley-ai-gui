@@ -233,19 +233,22 @@ const layout = {
           return;
         }
         const binds = kit.el(end, 'span', 'settings-binds');
-        /** @param {HTMLElement} item */
-        const separated = (item) => {
-          if (binds.firstChild !== item) {
-            binds.insertBefore(
-              kit.el(binds, 'span', 'settings-bind-separator', '·'),
-              item,
-            );
-          }
-        };
+        binds.title = input.lines
+          .map((line) => [line.keys, ...line.tags].join(' '))
+          .join(' · ');
+        // While a recording runs the row shows only it and the bind it
+        // replaces, so a bind cut from the line never hides the recording.
         input.lines.forEach((line, index) => {
-          const bind = kit.el(binds, 'span', 'settings-bind');
-          separated(bind);
           const isReplaced = recording !== null && recording.line === index;
+          if (recording !== null && !isReplaced) {
+            return;
+          }
+          const bind = kit.el(binds, 'span', 'settings-bind');
+          // The separator sits inside the bind it leads, so a bind cut from
+          // the line takes its separator with it.
+          if (binds.firstChild !== bind) {
+            kit.el(bind, 'span', 'settings-bind-separator', '·');
+          }
           bind.classList.toggle('is-struck', line.isStruck || isReplaced);
           kit.kbd(bind, line.keys);
           for (const text of line.tags) {
@@ -256,7 +259,7 @@ const layout = {
           }
         });
         if (recording !== null && recording.line === null) {
-          separated(recordingSpan(binds, kit, recording));
+          recordingSpan(binds, kit, recording);
         }
       },
       drawUnder: (drawnRow) => recordingNote(drawnRow, kit, recording),

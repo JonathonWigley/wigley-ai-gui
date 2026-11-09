@@ -122,7 +122,7 @@
   font-size: var(--wg-text-12);
 }
 
-/* A command row's binds on one line, separated by a dot: each bind's keys,
+/* A command row's binds, separated by a dot: each bind's separator, keys,
    then its tags. */
 .settings-binds {
   display: flex;
@@ -133,6 +133,7 @@
 }
 
 .settings-bind-separator {
+  margin-right: var(--wg-space-1);
   color: var(--wg-fg-tertiary);
 }
 
@@ -149,9 +150,13 @@
 }
 
 /* A key row is one line. Its keys and the cursor prompt keep their width;
-   the dim group gives way first, then the binds' tags and a recording's
-   prompt, then the label, each ending in an ellipsis. While a recording
-   runs, its prompt takes the cursor prompt's place. */
+   the dim group gives way first, then the binds that no longer fit leave the
+   line whole, from the last (the binds' title lists every one), then the
+   label down to a few characters, each ending in an ellipsis. The first bind
+   stays whole, except on the cursor row, whose prompt leaves no room for that
+   in a narrow window: there the first bind's tags and a recording's prompt
+   give way, then the label to nothing. While a recording runs, its prompt
+   takes the cursor prompt's place. */
 .settings-key-row .settings-row-label,
 .settings-key-row .settings-row-detail,
 .settings-key-row .settings-bind > .ui-tag,
@@ -166,20 +171,44 @@
   flex: 0 1 auto;
 }
 
-.settings-key-row .settings-row-detail {
-  flex: 0 10000 auto;
+.settings-key-row:not(.is-cursor) .settings-row-label {
+  min-width: calc-size(max-content, min(size, calc(var(--wg-space-8) * 2)));
 }
 
-/* The end shrinks no narrower than its keys: a bind or recording is a grid
-   whose keys column keeps its width while each tag or prompt column may
-   shrink to nothing, so its least width is its keys. */
-.settings-key-row .settings-row-end,
-.settings-key-row .settings-binds {
-  flex: 0 100 auto;
+.settings-key-row .settings-row-detail {
+  flex: 0 1000000 auto;
+}
+
+/* The end shrinks no narrower than the binds' least width: the first bind
+   (whole off the cursor row), or another bind's keys when wider. */
+.settings-key-row .settings-row-end {
+  flex: 0 1000 auto;
   flex-wrap: nowrap;
   min-width: auto;
 }
 
+/* The binds wrap onto lines the head's one-line height clips, so a bind
+   that does not fit leaves whole; the wide row gap keeps the next line out of
+   view. */
+.settings-key-row .settings-row-head {
+  height: calc(var(--wg-row-list) - var(--wg-space-1) * 2);
+}
+
+.settings-key-row .settings-binds {
+  flex: 0 1 auto;
+  row-gap: var(--wg-row-list);
+  min-width: min-content;
+  max-height: calc(var(--wg-row-list) - var(--wg-space-1) * 2);
+  overflow: clip;
+}
+
+.settings-key-row:not(.is-cursor) .settings-binds > .settings-bind:first-child {
+  grid-auto-columns: max-content;
+}
+
+/* A bind or recording is a grid whose separator and keys columns keep their
+   width while each tag or prompt column may shrink to nothing. While a
+   recording runs, the binds hold only it and the bind it replaces. */
 .settings-key-row .settings-bind,
 .settings-key-row .settings-recording {
   display: inline-grid;
@@ -192,6 +221,10 @@
 .settings-key-row .settings-bind,
 .settings-key-row .settings-recording:has(> .ui-kbd) {
   grid-template-columns: max-content;
+}
+
+.settings-key-row .settings-bind:has(> .settings-bind-separator) {
+  grid-template-columns: max-content max-content;
 }
 
 .settings-key-row .settings-row-actions {

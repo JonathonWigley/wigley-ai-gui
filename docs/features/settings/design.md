@@ -93,7 +93,11 @@ merged keymap: defaults, each manifest's `keys`, then the user's layer.
   default leader leaves the leader unset.
 - One row per command, every command included so an unbound one can get a key, grouped by plugin under a section
   header (core first). A row is one line: the action's label, its manifest `group` as a dim detail, then each bind in
-  force at the row's end as Kbd, separated by `·`. A bind carries a Tag only when it says something: its scope's title
+  force at the row's end as Kbd, separated by `·`. A row too narrow for every bind gives way in order: the dim
+  group, then whole binds from the last (a bind is never squeezed; hovering the binds lists every one), then the
+  label down to a few characters; on the cursor row, whose prompt leaves least room, the first bind's tags and then
+  the label may go further. While a recording runs, the row's binds show only the recording and the bind it
+  replaces. A bind carries a Tag only when it says something: its scope's title
   when it is not `any`, `box` or `page` when `where` is set, its `mode`, and `Set` for a user bind. A default the user
   removed shows struck through with "Removed", and one a user bind on the same keys displaced shows "Replaced by
   <label>", each judged per half (page and editor) as the merge judges it; a default with one half still firing
