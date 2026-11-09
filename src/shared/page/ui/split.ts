@@ -27,10 +27,18 @@ const NUDGE_PROMPT_MS = 1000;
 
 const OPPOSITE_SIDES = { left: 'right', right: 'left' } as const;
 
+// A column divider's directions on the row divider's: up toward the start.
+const COLUMN_SIDES = { up: 'left', down: 'right' } as const;
+
+// `axis` `row` lays the panes side by side, `column` one above the other;
+// `sizedPane` is the pane whose size the divider holds, `start` unless given.
 export interface SplitOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
-  // Places the handle's `⌥⇧H ◂ ▸ ⌥⇧L` prompt; the view's own anchor function.
+  axis?: 'row' | 'column';
+  sizedPane?: 'start' | 'end';
+  // Places the handle's `⌥⇧H ◂ ▸ ⌥⇧L` prompt (`⌥⇧K ▴ ▾ ⌥⇧J` on a column
+  // split); the view's own anchor function.
   anchor: AnchorNamer<never>;
   // Runs the prompt's linger after a nudge.
   timers: Timers;
@@ -45,28 +53,34 @@ export interface Split extends ResizeTarget {
   // drag wrote over takes that width; a drag in progress keeps its own.
   reloadWidth(): void;
   setStartHidden(hidden: boolean): void;
+  // Hides the end pane and the handle, the start pane taking the whole split.
+  setEndHidden(hidden: boolean): void;
   dispose(): void;
 }
 
 // `sizedPane` is the pane whose width the divider holds, `start` unless given;
 // `min` and `initial` describe it, and `endMin` the least width it leaves the
-// other pane. `measure` reads the start pane's left edge in client pixels and
-// the span both panes share, whichever pane is sized: an `end` pane's width
-// runs leftward from the span's right edge, so a nudge left widens it. `show`
-// draws a width. The divider owns the drag on `handle`, the stored width under
-// `stateKey` and `nudge`; a drag writes
+// other pane. `axis` `column` holds a height along y in place of a width along
+// x: every `left` and `width` below reads as top and height, and up and down
+// as left and right. `measure` reads the start pane's left edge in client
+// pixels and the span both panes share, whichever pane is sized: an `end`
+// pane's width runs leftward from the span's right edge, so a nudge left
+// widens it. `show` draws a width. The divider owns the drag on `handle`, the
+// stored width under `stateKey` and `nudge`; a drag writes
 // uiState once at its end, a nudge on each press, each only when the width
 // changed. A nudge steps from the drawn width, the stored one clamped to the
 // span, so a press at a limit writes nothing and keeps a wider stored width;
 // nudge does nothing while a drag is running. `nudge` returns false, moving
-// nothing, for up and down, which are not the divider's axis, and while
+// nothing, for the directions off the divider's axis (up and down on a row,
+// left and right on a column), and while
 // `handle` has no layout box (its split stacked, the pane it sizes hidden or
 // lying over, or the window too narrow for it), so the press goes on to the
 // next divider; it
-// returns true for left and right otherwise, moved or not.
+// returns true for its axis's directions otherwise, moved or not.
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
+  axis?: 'row' | 'column';
   sizedPane?: 'start' | 'end';
   handle: HTMLElement;
   measure(): { left: number; span: number };
@@ -254,6 +268,7 @@ function splitResizePrompt(
 // removes it.
 export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
   const sizesEnd = options.sizedPane === 'end';
+  const isColumn = options.axis === 'column';
   // The divider's client position for the sized pane drawn `drawn` wide, and
   // back: an end pane is measured from the span's right edge.
   const dividerAtWidth = (drawn: number, left: number, span: number) =>
@@ -271,13 +286,18 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
 
   const handle = createDividerHandle({
     handle: options.handle,
-    prompt: {
-      start: { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
-      end: { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
-    },
+    prompt: isColumn
+      ? {
+          start: { command: PANE_RESIZE_COMMANDS.up, chevron: '▴' },
+          end: { command: PANE_RESIZE_COMMANDS.down, chevron: '▾' },
+        }
+      : {
+          start: { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
+          end: { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
+        },
     anchor: options.anchor,
     timers: options.timers,
-    pointerAt: (event) => event.clientX,
+    pointerAt: (event) => (isColumn ? event.clientY : event.clientX),
     dividerAt() {
       const { left, span } = options.measure();
       return dividerAtWidth(clampSplitWidth(width, options, span), left, span);
@@ -305,7 +325,8 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
     },
     nudge(direction: PaneDirection) {
       const hasLayoutBox = options.handle.getClientRects().length > 0;
-      if (direction === 'up' || direction === 'down' || !hasLayoutBox) {
+      const side = sideOnAxis(direction, isColumn);
+      if (side === null || !hasLayoutBox) {
         return false;
       }
       if (isDisposed || handle.isDragging()) {
@@ -313,7 +334,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
       }
       const { span } = options.measure();
       const drawn = clampSplitWidth(width, options, span);
-      const widthDirection = sizesEnd ? OPPOSITE_SIDES[direction] : direction;
+      const widthDirection = sizesEnd ? OPPOSITE_SIDES[side] : side;
       const next = nudgedSplitWidth(drawn, widthDirection, options, span);
       if (next !== drawn) {
         showWidth(next);
@@ -332,14 +353,21 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
   };
 }
 
-// Two panes side by side with a drag handle between them, stacked
-// (`is-stacked`) while the split is narrower than `min` plus `endMin`. The
-// start pane's width opens from `uiState` under `stateKey` and is written back
-// at the end of a drag and on each nudge, when either changed it; a nudge
-// steps from the drawn width and is ignored mid-drag. `reloadWidth` reads it
-// again. Its owner calls `dispose` when it drops the split.
+// Two panes with a drag handle between them: side by side, stacked
+// (`is-stacked`) while the split is narrower than `min` plus `endMin`, or with
+// `axis` `column` (`is-column`) one above the other, never stacked. The sized
+// pane's width, or a column's height, opens from `uiState` under `stateKey`
+// and is written back at the end of a drag and on each nudge, when either
+// changed it; a nudge steps from the drawn width and is ignored mid-drag.
+// `reloadWidth` reads it again. With `sizedPane` `end` the root carries
+// `is-end-sized` and the end pane holds the size. Its owner calls `dispose`
+// when it drops the split.
 export function createSplit(options: SplitOptions): Split {
+  const isColumn = options.axis === 'column';
+  const sizesEnd = options.sizedPane === 'end';
   const root = element('div', 'ui-split');
+  root.classList.toggle('is-column', isColumn);
+  root.classList.toggle('is-end-sized', sizesEnd);
   const start = element('div', 'ui-split-start');
   const handle = element('div', 'ui-split-handle');
   const end = element('div', 'ui-split-end');
@@ -347,7 +375,7 @@ export function createSplit(options: SplitOptions): Split {
   root.style.setProperty('--ui-split-end-min', `${options.endMin}px`);
   const observer = new ResizeObserver(([observed]) => {
     const isNarrow = observed.contentRect.width < options.min + options.endMin;
-    root.classList.toggle('is-stacked', isNarrow);
+    root.classList.toggle('is-stacked', !isColumn && isNarrow);
   });
   observer.observe(root);
 
@@ -356,13 +384,16 @@ export function createSplit(options: SplitOptions): Split {
     handle,
     measure() {
       const rootRect = root.getBoundingClientRect();
-      return {
-        left: rootRect.left,
-        span: rootRect.width - handle.getBoundingClientRect().width,
-      };
+      const handleRect = handle.getBoundingClientRect();
+      return isColumn
+        ? { left: rootRect.top, span: rootRect.height - handleRect.height }
+        : { left: rootRect.left, span: rootRect.width - handleRect.width };
     },
     show(width) {
-      root.style.setProperty('--ui-split-start', String(width));
+      root.style.setProperty(
+        sizesEnd ? '--ui-split-end' : '--ui-split-start',
+        String(width),
+      );
     },
   });
 
@@ -376,9 +407,26 @@ export function createSplit(options: SplitOptions): Split {
     setStartHidden(hidden) {
       root.classList.toggle('is-start-hidden', hidden);
     },
+    setEndHidden(hidden) {
+      root.classList.toggle('is-end-hidden', hidden);
+    },
     dispose() {
       observer.disconnect();
       divider.dispose();
     },
   };
+}
+
+// `direction` as the row divider's side it moves toward, or null off the
+// divider's axis.
+function sideOnAxis(
+  direction: PaneDirection,
+  isColumn: boolean,
+): 'left' | 'right' | null {
+  if (isColumn) {
+    return direction === 'up' || direction === 'down'
+      ? COLUMN_SIDES[direction]
+      : null;
+  }
+  return direction === 'left' || direction === 'right' ? direction : null;
 }

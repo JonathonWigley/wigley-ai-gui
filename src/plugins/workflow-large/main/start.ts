@@ -1,4 +1,5 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
+import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { errorText } from '../../../shared/error-text';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
@@ -8,6 +9,7 @@ import {
   workflowMainKey,
 } from '../../workflow/contract';
 import {
+  EMPTY_LARGE_STATE,
   LARGE_WORKFLOW_ID,
   type LargeState,
   largeStateOf,
@@ -20,6 +22,9 @@ import { workflowLargeManifest } from '../manifest';
 import { LARGE_MAIN_STAGES } from '../stages';
 import { createWorkflowActions } from './actions';
 import { createCountdown } from './countdown';
+import { createPlanReports, PLAN_RUNS_FOLDER } from './plan-reports';
+import { largePlanReporter } from './plan-report';
+import { planToolDefinition, startPlanTool } from './plan-tool';
 import { createPlanWatch } from './plan-watch';
 import { workflowLargeSelfTestScript } from './selftest-script';
 
@@ -33,7 +38,8 @@ const autoCommandOf = (stageId: string): string | undefined =>
 
 // Large, the plan-driven workflow: adds its stages and state to the engine, and as
 // one engine observer runs the plan watch of each Large flow and the plan-ready
-// auto-start countdown; the page runs its main-side commands over `runAction`. Every
+// auto-start countdown; `set_workflow_plan` and `plan.py`'s report files move a
+// flow's watch to the copy its run writes; the page runs its main-side commands over `runAction`. Every
 // write goes through `setState`, which keeps the flow's save time, on a fresh flow,
 // since a plan read can signal while an observer call runs.
 export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
@@ -59,6 +65,27 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       log,
       signal: (sessionId, signal) =>
         workflow.signal(sessionId, signal, 'observed'),
+    });
+    const reportPlan = largePlanReporter(workflow);
+    sessions.contributeTools(
+      [planToolDefinition()],
+      startPlanTool({
+        paths: services.paths,
+        files: services.files,
+        reportPlan,
+      }),
+      { mainAgentOnly: true },
+    );
+    const planRunsFolder = services.paths.join(
+      appEndpointDir(services.paths, services.homeDir, services.appInstance.id),
+      PLAN_RUNS_FOLDER,
+    );
+    const planReports = createPlanReports({
+      files: services.files,
+      paths: services.paths,
+      log,
+      folder: planRunsFolder,
+      reportPlan,
     });
     const countdown = createCountdown({
       timers: services.timers,
@@ -137,15 +164,19 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
     };
 
     const followPlan = ({ sessionId, before, after, signal }: FoldEvent) => {
-      const planDir = largeStateOf(after).planDir;
+      const plan = largeStateOf(after);
+      const was = largeStateOf(before);
       if (signal.type === 'turnEnded') {
         planWatch.check(sessionId);
       }
-      if (signal.type === 'fileWritten' && isPlanFile(signal.path)) {
-        planWatch.follow(sessionId, planDir);
-      }
-      if (planDir !== largeStateOf(before).planDir) {
-        planWatch.follow(sessionId, planDir);
+      const wrotePlan =
+        signal.type === 'fileWritten' && isPlanFile(signal.path);
+      const followedPlanChanged =
+        plan.planDir !== was.planDir ||
+        plan.planReported !== was.planReported ||
+        plan.unreportedPlanDir !== was.unreportedPlanDir;
+      if (wrotePlan || followedPlanChanged) {
+        planWatch.follow(sessionId, plan);
       }
     };
 
@@ -178,13 +209,13 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
 
     const stopSession = (sessionId: string) => {
       countdown.stop(sessionId);
-      planWatch.follow(sessionId, null);
+      planWatch.follow(sessionId, EMPTY_LARGE_STATE);
       replayedTurnEnds.delete(sessionId);
     };
 
     const follow = (flow: SessionFlow) => {
       if (flow.workflow === LARGE_WORKFLOW_ID) {
-        planWatch.follow(flow.sessionId, largeStateOf(flow).planDir);
+        planWatch.follow(flow.sessionId, largeStateOf(flow));
         cancelCountdown(flow.sessionId);
       }
     };
@@ -244,13 +275,17 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
           sessions,
           harnesses: services.agentHarnesses,
           hooks: workflow.selfTestHooks,
+          planRunsFolder,
         }),
       );
     }
 
     return {
       commands: {},
-      dispose: () => planWatch.dispose(),
+      dispose: () => {
+        planReports.dispose();
+        planWatch.dispose();
+      },
     };
   },
 };

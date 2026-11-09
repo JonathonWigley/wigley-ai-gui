@@ -7,7 +7,7 @@
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, the attention mark.
-- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys, starting a session from an agent.
+- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, the turn-finished mark, keys, starting a session from an agent.
 - **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A to F each land.
 - **Out of scope** — follow-ups.
@@ -66,11 +66,14 @@ interview on 2026-10-23; this file is the record of both.
 ## Flow
 
 ```
- Space b n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
-                 │                     newest first, or the folder dialog), then profile (skipped with one profile),
-                 │                     then sign-in when that profile is signed out, then a new session or one of the
-                 │                     folder's saved sessions to resume; a registered resume section sits at the top of
-                 │                     the folder and session steps (`docs/features/session-log/design.md`)
+ Space b n ─► start prompt (overlay): project (each project in settings, then Other folder… for the folder step:
+                 │                     the app's recent folders and every folder the harness has sessions in, newest
+                 │                     first, or the folder dialog), then branch for a pool project, then profile
+                 │                     (skipped when the project fixes one, or with one profile), then sign-in when that
+                 │                     profile is signed out, then a new session or one of the project's or folder's
+                 │                     saved sessions to resume; a registered resume section sits at the top of the
+                 │                     project and session steps (`docs/features/session-log/design.md`,
+                 │                     `docs/features/projects/design.md`)
                  ▼
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
@@ -91,7 +94,7 @@ interview on 2026-10-23; this file is the record of both.
  claude stdout ─► adapter ─► ChatEntry added / updated ─► chat channel ─► Chat tab, drawn by the chat layout
  tool needs approval ─► permission_prompt tool call ─► permission entry ─► y / n ─► tool result to claude
  agent calls ask_round ─► forms ─► round popup over the tabs ─► user answers ─► submit ─► popup disposed ─► Chat tab shows
- turn ends, window unfocused or session not on screen ─► alert + sessions.mark(row)
+ turn ends, window unfocused or session not on screen ─► sessions.mark(row)
  row closed ─► confirm while a turn runs ─► AgentProcess.end() ─► row gone
 ```
 
@@ -183,7 +186,7 @@ interview on 2026-10-23; this file is the record of both.
 - A round opens as a popup over its session's tabs (`addPopup`, `../session-popups/design.md`), which replaced the
   tab take-over (`SessionTabHandle.takeOver()`, removed): the selected tab never changes. A round for a session not on
   screen opens its popup inside that session and marks its row; the user's current session stays on screen.
-- `MainServices.window` gains `isFocused()`, for the turn-finished alert.
+- `MainServices.window` gains `isFocused()`, for the turn-finished mark.
 - Kept as they are: the relay protocol and `relay.py`, the endpoint files, the MCP adapter, forms' round logic.
 
 ## Chat plugin
@@ -274,7 +277,7 @@ interview on 2026-10-23; this file is the record of both.
     prices out of the app.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
-  ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
+  ends counts as running too: the session shows working through it, its messages wait, and the turn-finished mark
   fires when it ends. Written into a running tool turn, Claude would fold a message into it with no turn of its own
   (claude-stream.md § Queued messages), so chat holds it until the turn ends, unless the user sends it now (Send now
   below). A permission call left waiting after the turn ended
@@ -288,7 +291,7 @@ interview on 2026-10-23; this file is the record of both.
   - **Sending**: when the harness reports the turn ended (activity `idle`) and a message is queued, chat main writes
     the oldest unsent queued message to the agent and swallows that `idle`: the activity the session shows does not change,
     so it shows no idle between turns. Each queued message runs as its own turn, in the order sent, so the
-    turn-finished alert fires once, after the last one. A write that throws puts the message back at its place in
+    turn-finished mark fires once, after the last one. A write that throws puts the message back at its place in
     the queue and logs `queued message <id> not sent: <error>`. Every message, sent at idle or sent now, joins the
     transcript as its user entry when the agent takes it in, at the place it really ran: the Claude adapter adds the
     entry on the message's `started` lifecycle line (claude-stream.md § Message lifecycle), or at the write when the
@@ -360,7 +363,7 @@ interview on 2026-10-23; this file is the record of both.
   untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), whether it is `headless` (a file without it reads as false), its own `instructions` and its `owner` (a file without them reads as none and null), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. A
   close of its row removes its record — the user's, a failed start's, `closeSessionsIn`'s, or chat main's `close`; quit, `install-app`, a process exit and a chat plugin reload keep it.
@@ -397,7 +400,9 @@ interview on 2026-10-23; this file is the record of both.
   registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
   registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until
   compaction (`--system-prompt-snapshot`, on by default), so a resumed conversation keeps the instructions of its
-  first launch.
+  first launch. A `launch` or `resume` request's own `instructions` follow the global ones at every start of that session's
+  process, saved with the session, so they hold across `/clear` and a relaunch, and across a resume only when the
+  request carries them again or chat still holds the row.
   A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
   reason. A restored session whose turn was running when its process was lost (a reboot or a host crash, since quit
   ends none) gets a notice that the app quit during that turn; one whose
@@ -412,10 +417,12 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
-- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
-  the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
-  starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
-  profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
+- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the project — the
+  Project, Branch and Other folder steps are `docs/features/projects/design.md` § Start prompt — or, through Other
+  folder…, the folder, then the profile (a single profile is not asked, nor one the project fixes; the last profile
+  used in a folder is pre-selected). Esc at any step
+  starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt, and after the profile and any sign-in its
+  session step holds only New session and New headless session, with the cursor on New session. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
   one line per folder, its newest use and the profile of that use kept. A path that is no longer a folder, one that
   sits in an OS temp folder (`MainServices.tempFolders`), and one whose check fails (logged) are left out, and the list
@@ -439,7 +446,7 @@ interview on 2026-10-23; this file is the record of both.
   with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins,
   skills, MCP servers and settings again. A running turn is interrupted first; waiting permission calls are cancelled
   and written messages not yet taken in, then queued messages, are pulled back into the box, as on an exit; no exit notice shows for the old process and no
-  turn-finished alert fires. The old process's later events are no longer live: none reaches the chat, but its
+  turn-finished mark fires. The old process's later events are no longer live: none reaches the chat, but its
   `agentEvent`s that do emit keep the old host id, and its `sessionEnded` still emits; the agents roster folds each host
   id apart, so that `sessionEnded` drops only the old process's subagents. The row's active time returns to 0 (`docs/features/session-clock/design.md`). The row's entries become one info notice,
   `Conversation cleared`, followed by whatever the fresh process reports at start (its start step draws under the notice
@@ -489,8 +496,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a
   permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
   seen.
-- **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
-  the row is marked. A row launched `unattended` raises no alert and is not marked: nobody waits on it.
+- **Turn finished**: when the window is not focused or the session is not on screen, the row is marked, with no
+  system notification. A row launched `unattended` is not marked: nobody waits on it.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
   and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name
   and aliases through the app's fuzzy matcher (fzf), best match first; with text typed, the completion hands the
@@ -510,10 +517,12 @@ interview on 2026-10-23; this file is the record of both.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
-- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the folders and above the new-session line. After the folder and profile, the start prompt offers a new session or one of the folder's
-  saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
-  through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
-  resumed with its earlier conversation read from the transcript. A resume lists the session host first, so a session
+- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the projects and above the new-session line. After the project or folder and the profile, the start prompt's session step offers a new session, a new
+  headless session, or one of the project's or folder's saved sessions; a folder with no saved sessions shows the step
+  with the two new-session lines alone. Saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
+  through the relay or on a row another plugin owns is left out, and picking one that has a chat row selects that row
+  instead of opening a second; a resume onto a held row whose owner is not the request's rejects, naming both),
+  resume with their earlier conversation read from the transcript. A resume lists the session host first, so a session
   never runs two processes: a process of the session running in the current host has the row open and attach to it,
   its history pending, as a restored row does; a process running in another app version refuses, and a host that
   cannot be listed rejects, each opening nothing. `x` archives the entry under the

@@ -4,7 +4,8 @@ import { isJsonObject } from '../../../shared/json';
 export const STASHED_FILE = 'stashed.json';
 
 // One stashed session: what resuming it needs, the title its side-bar row
-// had, the user's note (absent for none) and when it was stashed.
+// had, the user's note (absent for none), when it was stashed, and `headless`
+// true when the row was headless (absent when not).
 export interface StashRecord {
   hostSessionId: string;
   projectDir: string;
@@ -12,6 +13,7 @@ export interface StashRecord {
   title: string;
   note?: string;
   at: number;
+  headless?: boolean;
 }
 
 export interface StashStore {
@@ -41,7 +43,9 @@ function isStashRecord(value: unknown): value is StashRecord {
     (field) => typeof value[field] === 'string',
   );
   const hasNote = value.note === undefined || typeof value.note === 'string';
-  return hasStrings && hasNote && typeof value.at === 'number';
+  const hasHeadless =
+    value.headless === undefined || typeof value.headless === 'boolean';
+  return hasStrings && hasNote && hasHeadless && typeof value.at === 'number';
 }
 
 function parseRecords(text: string): StashRecord[] {

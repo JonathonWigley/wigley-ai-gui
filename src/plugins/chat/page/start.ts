@@ -94,10 +94,13 @@ type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 // the image viewer. The picker, the deny
 // reason box, the end-session confirmation, the sign-in dialog and the image
 // viewer sit in the overlay layer, each over a scope of its own; another
-// session's Chat tab showing closes the reason box, the confirmation, a
-// control picker and the image viewer, and leaves the sign-in dialog and the
-// start prompt open. A resting session's Chat tab keys as a running one's
-// does; its control chips are disabled until a message starts its process.
+// session's Chat tab showing (the shown tab, a Sessions tab or a mount) closes
+// the reason box, the confirmation, a control picker and the image viewer, and
+// leaves the sign-in dialog and the start prompt open. A session whose row has
+// an owner gets no Sessions tab: its owner draws its Chat tab into an element
+// of its own through `mountChat`, and a consumer's stop disposes its mounts. A
+// resting session's Chat tab keys as a running one's does; its control chips
+// are disabled until a message starts its process.
 // Each session's row shows its run time, and the exports and the `chat.session`
 // slot offer its clock to other plugins. Each tab's draft, cursor, open runs and
 // expanders go to `chat.place`, and its attached images to `chat.draftImages`,
@@ -275,6 +278,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       homeDir: services.homeDir,
       sessions,
       activeSessionId: () => active.get() ?? null,
+      ownerOf: (sessionId) => rows.get(sessionId)?.owner,
+      onRowAdded: (listener) =>
+        followRows(rows, { added: (row) => listener(row.sessionId) }),
       onSessionRemoved: (listener) =>
         followRows(rows, {
           removed: (sessionId) => {
@@ -389,6 +395,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       addStatusPart: (part) => consumer.track(statusParts.add(part)),
       addSidePart: (part) => consumer.track(sideParts.add(part)),
       activeTime: (sessionId) => view.activeTime(sessionId),
+      setHeadless: (sessionId, headless) =>
+        api.channel.invoke('setHeadless', sessionId, headless),
+      mountChat: (element, sessionId) =>
+        consumer.track(view.mount(element, sessionId)),
     });
     return {
       commands: {

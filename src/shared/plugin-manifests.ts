@@ -31,7 +31,7 @@ import { canonicalAccelerator, interceptChordText } from './accelerator';
 import { checkCommandArg } from './command-args';
 import { errorText } from './error-text';
 import { isJsonObject } from './json';
-import { editorBindMode, withLeader } from './key-hints';
+import { editorBindMode, normalLeaderKeys, withLeader } from './key-hints';
 import { isChordKeys, pageKeysFor } from './key-notation';
 import {
   requireUnambiguousBinds,
@@ -483,12 +483,13 @@ function layerBindsFirst<B extends { command: CommandId }>(
 }
 
 // `layers`' group names in order, a later layer's name replacing an earlier
-// one on the same keys with `leader` spelled, in the earlier one's place.
+// one on the same keys under `leader` (`normalLeaderKeys`), in the earlier
+// one's place.
 function mergeGroups(layers: readonly KeyGroups[], leader: string): KeyGroups {
   const merged = new Map<string, [keys: string, name: string]>();
   for (const groups of layers) {
     for (const [keys, name] of Object.entries(groups)) {
-      merged.set(withLeader(keys, leader), [keys, name]);
+      merged.set(normalLeaderKeys(keys, leader), [keys, name]);
     }
   }
   return Object.fromEntries(merged.values());

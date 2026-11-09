@@ -27,7 +27,7 @@ const GROUPS: SelfTestGroup[] = [
         why: '`open` waited for the idle line, so the turn has ended and Cmd+W does not ask.',
       },
       {
-        keys: [' ', 'k', 'n'],
+        keys: [' ', 'b', 'n'],
         expect: '[chat] picker shown: Folder',
         alsoExpect: [/^\[chat\] resume section Recently closed: \d+ rows$/],
         screenshot: 'folder-step',

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { HEADLESS_NOTE } from '../../chat/contract';
 import type { ToolCallContext } from '../../sessions/contract';
 import type { ChecklistItem } from '../contract';
+import { createHeadlessLines } from './headless-line';
 import { startChecklistTool } from './checklist-tool';
 
 const NO_CALL_CONTEXT: ToolCallContext = {
@@ -8,15 +10,20 @@ const NO_CALL_CONTEXT: ToolCallContext = {
   signal: new AbortController().signal,
 };
 
-// The tool for session s1, recording each report; `applies` is what each resolves.
-function toolWith(applies: boolean) {
+// The tool for session s1, recording each report; `applies` is what each
+// resolves, and `headless` what the session's headless flag reads.
+function toolWith(applies: boolean, headless = false) {
   const reports: [string, readonly ChecklistItem[]][] = [];
   const tool = startChecklistTool({
     reportChecklist: async (sessionId, items) => {
       reports.push([sessionId, items]);
       return applies;
     },
-  })({ id: 's1' });
+    lines: createHeadlessLines({
+      isHeadless: (sessionId) => headless && sessionId === 's1',
+      launchedHeadless: () => false,
+    }),
+  })({ id: 's1', info: { sessionId: 'h1', projectDir: null, harness: null } });
   const call = (args: unknown) =>
     tool.call('set_workflow_checklist', args, NO_CALL_CONTEXT);
   return { call, tool, reports };
@@ -93,6 +100,21 @@ describe('set_workflow_checklist', () => {
     expect(result.isError).not.toBe(true);
     expect(result.content[0].text).toBe(
       'Ignored the checklist: this session has no workflow yet.',
+    );
+  });
+
+  it('call_HeadlessSession_AppendsTheHeadlessNote', async () => {
+    const { call } = toolWith(true, true);
+
+    const result = await call({
+      items: [
+        { text: 'a', done: true },
+        { text: 'b', done: false },
+      ],
+    });
+
+    expect(result.content[0].text).toBe(
+      `Checklist set: 1 of 2 done.\n${HEADLESS_NOTE}`,
     );
   });
 

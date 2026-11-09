@@ -33,7 +33,7 @@ const GROUPS: SelfTestGroup[] = [
         why: '`open` waited for the idle line, so the close asks nothing and the stash is written.',
       },
       {
-        keys: [' ', 'k', 'n'],
+        keys: [' ', 'b', 'n'],
         expect: '[chat] picker shown: Folder',
         alsoExpect: [/^\[chat\] resume section Stashed: \d+ rows$/],
         screenshot: 'stashed-section',

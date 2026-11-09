@@ -1,0 +1,201 @@
+/* The default system stats look: the right-bar panel's meters and process list. */
+
+[data-layout-owner='system-stats'][data-layout='default'].system-stats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
+  padding: var(--wg-space-2);
+  font-variant-numeric: tabular-nums;
+  container: system-stats-panel / inline-size;
+}
+
+/* One grid row per meter: label, Meter, value, Sparkline, so each column lines
+   up from meter to meter. */
+[data-layout-owner='system-stats'][data-layout='default'] .system-stats-meters {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--wg-space-1_5);
+  row-gap: var(--wg-space-0_5);
+  padding-inline: var(--wg-space-1);
+  margin-block-end: var(--wg-space-1);
+}
+
+[data-layout-owner='system-stats'][data-layout='default'] .system-stats-meter {
+  display: contents;
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-meter-label {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+}
+
+/* A value is never narrower than `100%` in its own font. */
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-meter-value {
+  font-size: var(--wg-text-12);
+  text-align: end;
+  white-space: nowrap;
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-meter-value::after {
+  content: '100%';
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-meter-note {
+  grid-column: 1 / -1;
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='system-stats'][data-layout='default'] .system-stats-error {
+  margin: 0;
+  padding-inline: var(--wg-space-1);
+  font-size: var(--wg-text-12);
+  color: var(--wg-status-error);
+  overflow-wrap: anywhere;
+}
+
+/* The heading row matches a tree row's padding and gaps, so its cells sit over
+   the rows' cells. */
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-headings {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-height: var(--wg-row-tree);
+  padding-inline: var(--wg-space-2);
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-heading-name {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-chevron {
+  display: inline-flex;
+  flex: none;
+  width: var(--wg-icon-size);
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='system-stats'][data-layout='default'] .system-stats-cells {
+  display: flex;
+  flex: none;
+}
+
+[data-layout-owner='system-stats'][data-layout='default'] .system-stats-cell {
+  width: var(--wg-system-stats-column-width);
+  text-align: end;
+  white-space: nowrap;
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-cell.is-sorted {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-row
+  .ui-row-label {
+  flex: 1;
+}
+
+[data-layout-owner='system-stats'][data-layout='default']
+  .system-stats-row
+  .ui-row-trailing {
+  flex: none;
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='system-stats'][data-layout='default'] .system-stats-more {
+  padding-inline: var(--wg-space-2);
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+/* A narrow bar: each meter takes two lines (label and value, then the Meter
+   and the Sparkline), and each row's cells drop under its name, the cell lines
+   sharing one width at every depth so their columns line up. */
+@container system-stats-panel (width < 360px) {
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meters {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--wg-space-0_5);
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meter {
+    display: grid;
+    grid-template-areas:
+      'label value'
+      'meter sparkline';
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--wg-space-1_5);
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meter-label {
+    grid-area: label;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meter
+    > .ui-meter {
+    grid-area: meter;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meter-value {
+    grid-area: value;
+    white-space: normal;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meter
+    > .ui-sparkline {
+    grid-area: sparkline;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-headings,
+  [data-layout-owner='system-stats'][data-layout='default'] .system-stats-row {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-headings
+    > .system-stats-cells,
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-row
+    > .ui-row-trailing {
+    flex: 1 0 100%;
+    margin-inline-start: calc(var(--ui-row-depth, 0) * var(--wg-space-3) * -1);
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-row
+    .system-stats-cells {
+    width: 100%;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default'] .system-stats-cell {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

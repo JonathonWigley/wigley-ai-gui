@@ -434,6 +434,7 @@ async function start() {
               bridge,
               scopeStack,
               pendingKeys,
+              keyCapture: pageKeys,
               config: live,
               services,
               uiState,

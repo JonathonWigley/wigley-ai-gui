@@ -49,7 +49,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'full run',
-    why: 'Reports move the trail through each step, the checklist draws with its count, and a second Small ask starts at Scope.',
+    why: 'Reports move the trail through each step, the checklist draws with its count, and a second Small ask starts at Scope. The key turns headless on and off, and the strip chip and row tag show it.',
     steps: [
       { keys: sendKeys(SMALL_SEND), expect: line('shows scope') },
       { keys: sendKeys(reportSend('build')), expect: line('shows build') },
@@ -58,6 +58,12 @@ const GROUPS: SelfTestGroup[] = [
         expect: line('progress 1/3'),
         screenshot: 'small-build-checklist',
       },
+      {
+        keys: [' ', 'w', 'h'],
+        expect: line('headless on'),
+        screenshot: 'small-headless-chip-on',
+      },
+      { keys: [' ', 'w', 'h'], expect: line('headless off') },
       { keys: sendKeys(reportSend('check')), expect: line('shows check') },
       { keys: sendKeys(reportSend('land')), expect: line('shows land') },
       {

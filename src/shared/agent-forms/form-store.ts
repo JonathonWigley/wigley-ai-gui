@@ -41,6 +41,9 @@ export interface SavedAgentForm {
   outcome: SavedOutcome;
   // A tool reply carried the finished answers.
   returned: boolean;
+  // The service answered the form itself and showed none, so the answers are
+  // not the user's.
+  auto_answered: boolean;
   session_id: string | null;
   project_dir: string | null;
   tool_use_id: string | null;
@@ -65,6 +68,15 @@ export interface AgentFormStore {
     body: unknown,
     toolUseId: string | null,
   ): SavedAgentForm;
+  // A form the service answered itself, saved whole: submitted with `body`,
+  // returned and auto-answered. A failed write is logged, never thrown.
+  createAutoAnswered(
+    owner: AgentFormOwnerRef,
+    fingerprint: string,
+    args: unknown,
+    body: unknown,
+    toolUseId: string | null,
+  ): SavedAgentForm;
   // A finished form keeps the body it finished with: a late draft is dropped.
   // Throws an Error naming the form and the disk's reason when the write fails.
   saveBody(record: SavedAgentForm, body: unknown): void;
@@ -75,7 +87,7 @@ export interface AgentFormStore {
   ): void;
   markReturned(record: SavedAgentForm): void;
   // The newest by `updated` with this fingerprint, from any owner and in any
-  // state: what a re-sent form is pre-filled from.
+  // state but auto-answered: what a re-sent form is pre-filled from.
   newestFor(fingerprint: string): SavedAgentForm | null;
   // The newest finished form of this owner that no tool reply has carried,
   // passing over the forms whose ids are in `excluding`.
@@ -83,8 +95,8 @@ export interface AgentFormStore {
     owner: AgentFormOwnerRef,
     excluding: ReadonlySet<string>,
   ): FinishedSavedAgentForm | null;
-  // The args of the newest forms by `updated`, newest first: one per
-  // fingerprint, at most `limit`.
+  // The args of the newest forms by `updated` that were not auto-answered,
+  // newest first: one per fingerprint, at most `limit`.
   recentArgs(limit: number): unknown[];
   // Deletes every form file, and any temp file a crash left, last written more
   // than RETENTION_SECONDS ago.
@@ -157,6 +169,7 @@ function savedFormFrom(data: unknown): SavedAgentForm | null {
     body: fields.body,
     outcome,
     returned: fields.returned === true,
+    auto_answered: fields.auto_answered === true,
     session_id: stringOrNull(fields.session_id),
     project_dir: stringOrNull(fields.project_dir),
     tool_use_id: stringOrNull(fields.tool_use_id),
@@ -204,7 +217,9 @@ function newestUpdated<T extends SavedAgentForm>(records: T[]): T | null {
 }
 
 function recentArgsOf(records: SavedAgentForm[], limit: number): unknown[] {
-  const newestFirst = records.toSorted((a, b) => b.updated - a.updated);
+  const newestFirst = records
+    .filter((record) => !record.auto_answered)
+    .toSorted((a, b) => b.updated - a.updated);
   const seenFingerprints = new Set<string>();
   const args: unknown[] = [];
   for (const record of newestFirst) {
@@ -231,7 +246,10 @@ export function formQueries(
   return {
     newestFor: (fingerprint) =>
       newestUpdated(
-        readAll().filter((record) => record.fingerprint === fingerprint),
+        readAll().filter(
+          (record) =>
+            record.fingerprint === fingerprint && !record.auto_answered,
+        ),
       ),
     newestUnreturnedFinished: (owner, excluding) =>
       newestUpdated(
@@ -266,11 +284,23 @@ export function openRecord(
     body: body ?? {},
     outcome: 'open',
     returned: false,
+    auto_answered: false,
     session_id: owner.sessionId,
     project_dir: owner.projectDir,
     tool_use_id: toolUseId,
     created: now,
     updated: now,
+  };
+}
+
+// A new open form's record as one the service answered itself, submitted
+// with the record's body and already returned.
+export function autoAnsweredRecord(record: SavedAgentForm): SavedAgentForm {
+  return {
+    ...record,
+    outcome: 'submitted',
+    returned: true,
+    auto_answered: true,
   };
 }
 
@@ -353,6 +383,13 @@ export function createFolderFormStore(deps: {
         toolUseId,
         clock,
         randomHex,
+      );
+      write(record);
+      return record;
+    },
+    createAutoAnswered: (owner, fingerprint, args, body, toolUseId) => {
+      const record = autoAnsweredRecord(
+        openRecord(owner, fingerprint, args, body, toolUseId, clock, randomHex),
       );
       write(record);
       return record;

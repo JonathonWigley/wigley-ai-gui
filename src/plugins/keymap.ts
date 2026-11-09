@@ -61,13 +61,13 @@ function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
   const answerWhere =
     scope === 'forms.forms' ? ('both' as const) : ('box' as const);
   const answerBinds = [
-    { keys: '<Leader>x', command: 'forms.toggleNotApplicable' as const },
     ...DIGITS.map((digit) => ({
       keys: `<Leader>a${digit}`,
       command: 'forms.choose' as const,
       arg: Number(digit),
     })),
     { keys: '<Leader>ac', command: 'forms.clearChoice' as const },
+    { keys: '<Leader>ax', command: 'forms.toggleNotApplicable' as const },
   ].map((bind) => ({ ...bind, scope, where: answerWhere }));
   return [
     ...answerBinds,
@@ -169,6 +169,7 @@ export const LIST_PICKER_SCOPES = [
   'settings.picker',
   'backlog.picker',
   'notes.picker',
+  'keys.picker',
 ] as const;
 
 type ListPickerScope = (typeof LIST_PICKER_SCOPES)[number];
@@ -218,7 +219,8 @@ function listPickerBinds<S extends ListPickerScope>(scope: S) {
 export const defaultKeymap = {
   leader: '<Space>',
   groups: {
-    '<Leader>k': 'windows',
+    '<Leader>b': 'session',
+    '<Leader>k': 'go to',
     '<Leader>v': 'view',
     '<Leader>z': 'debug',
     '<Leader>zl': 'layout previews',
@@ -226,13 +228,11 @@ export const defaultKeymap = {
     '<Leader>a': 'answer',
     '<Leader>n': 'notes',
     '<Leader>w': 'workflow',
-    '<Leader>r': 'rename',
     '<Leader>p': 'projects',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
     { keys: '<Leader>ks', scope: 'any', command: 'sessions.showMode' },
-    { keys: '<Leader>kn', scope: 'any', command: 'chat.newSession' },
     // Bound per main view, so a dialog, picker or confirm keeps its own keys.
     ...(
       [
@@ -249,6 +249,8 @@ export const defaultKeymap = {
         'backlog.detail',
         'settings.sections',
         'settings.rows',
+        'settings.leaderGroups',
+        'settings.leaderItems',
         'gallery.gallery',
         'forms.forms',
         'forms.review',
@@ -259,6 +261,11 @@ export const defaultKeymap = {
         'backlog.editor',
         'notes.popup',
         'notes.title',
+        'practice.list',
+        'practice.problem',
+        'practice.editor',
+        'practice.console',
+        'practice.ask',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -270,15 +277,20 @@ export const defaultKeymap = {
     { keys: '<Leader>vw', scope: 'any', command: 'docs.toggleWikiView' },
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
     { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
+    { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
+    {
+      keys: '<Leader>vi',
+      scope: 'any',
+      command: 'practice.toggleInterviewer',
+    },
     {
       keys: '<Leader>va',
       scope: 'any',
       command: 'backlog.toggleAgentReadyOnly',
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
-    { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
-    { keys: '<Leader>vf', scope: 'any', command: 'sessions.togglePopup' },
+    { keys: '<Leader>vy', scope: 'any', command: 'system-stats.togglePanel' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -288,8 +300,13 @@ export const defaultKeymap = {
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
     { keys: "<Leader>'", scope: 'any', command: 'session-stash.stash' },
-    { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
-    { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
+    { keys: '<Leader>bn', scope: 'any', command: 'chat.newSession' },
+    { keys: '<Leader>br', scope: 'any', command: 'sessions.renameSession' },
+    { keys: '<Leader>bd', scope: 'any', command: 'sessions.closeSession' },
+    { keys: '<Leader>bs', scope: 'any', command: 'session-stash.stash' },
+    { keys: '<Leader>bX', scope: 'any', command: 'chat.stopAll' },
+    { keys: '<Leader>bp', scope: 'any', command: 'sessions.togglePopup' },
+    { keys: '<Leader>bh', scope: 'any', command: 'chat.toggleSideParts' },
     { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
     { keys: '<Leader>pk', scope: 'any', command: 'sessions.moveProjectUp' },
     { keys: '<Leader>pj', scope: 'any', command: 'sessions.moveProjectDown' },
@@ -324,6 +341,7 @@ export const defaultKeymap = {
       scope: 'any',
       command: 'workflow.toggleFinishedWaves',
     },
+    { keys: '<Leader>wh', scope: 'any', command: 'workflow.toggleHeadless' },
 
     // ── Panes ──────────────────────────────────────────────────────────────
     { keys: '<A-h>', scope: 'any', command: 'panes.focusLeft' },
@@ -364,6 +382,7 @@ export const defaultKeymap = {
 
     // ── Help ───────────────────────────────────────────────────────────────
     { keys: '<Leader>?', scope: 'any', command: 'keys.toggleHelp' },
+    { keys: '<Leader>/', scope: 'any', command: 'keys.searchLeader' },
     { keys: '<Esc>', scope: 'keys.help', command: 'keys.closeHelp' },
     { keys: 'j', scope: 'keys.help', command: 'keys.lineDown' },
     { keys: 'k', scope: 'keys.help', command: 'keys.lineUp' },
@@ -688,12 +707,21 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'docs.confirm', command: 'docs.confirmNo' },
 
     // ── Settings ───────────────────────────────────────────────────────────
-    ...(['settings.sections', 'settings.rows'] as const).flatMap((scope) => [
+    ...(
+      [
+        'settings.sections',
+        'settings.rows',
+        'settings.leaderGroups',
+        'settings.leaderItems',
+      ] as const
+    ).flatMap((scope) => [
       { keys: 'j', scope, command: 'settings.down' as const },
       { keys: 'k', scope, command: 'settings.up' as const },
       { keys: 'gg', scope, command: 'settings.top' as const },
       { keys: 'G', scope, command: 'settings.bottom' as const },
       { keys: '<CR>', scope, command: 'settings.open' as const },
+    ]),
+    ...(['settings.sections', 'settings.rows'] as const).flatMap((scope) => [
       { keys: '/', scope, command: 'settings.filter' as const },
       { keys: '<Esc>', scope, command: 'settings.clearFilter' as const },
     ]),
@@ -701,6 +729,32 @@ export const defaultKeymap = {
     { keys: 'r', scope: 'settings.rows', command: 'settings.reset' },
     { keys: 'a', scope: 'settings.rows', command: 'settings.addBind' },
     { keys: 'd', scope: 'settings.rows', command: 'settings.removeBind' },
+    { keys: 'f', scope: 'settings.rows', command: 'settings.cycleKeyFilter' },
+    { keys: '?', scope: 'settings.rows', command: 'settings.findByKey' },
+    { keys: 'a', scope: 'settings.leaderGroups', command: 'settings.addBind' },
+    {
+      keys: 'd',
+      scope: 'settings.leaderGroups',
+      command: 'settings.removeBind',
+    },
+    {
+      keys: 'R',
+      scope: 'settings.leaderGroups',
+      command: 'settings.renameGroup',
+    },
+    { keys: 'a', scope: 'settings.leaderItems', command: 'settings.addBind' },
+    { keys: 'c', scope: 'settings.leaderItems', command: 'settings.changeKey' },
+    {
+      keys: 'd',
+      scope: 'settings.leaderItems',
+      command: 'settings.removeBind',
+    },
+    {
+      keys: 'm',
+      scope: 'settings.leaderItems',
+      command: 'settings.moveToGroup',
+    },
+    { keys: 'r', scope: 'settings.leaderItems', command: 'settings.reset' },
     {
       keys: 'l',
       scope: 'settings.sections',
@@ -780,6 +834,101 @@ export const defaultKeymap = {
     { keys: 'n', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
     { keys: '<Esc>', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
 
+    // ── Practice ───────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'practice.list', command: 'practice.listDown' },
+    { keys: 'k', scope: 'practice.list', command: 'practice.listUp' },
+    { keys: 'gg', scope: 'practice.list', command: 'practice.listTop' },
+    { keys: 'G', scope: 'practice.list', command: 'practice.listBottom' },
+    { keys: '<CR>', scope: 'practice.list', command: 'practice.openProblem' },
+    {
+      keys: 'l',
+      scope: 'practice.list',
+      command: 'practice.openKeepingFocus',
+    },
+    { keys: '/', scope: 'practice.list', command: 'practice.filter' },
+    { keys: 'a', scope: 'practice.list', command: 'practice.importStart' },
+    { keys: '<CR>', scope: 'practice.box', command: 'practice.boxAccept' },
+    { keys: '<Esc>', scope: 'practice.box', command: 'practice.boxCancel' },
+    // A chord fires inside a box and the editor as well, ahead of vim.
+    ...(
+      [
+        'practice.list',
+        'practice.problem',
+        'practice.editor',
+        'practice.console',
+        'practice.ask',
+      ] as const
+    ).flatMap((scope) => [
+      { keys: "<D-'>", scope, command: 'practice.run' as const },
+      { keys: '<D-Enter>', scope, command: 'practice.submit' as const },
+    ]),
+    { keys: 'j', scope: 'practice.problem', command: 'practice.paneDown' },
+    { keys: 'k', scope: 'practice.problem', command: 'practice.paneUp' },
+    { keys: 'gg', scope: 'practice.problem', command: 'practice.paneTop' },
+    { keys: 'G', scope: 'practice.problem', command: 'practice.paneBottom' },
+    {
+      keys: '<CR>',
+      scope: 'practice.problem',
+      command: 'practice.openSubmission',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'practice.problem',
+      command: 'practice.closeSubmission',
+      where: 'page',
+    },
+    // The problem pane's and the console's tabs, box and scroll keys; Esc in
+    // a box's normal mode leaves the box.
+    ...(['practice.problem', 'practice.console'] as const).flatMap((scope) => [
+      { keys: 'gt', scope, command: 'practice.nextTab' as const },
+      { keys: 'gT', scope, command: 'practice.prevTab' as const },
+      {
+        keys: 'i',
+        scope,
+        command: 'practice.editBox' as const,
+        where: 'page' as const,
+      },
+      {
+        keys: '<Esc>',
+        scope,
+        command: 'practice.leaveBox' as const,
+        where: 'box' as const,
+      },
+      { keys: '<C-j>', scope, command: 'practice.lineDown' as const },
+      { keys: '<C-k>', scope, command: 'practice.lineUp' as const },
+      { keys: '<C-S-j>', scope, command: 'practice.halfPageDown' as const },
+      { keys: '<C-S-k>', scope, command: 'practice.halfPageUp' as const },
+    ]),
+    { keys: 'y', scope: 'practice.confirm', command: 'practice.confirmYes' },
+    { keys: 'n', scope: 'practice.confirm', command: 'practice.confirmNo' },
+    { keys: '<Esc>', scope: 'practice.confirm', command: 'practice.confirmNo' },
+    // The ask box sends on Enter in normal and insert mode, as the chat box
+    // does; Esc in its normal mode leaves it.
+    ...[
+      { keys: '<CR>', command: 'practice.askSend' as const },
+      { keys: '<Esc>', command: 'practice.askLeave' as const },
+    ].map((bind) => ({
+      ...bind,
+      scope: 'practice.ask' as const,
+      where: 'box' as const,
+    })),
+    {
+      keys: '<CR>',
+      scope: 'practice.ask',
+      command: 'practice.askSend',
+      mode: 'insert',
+    },
+    {
+      keys: '<CR>',
+      scope: 'practice.import',
+      command: 'practice.importAccept',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'practice.import',
+      command: 'practice.importCancel',
+    },
+
     // ── Notes ──────────────────────────────────────────────────────────────
     { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },
     { keys: 'j', scope: 'notes.popup', command: 'notes.nextField' },
@@ -849,6 +998,48 @@ export const defaultKeymap = {
       keys: '<CR>',
       scope: 'unity-pool.panel',
       command: 'unity-pool.showHolder',
+    },
+
+    // ── System stats ───────────────────────────────────────────────────────
+    {
+      keys: 'j',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorDown',
+    },
+    {
+      keys: 'k',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorUp',
+    },
+    {
+      keys: 'gg',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorTop',
+    },
+    {
+      keys: 'G',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorBottom',
+    },
+    {
+      keys: 's',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cycleSort',
+    },
+    {
+      keys: '<CR>',
+      scope: 'system-stats.panel',
+      command: 'system-stats.openGroup',
+    },
+    {
+      keys: 'l',
+      scope: 'system-stats.panel',
+      command: 'system-stats.openGroup',
+    },
+    {
+      keys: 'h',
+      scope: 'system-stats.panel',
+      command: 'system-stats.closeGroup',
     },
 
     // ── Gallery ────────────────────────────────────────────────────────────

@@ -390,6 +390,11 @@ export interface AgentProcessEvents {
   entry(entry: ChatEntry): void;
   controls(controls: SessionControl[]): void;
   activity(activity: ProcessActivity): void;
+  // The OS pid of the session's agent process, once the harness knows it: after
+  // `start` once the process runs, and during an `attach` before its promise
+  // resolves. At most once per process object; a harness with no OS process of
+  // its own never calls it. The process's pid ends with `ended`.
+  pid(pid: number): void;
   // The slash commands and skills the session offers, the whole list each time.
   // Chat main stores them and the Chat tab's message box offers them after `/`.
   commands(commands: AgentCommand[]): void;

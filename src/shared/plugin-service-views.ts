@@ -63,7 +63,6 @@ export function trackedAlerts(
     },
   });
   return {
-    announce: (title, body, onClick) => alerts.announce(title, body, onClick),
     setOpenCount(source, count) {
       if (!isDisposed) {
         lastCounts.set(source, count);

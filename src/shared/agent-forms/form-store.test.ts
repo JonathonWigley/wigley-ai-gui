@@ -96,12 +96,57 @@ describe('createFolderFormStore', () => {
       body: { note: 'n' },
       outcome: 'open',
       returned: false,
+      auto_answered: false,
       session_id: 's1',
       project_dir: '/p',
       tool_use_id: 'toolu_1',
       created: 1000,
       updated: 1000,
     });
+  });
+
+  it('createAutoAnswered_WritesOneSubmittedReturnedAutoAnsweredFile', () => {
+    const record = storeIn(formsDir).createAutoAnswered(
+      MINE,
+      'fp',
+      ARGS,
+      withNote('picked'),
+      'toolu_1',
+    );
+
+    const saved = JSON.parse(
+      readFileSync(path.join(formsDir, `${record.id}.json`), 'utf8'),
+    );
+
+    expect(formFiles()).toEqual([`${record.id}.json`]);
+    expect(saved).toMatchObject({
+      fingerprint: 'fp',
+      args: ARGS,
+      body: withNote('picked'),
+      outcome: 'submitted',
+      returned: true,
+      auto_answered: true,
+      session_id: 's1',
+      tool_use_id: 'toolu_1',
+    });
+  });
+
+  it('newestFor_PassesOverAnAutoAnsweredForm', () => {
+    const store = storeIn(formsDir);
+    const shown = store.create(MINE, 'fp', ARGS, withNote('mine'), null);
+    nowMs = 2_000_000;
+    store.createAutoAnswered(MINE, 'fp', ARGS, withNote('picked'), null);
+
+    expect(store.newestFor('fp')?.id).toBe(shown.id);
+  });
+
+  it('recentArgs_SkipsAnAutoAnsweredForm', () => {
+    const store = storeIn(formsDir);
+    store.create(MINE, 'fp-1', { heading: 'shown' }, null, null);
+    nowMs = 2_000_000;
+    store.createAutoAnswered(MINE, 'fp-2', { heading: 'auto' }, null, null);
+
+    expect(store.recentArgs(5)).toEqual([{ heading: 'shown' }]);
   });
 
   it('reads a created form back equal, open and unreturned', () => {
@@ -394,6 +439,7 @@ describe('createFolderFormStore', () => {
       id: '1700000000-0a1b2c3d',
       fingerprint: 'fp-python',
       outcome: 'submitted',
+      auto_answered: false,
       created: 1700000000.25,
       body: { note: 'café' },
     });
@@ -406,8 +452,17 @@ describe('createFolderFormStore', () => {
 
     const record = store.create(MINE, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote(''));
+    const autoAnswered = store.createAutoAnswered(
+      MINE,
+      'fp-auto',
+      ARGS,
+      null,
+      null,
+    );
 
     expect(logLines.some((line) => line.includes(record.id))).toBe(true);
+    expect(logLines.some((line) => line.includes(autoAnswered.id))).toBe(true);
+    expect(autoAnswered).toMatchObject({ outcome: 'submitted' });
     expect(store.newestFor('fp')).toBeNull();
   });
 

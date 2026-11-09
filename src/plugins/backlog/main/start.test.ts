@@ -517,7 +517,7 @@ describe('backlog main part', () => {
       plan: { copyPath: PLAN, checked: 1, total: 3, tasks: [] },
     },
     {
-      name: 'a newer worktree copy',
+      name: 'a newer worktree copy ahead of main',
       meta: { checked: 0, total: 2 },
       tasks: [
         ['01-a.md', 'not started'],
@@ -561,10 +561,10 @@ describe('backlog main part', () => {
       ],
       trees: [MAIN_TREE, WORKTREE],
       plan: {
-        copyPath: PLAN,
-        checked: 0,
+        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
+        checked: 1,
         total: 2,
-        tasks: [[`${PLAN_DIR}/01-a.md`, 'not started']],
+        tasks: [[`${WORKTREE_PLAN_DIR}/01-a.md`, 'in progress']],
       },
     },
     {
@@ -632,7 +632,7 @@ describe('backlog main part', () => {
       },
     },
   ])(
-    'load_PlanProgress_FromTheNewestCopy ($name)',
+    'load_PlanProgress_FromTheMovedCopy ($name)',
     async ({ meta, tasks, files, trees, plan }) => {
       const backlog = startBacklog(
         [
@@ -679,6 +679,29 @@ describe('backlog main part', () => {
 
     expect(read.homes[0].plans.map((plan) => plan.total)).toEqual([1, 1]);
     expect(backlog.git.worktrees).toHaveBeenCalledTimes(1);
+  });
+
+  it('load_CalledWhileOneRuns_LaterCallsShareOneNextLoad', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    let releaseFirst = (): void => undefined;
+    backlog.git.topLevel.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirst = () => resolve(CLONE);
+        }),
+    );
+    const first = backlog.invoke<BacklogRead>('load');
+    await vi.waitFor(() => expect(backlog.git.topLevel).toHaveBeenCalled());
+
+    const later = [1, 2, 3].map(() => backlog.invoke<BacklogRead>('load'));
+    releaseFirst();
+    const laterReads = await Promise.all(later);
+    await first;
+
+    expect(backlog.git.topLevel).toHaveBeenCalledTimes(2);
+    expect(new Set(laterReads).size).toBe(1);
   });
 
   it('load_PlanCopyFails_LoggedAndSkipped', async () => {

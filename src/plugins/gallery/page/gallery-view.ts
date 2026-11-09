@@ -35,6 +35,7 @@ import { type MeterTone, meter } from '../../../shared/page/ui/meter';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
+import { sparkline } from '../../../shared/page/ui/sparkline';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
@@ -215,6 +216,7 @@ function sectionSpecs(
     section('ToggleMark', toggleMarkCells),
     section('StatusDot', statusDotCells),
     section('Meter', meterCells),
+    section('Sparkline', sparklineCells),
     section('InputFrame', inputFrameCells),
     section('Row, list', listRowCells),
     section('Row, tree', treeRowCells),
@@ -510,6 +512,33 @@ function meterCells(): SampleCell[][] {
   ];
 }
 
+// Wide cells: the line fills its parent, and only a wide cell gives it a width.
+function sparklineCells(): SampleCell[][] {
+  const samples: { caption: string; values: number[]; tone: MeterTone }[] = [
+    {
+      caption: 'Normal',
+      values: [12, 18, 15, 30, 26, 22, 35, 28, 31, 24],
+      tone: 'normal',
+    },
+    {
+      caption: 'Warning',
+      values: [55, 62, 70, 68, 74, 80, 77, 72, 75, 78],
+      tone: 'warning',
+    },
+    {
+      caption: 'Critical',
+      values: [70, 82, 88, 91, 95, 93, 97, 92, 96, 94],
+      tone: 'critical',
+    },
+    { caption: 'Empty', values: [], tone: 'normal' },
+  ];
+  return [
+    samples.map(({ caption, values, tone }) =>
+      cell(sparkline(values, tone), caption, true),
+    ),
+  ];
+}
+
 // The frame holds no editor, so no box takes the gallery's keys.
 function inputFrameCells(): SampleCell[][] {
   const make = () => {
@@ -783,7 +812,7 @@ function emptyStateCells(platform: OsName): SampleCell[][] {
       cell(
         emptyState(
           'No sessions yet. Start one with',
-          kbd('Space k n', platform),
+          kbd('Space b n', platform),
         ),
         'Default',
       ),

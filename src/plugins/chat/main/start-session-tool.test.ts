@@ -14,6 +14,8 @@ interface Row {
   name: string;
   args: unknown;
   callerFolder?: string | null;
+  // Whether the calling session is headless; false when absent.
+  callerHeadless?: boolean;
   // Chat's default profile for the caller.
   defaultProfile?: string | null;
   profiles?: string[];
@@ -41,6 +43,7 @@ const ROWS: Row[] = [
       projectDir: '/caller',
       profile: 'home',
       message: message('  review the diff  '),
+      headless: false,
     },
     success:
       'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
@@ -52,6 +55,7 @@ const ROWS: Row[] = [
       projectDir: '/caller',
       profile: 'home',
       message: message('go'),
+      headless: false,
     },
     success:
       'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
@@ -63,9 +67,23 @@ const ROWS: Row[] = [
       projectDir: '/other',
       profile: 'work',
       message: message('go'),
+      headless: false,
     },
     success:
       'Launched session row-7 in /other under profile work. A failure to start shows on its row.',
+  },
+  {
+    name: 'a headless caller launches headless',
+    args: { prompt: 'go' },
+    callerHeadless: true,
+    launched: {
+      projectDir: '/caller',
+      profile: 'home',
+      message: message('go'),
+      headless: true,
+    },
+    success:
+      'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
   },
   {
     name: 'an unknown profile names the known ones',
@@ -192,6 +210,8 @@ function toolSession(row: Row) {
   const log = vi.fn<(line: string) => void>();
   const session = startSessionToolSession({
     launch,
+    isHeadless: (sessionId) =>
+      sessionId === 'caller' && row.callerHeadless === true,
     defaultProfile: (sessionId) =>
       sessionId === 'caller' && row.defaultProfile !== null
         ? (row.defaultProfile ?? 'home')

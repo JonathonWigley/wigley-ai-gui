@@ -24,6 +24,9 @@ import { mediumMainWorkflow } from './workflow-medium/stages';
 import { SMALL_WORKFLOW_ID } from './workflow-small/contract';
 import { workflowSmallMainPart } from './workflow-small/main/start';
 import { smallMainWorkflow } from './workflow-small/stages';
+import { SPIKE_WORKFLOW_ID } from './workflow-spike/contract';
+import { workflowSpikeMainPart } from './workflow-spike/main/start';
+import { spikeMainWorkflow } from './workflow-spike/stages';
 
 const settled = () => new Promise((settle) => setImmediate(settle));
 
@@ -31,6 +34,7 @@ const WORKFLOWS = [
   smallMainWorkflow,
   mediumMainWorkflow,
   largeMainWorkflow,
+  spikeMainWorkflow,
 ].sort((a, b) => a.order - b.order);
 
 function skill(name: string): WorkflowSignal {
@@ -114,6 +118,7 @@ describe('workflow levels', () => {
     'wigley:feature',
     'wigley:feature-primer',
     'wigley:make',
+    'wigley:spike',
   ])('claims_AreDisjoint %s', (name) => {
     const claimers = WORKFLOWS.filter((workflow) =>
       workflow.claims(skill(name)),
@@ -134,6 +139,12 @@ describe('workflow levels', () => {
       claim: 'wigley:medium',
       start: (dependencies: readonly FakeDependency<'main'>[]) =>
         startMainPart(workflowMediumMainPart, { dependencies }),
+    },
+    {
+      workflow: SPIKE_WORKFLOW_ID,
+      claim: 'wigley:spike',
+      start: (dependencies: readonly FakeDependency<'main'>[]) =>
+        startMainPart(workflowSpikeMainPart, { dependencies }),
     },
   ])(
     'mainPart_OnTheEngine_ClaimsUntilStopped $workflow',

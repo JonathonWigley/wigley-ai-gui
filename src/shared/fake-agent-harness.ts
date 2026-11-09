@@ -46,8 +46,10 @@ import { typedSkill } from './typed-skill';
 // `usage`, `compactionStarted` and one `compactionEnded` for each
 // compaction (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a
 // turn or a compaction closes or is interrupted, and
-// `sessionEnded` just before each `ended`. A process `attach` resolves opens with
-// none of `start`'s emissions: the test's replay stands for them. Once a process
+// `sessionEnded` just before each `ended`. A started process reports
+// `FAKE_AGENT_PID` through `pid` right after `sessionStarted`. A process `attach`
+// resolves opens with none of `start`'s emissions, its pid included: the test's
+// replay stands for them. Once a process
 // has detached, it emits nothing. The workflow
 // sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
 // `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
@@ -111,6 +113,8 @@ export const FAKE_WORKFLOW_STEP_TEXT = 'fake: workflow step';
 export const FAKE_WORKFLOW_PLAN_PATH =
   'docs/features/fake-flow/plan-fake-flow/plan.md';
 export const FAKE_WORKFLOW_TITLE = 'Fake flow';
+// The OS pid every started process reports.
+export const FAKE_AGENT_PID = 4242;
 // The link every `logIn` reports, and the one code that finishes it.
 export const FAKE_SIGN_IN_URL = 'https://example.invalid/fake-sign-in';
 export const FAKE_SIGN_IN_CODE = 'fake-code';
@@ -529,6 +533,7 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     entry: (entry) => whileAttached(() => events.entry(entry)),
     controls: (controls) => whileAttached(() => events.controls(controls)),
     activity: (activity) => whileAttached(() => events.activity(activity)),
+    pid: (pid) => whileAttached(() => events.pid(pid)),
     commands: (commands) => whileAttached(() => events.commands(commands)),
     planUsage: (update) => whileAttached(() => events.planUsage(update)),
     agentEvent: (event) => whileAttached(() => events.agentEvent(event)),
@@ -1636,6 +1641,7 @@ export function createFakeAgentHarness(
     if (!record.attached) {
       queueMicrotask(() => {
         events.agentEvent({ type: 'sessionStarted', at: clock.now() });
+        events.pid(FAKE_AGENT_PID);
         events.controls(controls);
         events.commands([
           {

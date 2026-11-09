@@ -308,14 +308,14 @@ function stepLabel(step: SelfTestStep): string {
 // writes its file and then removes its `remove` path through `homeFiles`
 // (rooted at the self-test's temp home, so a path outside it rejects), presses
 // its keys, and waits for its line; a repeating step presses again after each
-// `expect` until its `until` line, each line waited for up to `timeoutMs`. The
-// log is marked before the resize, the write and the removal, so a line any
-// of them alone causes counts. A width that never lands fails the step before
-// its write and keys. Then, whether the line came or not,
-// saves the window to each of `pngs` the presses reached, and, when the step
-// passed, runs its fit check, at the minimum width or the held one, which
-// resizes the window, so it comes after the screenshots, and returns to the
-// width the step left.
+// `expect` until its `until` line, each line waited for up to the step's own
+// `timeoutMs`, else `runTimeoutMs`. The log is marked before the resize, the
+// write and the removal, so a line any of them alone causes counts. A width
+// that never lands fails the step before its write and keys. Then, whether the
+// line came or not, saves the window to each of `pngs` the presses reached,
+// and, when the step passed, runs its fit check, at the minimum width or the
+// held one, which resizes the window, so it comes after the screenshots, and
+// returns to the width the step left.
 async function runStep(
   window: DrivenWindow,
   homeFiles: Files,
@@ -323,9 +323,10 @@ async function runStep(
   pngs: readonly string[],
   startWidth: number,
   scrollsItself: string[],
-  timeoutMs: number,
+  runTimeoutMs: number,
   isCurrent: () => boolean,
 ): Promise<boolean> {
+  const timeoutMs = step.timeoutMs ?? runTimeoutMs;
   const label = stepLabel(step);
   const mark = await markLog(window);
   if (step.width !== undefined) {

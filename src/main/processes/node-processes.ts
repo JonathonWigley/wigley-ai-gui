@@ -8,7 +8,8 @@ import type {
 
 // `ProcessRunner` through `node:child_process`, in the app's environment less
 // `unsetEnv`.
-// Output is collected whole, with no size cap. A run that cannot start
+// Output is collected whole unless `maxOutputBytes` caps each stream, which
+// marks the result `truncated` once either is cut. A run that cannot start
 // rejects naming the program, or the folder when `cwd` does not exist. Past
 // `timeoutMs` the program is killed and the run resolves at once with the
 // output so far; a grandchild it started is not killed. An abort of `signal`
@@ -32,9 +33,12 @@ function runToEnd(
       cwd: options?.cwd,
       env: envWithout(options?.unsetEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Off Windows the flag does nothing; on it, no console window flashes.
+      windowsHide: true,
     });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
+    const stdout = emptyOutput();
+    const stderr = emptyOutput();
+    const cap = options?.maxOutputBytes ?? Infinity;
     let isKilled = false;
     const kill = () => {
       isKilled = true;
@@ -62,8 +66,8 @@ function runToEnd(
       signal?.removeEventListener('abort', stop);
     };
     signal?.addEventListener('abort', stop);
-    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.stdout.on('data', (chunk: Buffer) => keep(stdout, chunk, cap));
+    child.stderr.on('data', (chunk: Buffer) => keep(stderr, chunk, cap));
     child.on('error', (error) => {
       stopWaiting();
       if (!isKilled) {
@@ -93,17 +97,43 @@ function envWithout(
   return env;
 }
 
+// One stream's kept chunks, their byte count, and whether any byte was dropped.
+interface Output {
+  chunks: Buffer[];
+  bytes: number;
+  isCut: boolean;
+}
+
+function emptyOutput(): Output {
+  return { chunks: [], bytes: 0, isCut: false };
+}
+
+// Keeps as much of `chunk` as fits under `cap` bytes.
+function keep(output: Output, chunk: Buffer, cap: number): void {
+  const room = Math.max(cap - output.bytes, 0);
+  const kept = chunk.length <= room ? chunk : chunk.subarray(0, room);
+  if (kept.length < chunk.length) {
+    output.isCut = true;
+  }
+  if (kept.length > 0) {
+    output.chunks.push(kept);
+    output.bytes += kept.length;
+  }
+}
+
 function collected(
   code: number,
-  stdout: Buffer[],
-  stderr: Buffer[],
+  stdout: Output,
+  stderr: Output,
   timedOut: boolean,
 ): ProcessResult {
+  const isCut = stdout.isCut || stderr.isCut;
   return {
     code,
-    stdout: Buffer.concat(stdout).toString('utf8'),
-    stderr: Buffer.concat(stderr).toString('utf8'),
+    stdout: Buffer.concat(stdout.chunks).toString('utf8'),
+    stderr: Buffer.concat(stderr.chunks).toString('utf8'),
     timedOut,
+    ...(isCut ? { truncated: true } : {}),
   };
 }
 

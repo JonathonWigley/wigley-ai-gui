@@ -124,14 +124,281 @@
   overflow-wrap: anywhere;
 }
 
-/* A command row's binds, one line each: the keys, then their tags. */
+/* A key row's command group, dim after its label. */
+.settings-row-detail {
+  flex: none;
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+/* A command row's binds, separated by a dot: each bind's separator, keys,
+   then its tags. */
 .settings-binds {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--wg-space-1);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--wg-space-2);
+}
+
+.settings-bind-separator {
+  margin-right: var(--wg-space-1);
+  color: var(--wg-fg-tertiary);
+}
+
+/* A key recording on its row: the keys held, then the prompt. */
+.settings-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+.settings-recording-prompt {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+/* A key row is one line. Its keys and the cursor prompt keep their width;
+   the dim group gives way first, then the binds that no longer fit leave the
+   line whole, from the last (the binds' title lists every one), then the
+   label down to a few characters, each ending in an ellipsis. The first bind
+   stays whole, except on the cursor row, whose prompt leaves no room for that
+   in a narrow window: there the first bind's tags and a recording's prompt
+   give way, then the label to nothing. While a recording runs, its prompt
+   takes the cursor prompt's place. */
+.settings-key-row .settings-row-label,
+.settings-key-row .settings-row-detail,
+.settings-key-row .settings-bind > .ui-tag,
+.settings-key-row .settings-recording-prompt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-key-row .settings-row-label {
+  flex: 0 1 auto;
+}
+
+.settings-key-row:not(.is-cursor) .settings-row-label {
+  min-width: calc-size(max-content, min(size, calc(var(--wg-space-8) * 2)));
+}
+
+.settings-key-row .settings-row-detail {
+  flex: 0 1000000 auto;
+}
+
+/* The end shrinks no narrower than the binds' least width: the first bind
+   (whole off the cursor row), or another bind's keys when wider. */
+.settings-key-row .settings-row-end {
+  flex: 0 1000 auto;
+  flex-wrap: nowrap;
+  min-width: auto;
+}
+
+/* The binds wrap onto lines the head's one-line height clips, so a bind
+   that does not fit leaves whole; the wide row gap keeps the next line out of
+   view. */
+.settings-key-row .settings-row-head {
+  height: calc(var(--wg-row-list) - var(--wg-space-1) * 2);
+}
+
+.settings-key-row .settings-binds {
+  flex: 0 1 auto;
+  row-gap: var(--wg-row-list);
+  min-width: min-content;
+  max-height: calc(var(--wg-row-list) - var(--wg-space-1) * 2);
+  overflow: clip;
+}
+
+.settings-key-row:not(.is-cursor) .settings-binds > .settings-bind:first-child {
+  grid-auto-columns: max-content;
+}
+
+/* A bind or recording is a grid whose separator and keys columns keep their
+   width while each tag or prompt column may shrink to nothing. While a
+   recording runs, the binds hold only it and the bind it replaces. */
+.settings-key-row .settings-bind,
+.settings-key-row .settings-recording {
+  display: inline-grid;
+  flex: 0 100 auto;
+  grid-auto-columns: minmax(0, max-content);
+  grid-auto-flow: column;
+  align-items: center;
+}
+
+.settings-key-row .settings-bind,
+.settings-key-row .settings-recording:has(> .ui-kbd) {
+  grid-template-columns: max-content;
+}
+
+.settings-key-row .settings-bind:has(> .settings-bind-separator) {
+  grid-template-columns: max-content max-content;
+}
+
+.settings-key-row .settings-row-actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.settings-row--recording .settings-row-actions {
+  display: none;
+}
+
+/* The recording's note under its row: what the keys move from, or why a
+   press was refused. */
+.settings-row-note {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  text-align: right;
+}
+
+.settings-row-note.is-refused {
+  color: var(--wg-status-warning);
+}
+
+/* The Keybindings section's filter bar: the f hint and the chips, then the
+   find by key hint or query at the end. */
+.settings-key-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wg-space-1) var(--wg-space-2);
+  padding: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+.settings-key-filters-end {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+}
+
+/* The keys a picker row's command already holds. */
+.settings-picker-keys {
+  color: var(--wg-status-warning);
 }
 
 .settings-group-header {
   padding: var(--wg-space-3) var(--wg-space-2) 0;
+}
+
+/* The Leader menu: the groups column beside the selected group's items. */
+.settings-leader {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--wg-space-3);
+  align-items: start;
+  list-style: none;
+}
+
+.settings-leader-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A column's header is one line: its edges keep their width, and the title
+   ends in an ellipsis. */
+.settings-leader-column > .settings-head {
+  white-space: nowrap;
+}
+
+.settings-leader-column .ui-section-header-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-leader-column > .settings-head > .settings-edge--end {
+  align-self: auto;
+  margin-left: auto;
+  padding: 0;
+}
+
+.settings-leader-groups,
+.settings-leader-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  outline: none;
+}
+
+/* A Leader menu row's main part is one line: its key and count keep their
+   width; its dim id, free keys and tags give way first, then the label, each
+   ending in an ellipsis. The recording and the cursor prompt follow on that
+   line, and wrap under it at its end when the column has no room. */
+.settings-leader-row > .settings-row-head {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: var(--wg-space-1);
+}
+
+.settings-leader-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--wg-space-3);
+  min-width: 0;
+}
+
+.settings-leader-main > .settings-row-label,
+.settings-leader-main > .ui-tag,
+.settings-leader-command,
+.settings-leader-free,
+.settings-leader-row .settings-recording-prompt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-leader-main > .settings-row-label {
+  flex: 0 1 auto;
+}
+
+.settings-leader-main > .ui-kbd,
+.settings-leader-count {
+  flex: none;
+}
+
+.settings-leader-main > .ui-tag,
+.settings-leader-command,
+.settings-leader-free {
+  flex: 0 1000 auto;
+}
+
+.settings-leader-row .settings-recording {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* A group row, indented one step per nested level. */
+.settings-leader-groups > .settings-leader-row {
+  padding-left: calc(
+    var(--wg-space-2) + var(--settings-leader-depth, 0) * var(--wg-space-4)
+  );
+}
+
+.settings-row-label.is-unnamed,
+.settings-leader-count,
+.settings-leader-command,
+.settings-leader-free {
+  color: var(--wg-fg-tertiary);
+}
+
+.settings-leader-count {
+  margin-left: auto;
+  font-size: var(--wg-text-12);
+}
+
+.settings-leader-command,
+.settings-leader-free {
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+}
+
+.settings-leader-row .ui-kbd.is-struck {
+  color: var(--wg-fg-tertiary);
+  text-decoration: line-through;
 }

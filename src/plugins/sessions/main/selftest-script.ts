@@ -72,17 +72,17 @@ const STACKED_RESIZE_STEPS: SelfTestStep[] = [
 // The title the first rename types, and so the text the second one empties.
 const RENAMED = 'Renamed in test';
 
-// `Space r r` renames panes-a, focused since the stacked resize, and a second
-// `Space r r` with the box emptied hands its naming back to the agent.
+// `Space b r` renames panes-a, focused since the stacked resize, and a second
+// `Space b r` with the box emptied hands its naming back to the agent.
 const RENAME_STEPS: SelfTestStep[] = [
   {
-    keys: [' ', 'r', 'r', ...RENAMED, 'Enter'],
+    keys: [' ', 'b', 'r', ...RENAMED, 'Enter'],
     expect: `[sessions] renamed panes-a to "${RENAMED}"`,
   },
   {
     keys: [
       ' ',
-      'r',
+      'b',
       'r',
       ...Array<string>(RENAMED.length).fill('Backspace'),
       'Enter',
@@ -310,7 +310,7 @@ export function sessionsSelfTestScript(
       },
       {
         name: 'rename',
-        why: '<Leader>rr renames the focused session and an empty name hands naming back.',
+        why: '<Leader>br renames the focused session and an empty name hands naming back.',
         steps: RENAME_STEPS,
       },
       {

@@ -459,6 +459,38 @@ describe('runScript', () => {
     expect(lines).toContain('[selftest] PASS n ×1 -> last page');
   });
 
+  it("waits a step's own timeoutMs for its line in place of the run's step wait", async () => {
+    const slowKey = (key: string, log: string[]) => {
+      setTimeout(() => log.unshift(`[t] ${key}`), 150);
+    };
+    const step: SelfTestStep = { keys: ['a'], expect: '[t] a' };
+    const group = (each: SelfTestStep): SelfTestGroup[] => [
+      { name: 'slow', why: 'a slow line lands', steps: [each] },
+    ];
+
+    const sharedWait = page(slowKey);
+    const sharedFailures = await runGroups(
+      sharedWait.window,
+      sharedWait.log,
+      group(step),
+      undefined,
+      undefined,
+      20,
+    );
+    const ownWait = page(slowKey);
+    const ownFailures = await runGroups(
+      ownWait.window,
+      ownWait.log,
+      group({ ...step, timeoutMs: 2000 }),
+      undefined,
+      undefined,
+      20,
+    );
+
+    expect(sharedFailures).toBe(1);
+    expect(ownFailures).toBe(0);
+  });
+
   it('fails a repeating step whose until line never comes in max presses', async () => {
     const { window, log } = page(pager(Number.POSITIVE_INFINITY));
 

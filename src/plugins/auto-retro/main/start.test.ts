@@ -54,6 +54,7 @@ function closedEvent(
     profile: 'work',
     titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
     sent: true,
+    headless: false,
     reason,
   };
 }
@@ -70,10 +71,12 @@ function sessionInfo(
     background: 0,
     activeTime: { totalMs: 0, since: null },
     running: true,
+    pid: null,
     compaction: null,
     repo: 'wigley-agents',
     branch: 'main',
     worktrees: [],
+    headless: false,
   };
 }
 

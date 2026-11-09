@@ -1,7 +1,9 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Key hints over the merged keymap: which-key while a sequence is pending,
-// the help overlay listing every key and the title bar's Keys button, each
+// the help overlay listing every key, the leader search over every leader
+// action in force, and the title bar's Keys button, each
 // surface drawn through the `layout` setting's keys layout, and the placement
 // check over the anchors the core holds. Its main part only registers that layout
 // contract, and it names no other plugin.
@@ -14,7 +16,7 @@ export const keysManifest = definePlugin({
   id: 'keys',
   label: 'Keys',
   description:
-    'Shows key hints: which-key while a key sequence waits, and the help overlay of every key.',
+    'Shows key hints: which-key while a key sequence waits, the help overlay of every key, and a search over every leader action.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -34,8 +36,14 @@ export const keysManifest = definePlugin({
     },
     scrollTop: { label: 'scroll to the top', group: 'help', runsIn: 'page' },
     scrollEnd: { label: 'scroll to the end', group: 'help', runsIn: 'page' },
+    searchLeader: {
+      label: 'search leader actions',
+      group: 'help',
+      runsIn: 'page',
+    },
+    ...LIST_PICKER_COMMANDS,
   },
-  scopes: { help: 'In help' },
+  scopes: { help: 'In help', picker: 'In the leader search' },
   settings: {
     whichKeyDelayMs: 200,
     whichKeyTimeoutMs: null as number | null,
@@ -66,7 +74,7 @@ export const keysManifest = definePlugin({
     },
   },
   themeTokens: {
-    'which-key-command': { kind: 'color', default: 'var(--wg-fg)' },
-    'which-key-prefix': { kind: 'color', default: 'var(--wg-fg-secondary)' },
+    'which-key-command': { kind: 'color', default: 'var(--wg-fg-secondary)' },
+    'which-key-prefix': { kind: 'color', default: 'var(--wg-accent)' },
   },
 });

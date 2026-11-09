@@ -179,10 +179,14 @@ export interface OwnedSession {
 // and the selected row stays as it was. `rowId` is the id the session's row
 // had before a restart of its owner or of sessions, or before a relaunch,
 // which the row takes back, or the row of a session its owner kept, which the
-// open adopts; left out, the row gets a new one.
+// open adopts; left out, the row gets a new one. `owner` names the plugin the
+// row belongs to (`practice`): such a row is never selected, whatever `select`
+// says, and the Sessions page leaves it out of its side bar, its session step
+// keys and its panes; the owner shows the session itself.
 export interface OpenOptions {
   select: boolean;
   rowId?: string;
+  owner?: string;
 }
 
 // What a mark asks the user: the page's toast reads `<text>`, or
@@ -233,29 +237,29 @@ export interface SessionsMainExports {
   // session moved away from, unless another owned session holds it.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
-  // false, added unmarked and the selected row (or none) left as it was.
-  // Throws when `info.sessionId` is null, any session already holds that
-  // host id, or one already holds `options.rowId`, except a session its owner
-  // kept (`OwnedSession.keep`) under that row id, which it adopts: no
-  // `connected` is emitted, and its host id moves to `info.sessionId`.
+  // false, added unmarked and the selected row (or none) left as it was; with
+  // `options.owner`, added unmarked and never selected. Throws when
+  // `info.sessionId` is null, any session already holds that host id, or one
+  // already holds `options.rowId`, except a session its owner kept
+  // (`OwnedSession.keep`) under that row id, which it adopts: no `connected`
+  // is emitted, and its host id moves to `info.sessionId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
   // its row at the end first. A row `release` closed while selected comes back
   // selected when this mark comes within 30 seconds of the release, unless in
-  // between came an `activate` or `activateExistingRow`, a selecting `open`,
+  // between came an `activate`, a selecting `open`,
   // a mark that selected another session from none, or a `release` of another
   // selected row; the session's end drops it too. A mark that finds the row
   // unmarked stores its `options` as the row's `markToast`, and one that finds
-  // it still marked keeps the toast there; an activate clears it.
+  // it still marked keeps the toast there; an activate clears it. For a session
+  // opened with an `owner`, `mark` is logged and adds no row, mark or
+  // selection.
   mark(sessionId: string, options: MarkOptions): void;
   // The user's pick: selects the session's row and clears its mark; a
   // connected session with no row, or a row the user closed, gets its row at
-  // the end first.
+  // the end first. A session opened with an `owner` is logged and ignored.
   activate(sessionId: string): void;
-  // `activate` for a session that holds a row; adds none, and logs and
-  // ignores a session with no row.
-  activateExistingRow(sessionId: string): void;
   // Closes a connected session's row once every close guard allows, emitting
   // `closed`; a guard refusing keeps the row and logs. An unknown or owned
   // session, or one with no row, is left alone without a log line.
@@ -358,6 +362,8 @@ export interface SessionRow {
   // The session's config folder as its harness resolves it, fixed at connect;
   // null when the app runs no such harness.
   profileDir: string | null;
+  // The plugin the row belongs to, fixed at `open`; null for every other row.
+  owner: string | null;
 }
 
 export interface SessionsState {
@@ -557,11 +563,12 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // `addSection` registers a side bar section; it throws `section id <id> is
 // reserved` for `favorites` or `recent`, and `part <id> is already added` on
 // an id another registered section holds. On each side bar draw every
-// section's `claims` is asked of every row: a claimed row leaves its project
-// group and draws in the section, newest first; a row two sections claim goes
-// to the lower `order`, a tie to the section registered first, and a `claims`
-// that throws counts as false and is logged. The sections that claim a row draw after Recent, by `order`,
-// a tie in registration order; one that claims none draws nothing. Adding a
+// section's `claims` is asked of every row with no owner: a claimed row leaves
+// its project group and draws in the section, newest first; a row two sections
+// claim goes to the lower `order`, a tie to the section registered first, and a
+// `claims` that throws counts as false and is logged. The sections that claim
+// a row draw after Recent, by `order`, a tie in registration order; one that
+// claims none draws nothing. Adding a
 // section and disposing its `Disposable` each redraw the side bar. `header`
 // builds on each side bar draw, so a header whose content changes between
 // draws redraws into its own wrapper itself.
@@ -641,7 +648,7 @@ export const sessionsPlaceSlot: KeyedSlotKey<
 // Main's rows, keyed by each row's `sessionId`, in the order main added them. In
 // one list operation main writes every row, then the selection, then emits its
 // events, all in one synchronous block. A row's `label` (`gamma 2`) is fixed for
-// its life.
+// its life. It holds rows with an owner too; the Sessions page leaves them out.
 export const sessionsRowsSlot: KeyedSlotKey<SessionRow, 'main', 'sessions'> = {
   id: 'sessions.rows',
   process: 'main',

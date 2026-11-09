@@ -13,11 +13,13 @@ import { formsMainPart } from './forms/main/start';
 import { galleryMainPart } from './gallery/main/start';
 import { keysMainPart } from './keys/main/start';
 import { notesMainPart } from './notes/main/start';
+import { practiceMainPart } from './practice/main/start';
 import { primerMainPart } from './primer/main/start';
 import { sessionLogMainPart } from './session-log/main/start';
 import { sessionStashMainPart } from './session-stash/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
+import { systemStatsMainPart } from './system-stats/main/start';
 import { unityPoolMainPart } from './unity-pool/main/start';
 import { usageMainPart } from './usage/main/start';
 import { visualMainPart } from './visual/main/start';
@@ -26,6 +28,7 @@ import { workflowMainPart } from './workflow/main/start';
 import { workflowLargeMainPart } from './workflow-large/main/start';
 import { workflowMediumMainPart } from './workflow-medium/main/start';
 import { workflowSmallMainPart } from './workflow-small/main/start';
+import { workflowSpikeMainPart } from './workflow-spike/main/start';
 
 // Every built-in plugin's main part, in start order where no dependency says
 // otherwise.
@@ -49,12 +52,15 @@ export const mainParts: readonly MainPart[] = [
   settingsMainPart,
   backlogMainPart,
   notesMainPart,
+  practiceMainPart,
   usageMainPart,
   workflowMainPart,
   workflowLargeMainPart,
+  workflowSpikeMainPart,
   workflowSmallMainPart,
   workflowMediumMainPart,
   unityPoolMainPart,
+  systemStatsMainPart,
   visualMainPart,
   galleryMainPart,
   windowMainPart,

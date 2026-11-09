@@ -41,13 +41,13 @@ function keymap(
 }
 
 describe('whichKeyModel', () => {
-  it('whichKeyModel_PageScope_GroupsByNextKeyInKeymapOrder', () => {
+  it('whichKeyModel_PageScope_GroupsByNextKeyInKeyOrder', () => {
     const map = keymap([
+      { keys: [' ', ' '], scope: 's', command: 'openReview' },
+      { keys: [' ', ';'], scope: 'any', command: 'closeTab' },
       { keys: [' ', 'a', '1'], scope: 's', command: 'choose1' },
       { keys: [' ', 'x'], scope: 'elsewhere', command: 'other' },
       { keys: [' ', 'a', '2'], scope: 's', command: 'choose2' },
-      { keys: [' ', ' '], scope: 's', command: 'openReview' },
-      { keys: [' ', ';'], scope: 'any', command: 'closeTab' },
     ]);
 
     const model = whichKeyModel(
@@ -60,13 +60,65 @@ describe('whichKeyModel', () => {
 
     expect(model).toEqual({
       title: 'Space',
+      name: null,
       entries: [
-        { keys: 'a', label: '+choices', kind: 'prefix' },
-        { keys: 'Space', label: 'review', kind: 'command' },
+        { keys: 'a', label: 'choices', kind: 'prefix' },
         { keys: ';', label: 'close the tab', kind: 'command' },
+        { keys: 'Space', label: 'review', kind: 'command' },
       ],
     });
   });
+
+  // Each spelling of a key sorts to the one place the Leader menu sorts it.
+  it.each<{ where: 'page' | 'editor'; map: Keymap; pending: string }>([
+    {
+      where: 'page',
+      map: keymap(
+        [
+          { keys: [' ', '|'], scope: 'any', command: 'splitRight' },
+          { keys: [' ', 'Backspace'], scope: 'any', command: 'closeTab' },
+          { keys: [' ', 'Enter'], scope: 'any', command: 'submit' },
+          { keys: [' ', ';'], scope: 'any', command: 'openReview' },
+          { keys: [' ', 'a'], scope: 'any', command: 'nextUnanswered' },
+        ],
+        [],
+      ),
+      pending: ' ',
+    },
+    {
+      where: 'editor',
+      map: keymap(
+        [],
+        [
+          { keys: '<Leader><Bar>', scope: 'any', command: 'splitRight' },
+          { keys: '<Leader><BS>', scope: 'any', command: 'closeTab' },
+          { keys: '<Leader><CR>', scope: 'any', command: 'submit' },
+          { keys: '<Leader>;', scope: 'any', command: 'openReview' },
+          { keys: '<Leader>a', scope: 'any', command: 'nextUnanswered' },
+        ],
+      ),
+      pending: '<Space>',
+    },
+  ])(
+    'whichKeyModel_KeySpellings_SortToOnePlace: $where',
+    ({ where, map, pending }) => {
+      const model = whichKeyModel(
+        { where, keys: [pending], scope: 's' },
+        map,
+        command,
+        label,
+        'macos',
+      );
+
+      expect(model?.entries.map((entry) => entry.keys)).toEqual([
+        'a',
+        ';',
+        '⌫',
+        '↩',
+        '|',
+      ]);
+    },
+  );
 
   it('whichKeyModel_PrefixSpanningGroups_JoinsGroups', () => {
     const map = keymap([
@@ -84,7 +136,7 @@ describe('whichKeyModel', () => {
     );
 
     expect(model?.entries).toEqual([
-      { keys: 'e', label: '+questions, review', kind: 'prefix' },
+      { keys: 'e', label: 'questions, review', kind: 'prefix' },
     ]);
   });
 
@@ -162,7 +214,8 @@ describe('whichKeyModel', () => {
 
     expect(model).toEqual({
       title: 'Space',
-      entries: [{ keys: 'a', label: '+choices', kind: 'prefix' }],
+      name: null,
+      entries: [{ keys: 'a', label: 'choices', kind: 'prefix' }],
     });
   });
 
@@ -259,8 +312,59 @@ describe('whichKeyModel', () => {
       const model = whichKeyModel(pending, map, command, label, 'macos');
 
       expect(model?.entries).toEqual([
-        { keys: 'k', label: '+windows', kind: 'prefix' },
+        { keys: 'k', label: 'windows', kind: 'prefix' },
       ]);
+    },
+  );
+
+  it.each([
+    {
+      case: 'a named page group',
+      page: [{ keys: [' ', 'b', 'd'], scope: 's', command: 'closeTab' }],
+      editor: [],
+      groups: { '<Leader>b': 'session' },
+      pending: { where: 'page', keys: [' ', 'b'], scope: 's' },
+      name: 'session',
+    },
+    {
+      case: 'the bare leader',
+      page: [{ keys: [' ', 'b', 'd'], scope: 's', command: 'closeTab' }],
+      editor: [],
+      groups: { '<Leader>b': 'session' },
+      pending: { where: 'page', keys: [' '], scope: 's' },
+      name: null,
+    },
+    {
+      case: 'a prefix no group names',
+      page: [{ keys: [' ', 'f', 'd'], scope: 's', command: 'closeTab' }],
+      editor: [],
+      groups: { '<Leader>b': 'session' },
+      pending: { where: 'page', keys: [' ', 'f'], scope: 's' },
+      name: null,
+    },
+    {
+      case: 'a named group in a box',
+      page: [],
+      editor: [{ keys: '<Leader>bd', scope: 's', command: 'closeTab' }],
+      groups: { '<Leader>b': 'session' },
+      pending: { where: 'editor', keys: ['<Space>', 'b'], scope: 's' },
+      name: 'session',
+    },
+  ] as {
+    case: string;
+    page: PageBind[];
+    editor: Keymap['editor']['binds'];
+    groups: Keymap['groups'];
+    pending: Parameters<typeof whichKeyModel>[0];
+    name: string | null;
+  }[])(
+    'whichKeyModel_PendingKeys_NameTheHeaderByTheirGroup $case',
+    ({ page, editor, groups, pending, name }) => {
+      const map = keymap(page, editor, groups);
+
+      const model = whichKeyModel(pending, map, command, label, 'macos');
+
+      expect(model?.name).toBe(name);
     },
   );
 
@@ -279,7 +383,7 @@ describe('whichKeyModel', () => {
     );
 
     expect(model?.entries).toEqual([
-      { keys: 'k', label: '+panes', kind: 'prefix' },
+      { keys: 'k', label: 'panes', kind: 'prefix' },
     ]);
   });
 });

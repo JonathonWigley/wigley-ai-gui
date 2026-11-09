@@ -18,7 +18,9 @@
 //   part, which then draws nothing
 //
 // The question card draws no section labels: the summary is its headline, and
-// the context, the choices and the rationale follow with no label.
+// the context, the choices and the rationale follow with no label. The finding
+// card opens on its verdict (tags and impact), then the finding text with no
+// label; only a Nit draws its proof, under "Why it's safe".
 
 // A notice's badge tone; a badge not listed here is neutral.
 /** @type {Record<string, import('../layout').TagTone>} */
@@ -43,10 +45,14 @@ const layout = {
     finding(parent, input, kit) {
       const card = kit.card(parent, 'item finding');
       kit.itemHead(card, input.words.kind);
-      kit.section(card, input.words.finding, input.finding);
-      const proof = kit.el(card, 'div', 'finding-proof');
-      kit.section(proof, input.words.proof, input.proof);
       kit.verdict(card);
+      kit.markdown(card, input.finding, 'context-body md');
+      // A Nit's proof is why it cannot happen, the card's whole case; on the
+      // other cards the finding text carries the evidence the user needs.
+      if (input.card === 'nit') {
+        const proof = kit.el(card, 'div', 'finding-proof');
+        kit.section(proof, input.words.proof, input.proof);
+      }
       const answer = kit.choiceGroups(card, 'all');
       kit.answerControls(answer);
       return { element: card };

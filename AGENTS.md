@@ -61,7 +61,7 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   reload, plugins start and stop live from the `plugins.disabled` switch, and a plugin in the user folder reloads with
   new code on save (A user plugin, below). A built-in's code still needs a rebuild.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
-  processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
+  processes, file watching, the icon badge, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
 - **Any agent harness and model, eventually.** Claude Code is the first adapter behind `AgentHarness`; Codex,
   wigley-harness and other models follow. Only the seams are built now, and no knowledge of one harness — its CLI,
@@ -88,7 +88,8 @@ src/contracts/   interfaces and records crossing a seam, the plugin API among th
                  readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
                  `plugin-catalog.ts`: `CatalogEntry`, `PluginSource`, the user side's `WatchedPluginSource` and the
                  `PluginCatalog` the host, the plugin switch and the config read;
-                 `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
+                 `list-picker.ts`: the shared list picker's contract behind `services.picker`; `system-stats.ts`: the
+                 `SystemStats` service behind `services.systemStats` and its raw sample); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
@@ -103,7 +104,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 newest of them, both read by workflow-large and backlog)
+                 moved one among them (progress unlike the main tree's and not behind it), both read by workflow-large and backlog)
   plugin-catalog/ `validateManifest` and the manifest JSON Schema: the checks a user plugin's manifest meets at load →
                  pure, no I/O
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
@@ -116,7 +117,12 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
-                 its per-session open form, deadline, re-attach and hand-back, the wake (a form the user finishes
+                 its per-session open form, deadline, re-attach and hand-back, its optional auto-answer
+                 (`AgentFormAutoAnswer`: while `isOn` holds for a session, an open call shows no form and saves and
+                 returns the type's own answers at once, the file marked `auto_answered`; answers the user gave come
+                 first — a re-send of the form still unfinished in the window waits on it, a finished form no reply
+                 has carried is returned or handed back as usual, and a re-send of the form the user last submitted
+                 gets those answers again), the wake (a form the user finishes
                  while no call waits on it sends its session a message naming the collect tool, through the
                  `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
                  other), the saved-form folder and memory stores,
@@ -136,7 +142,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
-                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `duration` and `state`) and
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `sparkline`, `duration` and `state`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
                  through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
@@ -182,9 +188,14 @@ src/main/        core main process; main.ts is its composition root
                  through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
-  alerts/        native notification behind Alerts, with a Mac variant (Dock bounce, badge), a Windows variant (taskbar
-                 flash, overlay dot) and a plain one for Linux; the badge sums the open counts each source sets
+  alerts/        the icon badge behind Alerts: the Dock badge on macOS, a taskbar overlay dot on Windows, none on
+                 Linux; the badge sums the open counts each source sets. The app raises no system notification: a
+                 finished turn or an open form marks its session's row instead
   images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
+  system-stats/  the macOS and Windows adapters behind SystemStats, each reading the OS's own commands (`ps`, `vm_stat`,
+                 `ioreg`, `netstat`; CIM and performance counters on Windows) and Node's `os.cpus()` into one raw
+                 sample of cumulative counters, each parser a pure function over a command's text;
+                 `docs/features/system-stats/design.md`
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also resolves a profile's config folder, lists
                  and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and status
                  and `claude -p /usage` (the plan usage poll), and asks each session for `get_context_usage` and
@@ -193,7 +204,7 @@ src/main/        core main process; main.ts is its composition root
                  rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
-                 ProcessRunner
+                 ProcessRunner; `limitRuns` caps how many of a runner's programs run at once (git's runner: 4)
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
@@ -243,8 +254,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active`,
                  `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
-                 count and hidden popups, and `followRows`), session-title.ts (the title rules main and page share), main/ (the
-                 session list — rows, their titles and origin-repo project names, the selected session, written to the `rows` and `selection` slots, tool routing — the
+                 count and hidden popups, `followRows`, and the row's `owner`: the plugin a row with no place in the side bar belongs to), session-title.ts (the title rules main and page share), main/ (the
+                 session list — rows, their titles and project names (a registered namer's, chat's projects, else the origin repo's), the selected session, written to the `rows` and `selection` slots, tool routing — the
                  `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections, then
                  the sections other plugins register through `addSection`, each claiming its own rows —
@@ -294,7 +305,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
-                 round), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
+                 round; the agents' service auto-answers a headless chat session's rounds with every item's
+                 recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
@@ -315,31 +327,33 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
-                 that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress
-                 and the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
-                 interviewer sessions through chat's `launch` and `resume`), page/ (Practice mode: the problem list in
-                 the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
-                 `mountChat`), layouts/ (the practice Layout contract and the built-in `default` layout);
-                 `docs/features/practice/design.md`
+                 that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress and
+                 the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
+                 interviewer sessions through chat's `launch` and `resume`, a `problems/` watch started at the first
+                 list, the self-test's script and its `writeFixture` drive action), page/ (Practice mode: the problem
+                 list in the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
+                 `mountChat`, the import box), layouts/ (the practice Layout contract and the built-in `default`
+                 layout); `docs/features/practice/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
                  layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
-                 the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
+                 the start prompt with its project, branch, folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is) and `defaultProfile` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; its page also draws each session's run time and profile under its row, through
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (the branch list, clone folders and claim of a pool project, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
-                 the title bar's Keys button, and the placement check over the core's anchors), layouts/
+                 the leader search (`leader-search.ts`), the title bar's Keys button, and the placement check over the core's anchors), layouts/
                  (the keys Layout contract and the built-in `default` layout)
   gallery/       manifest.ts, main/ (registers the layouts only), page/ (Gallery mode: every primitive in every state,
                  a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
                  contract and the built-in `default` layout)
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
-                 a form over every setting, every command's binds and the leader tree, `docs/features/settings/design.md`), layouts/
+                 a form over every setting, every command's binds with its key recorder (`key-recorder.ts`) and the leader tree
+                 (`leader-tree.ts`, `leader-menu-view.ts`), `docs/features/settings/design.md`), layouts/
                  (the settings Layout contract and the built-in `default` layout)
   notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
@@ -359,26 +373,39 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow, run through the
                  rules of the flow's current workflow alone), main/ (the engine: hears `chat.agentEvent` and the sessions
                  events, keeps each session's flow in its plugin data and writes it to the `workflow.flows` slot, contributes
-                 `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools`, appends a line to
+                 `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools` (each result of a headless
+                 session but an error ends on chat's `HEADLESS_NOTE`, and the first from either tool after headless turns off on
+                 `HEADLESS_OFF_NOTE`: one line state per app session across tool sessions, started at the first result under each host
+                 id from chat's `launchedHeadless`, the flag the session's process started with), appends a line to
                  `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
-                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the chip's `No workflow` and `Working` tags are the exception to
-                 the layout rule: the engine draws them with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
+                 layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the strip ends on the Headless chip (`kit.headlessChip`), which runs `toggleHeadless`, and the row shows a `Headless` tag while the session is headless; the chip's `No workflow`, `Working` and `Headless` tags are the exception to
+                 the layout rule: the engine draws them with no layout, since no workflow owns such a flow or the flag; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
   workflow-large/ manifest.ts, contract.ts, large-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
-                 folder across a clone's worktrees and git's shared folder, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
+                 folder across a clone's worktrees and git's shared folder, follows the copy a run reports through
+                 `plan.py`'s `plan-runs/<row>.json` in the endpoint folder or its own `set_workflow_plan` tool, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
                  the countdown, the preview samples), layouts/ (the built-in `default` layout); Large's workflow: the
                  `wigley:feature` run, make, review, fix and close
+  workflow-spike/ manifest.ts, contract.ts, stages/<stage>/ (interview, build, check, land, done; build, check and
+                 interview re-enter per ask), main/ (its self-test script), page/, layouts/ (the built-in `default`
+                 layout); claims `wigley:spike`
   workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
                  script), page/, layouts/ (the built-in `default` layout); claims `wigley:small`
   workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
                  `wigley:medium`
   unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json` into the `unity-pool.snapshot` slot, runs
-                 `unity-pool hold|release` for the panel, hands its self-test script), page/ (the clone badge under
+                 `unity-pool hold|release` for the panel and `unity-pool claim` as chat's pool provider, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
+  system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a
+                 page shows the panel, folds two samples into the snapshot with rates, groups and 60 s history, joins
+                 `chat.session` pids with `sessions.rows` titles into one group per session's process tree, hands its
+                 self-test script), page/ (the right-bar panel through `api.areas.rightBar.contribute` with `focus` and
+                 `left`, hidden and shown by `Space v y`), layouts/ (the system-stats Layout contract and the built-in
+                 `default` layout); `docs/features/system-stats/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
@@ -400,8 +427,7 @@ again once every close guard allows, as the form presenter does after every form
 any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
 which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
 while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
-round), unless the user picked another row first; later, it comes back marked. A form's notification click
-selects only a row its session still holds (`activateExistingRow`), so a stale click adds none. A session the
+round), unless the user picked another row first; later, it comes back marked. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
@@ -569,7 +595,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage tag, and the `No workflow` and `Working` tags), chat's run time and profile, usage's context meter and cache mark, unity-pool's clone badge, and the round status that forms and primer draw (`forms.status`, `primer.status`) are among them. A row part's optional `tooltip` joins the row's tooltip. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage tag, and the `No workflow`, `Working` and `Headless` tags), chat's run time and profile, usage's context meter and cache mark, unity-pool's clone badge, and the round status that forms and primer draw (`forms.status`, `primer.status`) are among them. A row part's optional `tooltip` joins the row's tooltip. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
@@ -603,7 +629,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
   A **row with an owner** — opened with an `owner`, the plugin it belongs to; not the "owned session" of `open` — has
   no place in the side bar, the next and previous session keys or the pane tree: it shows only where its owner mounts
-  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`).
+  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`). The start
+  prompt's saved sessions leave out a session on such a row, and a `resume` whose `owner` differs from the held row's
+  (no owner counting as one) rejects; Practice then launches a fresh interviewer.
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
@@ -640,8 +668,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `api.panes.setResizeTarget(target)` each time it sets its key scope, after `keys.setScope`: the right divider of
   the focused pane when it has one, else its left one, as tmux picks, and `null` when no split pane has focus. Every
   base scope change drops the target. A `ResizeTarget` (`src/contracts/panes.ts`) is one `nudge(direction)`, which
-  returns false when the direction's axis is not its own (a side-by-side `Split` given up or down) or its handle has
-  no layout box (a stacked or start-hidden `Split`), so a hidden view divider passes the press on; every `Split` is
+  returns false when the direction's axis is not its own (a side-by-side `Split` given up or down, a column `Split`
+  given left or right) or its handle has no layout box (a stacked, start-hidden or end-hidden `Split`), so a hidden view divider passes the press on; every `Split` is
   one. A press goes to the view's target, then, when it returns false or none is set, to the outer panes' target, then
   to the side bar (left and right only); a press nothing takes logs `no pane divider runs <direction>`.
 - **A focus target** is how the core's focus commands (`panes.focusLeft` / `Right` / `Up` / `Down`, `Alt+hjkl`) move
@@ -663,7 +691,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses
   the pushed scope, or move focus behind it. **The outer panes** are the
   panes around the view, handed over by the mode that tiles them with `api.panes.setOuterPanes({ focus, resize })`
-  and kept across scope changes until that mode sets null (Sessions mode's chat panes, set while the mode shows). A
+  and kept across scope changes until that mode sets null (Sessions mode's chat panes and Practice's interviewer
+  pane, each set while its mode shows). A
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the
@@ -807,7 +836,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
@@ -980,7 +1009,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   An agent session's relay finds the stable app by default. The dev app gets rounds from the sessions its own Chat tab
   starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
   set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
-  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude
+  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`, both with Chromium's HTTP and code
+  caches off, since no run reuses them (a dev start serves the page's modules from a fresh dev server URL); a drive run points its Claude
   sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows (`app.setName` at start,
   for the Mac app menu's items): the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
   the Dock label of an unbundled app.
@@ -1014,9 +1044,11 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
 - `npm run selftest` is the agent's loop, run filtered to what the change touches, which the user allows any time:
-  `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run takes half an hour
-  or more, so it runs only when the user asks for one in the current turn; a merge, a re-check after a fix and a final
-  pass all run filtered too. `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+  `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run runs every script, several
+  minutes of a full Electron app against well under one for a plugin, so it runs only when the user asks for one in
+  the current turn; a merge, a re-check after a fix and a final
+  pass all run filtered too, and only when the change's risk tier calls for a live run
+  (`~/wigley-agents/decisions.md` § Risk). `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
   it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
   bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
@@ -1032,7 +1064,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
@@ -1068,8 +1100,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`src/plugins/settings/main/selftest-script.ts`) drives the form over the temp home's empty config folder, its
   steps editing `settings.json` and `keymap.json` through the form and, as outside changes, through `writeFile`. The
   self-test emulates page focus as a drive run does, so a focus-dependent check can be a self-test step.
-- A drive run (`npm run drive`) is how the agent checks a change in the running app: every change to what the app
-  shows or how it reacts is driven end to end, and its captures read, before the work is done. It runs offscreen as
+- A drive run (`npm run drive`) is how the agent checks a change in the running app: a change to what the app
+  shows or how it reacts, at a risk tier that calls for a live run (`~/wigley-agents/decisions.md` § Risk),
+  is driven end to end, and its captures read, before the work is done. It runs offscreen as
   an accessory app on its own temp home, beside the user's app, so the agent starts one whenever a check needs it.
   The `drive` skill (`.agents/skills/drive/SKILL.md`) holds the loop. A plugin offers its fixtures to a drive run as
   drive actions (`api.drive`), so a new plugin's fixtures need no core edit.

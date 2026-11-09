@@ -15,7 +15,9 @@ export const FLOWS_FILE = 'flows.json';
 // once; a flow read from it runs no turn and no subagent.
 // `put`, `putKeepingSavedAt`, `rekey`, `drop`, `open` and `forgetFlows` each
 // write the whole file, one write after another in call order; a write that
-// fails is logged and the next change writes again. `rekey`, `put`,
+// fails is logged and the next change writes again. `flushed` resolves once
+// every write asked so far has settled, so a store stopped before a restart
+// leaves the file current for the next store's `load`. `rekey`, `put`,
 // `putKeepingSavedAt` and `drop` ignore a session the store does not hold. A
 // saved entry no open session took stays in the file. An open session's flow
 // sits in the `flows` slot, keyed by session id, and only there: each change sets
@@ -53,6 +55,8 @@ export interface FlowStore {
   // Forgets every flow in `projectDir`, open and saved alike; returns the
   // session ids of the open ones forgotten.
   forgetFlows(projectDir: string): string[];
+  // Resolves once every write asked so far has settled, written or logged.
+  flushed(): Promise<void>;
 }
 
 interface SavedFlow {
@@ -212,6 +216,7 @@ export function createFlowStore(deps: {
       write();
       return forgotten;
     },
+    flushed: () => lastWrite,
   };
 }
 

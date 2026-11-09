@@ -1,0 +1,216 @@
+/* The default layout's look: the list pane, its counts and rows' marks; the
+   column's panes, their tabs bars and headers; the tabs' documents, boxes and
+   results; the interviewer's ask box; and the import dialog's body. */
+
+/* The list pane's tracks: its header of counts and keys, the filter, then the
+   rows. */
+.practice-pane[data-layout-owner='practice'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The counts line, then the keys that act on the list. */
+[data-layout-owner='practice'] .practice-list-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-3);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+[data-layout-owner='practice'] .practice-list-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+  margin-left: auto;
+}
+
+.practice-counts[data-layout-owner='practice'] {
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-3);
+}
+
+[data-layout-owner='practice'] .practice-count--easy {
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='practice'] .practice-count--medium {
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='practice'] .practice-count--hard {
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='practice'] .practice-status--solved {
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='practice'] .practice-status--attempted {
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='practice'] .practice-status--new {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='practice'] .practice-row-marks {
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='practice'].is-open .ui-row-label {
+  font-weight: var(--wg-weight-semibold);
+}
+
+/* The column's tabbed panes: a header of tabs and keys over the body that
+   scrolls; the editor pane: a header of the file and its save state over the
+   editor. */
+.practice-pane--tabbed[data-layout-owner='practice'],
+.practice-pane--editor[data-layout-owner='practice'] {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+/* A header too narrow for its parts wraps the console's actions under the
+   tabs bar. */
+[data-layout-owner='practice'] .practice-pane-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  padding: 0 var(--wg-space-3);
+}
+
+/* The tabs bar takes the header's room; its strip shrinks and scrolls its
+   tabs, the hints keeping their width. */
+[data-layout-owner='practice'] .practice-tabs-bar {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+[data-layout-owner='practice'] .practice-tabs-bar > .practice-hint {
+  flex: none;
+}
+
+[data-layout-owner='practice'] .practice-tabs-bar > .ui-tabs {
+  flex: 0 1 auto;
+  margin: 0;
+  min-width: 0;
+}
+
+[data-layout-owner='practice'] .practice-file-name {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  padding: var(--wg-space-2) 0;
+}
+
+[data-layout-owner='practice'] .practice-console-actions {
+  display: flex;
+  flex: none;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+}
+
+[data-layout-owner='practice'] .practice-save-state {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  margin-left: auto;
+}
+
+/* A tab's document, box or result, inside the body that scrolls. */
+.practice-doc[data-layout-owner='practice'],
+.practice-box-tab[data-layout-owner='practice'],
+.practice-result[data-layout-owner='practice'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-3);
+}
+
+[data-layout-owner='practice'] .practice-doc-title {
+  margin: 0;
+}
+
+[data-layout-owner='practice'] .practice-doc-marks,
+[data-layout-owner='practice'] .practice-result-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='practice'] .practice-box-tab .practice-hint {
+  align-self: flex-end;
+}
+
+[data-layout-owner='practice'] .practice-output {
+  background: var(--wg-sheet-background);
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-sm);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  margin: 0;
+  overflow-x: auto;
+  padding: var(--wg-space-2);
+  white-space: pre-wrap;
+}
+
+[data-layout-owner='practice'] .practice-output-label,
+[data-layout-owner='practice'] .practice-case-label {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+.practice-case[data-layout-owner='practice'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+}
+
+/* The interviewer pane's ask box: the problem's title, the hint, then the
+   frame. */
+.practice-ask[data-layout-owner='practice'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-3);
+}
+
+[data-layout-owner='practice'] .practice-ask-title {
+  margin: 0;
+}
+
+[data-layout-owner='practice'] .practice-ask-hint {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}
+
+/* The import dialog's body: the frame, the problem, then the hint. */
+.practice-import[data-layout-owner='practice'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='practice'] .practice-import-problem,
+[data-layout-owner='practice'] .practice-import-hint-text {
+  font-size: var(--wg-text-12);
+  margin: 0;
+}
+
+[data-layout-owner='practice'] .practice-import-problem {
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='practice'] .practice-import-hint-text {
+  color: var(--wg-fg-tertiary);
+}

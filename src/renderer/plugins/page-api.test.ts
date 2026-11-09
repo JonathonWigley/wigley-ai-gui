@@ -184,6 +184,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       hold: () => {},
       cancel: () => {},
     },
+    keyCapture: { capture: () => ({ dispose: () => {} }) },
     config: liveConfig(),
     services: {} as PageApiServices,
     uiState: createPageUiState({}, () => {}),
@@ -258,6 +259,33 @@ describe('createPageApi', () => {
 
     second.dispose();
     expect(isHidden()).toBe(false);
+  });
+
+  it('captureKey_Armed_CancelsThePendingSequenceFirst', () => {
+    const calls: string[] = [];
+    const api = createPageApi(
+      manifest,
+      deps({
+        pendingKeys: {
+          onPending: () => ({ dispose: () => {} }),
+          hold: () => {},
+          cancel: () => calls.push('cancel pending'),
+        },
+        keyCapture: {
+          capture: () => {
+            calls.push('capture');
+            return { dispose: () => {} };
+          },
+        },
+      }),
+    );
+
+    api.keys.captureKey(
+      () => {},
+      () => {},
+    );
+
+    expect(calls).toEqual(['cancel pending', 'capture']);
   });
 
   it('onWhereChanged_PartStops_HearsNothing', () => {
@@ -706,6 +734,15 @@ const RECORDED_ROWS: RecordedRow[] = [
       },
     }),
     register: (api) => api.keys.onPending(() => {}),
+  },
+  {
+    member: 'keys.captureKey',
+    dep: (handle) => ({ keyCapture: { capture: () => handle } }),
+    register: (api) =>
+      api.keys.captureKey(
+        () => {},
+        () => {},
+      ),
   },
   {
     member: 'services.markdown.addFence',

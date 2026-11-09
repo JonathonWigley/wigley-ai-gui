@@ -14,11 +14,13 @@ import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
 import { notesManifest } from './notes/manifest';
+import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
 import { sessionLogManifest } from './session-log/manifest';
 import { sessionStashManifest } from './session-stash/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
+import { systemStatsManifest } from './system-stats/manifest';
 import { unityPoolManifest } from './unity-pool/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
@@ -28,6 +30,7 @@ import { workflowManifest } from './workflow/manifest';
 import { workflowLargeManifest } from './workflow-large/manifest';
 import { workflowMediumManifest } from './workflow-medium/manifest';
 import { workflowSmallManifest } from './workflow-small/manifest';
+import { workflowSpikeManifest } from './workflow-spike/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
 export { DIGITS } from './forms/manifest';
@@ -55,13 +58,16 @@ export const builtInManifests = [
   settingsManifest,
   backlogManifest,
   notesManifest,
+  practiceManifest,
   usageManifest,
   usageTabLineManifest,
   workflowManifest,
   workflowLargeManifest,
+  workflowSpikeManifest,
   workflowSmallManifest,
   workflowMediumManifest,
   unityPoolManifest,
+  systemStatsManifest,
   visualManifest,
   windowManifest,
 ] as const;

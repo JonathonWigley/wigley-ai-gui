@@ -6,8 +6,11 @@ import {
   withAddedBind,
   withAdvanced,
   withCommandReset,
+  withGroupName,
+  withMovedBind,
   withRemovedBind,
 } from './keymap-edits';
+import type { BindLine } from './keymap-rows';
 
 function schema(defaultBinds: KeyBind[] = []): UserConfigSchema {
   return {
@@ -16,6 +19,7 @@ function schema(defaultBinds: KeyBind[] = []): UserConfigSchema {
     scopes: [],
     defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app: [], global: [], intercept: [] },
+    defaultGroups: {},
     defaultLeader: '<Space>',
   };
 }
@@ -117,6 +121,59 @@ describe('withRemovedBind', () => {
   });
 });
 
+describe('withMovedBind', () => {
+  const user = { keys: 'x', scope: 'p.s', command: 'p.a' };
+  const other = { keys: 'y', scope: 'p.s', command: 'p.b' };
+  const boxDefault = { ...user, where: 'box' as const };
+  const leaderDefault = { keys: '<Leader>x', scope: 'p.s', command: 'p.a' };
+  const editorOnly = { page: null, editor: { state: 'active' as const } };
+
+  it.each<{
+    case: string;
+    layer: UserKeymap | null;
+    line: BindLine;
+    to: KeyBind;
+    expected: UserKeymap;
+  }>([
+    {
+      case: 'a user bind has its entry replaced',
+      layer: { binds: [other, user] },
+      line: { bind: user, origin: 'user', ...editorOnly },
+      to: { ...user, keys: 'z' },
+      expected: { binds: [other, { ...user, keys: 'z' }] },
+    },
+    {
+      case: 'a default gets its unbind entry beside the new bind',
+      layer: null,
+      line: { bind: boxDefault, origin: 'default', ...editorOnly },
+      to: { ...boxDefault, keys: 'z' },
+      expected: {
+        unbind: [{ keys: 'x', scope: 'p.s', where: 'box' }],
+        binds: [{ ...boxDefault, keys: 'z' }],
+      },
+    },
+    {
+      case: "onto another user bind's keys and scope drops that bind",
+      layer: { binds: [other, user] },
+      line: { bind: user, origin: 'user', ...editorOnly },
+      to: { ...user, keys: 'y' },
+      expected: { binds: [{ ...user, keys: 'y' }] },
+    },
+    {
+      case: 'a default whose page half a later default took unbinds its box half',
+      layer: null,
+      line: { bind: leaderDefault, origin: 'default', ...editorOnly },
+      to: { ...leaderDefault, keys: '<Leader>z' },
+      expected: {
+        unbind: [{ keys: '<Leader>x', scope: 'p.s', where: 'box' }],
+        binds: [{ ...leaderDefault, keys: '<Leader>z' }],
+      },
+    },
+  ])('withMovedBind_$case', ({ layer, line, to, expected }) => {
+    expect(withMovedBind(layer, line, to, schema())).toEqual(expected);
+  });
+});
+
 describe('withCommandReset', () => {
   it('withCommandReset_RemovesUserBindsAndUnbinds', () => {
     const other = { keys: 'y', scope: 'p.s', command: 'p.b' };
@@ -174,21 +231,33 @@ describe('withCommandReset', () => {
 });
 
 describe('withAdvanced', () => {
-  it('withAdvanced_RejectsBinds', () => {
-    expect(withAdvanced(null, '{"binds": []}')).toEqual({
+  it.each([
+    { key: 'binds', text: '{"binds": []}', owner: 'the command rows' },
+    { key: 'leader', text: '{"leader": ","}', owner: 'the command rows' },
+    { key: 'groups', text: '{"groups": {}}', owner: 'the Leader menu' },
+  ])('withAdvanced_RowOwnedSection_Refused: $key', ({ key, text, owner }) => {
+    expect(withAdvanced(null, text)).toEqual({
       type: 'problem',
-      problem: '"binds" belongs in the command rows',
+      problem: `"${key}" belongs in ${owner}`,
     });
   });
 
   it('withAdvanced_KeepsRowSections', () => {
     const bind = { keys: 'x', scope: 'p.s', command: 'p.a' };
-    const layer: UserKeymap = { leader: ',', binds: [bind] };
+    const groups = { '<Leader>q': 'quit' };
+    const layer: UserKeymap = { leader: ',', binds: [bind], groups };
+    const remaps = [{ mode: 'insert' as const, keys: 'jk', to: '<Esc>' }];
 
-    expect(withAdvanced(layer, '{"groups":{"<Leader>q":"quit"}}')).toEqual({
+    expect(withAdvanced(layer, JSON.stringify({ remaps }))).toEqual({
       type: 'layer',
-      layer: { leader: ',', binds: [bind], groups: { '<Leader>q': 'quit' } },
+      layer: { leader: ',', binds: [bind], groups, remaps },
     });
+  });
+
+  it('advancedText_LeavesOutGroups', () => {
+    const layer: UserKeymap = { groups: { '<Leader>q': 'quit' } };
+
+    expect(advancedText(layer)).toBe('{}');
   });
 
   it('withAdvanced_KeepsKeysUnbinds', () => {
@@ -241,5 +310,53 @@ describe('withCommandReset with an argument', () => {
       binds: [layer.binds[1]],
       unbind: [layer.unbind[1]],
     });
+  });
+});
+
+describe('withGroupName', () => {
+  it.each<{
+    case: string;
+    layer: UserKeymap | null;
+    prefix: string;
+    name: string | null;
+    expected: UserKeymap;
+  }>([
+    {
+      case: 'set on no layer',
+      layer: null,
+      prefix: '<Leader>q',
+      name: 'quick',
+      expected: { groups: { '<Leader>q': 'quick' } },
+    },
+    {
+      case: 'replace',
+      layer: { leader: ',', groups: { '<Leader>q': 'quick' } },
+      prefix: '<Leader>q',
+      name: 'quiet',
+      expected: { leader: ',', groups: { '<Leader>q': 'quiet' } },
+    },
+    {
+      case: 'remove one of two',
+      layer: { groups: { '<Leader>q': 'quick', '<Leader>w': 'wide' } },
+      prefix: '<leader>q',
+      name: null,
+      expected: { groups: { '<Leader>w': 'wide' } },
+    },
+    {
+      case: 'replace an entry spelling the leader',
+      layer: { groups: { '<Space>q': 'quick' } },
+      prefix: '<Leader>q',
+      name: 'quiet',
+      expected: { groups: { '<Leader>q': 'quiet' } },
+    },
+    {
+      case: 'remove the last',
+      layer: { leader: ',', groups: { '<Leader>q': 'quick' } },
+      prefix: '<Leader>q',
+      name: null,
+      expected: { leader: ',' },
+    },
+  ])('withGroupName_$case', ({ layer, prefix, name, expected }) => {
+    expect(withGroupName(layer, prefix, name, schema())).toEqual(expected);
   });
 });

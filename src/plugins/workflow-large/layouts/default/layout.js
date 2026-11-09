@@ -5,7 +5,7 @@
 // row's label says it, and the countdown), a strip above the
 // composer (the stepper's trail while it shows the stage; for a stage outside
 // it, the status mark and line, with the trail until a checklist exists; the
-// countdown and the main action), and the
+// countdown, the main action and the Headless chip), and the
 // side pane beside the transcript (the
 // status mark and line, the detail, the progress bar, the
 // checklist and every action).
@@ -135,6 +135,7 @@ const layout = {
     if (mainAction !== undefined) {
       kit.actionButton(strip, mainAction);
     }
+    kit.headlessChip(strip, input.headless);
     return { element: strip };
   },
 

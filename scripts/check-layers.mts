@@ -149,6 +149,40 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  practice: {
+    // Its contract names the problem types of `./problem`.
+    contract: { layers: ['src/plugins/practice'] },
+    sublayers: {
+      // Compiles and runs generated drivers with the machine's clang++ through the real process and file adapters.
+      'src/plugins/practice/main/judge.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/paths',
+          'src/plugins/practice',
+          'src/plugins/practice/contract.ts',
+          'src/plugins/practice/main',
+          'src/main/processes',
+          'src/main/files',
+        ],
+        packages: ['node:'],
+      },
+      // Runs its host-id wait on the shared global timers under fake timers.
+      'src/plugins/practice/main/practice-sessions.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/paths',
+          'src/shared/agent-forms',
+          'src/plugins/practice/contract.ts',
+          'src/plugins/practice/main',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/sessions/contract.ts',
+        ],
+        packages: [],
+      },
+    },
+  },
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the
   // relay and its channel path use the shared local channel transport.
   sessions: {
@@ -231,6 +265,65 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/shared/page',
           'src/plugins/workflow-large/layouts',
           'src/plugins/workflow/layouts',
+        ],
+        packages: [],
+      },
+    },
+  },
+  'workflow-spike': {
+    main: {
+      layers: [
+        'src/plugins/workflow-spike/stages',
+        'src/plugins/workflow-spike/main/selftest-script.ts',
+      ],
+    },
+    page: { layers: ['src/plugins/workflow-spike/stages'] },
+    sublayers: {
+      // Self-test support: Spike's script is built on the engine's level script.
+      'src/plugins/workflow-spike/main/selftest-script.ts': {
+        layers: ['src/contracts', 'src/plugins/workflow/main'],
+        packages: [],
+      },
+      'src/plugins/workflow-spike/stages': {
+        layers: [
+          'src/contracts',
+          'src/plugins/workflow-spike',
+          'src/plugins/workflow-spike/contract.ts',
+          'src/plugins/workflow/contract.ts',
+        ],
+        packages: [],
+      },
+      // Runs Spike's stage rules through the engine's real fold.
+      'src/plugins/workflow-spike/stages/spike-stages.test.ts': {
+        layers: [
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow-spike/contract.ts',
+          'src/plugins/workflow-spike/stages',
+        ],
+        packages: [],
+      },
+      // Starts the real engine page part and Spike's on it.
+      'src/plugins/workflow-spike/page/start.test.ts': {
+        layers: [
+          'src/shared',
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow/page',
+          'src/plugins/workflow-spike',
+          'src/plugins/workflow-spike/contract.ts',
+          'src/plugins/workflow-spike/page',
+          'src/plugins/workflow-spike/stages',
+        ],
+        packages: [],
+      },
+      // Draws with the engine's real kit.
+      'src/plugins/workflow-spike/layouts/default/layout.test.ts': {
+        layers: [
+          'src/shared/page',
+          'src/plugins/workflow-spike/layouts',
+          'src/plugins/workflow/layouts',
+          'src/plugins/workflow/page',
         ],
         packages: [],
       },
@@ -456,6 +549,17 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/images': { layers: ['src/contracts'], packages: ['electron'] },
+  // The OS's own commands, through the ProcessRunner; no `node:` import.
+  'src/main/system-stats': { layers: ['src/contracts'], packages: [] },
+  // Over the shared FakeProcesses.
+  'src/main/system-stats/mac-system-stats.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/system-stats'],
+    packages: [],
+  },
+  'src/main/system-stats/windows-system-stats.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/system-stats'],
+    packages: [],
+  },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {
@@ -537,6 +641,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/ui-state',
       'src/main/alerts',
       'src/main/images',
+      'src/main/system-stats',
       'src/main/files',
       'src/main/processes',
       'src/main/git',
@@ -658,8 +763,8 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
-  // The three level workflows' main rules through the engine's real fold, and
-  // Small's and Medium's main parts on the real engine.
+  // The four level workflows' main rules through the engine's real fold, and
+  // Small's, Medium's and Spike's main parts on the real engine.
   'src/plugins/workflow-levels.test.ts': {
     layers: [
       'src/shared',
@@ -674,6 +779,9 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-medium/contract.ts',
       'src/plugins/workflow-medium/main',
       'src/plugins/workflow-medium/stages',
+      'src/plugins/workflow-spike/contract.ts',
+      'src/plugins/workflow-spike/main',
+      'src/plugins/workflow-spike/stages',
     ],
     packages: [],
   },

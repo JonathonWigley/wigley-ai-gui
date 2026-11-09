@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DefaultKeymap } from '../../contracts/keymap';
+import type { DefaultKeymap, KeyGroups } from '../../contracts/keymap';
 import type { Settings } from '../../contracts/settings';
 import type { UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
@@ -130,6 +130,20 @@ const CORE_INFO = {
 // An applied list that switches no plugin off.
 const NONE_APPLIED: UserConfigDeps['applied'] = { disabled: () => [] };
 
+// The catalog entries of `manifests` as built-in plugins.
+function builtInEntries(
+  manifests: readonly PluginManifest[],
+): ConfigStoreDeps['plugins'] {
+  return manifests.map((manifest) => ({
+    manifest,
+    origin: 'built-in',
+    revision: 0,
+    main: null,
+    pageUrl: null,
+    folder: null,
+  }));
+}
+
 // A store over `files` for `createUserConfig`, `manifests` its built-in
 // entries.
 function storeOver(
@@ -138,14 +152,7 @@ function storeOver(
 ) {
   return loadConfigStore({
     ...CHECK_DEPS,
-    plugins: manifests.map((manifest) => ({
-      manifest,
-      origin: 'built-in',
-      revision: 0,
-      main: null,
-      pageUrl: null,
-      folder: null,
-    })),
+    plugins: builtInEntries(manifests),
     files,
     folder: FOLDER,
     platform: fakePlatform('macos'),
@@ -730,6 +737,70 @@ describe('createUserConfig', () => {
     ]);
   });
 
+  it.each([
+    {
+      case: 'one spelling',
+      pluginGroups: { '<Leader>x': 'plugin x' },
+      groups: { '<Leader>x': 'plugin x', '<Leader>y': 'core y' },
+    },
+    {
+      case: 'the leader spelled out',
+      pluginGroups: { '<Space>x': 'plugin x' },
+      groups: { '<Space>x': 'plugin x', '<Leader>y': 'core y' },
+    },
+  ] as { case: string; pluginGroups: KeyGroups; groups: KeyGroups }[])(
+    'schema_DefaultGroups_LaterLayerNameWins $case',
+    async ({ pluginGroups, groups }) => {
+      const namingPlugin = definePlugin({
+        id: 'naming',
+        label: 'naming',
+        description: 'A test plugin.',
+        dependsOn: { main: [], page: [] },
+        reads: { main: [], page: [] },
+        commands: {},
+        scopes: {},
+        keys: { groups: pluginGroups },
+        settings: {},
+        settingInfo: {},
+        themeTokens: {},
+      });
+      const deps = {
+        ...CHECK_DEPS,
+        defaultKeymap: {
+          ...DEFAULT_KEYMAP,
+          groups: { '<Leader>x': 'core x', '<Leader>y': 'core y' },
+        },
+        plugins: builtInEntries([namingPlugin]),
+      };
+      const files = createMemoryFiles();
+      const store = await loadConfigStore({
+        ...deps,
+        files,
+        folder: FOLDER,
+        platform: fakePlatform('macos'),
+        homeDir: HOME,
+        appInstance: {
+          id: 'wigley-ai-gui-dev',
+          displayName: 'Auri Dev',
+          isDev: true,
+        },
+        runMode: 'live',
+        log: () => undefined,
+      });
+
+      const schema = createUserConfig({
+        ...deps,
+        files,
+        folder: FOLDER,
+        store,
+        settingInfo: {},
+        applied: NONE_APPLIED,
+      }).schema();
+
+      expect(schema.defaultGroups).toEqual(groups);
+    },
+  );
+
   it('throws on a plugin setting with no declaration', async () => {
     const undeclared = {
       ...listPlugin,
@@ -846,6 +917,24 @@ describe('createUserConfig', () => {
         ...DEFAULT_KEYMAP.app,
         main.binds.app[0],
       ]);
+    });
+
+    it('schema_RuntimeGroups_AreListed', async () => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files);
+      const runtimeGroups = { '<Leader>r': 'runtime r' };
+      const userConfig = await create(files, MANIFESTS, {
+        ...store,
+        runtime: () => {
+          const served = store.runtime();
+          return {
+            ...served,
+            layer: { ...served.layer, groups: runtimeGroups },
+          };
+        },
+      });
+
+      expect(userConfig.schema().defaultGroups).toEqual(runtimeGroups);
     });
 
     it('schema_AppliedPluginCommandsAndScopes_AreNotListed', async () => {

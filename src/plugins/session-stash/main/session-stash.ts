@@ -24,6 +24,7 @@ export interface SessionStashDeps {
 // whose close did not happen; `forgetKept` forgets every kept note, for a page
 // that started again. `closed` writes the stash of a kept session the
 // user closed after sending it a message, and drops the kept note of any close.
+// A headless session's stash keeps the flag, and its row resumes it headless.
 // `opened` removes the stash of a session resumed from the start prompt.
 // `rows` is the Stashed section's rows: the resumable stashes, newest last. A
 // failed write is logged.
@@ -46,7 +47,13 @@ function rowOf(record: StashRecord): ResumeSectionRow {
     title: record.title,
     at: record.at,
   };
-  return record.note === undefined ? row : { ...row, note: record.note };
+  if (record.note !== undefined) {
+    row.note = record.note;
+  }
+  if (record.headless === true) {
+    row.headless = true;
+  }
+  return row;
 }
 
 export function createSessionStash(deps: SessionStashDeps): SessionStash {
@@ -64,7 +71,13 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
       title: editableTitle(closed.titles) || 'Untitled session',
       at: deps.now(),
     };
-    return note === null ? record : { ...record, note };
+    if (note !== null) {
+      record.note = note;
+    }
+    if (closed.headless) {
+      record.headless = true;
+    }
+    return record;
   };
 
   return {

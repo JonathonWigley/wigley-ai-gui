@@ -4,24 +4,31 @@ import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import {
-  newestPlanCopy,
   planCopies,
   type PlanCopy,
   type PlanCopyDeps,
-  readPlanCopy,
+  readCopyAt,
+  readMovedCopy,
   repoTop,
 } from '../../../shared/plan-copies';
 import type { WorkflowSignal } from '../../workflow/contract';
-import { largeSignal } from '../contract';
+import { type LargeState, largeSignal } from '../contract';
 
 // Watches every copy of each session's plan folder (the folder in each
 // checkout of its clone) and git's shared folder, signalling `planChanged`
-// with the newest copy's progress on each read and `planGone` once when no
-// copy is left, which closes the watch. `follow` moves the session's watch to
-// `planDir` (null: none); following the folder it already watches does
-// nothing, unless `planGone` closed that watch, which `follow` reopens.
-// `check` lists the copies again and reads the newest, for a delete or a new
-// worktree the OS watcher may not report; it does nothing while the watch is
+// on each read and `planGone` once when no copy is left and `planDir` is
+// gone, which closes the watch. A read takes a reported folder's own copy
+// alone; with no report, or once the reported folder holds no `plan.md`, it
+// takes the moved copy, listed from the main tree's copy folder the watch last
+// listed, else from `unreportedPlanDir`. Once a reported folder lists no
+// copies, as a worktree removed after its merge does, the copies, their
+// watches and the git folder watch come from that folder too, so a fresh
+// watch still finds the main tree's copy. `follow` moves the session's watch
+// to the plan's `planDir` (null: none); following the folder it already
+// watches with the same report fields does nothing, changed ones read again
+// on the same watches, and a watch `planGone` closed reopens.
+// `check` lists the copies again and reads, for a delete or a new worktree
+// the OS watcher may not report; it does nothing while the watch is
 // still opening or after `planGone` closed it. A change to git's worktree list
 // lists the copies again too, and each list reopens a git folder watch that
 // failed and opens or closes the `worktrees` watch with its folder; a copy
@@ -33,14 +40,25 @@ import { largeSignal } from '../contract';
 // its folder tries again. Each failure of an open watch is logged, and a
 // folder's watch that fails more than `MAX_WATCH_REOPENS` times with no change
 // heard on it between stops listing again; a later list still reopens it.
+export type FollowedPlan = Pick<
+  LargeState,
+  'planDir' | 'planReported' | 'unreportedPlanDir'
+>;
+
 export interface PlanWatch {
-  follow(sessionId: string, planDir: string | null): void;
+  follow(sessionId: string, plan: FollowedPlan): void;
   check(sessionId: string): void;
   dispose(): void;
 }
 
 interface Watched {
   planDir: string;
+  // Whether the run reported `planDir` as the copy it works in.
+  reported: boolean;
+  // The unreported folder the flow held before the report moved it.
+  unreportedPlanDir: string | null;
+  // The main tree's copy folder at the last list that held one.
+  mainCopyDir: string | null;
   // `opening` until every watch is open; `gone` once `planGone` closed it.
   status: 'opening' | 'open' | 'gone';
   // One watch per copy's folder, and one on `planDir` while it is a folder.
@@ -57,6 +75,23 @@ interface Watched {
 }
 
 export const MAX_WATCH_REOPENS = 3;
+
+// Keeps the main tree's copy folder in `entry` when `copies` holds one.
+function rememberMainCopy(entry: Watched, copies: readonly PlanCopy[]): void {
+  const main = copies.find((copy) => copy.isMainTree);
+  if (main !== undefined) {
+    entry.mainCopyDir = main.planDir;
+  }
+}
+
+// The folder the moved copy is listed from: a reported folder's main tree
+// copy the watch last listed, else the unreported folder the flow held before
+// the report; `planDir` when there is neither, or no report.
+function movedFromDir(entry: Watched): string {
+  return entry.reported
+    ? (entry.mainCopyDir ?? entry.unreportedPlanDir ?? entry.planDir)
+    : entry.planDir;
+}
 
 // The entry of git's shared folder that holds one folder per linked worktree.
 const WORKTREES = 'worktrees';
@@ -167,20 +202,33 @@ export function createPlanWatch(deps: {
     entry.watchFailures.delete(folder);
   };
 
+  // The plan's copies listed from `planDir`, else, when it lists none, from
+  // the folder the moved copy is listed from.
+  const listCopies = async (entry: Watched): Promise<PlanCopy[]> => {
+    const movedFrom = movedFromDir(entry);
+    const copies = await planCopies(entry.planDir, copyDeps);
+    return copies.length === 0 && movedFrom !== entry.planDir
+      ? planCopies(movedFrom, copyDeps)
+      : copies;
+  };
+
   const read = (sessionId: string, entry: Watched) => {
     const isCurrent = startCall(sessionId, latestReads);
-    const readNewest = async () => {
-      const copy = await newestPlanCopy(entry.planDir, copyDeps);
-      const progress =
-        copy === null ? null : await readPlanCopy(copy, copyDeps);
+    const { planDir, reported } = entry;
+    const movedFrom = movedFromDir(entry);
+    const readCopy = async () => {
+      const reportedCopy = reported
+        ? await readCopyAt(planDir, copyDeps)
+        : null;
+      const copy = reportedCopy ?? (await readMovedCopy(movedFrom, copyDeps));
       if (!isCurrent()) {
         return;
       }
-      if (progress !== null) {
-        deps.signal(sessionId, largeSignal({ type: 'planChanged', progress }));
-        return;
-      }
       if (copy !== null) {
+        deps.signal(
+          sessionId,
+          largeSignal({ type: 'planChanged', progress: copy.progress }),
+        );
         return;
       }
       const folder = await files.stat(entry.planDir);
@@ -188,7 +236,7 @@ export function createPlanWatch(deps: {
         signalGone(sessionId, entry);
       }
     };
-    readNewest().catch(logFailure(entry, 'plan.md not read'));
+    readCopy().catch(logFailure(entry, 'plan.md not read'));
   };
 
   // The folders that hold the plan's copies: `planDir` while it is a folder,
@@ -264,11 +312,12 @@ export function createPlanWatch(deps: {
     }
     const isCurrent = startCall(sessionId, latestLists);
     const list = async () => {
-      const copies = await planCopies(entry.planDir, copyDeps);
+      const copies = await listCopies(entry);
       const folders = await copyFolders(entry.planDir, copies);
       if (!isCurrent()) {
         return;
       }
+      rememberMainCopy(entry, copies);
       const opened = watchCopyFolders(sessionId, entry, folders);
       for (const watch of entry.copyWatches) {
         watch.dispose();
@@ -322,13 +371,17 @@ export function createPlanWatch(deps: {
     entry.worktreesWatch = watch;
   };
 
-  // Watches the git folder every checkout of the plan's clone shares, listing
-  // the copies again when its worktree list changes, then syncs the
-  // `worktrees` watch; none outside a clone. A watch that fails drops itself
-  // and lists again, within the bound, which reopens it.
+  // Watches the git folder every checkout of the plan's clone shares, the
+  // clone found from `planDir`, else from the folder the moved copy is listed
+  // from; lists the copies again when its worktree list changes, then syncs
+  // the `worktrees` watch; none outside a clone. A watch that fails drops
+  // itself and lists again, within the bound, which reopens it.
   const watchGitFolder = async (sessionId: string, entry: Watched) => {
     const isCurrent = startCall(sessionId, latestGitWatches);
-    const top = await repoTop(entry.planDir, copyDeps);
+    const movedFrom = movedFromDir(entry);
+    const top =
+      (await repoTop(entry.planDir, copyDeps)) ??
+      (movedFrom !== entry.planDir ? await repoTop(movedFrom, copyDeps) : null);
     if (top === null) {
       return;
     }
@@ -365,10 +418,17 @@ export function createPlanWatch(deps: {
     await syncWorktreesWatch(sessionId, entry, commonDir);
   };
 
-  const open = (sessionId: string, planDir: string) => {
+  const open = (
+    sessionId: string,
+    planDir: string,
+    { planReported, unreportedPlanDir }: FollowedPlan,
+  ) => {
     close(sessionId);
     const entry: Watched = {
       planDir,
+      reported: planReported,
+      unreportedPlanDir,
+      mainCopyDir: null,
       status: 'opening',
       copyWatches: [],
       commonDir: null,
@@ -380,11 +440,12 @@ export function createPlanWatch(deps: {
     const generation = generationOf(sessionId);
     const isCurrent = () => generationOf(sessionId) === generation;
     const startWatch = async () => {
-      const copies = await planCopies(planDir, copyDeps);
+      const copies = await listCopies(entry);
       const folders = await copyFolders(planDir, copies);
       if (!isCurrent()) {
         return;
       }
+      rememberMainCopy(entry, copies);
       if (folders.length === 0) {
         signalGone(sessionId, entry);
         return;
@@ -406,20 +467,29 @@ export function createPlanWatch(deps: {
   };
 
   return {
-    follow(sessionId, planDir) {
+    follow(sessionId, plan) {
+      const { planDir, planReported, unreportedPlanDir } = plan;
       const current = watched.get(sessionId);
       const watchesItAlready =
         current !== undefined &&
         current.planDir === planDir &&
         current.status !== 'gone';
       if (watchesItAlready) {
+        const reportChanged =
+          current.reported !== planReported ||
+          current.unreportedPlanDir !== unreportedPlanDir;
+        if (reportChanged) {
+          current.reported = planReported;
+          current.unreportedPlanDir = unreportedPlanDir;
+          read(sessionId, current);
+        }
         return;
       }
       if (planDir === null) {
         close(sessionId);
         return;
       }
-      open(sessionId, planDir);
+      open(sessionId, planDir, plan);
     },
     check(sessionId) {
       const current = watched.get(sessionId);

@@ -2,8 +2,9 @@
 
 // The built-in Small look: a one-line chip under the session row (the level's
 // badge, then the stage's tag, coloured and pulsing by its status), the stepper's
-// trail above the composer, and the side pane beside the transcript (the status mark and line,
-// the count, the progress bar and the checklist as one flat list).
+// trail above the composer, ending on the Headless chip, and the side pane
+// beside the transcript (the status mark and line, the count, the progress bar
+// and the checklist as one flat list).
 
 /** @typedef {import('../../../workflow/layouts/layout').SideGroupInput} SideGroupInput */
 /** @typedef {import('../../../workflow/layouts/layout').SidePaneInput} SidePaneInput */
@@ -59,13 +60,16 @@ const layout = {
   chip(parent, input, kit) {
     const chip = kit.el(parent, 'div', 'workflow-chip');
     kit.badge(chip, input.badge, input.workflowLabel);
-    kit.stageTag(chip, input.label, input.status);
+    if (!input.onRowLabel) {
+      kit.stageTag(chip, input.label, input.status);
+    }
     return { element: chip };
   },
 
   strip(parent, input, kit) {
     const strip = kit.el(parent, 'div', 'workflow-strip');
     kit.stepper(strip, input.steps);
+    kit.headlessChip(strip, input.headless);
     return { element: strip };
   },
 

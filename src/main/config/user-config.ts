@@ -226,12 +226,13 @@ function userConfigSchema(
       global: fixed.defaultKeymap.global,
       intercept: fixed.defaultKeymap.intercept,
     },
+    defaultGroups: fixed.defaultKeymap.groups,
     defaultLeader: fixed.defaultLeader,
   };
 }
 
-// `schema` with the runtime commands and binds the store serves now, and the
-// commands and scopes of the applied list's plugins left out.
+// `schema` with the runtime commands, binds and group names the store serves
+// now, and the commands and scopes of the applied list's plugins left out.
 function withRuntime(
   schema: UserConfigSchema,
   checks: ConfigCheckDeps,
@@ -248,6 +249,7 @@ function withRuntime(
       layer.binds === undefined || layer.binds.length === 0
         ? schema.defaultBindLayers
         : [...schema.defaultBindLayers, layer.binds],
+    defaultGroups: merged.groups,
     defaultAccelerators: {
       app: merged.app,
       global: merged.global,

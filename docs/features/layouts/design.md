@@ -124,21 +124,22 @@ stays in themes.
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree, its rows and its Wiki and All pages switch; the rendered doc, its page frame and right column, header, disk banner, section edit control and editor frame; Recent changes and the missing Main page's empty state; the list pages and their rows; the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
-| `practice` | `practice.layout` | the problem list's header and rows in the side bar; the problem pane's tabs (description, submissions, notes, solution), the console's Testcase and Result tabs, a case's result, the interviewer pane's ask box, the import box and the Solution confirm body |
-| `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the problem line, the picker rows |
+| `practice` | `practice.layout` | the problem list (its pane, header, rows and empty state) in the side bar; the problem column's three stacked panes (problem, editor, console) and the no-problem state; the problem pane's tabs (description, submissions with their rows and a submission's code, notes, solution), the console's Testcase and Result tabs, a case's result, the Solution confirm body, the interviewer pane's ask box (`askBox`) and the import dialog's body (`importBox`) |
+| `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the Leader menu's panes, group, item and add rows, the Keybindings section's filter chips, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections and every plugin's section (`addSection`), their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog |
 | `agent-lines` | `agent-lines.layout` | the working line under each session row while it runs a subagent or task |
 | `session-stash` | `session-stash.layout` | the stash dialog's body: the session's name, the note box and the hint |
 | `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
+| `system-stats` | `system-stats.layout` | the right-bar system stats panel: its section header, the five meter rows with their sparklines, and the process list's group and process rows |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `agent-skills` | `agent-skills.layout` | the session hub's Skills section: a chip per skill, grouped by namespace |
 | `context-sources` | `context-sources.layout` | the session hub's Context section: the sources' bar, the window's fill and a row per source with its items, the largest five until the more line shows them all |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
-| `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
-| `workflow-small`, `workflow-medium`, `workflow-large` | `workflow-small.layout`, `workflow-medium.layout`, `workflow-large.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Large's status, plan checklist by wave and actions; Small's and Medium's status, count and flat checklist) |
+| `keys` | `keys.layout` | the help overlay, the which-key shelf, the leader search's rows, the title bar's Keys button |
+| `workflow-spike`, `workflow-small`, `workflow-medium`, `workflow-large` | `workflow-spike.layout`, `workflow-small.layout`, `workflow-medium.layout`, `workflow-large.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Large's status, plan checklist by wave and actions; Spike's, Small's and Medium's status, count and flat checklist) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its widen and expand controls, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.

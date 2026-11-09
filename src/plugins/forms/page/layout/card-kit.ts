@@ -804,7 +804,7 @@ function showPressed(control: HTMLElement, isPressed: boolean) {
   control.setAttribute('aria-pressed', String(isPressed));
 }
 
-// The verdict under the finding and proof: its origin and severity tags, the
+// A finding's verdict, wherever the layout places it: its origin and severity tags, the
 // impact, and the Accept button, which picks the recommended entry on the
 // finding, the one the choice groups tag.
 function buildVerdict(

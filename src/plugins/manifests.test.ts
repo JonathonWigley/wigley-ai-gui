@@ -83,4 +83,11 @@ describe('manifests', () => {
     expect(Object.keys(medium?.settings ?? {})).toEqual(['layout']);
     expect(medium?.themeTokens?.badge.default).toBe('var(--wg-accent)');
   });
+
+  it('manifests_WorkflowSpike_HasItsLayoutSettingAndBadgeToken', () => {
+    const spike = manifests.find(({ id }) => id === 'workflow-spike');
+
+    expect(Object.keys(spike?.settings ?? {})).toEqual(['layout']);
+    expect(spike?.themeTokens?.badge.default).toBe('var(--wg-fg-secondary)');
+  });
 });

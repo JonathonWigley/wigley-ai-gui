@@ -18,6 +18,8 @@ import type { GitWorktree } from '../../../contracts/git';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   createFakeAgentHarness,
+  FAKE_AGENT_PID,
+  FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
@@ -48,6 +50,7 @@ import {
   type ChatSessionInfo,
   type ChatSessionState,
   chatSessionSlot,
+  HEADLESS_NOTE,
   type QueuedMessage,
   type ReturnedMessage,
   type SendGate,
@@ -63,7 +66,6 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
-  TURN_FINISHED_TITLE,
 } from './chat-sessions';
 import type {
   OpenSessions,
@@ -225,12 +227,6 @@ type Emitted = {
   [K in keyof ChatMainEvents]: { event: K; data: ChatMainEvents[K] };
 }[keyof ChatMainEvents];
 
-interface Announced {
-  title: string;
-  body: string;
-  onClick: () => void;
-}
-
 const ROW_ID = 'row-1';
 const PROJECT_DIR = '/work/app';
 const PAST_ONE = FAKE_PAST_SESSIONS[0];
@@ -298,6 +294,7 @@ function record(
     processId: null,
     launchControls: {},
     launchResume: false,
+    launchHeadless: false,
     queued: [],
     returned: [],
     controls: [],
@@ -306,6 +303,9 @@ function record(
     activeMs: 0,
     rowId: null,
     unattended: false,
+    headless: false,
+    instructions: [],
+    owner: null,
     ...fields,
   };
 }
@@ -320,10 +320,12 @@ function keptSessionInfo(rowId: string): ChatSessionInfo {
     background: 0,
     activeTime: NO_ACTIVE_TIME,
     running: false,
+    pid: null,
     compaction: null,
     repo: 'app',
     branch: null,
     worktrees: [],
+    headless: false,
   };
 }
 
@@ -432,7 +434,6 @@ function setUp(
   const markOptions: MarkOptions[] = [];
   const rowLabels = new Map<string, string>();
   const activated: string[] = [];
-  const announced: Announced[] = [];
   // Each slot change and `sessionRested`, in the order they left main.
   const timeline: TimelineItem[] = [];
   const store = createSlotStore(() => undefined);
@@ -449,7 +450,6 @@ function setUp(
     | { emitted: Emitted }
   )[] = [];
   let ownedEnds = 0;
-  let windowShows = 0;
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
   let uuidCalls = 0;
@@ -544,14 +544,7 @@ function setUp(
       notesAndEmits.push({ emitted: each });
       onEmit(each);
     },
-    alerts: {
-      announce: (title, body, onClick) =>
-        announced.push({ title, body, onClick }),
-    },
     window: {
-      show: () => {
-        windowShows++;
-      },
       isFocused: () => isFocused,
     },
     git: options.git ?? NO_CLONE,
@@ -584,7 +577,6 @@ function setUp(
     markOptions,
     rowLabels,
     activated,
-    announced,
     store,
     timeline,
     messages: () => messagesFrom(timeline),
@@ -604,7 +596,6 @@ function setUp(
     },
     hostIdChanges,
     ownedEnds: () => ownedEnds,
-    windowShows: () => windowShows,
     setFocused: (focused: boolean) => {
       isFocused = focused;
     },
@@ -780,6 +771,58 @@ function replyText(result: ToolResult | 'pending'): string {
 }
 
 describe('createChatSessions', () => {
+  it.each([
+    {
+      given: 'a started process',
+      expected: FAKE_AGENT_PID,
+      run: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        await flush();
+      },
+    },
+    {
+      given: 'the process ended',
+      expected: null,
+      run: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        await flush();
+        test.chat.send(ROW_ID, { text: FAKE_END_TEXT, images: [] });
+        await flush();
+      },
+    },
+    {
+      given: 'a re-attached process',
+      expected: 4321,
+      run: async (test: ReturnType<typeof setUp>) => {
+        test.harness.scriptAttach('p1', {
+          outcome: 'process',
+          replay(events) {
+            events.pid(4321);
+          },
+        });
+        restoreOne(test, hostedRecord(), [hostedP1()]);
+        await flush();
+      },
+    },
+    {
+      given: 'a restored row whose process is gone',
+      expected: null,
+      run: async (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, hostedRecord(), []);
+        await flush();
+      },
+    },
+  ])(
+    'pid_ProcessLifecycle_PublishedOnlyWhileRunning: $given',
+    async ({ expected, run }) => {
+      const test = setUp();
+
+      await run(test);
+
+      expect(test.chat.sessions()[0].pid).toBe(expected);
+    },
+  );
+
   it('start_opensTheSessionAndStartsTheHarness', async () => {
     const test = setUp();
 
@@ -823,12 +866,14 @@ describe('createChatSessions', () => {
         activeTime: { totalMs: 0, since: null },
         commands: [],
         running: false,
+        pid: null,
         queued: [],
         compaction: null,
         returned: [],
         repo: 'app',
         branch: null,
         worktrees: [],
+        headless: false,
       },
     ]);
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -881,6 +926,30 @@ describe('createChatSessions', () => {
     expect(test.harness.processes[0].request.instructions).toEqual([
       'first note',
       'second note',
+    ]);
+  });
+
+  it('launch_InstructionsFollowTheGlobalOnesAndSurviveAClear', async () => {
+    const test = setUp();
+    test.chat.addInstructions('global note');
+
+    const launchedId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: { text: 'go', images: [] },
+      instructions: ['own note'],
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    expect(
+      test.harness.processes.map((process) => process.request.instructions),
+    ).toEqual([['global note', 'own note'], ['global note']]);
+
+    test.chat.clear(launchedId);
+    await flush();
+    expect(test.harness.processes[2].request.instructions).toEqual([
+      'global note',
+      'own note',
     ]);
   });
 
@@ -1271,6 +1340,47 @@ describe('createChatSessions', () => {
     expect(test.saved.last()?.sessions[0].processId).toBe(HOSTED_PAST_ONE.id);
   });
 
+  it.each([
+    {
+      given: 'history read, new process',
+      hosted: [],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.processes[0].request.instructions,
+    },
+    {
+      given: 'process running here',
+      hosted: [HOSTED_PAST_ONE],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.attachCalls[0].instructions,
+    },
+  ])(
+    'resume_OwnerAndInstructions_OpenUnselectedAndStartWithThem: $given',
+    async ({ hosted, instructionsOf }) => {
+      const test = setUp({
+        sessionHost: { list: () => Promise.resolve(hosted) },
+      });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+      test.chat.addInstructions('global note');
+
+      await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title: PAST_ONE.title,
+        instructions: ['own note'],
+        owner: 'practice',
+      });
+      await flush();
+
+      expect(test.openOptions).toEqual([{ select: false, owner: 'practice' }]);
+      expect(instructionsOf(test)).toEqual(['global note', 'own note']);
+    },
+  );
+
   it('resume_AlreadyOpen_Rejects', async () => {
     const test = setUp();
     const hostId = PAST_ONE.sessionId;
@@ -1288,22 +1398,28 @@ describe('createChatSessions', () => {
     expect(test.opened).toEqual([]);
   });
 
-  it('pastSessions_OpenRows_ListsChatRowsOnly', async () => {
-    const test = setUp();
-    test.chat.restore(
-      {
-        sessions: [record(PAST_ONE.sessionId)],
-        selectedHostSessionId: null,
-      },
-      [],
-    );
-    test.chat.recordOpenHostId(connected(ROW_ID, PAST_ONE.sessionId));
-    test.chat.recordOpenHostId(connected('row-relay', PAST_TWO.sessionId));
+  it.each([
+    { given: 'a relay row', secondOwner: undefined },
+    { given: 'a chat row with an owner', secondOwner: 'practice' },
+  ])(
+    'pastSessions_OpenRows_ListsUnownedChatRowsOnly given $given',
+    async ({ secondOwner }) => {
+      const test = setUp();
+      const held = [record(PAST_ONE.sessionId)];
+      if (secondOwner !== undefined) {
+        held.push(record(PAST_TWO.sessionId, { owner: secondOwner }));
+      }
+      test.chat.restore({ sessions: held, selectedHostSessionId: null }, []);
+      test.chat.recordOpenHostId(connected(ROW_ID, PAST_ONE.sessionId));
+      test.chat.recordOpenHostId(connected('row-two', PAST_TWO.sessionId));
 
-    const rows = await test.chat.pastSessions('/w/app', 'work');
+      const rows = await test.chat.pastSessions('/w/app', 'work');
 
-    expect(rows.map((row) => row.hostSessionId)).toEqual([PAST_ONE.sessionId]);
-  });
+      expect(rows.map((row) => row.hostSessionId)).toEqual([
+        PAST_ONE.sessionId,
+      ]);
+    },
+  );
 
   it('resume_HostIdChatHolds_SelectsExistingRow', async () => {
     const test = setUp();
@@ -1331,6 +1447,77 @@ describe('createChatSessions', () => {
     expect(test.harness.pastSessionCalls).toEqual([]);
     expect(test.titleCalls).toEqual([]);
   });
+
+  it('resume_HostIdChatHoldsOnARowWithTheRequestsOwner_ReturnsItWithoutActivating', async () => {
+    const test = setUp();
+    const launchedId = test.chat.launch({
+      projectDir: '/w/app',
+      profile: 'work',
+      message: { text: 'go', images: [] },
+      owner: 'practice',
+    });
+    await flush();
+
+    const sessionId = await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: 'uuid-1',
+      title: 'go',
+      owner: 'practice',
+    });
+
+    expect(sessionId).toBe(launchedId);
+    expect(test.activated).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'an owned row, no owner asked',
+      rowOwner: { owner: 'practice' },
+      asked: {},
+      named: ['practice', 'no owner'],
+    },
+    {
+      given: 'an unowned row, an owner asked',
+      rowOwner: {},
+      asked: { owner: 'practice' },
+      named: ['no owner', 'practice'],
+    },
+    {
+      given: 'another owner asked',
+      rowOwner: { owner: 'practice' },
+      asked: { owner: 'backlog' },
+      named: ['practice', 'backlog'],
+    },
+  ])(
+    'resume_HostIdChatHoldsForAnotherOwner_RejectsNamingBoth given $given',
+    async ({ rowOwner, asked, named }) => {
+      const test = setUp();
+      test.chat.launch({
+        projectDir: '/w/app',
+        profile: 'work',
+        message: { text: 'go', images: [] },
+        ...rowOwner,
+      });
+      await flush();
+      const openedBefore = test.opened.length;
+
+      const resumed = test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: 'uuid-1',
+        title: 'go',
+        instructions: ['own note'],
+        ...asked,
+      });
+
+      await expect(resumed).rejects.toThrow(
+        new RegExp(`uuid-1.*${named[0]}.*${named[1]}`),
+      );
+      expect(test.activated).toEqual([]);
+      expect(test.opened).toHaveLength(openedBefore);
+    },
+  );
 
   it('commands_StoredAndSentOnChange', async () => {
     const test = await started();
@@ -1386,23 +1573,34 @@ describe('createChatSessions', () => {
     expect(test.openOptions).toEqual([{ select: true }]);
   });
 
-  it('launch_OpensUnselectedAndSendsFirstMessage', async () => {
-    const test = setUp();
+  it.each([
+    { given: 'owner absent', owner: {}, options: { select: false } },
+    {
+      given: 'owner practice',
+      owner: { owner: 'practice' },
+      options: { select: false, owner: 'practice' },
+    },
+  ])(
+    'launch_OpensUnselectedAndSendsFirstMessage: $given',
+    async ({ owner, options }) => {
+      const test = setUp();
 
-    const sessionId = test.chat.launch({
-      projectDir: PROJECT_DIR,
-      profile: DEFAULT_PROFILES[0].name,
-      message: { text: 'fix the chip', images: [] },
-    });
-    await flush();
+      const sessionId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: DEFAULT_PROFILES[0].name,
+        message: { text: 'fix the chip', images: [] },
+        ...owner,
+      });
+      await flush();
 
-    expect(sessionId).toBe(ROW_ID);
-    expect(test.openOptions).toEqual([{ select: false }]);
-    expect(test.harness.processes[0].calls).toEqual([
-      { method: 'send', text: 'fix the chip', imageCount: 0 },
-    ]);
-    expect(test.activated).toEqual([]);
-  });
+      expect(sessionId).toBe(ROW_ID);
+      expect(test.openOptions).toEqual([options]);
+      expect(test.harness.processes[0].calls).toEqual([
+        { method: 'send', text: 'fix the chip', imageCount: 0 },
+      ]);
+      expect(test.activated).toEqual([]);
+    },
+  );
 
   it('launch_ImageOverCap_RejectsAndOpensNothing', () => {
     const test = setUp();
@@ -1616,7 +1814,7 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()[0].controls).toEqual(controls);
   });
 
-  it('turnFinished_focusedAndSelected_noAlert', async () => {
+  it('turnFinished_focusedAndSelected_noMark', async () => {
     const test = await started();
 
     test.activity('working');
@@ -1626,24 +1824,17 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, activity: 'working' },
       { sessionId: ROW_ID, activity: 'idle' },
     ]);
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 
-  it('turnFinished_unfocused_alertsAndMarks', async () => {
+  it('turnFinished_unfocused_marks', async () => {
     const test = await started();
     test.setFocused(false);
 
     test.activity('working');
     test.activity('idle');
 
-    expect(test.announced.map(({ title, body }) => [title, body])).toEqual([
-      [TURN_FINISHED_TITLE, 'app'],
-    ]);
     expect(test.marked).toEqual([ROW_ID]);
-    test.announced[0].onClick();
-    expect(test.activated).toEqual([ROW_ID]);
-    expect(test.windowShows()).toBe(1);
   });
 
   it.each([
@@ -1666,11 +1857,12 @@ describe('createChatSessions', () => {
   );
 
   it.each([
-    { given: 'unattended: true', flag: { unattended: true }, alerts: 0 },
-    { given: 'unattended absent', flag: {}, alerts: 1 },
+    { given: 'unattended: true', flag: { unattended: true }, marks: 0 },
+    { given: 'unattended absent', flag: {}, marks: 1 },
+    { given: 'owner: practice', flag: { owner: 'practice' }, marks: 0 },
   ])(
-    'turnFinished_LaunchedRow_AlertsByUnattended: $given → $alerts alerts',
-    async ({ flag, alerts }) => {
+    'turnFinished_LaunchedRow_MarksUnlessUnattendedOrOwned: $given → $marks marks',
+    async ({ flag, marks }) => {
       const test = setUp();
       const sessionId = test.chat.launch({
         projectDir: PROJECT_DIR,
@@ -1685,23 +1877,21 @@ describe('createChatSessions', () => {
       events.activity('working');
       events.activity('idle');
 
-      expect(test.announced).toHaveLength(alerts);
-      expect(test.marked).toEqual(alerts === 0 ? [] : [sessionId]);
+      expect(test.marked).toEqual(marks === 0 ? [] : [sessionId]);
     },
   );
 
-  it('turnFinished_otherSessionSelected_alertsAndMarks', async () => {
+  it('turnFinished_otherSessionSelected_marks', async () => {
     const test = await started();
     test.setSelected('row-other');
 
     test.activity('working');
     test.activity('idle');
 
-    expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
   });
 
-  it('turnFinished_backgroundWorkRunning_noAlertUntilLastTurnEnds', async () => {
+  it('turnFinished_backgroundWorkRunning_noMarkUntilLastTurnEnds', async () => {
     const test = await started();
     test.setFocused(false);
     const { events } = test.process;
@@ -1728,7 +1918,6 @@ describe('createChatSessions', () => {
     });
     test.activity('idle');
 
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
     expect(test.chat.sessions()[0].background).toBe(2);
 
@@ -1753,7 +1942,6 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, background: 1 },
       { sessionId: ROW_ID, background: 0 },
     ]);
-    expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
   });
 
@@ -2019,7 +2207,7 @@ describe('createChatSessions', () => {
     test.activity('idle');
 
     expect(test.sent('activity')).toEqual([]);
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
   });
 
   it.each([
@@ -2066,7 +2254,6 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()).toMatchObject([
       { sessionId: ROW_ID, running: false, activity: 'idle' },
     ]);
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 
@@ -2285,7 +2472,7 @@ describe('createChatSessions', () => {
     expect(test.sent('queued')).toEqual([]);
   });
 
-  it('activityIdle_Queued_WritesOneEachIdleAndAlertsAfterTheLast', async () => {
+  it('activityIdle_Queued_WritesOneEachIdleAndMarksAfterTheLast', async () => {
     const test = await started();
     test.setFocused(false);
     const [first, second] = queueTwo(test);
@@ -2304,7 +2491,7 @@ describe('createChatSessions', () => {
     expect(test.sent('activity')).toEqual([
       { sessionId: ROW_ID, activity: 'working' },
     ]);
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
 
     test.activity('idle');
 
@@ -2312,7 +2499,7 @@ describe('createChatSessions', () => {
       sessionId: ROW_ID,
       activity: 'idle',
     });
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 
   it('pullBack_QueuedReturnsItAloneAndSentIsIgnored', async () => {
@@ -3025,7 +3212,6 @@ describe('createChatSessions', () => {
       expect(test.saved.saves()).toBe(savesBefore);
       expect(test.saved.last()?.sessions[0].busy).toBe(true);
       expect(test.messages()).toHaveLength(messagesBefore);
-      expect(test.announced).toEqual([]);
       expect(test.marked).toEqual([]);
     },
   );
@@ -3549,12 +3735,16 @@ describe('createChatSessions saved sessions', () => {
         returned: [],
         launchControls: {},
         launchResume: false,
+        launchHeadless: false,
         controls: test.chat.sessions()[0].controls,
         confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
         rowId: ROW_ID,
         unattended: false,
+        headless: false,
+        instructions: [],
+        owner: null,
       },
     ]);
   });
@@ -3562,27 +3752,284 @@ describe('createChatSessions saved sessions', () => {
   it.each([
     { given: 'as launched', clear: false },
     { given: 'after a clear', clear: true },
-  ])('save_LaunchedRow_RecordKeepsUnattended: $given', async ({ clear }) => {
-    const test = setUp();
-    test.chat.restore(NOTHING_SAVED, []);
+  ])(
+    'save_LaunchedRow_RecordKeepsItsLaunchFlags: $given',
+    async ({ clear }) => {
+      const test = setUp();
+      test.chat.restore(NOTHING_SAVED, []);
 
-    const launchedId = test.chat.launch({
-      projectDir: PROJECT_DIR,
-      profile: 'personal',
-      message: { text: 'go', images: [] },
-      unattended: true,
-    });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
-    await flush();
-    if (clear) {
-      test.chat.clear(launchedId);
+      const launchedId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        message: { text: 'go', images: [] },
+        unattended: true,
+        instructions: ['own note'],
+        owner: 'practice',
+      });
+      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
       await flush();
-    }
+      if (clear) {
+        test.chat.clear(launchedId);
+        await flush();
+      }
 
-    expect(
-      test.saved.last()?.sessions.map((saved) => saved.unattended),
-    ).toEqual([true, false]);
+      expect(
+        test.saved
+          .last()
+          ?.sessions.map(({ unattended, instructions, owner }) => ({
+            unattended,
+            instructions,
+            owner,
+          })),
+      ).toEqual([
+        { unattended: true, instructions: ['own note'], owner: 'practice' },
+        { unattended: false, instructions: [], owner: null },
+      ]);
+    },
+  );
+
+  it.each([{ headless: true }, { headless: false }])(
+    'setHeadless_HeldRow_PublishesAndSaves: $headless',
+    async ({ headless }) => {
+      const test = await started();
+      test.chat.restore(NOTHING_SAVED, []);
+      test.chat.setHeadless(ROW_ID, !headless);
+
+      test.chat.setHeadless(ROW_ID, headless);
+
+      expect(test.chat.isHeadless(ROW_ID)).toBe(headless);
+      expect(test.chat.sessions()[0].headless).toBe(headless);
+      expect(test.saved.last()?.sessions[0].headless).toBe(headless);
+    },
+  );
+
+  it('setHeadless_UnknownRow_LogsAndChangesNothing', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+    const savesBefore = test.saved.saves();
+
+    test.chat.setHeadless('row-unknown', true);
+
+    expect(test.logged).toContain(
+      'setHeadless for unknown session row-unknown ignored',
+    );
+    expect(test.saved.saves()).toBe(savesBefore);
+    expect(test.chat.isHeadless('row-unknown')).toBe(false);
   });
+
+  // The flag at the last process start, whatever it was set to since.
+  it.each([
+    { given: 'turned on, not cleared', clears: false, expected: false },
+    { given: 'turned on, then cleared', clears: true, expected: true },
+  ])(
+    'launchedHeadless_FlagSetAfterTheStart_KeepsTheStartsFlag: $given → $expected',
+    async ({ clears, expected }) => {
+      const test = await started();
+      test.chat.restore(NOTHING_SAVED, []);
+      test.chat.setHeadless(ROW_ID, true);
+
+      if (clears) {
+        test.chat.clear(ROW_ID);
+        await flush();
+      }
+
+      expect(test.chat.launchedHeadless(ROW_ID)).toBe(expected);
+      expect(test.saved.last()?.sessions[0].launchHeadless).toBe(expected);
+    },
+  );
+
+  it('clear_HeadlessRow_KeepsHeadless', async () => {
+    const test = await started();
+    test.chat.setHeadless(ROW_ID, true);
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.chat.isHeadless(ROW_ID)).toBe(true);
+    expect(test.chat.launchedHeadless(ROW_ID)).toBe(true);
+    expect(test.chat.sessions()[0].headless).toBe(true);
+  });
+
+  it.each([
+    { given: 'headless: true', flag: { headless: true }, expected: true },
+    { given: 'headless absent', flag: {}, expected: false },
+  ])(
+    'start_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
+    async ({ flag, expected }) => {
+      const test = setUp();
+
+      const sessionId = test.chat.start({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        ...flag,
+      });
+      await flush();
+
+      expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
+      expect(test.chat.sessions()[0].headless).toBe(expected);
+    },
+  );
+
+  it.each([
+    { given: 'headless: true', flag: { headless: true }, expected: true },
+    { given: 'headless absent', flag: {}, expected: false },
+  ])(
+    'launch_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
+    async ({ flag, expected }) => {
+      const test = setUp();
+
+      const sessionId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        message: { text: 'go', images: [] },
+        ...flag,
+      });
+      await flush();
+
+      expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
+      expect(test.chat.sessions()[0].headless).toBe(expected);
+    },
+  );
+
+  it.each([
+    {
+      given: 'headless: true',
+      flag: { headless: true },
+      list: [],
+      expected: true,
+    },
+    { given: 'headless absent', flag: {}, list: [], expected: false },
+    {
+      given: 'headless: true, its process running here',
+      flag: { headless: true },
+      list: [{ ...HOSTED_PAST_ONE }],
+      expected: true,
+    },
+  ])(
+    'resume_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
+    async ({ flag, list, expected }) => {
+      const test = setUp({
+        sessionHost: { list: () => Promise.resolve(list) },
+      });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      const sessionId = await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title: PAST_ONE.title,
+        ...flag,
+      });
+      await flush();
+
+      expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
+      expect(test.chat.sessions()[0].headless).toBe(expected);
+    },
+  );
+
+  it.each([
+    {
+      given: 'saved headless',
+      saved: hostedRecord({ headless: true, launchHeadless: true }),
+      hosted: [],
+      expected: { headless: true, launched: true },
+    },
+    {
+      given: 'turned off after a headless start, its process attached',
+      saved: hostedRecord({ headless: false, launchHeadless: true }),
+      hosted: [hostedP1()],
+      expected: { headless: false, launched: true },
+    },
+  ])(
+    'restore_SavedHeadless_RestoresTheFlagAndTheLaunchFlag: $given',
+    async ({ saved, hosted, expected }) => {
+      const test = setUp();
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      restoreOne(test, saved, hosted);
+      await flush();
+
+      expect(test.chat.isHeadless(ROW_ID)).toBe(expected.headless);
+      expect(test.chat.launchedHeadless(ROW_ID)).toBe(expected.launched);
+      expect(test.chat.sessions()[0].headless).toBe(expected.headless);
+    },
+  );
+
+  it.each([
+    {
+      given: 'headless start',
+      headless: true,
+      turnOffAndClear: false,
+      expected: ['registered', HEADLESS_NOTE],
+    },
+    {
+      given: 'not headless',
+      headless: false,
+      turnOffAndClear: false,
+      expected: ['registered'],
+    },
+    {
+      given: 'headless turned off then clear',
+      headless: true,
+      turnOffAndClear: true,
+      expected: ['registered'],
+    },
+  ])(
+    'start_HeadlessRow_CarriesTheHeadlessNote: $given',
+    async ({ headless, turnOffAndClear, expected }) => {
+      const test = setUp();
+      test.chat.addInstructions('registered');
+      const sessionId = test.chat.start({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        headless,
+      });
+      await flush();
+
+      if (turnOffAndClear) {
+        test.chat.setHeadless(sessionId, false);
+        test.chat.clear(sessionId);
+        await flush();
+      }
+
+      expect(test.harness.processes.at(-1)?.request.instructions).toEqual(
+        expected,
+      );
+    },
+  );
+
+  it.each([
+    { headless: true, expected: ['registered', HEADLESS_NOTE] },
+    { headless: false, expected: ['registered'] },
+  ])(
+    'attach_HeadlessRestoredRow_CarriesTheHeadlessNote: $headless',
+    async ({ headless, expected }) => {
+      const test = setUp();
+      test.chat.addInstructions('registered');
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      restoreOne(test, hostedRecord({ headless }), [hostedP1()]);
+      await flush();
+
+      expect(test.harness.attachCalls).toHaveLength(1);
+      expect(test.harness.attachCalls[0].instructions).toEqual(expected);
+    },
+  );
 
   it('restore_UnattendedRecord_DeniesPermissionAtOnce', async () => {
     const test = setUp();
@@ -3611,6 +4058,55 @@ describe('createChatSessions saved sessions', () => {
       message: UNATTENDED_REASON,
     });
   });
+
+  it.each([
+    {
+      given: 'resting, then a send',
+      processId: null,
+      hosted: [],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.processes[0].request.instructions,
+    },
+    {
+      given: 'running here',
+      processId: 'p1',
+      hosted: [hostedP1()],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.attachCalls[0].instructions,
+    },
+  ])(
+    'restore_RecordWithInstructionsAndOwner_ReopensWithBoth: $given',
+    async ({ processId, hosted, instructionsOf }) => {
+      const test = setUp();
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+      test.chat.addInstructions('global note');
+
+      test.chat.restore(
+        {
+          sessions: [
+            record('host-a', {
+              instructions: ['own note'],
+              owner: 'practice',
+              processId,
+            }),
+          ],
+          selectedHostSessionId: null,
+        },
+        hosted,
+      );
+      if (processId === null) {
+        await test.chat.send(ROW_ID, { text: 'hi', images: [] });
+      }
+      await flush();
+
+      expect(test.openOptions).toEqual([{ select: false, owner: 'practice' }]);
+      expect(instructionsOf(test)).toEqual(['global note', 'own note']);
+    },
+  );
 
   it('save_BeforeRestore_WritesNothing', async () => {
     const test = setUp();
@@ -4436,12 +4932,16 @@ describe('createChatSessions clear', () => {
           returned: [],
           launchControls: { mode: 'auto', model: 'fake-large' },
           launchResume: false,
+          launchHeadless: false,
           controls: test.chat.sessions()[0].controls,
           confirmedPicks: { model: 'fake-large' },
           returnedDrops: [],
           activeMs: 0,
           rowId: ROW_ID,
           unattended: false,
+          headless: false,
+          instructions: [],
+          owner: null,
         },
       ],
       selectedHostSessionId: 'uuid-2',
@@ -4663,7 +5163,7 @@ describe('createChatSessions clear', () => {
     expect(test.sent('entries')).toHaveLength(1);
   });
 
-  it('clear_WorkingRowUnfocused_NoTurnFinishedAlert', async () => {
+  it('clear_WorkingRowUnfocused_NoTurnFinishedMark', async () => {
     const test = await started();
     test.setFocused(false);
     test.activity('working');
@@ -4671,7 +5171,6 @@ describe('createChatSessions clear', () => {
     test.chat.clear(ROW_ID);
     await flush();
 
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 });
@@ -5955,7 +6454,7 @@ describe('createChatSessions attaching', () => {
     ]);
   });
 
-  it('attach_ReplayedEvents_FlaggedNoAlertNoPlanUsage', async () => {
+  it('attach_ReplayedEvents_FlaggedNoMarkNoPlanUsage', async () => {
     const test = setUp();
     test.setFocused(false);
     test.harness.scriptAttach('p1', {
@@ -5993,7 +6492,7 @@ describe('createChatSessions attaching', () => {
     expect(test.emitted.filter((each) => each.event === 'planUsage')).toEqual(
       [],
     );
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 
   it.each([
@@ -6447,7 +6946,7 @@ describe('createChatSessions stopAll', () => {
     expect(test.logged).toContain('stopped 2 session process(es)');
   });
 
-  it('stopAll_WorkingRow_RaisesNoAlertAndWritesNothingQueued', async () => {
+  it('stopAll_WorkingRow_MarksNothingAndWritesNothingQueued', async () => {
     const test = await started();
     const queued = { text: 'queued', images: [] };
     test.setFocused(false);
@@ -6460,7 +6959,6 @@ describe('createChatSessions stopAll', () => {
     await flush();
 
     expect(test.process.calls).toEqual([{ method: 'kill' }]);
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
     expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [queued] },
@@ -7168,7 +7666,7 @@ describe('createChatSessions send gate and hold', () => {
   it.each<{
     given: string;
     act(test: Awaited<ReturnType<typeof started>>): Promise<void>;
-    alerts: number;
+    marks: number;
   }>([
     {
       given: 'a pulled-back compaction, its stretch held no turn',
@@ -7177,17 +7675,17 @@ describe('createChatSessions send gate and hold', () => {
         test.harness.releaseCompactions();
         await flush();
       },
-      alerts: 0,
+      marks: 0,
     },
     {
       given: 'an idle before the compaction ends, in the skip grace order',
       act: async (test) => {
         test.chat.interrupt(ROW_ID);
         test.activity('idle');
-        expect(test.announced).toEqual([]);
+        expect(test.marked).toEqual([]);
         await flush();
       },
-      alerts: 1,
+      marks: 1,
     },
     {
       given: 'the held row written at the end, its own turn',
@@ -7195,7 +7693,7 @@ describe('createChatSessions send gate and hold', () => {
         test.harness.releaseCompactions();
         await flush();
       },
-      alerts: 1,
+      marks: 1,
     },
     {
       given: 'a later stretch after a pulled-back compaction',
@@ -7206,7 +7704,7 @@ describe('createChatSessions send gate and hold', () => {
         test.activity('working');
         test.activity('idle');
       },
-      alerts: 1,
+      marks: 1,
     },
     {
       given: 'a stretch of the fresh process after a clear',
@@ -7217,18 +7715,18 @@ describe('createChatSessions send gate and hold', () => {
         fresh.events.activity('working');
         fresh.events.activity('idle');
       },
-      alerts: 1,
+      marks: 1,
     },
-  ])('hold_TurnFinishedAlert: $given', async ({ act, alerts }) => {
+  ])('hold_TurnFinishedMark: $given', async ({ act, marks }) => {
     const test = await startedAndHeld();
     test.setFocused(false);
 
     await act(test);
 
-    expect(test.announced).toHaveLength(alerts);
+    expect(test.marked).toHaveLength(marks);
   });
 
-  it('hold_IdleAfterARowBehindWasSentNow_NoAlertWhileTheHoldIsUp', async () => {
+  it('hold_IdleAfterARowBehindWasSentNow_NoMarkWhileTheHoldIsUp', async () => {
     const test = await startedAndHeld();
     test.setFocused(false);
     await test.chat.send(ROW_ID, LATER);
@@ -7236,7 +7734,7 @@ describe('createChatSessions send gate and hold', () => {
 
     test.activity('idle');
 
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
   });
 
   it('hold_IdleWithNoCompaction_WritesTheRowAndALaterEndReleasesNothing', async () => {
@@ -7470,7 +7968,7 @@ describe('createChatSessions compact', () => {
     expect(compacted).toBe(true);
     expect(test.chat.sessions()[0].compaction).toBeNull();
     expect(test.chat.sessions()[0].activity).toBe('idle');
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
   });
 
   it('compact_HarnessThrows_ReturnsFalseAndShowsNothing', async () => {
@@ -7502,7 +8000,7 @@ describe('createChatSessions compact', () => {
     expect(test.chat.sessions()[0].compaction).toBeNull();
     fake.processes[0].events.activity('working');
     fake.processes[0].events.activity('idle');
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 
   it('compact_MessageSentDuringIt_QueuesUntilItsEnd', async () => {
@@ -7521,7 +8019,7 @@ describe('createChatSessions compact', () => {
     expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
   });
 
-  it('compact_StretchRanOnlyIt_NoTurnFinishedAlert', async () => {
+  it('compact_StretchRanOnlyIt_NoTurnFinishedMark', async () => {
     const test = await started();
     test.setFocused(false);
 
@@ -7530,10 +8028,10 @@ describe('createChatSessions compact', () => {
 
     expect(test.chat.sessions()[0].compaction).toBeNull();
     expect(test.chat.sessions()[0].activity).toBe('idle');
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
     test.activity('working');
     test.activity('idle');
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 });
 
@@ -7659,15 +8157,17 @@ describe('createChatSessions lifecycle events', () => {
   );
 
   it.each([
-    { given: 'a sent row', sends: true, sent: true },
-    { given: 'an unsent row', sends: false, sent: false },
+    { given: 'a sent row', sends: true, sent: true, headless: false },
+    { given: 'an unsent row', sends: false, sent: false, headless: false },
+    { given: 'a headless row', sends: true, sent: true, headless: true },
   ])(
     'sessionClosed_RestingRow_CarriesTitlesBeforeEnded given $given',
-    async ({ sends, sent }) => {
+    async ({ sends, sent, headless }) => {
       const test = await started();
       if (sends) {
         await test.chat.send(ROW_ID, IDLE_SEND);
       }
+      test.chat.setHeadless(ROW_ID, headless);
       test.process.events.ended({ code: 0, error: null });
       test.setRowTitles(ROW_ID, AGENT_TITLES);
       let closedAtOwnedEnd: unknown[] = [];
@@ -7686,6 +8186,7 @@ describe('createChatSessions lifecycle events', () => {
           profile: 'personal',
           titles: AGENT_TITLES,
           sent,
+          headless,
           reason: 'user',
         },
       ]);
@@ -7824,6 +8325,7 @@ describe('createChatSessions lifecycle events', () => {
         profile: 'personal',
         titles: NO_TITLES,
         sent: false,
+        headless: false,
         reason: 'start-failed',
       },
     ]);

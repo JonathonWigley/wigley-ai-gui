@@ -9,10 +9,20 @@ import {
   type ToolResult,
 } from './sessions/contract';
 
-export const fakeChat = fakeDependency(
-  chatMainKey,
-  () => ({ profileOf: () => null }) as unknown as ChatMainExports,
-);
+// Chat with every session's profile unknown; `isHeadless` answers whether a
+// row is headless, none by default.
+export function fakeChat(
+  isHeadless: (sessionId: string) => boolean = () => false,
+) {
+  return fakeDependency(
+    chatMainKey,
+    () =>
+      ({
+        profileOf: () => null,
+        isHeadless,
+      }) as unknown as ChatMainExports,
+  );
+}
 
 export const SUBMITTED: ToolResult = {
   content: [{ type: 'text', text: 'done' }],

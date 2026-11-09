@@ -20,10 +20,9 @@ import {
   parseFollowups,
 } from '../../../shared/followups/followup-file';
 import {
-  newestPlanCopy,
   type PlanCopy,
   type PlanCopyDeps,
-  readPlanCopy,
+  readMovedCopy,
 } from '../../../shared/plan-copies';
 import type { PlanProgress } from '../../../shared/plan-progress';
 import {
@@ -329,7 +328,7 @@ function withProgress(
 }
 
 // The plan with its header from the index's copy, and its counts, task
-// statuses and copy paths from the newest copy across its clone's checkouts;
+// statuses and copy paths from the moved copy across its clone's checkouts;
 // the index's when no copy holds a `plan.md`. Null, logged, when a read
 // fails.
 async function readPlan(
@@ -342,11 +341,11 @@ async function readPlan(
     const text = await docs.readDoc(plan.path);
     const planDir = paths.parent(plan.path);
     const header = planHeader(text, paths.base(planDir));
-    const copy = await newestPlanCopy(planDir, copyDeps);
-    const progress = copy === null ? null : await readPlanCopy(copy, copyDeps);
-    if (copy === null || progress === null) {
+    const moved = await readMovedCopy(planDir, copyDeps);
+    if (moved === null) {
       return { ...plan, ...header };
     }
+    const { copy, progress } = moved;
     const isIndexCopy = paths.samePath(
       await files.realPath(copy.planDir),
       await files.realPath(planDir),
@@ -666,7 +665,38 @@ function createBacklogMain(deps: BacklogDeps) {
     return read;
   }
 
-  const load = () => serve(() => docs.machineIndex());
+  // One load runs at a time: every call made while one runs shares the single
+  // load that starts once it ends, so a burst of `changed` events costs two
+  // loads, and each caller still gets a read begun after its call.
+  let runningLoad: Promise<BacklogRead> | null = null;
+  let queuedLoad: Promise<BacklogRead> | null = null;
+
+  function startLoad(): Promise<BacklogRead> {
+    const started = serve(() => docs.machineIndex());
+    runningLoad = started;
+    const settle = () => {
+      if (runningLoad === started) {
+        runningLoad = null;
+      }
+    };
+    void started.then(settle, settle);
+    return started;
+  }
+
+  function load(): Promise<BacklogRead> {
+    if (queuedLoad !== null) {
+      return queuedLoad;
+    }
+    if (runningLoad === null) {
+      return startLoad();
+    }
+    const settled = () => undefined;
+    queuedLoad ??= runningLoad.then(settled, settled).then(() => {
+      queuedLoad = null;
+      return startLoad();
+    });
+    return queuedLoad;
+  }
 
   function imagesRootOf(home: BacklogHome): string {
     return paths.join(home.root, IMAGES_FOLDER);

@@ -131,6 +131,7 @@ function childHost(
       );
       return {
         id: hostedRequest.id,
+        pid: null,
         write(text) {
           if (!isDetached) {
             child.stdin.write(`${text}\n`);
@@ -173,6 +174,7 @@ function recordingEvents() {
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
+    pid: (pid) => hear('pid', pid),
     commands: (names) => hear('commands', names),
     planUsage: (update) => hear('planUsage', update),
     agentEvent: (event) => {
@@ -3280,6 +3282,31 @@ describe('createClaudeCodeHarness on the session host', () => {
       KEEP: 'a',
       WIGLEY_SESSION_ROW: 'row-1',
     });
+  });
+
+  it.each([
+    {
+      via: 'start',
+      run: async (host: FakeSessionHost, events: AgentProcessEvents) => {
+        hostHarness(host, clock).start(request, events);
+        host.spawned('p-1', 4321);
+        await settle();
+      },
+    },
+    {
+      via: 'attach',
+      run: async (host: FakeSessionHost, events: AgentProcessEvents) => {
+        host.addRunning({ ...running(logOf(ENDED_TURN_LOG)), pid: 4321 });
+        await hostHarness(host, clock).attach(request, events);
+      },
+    },
+  ])('pid_FromTheHost_ReachesTheEvents: via $via', async ({ run }) => {
+    const host = createFakeSessionHost(clock);
+    const { heard, events } = recordingEvents();
+
+    await run(host, events);
+
+    expect(heard.filter(([name]) => name === 'pid')).toEqual([['pid', 4321]]);
   });
 
   it('start_HostSpawnFails_EndsWithHint', async () => {

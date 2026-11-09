@@ -136,7 +136,7 @@ auto-compact, at each workflow.flows change and each chat.turnFinished (idle):
 - A held row across a relaunch is saved as a plain pending row, and its reason is not kept.
 - A hold whose process goes from working to idle with no compaction running has no end coming: chat logs it, releases
   the held row and writes it. A `compactionEnded` after that finds no hold.
-- The `Turn finished` alert skips an idle while a hold is up, and the end of a working stretch that ran only an app
+- The `Turn finished` mark skips an idle while a hold is up, and the end of a working stretch that ran only an app
   compaction, a hold's or `compact`'s.
 - Labels by trigger:
 

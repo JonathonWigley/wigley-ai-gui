@@ -57,23 +57,26 @@ const SCHEMA: UserConfigSchema = {
   scopes: [],
   defaultBindLayers: [],
   defaultAccelerators: { app: [], global: [], intercept: [] },
+  defaultGroups: {},
   defaultLeader: '<Space>',
 };
 
-// A channel serving `schema`, `keymap` and an empty settings file, recording
-// each settings write and each keymap write, which the next read then serves,
-// and each `mayDisable` asked, which `mayDisable` answers.
+// A channel serving `schema`, `keymap` (or `keymapRead`, when given) and an
+// empty settings file, recording each settings write and each keymap write,
+// which the next read then serves, and each `mayDisable` asked, which
+// `mayDisable` answers.
 function fakeChannel(
   schema: UserConfigSchema,
   keymap: UserKeymap | null,
   mayDisable: (pluginId: string) => Promise<string | null>,
+  keymapRead?: UserConfigRead['keymap'],
 ) {
   const written: Record<string, unknown>[] = [];
   const writtenKeymaps: UserKeymap[] = [];
   const asked: string[] = [];
   const read: UserConfigRead = {
     settings: { state: 'ok', layer: null, text: null },
-    keymap: { state: 'ok', layer: keymap, text: null },
+    keymap: keymapRead ?? { state: 'ok', layer: keymap, text: null },
     themes: [],
   };
   const invoke = async (method: string, ...args: unknown[]) => {
@@ -106,6 +109,7 @@ function fakeChannel(
 interface ShownViewOptions {
   schema?: UserConfigSchema;
   keymap?: UserKeymap | null;
+  keymapRead?: UserConfigRead['keymap'];
   // A reloaded page's place, put back before the load.
   restored?: SettingsPlace;
   plugins?: () => readonly PluginStatus[];
@@ -121,6 +125,7 @@ interface ShownViewOptions {
 async function shownView({
   schema = SCHEMA,
   keymap = null,
+  keymapRead,
   restored,
   plugins = () => [],
   mayDisable = async () => null,
@@ -129,6 +134,7 @@ async function shownView({
     schema,
     keymap,
     mayDisable,
+    keymapRead,
   );
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
@@ -139,6 +145,7 @@ async function shownView({
   const toasts: [string, string][] = [];
   const picked = { count: 0 };
   const places: SettingsPlace[] = [];
+  const capture = fakeCapture();
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
@@ -166,6 +173,7 @@ async function shownView({
       dispose: () => undefined,
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
+    captureKey: capture.captureKey,
     picker: fakeListPickerService({
       place(element) {
         overlay.append(asFake(element));
@@ -208,7 +216,40 @@ async function shownView({
     toasts,
     picked,
     places,
+    capture,
     sheet: asFake(view.sheet),
+  };
+}
+
+// The page's one-shot key capture: `press` hands keys to the armed capture,
+// `isArmed` reads whether one is, `disposes` counts each dispose of an armed
+// one.
+function fakeCapture() {
+  let armed: { onKey(keys: string): void; onCancel(): void } | null = null;
+  const counts = { disposes: 0 };
+  return {
+    counts,
+    captureKey(onKey: (keys: string) => void, onCancel: () => void) {
+      const held = { onKey, onCancel };
+      armed = held;
+      return {
+        dispose() {
+          if (armed === held) {
+            armed = null;
+            counts.disposes += 1;
+          }
+        },
+      };
+    },
+    press(keys: string) {
+      const held = armed;
+      if (held === null) {
+        throw new Error('no capture armed');
+      }
+      armed = null;
+      held.onKey(keys);
+    },
+    isArmed: () => armed !== null,
   };
 }
 
@@ -239,6 +280,7 @@ describe('createSettingsView', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it.each([
@@ -417,7 +459,7 @@ describe('createSettingsView', () => {
       schema: { ...SCHEMA, sections: [], commands: { [command.id]: command } },
       keymap: { binds: [bind('a', 1), bind('b', 2), bind('c', 3)] },
     });
-    // Plugins, then Keymap.
+    // Plugins, then Keybindings.
     view.openSectionAt(1);
     move('right');
     // The leader row, then one row per argument.
@@ -433,6 +475,32 @@ describe('createSettingsView', () => {
       { binds: [bind('a', 1), bind('c', 3)] },
       { binds: [bind('a', 1)] },
     ]);
+  });
+
+  // Section p's rows: Name, then Mode; the sheet scrolled down first.
+  it.each([
+    {
+      case: 'a later row keeps the scroll and follows the row into view',
+      moves: ['down'] as const,
+      scrollTop: 40,
+    },
+    {
+      case: 'the first row scrolls the sheet to its top',
+      moves: ['down', 'up'] as const,
+      scrollTop: 0,
+    },
+  ])('markCursor_ScrollsToTheCursor: $case', async ({ moves, scrollTop }) => {
+    const { view, sheet } = await shownView();
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    sheet.scrollTop = 40;
+
+    for (const move of moves) {
+      view.commands[move]();
+    }
+
+    expect(sheet.scrollTop).toBe(scrollTop);
+    // Only the move down to Mode follows a row into view.
+    expect(scrolled).toHaveBeenCalledTimes(1);
   });
 
   it('a row a new filter hides hands the cursor to the first match', async () => {
@@ -534,6 +602,8 @@ describe('createSettingsView', () => {
     },
   );
 
+  const NO_LEADER_CURSORS = { groups: null, items: null };
+
   // Section `q` sits after `p`, holding one row.
   const TWO_SECTIONS: UserConfigSchema = {
     ...SCHEMA,
@@ -563,6 +633,7 @@ describe('createSettingsView', () => {
         openSectionId: 'q',
         cursorKey: 'q.size',
         filter: 'size',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section q',
       sectionsCursor: 1,
@@ -570,16 +641,18 @@ describe('createSettingsView', () => {
       isFilterShown: true,
     },
     {
-      // Sections p, q, Plugins and Keymap: index 3 is the last.
+      // Sections p, q, Plugins, Keybindings and Leader menu: index 4 is the
+      // last.
       name: 'a sections cursor past the last section',
       saved: {
         sectionsCursor: 9,
         openSectionId: 'q',
         cursorKey: 'q.size',
         filter: '',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section q',
-      sectionsCursor: 3,
+      sectionsCursor: 4,
       cursorKey: 'q.size',
       isFilterShown: false,
     },
@@ -590,6 +663,7 @@ describe('createSettingsView', () => {
         openSectionId: 'p',
         cursorKey: 'p.gone',
         filter: '',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section p',
       sectionsCursor: 0,
@@ -603,6 +677,7 @@ describe('createSettingsView', () => {
         openSectionId: 'gone',
         cursorKey: 'q.size',
         filter: 'size',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section p',
       sectionsCursor: 0,
@@ -790,7 +865,7 @@ describe('createSettingsView', () => {
     expect(written).toEqual([{ plugins: { disabled: [] } }]);
   });
 
-  it('sections_ListPluginsBeforeKeymap_AndCoreHasNoListRow', async () => {
+  it('sections_ListPluginsBeforeKeybindings_AndCoreHasNoListRow', async () => {
     const { view, sheet } = await shownView({ schema: pluginsSchema([]) });
     setUserLayout(view, {
       settingRow: (parent, input, kit) =>
@@ -800,10 +875,275 @@ describe('createSettingsView', () => {
     const sectionTitles = findAll(asFake(view.sideBar), 'ui-row-label').map(
       (label) => label.textContent,
     );
-    expect(sectionTitles).toEqual(['Core', 'P', 'Plugins', 'Keymap']);
+    expect(sectionTitles).toEqual([
+      'Core',
+      'P',
+      'Plugins',
+      'Keybindings',
+      'Leader menu',
+    ]);
     expect(findAll(sheet, 'mine-row').map((row) => row.textContent)).toEqual([
       'keySequenceTimeoutMs',
     ]);
+  });
+
+  // SCHEMA's sections: p, Plugins, then Keybindings.
+  const KEYS_INDEX = 2;
+
+  // A view open on the Keybindings section with the rows focused.
+  async function keysView() {
+    const shown = await shownView();
+    shown.view.openSectionAt(KEYS_INDEX);
+    shown.move('right');
+    return shown;
+  }
+
+  it('keysSection_FilterKey_CyclesChipsAndLogs', async () => {
+    const inSchemaSection = await shownView();
+    const schemaLogsBefore = inSchemaSection.logs.length;
+    inSchemaSection.view.commands.cycleKeyFilter();
+    const { view, logs } = await keysView();
+    const logsBefore = logs.length;
+
+    for (let press = 0; press < 4; press++) {
+      view.commands.cycleKeyFilter();
+    }
+
+    expect(inSchemaSection.logs.slice(schemaLogsBefore)).toEqual([]);
+    expect(
+      logs.slice(logsBefore).filter((line) => line.startsWith('key filter')),
+    ).toEqual([
+      'key filter bound',
+      'key filter unbound',
+      'key filter changed',
+      'key filter all',
+    ]);
+  });
+
+  it('keysSection_FindByKey_EscClearsFirst', async () => {
+    const { view, logs, capture, sheet } = await keysView();
+    view.commands.filter();
+    const filter = only(
+      only(sheet, 'settings-filter'),
+      'settings-box-input',
+    ) as FocusFakeElement;
+    filter.value = 'x';
+    filter.fire('input');
+    view.commands.boxAccept();
+
+    view.commands.findByKey();
+    capture.press('j');
+    const logsBefore = logs.length;
+    view.commands.clearFilter();
+
+    expect(logs).toContain('find by key j');
+    expect(logs.slice(logsBefore)).toEqual(['find by key cleared']);
+    expect(only(sheet, 'settings-filter').hidden).toBe(false);
+  });
+
+  it.each([
+    {
+      case: 'opening a section',
+      end: (view: SettingsView) => view.openSectionAt(0),
+    },
+    { case: 'hiding the mode', end: (view: SettingsView) => view.hidden() },
+  ])('recording_EndsOnSectionOpenAndHide: $case', async ({ end }) => {
+    const { view, capture, logs } = await keysView();
+    view.commands.findByKey();
+
+    end(view);
+
+    expect(capture.isArmed()).toBe(false);
+    expect(capture.counts.disposes).toBe(1);
+    expect(logs).toContain('recording cancelled find');
+  });
+
+  it('keysSection_ChipHidesTheCursorRow_CursorMovesToTheFirstMatch', async () => {
+    const command = (id: string) =>
+      ({ id, plugin: 'p', label: id, group: 'g', runsIn: 'page' }) as const;
+    const { view, places, move } = await shownView({
+      schema: {
+        ...SCHEMA,
+        commands: {
+          'p.a': command('p.a'),
+          'p.b': command('p.b'),
+          'p.c': command('p.c'),
+        },
+        defaultBindLayers: [
+          [
+            { keys: 'x', scope: 'any', command: 'p.a' },
+            { keys: 'y', scope: 'any', command: 'p.c' },
+          ],
+        ],
+      },
+    });
+    view.openSectionAt(KEYS_INDEX);
+    move('right');
+    view.moveToRow('p.b');
+
+    view.commands.cycleKeyFilter();
+
+    expect(places.at(-1)?.cursorKey).toBe('p.a');
+  });
+
+  it('recording_Find_SurvivesRedraw', async () => {
+    const { view, capture } = await keysView();
+    view.commands.findByKey();
+
+    view.reread();
+    await settle();
+
+    expect(capture.isArmed()).toBe(true);
+  });
+
+  // SCHEMA's sections with a b group holding a, and c at the top level:
+  // p, Plugins, Keybindings, then the Leader menu.
+  const LEADER_INDEX = 3;
+  const LEADER_SCHEMA: UserConfigSchema = {
+    ...SCHEMA,
+    commands: {
+      'p.a': { id: 'p.a', plugin: 'p', label: 'a', group: 'g', runsIn: 'page' },
+      'p.c': { id: 'p.c', plugin: 'p', label: 'c', group: 'g', runsIn: 'page' },
+    },
+    defaultBindLayers: [
+      [
+        { keys: '<Leader>ba', scope: 'any', command: 'p.a' },
+        { keys: '<Leader>c', scope: 'any', command: 'p.c' },
+      ],
+    ],
+  };
+
+  // A view open on the Leader menu with its groups pane focused.
+  async function leaderView(options: ShownViewOptions = {}) {
+    const shown = await shownView({ schema: LEADER_SCHEMA, ...options });
+    shown.view.openSectionAt(LEADER_INDEX);
+    shown.move('right');
+    return shown;
+  }
+
+  it('leaderMenu_Routing_CommandsReachTheView', async () => {
+    const { view, logs, sheet } = await leaderView();
+    const filterShown = () => !only(sheet, 'settings-filter').hidden;
+
+    view.commands.filter();
+    const isShownFromRows = filterShown();
+    view.commands.down();
+    view.commands.renameGroup();
+    view.commands.boxCancel();
+    view.focusSideBar();
+    view.commands.filter();
+
+    expect(isShownFromRows).toBe(false);
+    expect(filterShown()).toBe(false);
+    expect(logs).toContain('leader groups focused');
+    expect(logs).toContain('cursor group <Leader>b');
+    expect(logs).toContain('box open group <Leader>b');
+  });
+
+  // Top level's items: the b group, then c.
+  it.each([
+    {
+      case: 'open on the groups pane focuses the items pane',
+      act: (view: SettingsView) => view.commands.open(),
+      log: 'leader items focused',
+    },
+    {
+      case: 'open on a nested group row opens the group',
+      act(view: SettingsView) {
+        view.commands.open();
+        view.commands.open();
+      },
+      log: 'cursor group <Leader>b',
+    },
+    {
+      case: 'open on an item row, changing its action, is refused',
+      act(view: SettingsView) {
+        view.commands.open();
+        view.commands.down();
+        view.commands.open();
+      },
+      log: 'cursor item any <Leader>c',
+    },
+    {
+      case: 'add is refused',
+      act: (view: SettingsView) => view.commands.addBind(),
+      log: 'leader groups focused',
+    },
+  ])('leaderMenu_BrokenKeymap_OpenStillMoves: $case', async ({ act, log }) => {
+    const { view, logs, overlay, capture } = await leaderView({
+      keymapRead: { state: 'broken', problem: 'bad json', text: '{' },
+    });
+
+    act(view);
+    await settle();
+
+    expect(logs).toContain(log);
+    expect(only(overlay, 'ui-picker-layer').hidden).toBe(true);
+    expect(capture.isArmed()).toBe(false);
+  });
+
+  it('leaderMenu_Recording_SurvivesRedraw', async () => {
+    const { view, capture, logs } = await leaderView();
+    view.commands.down();
+    view.commands.open();
+    view.commands.changeKey();
+
+    view.reread();
+    await settle();
+
+    expect(logs).toContain('recording item any <Leader>ba');
+    expect(capture.isArmed()).toBe(true);
+  });
+
+  it.each([
+    {
+      name: 'held rows',
+      saved: { groups: 'group <Leader>b', items: 'item any <Leader>ba' },
+      restored: { groups: 'group <Leader>b', items: 'item any <Leader>ba' },
+    },
+    {
+      name: 'gone rows',
+      saved: { groups: 'group <Leader>z', items: 'item any <Leader>za' },
+      restored: { groups: 'group top', items: null },
+    },
+  ])(
+    'leaderMenu_RestoredPlace_PutsBackItsCursors: $name',
+    async ({ saved, restored }) => {
+      const { places } = await shownView({
+        schema: LEADER_SCHEMA,
+        restored: {
+          sectionsCursor: LEADER_INDEX,
+          openSectionId: 'leader',
+          cursorKey: null,
+          filter: '',
+          leaderCursors: saved,
+        },
+      });
+
+      expect(places.at(-1)?.leaderCursors).toEqual(restored);
+    },
+  );
+
+  it('leaderMenu_RowClickAndMoves_MoveItsPaneCursorAndReportIt', async () => {
+    vi.stubGlobal('Element', FakeElement);
+    const { view, sheet, runs, logs, places } = await leaderView();
+    // The groups top and b, then Top level's items: b, c and add.
+    const row = findAll(sheet, 'settings-leader-row')[3];
+
+    row.fire('click', { target: row });
+    const [[command, key]] = runs;
+    view.moveToRow(key as string);
+
+    const clicked = places.at(-1)?.leaderCursors;
+    view.commands.up();
+
+    expect(command).toBe('settings.moveToRow');
+    expect(logs).toContain('leader items focused');
+    expect(clicked).toEqual({
+      groups: 'group top',
+      items: 'item any <Leader>c',
+    });
+    expect(places.at(-1)?.leaderCursors.items).toBe('opens <Leader>b');
   });
 
   it('pluginsChanged_PluginsSectionOpen_Redraws', async () => {

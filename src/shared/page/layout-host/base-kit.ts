@@ -31,6 +31,7 @@ import { keyPrompt } from '../ui/key-prompt';
 import { meter } from '../ui/meter';
 import { row } from '../ui/row';
 import { sectionHeader } from '../ui/section-header';
+import { sparkline } from '../ui/sparkline';
 import { setDotStatus, statusDot } from '../ui/status-dot';
 import { tag as tagPart } from '../ui/tag';
 import type { RollbackDeps } from './draw-part';
@@ -295,6 +296,8 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     statusDot: (parent, status) => appended(parent, statusDot(status)),
     setDotStatus: (dot, status) => setDotStatus(dot, status),
     meter: (parent, percent, tone) => appended(parent, meter(percent, tone)),
+    sparkline: (parent, values, tone) =>
+      appended(parent, sparkline(values, tone)),
     row: (parent, options) => appended(parent, row(options)),
     emptyState: (parent, text, hint) =>
       appended(parent, emptyState(text, hint)),

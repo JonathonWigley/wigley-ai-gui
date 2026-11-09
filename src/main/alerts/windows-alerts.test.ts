@@ -6,7 +6,6 @@ const DOT = 'dot';
 
 const electron = vi.hoisted(() => ({
   nativeImage: { createFromBitmap: () => 'dot' },
-  Notification: { isSupported: () => false },
 }));
 vi.mock('electron', () => electron);
 
@@ -20,11 +19,6 @@ function fakeWindow({ isDestroyed }: { isDestroyed: boolean }) {
   };
   const window = {
     isDestroyed: () => isDestroyed,
-    on: () => {},
-    flashFrame(flag: boolean) {
-      live();
-      calls.push(['flashFrame', flag]);
-    },
     setOverlayIcon(icon: unknown) {
       live();
       calls.push(['setOverlayIcon', icon]);
@@ -36,26 +30,23 @@ function fakeWindow({ isDestroyed }: { isDestroyed: boolean }) {
 describe('createWindowsAlerts', () => {
   it('destroyedWindow_AnswersWithoutThrowing', () => {
     const { window, calls } = fakeWindow({ isDestroyed: true });
-    const alerts = createWindowsAlerts(window, vi.fn());
+    const alerts = createWindowsAlerts(window);
 
     alerts.setOpenCount('forms', 0);
-    alerts.announce('title', 'body', vi.fn());
 
     expect(calls).toEqual([]);
   });
 
   it('liveWindow_UsesTheWindow', () => {
     const { window, calls } = fakeWindow({ isDestroyed: false });
-    const alerts = createWindowsAlerts(window, vi.fn());
+    const alerts = createWindowsAlerts(window);
 
     alerts.setOpenCount('forms', 2);
     alerts.setOpenCount('forms', 0);
-    alerts.announce('title', 'body', vi.fn());
 
     expect(calls).toEqual([
       ['setOverlayIcon', DOT],
       ['setOverlayIcon', null],
-      ['flashFrame', true],
     ]);
   });
 });

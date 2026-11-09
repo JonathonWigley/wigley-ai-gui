@@ -320,7 +320,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       slots,
       send: (message, data) => api.channel.send(message, data),
       emit: (event, data) => api.events.emit(event, data),
-      alerts: services.alerts,
       window: services.window,
       git: services.git,
       files: services.files,
@@ -391,6 +390,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('clear', (sessionId) => {
       if (!ignoredInPreview('clear', sessionId)) {
         chat.clear(sessionId);
+      }
+    });
+    api.channel.handle('setHeadless', (sessionId, headless) => {
+      if (!ignoredInPreview('setHeadless', sessionId)) {
+        chat.setHeadless(sessionId, headless);
       }
     });
     api.channel.handle('pullBack', (sessionId, queuedId) => {
@@ -465,6 +469,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       [START_SESSION_TOOL],
       startSessionToolSession({
         launch: (request) => chat.launch(request),
+        isHeadless: (sessionId) => chat.isHeadless(sessionId),
         defaultProfile,
         profileNames,
         isAbsolute: (folder) => services.paths.isAbsolute(folder),
@@ -517,9 +522,12 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     };
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
+      resume: (request) => chat.resume(request),
       profiles,
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
+      isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,
       send: async (sessionId, message) => {
         requireHeld(sessionId);

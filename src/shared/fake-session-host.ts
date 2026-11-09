@@ -10,7 +10,7 @@ import type {
   SessionHost,
 } from '../contracts/session-host';
 
-// An in-memory `SessionHost` for the tests. `output` and `close` call a record's
+// An in-memory `SessionHost` for the tests. `output`, `close` and `spawned` call a record's
 // events at once; `spawn` and `attach` call nothing during the call.
 
 export interface FakeHostedProcessRecord {
@@ -19,6 +19,8 @@ export interface FakeHostedProcessRecord {
   startedAt: number;
   current: boolean;
   events: HostedProcessEvents | null; // the latest spawn or attach events; null until attached
+  spawnEvents: HostedProcessEvents | null; // the events `spawn` was given; null for a process added with addRunning
+  pid: number | null; // set by `spawned`, or by addRunning's `pid`
   log: PipeLine[]; // every line, `in` included, in seq order
   writes: string[];
   inputEnded: boolean;
@@ -36,8 +38,11 @@ export interface FakeSessionHost extends SessionHost {
     startedAt: number;
     current: boolean;
     log: readonly PipeLine[];
+    pid?: number; // left out: null
   }): FakeHostedProcessRecord;
   output(id: string, dir: 'out' | 'err', text: string): PipeLine;
+  // Sets process `id`'s pid, and tells the events `spawn` was given while no `attach` has replaced them.
+  spawned(id: string, pid: number): void;
   close(id: string, exit: HostedExit): void;
   failNextSpawn(error: string): void;
   // What `list()` resolves from now on; null goes back to listing the records.
@@ -73,6 +78,9 @@ function hostedProcessOf(
 ): HostedProcess {
   return {
     id: record.id,
+    get pid() {
+      return record.closed === null ? record.pid : null;
+    },
     write(text) {
       if (record.closed === null) {
         record.writes.push(text);
@@ -128,6 +136,7 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
         );
         return {
           id,
+          pid: null,
           write() {},
           endInput() {},
           kill() {},
@@ -140,6 +149,8 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
         startedAt: clock.now(),
         current: true,
         events,
+        spawnEvents: events,
+        pid: null,
         log: [],
         writes: [],
         inputEnded: false,
@@ -197,13 +208,15 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
         closeRecord(record, { code: null, signal: 'SIGTERM', error: null });
       }
     },
-    addRunning({ id, startedAt, current, log }) {
+    addRunning({ id, startedAt, current, log, pid }) {
       const record: FakeHostedProcessRecord = {
         request: null,
         id,
         startedAt,
         current,
         events: null,
+        spawnEvents: null,
+        pid: pid ?? null,
         log: [...log],
         writes: [],
         inputEnded: false,
@@ -222,6 +235,16 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
       const line = appendLine(record, dir, text, clock);
       record.events?.line(line);
       return line;
+    },
+    spawned(id, pid) {
+      const record = lastRecordOf(id);
+      if (record === undefined || record.closed !== null) {
+        throw new Error(`fake session host has no open process ${id}`);
+      }
+      record.pid = pid;
+      if (record.events !== null && record.events === record.spawnEvents) {
+        record.events.spawned(pid);
+      }
     },
     close(id, exit) {
       const record = lastRecordOf(id);

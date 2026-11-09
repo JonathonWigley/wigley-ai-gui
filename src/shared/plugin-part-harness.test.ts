@@ -712,25 +712,30 @@ describe('plugin part harness', () => {
     },
   );
 
-  it('pushSettings_ThenRestart_SettingsReadsThePushedValue', async () => {
-    const pushed = { width: 2 };
-    const heard: unknown[] = [];
-    let api!: PageSampleApi;
-    const harness = startPagePart(
-      pagePart((started) => {
+  it.each(['main', 'page'] as const)(
+    'pushSettings_ThenRestart_SettingsReadsThePushedValue: %s',
+    async (side) => {
+      const pushed = { width: 2 };
+      const heard: unknown[] = [];
+      let api!: MainSampleApi | PageSampleApi;
+      const start = (started: MainSampleApi | PageSampleApi) => {
         api = started;
         api.onSettingsChanged((settings) => heard.push(settings));
         return { commands: { run() {} } };
-      }),
-    );
+      };
+      const harness =
+        side === 'main'
+          ? startMainPart(mainPart(start))
+          : startPagePart(pagePart(start));
 
-    harness.pushSettings(pushed);
-    expect(api.settings()).toBe(pushed);
-    expect(heard).toEqual([pushed]);
+      harness.pushSettings(pushed);
+      expect(api.settings()).toBe(pushed);
+      expect(heard).toEqual([pushed]);
 
-    await harness.restart();
-    expect(api.settings()).toBe(pushed);
-  });
+      await harness.restart();
+      expect(api.settings()).toBe(pushed);
+    },
+  );
 
   it.each([
     { row: 'a string', scope: 'nope' },

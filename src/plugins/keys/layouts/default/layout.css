@@ -1,19 +1,47 @@
-/* The default Keys layout: the which-key list, the help dialog's sections, and the title bar's Keys button. */
+/* The default Keys layout: the which-key shelf, the help dialog's sections, and the title bar's Keys button. */
+
+/* Which-key: the keys pressed and their group's name, then up to four
+   columns of entries, each its key and its label; a group's label and its
+   `›` in the prefix colour. */
+.which-key-pane {
+  padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-4);
+}
+
+.which-key-header {
+  align-items: baseline;
+  display: flex;
+  gap: var(--wg-space-3);
+  margin-bottom: var(--wg-space-2);
+}
+
+.which-key-name {
+  color: var(--wg-fg);
+  font-weight: var(--wg-weight-medium);
+}
 
 .which-key-list {
-  column-gap: var(--wg-space-4);
-  columns: calc(var(--wg-space-8) * 7);
+  column-gap: var(--wg-space-6);
+  columns: calc(var(--wg-space-8) * 7) 4;
 }
 
-.which-key-row {
+.which-key-entry {
+  align-items: baseline;
   break-inside: avoid;
+  display: flex;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-1) 0;
 }
 
-.which-key-row.is-command .ui-row-label {
+.which-key-entry .ui-kbd {
+  min-width: calc(var(--wg-space-8) * 2);
+}
+
+.which-key-entry.is-command .which-key-label {
   color: var(--wg-keys-which-key-command);
 }
 
-.which-key-row.is-prefix .ui-row-label {
+.which-key-entry.is-prefix .which-key-label,
+.which-key-entry.is-prefix .which-key-more {
   color: var(--wg-keys-which-key-prefix);
 }
 

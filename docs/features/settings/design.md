@@ -41,7 +41,7 @@ plan is written from them. A decision here stands unless the user changes it.
   the `FuzzyMatcher` page service) and by description (plain substring, since a fuzzy match over a sentence matches
   almost any query), plugin rows by label and id, fuzzy, command rows by label, qualified id, keys and accelerators,
   and the Leader row by "leader" and its keys, all fuzzy. Esc on the rows clears a kept filter; opening a section
-  clears it too.
+  clears it too. The Leader menu's two panes take no `/` filter.
 
 ## Setting rows
 
@@ -97,7 +97,11 @@ merged keymap: defaults, each manifest's `keys`, then the user's layer.
   default leader leaves the leader unset.
 - One row per command, every command included so an unbound one can get a key, grouped by plugin under a section
   header (core first). A row is one line: the action's label, its manifest `group` as a dim detail, then each bind in
-  force at the row's end as Kbd, separated by `·`. A bind carries a Tag only when it says something: its scope's title
+  force at the row's end as Kbd, separated by `·`. A row too narrow for every bind gives way in order: the dim
+  group, then whole binds from the last (a bind is never squeezed; hovering the binds lists every one), then the
+  label down to a few characters; on the cursor row, whose prompt leaves least room, the first bind's tags and then
+  the label may go further. While a recording runs, the row's binds show only the recording and the bind it
+  replaces. A bind carries a Tag only when it says something: its scope's title
   when it is not `any`, `box` or `page` when `where` is set, its `mode`, and `Set` for a user bind. A default the user
   removed shows struck through with "Removed", and one a user bind on the same keys displaced shows "Replaced by
   <label>", each judged per half (page and editor) as the merge judges it; a default with one half still firing
@@ -111,7 +115,8 @@ merged keymap: defaults, each manifest's `keys`, then the user's layer.
     the user presses is recorded in its place, shown live; Enter keeps it, Esc cancels, and Tab turns the row into a
     one-line box for vim notation with the live Kbd preview. When the keys are taken in that scope the row shows
     "<keys> runs "<label>" in <scope>: it moves here" under it before the commit. Reassign keeps the bind's scope,
-    `where` and `mode`; a row with several binds reassigns the one the list picker chooses.
+    `where` and `mode`, and judges the keys as that bind: a chord is refused for a `box` or `both` bind, and only the
+    halves the bind fires on displace another; a row with several binds reassigns the one the list picker chooses.
   - **Add key** (`a`) records the same way, then opens the list picker of scopes (`any` and every scope),
     preselecting the scope of the command's first default bind, else `any`, each scope's line naming what the bind
     would replace there. A bind added here carries no `where` or `mode`.
@@ -144,17 +149,26 @@ The leader tree as which-key shows it, edited in place, in two panes moved betwe
 - **Items**, on the right: every bind directly under the selected group, in key order, a nested group's row opening it
   on Enter. A row shows its key, the action's label (always the command's label: leader items take no label of their
   own), its qualified id dim, and a Tag when it fires only in one scope (the scope's title) or only in a box (`in a
-  box`). The cursor row's prompt: `↩ change action`, `c change key`, `d clear`, `m move to group`, `r reset`.
+  box`). The cursor row's prompt: `↩ change action`, `c change key`, `d clear`, `m move to group`, `r reset`; the
+  `add…` row's: `a add`.
   - **Add** (`a`, also the `add…` row at the end, which lists the group's free keys) records one key, refusing one the
     group already holds in an overlapping scope, then opens the list picker over every page command by label. A
     command already bound under the leader shows that key in `status-warning`; picking it moves that bind instead of
-    adding a second. The scope picker then opens as Add key's does.
-  - **Change action** opens the same command picker and keeps the key and scope. A picked command that already has a
-    leader bind elsewhere moves that bind here and the item's old bind goes, as Add does: one leader path per command; **change key** records a new key in
-    the same group; **move to group** picks a group, then records the key there. Each is one user-layer edit: a user
-    bind's entry is rewritten, a default's becomes an `unbind` entry beside the new `binds` entry.
+    adding a second. The scope picker then opens as Add key's does; a scope where the key meets an item in an
+    overlapping scope is refused with the same note, writing nothing. A command with several leader binds moves the
+    one in the scope chosen, else its first, and its other leader binds in a scope overlapping the one chosen go in
+    the same edit: one leader path per command per scope.
+  - **Change action** opens the same command picker and keeps the key and scope. The picked command's leader binds in
+    a scope overlapping the item's go, and the item's key now runs it, as Add does: one leader path per command per
+    scope; **change key** records a new key in the same group; **move to group** picks a group, then records the key
+    there. Each is one user-layer edit: a user bind's entry is rewritten, a default's becomes an `unbind` entry beside
+    the new `binds` entry.
   - **Clear** works as on the Keybindings section, on the one bind; **reset** works on the item's command, as on the
     Keybindings section.
+- A row's main part (key, label, id, tags) is one line; the cursor prompt follows it on that line, and wraps under
+  it when the pane is narrow.
+- A click on a row moves its pane's cursor there and gives that pane the keys. Both panes' cursors are kept across a
+  page reload with the rest of Settings mode's place, each falling back as on a first open when its row is gone.
 
 ## The userConfig service
 

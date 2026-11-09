@@ -12,9 +12,14 @@ const LAYOUT_PARTS: Record<keyof SettingsLayout, true> = {
   leaderRow: true,
   advancedRow: true,
   groupHeader: true,
+  keyFilters: true,
   empty: true,
   problem: true,
   pickerRow: true,
+  leaderPanes: true,
+  leaderGroupRow: true,
+  leaderItemRow: true,
+  leaderAddRow: true,
 };
 
 // The layout a user's `layout.js` module exports as its default. A layout

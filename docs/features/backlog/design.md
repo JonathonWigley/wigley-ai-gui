@@ -108,15 +108,17 @@ plan is written from them. A decision here stands unless the user changes it.
 - A plan shows its name, feature, progress (checked of total), target and written date; a primed feature shows its
   slug and progress.
 - A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
-  plan's newest copy across the clone and its git worktrees (`src/shared/plan-copies.ts`), as Large's checklist reads
-  them, so a run in a worktree shows in Backlog too. Each load lists a clone's worktrees once, for all its plans. The
+  plan's moved copy across the clone and its git worktrees (`src/shared/plan-copies.ts`): a copy whose progress
+  differs from the main tree's and is not behind it (no fewer ticked boxes, and no task's `Status` ranked before main's for the same task document; the order is not started, in progress, done, and a status outside that order is never behind), the most recently modified when several differ, else the
+  main tree's. A run in a worktree shows in Backlog too, and neither a fresh worktree's untouched copy nor an idle
+  worktree's copy left behind main wins. Each load lists a clone's worktrees once, for all its plans. The
   count is the boxes under `## Tasks`, not the docs index's count of every checkbox in the file. Opening one renders
   `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a key to open the file in Docs mode for hand
   edits.
-- A row and its detail read one copy: a plan, and each task its newest copy's `plan.md` links, show that copy's file;
+- A row and its detail read one copy: a plan, and each task its moved copy's `plan.md` links, show that copy's file;
   a task it does not link keeps the index's file and status. A worktree copy's `Status:` value outside the three task
   statuses shows no status, never another copy's. The title, target and written date stay the index copy's, and the
-  selection and expansion stay keyed on the index's path, so they hold when the newest copy moves. Open in Docs opens
+  selection and expansion stay keyed on the index's path, so they hold when the moved copy changes. Open in Docs opens
   the index's file, since Docs opens only indexed files and the index skips linked worktrees.
 
 ## Git

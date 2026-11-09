@@ -7,7 +7,7 @@
 - **Shell and areas** — the permanent areas and who fills them.
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
-- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
+- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the leader search on `Space /`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 - **Hot reload (Wave 4)** — the closed bridge, core services that stay fixed, live stop, start and restart, the `ready` and `mayStop` hooks, the live enable switch, and quit waiting for every stop.
@@ -39,7 +39,7 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
   plugin from outside the repo, its own default keys (the built-ins' sit in `src/plugins/keymap.ts`); each
   part's start function returns the handlers. A missing handler is a type error.
 - Plugins never import a third-party library's adapter: the core hands them services (editor, markdown,
-  notifications, log, clock, home folder). Built-in main parts use Node directly.
+  the icon badge, log, clock, home folder). Built-in main parts use Node directly.
 - A plugin's two parts talk over one generic per-plugin Bridge channel (invoke and listen, by plugin id), typed in
   the plugin's `contract.ts`.
 - A manifest names the plugins it depends on; they start first, and a plugin's start function may return an
@@ -53,7 +53,7 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
 - Key scopes are plugin-declared and qualified (`forms.review`); plugin settings live in the manifest under the
   plugin's id (which-key's delay is a setting, 200 ms default); fonts and theme stay core settings.
 - Core: plugin host, shell and areas, commands, key engine (sequences, chords, leader), settings, themes, the
-  Bridge's plugin channel, services (editor, markdown, notifications and Dock badge, log, clock). The unwired ACP
+  Bridge's plugin channel, services (editor, markdown, the icon badge, log, clock). The unwired ACP
   adapter and mock agent wait for a harness plugin. The self-test is a core driver running a plugin's script.
 
 ## Shell and areas
@@ -109,16 +109,21 @@ command's keys into an element a view names, and the plugin's `showHints` settin
 `settings.json`) tells the core to turn the hints off; with the plugin stopped or disabled, hints show. The title bar's Keys button, which opens help, is the plugin's too
 (`docs/features/key-hints/design.md`).
 
-- Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a panel docked full width just above
-  the status bar, listing what can follow in columns; it redraws at once on a deeper prefix and closes when the
+- Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a full-width glass shelf on the
+  window's bottom edge, listing what can follow in up to four columns, in the Leader menu's key order (letters, the
+  lowercase one first, then digits, other characters, then named keys, each key in one spelling; `compareKeysUnder` in
+  `src/shared/key-hints.ts`),
+  not keymap order; it redraws at once on a deeper prefix and closes when the
   sequence ends or on Esc. `whichKeyTimeoutMs` (default `null`,
-  wait for the next key or Esc) ends a sequence the panel has shown that long. Commands draw in the theme's green and
-  prefixes in its mauve, from theme tokens (the user's IdeaVim which-key colours).
+  wait for the next key or Esc) ends a sequence the shelf has shown that long. A group's label and `›` draw in the `accent` colour and an action's label in `fg-secondary`, from the
+  `which-key-prefix` and `which-key-command` theme tokens.
 - It also opens inside a box in vim normal mode: `@replit/codemirror-vim` 6.4.0 keeps the typed keys in
   `getCM(view).state.vim.inputState.keyBuffer` and fires `vim-keypress` per key and `vim-command-done` when the
   pending input clears; the editor adapter reports them through `EditorHost.onPendingKeys` and `cancelPendingKeys`,
   and a test fails if an upgrade drops that state. The remaining keys come from the app's own keymap, not vim's.
-  A count-prefixed sequence (`3 Space`) gets no panel.
+  A count-prefixed sequence (`3 Space`) gets no shelf.
+- `Space /` opens the leader search: the shared list picker over the leader actions in force, which runs the pick
+  with its arg.
 - `Space ?` (`<Leader>?` in a box) opens the full help overlay; bare `?` is freed. Help lays the `help` scope
   (`keys.help`, Esc closes) over the page's scope with `api.keys.pushScope`, and closes itself when the scope under it
   changes (the `PushedScope`'s `onBaseChanged`), so a prompt such as chat's end-session confirm shows at once.

@@ -33,6 +33,7 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
+import { autoAnsweredPayload, recommendedBody } from './round';
 import { roundType, withKnownLayouts } from './round-type';
 import {
   FORMS_LAYOUTS_FOLDER,
@@ -56,8 +57,10 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // presenter they share, which owns the channel's `finish` and `draft`
 // handlers; the preview's rounds go through its quiet view. The agents'
 // service wakes the round's chat session when a round finishes with no call
-// waiting; the preview's wakes nothing. Both services and the preview read
-// `layoutNames` for the layouts a round may name.
+// waiting, and answers a headless chat session's rounds with their
+// recommendations; the preview's wakes nothing and answers none. Both
+// services and the preview read `layoutNames` for the layouts a round may
+// name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -81,11 +84,9 @@ function createForms(
     channel: api.channel,
     alerts: services.alerts,
     source: 'forms',
-    announceTitle: 'New review round',
     noun: roundType.noun,
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',
-    window: services.window,
     log: services.log,
     sessions,
   });
@@ -97,6 +98,11 @@ function createForms(
     wake: createChatFormWake(chat, services.log),
     defaultDeadlineSeconds,
     timers: services.timers,
+    autoAnswer: {
+      isOn: (sessionId) => chat.isHeadless(sessionId),
+      body: recommendedBody,
+      payload: autoAnsweredPayload,
+    },
   });
   const previewService = createAgentFormService({
     type: roundType,

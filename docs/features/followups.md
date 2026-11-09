@@ -112,7 +112,7 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Interrupt in the gap before a message's init** — *agent-ready*: `interruptAnswered` with no turn open
   (`src/main/claude-code/turn-tracker.ts`) also closes a message after its `queued`/`started` frame and before its
   `init` — e.g. Ctrl+C in `/compact`'s gap between `started` and `init` (`agent-chat/claude-stream.md` § Message
-  lifecycle) — so the session shows idle and the turn-finished alert fires, then the init shows working again. Option:
+  lifecycle) — so the session shows idle and the turn-finished mark fires, then the init shows working again. Option:
   in lifecycle mode keep a uuid whose last state was `started` open through `interruptAnswered`.
 - **Terminal resume of a cleared conversation** — *needs a feature plan*: after `/clear`, the sessions list refuses
   any relay hello carrying the row's pre-clear host id while the row lives (`retiredHostIds`,
@@ -344,6 +344,14 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   `createModes` has no claim there. Only one listener today sets a flag, so nothing fails. To decide: move the
   `coreModeSlot` write to first, as the registry model does, or release the fake's claim before it tells.
 
+- **Headless off note: chat sends it, not the workflow tools** — *needs a feature plan*: turning a session's
+  headless flag off reaches the agent only as a line on its next `set_workflow_step` or `set_workflow_checklist`
+  result (`src/plugins/workflow/main/headless-line.ts`). Four stacked fixes in the retro-briefs run (track at tool
+  start, re-seed at a host id change, `launchedHeadless` at the first result with `forget`, `launchHeadless`
+  saved in `SavedSession`) still leave two gaps: a workflow main restart loses the line state, and an agent that
+  calls neither workflow tool never hears the flag went off. Chosen direction: chat owns the off note and sends it
+  with the user's next prompt (or on the next tool result of any kind), so the workflow tools carry no line state.
+
 ## Platform and packaging
 
 What Windows support and installers need.
@@ -363,10 +371,9 @@ What Windows support and installers need.
   not a chord (`src/renderer/page-keys.ts`, `key-sequences.ts`); allow non-letter chords (`<C-/>`, `<F5>`).
 - **Per-source alert descriptions** — *agent-ready*: `Alerts.setOpenCount(source, count)` carries no per-source
   description: the core sums the counts, but the Windows overlay names every source "open agent forms"
-  (`electron-alerts.ts`), so chat waiting on the user would read as a form.
+  (`windows-alerts.ts`), so chat waiting on the user would read as a form.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
-  `packagerConfig`, no makers). On the first signed build, check live that a notification click focuses its round:
-  an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge).
+  `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
   (`Operation not permitted`) right after the stable app relaunched, and regained it once the user changed the macOS
   privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS
@@ -399,6 +406,11 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   per-origin types; each saved round carries its origin action words so retro reads data rather than keeping
   `ORIGIN_ACTION_LABELS`. `origin` / `card` / `FindingAction` in forms' `layout.d.ts` become strings, so a new
   finding origin, card or action does not break a user forms layout typed against the closed unions.
+- **A finding's proof becomes optional off a Nit** — *agent-ready*: the default forms layout draws a finding's `proof`
+  only on a Nit card (as Why it's safe), yet `finding-format.ts` still requires it on every origin, so agents send a
+  filler line nobody sees. Make `proof` required on `nit` alone in the finding origins table and the tool schema, and
+  update the forms README (marketplace), `~/wigley-agents/forms.md` § Findings and the review skill's `triage.md` to
+  match, in the same piece of work.
 - **Markdown block contributions** — *agent-ready*: `MarkdownRenderer.addBlock({ opener, render })` in the contract's
   own terms, beside the fence registry `addFence` (`docs/features/visuals/design.md`); the wigley `:::changes` /
   `:::tree` / `:::details` blocks move out of the core adapter (`markdown-it-renderer.ts`) into a contribution.
@@ -615,8 +627,16 @@ because the earlier items rewrite many of these tests anyway.
 - **Plugin main-part file watchers can miss a save on macOS** — *agent-ready*: a watch opening or closing in the main
   process drops the other watches' pending events. `WatchOptions.onMissed` (`src/contracts/files.ts`) reports it, and
   the user plugin folder source, the config store and the layout registry rescan on it. Plugin main parts that watch
-  through `api.files` do not use it yet: workflow-large's plan watch, unity-pool's pool watch, backlog's start watch and
-  docs' doc-files. Give each an `onMissed` rescan.
+  through `api.files` do not use it yet: workflow-large's plan watch, unity-pool's pool watch, backlog's start watch,
+  docs' doc-files and practice's problems watch. Give each an `onMissed` rescan.
+- **The Node files watcher can lose a rename's target** — *agent-ready*: the Node Files adapter
+  (`src/main/files/node-files.ts`, `TEMP_FILE` and its check in the watch handler) drops every event whose name has
+  its own temp shape `.<name>.<8 hex>.tmp`. When macOS FSEvents reports a temp-then-rename `write` under the temp name
+  only, the target is never reported, which breaks the `Files.watch` promise in `src/contracts/files.ts` that a write
+  reports its target. Seen as the self-test losing the target about 1 run in 5 with `files.write` (it switched to
+  `append`), and why plan.py writes its plan-runs report in place. When a temp-shaped name arrives and its target
+  exists, report the target instead of dropping the event; else correct the contract line. Exposure: every
+  `files.watch` consumer whose folder receives a `Files.write`, about 17 non-test call sites, unscoped.
 - **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
   that session gets its stored answers back from form-service's `replaysLastSubmitted`
   (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same
@@ -922,8 +942,12 @@ because the earlier items rewrite many of these tests anyway.
   scope, so a click into the detail pane while a right-bar stop holds the keys ends the stop's turn, and the deferred
   `focusMain` (`src/plugins/backlog/page/backlog-view.ts:986-998`) focuses `lastMainFocus`, often the list, off the
   clicked pane. Fix: a focusin on each Backlog pane records it as `lastMainFocus` (and sets the scope) before
-  `focusMain` runs. Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
-  re-review.
+  `focusMain` runs. A click into the detail with no right-bar stop in play also leaves the keys with the list, so j/k
+  act on a hidden cursor; the same handler fixes both (Practice's `focusin` loop over `listPane` and `mainPane` in
+  `src/plugins/practice/page/practice-view.ts` and Docs' `focusin` handoff in `src/plugins/docs/page/docs-view.ts` are
+  the model). Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
+  re-review. Source session: Claude Code f1855e19-7de7-4e8f-a22a-ca873386605d in
+  /Users/jonathonwigley/Documents/ai-dev.
 - **Self-test `forms: cancelled preview` fails on main** — *agent-ready*: `npm run selftest -- --plugin forms`; after
   `<D-w>` closes the Layout preview session the app selects `selftest 3` (its right neighbour in main's rows) where the
   step expects `Codex session`, and the `R` and `<A-o>` steps after it fail on that. Fails the same on a plain `main`
@@ -931,3 +955,13 @@ because the earlier items rewrite many of these tests anyway.
 - **Primer `placeRestored` may restore a stale review cursor** — *agent-ready*: since keyboard-reach met hot-reload,
   `primer-state.ts`'s reducer restores a stored place without resetting the review view's `reviewRow`, so a restored
   review could hold a row past the list's end. Trace it and pin it with a row in the primer-state tests.
+- **A re-picked problem's open read can overwrite a just-saved draft** — *agent-ready*: while a switch from problem A
+  to B waits on A's save, picking A again reads A from disk (`applyOpened`,
+  `src/plugins/practice/page/practice-view.ts`). When that read started before A's in-flight save landed, `refresh`
+  (`src/plugins/practice/page/problem-workspace.ts`) dispatches `refreshed`, and the reducer (`refreshed`,
+  `src/plugins/practice/page/workspace-state.ts`) takes the stale disk text for a draft the save has just marked saved
+  (`savedRevision === revision`). The general path, `refreshOpen` after a `changed`, has the same race. Fix:
+  `refreshed` keeps a draft whose saved revision is newer than the read, or the open read is ordered after the pending
+  saves. Pin it with a row in the workspace-state tests: GIVEN a draft saved after a read began WHEN `refreshed`
+  carries that read THEN the draft keeps its text. Source session: Claude Code f1855e19-7de7-4e8f-a22a-ca873386605d in
+  /Users/jonathonwigley/Documents/ai-dev.

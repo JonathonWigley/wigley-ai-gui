@@ -37,6 +37,7 @@ function progress(fields: Partial<PlanProgress>): PlanProgress {
 function flowWith(fields: Partial<SessionFlow & LargeState>): SessionFlow {
   const {
     planDir,
+    planReported,
     progress: read,
     reviewRoundsAtMake,
     countdownEndsAt,
@@ -46,6 +47,7 @@ function flowWith(fields: Partial<SessionFlow & LargeState>): SessionFlow {
     { ...newFlow('s1', '/r'), workflow: LARGE_WORKFLOW_ID, ...flow },
     {
       planDir: planDir === undefined ? '/r/plan-f' : planDir,
+      planReported: planReported ?? false,
       progress: read === undefined ? progress({}) : read,
       reviewRoundsAtMake: reviewRoundsAtMake ?? null,
       countdownEndsAt: countdownEndsAt ?? null,

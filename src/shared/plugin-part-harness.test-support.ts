@@ -53,6 +53,7 @@ import type {
 } from '../contracts/plugin';
 import type { SessionHost } from '../contracts/session-host';
 import type { SlotKey, SlotWriter } from '../contracts/state';
+import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -66,6 +67,7 @@ import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
 import { fakePlatform } from './platform.test-support';
 import { commandTarget } from './command-args';
+import { normalVimKeys } from './key-hints';
 import { keysFor } from './keys-for';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
@@ -165,7 +167,9 @@ export interface PartHarness<Started> {
 }
 
 // `invoke` calls the live handler of the part under test and throws when none
-// is live; `sent` holds what that part sent.
+// is live; `sent` holds what that part sent. `pushSettings` replaces what
+// `settings()` reads for the part under test and tells its `onSettingsChanged`
+// listeners.
 export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   MainStart<M>
 > {
@@ -173,6 +177,7 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   readonly processes: FakeProcesses;
   readonly drive: ReturnType<typeof fakeDriveHost> | null;
   invoke(method: string, ...args: unknown[]): unknown;
+  pushSettings(settings: M['settings']): void;
   readonly sent: readonly { message: string; data: unknown }[];
 }
 
@@ -188,6 +193,11 @@ export interface HarnessAnchor {
 // `services.markdown`. `anchors` holds each anchor named through the fake
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
+// `pressCapture` hands `keys`, in vim notation, to the capture `keys.captureKey`
+// armed, and `cancelCapture` cancels it, as an Esc would; each disarms it before
+// the callback runs, as the page key engine does, and throws when none is armed.
+// `pressCapture` throws on Esc, in any spelling: the engine never captures it.
+// `isCapturing` reads whether one is armed.
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
 // order. `restores` holds each restore handed to `restores.track`; the harness
 // runs no page load, so `restores.onSettled` calls its listener at once, unless
@@ -215,6 +225,9 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   changeBase(scope: string): void;
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
+  pressCapture(keys: string): void;
+  cancelCapture(): void;
+  isCapturing(): boolean;
   // The live mode added under qualified id `id`; throws when none is live.
   mode(id: string): Mode;
   // Sets what every mode handle's `sideBarShown` reads; false until set.
@@ -761,10 +774,22 @@ interface MainRecord {
   handlers: Map<string, (...args: never[]) => unknown>;
   sent: { message: string; data: unknown }[];
   layoutsRegistered: boolean;
+  settings: object;
+  settingsListeners: Listeners<object>;
 }
 
-function newMainRecord(counts: PartCounts = zeroCounts()): MainRecord {
-  return { counts, handlers: new Map(), sent: [], layoutsRegistered: false };
+function newMainRecord(
+  settings: object,
+  counts: PartCounts = zeroCounts(),
+): MainRecord {
+  return {
+    counts,
+    handlers: new Map(),
+    sent: [],
+    layoutsRegistered: false,
+    settings,
+    settingsListeners: createListeners(),
+  };
 }
 
 // What every main part of one harness shares.
@@ -861,14 +886,13 @@ function fakeMainApi(
   context: PartContext,
   world: MainWorld,
   record: MainRecord,
-  settings: object,
 ): MainApi<PluginManifest, any, any, any> {
   const common = commonApi(
     manifest,
     context,
     world,
     record.counts,
-    settings,
+    record.settings,
     'main',
   );
   const { register } = common;
@@ -901,8 +925,9 @@ function fakeMainApi(
       },
     },
     events: common.events,
-    settings: common.settings,
-    onSettingsChanged: common.onSettingsChanged,
+    settings: () => record.settings,
+    onSettingsChanged: (listener) =>
+      register(record.settingsListeners.add(listener)),
     dependency: common.dependency as MainApi<
       PluginManifest,
       any,
@@ -940,6 +965,7 @@ function fakeMainApi(
       git: notFaked<Git>('git'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
+      systemStats: notFaked<SystemStats>('systemStats'),
       // Refuses no switch-off.
       pluginSwitch: { mayDisable: async () => null },
       ...replaced,
@@ -979,30 +1005,23 @@ export function startMainPart<M extends PluginManifest>(
     options.state,
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
-  const record = newMainRecord();
+  const record = newMainRecord(options.settings ?? part.manifest.settings);
   const beginOn = (
     each: { manifest: PluginManifest; start(api: never): HostedStart },
     partRecord: MainRecord,
-    settings: object,
   ): HostedPart => ({
     manifest: each.manifest,
     begin: (context) =>
       each.start(
-        fakeMainApi(
-          each.manifest,
-          context,
-          world,
-          partRecord,
-          settings,
-        ) as never,
+        fakeMainApi(each.manifest, context, world, partRecord) as never,
       ),
   });
   const lifecycle = partLifecycle<MainStart<M>>(
     'main',
-    beginOn(part, record, options.settings ?? part.manifest.settings),
+    beginOn(part, record),
     dependencies,
     realParts.map((real) =>
-      beginOn(real, newMainRecord(), real.manifest.settings),
+      beginOn(real, newMainRecord(real.manifest.settings)),
     ),
     record.counts,
     world.commands.registry,
@@ -1014,6 +1033,10 @@ export function startMainPart<M extends PluginManifest>(
     processes: world.processes,
     drive: world.drive,
     sent: record.sent,
+    pushSettings(settings) {
+      record.settings = settings;
+      record.settingsListeners.tell(settings);
+    },
     invoke(method, ...args) {
       const handler = record.handlers.get(method) as
         | ((...handlerArgs: unknown[]) => unknown)
@@ -1089,6 +1112,23 @@ interface PageWorld extends HarnessWorld {
   hintsShown: boolean;
   hintsHold: { hold(shown: boolean): Disposable };
   anchorDispose?(): void;
+  // The capture `keys.captureKey` armed, null when none is.
+  capture: HarnessCapture | null;
+}
+
+interface HarnessCapture {
+  onKey(keys: string): void;
+  onCancel(): void;
+}
+
+// Disarms the armed capture and returns it, throwing when none is armed.
+function takeCapture(world: PageWorld): HarnessCapture {
+  const capture = world.capture;
+  if (capture === null) {
+    throw new Error('no key capture is armed');
+  }
+  world.capture = null;
+  return capture;
 }
 
 function createPageWorld(
@@ -1135,6 +1175,7 @@ function createPageWorld(
     hintsHold: createLatestHold<boolean>(true, (shown) => {
       world.hintsShown = shown;
     }),
+    capture: null,
   };
   tellShownMode(world.state, firstMode?.id ?? '');
   return world;
@@ -1369,6 +1410,19 @@ function fakePageApi(
       onPending: liveHandle,
       holdPending() {},
       cancelPending() {},
+      captureKey(onKey, onCancel) {
+        const capture: HarnessCapture = { onKey, onCancel };
+        const replaced = world.capture;
+        world.capture = capture;
+        replaced?.onCancel();
+        return register<Disposable>({
+          dispose() {
+            if (world.capture === capture) {
+              world.capture = null;
+            }
+          },
+        });
+      },
       keymap: () => world.keymap,
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
@@ -1700,6 +1754,18 @@ export function startPagePart<M extends PluginManifest>(
       world.whereListeners.tell(where);
     },
     hintsShown: () => world.hintsShown,
+    pressCapture(keys) {
+      if (normalVimKeys(keys) === normalVimKeys('<Esc>')) {
+        throw new Error(
+          'part harness: pressCapture never gets <Esc>; the engine cancels on Esc, so call cancelCapture',
+        );
+      }
+      takeCapture(world).onKey(keys);
+    },
+    cancelCapture() {
+      takeCapture(world).onCancel();
+    },
+    isCapturing: () => world.capture !== null,
     mode(id) {
       const live = world.liveModes.find((entry) => entry.id === id)?.added;
       if (live === undefined || live === null) {
@@ -1750,13 +1816,16 @@ export function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-// An editor host that counts the editors it holds live and every one it made;
-// `type` edits the last one made. After `stop()`, `live` cannot fail, as the
-// per-plugin view destroys what the part left: it is only meaningful mid-life.
+// An editor host that counts the editors it holds live and every one it made,
+// boxes and document editors alike; `type` edits the last one made, and
+// `typeDocument` the last document editor made. After `stop()`, `live` cannot
+// fail, as the per-plugin view destroys what the part left: it is only
+// meaningful mid-life.
 export function countingEditors() {
   let live = 0;
   let made = 0;
   let type: (text: string) => void = () => undefined;
+  let typeDocument: (text: string) => void = () => undefined;
   const host: EditorHost = {
     create(_parent, doc, events) {
       live += 1;
@@ -1774,8 +1843,36 @@ export function countingEditors() {
         },
       };
     },
-    createDocument() {
-      throw new Error('part harness: countingEditors makes no document editor');
+    createDocument(_parent, doc, _options, events) {
+      live += 1;
+      made += 1;
+      let text = doc;
+      typeDocument = (typed) => {
+        text = typed;
+        events.changed(typed);
+      };
+      type = typeDocument;
+      return {
+        text: () => text,
+        setText(next) {
+          text = next;
+        },
+        insert() {},
+        charBeforeCursor: () => '',
+        focus() {},
+        blur() {},
+        destroy() {
+          live -= 1;
+        },
+        goToLine() {},
+        scrollBy: () =>
+          Promise.resolve({
+            moved: false,
+            atEnd: true,
+            cursorMoved: false,
+            top: { line: 1, cut: false },
+          }),
+      };
     },
     contains: () => false,
     takesChordKey: () => false,
@@ -1789,5 +1886,6 @@ export function countingEditors() {
     live: () => live,
     made: () => made,
     type: (text: string) => type(text),
+    typeDocument: (text: string) => typeDocument(text),
   };
 }

@@ -363,6 +363,7 @@ export function installFakeDom(
   stubGlobal('window', new FakeWindow('window'));
   stubGlobal('document', {
     createElement: (tag: string) => new FakeElement(tag),
+    createElementNS: (_namespace: string, tag: string) => new FakeElement(tag),
   });
   stubGlobal(
     'ResizeObserver',
@@ -407,6 +408,7 @@ function collectUnder(
 export interface FocusFakeDocument {
   activeElement: FakeElement | null;
   createElement(tag: string): FakeElement;
+  createElementNS(namespace: string, tag: string): FakeElement;
 }
 
 function focusDocument(): FocusFakeDocument {
@@ -511,6 +513,7 @@ export function installFocusFakeDom(
   const doc: FocusFakeDocument = {
     activeElement: null,
     createElement: (tag) => new Element(tag),
+    createElementNS: (_namespace, tag) => new Element(tag),
   };
   stubGlobal('document', doc);
   return doc;

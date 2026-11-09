@@ -48,14 +48,14 @@ export interface StartPromptDeps {
 
 // `open` asks for a folder, then a profile when there is more than one, then
 // signs a signed-out profile in through the sign-in dialog, then asks for a
-// new or saved session when the folder has saved ones, and starts or
-// resumes a chat session there, revealing its Chat tab. Its folder step also
-// lists the resume sections' rows above the folders, a pick resuming that
-// session at once, and its session step those of its folder and profile. Esc
-// at any step starts nothing. Opening the prompt again drops the earlier one:
-// an answer or a sign-in that arrives for it is logged and goes no further.
-// `openForNewSession` asks the same way but lists no sections and passes the
-// session step over, starting a new session once the profile is signed in.
+// new session, a new headless session or one of the folder's saved sessions,
+// and starts or resumes a chat session there, revealing its Chat tab. Its
+// folder step also lists the resume sections' rows above the folders, a pick
+// resuming that session at once, and its session step those of its folder and
+// profile. Esc at any step starts nothing. Opening the prompt again drops the
+// earlier one: an answer or a sign-in that arrives for it is logged and goes
+// no further. `openForNewSession` asks the same way but lists no sections and
+// no saved sessions: its session step holds the two new-session lines alone.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
 export interface StartPrompt {
   open(): void;
@@ -198,6 +198,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         row.profile,
         row.hostSessionId,
         row.title,
+        row.headless === true,
       );
     const profile = context.profiles.find(({ name }) => name === row.profile);
     if (profile === undefined) {
@@ -249,8 +250,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     });
   };
 
-  // Goes on to the session step, or to a new session when the prompt offers no
-  // saved ones, once the profile picked for `projectDir` is signed in.
+  // Goes on to the session step once the profile picked for `projectDir` is
+  // signed in, listing the folder's saved sessions when the prompt offers them.
   const checkProfile = (
     context: PromptContext,
     projectDir: string,
@@ -260,7 +261,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       if (context.offersSavedSessions) {
         listSessions(context, projectDir, profile);
       } else {
-        startSession(context, projectDir, profile);
+        openSessionStepOn(context, projectDir, profile, []);
       }
     });
   };
@@ -305,36 +306,40 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     );
   };
 
-  // Opens the session step on the folder's saved sessions; with none, starts
-  // a new session at once. A failed listing opens the step with the
-  // new-session line alone.
+  // Opens the session step on `rows` with the cursor on `New session`.
+  const openSessionStepOn = (
+    context: PromptContext,
+    projectDir: string,
+    profile: ChatProfile,
+    rows: PastSessionRow[],
+  ) => {
+    const opened: SessionStep = {
+      context,
+      projectDir,
+      profile,
+      rows,
+      showArchived: false,
+      items: [],
+      shown: null,
+      isWriting: false,
+    };
+    step = opened;
+    const items = sessionStepItems(opened);
+    openSessionStep(opened, items, newSessionIndex(items));
+  };
+
+  // Opens the session step on the folder's saved sessions; with none, or when
+  // the listing fails, on the two new-session lines alone.
   const listSessions = (
     context: PromptContext,
     projectDir: string,
     profile: ChatProfile,
   ) => {
-    const openWith = (rows: PastSessionRow[]) => {
-      const opened: SessionStep = {
-        context,
-        projectDir,
-        profile,
-        rows,
-        showArchived: false,
-        items: [],
-        shown: null,
-        isWriting: false,
-      };
-      step = opened;
-      const items = sessionStepItems(opened);
-      openSessionStep(opened, items, newSessionIndex(items));
-    };
+    const openWith = (rows: PastSessionRow[]) =>
+      openSessionStepOn(context, projectDir, profile, rows);
     void channel.invoke('pastSessions', projectDir, profile.name).then(
       (rows) => {
         if (isStale(context.isCurrent, 'saved sessions')) {
-          return;
-        }
-        if (rows.length === 0) {
-          startSession(context, projectDir, profile);
           return;
         }
         openWith(rows);
@@ -380,7 +385,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       picked: (item) => {
         step = null;
         if (item.kind === 'new') {
-          startSession(opened.context, opened.projectDir, opened.profile);
+          startSession(
+            opened.context,
+            opened.projectDir,
+            opened.profile,
+            item.headless,
+          );
         } else {
           resumeSession(
             opened.context,
@@ -388,6 +398,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
             opened.profile.name,
             item.row.hostSessionId,
             shownTitle(item),
+            item.kind === 'section' && item.closed.headless === true,
           );
         }
       },
@@ -418,7 +429,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     }
     const item = shown.items[cursor];
     if (item.kind === 'new') {
-      log('New session cannot be archived');
+      log(`${item.label} cannot be archived`);
       return;
     }
     if (shown.isWriting) {
@@ -479,6 +490,7 @@ function resumeSession(
   profileName: string,
   hostSessionId: string,
   title: string,
+  headless: boolean,
 ) {
   const { deps } = context;
   deps.log(
@@ -490,6 +502,7 @@ function resumeSession(
       profile: profileName,
       hostSessionId,
       title,
+      headless,
     })
     .then(
       (sessionId) => deps.reveal(sessionId),
@@ -504,16 +517,19 @@ function startSession(
   context: PromptContext,
   projectDir: string,
   profile: ChatProfile,
+  headless: boolean,
 ) {
   const { deps } = context;
   deps.log(
     `starting a session in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
   );
-  void deps.channel.invoke('start', { projectDir, profile: profile.name }).then(
-    (sessionId) => deps.reveal(sessionId),
-    (error: unknown) => {
-      deps.log(`session not started: ${errorText(error)}`);
-      deps.toast(`Session not started: ${errorText(error)}`, 'error');
-    },
-  );
+  void deps.channel
+    .invoke('start', { projectDir, profile: profile.name, headless })
+    .then(
+      (sessionId) => deps.reveal(sessionId),
+      (error: unknown) => {
+        deps.log(`session not started: ${errorText(error)}`);
+        deps.toast(`Session not started: ${errorText(error)}`, 'error');
+      },
+    );
 }

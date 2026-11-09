@@ -127,7 +127,7 @@ means something.
 | Running                | `status-running` (sapphire)                                             | An agent working, a tool running                                                                                    |
 | Success / added        | `status-success`                                                        |                                                                                                                     |
 | Warning                | `status-warning`                                                        |                                                                                                                     |
-| Needs you              | `status-attention` (peach)                                              | A permission prompt, an open round: "your turn", apart from warning                                                 |
+| Needs you              | `status-attention` (peach)                                              | A permission prompt, an open round, a run paused short of its end: "your turn", apart from warning                  |
 | Error / removed        | `status-error`                                                          |                                                                                                                     |
 | Text selection, cursor | `selection-background`, `cursor`, `editor-active-line`                  | Catppuccin convention; the active line's band in a focused document editor                                          |
 | Changed sections       | `diff-inserted-mark`, `diff-removed-mark`, `diff-changed-mark` (peach)  | The mark on an inserted, removed or changed section in rendered markdown                                            |
@@ -175,7 +175,7 @@ means something.
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
   the side bar's opening width `sidebar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
-  `icon-size`, the docs page's right column `docs.aside-width`. The title bar leaves `traffic-light-inset` at its left for macOS's window
+  `icon-size`, the docs page's right column `docs.aside-width`, the system stats panel's number columns `system-stats.column-width`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
   inputs, cards and code blocks; `radius-lg` for sheets, menus and pickers; `radius-xl` for
@@ -241,7 +241,8 @@ The keyboard is first; the mouse works everywhere.
     (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
   - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
     (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
-    wraps when the row has no room; on a line of its own under the label in Primer and in the Sessions list's card; in a column of
+    wraps when the row has no room (a Keybindings row keeps one line: its dim parts give way instead, and
+    a recording's prompt takes the cursor prompt's place); on a line of its own under the label in Primer and in the Sessions list's card; in a column of
     its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
@@ -287,7 +288,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
-- **Tag** (`tag`): a small static label in a tone.
+- **Tag** (`tag`): a small static label in a tone. The workflow strip's Headless chip is the one Tag drawn as a
+  toggle button (`button.ui-tag`, its `data-state` and `aria-pressed` carrying on or off).
 - **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding
   on the sides only so the box keeps its line height, `font-mono`, a file Codicon in `fg-secondary`, then the file's
   name. The CodeMirror adapter draws it; it is not a builder
@@ -298,17 +300,22 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **StatusDot** (`statusDot`): a static dot for idle, running, success, warning, attention or error.
 - **Meter** (`meter`): a small bar filled to a percent in a status tone (`normal`, `warning`, `critical`); `setMeter`
   changes it.
+- **Sparkline** (`sparkline`): an SVG line of recent values from 0 to 100, in the tone of the Meter beside it; a fixed
+  height and no axes. A layout draws one with `kit.sparkline(parent, values, tone)` and redraws it by calling that again
+  in a fresh parent part.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab. The `ui-tabs--scroll` strip scrolls
   sideways with no scroll bar when too narrow for its tabs, each tab keeping its full width.
 - **Sheet** (`sheet`): the solid L2 content sheet.
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
-  width; the start pane's width lives in `uiState`, written when a drag ends and on each keyboard resize. The
+  width, side by side or, with `axis: 'column'`, one above the other; the sized pane's width (or height) lives in
+  `uiState`, written when a drag ends and on each keyboard resize. The sized pane is the start pane unless
+  `sizedPane: 'end'` names the end one, and either pane can be hidden. The
   shell's side bar resizes through the same split core. Three columns are two nested splits, the
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
-  `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
-  and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
+  `⌥⇧H ◂ ▸ ⌥⇧L` (`⌥⇧K ▴ ▾ ⌥⇧J` on a column split), centred on it and taking no space, while the pointer is over it,
+  while a drag runs and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
 - **HScroller** (`createHScroller`): a row that scrolls sideways, with a `sheet-background` IconButton chevron lying over
   each end, taking no space so overflow moves no item, that scrolls by one item and hides while nothing lies further
   that way, and a `reveal(item)` that scrolls an item into view.
@@ -316,7 +323,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
 - **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
-- **Dialog** (`createDialog`): a modal over the `scrim`.
+- **Dialog** (`createDialog`): a modal over the `scrim`; `restoreFocusAfterDialog` gives focus back to its opener on
+  close.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
 - **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items
@@ -362,7 +370,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
   `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `fg-tertiary` text for Done, and nothing for Working, which the workflow chip's tag says; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
-  plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` tag beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
+  plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` and `Headless` tags beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
@@ -388,7 +396,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   bar; in a tab bar the slot keeps room for the bar and a few of the chip's characters, and the strip scrolls instead.
   Its context bar pulses at `duration-pulse`, unbroken across redraws, static under reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
   `warning`, `critical`); the context bar by its share of the limit
-  (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
+  (`warning` from 70 %, `critical` from 90 %, of the share rounded to a whole percent). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
   (right bar, `Space v u`) is a card per profile, each a header (the name, its muted `text-12` freshness beside it —
   `updated <ago>` from the poll's time, or `stale, last good <ago>` — and the default profile's tag at the end) over
@@ -415,6 +423,17 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
   `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
+- **System stats:** the right bar holds the system stats panel while it is shown (`Space v y`): a section header
+  with the sort key's hint at its end, then five meter rows (CPU, GPU, RAM, Network, Disk), each its label, a Meter,
+  its value in tabular numerals and a Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %,
+  `critical` from 90 % of the percent rounded to a whole percent, as the context bar; RAM by memory pressure where the
+  OS reports it); RAM's pressure and swap sit on a `text-12`
+  `fg-tertiary` line under its row. The process list follows under a heading row naming the columns, the sorted one
+  marked: one row per group or process, its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of
+  them; the keyboard cursor's row takes `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show
+  its processes under it. A process with no GPU reading shows a dash in its GPU column. An `Other (exited processes,
+  system)` row holds the CPU no other row does, sorts with them, never opens, and shows dashes for RAM and GPU. Under a 360px container query
+  each meter takes two lines and a row's cells drop under its name.
 - **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
   (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token
   (`15%` of the frame's body), the tab under it dimmed by the `scrim`. It slides up on open and down on hide over
@@ -499,15 +518,18 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   too narrow and whole in its tooltip), and the plugin's state, `true` or `false`, which says whether a version of the
   plugin runs. The problem shows under the description as a `status-error` line, wrapped whole. A plugin that failed its
   first load has a row labelled with its id and no description. A file that fails its check shows an error Card at the section's top.
-- **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Small's, Medium's or Large's
-  own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (S, M
-  or L) in the plugin token `--wg-workflow-small-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
+- **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Spike's, Small's, Medium's or
+  Large's own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter
+  (X, S, M or L) in the plugin token `--wg-workflow-spike-badge` (default `fg-secondary`), `--wg-workflow-small-badge` (`status-info`), `--wg-workflow-medium-badge` (`accent`)
   or `--wg-workflow-large-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
   `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
   row's label says it, and Large's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
   workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
   activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
-  pulsing, unless its stage tag is already running. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+  pulsing, unless its stage tag is already running; while the session is headless the chip ends on an `accent` `Headless`
+  Tag in every stage, idle and no workflow included. The strip sits above the Chat composer: the stepper, the countdown,
+  the main action as a button, and last the Headless chip, a toggle Tag reading `Headless` in `accent` while on and in
+  `fg-tertiary` with a `border-default` outline and no fill while off. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status
@@ -517,11 +539,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   running in `status-running`, ready in `accent`, paused in `status-warning`, done in `status-success`), the stage's
   detail, a progress meter, the checklist and every action as buttons. Large's checklist, titled `Plan`, folds finished waves into one
   toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
-  one row each under `Up next`, all on the pane's left edge. Small's and Medium's pane, titled `Checklist`, draws the status
+  one row each under `Up next`, all on the pane's left edge. Spike's, Small's and Medium's pane, titled `Checklist`, draws the status
   mark and line, a `<checked>/<total>` line, the progress meter and one flat list with a mark per item, and no actions. An idle session, a session with no plan or checklist and a hidden pane draw no pane. A
   disabled action draws disabled.
-- **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
-  and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
+- **Floating:** pickers (the leader search's rows included), help and dialogs use the floating material with `row-list` rows
+  and key hints right-aligned in `fg-tertiary`; which-key is a full-width glass shelf on the window's bottom edge, its
+  entries not `row-list` rows; dialogs, chat's full-size image viewer and the full-size visual
   overlay sit over the `scrim`. A `/` completion row's description is `fg-tertiary`, one line, in the UI font inside
   the mono list.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
@@ -550,7 +573,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-large-strip-*`, `workflow-large-side-pane-hidden`, `workflow-small-*` and `workflow-medium-*`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-large-strip-*`, `workflow-large-side-pane-hidden`, `workflow-spike-*`, `workflow-small-*` and `workflow-medium-*`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

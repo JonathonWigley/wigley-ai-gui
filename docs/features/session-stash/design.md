@@ -48,6 +48,8 @@ know nothing of it.
   earlier one listed, so a stashed session shows under Stashed only, and Recently closed's cap counts only the
   sessions it shows. The row's detail starts with the note: `title · note · folder ·
   profile · time` on the Folder step, `title · note · time` on the Session step; the `/` filter matches the note.
+- **Headless.** A stash keeps whether the session was headless, and its resume opens the row headless again; a
+  session resumed from any other list starts with headless off.
 - **Leaving the list.** Resuming the session (`chat.sessionOpened` with origin `resumed`) removes its record. `x` in
   the start prompt archives it, which hides it from every section. A second stash of one session replaces its record.
 - **A bad file.** A `stashed.json` that is not a JSON array of records is the user's state: the section fails (chat
@@ -56,11 +58,12 @@ know nothing of it.
 ## Decisions
 
 - **Its own plugin.** Stashing can be swapped or disabled alone, and chat and sessions gain only generic seams: the
-  optional `note` on `ResumeSectionRow` and sessions' `shownSessionId`.
+  optional `note` and `headless` on `ResumeSectionRow`, `headless` on `ResumeRequest` and on `chat.sessionClosed`, and
+  sessions' `shownSessionId`.
 - **Above Recently closed.** A stash is a deliberate park, so it is the first list the user sees. Chat orders sections
   by registration, so `session-stash`'s main part starts before `session-log`'s (`src/plugins/main.ts`).
 - **The record is written at the close, not at the key.** The confirm mid-turn can be turned down, and only the close
-  event carries the titles and `sent` the record needs. Sessions' `closeSession` resolves to whether the row closed, so
+  event carries the titles, `sent` and `headless` the record needs. Sessions' `closeSession` resolves to whether the row closed, so
   the page learns a kept close and drops the note; main cannot tell a declined confirm from a close still waiting, and a reloaded page clears what it can no longer drop. The asked stash lives in memory only: a quit between the key
   and the close loses it, and nothing half-written is left on disk.
 - **The normal close.** Stashing reuses `closeSession`, so every close guard and chat's confirm apply unchanged.

@@ -51,25 +51,12 @@ function fakeChannel(calls: string[]) {
   return { channel, sent, invoke };
 }
 
-function fakeWindow() {
-  let shown = 0;
-  const window = {
-    show: () => {
-      shown++;
-    },
-  };
-  return { window, shown: () => shown };
-}
-
 function fakeAlerts() {
-  const announced: { title: string; body: string; onClick: () => void }[] = [];
   const counts: [string, number][] = [];
   const alerts: Alerts = {
-    announce: (title, body, onClick) =>
-      announced.push({ title, body, onClick }),
     setOpenCount: (source, count) => counts.push([source, count]),
   };
-  return { alerts, announced, counts };
+  return { alerts, counts };
 }
 
 // Records row calls into `calls` and each mark's options into `marks`, keeps
@@ -85,8 +72,6 @@ function fakeSessions(calls: string[], labels: ReadonlyMap<string, string>) {
       calls.push(`mark ${sessionId}`);
       marks.push(options);
     },
-    activateExistingRow: (sessionId) =>
-      calls.push(`activateExistingRow ${sessionId}`),
     addCloseGuard: (mayClose, cancelHold) => {
       guards.push({ mayClose, cancelHold });
       return {
@@ -124,7 +109,6 @@ function fakeListener() {
 function setUp(labels: ReadonlyMap<string, string> = new Map()) {
   const calls: string[] = [];
   const page = fakeChannel(calls);
-  const window = fakeWindow();
   const attention = fakeAlerts();
   const logged: string[] = [];
   const tabs = fakeSessions(calls, labels);
@@ -132,11 +116,9 @@ function setUp(labels: ReadonlyMap<string, string> = new Map()) {
     channel: page.channel,
     alerts: attention.alerts,
     source: 'forms',
-    announceTitle: 'New review round',
     noun: 'round',
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',
-    window: window.window,
     log: (message: string) => logged.push(message),
     sessions: tabs.sessions,
   });
@@ -149,7 +131,6 @@ function setUp(labels: ReadonlyMap<string, string> = new Map()) {
   return {
     calls,
     page,
-    window,
     attention,
     logged,
     marks: tabs.marks,
@@ -163,34 +144,29 @@ function setUp(labels: ReadonlyMap<string, string> = new Map()) {
 }
 
 describe('createAgentFormChannelPresenter', () => {
-  it('shows a form on the page and announces it without showing the window', () => {
-    const { calls, page, window, attention, logged, presenter } = setUp();
+  it('shows a form on the page and counts it open', () => {
+    const { calls, page, attention, logged, presenter } = setUp();
 
     presenter.show(FORM, fakeListener().listener);
 
     expect(calls).toEqual(['mark app-1', 'send formShown']);
     expect(page.sent).toEqual([['formShown', FORM]]);
-    expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
-      [[expect.any(String), 'wigley-ai-gui · Pick a theme']],
-    );
     expect(attention.counts).toEqual([['forms', 1]]);
     expect(logged).toEqual(['form shown: wigley-ai-gui · Pick a theme']);
-    expect(window.shown()).toBe(0);
   });
 
-  it('shows a quiet form on the page and its row without an alert or a count', () => {
+  it('shows a quiet form on the page and its row without a count', () => {
     const { calls, page, attention, logged, presenter } = setUp();
 
     presenter.quiet.show(FORM, fakeListener().listener);
 
     expect(calls).toEqual(['mark app-1', 'send formShown']);
     expect(page.sent).toEqual([['formShown', FORM]]);
-    expect(attention.announced).toEqual([]);
     expect(attention.counts).toEqual([]);
     expect(logged).toEqual(['form shown: wigley-ai-gui · Pick a theme']);
   });
 
-  it('counts only announced forms open, and a quiet form ending leaves the count', () => {
+  it('counts only the forms that are not quiet, and a quiet form ending leaves the count', () => {
     const { page, attention, presenter, openForms, finish } = setUp();
     const quietForm = { ...FORM, formId: 'form-q', sessionId: 'app-q' };
     presenter.quiet.show(quietForm, fakeListener().listener);
@@ -209,17 +185,6 @@ describe('createAgentFormChannelPresenter', () => {
       { formId: 'form-q2', byFinish: false },
     ]);
     expect(openForms()).toEqual([FORM]);
-  });
-
-  it("brings the window forward on the form's row when the announcement is clicked", () => {
-    const { calls, window, attention, presenter } = setUp();
-    presenter.show(FORM, fakeListener().listener);
-    calls.length = 0;
-
-    attention.announced[0].onClick();
-
-    expect(calls).toEqual(['activateExistingRow app-1']);
-    expect(window.shown()).toBe(1);
   });
 
   it('open form refuses with its reason and closed form allows', () => {

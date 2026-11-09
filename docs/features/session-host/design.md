@@ -133,6 +133,12 @@ shape, so any host can end what any other left.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
 
+Each hosted process's OS pid reaches the app: `subscribe`'s reply carries `pid` (null when it has none), and the host
+sends the connection that spawned a process `{ type: 'spawned', id, pid }` once the OS reports it (both since
+protocol 3). `HostedProcessEvents.spawned(pid)` hands it to the spawner and `HostedProcess`
+exposes it; the harness adapter passes it up, and chat publishes it as `pid` on the session's `chat.session` entry,
+null while no process runs (`docs/features/system-stats/design.md` § Session processes).
+
 A pipe log line is `{ seq, dir, at, text }`: `seq` counts from 1 per process, `dir` is `in`, `out` or `err`, `at` is
 epoch ms, `text` the line without its newline. On attach the app subscribes first, reads the log, then takes live
 lines past the last `seq` it read.
@@ -156,7 +162,7 @@ lines past the last `seq` it read.
   running in the current host has the row open and attach to it, and one in another app version or a list that rejects
   refuses the resume. So a session never runs two processes, past those § The host names: a process left alone, a
   live host's child beside a new host, and a relaunch inside a new host's hold, when `list` answers empty.
-- Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no alert fires for a
+- Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no turn-finished mark fires for a
   turn that ended while the app was closed. What a process that exits during the attach fires for that exit, its
   `sessionEnded` included, is not: that exit is real, so the agents log closes. The row still shows the session's current state.
 - Chat saves each session's queued messages with its record. A re-attached row shows them again and sends the oldest

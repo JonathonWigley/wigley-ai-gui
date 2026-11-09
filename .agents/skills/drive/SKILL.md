@@ -178,6 +178,10 @@ its plugin's self-test script (`AGENTS.md` § Running and testing).
 its rounds open in the drive run, not in the user's app. It spends tokens, so use it only where a
 fixture cannot stand in (real tool cards, real stream shapes), and name it in the report.
 
+`start --system-stats live` gives the system stats panel this machine's real readings in place of
+the fake's fixed processes; `restart` keeps it. Use it for a check on real numbers or on a real
+session's process tree (with `--harness claude`).
+
 ## What stays the user's
 
 Synthetic keys never reach a global shortcut, never compose a dead key (macOS Option+n) and never

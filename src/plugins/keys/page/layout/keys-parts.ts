@@ -9,6 +9,7 @@ import type {
   CompleteLayout,
   HelpInput,
   Layout,
+  LeaderSearchRowInput,
   WhichKeyInput,
 } from '../../layouts/layout';
 import { keysManifest } from '../../manifest';
@@ -34,6 +35,7 @@ export interface KeysPartsDeps {
 export interface KeysParts {
   help(parent: HTMLElement, input: HelpInput): Drawn;
   whichKey(parent: HTMLElement, input: WhichKeyInput): Drawn;
+  leaderSearchRow(parent: HTMLElement, input: LeaderSearchRowInput): Drawn;
   titleBarButton(parent: HTMLElement): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
@@ -41,6 +43,7 @@ export interface KeysParts {
 type PartName = keyof CompleteLayout;
 
 const HELP_SCOPE = qualify(keysManifest.id, 'help');
+const PICKER_SCOPE = qualify(keysManifest.id, 'picker');
 
 // The scope each part's keys fire in; null anchors with no scope, so the
 // Keys button's hint shows in every scope.
@@ -50,6 +53,7 @@ const PART_SCOPES: Record<PartName, ViewScope | null> = {
   helpRow: HELP_SCOPE,
   whichKey: 'any',
   whichKeyEntry: 'any',
+  leaderSearchRow: PICKER_SCOPE,
   titleBarButton: null,
 };
 
@@ -147,6 +151,14 @@ export function createKeysParts(deps: KeysPartsDeps): KeysParts {
                 ),
             ),
         }),
+      );
+    },
+    leaderSearchRow(parent, input) {
+      return draw(
+        'leaderSearchRow',
+        parent,
+        (leaderSearchRow, slot, rollback) =>
+          leaderSearchRow(slot, input, kitFor('leaderSearchRow', rollback)),
       );
     },
     titleBarButton(parent) {

@@ -1,0 +1,96 @@
+/* Practice mode's side bar, which holds the layout's list pane. */
+.practice-list {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.practice-rows {
+  list-style: none;
+  margin: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+.practice-filter {
+  margin: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+.practice-filter-input {
+  background: transparent;
+  border: 0;
+  color: var(--wg-fg);
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+/* The sheet holds the problem column. The sheet is the main cell's direct
+   child: its margins lie outside the box, so it takes the cell's height less
+   its two gutters. */
+.practice-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .practice-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.practice-main {
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+}
+
+/* The open problem's workspace: the column of the problem pane, the editor and
+   the console, with the interviewer's slot beside it. Each split pane is a grid
+   of one cell its pane root fills. */
+.practice-workspace,
+.practice-column {
+  height: 100%;
+}
+
+.practice-workspace .ui-split-start,
+.practice-workspace .ui-split-end {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.practice-side {
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The interviewer pane: one cell its ask box or chat view fills. */
+.practice-interviewer {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.practice-tab-body {
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+}
+
+.practice-editor {
+  height: 100%;
+  min-height: 0;
+}
+
+.practice-submission-rows {
+  list-style: none;
+  margin: 0;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}

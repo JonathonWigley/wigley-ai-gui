@@ -57,6 +57,8 @@ export function sameLargeState(a: unknown, b: unknown): boolean {
   const right = largeStateIn(b);
   return (
     left.planDir === right.planDir &&
+    left.planReported === right.planReported &&
+    left.unreportedPlanDir === right.unreportedPlanDir &&
     left.progress === right.progress &&
     left.reviewRoundsAtMake === right.reviewRoundsAtMake &&
     left.countdownEndsAt === right.countdownEndsAt
@@ -71,7 +73,7 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
       break;
     case 'fileWritten':
       if (isPlanFile(signal.path)) {
-        setPlanDir(next, planDirOf(signal.path));
+        followPlanDir(next, planDirOf(signal.path));
       }
       break;
     case 'skillStarted': {
@@ -79,7 +81,7 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
         ? planDirOfArgsPath(signal.argsPath)
         : null;
       if (planDir !== null) {
-        setPlanDir(next, planDir);
+        followPlanDir(next, planDir);
       }
       break;
     }
@@ -90,6 +92,8 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
           next.progress = event.progress;
         }
         next.reviewRoundsAtMake ??= event.progress.reviewRounds;
+      } else if (event?.type === 'planReported') {
+        reportPlanDir(next, event.planDir);
       }
       break;
     }
@@ -148,8 +152,7 @@ function planDirOfArgsPath(argsPath: string | null): string | null {
     return planDirOf(argsPath);
   }
   const folder = argsPath.replace(TRAILING_SEPARATORS, '');
-  const folderName = folder.slice(lastSeparatorIndex(folder) + 1);
-  return PLAN_FOLDER_NAME.test(folderName) ? folder : null;
+  return PLAN_FOLDER_NAME.test(folderNameOf(folder)) ? folder : null;
 }
 
 // A new plan folder drops the old plan's progress and review rounds; the
@@ -162,9 +165,55 @@ function setPlanDir(next: LargeState, planDir: string): void {
   }
 }
 
+// A reported folder: marks it, and a new one keeps the unreported folder it
+// moves away from, or the one an earlier report kept, while that folder has the
+// reported folder's plan folder name under the same feature folder; any other
+// folder is another plan's.
+function reportPlanDir(next: LargeState, planDir: string): void {
+  if (planDir !== next.planDir && !next.planReported) {
+    next.unreportedPlanDir = next.planDir;
+  }
+  if (
+    next.unreportedPlanDir !== null &&
+    featureAndPlanNameOf(next.unreportedPlanDir) !==
+      featureAndPlanNameOf(planDir)
+  ) {
+    next.unreportedPlanDir = null;
+  }
+  setPlanDir(next, planDir);
+  next.planReported = true;
+}
+
+// A folder seen in a write or a make argument, not reported: a new one drops
+// the report mark and the unreported folder kept, and the folder already held
+// keeps both.
+function followPlanDir(next: LargeState, planDir: string): void {
+  if (planDir !== next.planDir) {
+    setPlanDir(next, planDir);
+    next.planReported = false;
+    next.unreportedPlanDir = null;
+  }
+}
+
 function clearPlan(next: LargeState): void {
   next.planDir = null;
+  next.planReported = false;
+  next.unreportedPlanDir = null;
   next.progress = null;
+}
+
+function folderNameOf(folder: string): string {
+  return folder.slice(lastSeparatorIndex(folder) + 1);
+}
+
+// The last two segments: the feature folder and the plan folder in it.
+function featureAndPlanNameOf(folder: string): string {
+  const planStart = lastSeparatorIndex(folder);
+  const featureStart = Math.max(
+    folder.lastIndexOf('/', planStart - 1),
+    folder.lastIndexOf('\\', planStart - 1),
+  );
+  return folder.slice(featureStart + 1).replace(/\\/g, '/');
 }
 
 function lastSeparatorIndex(path: string): number {

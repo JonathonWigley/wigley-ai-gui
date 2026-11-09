@@ -136,12 +136,14 @@ function session(
     activeTime: NO_ACTIVE_TIME,
     commands: [],
     running,
+    pid: null,
     queued: [],
     compaction: null,
     returned: [],
     repo: 'app',
     branch: 'main',
     worktrees: [],
+    headless: false,
     ...stateFields,
   };
   const entries = {

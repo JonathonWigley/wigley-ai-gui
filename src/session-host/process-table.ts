@@ -30,6 +30,7 @@ export type HostSpawn = (
 export interface ProcessSubscriber {
   line(id: string, line: PipeLine): void;
   closed(id: string, exit: HostedExit): void;
+  spawned(id: string, pid: number): void;
 }
 
 export interface ProcessTableDeps {
@@ -43,18 +44,20 @@ export interface ProcessTableDeps {
 }
 
 export interface ProcessTable {
-  // Subscribes `subscriber`. A refused or failed spawn calls its `closed`, with no other process touched.
+  // Subscribes `subscriber`, and calls its `spawned` before returning when the OS started the process. A refused or
+  // failed spawn calls its `closed`, with no other process touched.
   spawn(request: HostedSpawn, subscriber: ProcessSubscriber): void;
   // `write`, `endInput` and `kill` do nothing for an id the table does not hold.
   write(id: string, text: string): void;
   endInput(id: string): void;
   kill(id: string, signal: 'SIGTERM' | 'SIGKILL'): void;
-  // Replaces any earlier subscriber, and returns the log's path. `log` is null, and nothing is subscribed, when the
-  // process is unknown or ending (`running` false) or its log is incomplete (`running` true).
+  // Replaces any earlier subscriber, and returns the log's path and the process's pid. `log` is null, and nothing is
+  // subscribed, when the process is unknown or ending (`running` false) or its log is incomplete (`running` true).
+  // `pid` is null whenever `running` is false.
   subscribe(
     id: string,
     subscriber: ProcessSubscriber,
-  ): { running: boolean; log: string | null };
+  ): { running: boolean; log: string | null; pid: number | null };
   // Does nothing unless `subscriber` is process `id`'s.
   unsubscribe(id: string, subscriber: ProcessSubscriber): void;
   dropSubscriber(subscriber: ProcessSubscriber): void;
@@ -77,6 +80,7 @@ interface DroppedKey {
 interface TableProcess {
   id: string;
   child: ChildProcessWithoutNullStreams;
+  pid: number | null;
   log: PipeLog;
   idleRule: IdleRule;
   droppedOutKeys: readonly DroppedKey[];
@@ -371,6 +375,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         const hosted: TableProcess = {
           id: request.id,
           child,
+          pid: child.pid ?? null,
           log,
           idleRule: request.idleRule,
           droppedOutKeys: droppedKeysOf(request.droppedOutKeys),
@@ -385,6 +390,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         wireChild(hosted);
         processes.set(request.id, hosted);
         armKeepTimer(hosted);
+        // Node sets `pid` at once when the OS started the child; a child with none never ran, and its `error` follows.
+        if (hosted.pid !== null) {
+          subscriber.spawned(request.id, hosted.pid);
+        }
       } catch (error) {
         log?.remove();
         refuse((error as Error).message);
@@ -411,13 +420,13 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     subscribe(id, subscriber) {
       const hosted = processes.get(id);
       if (hosted === undefined || hosted.isEnding) {
-        return { running: false, log: null };
+        return { running: false, log: null, pid: null };
       }
       if (!hosted.log.isComplete) {
-        return { running: true, log: null };
+        return { running: true, log: null, pid: hosted.pid };
       }
       hosted.subscriber = subscriber;
-      return { running: true, log: hosted.log.file };
+      return { running: true, log: hosted.log.file, pid: hosted.pid };
     },
     unsubscribe(id, subscriber) {
       const hosted = processes.get(id);

@@ -6,6 +6,7 @@ import type {
   ClosedEvent,
   HostMessage,
   LineEvent,
+  SpawnedEvent,
 } from '../../contracts/session-host-protocol';
 import {
   connectFoundNoListener,
@@ -35,7 +36,7 @@ export interface HostLink {
 export interface HostLinkDeps {
   timers: Timers;
   log: Log;
-  pushed(message: LineEvent | ClosedEvent): void;
+  pushed(message: LineEvent | ClosedEvent | SpawnedEvent): void;
   disconnected(link: HostLink): void;
 }
 
@@ -60,7 +61,11 @@ function createHostLink(socket: Socket, deps: HostLinkDeps): HostLink {
       deps.log(LOG_SOURCE, `a host sent a line that is not JSON: ${line}`);
       return;
     }
-    if (message.type === 'line' || message.type === 'closed') {
+    if (
+      message.type === 'line' ||
+      message.type === 'closed' ||
+      message.type === 'spawned'
+    ) {
       deps.pushed(message);
       return;
     }

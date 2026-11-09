@@ -135,7 +135,7 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   { keys: ['e'], expect: '[chat] picker shown: Effort' },
   { keys: ['<A-S-i>'], expect: '[chat] picker closed: Effort' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
-  { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
+  { keys: [' ', 'b', 'n'], expect: '[chat] picker shown: Folder' },
   {
     keys: ['<A-S-i>'],
     expect: '[chat] Chat tab shown in chat-second',
@@ -470,7 +470,7 @@ const PERMISSION_CARD_STEPS: SelfTestStep[] = [
     why: 'The row showed needs you from the start; the answered permission leaves the focused session idle.',
   },
   {
-    keys: [' ', 'v', 'f'],
+    keys: [' ', 'b', 'p'],
     expect: '[sessions] hid Form popup in chat-selftest',
     alsoExpect: [/^\[chat\] Chat tab shown in chat-selftest$/],
   },
@@ -480,7 +480,7 @@ const PERMISSION_CARD_STEPS: SelfTestStep[] = [
     why: 'The chat scope holds the keys while the popup is hidden.',
   },
   {
-    keys: [' ', 'v', 'f'],
+    keys: [' ', 'b', 'p'],
     expect: '[sessions] opened Form popup in chat-selftest',
   },
   {
@@ -648,13 +648,13 @@ const PANE_KEYS_STEPS: SelfTestStep[] = [
     why: 'Esc in the hub always goes to the transcript.',
   },
   {
-    keys: ['<A-l>', ' ', 'v', 's'],
+    keys: ['<A-l>', ' ', 'b', 'h'],
     expect: '[chat] session hub hidden',
     alsoExpect: [linePattern(BACK_ON_ENTRIES)],
     why: 'Hiding the hub hands its keys to the transcript.',
   },
   {
-    keys: [' ', 'v', 's'],
+    keys: [' ', 'b', 'h'],
     expect: '[chat] session hub shown',
     width: 'start',
     why: 'The hub shows again for the groups after.',
@@ -765,7 +765,7 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[chat] left the box' },
   {
-    keys: [' ', 'k', 'n'],
+    keys: [' ', 'b', 'n'],
     expect: '[chat] picker shown: Folder',
     checksFit: true,
   },
@@ -810,10 +810,10 @@ const RESUME_LIST_STEPS: SelfTestStep[] = [
   {
     keys: ['<C-n>'],
     expect: '[chat] picker shown: Folder',
-    why: 'Ctrl+n from the Chat tab opens the folder step; the steps below use the session step only Space k n offers.',
+    why: 'Ctrl+n from the Chat tab opens the folder step; the steps below use the session step only Space b n offers.',
   },
   { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
-  { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
+  { keys: [' ', 'b', 'n'], expect: '[chat] picker shown: Folder' },
   {
     keys: ['/', ...SELFTEST_PROJECT_NAME, 'Enter'],
     expect: '[chat] picker shown: Profile',
@@ -1054,7 +1054,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'pane keys',
-    why: 'Alt+l and Alt+h move between the transcript or the box and the session hub, returning to the pane they came from; Alt+j and Alt+k move between the transcript and the box, the box leaving insert mode; in the hub G, j and k walk the section heads, Enter and l fold and unfold one, Ctrl+j scrolls it, Alt+Shift+h and l resize the hub, Esc goes back to the transcript, and Space v s hiding the hub hands the keys back.',
+    why: 'Alt+l and Alt+h move between the transcript or the box and the session hub, returning to the pane they came from; Alt+j and Alt+k move between the transcript and the box, the box leaving insert mode; in the hub G, j and k walk the section heads, Enter and l fold and unfold one, Ctrl+j scrolls it, Alt+Shift+h and l resize the hub, Esc goes back to the transcript, and Space b h hiding the hub hands the keys back.',
     steps: PANE_KEYS_STEPS,
   },
   {
@@ -1109,14 +1109,14 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'session hub',
-    why: 'Space v s hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box.',
+    why: 'Space b h hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box.',
     steps: [
       {
-        keys: ['Escape', ' ', 'v', 's'],
+        keys: ['Escape', ' ', 'b', 'h'],
         expect: '[chat] session hub hidden',
       },
       {
-        keys: ['Escape', ' ', 'v', 's'],
+        keys: ['Escape', ' ', 'b', 'h'],
         expect: '[chat] session hub shown',
       },
       {
@@ -1138,9 +1138,12 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'stop all',
-    why: 'Space : stops every session process; the rows stay, resting.',
+    why: 'Space b X stops every session process; the rows stay, resting.',
     steps: [
-      { keys: ['Escape', ' ', ':'], expect: '[chat] stopping every session' },
+      {
+        keys: ['Escape', ' ', 'b', 'X'],
+        expect: '[chat] stopping every session',
+      },
     ],
   },
 ];

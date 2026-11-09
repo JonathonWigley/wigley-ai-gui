@@ -167,6 +167,7 @@ function withSpawnHint(
 ): HostedProcessEvents {
   return {
     line: (line) => events.line(line),
+    spawned: (pid) => events.spawned(pid),
     closed: (exit) =>
       events.closed(
         exit.error === null
@@ -485,6 +486,11 @@ function createClaudeSession(
       emit(() => events.ended(end));
       markClosed();
     },
+    spawned(pid) {
+      if (!isDetached && !hasClosed) {
+        emit(() => events.pid(pid));
+      }
+    },
   };
 
   const readConfiguredPercent = () => {
@@ -716,6 +722,10 @@ function createPipeForwarder() {
         live.closed(exit);
       }
     },
+    // Never arrives before `goLive`: the host's `spawned` comes on a later socket read than `spawn`.
+    spawned(pid) {
+      live?.spawned(pid);
+    },
   };
   return {
     events,
@@ -824,6 +834,9 @@ async function attachClaudeProcess(
     );
     for (const effect of effects) {
       reportEffect(events, effect);
+    }
+    if (attached.process.pid !== null) {
+      events.pid(attached.process.pid);
     }
     forwarder.goLive(session.pipeEvents);
     session.syncGraceTimer();

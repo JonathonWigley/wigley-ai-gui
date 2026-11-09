@@ -43,11 +43,19 @@ const ROUND_WHERE = "ask_round's ";
 export type FinishedOutcome = RoundEnd['kind'];
 
 // The outcomes a round that ran can report.
-export type RoundOutcome = FinishedOutcome | 'draft';
+export type RoundOutcome = FinishedOutcome | 'draft' | 'auto_answered';
 
 const NEXT_ON_DRAFT =
   'The user has not submitted yet. Call collect_last_round to keep waiting. ' +
   'Do not re-ask these questions and do not open a second round.';
+
+export const NEXT_ON_AUTO_ANSWERED =
+  'This session is headless until a tool result says the session is no ' +
+  'longer headless: the app showed no form and answered every item with its ' +
+  'recommendation. Build no more rounds, and list every pick as a Decided ' +
+  'notice in your reply. An auto-answered pick never approves a hard-gated ' +
+  'action (third-party code, destroying user state, a push): name what the ' +
+  'gate needs in the reply and end the turn.';
 
 const NEXT_ON_NO_ROUND =
   'No round is open for this session, and no finished answers are waiting ' +
@@ -408,6 +416,43 @@ export function handedBackPayload(
     `never received. Read them as that round's answers. The round you just ` +
     `sent was not opened: send it again with ask_round.`;
   payload.earlier_heading = round.heading;
+  return payload;
+}
+
+// Every question and finding on its recommendation, every note and comment
+// empty: the body a headless session's round is answered with.
+export function recommendedBody(round: Round): FormBody {
+  const recommended = (index: number, choice: number): AnswerEntry => ({
+    index,
+    choice,
+    not_applicable: false,
+    notes: '',
+    dont_ask: false,
+    dont_ask_reason: '',
+  });
+  return {
+    note: '',
+    answers: round.questions.map((question, i) =>
+      recommended(i + 1, question.recommend),
+    ),
+    finding_answers: round.findings.map((finding, i) => ({
+      ...recommended(i + 1, finding.recommend ?? 0),
+      action: finding.recommend_action,
+    })),
+    notice_comments: round.notices.map((_, i) => ({
+      index: i + 1,
+      comment: '',
+    })),
+  };
+}
+
+// A round the app answered with `body` and never showed.
+export function autoAnsweredPayload(
+  round: Round,
+  body: FormBody,
+): AnswersPayload {
+  const payload = answersPayload(round, 'auto_answered', body);
+  payload.next = NEXT_ON_AUTO_ANSWERED;
   return payload;
 }
 

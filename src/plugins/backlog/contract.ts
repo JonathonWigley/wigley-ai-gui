@@ -29,7 +29,7 @@ export interface BacklogTask {
 }
 
 // `path` is the index's copy of the plan's `plan.md`, `copyPath` the copy
-// `checked` and `total` were read from and the detail shows: the newest copy
+// `checked` and `total` were read from and the detail shows: the moved copy
 // across the clone's checkouts. `title` is the index copy's first `# `
 // heading less a trailing ` — plan`, else the plan folder's name; `target`
 // and `written` from its `Target: … · Written: …` line, each null when

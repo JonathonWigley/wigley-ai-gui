@@ -1,7 +1,9 @@
 // @ts-check
 
-// The built-in keys look: help's sections side by side, which-key's rows in
-// columns, and the Keys button with its key prompt after the icon.
+// The built-in keys look: help's sections side by side, which-key as a quiet
+// shelf of keys and labels in columns under the keys pressed and their
+// group's name, the leader search's rows as help's are, and the Keys button
+// with its key prompt after the icon.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -31,7 +33,11 @@ const layout = {
   },
   whichKey(parent, input, kit) {
     const pane = kit.el(parent, 'div', 'which-key-pane');
-    kit.sectionHeader(pane, input.title);
+    const header = kit.el(pane, 'div', 'which-key-header');
+    kit.kbd(header, input.title);
+    if (input.name !== null) {
+      kit.el(header, 'span', 'which-key-name', sentenceCase(input.name));
+    }
     const list = kit.el(pane, 'div', 'which-key-list');
     for (const entry of input.entries) {
       kit.entry(list, entry);
@@ -39,13 +45,20 @@ const layout = {
     return pane;
   },
   whichKeyEntry(parent, input, kit) {
-    const row = kit.row(parent, {
+    const entry = kit.el(parent, 'div', `which-key-entry is-${input.kind}`);
+    kit.kbd(entry, input.keys);
+    kit.el(entry, 'span', 'which-key-label', sentenceCase(input.label));
+    if (input.kind === 'prefix') {
+      kit.el(entry, 'span', 'which-key-more', '›');
+    }
+    return entry;
+  },
+  leaderSearchRow(parent, input, kit) {
+    return kit.row(parent, {
       density: 'list',
-      label: input.label,
+      label: sentenceCase(input.label),
       trailing: keysElement(input.keys, kit),
     });
-    row.classList.add('which-key-row', `is-${input.kind}`);
-    return row;
   },
   titleBarButton(parent, kit) {
     const button = kit.iconButton(
@@ -67,6 +80,12 @@ const layout = {
  */
 function keysElement(keys, kit) {
   return kit.kbd(document.createElement('span'), keys);
+}
+
+// `text` with its first character upper-cased and the rest as written.
+/** @param {string} text */
+function sentenceCase(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export default layout;

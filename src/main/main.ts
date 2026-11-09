@@ -9,6 +9,7 @@ import {
   globalShortcut,
   ipcMain,
   nativeTheme,
+  session,
   shell,
   type WebContents,
 } from 'electron';
@@ -47,9 +48,11 @@ import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
+import type { ProcessRunner } from '../contracts/processes';
 import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
+import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
 import type {
   CommandHandler,
@@ -69,6 +72,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
+import { createFakeSystemStats } from '../shared/fake-system-stats';
 import { isSameJson } from '../shared/json';
 import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
@@ -89,7 +93,6 @@ import { scopedFiles } from '../shared/scoped-files';
 import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
-import { createPlainAlerts } from './alerts/electron-alerts';
 import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createWindowsAlerts } from './alerts/windows-alerts';
@@ -156,9 +159,13 @@ import {
 } from './plugins/plugin-switch';
 import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
+import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
+import { createMacSystemStats } from './system-stats/mac-system-stats';
+import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
+import { createWindowsSystemStats } from './system-stats/windows-system-stats';
 import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import {
   SELFTEST_USER_ID,
@@ -168,6 +175,7 @@ import {
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
+  type DriveSystemStatsName,
   type RunEnvironment,
   runEnvironmentOf,
 } from './run-mode';
@@ -230,7 +238,7 @@ interface ModeServices {
     context: ModeServicesContext,
   ): Pick<
     MainServices,
-    'alerts' | 'agentHarnesses' | 'window' | 'openExternal'
+    'alerts' | 'agentHarnesses' | 'window' | 'openExternal' | 'systemStats'
   >;
 }
 
@@ -281,29 +289,41 @@ function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
   };
 }
 
-// The native alerts of the OS `osName`. Linux has no attention call and no badge.
-function alertsFor(osName: OsName, window: BrowserWindow, log: Log): Alerts {
+// The icon badge of the OS `osName`. Linux has none.
+function alertsFor(osName: OsName, window: BrowserWindow): Alerts {
   if (osName === 'macos') {
-    return createMacAlerts(log);
+    return createMacAlerts();
   }
-  return osName === 'windows'
-    ? createWindowsAlerts(window, log)
-    : createPlainAlerts(log);
+  return osName === 'windows' ? createWindowsAlerts(window) : silentAlerts;
 }
 
-// The user's app: the OS Trash, native alerts and dialogs, Claude Code, whose
-// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, and
-// links opened in the user's browser.
+// The readings of the OS `osName`, its commands run through `runner`. Linux has
+// no adapter, so its samples reject.
+function systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats {
+  switch (osName) {
+    case 'macos':
+      return createMacSystemStats(runner, os.cpus);
+    case 'windows':
+      return createWindowsSystemStats(runner, os.cpus);
+    default:
+      return createUnavailableSystemStats(osName);
+  }
+}
+
+// The user's app: the OS Trash, the icon badge, native dialogs, Claude Code, whose
+// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, links
+// opened in the user's browser, and the machine's own readings.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
     forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
-      alerts: alertsFor(platform.os, window, log),
+      alerts: alertsFor(platform.os, window),
       agentHarnesses: [
         claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
       ],
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
+      systemStats: systemStatsFor(platform.os, processes),
     }),
   };
 }
@@ -313,10 +333,11 @@ function liveServices(): ModeServices {
 // collects nothing; alerts are silent, the window stays offscreen and shows no
 // dialog, and no link takes the user's foreground. `runName` names the run in
 // the line a window not shown or a link not opened logs; sessions run over the
-// harness `harness` builds.
+// harness `harness` builds, and plugins read the machine `systemStats` builds.
 function offscreenRunServices(
   runName: string,
   harness: (context: ModeServicesContext) => AgentHarness,
+  systemStats: () => SystemStats,
 ): ModeServices {
   return {
     trashItem: (file) => rm(file, { recursive: true }),
@@ -327,6 +348,7 @@ function offscreenRunServices(
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
       ),
+      systemStats: systemStats(),
     }),
   };
 }
@@ -351,17 +373,29 @@ function driveHarness(
   );
 }
 
+// A drive run's system stats, as `WIGLEY_DRIVE_SYSTEM_STATS` named them: the
+// fake's fixed machine, or this machine's readings.
+function driveSystemStats(name: DriveSystemStatsName): SystemStats {
+  return name === 'fake'
+    ? createFakeSystemStats(clock)
+    : systemStatsFor(platform.os, processes);
+}
+
 function modeServicesOf(environment: RunEnvironment): ModeServices {
   switch (environment.mode) {
     case 'live':
       return liveServices();
     case 'selfTest':
-      return offscreenRunServices('the self-test', () =>
-        createFakeAgentHarness(clock, files, timers),
+      return offscreenRunServices(
+        'the self-test',
+        () => createFakeAgentHarness(clock, files, timers),
+        () => createFakeSystemStats(clock),
       );
     case 'drive':
-      return offscreenRunServices('a drive run', (context) =>
-        driveHarness(environment.harness, context),
+      return offscreenRunServices(
+        'a drive run',
+        (context) => driveHarness(environment.harness, context),
+        () => driveSystemStats(environment.systemStats),
       );
   }
 }
@@ -388,7 +422,14 @@ const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
-const git = createProcessGit({ processes, files, paths });
+// Git runs at most this many at once, so a burst of reads cannot pile up
+// exited children faster than main's event loop reaps them.
+const MAX_GIT_RUNS = 4;
+const git = createProcessGit({
+  processes: limitRuns(processes, MAX_GIT_RUNS),
+  files,
+  paths,
+});
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -1345,6 +1386,13 @@ function startApp() {
       failStart(error);
       return;
     }
+    // The page loads hundreds of modules from the dev server, and Chromium
+    // wrote each one into the profile's HTTP and code caches on every start:
+    // about 2,300 files a run, 1.5 GB kept, and Spotlight indexing the churn.
+    // A run reuses none of it: a dev start's server port and module URLs
+    // change between starts, and a packaged drive run's profile is new. The code cache goes off once the app is ready
+    // (`disableCodeCache`).
+    app.commandLine.appendSwitch('disable-http-cache');
   }
   // A second start (a relay starting the app) shows the window without
   // taking the user's focus.
@@ -1359,6 +1407,9 @@ function startApp() {
       const shellPath = await loginShellPath;
       if (shellPath !== null) {
         process.env.PATH = shellPath;
+      }
+      if (runMode !== 'live') {
+        disableCodeCache();
       }
       const inputs = await readStartInputs();
       // The temp home is new each run, so the seed overwrites no user file.
@@ -1437,6 +1488,13 @@ function startApp() {
       app.quit();
     }
   });
+}
+
+// Turns the V8 code cache off for the default session: Electron uses no code
+// cache when it cannot create the folder it is given, and no folder can be
+// made under the null device.
+function disableCodeCache() {
+  session.defaultSession.setCodeCachePath(path.join(os.devNull, 'code-cache'));
 }
 
 // The user's app, in the app instance's own user data folder. The

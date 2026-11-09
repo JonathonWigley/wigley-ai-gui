@@ -278,7 +278,6 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       open: (info, options) => list.open(info, options),
       mark: (sessionId, options) => list.mark(sessionId, options),
       activate: (sessionId) => list.activate(sessionId),
-      activateExistingRow: (sessionId) => list.activateExistingRow(sessionId),
       release: (sessionId) => list.release(sessionId),
       label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose, cancelHold) =>

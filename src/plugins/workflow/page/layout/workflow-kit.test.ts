@@ -39,3 +39,43 @@ describe('workflow kit stage tag', () => {
     expect(findAll(stageTag, 'workflow-stage-tag-check')).toHaveLength(checks);
   });
 });
+
+describe('workflow kit headless chip', () => {
+  beforeEach(() => installFakeDom(vi.stubGlobal));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    { headless: true, state: 'on', pressed: 'true' },
+    { headless: false, state: 'off', pressed: 'false' },
+  ])(
+    'headlessChip_State_DrawsAndRunsToggleForItsSession $state',
+    ({ headless, state, pressed }) => {
+      const { kit, anchors, runs } = testWorkflowKit(KIT_MANIFEST, 0, 's7');
+      let stopped = false;
+
+      const chip = asFake(
+        kit.headlessChip(asHtml(new FakeElement('div')), headless),
+      );
+      chip.fire('click', {
+        stopPropagation: () => {
+          stopped = true;
+        },
+      });
+
+      expect(chip.classList.contains('workflow-headless')).toBe(true);
+      expect(chip.textContent).toBe('Headless');
+      expect(chip.dataset.state).toBe(state);
+      expect(chip.attributes.get('aria-pressed')).toBe(pressed);
+      expect(runs).toEqual([
+        {
+          id: 'workflow.stageAction',
+          arg: { sessionId: 's7', action: 'toggleHeadless' },
+        },
+      ]);
+      expect(stopped).toBe(true);
+      expect(anchors.map((anchor) => anchor.command)).toEqual([
+        'workflow.toggleHeadless',
+      ]);
+    },
+  );
+});

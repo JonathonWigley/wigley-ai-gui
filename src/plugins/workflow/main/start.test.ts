@@ -3,6 +3,7 @@ import type { ActiveTime } from '../../../contracts/active-time';
 import type { AgentEvent, UsageAgentEvent } from '../../../contracts/agent';
 import { readIfPresent } from '../../../contracts/files';
 import type { QualifiedEvents } from '../../../contracts/plugin';
+import type { KeyedSlotKey } from '../../../contracts/state';
 import {
   createMemoryFiles,
   type MemoryFiles,
@@ -14,7 +15,14 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { createSlotStore } from '../../../shared/state/slot-store';
-import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
+import {
+  type ChatMainEvents,
+  type ChatMainExports,
+  type ChatSessionInfo,
+  chatSessionSlot,
+  HEADLESS_NOTE,
+  HEADLESS_OFF_NOTE,
+} from '../../chat/contract';
 import {
   type AgentSession,
   type ContributeToolsOptions,
@@ -22,8 +30,11 @@ import {
   type SessionsMainExports,
   type ToolCallContext,
   type ToolDefinition,
+  type SessionRow,
+  sessionsRowsSlot,
   type ToolSession,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type ChecklistItem,
   type FoldEvent,
@@ -123,8 +134,20 @@ function startWorkflowPart(
   const time = handTime();
   const instructions: string[] = [];
   let activeTime: ActiveTime | null = null;
-  const chat: Pick<ChatMainExports, 'activeTime' | 'addInstructions'> = {
+  let headless = false;
+  let launchedHeadless = false;
+  const chat: Pick<
+    ChatMainExports,
+    | 'activeTime'
+    | 'addInstructions'
+    | 'isHeadless'
+    | 'launchedHeadless'
+    | 'profiles'
+  > = {
     activeTime: () => activeTime,
+    isHeadless: () => headless,
+    launchedHeadless: () => launchedHeadless,
+    profiles: () => [],
     addInstructions: (text) => {
       instructions.push(text);
       return { dispose: () => undefined };
@@ -148,7 +171,10 @@ function startWorkflowPart(
   };
   const dependencies: Record<string, unknown> = { chat, sessions };
   const api = {
-    state: { publish: () => store.publish(workflowFlowsSlot) },
+    state: {
+      publish: () => store.publish(workflowFlowsSlot),
+      read: (key: KeyedSlotKey<unknown>) => store.read(key, 'workflow'),
+    },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
@@ -246,8 +272,15 @@ function startWorkflowPart(
   return {
     data,
     time,
+    dispose: async () => part.dispose?.('end'),
     setActiveTime: (next: ActiveTime) => {
       activeTime = next;
+    },
+    setHeadless: (next: boolean) => {
+      headless = next;
+    },
+    setLaunchedHeadless: (next: boolean) => {
+      launchedHeadless = next;
     },
     sent,
     emit,
@@ -264,6 +297,41 @@ function startWorkflowPart(
     callChecklistTool: (id: string, items: unknown) =>
       callTool(SET_WORKFLOW_CHECKLIST_TOOL, id, { items }),
   };
+}
+
+// Chat's state for session `sessionId`, held under `profile`.
+function chatHeld(sessionId: string, profile: string): ChatSessionInfo {
+  return {
+    sessionId,
+    projectDir: '/p',
+    profile,
+    activity: 'idle',
+    background: 0,
+    activeTime: { totalMs: 0, since: null },
+    running: true,
+    pid: null,
+    compaction: null,
+    repo: 'p',
+    branch: null,
+    worktrees: [],
+    headless: false,
+  };
+}
+
+// The events that open s1 under h1, as sessions and chat emit them.
+function emitOpenS1(harness: MainPartHarness<typeof workflowManifest>) {
+  harness.emit('sessions.connected', {
+    ...session('s1', 'h1'),
+    owned: true,
+  });
+  harness.emit('chat.sessionOpened', {
+    sessionId: 's1',
+    profileDir: '~/.c',
+    hostSessionId: 'h1',
+    projectDir: '/p',
+    profile: 'personal',
+    origin: 'new',
+  });
 }
 
 const NO_CALL_CONTEXT: ToolCallContext = {
@@ -632,6 +700,45 @@ describe('workflowMainPart', () => {
     expect(await workflow.savedAt()).toBe(START + 5);
   });
 
+  it('Tools_LaunchedHeadlessTurnedOffBeforeTheFirstCall_OffNoteOnTheFirstResult', async () => {
+    const workflow = startSmallAndMedium();
+    workflow.setLaunchedHeadless(true);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:small', ''));
+
+    const results = [
+      await workflow.callStepTool('s1', 'build'),
+      await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]),
+    ];
+
+    expect(results.map((result) => result.content[0].text)).toEqual([
+      `Step set to build.\n${HEADLESS_OFF_NOTE}`,
+      'Checklist set: 0 of 1 done.',
+    ]);
+  });
+
+  it('Tools_HeadlessTurnsOff_OffNoteOnTheFirstResultOfEitherTool', async () => {
+    const workflow = startSmallAndMedium();
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:small', ''));
+    workflow.setHeadless(true);
+    const whileOn = await workflow.callStepTool('s1', 'build');
+    workflow.setHeadless(false);
+
+    const results = [
+      await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]),
+      await workflow.callStepTool('s1', 'build'),
+      await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]),
+    ];
+
+    expect(whileOn.content[0].text).toContain(HEADLESS_NOTE);
+    expect(results.map((result) => result.content[0].text)).toEqual([
+      `Checklist set: 0 of 1 done.\n${HEADLESS_OFF_NOTE}`,
+      'Step set to build.',
+      'Checklist set: 0 of 1 done.',
+    ]);
+  });
+
   it('Start_AddsTheSessionNote', () => {
     const workflow = startWorkflowPart();
 
@@ -800,6 +907,143 @@ describe('workflowMainPart', () => {
     expect([...harness.state.read(workflowFlowsSlot, 'test').all()]).toEqual(
       [],
     );
+  });
+
+  it.each<{
+    name: string;
+    row: Partial<SessionRow>;
+    chatProfile: string | null;
+    opens: boolean;
+  }>([
+    {
+      name: 'a row chat holds',
+      row: { hostSessionId: 'h1', projectDir: '/p' },
+      chatProfile: 'personal',
+      opens: true,
+    },
+    {
+      name: 'a row chat does not hold',
+      row: { hostSessionId: 'h1', projectDir: '/p' },
+      chatProfile: null,
+      opens: false,
+    },
+    {
+      name: 'a row with no host id',
+      row: { projectDir: '/p' },
+      chatProfile: 'personal',
+      opens: false,
+    },
+    {
+      name: "a profile not in chat's settings",
+      row: { hostSessionId: 'h1', projectDir: '/p' },
+      chatProfile: 'gone',
+      opens: false,
+    },
+  ])(
+    'restart_RowAlreadyOpen_OpensItsSavedFlowAsTheEventsWould ($name)',
+    async ({ row, chatProfile, opens }) => {
+      const { engine: harness } = startEngineMainPart();
+      const exportsNow = () =>
+        harness
+          .started()
+          .exports?.(createRegistrations()) as WorkflowMainExports;
+      exportsNow().addWorkflow(stubWorkflow());
+      emitOpenS1(harness);
+      await settled();
+      harness.emit('chat.agentEvent', {
+        sessionId: 's1',
+        profileDir: '~/.c',
+        hostSessionId: 'h1',
+        event: skill('x:stub', ''),
+        replayed: false,
+      });
+      await settled();
+      harness.state.publish(sessionsRowsSlot).set('s1', sessionRow('s1', row));
+      if (chatProfile !== null) {
+        harness.state
+          .publish(chatSessionSlot)
+          .set('s1', chatHeld('s1', chatProfile));
+      }
+
+      await harness.restart();
+      await settled();
+
+      expect(exportsNow().flowOf('s1')).toEqual(
+        opens
+          ? expect.objectContaining({
+              sessionId: 's1',
+              projectDir: '/p',
+              workflow: 'stub',
+            })
+          : null,
+      );
+    },
+  );
+
+  it.each<{ name: string; eventFirst: boolean }>([
+    { name: "the events before the start's open", eventFirst: true },
+    { name: "the events after the start's open", eventFirst: false },
+  ])(
+    'start_OpenEventsMeetTheStartsOpen_OpensOnce ($name)',
+    async ({ eventFirst }) => {
+      const { engine: harness } = startEngineMainPart();
+      const opened: string[] = [];
+      const exported = harness
+        .started()
+        .exports?.(createRegistrations()) as WorkflowMainExports;
+      exported.observe({
+        folded: () => undefined,
+        opened: (flow) => opened.push(flow.sessionId),
+        closed: () => undefined,
+        replaying: () => undefined,
+      });
+      harness.state
+        .publish(sessionsRowsSlot)
+        .set('s1', sessionRow('s1', { hostSessionId: 'h1', projectDir: '/p' }));
+      harness.state
+        .publish(chatSessionSlot)
+        .set('s1', chatHeld('s1', 'personal'));
+
+      if (eventFirst) {
+        emitOpenS1(harness);
+        harness.ready();
+      } else {
+        harness.ready();
+        emitOpenS1(harness);
+      }
+      await settled();
+
+      expect(opened).toEqual(['s1']);
+    },
+  );
+
+  it('dispose_WriteStillPending_ResolvesOnceItLands', async () => {
+    const files = createMemoryFiles();
+    let landWrites = () => undefined as void;
+    const writesLand = new Promise<void>((land) => {
+      landWrites = land;
+    });
+    const data: MemoryFiles = {
+      ...files,
+      write: async (path, text) => {
+        await writesLand;
+        await files.write(path, text);
+      },
+    };
+    const workflow = startWorkflowPart({ data });
+    await workflow.openS1();
+    let isDisposed = false;
+
+    const disposing = workflow.dispose().then(() => {
+      isDisposed = true;
+    });
+    await settled();
+    const disposedBeforeTheWrite = isDisposed;
+    landWrites();
+    await disposing;
+
+    expect(disposedBeforeTheWrite).toBe(false);
+    expect(await readIfPresent(files, FLOWS_FILE)).toContain('"h1"');
   });
 
   it('exports_ConsumerDisposed_FreesTheWorkflowId', () => {

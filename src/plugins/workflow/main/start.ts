@@ -9,10 +9,15 @@ import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import layoutTypes from '../layouts/layout.d.ts?raw';
-import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
+import {
+  type ChatMainEvents,
+  chatMainKey,
+  chatSessionSlot,
+} from '../../chat/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
   type ChecklistItem,
@@ -37,6 +42,7 @@ import {
 } from './checklist-tool';
 import { addDriveActions } from './drive-actions';
 import { createFlowStore } from './flow-store';
+import { createHeadlessLines } from './headless-line';
 import { createRunLog } from './run-log';
 import { createRunMeter } from './run-meter';
 import { SESSION_NOTE } from './session-note';
@@ -58,7 +64,8 @@ type WorkflowApi = MainApi<
 
 // Folds each owned Chat-tab session's agent events and session events into its
 // flow through the registered workflows, keeps the flows in `flows.json` keyed by
-// host session id, folds a re-attach's replay only past the flow's last save,
+// host session id, opens at start each row chat already holds as its open events
+// would have, folds a re-attach's replay only past the flow's last save,
 // marks a live turn with agent work and no workflow as a missed level, tells each
 // observer every fold, open, close and replay, contributes `set_workflow_step`
 // while a workflow has a reportable stage, which lists every workflow's stages'
@@ -75,6 +82,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const { log, clock } = services;
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
+    const rows = api.state.read(sessionsRowsSlot);
+    const chatSessions = api.state.read(chatSessionSlot);
     const workflows = createStageList<MainWorkflow>();
     const store = createFlowStore({
       flows: api.state.publish(workflowFlowsSlot),
@@ -219,9 +228,15 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, { type: 'stepReported', step: stage.id }, 'live');
         return store.get(sessionId)?.stage === stage.id;
       });
+    // One headless-line state per session, shared by both workflow tools.
+    const headlessLines = createHeadlessLines({
+      isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
+    });
     const startStepToolSession = startStepTool({
       workflows: () => workflows.all(),
       reportStep,
+      lines: headlessLines,
     });
 
     // Folds a reported checklist as a live event; resolves whether a registered
@@ -237,7 +252,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, { type: 'checklistReported', items }, 'live');
         return true;
       });
-    const startChecklistToolSession = startChecklistTool({ reportChecklist });
+    const startChecklistToolSession = startChecklistTool({
+      reportChecklist,
+      lines: headlessLines,
+    });
     sessions.contributeTools(
       [checklistToolDefinition()],
       startChecklistToolSession,
@@ -289,14 +307,47 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       };
     };
 
+    const openFlow = (
+      sessionId: string,
+      hostSessionId: string,
+      projectDir: string,
+    ) => {
+      const flow = store.open(sessionId, hostSessionId, projectDir);
+      tellObservers((observer) => observer.opened(flow));
+    };
+
+    // A start while chat runs hears no `sessionOpened` for the rows it already
+    // holds, so each row chat holds under a profile in its settings opens here
+    // under its row's host id, as that event would have opened it. A row an
+    // event opened first is left.
+    const openRowsAlreadyOpen = () => {
+      const profileNames = new Set(chat.profiles().map(({ name }) => name));
+      for (const [sessionId, info] of chatSessions.all()) {
+        const row = rows.get(sessionId);
+        const hostSessionId = row?.hostSessionId ?? null;
+        const projectDir = row?.projectDir ?? null;
+        if (hostSessionId === null || projectDir === null) {
+          continue;
+        }
+        const isHeld = store.hostIdOf(sessionId) !== null;
+        if (isHeld || !profileNames.has(info.profile)) {
+          continue;
+        }
+        openFlow(sessionId, hostSessionId, projectDir);
+      }
+    };
+
     // Chat's open carries the host id and folder: a session chat adopts across
-    // its own restart fires no `sessions.connected`.
+    // its own restart fires no `sessions.connected`. A row already held under
+    // that host id is left.
     events.on(
       'chat.sessionOpened',
       ({ sessionId, hostSessionId, projectDir }) => {
         void ready.then(() => {
-          const flow = store.open(sessionId, hostSessionId, projectDir);
-          tellObservers((observer) => observer.opened(flow));
+          if (store.hostIdOf(sessionId) === hostSessionId) {
+            return;
+          }
+          openFlow(sessionId, hostSessionId, projectDir);
         });
       },
     );
@@ -353,6 +404,15 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       },
     );
 
+    // The tool session a self-test call stands for, under the flow's host id.
+    const selfTestToolSession = (sessionId: string) => ({
+      id: sessionId,
+      info: {
+        sessionId: store.hostIdOf(sessionId),
+        projectDir: null,
+        harness: null,
+      },
+    });
     const selfTestHooks: WorkflowSelfTestHooks = {
       forgetFlows(projectDir) {
         for (const sessionId of store.forgetFlows(projectDir)) {
@@ -362,14 +422,14 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         }
       },
       callStepTool(sessionId, step) {
-        void startStepToolSession({ id: sessionId }).call(
+        void startStepToolSession(selfTestToolSession(sessionId)).call(
           SET_WORKFLOW_STEP_TOOL,
           { step },
           { toolUseId: null, signal: new AbortController().signal },
         );
       },
       callChecklistTool(sessionId, items) {
-        void startChecklistToolSession({ id: sessionId }).call(
+        void startChecklistToolSession(selfTestToolSession(sessionId)).call(
           SET_WORKFLOW_CHECKLIST_TOOL,
           { items },
           { toolUseId: null, signal: new AbortController().signal },
@@ -383,6 +443,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     };
     return {
       commands: {},
+      ready() {
+        void ready.then(openRowsAlreadyOpen);
+      },
+      dispose: () => store.flushed(),
       exports: (consumer): WorkflowMainExports => ({
         signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
         flowOf: (sessionId) => store.get(sessionId),

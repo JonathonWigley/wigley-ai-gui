@@ -6,6 +6,8 @@ export interface ProcessResult {
   stderr: string;
   // True only when `timeoutMs` passed and the program was killed.
   timedOut: boolean;
+  // True only when `maxOutputBytes` cut stdout or stderr.
+  truncated?: boolean;
 }
 
 // How one `ProcessRunner.run` runs its program.
@@ -16,6 +18,9 @@ export interface ProcessRunOptions {
   // Names removed from the app's environment for this run; every other
   // variable passes through.
   unsetEnv?: readonly string[];
+  // The most bytes kept of each of stdout and stderr; the rest is read and
+  // dropped. Unset, all of both is kept.
+  maxOutputBytes?: number;
 }
 
 // Runs the machine's programs.

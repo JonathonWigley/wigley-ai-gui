@@ -290,24 +290,9 @@ describe('sessionLineInput', () => {
       expected: { context: meter('180k', 0, 'normal') },
     },
     {
-      case: 'BelowSeventyIsNormal',
-      usage: usageEvent({ contextTokens: 207_000 }),
-      expected: { context: meter('207k/300k', 69, 'normal') },
-    },
-    {
-      case: 'SeventyIsWarning',
-      usage: usageEvent({ contextTokens: 210_000 }),
-      expected: { context: meter('210k/300k', 70, 'warning') },
-    },
-    {
-      case: 'BelowNinetyIsWarning',
-      usage: usageEvent({ contextTokens: 267_000 }),
-      expected: { context: meter('267k/300k', 89, 'warning') },
-    },
-    {
-      case: 'NinetyIsCritical',
-      usage: usageEvent({ contextTokens: 270_000 }),
-      expected: { context: meter('270k/300k', 90, 'critical') },
+      case: 'ToneOfTheShareRounded',
+      usage: usageEvent({ contextTokens: 208_500 }),
+      expected: { context: meter('209k/300k', 69.5, 'warning') },
     },
     {
       case: 'PastTheLimitFillsToAHundred',

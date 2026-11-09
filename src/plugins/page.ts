@@ -13,10 +13,12 @@ import { formsPagePart } from './forms/page/start';
 import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
 import { notesPagePart } from './notes/page/start';
+import { practicePagePart } from './practice/page/start';
 import { primerPagePart } from './primer/page/start';
 import { sessionStashPagePart } from './session-stash/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
+import { systemStatsPagePart } from './system-stats/page/start';
 import { unityPoolPagePart } from './unity-pool/page/start';
 import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
@@ -25,6 +27,7 @@ import { workflowPagePart } from './workflow/page/start';
 import { workflowLargePagePart } from './workflow-large/page/start';
 import { workflowMediumPagePart } from './workflow-medium/page/start';
 import { workflowSmallPagePart } from './workflow-small/page/start';
+import { workflowSpikePagePart } from './workflow-spike/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise. `keys` starts first, so its Keys button contributes to the title
@@ -40,9 +43,11 @@ export const pageParts: readonly PagePart[] = [
   agentLinesPagePart,
   workflowPagePart,
   workflowLargePagePart,
+  workflowSpikePagePart,
   workflowSmallPagePart,
   workflowMediumPagePart,
   unityPoolPagePart,
+  systemStatsPagePart,
   autoRetroPagePart,
   agentStripPagePart,
   agentSkillsPagePart,
@@ -52,6 +57,7 @@ export const pageParts: readonly PagePart[] = [
   galleryPagePart,
   settingsPagePart,
   backlogPagePart,
+  practicePagePart,
   notesPagePart,
   usagePagePart,
   usageTabLinePagePart,

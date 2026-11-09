@@ -11,7 +11,6 @@ import type {
   UsageAgentEvent,
   UserMessage,
 } from '../../../contracts/agent';
-import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
@@ -50,6 +49,7 @@ import {
   type ChatMainEvents,
   type ChatProfile,
   type ChatSessionState,
+  HEADLESS_NOTE,
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
@@ -94,8 +94,6 @@ import {
   worktreesInCommand,
 } from './worktree-name';
 
-export const TURN_FINISHED_TITLE = 'Turn finished';
-
 export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
@@ -112,8 +110,7 @@ export interface ChatSessionsDeps {
   slots: ChatSlots;
   send: MainChannel<ChatChannel>['send'];
   emit: PluginEvents<ChatMainEvents>['emit'];
-  alerts: Pick<Alerts, 'announce'>;
-  window: { show(): void; isFocused(): boolean };
+  window: { isFocused(): boolean };
   // Reads each row's repo, branch and linked worktrees at its open and after
   // each turn, and the worktrees again after a Bash call runs `git worktree`.
   git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
@@ -139,11 +136,26 @@ export interface ChatSessions {
   hostSessionIdOf(sessionId: string): string | null;
   // The held session's active-time clock; null for a row chat does not hold.
   activeTimeOf(sessionId: string): ActiveTime | null;
+  // Whether the held session is headless; false for a row chat does not hold.
+  isHeadless(sessionId: string): boolean;
+  // Whether the held session's last process start carried the headless note;
+  // the saved flag until its first start in this app run. False for a row
+  // chat does not hold.
+  launchedHeadless(sessionId: string): boolean;
+  // Sets the held session's headless flag, publishes it in `chat.session` and
+  // saves; the value it already holds changes nothing. Logs and does nothing
+  // for a row chat does not hold.
+  setHeadless(sessionId: string, headless: boolean): void;
+  // Opens a row selected; a request with `headless` true opens it headless.
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
   // message; returns the row's sessionId. A request with `unattended` true
-  // makes the row deny each permission prompt at once. Throws before opening
-  // anything on an image chat would refuse to attach.
+  // makes the row deny each permission prompt at once, and one with `headless`
+  // true opens it headless. The request's
+  // `instructions` follow the global ones at each of the row's process starts,
+  // and its `owner` goes to sessions with the row; both are kept across a clear
+  // and a relaunch, and a row with an owner raises no `Turn finished` mark.
+  // Throws before opening anything on an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
   // Opens a row for each saved session in order, unselected, under its saved
   // row id, with its saved titles, queued messages and returned messages, then
@@ -175,9 +187,9 @@ export interface ChatSessions {
   // saved selection; any other row, or none, leaves it as it was.
   selected(sessionId: string | null): void;
   // The folder's saved sessions under the profile, newest first, leaving out
-  // every session open in the app on a row chat does not hold. When the
-  // archived-sessions file cannot be read, every row lists as not archived
-  // and the failure is logged; the file is left as it is.
+  // every session open in the app on a row chat does not hold or on a row with
+  // an owner. When the archived-sessions file cannot be read, every row lists
+  // as not archived and the failure is logged; the file is left as it is.
   pastSessions(projectDir: string, profile: string): Promise<PastSessionRow[]>;
   // Each resume section's rows, in registration order, never rejecting for a
   // section's failure: one that fails is logged and left out, as is one with no
@@ -190,10 +202,14 @@ export interface ChatSessions {
   setArchived(hostSessionId: string, archived: boolean): Promise<void>;
   // Opens a row for a saved session, its earlier conversation as the first
   // entries and the request's title as its first-message title, and resumes
-  // its process; resolves to the row's sessionId. A
-  // session chat holds a row for has that row activated instead; one open in
-  // the app on any other row rejects, as does any after `detachAll`; both hold
-  // after each wait as well, so two resumes of one id open one row. It lists
+  // its process; resolves to the row's sessionId. The request's `instructions`
+  // and `owner` are carried as `launch` carries them, and a request with an
+  // `owner` opens its row unselected. A session chat holds a row for resolves
+  // to that row when the request's owner (none when absent) is the row's,
+  // keeping the row's own instructions, and has it activated when it has no
+  // owner; one held for another owner rejects, naming both, as does one open in
+  // the app on any other row and any after `detachAll`; each holds after each
+  // wait as well, so two resumes of one id open one row. It lists
   // the host first, so a session never runs two processes: a process of the
   // session running in the current host has the row open and attach to it, as a
   // restored row does, its history pending; one running in another app version,
@@ -236,7 +252,7 @@ export interface ChatSessions {
   // `interrupted` `agentEvent`, since the old process's own is dropped, and
   // messages written but not taken in and every queued message, the held row
   // included, returned in the order written; the old
-  // process raises no exit notice and no turn-finished alert. The entries
+  // process raises no exit notice and no turn-finished mark. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
   // is missing, or while the row attaches; a fresh start that throws leaves the
@@ -420,9 +436,12 @@ interface HeldSession {
   // an exit it still names the ended process.
   processId: string | null;
   // What the row's last process start passed as `controls` and `resume`, which
-  // an attach passes again: no pipe line reports them.
+  // an attach passes again, and whether it carried the headless note: no pipe
+  // line reports them. `launchHeadless` is the opening's flag before the
+  // row's first start.
   launchControls: Record<string, string>;
   launchResume: boolean;
+  launchHeadless: boolean;
   // Entry ids of the messages the row's last process start dropped that went
   // back to the page: a re-attach replays those drops.
   returnedDrops: Set<string>;
@@ -442,8 +461,17 @@ interface HeldSession {
   // The running guard step for `unheldProcessId`.
   unheldSettling: Promise<void> | null;
   // Nobody answers this row: each permission prompt is denied at once, and a
-  // finished turn raises no alert. Saved with the row, kept across a clear.
+  // finished turn raises no mark. Saved with the row, kept across a clear.
   unattended: boolean;
+  // The row is headless; mirrored in `chat.session`. Saved with the row, kept
+  // across a clear.
+  headless: boolean;
+  // Texts the row's process starts carry after the global ones. Saved with the
+  // row, kept across a clear.
+  instructions: readonly string[];
+  // The plugin the row belongs to, passed to sessions at open; null for none.
+  // Saved with the row, kept across a clear.
+  owner: string | null;
 }
 
 // What one guard step on an unheld process leaves its caller to do: whether a
@@ -602,12 +630,16 @@ function savedSessionOf(
     returned: session.slots.returned().map(userMessageOf),
     launchControls: session.launchControls,
     launchResume: session.launchResume,
+    launchHeadless: session.launchHeadless,
     controls: session.slots.controls(),
     confirmedPicks: Object.fromEntries(session.confirmedPicks),
     returnedDrops: [...session.returnedDrops],
     activeMs: activeMsAt(activeTime, now),
     rowId: session.sessionId,
     unattended: session.unattended,
+    headless: session.headless,
+    instructions: [...session.instructions],
+    owner: session.owner,
   };
 }
 
@@ -618,6 +650,11 @@ const FIRST_MESSAGE_TITLE_CAP = 200;
 
 function firstMessageTitleOf(text: string): string {
   return [...text.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
+}
+
+// A row's owner as a resume's rejection names it.
+function ownerName(owner: string | null): string {
+  return owner ?? 'no owner';
 }
 
 // The error sessions' `open` throws when another session holds `rowId`.
@@ -764,12 +801,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.slots.putEntry(nextNotice(session, text, tone));
   }
 
-  function announceTurnFinished(session: HeldSession) {
+  function markTurnFinished(session: HeldSession) {
     const { sessionId, projectDir } = session.slots.info();
-    deps.alerts.announce(TURN_FINISHED_TITLE, path.basename(projectDir), () => {
-      sessions.activate(sessionId);
-      deps.window.show();
-    });
     const label = sessions.label(sessionId) ?? path.basename(projectDir);
     sessions.mark(sessionId, {
       text: `Turn finished in ${label}`,
@@ -778,7 +811,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Keeps the ids of the subagents and background tasks still running, so a
-  // turn that ends while any runs announces nothing.
+  // turn that ends while any runs marks nothing.
   function trackBackground(session: HeldSession, event: AgentEvent) {
     const ids = session.backgroundIds;
     if (event.type === 'agentSpawned') {
@@ -835,10 +868,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     save();
   }
 
-  // A replayed turn's end announces nothing, since it ended while the app was
+  // A replayed turn's end marks nothing, since it ended while the app was
   // closed, and neither does one `stopAll` caused, an idle with a hold up, whose
   // row is still to go out, the end of a stretch that ran only an app
-  // compaction, or any turn of an unattended row.
+  // compaction, or any turn of an unattended row or a row with an owner.
   function updateActivity(session: HeldSession, isReplayed = false) {
     const previous = session.slots.info().activity;
     const activity = shownActivity(session);
@@ -872,9 +905,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       workIsOver &&
       isTheTurnsOwnEnd &&
       ranATurn &&
-      !session.unattended
+      !session.unattended &&
+      session.owner === null
     ) {
-      announceTurnFinished(session);
+      markTurnFinished(session);
     }
     if (turnFinished || turnStarted) {
       save();
@@ -882,7 +916,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // A resting session runs no turn, so it shows idle; unlike a turn going
-  // idle, its exit announces nothing, and a crossing outside a replay fires
+  // idle, its exit marks nothing, and a crossing outside a replay fires
   // `turnFinished` as `rested`.
   function showRestingIdle(session: HeldSession) {
     session.harnessActivity = 'idle';
@@ -1190,6 +1224,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       profile,
       titles: sessions.titles(sessionId) ?? NO_TITLES,
       sent: session.sent,
+      headless: session.headless,
       reason,
     });
   }
@@ -1258,12 +1293,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           save();
         }
       },
+      pid(pid) {
+        if (isLive(session, processStart)) {
+          session.slots.setInfo({ pid });
+        }
+      },
       activity(activity) {
         if (!isLive(session, processStart)) {
           return;
         }
         // A queued message starts the next turn, so the session shows no idle
-        // in between and the turn-finished alert waits for the last one. A
+        // in between and the turn-finished mark waits for the last one. A
         // stopped process takes no more.
         const writesNext =
           !replay.isReplaying &&
@@ -1365,7 +1405,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
         // The row and its state stay, resting, until the user closes the row.
         // The harness ended any running compaction before `sessionEnded`.
-        session.slots.setInfo({ running: false });
+        session.slots.setInfo({ running: false, pid: null });
         session.process = null;
         forgetCompaction(session);
         showPendingCancelled(session);
@@ -1425,16 +1465,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       processId: string | null;
       launchControls: Record<string, string>;
       launchResume: boolean;
+      launchHeadless: boolean;
       controls: SessionControl[];
       confirmedPicks: Record<string, string>;
       returnedDrops: readonly string[];
       activeMs: number;
       origin: SessionOrigin;
       unattended: boolean;
+      headless: boolean;
+      instructions: readonly string[];
+      owner: string | null;
     },
     options: OpenOptions,
   ): HeldSession {
-    const { hostId } = opening;
+    const { hostId, owner } = opening;
     const owned = sessions.open(
       {
         sessionId: hostId,
@@ -1442,7 +1486,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         harness: CHAT_HARNESS_ID,
         ...(profileDir === null ? {} : { profileDir }),
       },
-      options,
+      owner === null ? options : { ...options, owner },
     );
     const sessionId = owned.session.id;
     for (const source of TITLE_SOURCES) {
@@ -1479,12 +1523,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeTime: { totalMs: opening.activeMs, since: null },
         commands: [],
         running: false,
+        pid: null,
         queued: [],
         compaction: null,
         returned: [],
         repo: path.basename(projectDir),
         branch: null,
         worktrees: [],
+        headless: opening.headless,
       }),
       owned,
       hostId,
@@ -1523,6 +1569,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       unheldProcessId: null,
       unheldSettling: null,
       unattended: opening.unattended,
+      headless: opening.headless,
+      launchHeadless: opening.launchHeadless,
+      instructions: opening.instructions,
+      owner,
     };
     held.set(sessionId, session);
     takeOverSkipped(session);
@@ -1770,6 +1820,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.confirmedPicks,
     );
     session.launchResume = resume;
+    session.launchHeadless = session.headless;
     session.returnedDrops.clear();
     const process = harness.start(
       {
@@ -1779,7 +1830,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         projectDir,
         profileDir,
         controls: session.launchControls,
-        instructions: currentInstructions(),
+        instructions: currentInstructions(session),
         idleCompactMinTokens: currentIdleCompactMinTokens(sessionId),
         rowId: sessionId,
       },
@@ -1791,7 +1842,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.process = process;
     session.exit = null;
     running.add(process);
-    session.slots.setInfo({ running: true });
+    session.slots.setInfo({ running: true, pid: null });
     log(`session ${sessionId} process started (resume ${resume})`);
     deps.recent
       .record(projectDir, profile.name)
@@ -1800,10 +1851,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
   }
 
-  function currentInstructions(): string[] {
-    return [...instructionRegistrations].map(
-      (registration) => registration.text,
-    );
+  // The global texts in registration order, then the session's own, then the
+  // headless note while the row is headless.
+  function currentInstructions(session: HeldSession): string[] {
+    const texts = [
+      ...[...instructionRegistrations].map((registration) => registration.text),
+      ...session.instructions,
+    ];
+    return session.headless ? [...texts, HEADLESS_NOTE] : texts;
   }
 
   // The newest reader's value, or null with no reader or after logging its throw.
@@ -1839,7 +1894,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.exit = null;
     session.processId = hosted.id;
     session.historyBefore = hosted.startedAt;
-    session.slots.setInfo({ running: true });
+    session.slots.setInfo({ running: true, pid: null });
     const started: { process: AgentProcess | null } = { process: null };
     const replay = { isReplaying: true };
     session.replay = replay;
@@ -1853,7 +1908,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           projectDir,
           profileDir,
           controls: session.launchControls,
-          instructions: currentInstructions(),
+          instructions: currentInstructions(session),
           idleCompactMinTokens: null,
           rowId: sessionId,
         },
@@ -1950,7 +2005,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (held.get(sessionId) !== session || session.exit !== null) {
       return;
     }
-    session.slots.setInfo({ running: false });
+    session.slots.setInfo({ running: false, pid: null });
     session.process = null;
     session.historyBefore = null;
     clearCompaction(session, profileDirOf(profile));
@@ -2077,6 +2132,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       titles: SessionTitles;
       origin: SessionOrigin;
       unattended: boolean;
+      headless: boolean;
+      instructions: readonly string[];
+      owner: string | null;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -2094,12 +2152,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         processId: null,
         launchControls: {},
         launchResume: false,
+        launchHeadless: opening.headless,
         controls: [],
         confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
         origin: opening.origin,
         unattended: opening.unattended,
+        headless: opening.headless,
+        instructions: opening.instructions,
+        owner: opening.owner,
       },
       options,
     );
@@ -2123,9 +2185,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session;
   }
 
-  // Opens the selected row for the session of the process the host lists as
-  // `hosted` and attaches to it. The closed row's launch values went with its
-  // record, so the attach passes none.
+  // Opens the row, selected when `select` says, for the session of the process
+  // the host lists as `hosted` and attaches to it. The closed row's launch
+  // values went with its record, so the attach passes none and takes the
+  // opening's headless flag as the launch's.
   function openAndAttach(
     harness: AgentHarness,
     profile: ChatProfile,
@@ -2134,7 +2197,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       hostId: string;
       titles: SessionTitles;
       hosted: HostedProcessInfo;
+      instructions: readonly string[];
+      owner: string | null;
+      headless: boolean;
     },
+    select: boolean,
   ): HeldSession {
     requireNotDetached(opening.hostId);
     const session = openRow(
@@ -2150,14 +2217,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         processId: opening.hosted.id,
         launchControls: {},
         launchResume: true,
+        launchHeadless: opening.headless,
         controls: [],
         confirmedPicks: {},
         returnedDrops: [],
         activeMs: 0,
         origin: 'resumed',
         unattended: false,
+        headless: opening.headless,
+        instructions: opening.instructions,
+        owner: opening.owner,
       },
-      { select: true },
+      { select },
     );
     void attachProcess(session, harness, profile, opening.hosted, false);
     save();
@@ -2169,7 +2240,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     request: StartRequest,
     origin: SessionOrigin,
     options: OpenOptions,
-    unattended: boolean,
+    flags: {
+      unattended: boolean;
+      headless: boolean;
+      instructions: readonly string[];
+      owner: string | null;
+    },
   ): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
@@ -2183,7 +2259,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries: [],
         titles: NO_TITLES,
         origin,
-        unattended,
+        ...flags,
       },
       options,
     );
@@ -2535,7 +2611,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       request,
       'launched',
       { select: false },
-      request.unattended === true,
+      {
+        unattended: request.unattended === true,
+        headless: request.headless === true,
+        instructions: request.instructions ?? [],
+        owner: request.owner ?? null,
+      },
     );
     deliverWritten(session, request.message);
     const { sessionId } = session;
@@ -2557,12 +2638,29 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  // The row holding `hostSessionId`, activated, or null when chat holds none;
-  // throws when the session is open on a row chat does not hold.
-  function activateRowOf(hostSessionId: string): string | null {
+  // A session with a row that belongs to a plugin, which only its owner shows.
+  function isOwned(hostSessionId: string): boolean {
+    const existing = holding(hostSessionId);
+    return existing !== undefined && existing.owner !== null;
+  }
+
+  // The row holding `hostSessionId`, activated when it has no owner, or null
+  // when chat holds none; throws when the session is open on a row chat does
+  // not hold, or on a row whose owner is not `owner`.
+  function activateRowOf(
+    hostSessionId: string,
+    owner: string | null,
+  ): string | null {
     const existing = holding(hostSessionId);
     if (existing !== undefined) {
-      sessions.activate(existing.sessionId);
+      if (existing.owner !== owner) {
+        throw new Error(
+          `session ${hostSessionId} is open for ${ownerName(existing.owner)}, not ${ownerName(owner)}`,
+        );
+      }
+      if (existing.owner === null) {
+        sessions.activate(existing.sessionId);
+      }
       return existing.sessionId;
     }
     if (isOpenOnOtherRow(hostSessionId)) {
@@ -2604,12 +2702,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           processId: record.processId,
           launchControls: record.launchControls,
           launchResume: record.launchResume,
+          launchHeadless: record.launchHeadless,
           controls: record.controls,
           confirmedPicks: record.confirmedPicks,
           returnedDrops: record.returnedDrops,
           activeMs: record.activeMs,
           origin: 'restored',
           unattended: record.unattended,
+          headless: record.headless,
+          instructions: record.instructions,
+          owner: record.owner,
         },
         options,
       );
@@ -2910,7 +3012,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       archivedIdsOrNone(),
     ]);
     return saved
-      .filter((past) => !isOpenOnOtherRow(past.sessionId))
+      .filter(
+        (past) => !isOpenOnOtherRow(past.sessionId) && !isOwned(past.sessionId),
+      )
       .map((past) => ({
         hostSessionId: past.sessionId,
         title: past.title,
@@ -2961,7 +3065,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
     const { hostSessionId, projectDir } = request;
-    const rowAtStart = activateRowOf(hostSessionId);
+    const owner = request.owner ?? null;
+    const rowAtStart = activateRowOf(hostSessionId, owner);
     if (rowAtStart !== null) {
       return rowAtStart;
     }
@@ -2972,17 +3077,28 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const runningOfSession = (await listHost()).filter(
       (hosted) => hosted.running && hosted.id.startsWith(`${hostSessionId}-`),
     );
-    const rowAfterList = activateRowOf(hostSessionId);
+    const rowAfterList = activateRowOf(hostSessionId, owner);
     if (rowAfterList !== null) {
       return rowAfterList;
     }
+    const instructions = request.instructions ?? [];
+    const select = request.owner === undefined;
     const runningHere = runningOfSession.find((hosted) => hosted.current);
     if (runningHere !== undefined) {
-      const attached = openAndAttach(harness, profile, projectDir, {
-        hostId: hostSessionId,
-        titles,
-        hosted: runningHere,
-      });
+      const attached = openAndAttach(
+        harness,
+        profile,
+        projectDir,
+        {
+          hostId: hostSessionId,
+          titles,
+          hosted: runningHere,
+          instructions,
+          owner,
+          headless: request.headless === true,
+        },
+        select,
+      );
       return attached.sessionId;
     }
     if (runningOfSession.length > 0) {
@@ -2993,7 +3109,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       readHistory(harness, hostSessionId, projectDir, profileDir, null),
       readSavedUsage(harness, hostSessionId, projectDir, profileDir),
     ]);
-    const rowAfterRead = activateRowOf(hostSessionId);
+    const rowAfterRead = activateRowOf(hostSessionId, owner);
     if (rowAfterRead !== null) {
       return rowAfterRead;
     }
@@ -3008,8 +3124,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         titles,
         origin: 'resumed',
         unattended: false,
+        headless: request.headless === true,
+        instructions,
+        owner,
       },
-      { select: true },
+      { select },
     );
     if (usage !== null) {
       emitSavedUsage(session, profileDir, usage);
@@ -3099,7 +3218,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Ends the session's process, interrupting its turn first, and rests the
-  // row with no exit notice and no alert; the process's later events are no
+  // row with no exit notice and no mark; the process's later events are no
   // longer live. Does nothing for a resting session.
   function endForClear(session: HeldSession) {
     const { process } = session;
@@ -3115,7 +3234,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       .catch((error: unknown) =>
         log(`session ${sessionId} end failed: ${errorText(error)}`),
       );
-    session.slots.setInfo({ running: false });
+    session.slots.setInfo({ running: false, pid: null });
     session.process = null;
     showRestingIdle(session);
   }
@@ -3224,8 +3343,34 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
+    isHeadless: (sessionId) => held.get(sessionId)?.headless ?? false,
+    launchedHeadless: (sessionId) =>
+      held.get(sessionId)?.launchHeadless ?? false,
+    setHeadless(sessionId, headless) {
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        log(`setHeadless for unknown session ${sessionId} ignored`);
+        return;
+      }
+      if (session.headless === headless) {
+        return;
+      }
+      session.headless = headless;
+      session.slots.setInfo({ headless });
+      save();
+    },
     start: (request) =>
-      startNew(request, 'new', { select: true }, false).sessionId,
+      startNew(
+        request,
+        'new',
+        { select: true },
+        {
+          unattended: false,
+          headless: request.headless === true,
+          instructions: [],
+          owner: null,
+        },
+      ).sessionId,
     launch,
     restore,
     loadHistory,

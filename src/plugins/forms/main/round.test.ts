@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import type { AnswerEntry, FindingAnswerEntry, FormBody } from '../contract';
+import type {
+  AnswerEntry,
+  AnswersPayload,
+  FindingAnswerEntry,
+  FormBody,
+} from '../contract';
 import {
   answersPayload,
+  autoAnsweredPayload,
   fingerprint,
   handedBackPayload,
+  NEXT_ON_AUTO_ANSWERED,
   noRoundPayload,
   parseRound,
   readFormBody,
+  recommendedBody,
   requireKnownLayouts,
 } from './round';
 import { RoundError } from './round-error';
@@ -1268,6 +1276,78 @@ describe('fingerprint', () => {
       '58960c3e13b904b5bdbb945f76fd021f79b7c68c104678715b269021f13677a7',
     );
   });
+});
+
+describe('autoAnsweredPayload', () => {
+  const { recommend: _recommend, ...headerRecommended } = finding({
+    title: 'Header pick',
+    recommend_action: 'follow_up',
+  });
+
+  it.each([
+    {
+      name: 'a question recommending 2',
+      args: { questions: [question({ recommend: 2 })] },
+      item: (payload: AnswersPayload) => payload.answers[0],
+      expected: {
+        index: 1,
+        title: 'Naming',
+        status: 'answered',
+        choice: 2,
+        choice_text: 'module_b',
+        took_recommendation: true,
+      },
+    },
+    {
+      name: 'a finding recommending choice 1 under fix_now',
+      args: { findings: [finding()] },
+      item: (payload: AnswersPayload) => payload.findings[0],
+      expected: {
+        index: 1,
+        title: 'Stale cache',
+        status: 'answered',
+        choice: 1,
+        choice_text: 'Fix it now',
+        action: 'fix_now',
+        took_recommendation: true,
+        took_action_recommendation: true,
+      },
+    },
+    {
+      name: 'a finding recommending the follow_up header',
+      args: { findings: [finding(), headerRecommended] },
+      item: (payload: AnswersPayload) => payload.findings[1],
+      expected: {
+        index: 2,
+        title: 'Header pick',
+        status: 'answered',
+        choice: 0,
+        choice_text: '',
+        action: 'follow_up',
+        took_recommendation: true,
+        took_action_recommendation: true,
+      },
+    },
+    {
+      name: 'a notice',
+      args: {
+        notices: [notice(), notice({ title: 'Second', badge: 'Decided' })],
+      },
+      item: (payload: AnswersPayload) => payload.notices[1],
+      expected: { index: 2, title: 'Second', badge: 'Decided' },
+    },
+  ])(
+    "takes every item's recommendation ($name)",
+    ({ args, item, expected }) => {
+      const round = parseRound({ heading: 'H', ...args });
+
+      const payload = autoAnsweredPayload(round, recommendedBody(round));
+
+      expect(payload.outcome).toBe('auto_answered');
+      expect(payload.next).toBe(NEXT_ON_AUTO_ANSWERED);
+      expect(item(payload)).toEqual(expected);
+    },
+  );
 });
 
 describe('noRoundPayload', () => {

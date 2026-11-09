@@ -44,6 +44,29 @@ describe('createMemoryFormStore', () => {
     expect(subject.newestFor('f1')).toBe(record);
   });
 
+  it('createAutoAnswered_KeepsAReturnedAutoAnsweredRecord', () => {
+    const subject = store();
+
+    const record = subject.createAutoAnswered(
+      MINE,
+      'f1',
+      { heading: 'h' },
+      withNote('picked'),
+      'tu-1',
+    );
+
+    expect(record).toMatchObject({
+      id: '1000-00000001',
+      body: withNote('picked'),
+      outcome: 'submitted',
+      returned: true,
+      auto_answered: true,
+      tool_use_id: 'tu-1',
+    });
+    expect(subject.newestUnreturnedFinished(MINE, NONE)).toBeNull();
+    expect(subject.newestFor('f1')).toBeNull();
+  });
+
   it('saveBody_AfterFinish_IsDropped', () => {
     const subject = store();
     const record = subject.create(MINE, 'f1', {}, null, null);

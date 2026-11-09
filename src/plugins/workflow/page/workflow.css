@@ -1,7 +1,7 @@
 /* The workflow parts the kit draws: the stepper's trail of step words, the status
    marks, the side pane's list and the fold over it, the countdown and the level's
    badge, whose colour the kit sets from the drawing plugin's token, the stage
-   tag, and the row wrapper around a chip. Each workflow plugin's default layout styles its own chip,
+   tag, the Headless chip, and the row wrapper around a chip. Each workflow plugin's default layout styles its own chip,
    strip and side pane in its `layout.css`. */
 
 .workflow-stepper {
@@ -128,6 +128,23 @@
   width: 100%;
   justify-content: flex-start;
   padding-left: 0;
+}
+
+/* A Tag that toggles: muted while off, the accent Tag while on, its key hint
+   after its word. */
+.ui-tag.workflow-headless {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-1);
+  border: 1px solid transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ui-tag.workflow-headless[data-state='off'] {
+  border-color: var(--wg-border-default);
+  background: none;
+  color: var(--wg-fg-tertiary);
 }
 
 .workflow-countdown {

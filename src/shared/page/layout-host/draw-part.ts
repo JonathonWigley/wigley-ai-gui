@@ -47,6 +47,16 @@ export interface DrawnPart<R> {
   dispose(): void;
 }
 
+// Disposes each of `draws`; returns the empty list that replaces them.
+export function disposeDraws<R>(
+  draws: readonly DrawnPart<R>[],
+): DrawnPart<R>[] {
+  for (const draw of draws) {
+    draw.dispose();
+  }
+  return [];
+}
+
 const DEFAULT_NAME = 'default';
 
 // The part names whose failure was logged, by the layout object that failed.

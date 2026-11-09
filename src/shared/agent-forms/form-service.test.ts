@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  AgentFormAutoAnswer,
   AgentFormOwnerInfo,
   AgentFormSession,
   AgentFormWake,
@@ -1555,4 +1556,309 @@ describe('a session moved to a new host id', () => {
     expect(presenter.shown).toHaveLength(1);
     expect(store.newestFor(fingerprintOf(PLACEMENT_ARGS))).toBeNull();
   });
+});
+
+describe('auto-answer', () => {
+  let autoAnswerOn: boolean;
+
+  const autoAnswer: AgentFormAutoAnswer<TestForm, TestBody, TestPayload> = {
+    isOn: (sessionId) => autoAnswerOn && sessionId === 'app-1',
+    body: (form) => body(`recommended for ${form.heading}`),
+    payload: (form, answered) => ({
+      outcome: 'auto_answered',
+      heading: form.heading,
+      note: answered.note,
+    }),
+  };
+
+  // A session whose host id `moveHost` changes in place, as `/clear` does.
+  function startAutoSession() {
+    const info: AgentFormOwnerInfo = { ...SESSION };
+    const session = createAgentFormService({
+      type: TEST_FORM_TYPE,
+      presenter,
+      store,
+      wake,
+      defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+      timers: globalTimers,
+      autoAnswer,
+    }).startSession({ id: 'app-1', info });
+    const moveHost = () => {
+      info.sessionId = 'session-2';
+    };
+    return { session, moveHost };
+  }
+
+  function autoAnswered(args: unknown): TestPayload {
+    const form = parse(args);
+    return autoAnswer.payload(form, autoAnswer.body(form));
+  }
+
+  // Every saved form file, in id order.
+  function savedFiles(): Record<string, unknown>[] {
+    return readdirSync(formsDir)
+      .filter((name) => name.endsWith('.json'))
+      .sort()
+      .map((name) => savedFile(name.slice(0, -'.json'.length)));
+  }
+
+  beforeEach(() => {
+    autoAnswerOn = true;
+  });
+
+  it('returns the auto-answered payload without showing a form, and saves one file answered and returned', async () => {
+    const { session } = startAutoSession();
+
+    const payload = await session.open(NAMING_ARGS, 'toolu_1', live());
+
+    expect(payload).toEqual(autoAnswered(NAMING_ARGS));
+    expect(presenter.shown).toEqual([]);
+    expect(savedFiles()).toEqual([
+      expect.objectContaining({
+        fingerprint: fingerprintOf(NAMING_ARGS),
+        body: body('recommended for Naming decisions'),
+        outcome: 'submitted',
+        returned: true,
+        auto_answered: true,
+        tool_use_id: 'toolu_1',
+      }),
+    ]);
+  });
+
+  it('rejects a malformed form with the args error and saves nothing', async () => {
+    const { session } = startAutoSession();
+
+    await expect(
+      session.open({ heading: 'H' }, null, live()),
+    ).rejects.toMatchObject({ name: TEST_FORM_ERROR_NAME });
+    expect(savedFiles()).toEqual([]);
+  });
+
+  it('replays the auto-answered payload to collect, and to a re-send of the same form without a second file', async () => {
+    const { session } = startAutoSession();
+    await session.open(NAMING_ARGS, null, live());
+
+    const collected = await session.collect(false, live());
+    const resent = await session.open(NAMING_ARGS, null, live());
+
+    expect(collected).toEqual(autoAnswered(NAMING_ARGS));
+    expect(resent).toEqual(autoAnswered(NAMING_ARGS));
+    expect(savedFiles()).toHaveLength(1);
+  });
+
+  it('opens the form for a re-send once auto-answer is off', async () => {
+    const { session } = startAutoSession();
+    await session.open(NAMING_ARGS, null, live());
+    autoAnswerOn = false;
+
+    void session.open(NAMING_ARGS, null, live());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.latest().form).toEqual(parse(NAMING_ARGS));
+  });
+
+  it('answers at once while another form is open, and leaves that form open', async () => {
+    const { session } = startAutoSession();
+    autoAnswerOn = false;
+    void session.open(NAMING_ARGS, null, live());
+    autoAnswerOn = true;
+
+    const payload = await session.open(PLACEMENT_ARGS, null, live());
+
+    expect(payload).toEqual(autoAnswered(PLACEMENT_ARGS));
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+  });
+
+  it('collects the open form while one is open, and the auto-answered payload once none is', async () => {
+    const { session } = startAutoSession();
+    await session.open(PLACEMENT_ARGS, null, live());
+    const beforeAnyForm = await session.collect(false, live());
+    autoAnswerOn = false;
+    const asking = session.open(NAMING_ARGS, null, live());
+    autoAnswerOn = true;
+    await session.open(PLACEMENT_ARGS, null, live());
+
+    const whileOpen = await session.collect(false, live());
+    presenter.submit(presenter.latest().formId, body('mine'));
+    await asking;
+    const afterSubmit = await session.collect(false, live());
+
+    expect(beforeAnyForm).toEqual(autoAnswered(PLACEMENT_ARGS));
+    expect(whileOpen).toMatchObject({
+      outcome: 'draft',
+      heading: 'Naming decisions',
+    });
+    expect(afterSubmit).toEqual(
+      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('mine')),
+    );
+  });
+
+  // The user submits NAMING in the window after its call returned a draft.
+  async function submitAfterDraftReply(session: AgentFormSession<TestPayload>) {
+    autoAnswerOn = false;
+    const asking = session.open(NAMING_ARGS, null, live());
+    await expireDeadline();
+    await asking;
+    presenter.submit(presenter.latest().formId, body('mine'));
+    autoAnswerOn = true;
+  }
+
+  it.each([
+    {
+      case: 'the same form finished in the window',
+      leaveAnswers: submitAfterDraftReply,
+      args: NAMING_ARGS,
+      expected: TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+      ),
+    },
+    {
+      case: 'another form finished in the window',
+      leaveAnswers: submitAfterDraftReply,
+      args: PLACEMENT_ARGS,
+      expected: TEST_FORM_TYPE.handedBackPayload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+      ),
+    },
+    {
+      case: 'the same form submitted and returned before auto-answer turned on',
+      leaveAnswers: async (session: AgentFormSession<TestPayload>) => {
+        autoAnswerOn = false;
+        const asking = session.open(NAMING_ARGS, null, live());
+        await vi.advanceTimersByTimeAsync(0);
+        presenter.submit(presenter.latest().formId, body('mine'));
+        await asking;
+        autoAnswerOn = true;
+      },
+      args: NAMING_ARGS,
+      expected: TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+      ),
+    },
+    {
+      case: 'the same form finished before a restart',
+      leaveAnswers: async () => {
+        saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
+      },
+      args: NAMING_ARGS,
+      expected: TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        HALF_BODY,
+      ),
+    },
+    {
+      case: 'another form finished before a restart',
+      leaveAnswers: async () => {
+        saveEarlier(NAMING_ARGS, 'cancelled', HALF_BODY);
+      },
+      args: PLACEMENT_ARGS,
+      expected: TEST_FORM_TYPE.handedBackPayload(
+        parse(NAMING_ARGS),
+        'cancelled',
+        HALF_BODY,
+      ),
+    },
+  ])(
+    'returns answers no reply has carried before auto-answering: $case',
+    async ({ leaveAnswers, args, expected }) => {
+      const { session } = startAutoSession();
+      await leaveAnswers(session);
+
+      const payload = await session.open(args, null, live());
+
+      expect(payload).toEqual(expected);
+      expect(savedFiles()).not.toContainEqual(
+        expect.objectContaining({ auto_answered: true }),
+      );
+    },
+  );
+
+  it('auto-answers a re-send of the form the user cancelled before auto-answer turned on', async () => {
+    const { session } = startAutoSession();
+    autoAnswerOn = false;
+    const asking = session.open(NAMING_ARGS, null, live());
+    await vi.advanceTimersByTimeAsync(0);
+    presenter.cancel(presenter.latest().formId, body('stop here'));
+    await asking;
+    autoAnswerOn = true;
+
+    const payload = await session.open(NAMING_ARGS, null, live());
+
+    expect(payload).toEqual(autoAnswered(NAMING_ARGS));
+  });
+
+  it("waits on the same form still unfinished in the window, and returns the user's answers", async () => {
+    const { session } = startAutoSession();
+    autoAnswerOn = false;
+    void session.open(NAMING_ARGS, null, live());
+    autoAnswerOn = true;
+
+    const resent = session.open(NAMING_ARGS, null, live());
+    const state = watch(resent);
+    await vi.advanceTimersByTimeAsync(0);
+    const settledBeforeSubmit = state.settled;
+    const closedBeforeSubmit = [...presenter.closed];
+    presenter.submit(presenter.latest().formId, body('mine'));
+
+    expect(settledBeforeSubmit).toBe(false);
+    expect(await resent).toEqual(
+      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('mine')),
+    );
+    expect(presenter.shown).toHaveLength(1);
+    expect(closedBeforeSubmit).toEqual([]);
+    expect(savedFiles()).not.toContainEqual(
+      expect.objectContaining({ auto_answered: true }),
+    );
+  });
+
+  it('writes a second file for the same form after the host moves', async () => {
+    const { session, moveHost } = startAutoSession();
+    await session.open(NAMING_ARGS, null, live());
+    moveHost();
+
+    const payload = await session.open(NAMING_ARGS, null, live());
+
+    expect(payload).toEqual(autoAnswered(NAMING_ARGS));
+    expect(savedFiles()).toEqual([
+      expect.objectContaining({ auto_answered: true, session_id: 'session-1' }),
+      expect.objectContaining({ auto_answered: true, session_id: 'session-2' }),
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'session ended',
+      call: (session: AgentFormSession<TestPayload>) => {
+        session.end();
+        return session.open(NAMING_ARGS, null, live());
+      },
+      error: 'The session ended before this open_form ran.',
+    },
+    {
+      case: 'signal already aborted',
+      call: (session: AgentFormSession<TestPayload>) => {
+        const aborted = new AbortController();
+        aborted.abort();
+        return session.open(NAMING_ARGS, null, aborted.signal);
+      },
+      error: 'open_form was cancelled before it ran.',
+    },
+  ])(
+    'rejects a call from an ended session or with an aborted signal, and saves nothing: $case',
+    async ({ call, error }) => {
+      const { session } = startAutoSession();
+
+      await expect(call(session)).rejects.toThrow(error);
+      expect(savedFiles()).toEqual([]);
+    },
+  );
 });

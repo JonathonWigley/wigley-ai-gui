@@ -51,6 +51,7 @@ import type {
   SlotReader,
   SlotWriter,
 } from './state';
+import type { SystemStats } from './system-stats';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
@@ -771,7 +772,16 @@ export interface PageRestores {
 // an editor, `null` once none are pending, until its `dispose`;
 // `keys.holdPending` keeps a pending page sequence past its
 // timeout until it ends, and `keys.cancelPending` drops whichever sequence is
-// pending, running nothing. `keys.keymap` reads the merged keymap as the user
+// pending, running nothing. `keys.captureKey` hands the next key or chord
+// pressed to `onKey` in the keymap's vim notation, as a bind's `keys` is written
+// (`T`, `<C-t>`, `<A-S-o>`, `<CR>`), ahead of every bind, a pending sequence
+// (it cancels one first) and a text box; Esc runs `onCancel` and is never
+// captured; a bare modifier, a key no bind can name and an auto-repeat keydown
+// are waited past. Arming a second capture cancels the first, the last armed
+// staying armed, and the handle's `dispose` disarms with no callback; the
+// handle is filed in the part's registrations. Keys main takes first (app menu
+// accelerators, intercept and global binds) never reach it.
+// `keys.keymap` reads the merged keymap as the user
 // config now sets it, every plugin's binds qualified, and
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
 // `keys.label` falls back to the id for a command with no label;
@@ -845,6 +855,7 @@ export interface PageApi<
     onPending(listener: (pending: PendingKeys | null) => void): Disposable;
     holdPending(): void;
     cancelPending(): void;
+    captureKey(onKey: (keys: string) => void, onCancel: () => void): Disposable;
     keymap(): Keymap;
     label(id: CommandId): string;
     command(id: CommandId): CommandInfo | undefined;
@@ -933,7 +944,9 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // integer. `repeat`, when set, presses the keys again after each `expect` line
 // until the `until` line is logged, failing when `max` presses (the first
 // included, at least 2) have not reached it; its `screenshot` saves one PNG per
-// press, as `<pluginId>-<screenshot>-<n>.png`.
+// press, as `<pluginId>-<screenshot>-<n>.png`. `timeoutMs`, when set, is how
+// long the step waits for each of its lines in place of the run's step wait, for
+// slow work such as a compile; a positive integer.
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   remove?: string;
@@ -945,6 +958,7 @@ export interface SelfTestStep {
   why?: string;
   width?: number | 'start';
   repeat?: { until: string; max: number };
+  timeoutMs?: number;
 }
 
 // A script's steps under one name. `name` is short words naming what the group
@@ -1040,7 +1054,8 @@ export interface DriveHost {
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
 // the stable or the dev one. `images` re-encodes an image smaller, as PNG or
-// JPEG only, for `shrinkToFit`. `sessionHost` owns every agent process, so a
+// JPEG only, for `shrinkToFit`. `systemStats` reads the machine's CPU, GPU,
+// memory, network and disk counters. `sessionHost` owns every agent process, so a
 // process outlives the app (`docs/features/session-host/design.md`).
 // `pluginSwitch` tells whether a plugin may switch off now.
 export interface MainServices {
@@ -1059,6 +1074,7 @@ export interface MainServices {
   platform: Platform;
   alerts: Alerts;
   images: ImageEncoder;
+  systemStats: SystemStats;
   agentHarnesses: readonly AgentHarness[];
   sessionHost: SessionHost;
   window: {

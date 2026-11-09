@@ -296,7 +296,7 @@ describe('the children record', () => {
     const { processes } = fakeMachine(
       new Map([
         [OWN_PID, own],
-        [1, REPORT],
+        [4321, REPORT],
       ]),
     );
     const { children, ownFile, spawned } = setUp(processes);
@@ -305,7 +305,7 @@ describe('the children record', () => {
     await vi.waitFor(() => expect(existsSync(ownFile)).toBe(true));
     expect(JSON.parse(readFileSync(ownFile, 'utf8'))).toEqual({
       writer: { pid: OWN_PID, startedAt: own.startedAt },
-      children: [{ pid: 1, ...REPORT }],
+      children: [{ pid: 4321, ...REPORT }],
     });
 
     spawned[0].close();
@@ -317,7 +317,7 @@ describe('the children record', () => {
     const { processes } = fakeMachine(
       new Map([
         [OWN_PID, REPORT],
-        [1, REPORT],
+        [4321, REPORT],
       ]),
     );
     const { children, folder, ownFile, spawned } = setUp(processes);

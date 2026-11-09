@@ -226,7 +226,8 @@ function createExports(
 // plugins add. The side bar's selected row, the title bar and `sessions.active`
 // follow the focused pane's session; main owns the rows and keeps a
 // selection of its own, which the page keeps in step through `activate`, its
-// own echoes changing nothing when they come back. The first state is read at
+// own echoes changing nothing when they come back. Rows with an owner are left
+// out of the page's state, so no page rule sees them. The first state is read at
 // `ready`, and each notice of the rows or the selection applies after
 // it. A selection naming no row is mid-operation: main deleted that row and its
 // selection write follows, so the state that settles it places the panes, and
@@ -779,7 +780,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     const currentState = (): SessionsState => ({
-      rows: [...rows.all().values()],
+      rows: [...rows.all().values()].filter((row) => row.owner === null),
       selectedSessionId: selection.get() ?? null,
     });
 

@@ -160,6 +160,40 @@ function chordCode(key: string): string {
   return isDigit ? `Digit${key}` : `Key${key.toUpperCase()}`;
 }
 
+// The chord key of `code`, the reverse of `chordCode`; null for a code no
+// chord names.
+function chordKeyFor(code: string): string | null {
+  const named = Object.entries(NAMED_KEY_CODES).find(
+    ([, namedCode]) => namedCode === code,
+  );
+  if (named !== undefined) {
+    return named[0];
+  }
+  const letter = /^Key([A-Z])$/.exec(code);
+  if (letter !== null) {
+    return letter[1].toLowerCase();
+  }
+  return /^Digit([0-9])$/.exec(code)?.[1] ?? null;
+}
+
+// The chord token a bind writes to match `press`, as `createChordMatcher`
+// reads it: `<C-t>` for Control+t, `<A-o>` for Option+o whatever character it
+// types. Null when the press names no chord: a key the notation has no name
+// for, or no modifier that makes a chord.
+export function chordTokenFor(press: ChordPress): string | null {
+  const key = chordKeyFor(press.code);
+  if (key === null) {
+    return null;
+  }
+  const modifiers =
+    (press.ctrlKey ? 'C-' : '') +
+    (press.altKey ? 'A-' : '') +
+    (press.shiftKey ? 'S-' : '') +
+    (press.metaKey ? 'D-' : '');
+  const token = `<${modifiers}${key}>`;
+  return parseChord(token) === null ? null : token;
+}
+
 function isSameChord(a: ChordPress, b: ChordPress): boolean {
   return (
     a.code === b.code &&

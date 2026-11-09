@@ -50,12 +50,14 @@ const STATE: ChatSessionState = {
   activeTime: NO_ACTIVE_TIME,
   commands: [],
   running: false,
+  pid: null,
   queued: [],
   compaction: null,
   returned: [],
   repo: 'p',
   branch: null,
   worktrees: [],
+  headless: false,
 };
 
 function writersOf(store: SlotStore): ChatSlotWriters {

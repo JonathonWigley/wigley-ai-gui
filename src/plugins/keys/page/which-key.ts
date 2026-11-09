@@ -2,12 +2,14 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PendingKeys } from '../../../contracts/keymap';
 import type { OsName } from '../../../contracts/platform';
 import type { CommandInfo } from '../../../contracts/plugin';
-import { pageKeysFor } from '../../../shared/key-notation';
+import { pageKeysFor, vimTokenForPageKey } from '../../../shared/key-notation';
 import {
   type CommandLabel,
+  compareKeysUnder,
   formatKeys,
   formatVimToken,
   joinKeys,
+  unnamedGroupName,
   vimTokens,
 } from '../../../shared/key-hints';
 
@@ -19,9 +21,12 @@ export interface WhichKeyEntry {
   kind: 'command' | 'prefix';
 }
 
-// `title` is the pending keys as the user reads them, e.g. `Space a`.
+// `title` is the pending keys as the user reads them, e.g. `Space a`;
+// `name` is the keymap's `groups` name for those keys, null when none names
+// them.
 export interface WhichKeyModel {
   title: string;
+  name: string | null;
   entries: WhichKeyEntry[];
 }
 
@@ -30,12 +35,13 @@ interface Candidate {
   command: CommandId;
 }
 
-// The keys that continue `pending`, in keymap order: those firing in the
-// pending scope (or `any`), on the page or in a box. A prefix the keymap's
-// `groups` names is labelled with that name, matched in the pending keys'
-// own spelling: page keys on the page, vim tokens in a box.
-// Neighbouring entries of one kind and label merge into one, and chords print
-// for `platform`. Null when no bind continues the sequence.
+// The keys that continue `pending`, in key order (`compareKeysUnder`, a page
+// key by its vim token): those firing in the pending scope (or `any`), on the
+// page or in a box. A prefix the keymap's `groups` names is labelled with
+// that name, matched in the pending keys' own spelling: page keys on the
+// page, vim tokens in a box; the model's `name` is the pending keys' own
+// group name. Neighbouring entries of one kind and label merge into one, and
+// chords print for `platform`. Null when no bind continues the sequence.
 export function whichKeyModel(
   pending: PendingKeys,
   keymap: Keymap,
@@ -51,20 +57,25 @@ export function whichKeyModel(
     pending.where === 'page'
       ? (key: string) => formatKeys([key], platform)
       : (token: string) => formatVimToken(token, platform);
+  const sortToken =
+    pending.where === 'page' ? vimTokenForPageKey : (token: string) => token;
   const groups = groupPrefixes(pending.where, keymap);
-  const entries = byNextKey(candidates, pending.keys.length).map(
-    ([key, binds]) =>
-      entry(
-        readKey(key),
-        binds,
-        pending.keys.length,
-        groupName([...pending.keys, key], groups),
-        command,
-        label,
-      ),
+  const nextKeys = byNextKey(candidates, pending.keys.length).sort(([a], [b]) =>
+    compareKeysUnder(sortToken(a), sortToken(b), keymap.editor.leader),
+  );
+  const entries = nextKeys.map(([key, binds]) =>
+    entry(
+      readKey(key),
+      binds,
+      pending.keys.length,
+      groupName([...pending.keys, key], groups),
+      command,
+      label,
+    ),
   );
   return {
     title: pending.keys.map(readKey).join(' '),
+    name: groupName(pending.keys, groups) ?? null,
     entries: mergeNeighbours(entries),
   };
 }
@@ -156,7 +167,7 @@ function groupName(keys: string[], groups: GroupPrefix[]): string | undefined {
   return undefined;
 }
 
-// A key with any bind running past it is a prefix, labelled `+` and its
+// A key with any bind running past it is a prefix, labelled with its
 // `groupName`, or without one its binds' command groups; otherwise it runs
 // its command.
 function entry(
@@ -172,16 +183,13 @@ function entry(
     return { keys, label: label(binds[0].command), kind: 'command' };
   }
   if (groupName !== undefined) {
-    return { keys, label: `+${groupName}`, kind: 'prefix' };
+    return { keys, label: groupName, kind: 'prefix' };
   }
-  const groups = new Set<string>();
-  for (const bind of binds) {
-    const group = command(bind.command)?.group;
-    if (group !== undefined) {
-      groups.add(group);
-    }
-  }
-  return { keys, label: `+${[...groups].join(', ')}`, kind: 'prefix' };
+  return {
+    keys,
+    label: unnamedGroupName(binds.map((bind) => command(bind.command)?.group)),
+    kind: 'prefix',
+  };
 }
 
 function mergeNeighbours(entries: WhichKeyEntry[]): WhichKeyEntry[] {

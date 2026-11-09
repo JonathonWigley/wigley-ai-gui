@@ -1,11 +1,12 @@
 import type { RowActions } from './settings-view';
 
 // An action the cursor prompt can show a key for.
-export type PromptAction = 'edit' | 'reset' | 'addBind' | 'removeBind';
+export type PromptAction = 'open' | 'edit' | 'reset' | 'addBind' | 'removeBind';
 
-// A key row (one with `addBind`) runs add on `i`, so it shows add, remove and
+// A key row (one with `addBind`) shows reassign (`open`), add, clear and
 // reset; any other row shows edit and reset.
 const KEY_ROW_ACTIONS: readonly PromptAction[] = [
+  'open',
   'addBind',
   'removeBind',
   'reset',

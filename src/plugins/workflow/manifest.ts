@@ -5,9 +5,10 @@ import { definePlugin } from '../../shared/define-plugin';
 // and in a side pane beside the transcript, with the main action on `<Leader>ww`.
 // Main folds the agent events and the steps `set_workflow_step` reports into each
 // session's flow. Each workflow is its own plugin, which names its stages, its
-// layouts and its commands. `stageAction` runs a stage action for the session and
-// action its arg names; every stage button, fold and stage key runs it, and it
-// has no key of its own.
+// layouts and its commands. `toggleHeadless` turns the selected session's
+// headless flag on or off, as the strip's Headless chip does. `stageAction` runs
+// a stage action for the session and action its arg names; every stage button,
+// fold, Headless chip and stage key runs it, and it has no key of its own.
 export const workflowManifest = definePlugin({
   id: 'workflow',
   label: 'Workflow',
@@ -31,6 +32,11 @@ export const workflowManifest = definePlugin({
     },
     toggleFinishedWaves: {
       label: 'open or fold finished waves',
+      group: 'workflow',
+      runsIn: 'page',
+    },
+    toggleHeadless: {
+      label: 'turn headless on or off',
       group: 'workflow',
       runsIn: 'page',
     },

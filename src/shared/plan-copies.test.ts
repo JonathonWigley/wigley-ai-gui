@@ -4,8 +4,9 @@ import type { Git, GitWorktree } from '../contracts/git';
 import { createMemoryFiles } from './memory-files';
 import {
   type PlanCopyDeps,
-  newestPlanCopy,
   planCopies,
+  readCopyAt,
+  readMovedCopy,
   readPlanCopy,
 } from './plan-copies';
 import { posixPaths } from './paths/posix-paths';
@@ -20,8 +21,17 @@ const TREES: GitWorktree[] = [
   { path: '/w2', branch: 'w2', isMain: false },
 ];
 
-// `[path, modified time]`: each file is written at its time.
-type Write = readonly [string, number];
+// `[path, modified time, text]`: each file is written at its time, a
+// `plan.md` with `PLAN_TEXT` and any other file empty unless `text` is given.
+type Write = readonly [string, number, string?];
+
+// A three-task plan with its first `ticks` tasks ticked.
+function planTicked(ticks: number): string {
+  const boxes = ['one', 'two', 'three'].map(
+    (task, index) => `- [${index < ticks ? 'x' : ' '}] ${task}\n`,
+  );
+  return `# A — plan\n\n## Tasks\n\n${boxes.join('')}`;
+}
 
 // The prefix the `linked` files wrapper reads as `/r/docs/features`.
 const LINK = '/link';
@@ -47,16 +57,25 @@ function linkedFiles(files: PlanCopyDeps['files']): PlanCopyDeps['files'] {
 // Deps over memory files holding `writes`, and a git whose checkouts are
 // `trees`: `topLevel` answers the checkout holding an existing folder, as
 // `git -C` fails in a missing one, and null outside every checkout.
+// `vanished` names a file whose read fails as missing, as one deleted after
+// the listing.
 async function setUp(
   writes: readonly Write[],
-  options: { trees?: GitWorktree[]; linked?: boolean } = {},
+  options: {
+    trees?: GitWorktree[];
+    linked?: boolean;
+    vanished?: string;
+  } = {},
 ) {
   const trees = options.trees ?? TREES;
   const clock = { time: 0, now: () => clock.time };
   const memory = createMemoryFiles(clock);
-  for (const [path, time] of writes) {
+  for (const [path, time, text] of writes) {
     clock.time = time;
-    await memory.write(path, path.endsWith('plan.md') ? PLAN_TEXT : '');
+    await memory.write(
+      path,
+      text ?? (path.endsWith('plan.md') ? PLAN_TEXT : ''),
+    );
   }
   const git = {
     topLevel: vi.fn<Git['topLevel']>(async (folder) => {
@@ -69,7 +88,16 @@ async function setUp(
     }),
     worktrees: vi.fn<Git['worktrees']>(async () => trees),
   };
-  const files = options.linked ? linkedFiles(memory) : memory;
+  const shown = options.linked ? linkedFiles(memory) : memory;
+  const files: PlanCopyDeps['files'] = {
+    ...shown,
+    read: async (path) => {
+      if (path === options.vanished) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      }
+      return shown.read(path);
+    },
+  };
   const deps: PlanCopyDeps = { git, files, paths: posixPaths };
   return { deps, git, memory };
 }
@@ -84,8 +112,13 @@ const THREE_CHECKOUTS: Write[] = [
 ];
 
 const MAIN_AND_FIRST = [
-  { planDir: `/r/${PLAN}`, checkout: '/r', changedAt: 25 },
-  { planDir: `/w1/${PLAN}`, checkout: '/w1', changedAt: 30 },
+  { planDir: `/r/${PLAN}`, checkout: '/r', changedAt: 25, isMainTree: true },
+  {
+    planDir: `/w1/${PLAN}`,
+    checkout: '/w1',
+    changedAt: 30,
+    isMainTree: false,
+  },
 ];
 
 describe('planCopies', () => {
@@ -119,7 +152,14 @@ describe('planCopies', () => {
       trees: TREES,
       linked: false,
       askedOf: '/r/docs/features/f',
-      expected: [{ planDir: `/w1/${PLAN}`, checkout: '/w1', changedAt: 30 }],
+      expected: [
+        {
+          planDir: `/w1/${PLAN}`,
+          checkout: '/w1',
+          changedAt: 30,
+          isMainTree: false,
+        },
+      ],
     },
     {
       name: 'a symlinked home spelling',
@@ -138,7 +178,12 @@ describe('planCopies', () => {
       linked: false,
       askedOf: '/o/plan-a',
       expected: [
-        { planDir: '/o/plan-a', checkout: '/o/plan-a', changedAt: 12 },
+        {
+          planDir: '/o/plan-a',
+          checkout: '/o/plan-a',
+          changedAt: 12,
+          isMainTree: true,
+        },
       ],
     },
     {
@@ -200,7 +245,7 @@ describe('planCopies', () => {
       const test = await setUp(writes, { trees: [] });
 
       expect(await planCopies('/o/p', test.deps)).toEqual([
-        { planDir: '/o/p', checkout: '/o/p', changedAt },
+        { planDir: '/o/p', checkout: '/o/p', changedAt, isMainTree: true },
       ]);
     },
   );
@@ -210,7 +255,12 @@ describe('planCopies', () => {
     test.git.worktrees.mockRejectedValue(new Error('git worktree exited 128'));
 
     expect(await planCopies(`/w1/${PLAN}`, test.deps)).toEqual([
-      { planDir: `/w1/${PLAN}`, checkout: `/w1/${PLAN}`, changedAt: 30 },
+      {
+        planDir: `/w1/${PLAN}`,
+        checkout: `/w1/${PLAN}`,
+        changedAt: 30,
+        isMainTree: true,
+      },
     ]);
   });
 
@@ -232,41 +282,171 @@ describe('planCopies', () => {
   });
 });
 
-describe('newestPlanCopy', () => {
+describe('readMovedCopy', () => {
+  const MAIN = `/r/${PLAN}/plan.md`;
+  const FIRST = `/w1/${PLAN}/plan.md`;
+  const SECOND = `/w2/${PLAN}/plan.md`;
+  // Keeps the main tree's folder, so its clone is found with no main copy.
+  const MAIN_FOLDER: Write = ['/r/docs/features/f/checklist.md', 5];
+
   it.each([
     {
-      name: 'a worktree newer',
+      name: 'a newer worktree copy equal to main',
       writes: [
-        [`/r/${PLAN}/plan.md`, 10],
-        [`/w1/${PLAN}/plan.md`, 20],
+        [MAIN, 10, planTicked(1)],
+        [FIRST, 50, planTicked(1)],
       ] satisfies Write[],
-      expected: { planDir: `/w1/${PLAN}`, checkout: '/w1', changedAt: 20 },
+      vanished: undefined,
+      expected: '/r',
     },
     {
-      name: 'equal times',
+      name: 'a moved copy and a newer fresh copy equal to main',
       writes: [
-        [`/r/${PLAN}/plan.md`, 10],
-        [`/w1/${PLAN}/plan.md`, 10],
+        [MAIN, 10, planTicked(1)],
+        [FIRST, 20, planTicked(2)],
+        [SECOND, 50, planTicked(1)],
       ] satisfies Write[],
-      expected: { planDir: `/r/${PLAN}`, checkout: '/r', changedAt: 10 },
+      vanished: undefined,
+      expected: '/w1',
+    },
+    {
+      name: 'two moved copies',
+      writes: [
+        [MAIN, 10, planTicked(1)],
+        [FIRST, 20, planTicked(2)],
+        [SECOND, 30, planTicked(3)],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/w2',
+    },
+    {
+      name: 'no main copy',
+      writes: [
+        MAIN_FOLDER,
+        [FIRST, 20, planTicked(2)],
+        [SECOND, 30, planTicked(1)],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/w2',
+    },
+    {
+      name: 'a newer worktree copy behind main',
+      writes: [
+        [MAIN, 10, planTicked(2)],
+        [FIRST, 50, planTicked(1)],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/r',
+    },
+    {
+      name: 'a newer worktree copy with an earlier status, equal ticks',
+      writes: [
+        [MAIN, 10],
+        [`/r/${PLAN}/01-a.md`, 10, 'Status: in progress\n'],
+        [FIRST, 50],
+        [`/w1/${PLAN}/01-a.md`, 50, 'Status: not started\n'],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/r',
+    },
+    {
+      name: 'a newer worktree copy with a later status, equal ticks',
+      writes: [
+        [MAIN, 10],
+        [`/r/${PLAN}/01-a.md`, 10, 'Status: in progress\n'],
+        [FIRST, 50],
+        [`/w1/${PLAN}/01-a.md`, 50, 'Status: done\n'],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/w1',
+    },
+    {
+      name: 'a newer worktree copy with a blocked status, equal ticks',
+      writes: [
+        [MAIN, 10],
+        [`/r/${PLAN}/01-a.md`, 10, 'Status: in progress\n'],
+        [FIRST, 50],
+        [`/w1/${PLAN}/01-a.md`, 50, 'Status: blocked\n'],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/w1',
+    },
+    {
+      name: 'two moved copies at equal times',
+      writes: [
+        [MAIN, 10, planTicked(1)],
+        [FIRST, 30, planTicked(2)],
+        [SECOND, 30, planTicked(3)],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/w1',
+    },
+    {
+      name: 'a worktree copy whose plan.md does not read',
+      writes: [
+        [MAIN, 10, planTicked(1)],
+        [FIRST, 50, planTicked(2)],
+      ] satisfies Write[],
+      vanished: FIRST,
+      expected: '/r',
     },
     {
       name: 'no copy',
-      writes: [['/r/docs/features/f/checklist.md', 10]] satisfies Write[],
+      writes: [MAIN_FOLDER] satisfies Write[],
+      vanished: undefined,
       expected: null,
     },
   ])(
-    'newestPlanCopy_Copies_LargestChangedAtTiesToMain ($name)',
-    async ({ writes, expected }) => {
-      const test = await setUp(writes);
+    'readMovedCopy_PicksTheMovedCopy ($name)',
+    async ({ writes, vanished, expected }) => {
+      const test = await setUp(writes, { vanished });
 
-      expect(await newestPlanCopy(`/r/${PLAN}`, test.deps)).toEqual(expected);
+      const moved = await readMovedCopy(`/r/${PLAN}`, test.deps);
+
+      expect(moved?.copy.checkout ?? null).toEqual(expected);
+    },
+  );
+});
+
+describe('readCopyAt', () => {
+  it.each([
+    {
+      name: 'a folder with plan.md, a newer differing copy elsewhere',
+      planDir: `/w1/${PLAN}`,
+      expected: { planDir: `/w1/${PLAN}`, checked: 1 },
+    },
+    {
+      name: 'a folder with no plan.md',
+      planDir: `/w2/${PLAN}`,
+      expected: null,
+    },
+  ])(
+    'readCopyAt_ReadsThatFolderAlone ($name)',
+    async ({ planDir, expected }) => {
+      const test = await setUp([
+        [`/r/${PLAN}/plan.md`, 50, planTicked(2)],
+        [`/w1/${PLAN}/plan.md`, 10, planTicked(1)],
+        [`/w2/${PLAN}/notes.md`, 60],
+      ]);
+
+      const read = await readCopyAt(planDir, test.deps);
+
+      expect(
+        read === null
+          ? null
+          : { planDir: read.copy.planDir, checked: read.progress.checked },
+      ).toEqual(expected);
     },
   );
 });
 
 describe('readPlanCopy', () => {
-  const COPY = { planDir: `/w1/${PLAN}`, checkout: '/w1', changedAt: 0 };
+  const COPY = {
+    planDir: `/w1/${PLAN}`,
+    checkout: '/w1',
+    changedAt: 0,
+    isMainTree: false,
+  };
   const LINKED_PLAN = `# A — plan
 
 ## Tasks

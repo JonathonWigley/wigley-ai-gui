@@ -1,5 +1,6 @@
 import path from 'node:path';
 import {
+  type AgentFormAutoAnswer,
   type AgentFormEndKind,
   type AgentFormListener,
   type AgentFormOwner,
@@ -25,6 +26,9 @@ export interface AgentFormServiceDeps<Form, Body, Payload> {
   // A plugin's timers cap a long delay at the longest a timer takes, and its stop
   // clears them with no wake, so its part ends each session before they clear.
   timers: Timers;
+  // Answers a session's forms with no window while its `isOn` holds; none
+  // shows every form.
+  autoAnswer?: AgentFormAutoAnswer<Form, Body, Payload>;
 }
 
 interface FormFinish<Body> {
@@ -60,6 +64,9 @@ interface FinishedForm<Form, Body> {
   // An open call for another form returned it with `earlier_heading`, so a
   // replay keeps that framing.
   handedBack: boolean;
+  // The auto-answer answered it and no form showed, so a replay returns the
+  // auto-answer's payload.
+  autoAnswered: boolean;
 }
 
 // One connected session: at most one open form, and the last finished one.
@@ -75,6 +82,7 @@ interface SessionContext<Form, Body, Payload> {
   store: AgentFormStore;
   wake: AgentFormWake;
   timers: Timers;
+  autoAnswer: AgentFormAutoAnswer<Form, Body, Payload> | null;
   open: OpenForm<Form, Body> | null;
   lastFinished: FinishedForm<Form, Body> | null;
   // Settles once every open call already made has returned; null when none
@@ -129,6 +137,34 @@ function finishedPayload<Form, Body, Payload>(
   finished: FinishedForm<Form, Body>,
 ): Payload {
   return type.payload(finished.form, finished.outcome, finished.body);
+}
+
+// `last` holds the user's own submitted answers to the form `formFingerprint`
+// names, which a re-send of that form gets back.
+function isUserSubmitted<Form, Body>(
+  last: FinishedForm<Form, Body>,
+  formFingerprint: string,
+): boolean {
+  return (
+    last.fingerprint === formFingerprint &&
+    last.outcome === 'submitted' &&
+    !last.autoAnswered
+  );
+}
+
+// The last finished form's answers again, framed as its first return framed
+// them: auto-answered, handed back, or plain.
+function lastFinishedPayload<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  last: FinishedForm<Form, Body>,
+): Payload {
+  const { autoAnswer } = session;
+  if (last.autoAnswered && autoAnswer !== null) {
+    return autoAnswer.payload(last.form, last.body);
+  }
+  return last.handedBack
+    ? handedBackFinishedPayload(session.type, last)
+    : finishedPayload(session.type, last);
 }
 
 function handedBackFinishedPayload<Form, Body, Payload>(
@@ -201,6 +237,7 @@ function settle<Form, Body, Payload>(
     body: end.body,
     fingerprint: open.record.fingerprint,
     handedBack: false,
+    autoAnswered: false,
   };
   session.lastFinished = finished;
   session.open = null;
@@ -331,6 +368,7 @@ function takeUnreturnedFinished<Form, Body, Payload>(
     body: session.type.readBody(form, record.body),
     fingerprint: record.fingerprint,
     handedBack: false,
+    autoAnswered: false,
   };
   session.store.markReturned(record);
   session.lastFinished = finished;
@@ -522,6 +560,24 @@ function requireCallerHostId<Form, Body, Payload>(
   }
 }
 
+// The answers of a finished form no reply has carried, which win over the
+// call's own form: as its answers when it is the call's form, or else handed
+// back so the agent sends its form again.
+function unreturnedFinishedPayload<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  formFingerprint: string,
+): Payload | null {
+  const handed = takeUnreturnedFinished(session);
+  if (handed === null) {
+    return null;
+  }
+  if (handed.fingerprint === formFingerprint) {
+    return finishedPayload(session.type, handed);
+  }
+  handed.handedBack = true;
+  return handedBackFinishedPayload(session.type, handed);
+}
+
 // `signal` wakes the call's wait early; `host` is the caller's own signal,
 // whose abort may abandon the form.
 async function openParsedForm<Form, Body, Payload>(
@@ -540,22 +596,18 @@ async function openParsedForm<Form, Body, Payload>(
     return presentOpen(session, open, session.deadlineSeconds, signal, host);
   }
   const last = session.lastFinished;
-  // A cancelled form the agent already received opens again, pre-filled.
-  const replaysLastSubmitted =
+  // A cancelled form the agent already received opens again, pre-filled, as
+  // does an auto-answered one once the auto-answer is off.
+  if (
     open === null &&
     last !== null &&
-    last.fingerprint === formFingerprint &&
-    last.outcome === 'submitted';
-  if (replaysLastSubmitted) {
+    isUserSubmitted(last, formFingerprint)
+  ) {
     return finishedPayload(session.type, last);
   }
-  const handed = takeUnreturnedFinished(session);
-  if (handed !== null) {
-    if (handed.fingerprint === formFingerprint) {
-      return finishedPayload(session.type, handed);
-    }
-    handed.handedBack = true;
-    return handedBackFinishedPayload(session.type, handed);
+  const unreturned = unreturnedFinishedPayload(session, formFingerprint);
+  if (unreturned !== null) {
+    return unreturned;
   }
   // One open form per session: an unfinished form is never replaced.
   const unfinished = session.open;
@@ -786,14 +838,73 @@ async function collectLastForm<Form, Body, Payload>(
   }
   const last = session.lastFinished;
   if (last !== null) {
-    return last.handedBack
-      ? handedBackFinishedPayload(session.type, last)
-      : finishedPayload(session.type, last);
+    return lastFinishedPayload(session, last);
   }
   const handed = takeUnreturnedFinished(session);
   return handed === null
     ? session.type.noFormPayload()
     : finishedPayload(session.type, handed);
+}
+
+// Answers the call's form with `autoAnswer` at once, outside the call queue,
+// after the checks every call runs: the args, a live caller, and the host id
+// the session's forms were made under. Answers the user gave come first: a
+// re-send of the form still unfinished in the window takes the normal path
+// and waits on it, a finished form no reply has carried is returned as the
+// normal path returns it, and a re-send of the form the user last submitted
+// gets those answers again. A form open in the window stays, unless the host
+// moved. A re-send of the form last auto-answered returns its answers again;
+// any other form, a re-send of one the user cancelled included, is saved
+// answered and returned, and shows nowhere.
+async function autoAnswerForm<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  autoAnswer: AgentFormAutoAnswer<Form, Body, Payload>,
+  args: unknown,
+  toolUseId: string | null,
+  signal: AbortSignal,
+): Promise<Payload> {
+  const form = session.type.parse(args);
+  const formFingerprint = session.type.fingerprint(form);
+  requireLiveCaller(session, signal);
+  leaveFormsOfPastHost(session);
+  const open = session.open;
+  const resendsUnfinishedOpen =
+    open !== null &&
+    open.end === null &&
+    open.record.fingerprint === formFingerprint;
+  if (resendsUnfinishedOpen) {
+    return openFormInTurn(session, args, toolUseId, signal);
+  }
+  const unreturned = unreturnedFinishedPayload(session, formFingerprint);
+  if (unreturned !== null) {
+    return unreturned;
+  }
+  const last = session.lastFinished;
+  if (last !== null && isUserSubmitted(last, formFingerprint)) {
+    return finishedPayload(session.type, last);
+  }
+  const replaysLastAutoAnswered =
+    last !== null && last.autoAnswered && last.fingerprint === formFingerprint;
+  if (replaysLastAutoAnswered) {
+    return autoAnswer.payload(last.form, last.body);
+  }
+  const body = autoAnswer.body(form);
+  session.store.createAutoAnswered(
+    session.info,
+    formFingerprint,
+    args,
+    body,
+    toolUseId,
+  );
+  session.lastFinished = {
+    form,
+    outcome: 'submitted',
+    body,
+    fingerprint: formFingerprint,
+    handedBack: false,
+    autoAnswered: true,
+  };
+  return autoAnswer.payload(form, body);
 }
 
 function endSession<Form, Body, Payload>(
@@ -818,6 +929,7 @@ function startSession<Form, Body, Payload>(
     store: deps.store,
     wake: deps.wake,
     timers: deps.timers,
+    autoAnswer: deps.autoAnswer ?? null,
     open: null,
     lastFinished: null,
     askTurn: null,
@@ -825,16 +937,20 @@ function startSession<Form, Body, Payload>(
     reportedUnreadable: new Set(),
   };
   return {
-    open: (args, toolUseId, signal) =>
-      openFormInTurn(session, args, toolUseId, signal),
+    open: (args, toolUseId, signal) => {
+      const { autoAnswer } = session;
+      return autoAnswer?.isOn(session.sessionId)
+        ? autoAnswerForm(session, autoAnswer, args, toolUseId, signal)
+        : openFormInTurn(session, args, toolUseId, signal);
+    },
     collect: (wait, signal) => collectLastForm(session, wait, signal),
     end: () => endSession(session),
   };
 }
 
 // Form logic every form source reaches, for one form type: validation,
-// re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms and
-// the wake for a form no call will return.
+// re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms,
+// the wake for a form no call will return, and the optional auto-answer.
 export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
 ): AgentFormService<Payload> {

@@ -1,7 +1,6 @@
 import { type BrowserWindow, type NativeImage, nativeImage } from 'electron';
 import type { Alerts } from '../../contracts/alerts';
-import type { Log } from '../../contracts/log';
-import { createElectronAlerts } from './electron-alerts';
+import { createOpenCounts } from './open-counts';
 
 const OVERLAY_SIZE = 16;
 // Catppuccin Mocha red in the BGRA byte order createFromBitmap reads.
@@ -26,31 +25,24 @@ function overlayDot(): NativeImage {
   });
 }
 
-// Notifications, a taskbar flash and a taskbar overlay dot.
-export function createWindowsAlerts(window: BrowserWindow, log: Log): Alerts {
+// A taskbar overlay dot.
+export function createWindowsAlerts(window: BrowserWindow): Alerts {
   const dot = overlayDot();
-  window.on('focus', () => window.flashFrame(false));
-  return createElectronAlerts(
-    {
-      drawAttention() {
-        // Electron throws on a call to a destroyed window, as at quit.
-        if (!window.isDestroyed()) {
-          window.flashFrame(true);
-        }
-      },
-      showOpenCount(total) {
-        if (window.isDestroyed()) {
-          return;
-        }
-        const description =
-          total === 0
-            ? ''
-            : total === 1
-              ? '1 open agent form'
-              : `${total} open agent forms`;
-        window.setOverlayIcon(total > 0 ? dot : null, description);
-      },
+  const openCounts = createOpenCounts();
+  return {
+    setOpenCount(source, count) {
+      const total = openCounts.set(source, count);
+      // Electron throws on a call to a destroyed window, as at quit.
+      if (window.isDestroyed()) {
+        return;
+      }
+      const description =
+        total === 0
+          ? ''
+          : total === 1
+            ? '1 open agent form'
+            : `${total} open agent forms`;
+      window.setOverlayIcon(total > 0 ? dot : null, description);
     },
-    log,
-  );
+  };
 }

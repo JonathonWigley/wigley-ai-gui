@@ -45,6 +45,7 @@ const stripInput: StripInput = {
   ],
   actions: [],
   hasChecklist: true,
+  headless: false,
 };
 
 const paneInput = (fields: Partial<SidePaneInput>): SidePaneInput => ({
@@ -86,19 +87,27 @@ describe('Small default layout', () => {
     vi.unstubAllGlobals();
   });
 
-  it('chip_DrawsBadgeFirst', () => {
+  it.each([
+    { onRowLabel: false, tags: [{ text: 'Build', state: 'running' }] },
+    { onRowLabel: true, tags: [] },
+  ])('chip_DrawsBadgeFirst onRowLabel $onRowLabel', ({ onRowLabel, tags }) => {
     const { kit } = testWorkflowKit(KIT_MANIFEST);
 
     const chip = asFake(
-      layout.chip(asHtml(new FakeElement('div')), chipInput, kit).element,
+      layout.chip(
+        asHtml(new FakeElement('div')),
+        { ...chipInput, onRowLabel },
+        kit,
+      ).element,
     );
 
-    const [badge, tag] = chip.children;
+    const [badge, ...rest] = chip.children;
     expect(badge.classList.contains('workflow-badge')).toBe(true);
     expect(badge.textContent).toBe('S');
     expect(badge.title).toBe('Small');
-    expect(tag.textContent).toBe('Build');
-    expect(tag.dataset.state).toBe('running');
+    expect(
+      rest.map((tag) => ({ text: tag.textContent, state: tag.dataset.state })),
+    ).toEqual(tags);
   });
 
   it('strip_DrawsTheSteps', () => {
@@ -117,6 +126,25 @@ describe('Small default layout', () => {
     ).toEqual(['Scope', 'Build 1/3']);
     expect(findAll(strip, 'workflow-countdown')).toEqual([]);
     expect(findAll(strip, 'ui-button')).toEqual([]);
+  });
+
+  it.each([
+    { headless: true, state: 'on' },
+    { headless: false, state: 'off' },
+  ])('strip_DrawsTheHeadlessChipLast $state', ({ headless, state }) => {
+    const { kit } = testWorkflowKit(KIT_MANIFEST);
+
+    const strip = asFake(
+      layout.strip(
+        asHtml(new FakeElement('div')),
+        { ...stripInput, headless },
+        kit,
+      ).element,
+    );
+
+    const last = strip.children.at(-1);
+    expect(last?.classList.contains('workflow-headless')).toBe(true);
+    expect(last?.dataset.state).toBe(state);
   });
 
   it('sidePane_DrawsTheGroups', () => {

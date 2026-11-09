@@ -10,7 +10,7 @@ import type {
   PluginManifest,
 } from '../../contracts/plugin';
 import type { KeyedSlotKey } from '../../contracts/state';
-import type { RowActivity } from '../sessions/contract';
+import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../sessions/contract';
 import type {
   ChipInput,
   CompleteLayout,
@@ -110,7 +110,7 @@ export interface MainStage {
 
 export interface MainWorkflow {
   id: WorkflowId;
-  // Small 10, medium 20, large 30. The lowest order's claim wins a skill two
+  // Small 10, medium 20, large 30, spike 40. The lowest order's claim wins a skill two
   // workflows claim.
   order: number;
   claims(signal: WorkflowSignal): boolean;
@@ -214,7 +214,8 @@ export interface PageStage {
   // they draw `pending`.
   runsTasks?: boolean;
   // What the session's row says while the stage waits on the user and the flow
-  // is not busy, in place of the chip's tag. Left out, the row keeps its other
+  // is not busy, in place of the chip's tag. Left out, a paused stage shows
+  // `PAUSED_RUN_ACTIVITY`, and any other stage leaves the row its other
   // activities and the chip its tag.
   rowActivity?: RowActivity;
 }
@@ -223,12 +224,25 @@ export interface PageStage {
 // turn's and gives way to a running one.
 export const STAGE_ACTIVITY_RANK = 15;
 
-// The row activity `stage` shows for `flow`, null for none.
+// Under chat's working and error, above a stage's own label.
+export const PAUSED_RUN_ACTIVITY: RowActivity = {
+  ...NEEDS_YOU_ACTIVITY,
+  rank: 18,
+};
+
+// The row activity `stage` shows for `flow`, null for none: none while busy,
+// else the stage's own `rowActivity`, else `PAUSED_RUN_ACTIVITY` when paused.
 export function shownRowActivity(
   stage: PageStage,
   flow: SessionFlow,
 ): RowActivity | null {
-  return isBusy(flow) ? null : (stage.rowActivity ?? null);
+  if (isBusy(flow)) {
+    return null;
+  }
+  if (stage.rowActivity) {
+    return stage.rowActivity;
+  }
+  return stage.status(flow) === 'paused' ? PAUSED_RUN_ACTIVITY : null;
 }
 
 // Where a fold's signal came from. 'live' is a live event or a workflow's action;

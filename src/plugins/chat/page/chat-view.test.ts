@@ -117,11 +117,13 @@ function stateOf(
     activeTime: NO_ACTIVE_TIME,
     commands: [],
     running: false,
+    pid: null,
     queued: [],
     returned,
     repo: 'app',
     branch: 'main',
     worktrees: [],
+    headless: false,
     compaction: null,
     ...overrides,
   };
@@ -159,7 +161,11 @@ const returnedTwo: ReturnedMessage = {
 // tab's `shown` before it returns, as the sessions plugin may, and
 // `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
 // session of each tab handle's `select`; `hasSavedPlace` answers whether
-// `savedPlaces` holds the session.
+// `savedPlaces` holds the session. `owners` holds each session's row owner as
+// `ownerOf` reads it, null for a session it does not name and undefined for a
+// row not yet arrived; `rowAdded` sets a row's owner and tells the view the row
+// arrived. `addTabs` records each `addTab` session id and `otherShown.count`
+// each `otherSessionShown` call.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -242,6 +248,10 @@ function mounted(
   const confirmed: string[] = [];
   const confirmAnswer = { ended: false };
   let activeSessionId: string | null = null;
+  const owners = new Map<string, string | null | undefined>();
+  let rowAdded: (sessionId: string) => void = noEvent;
+  const addTabs: string[] = [];
+  const otherShown = { count: 0 };
   const view = mountChatView({
     channel,
     slots: {
@@ -264,6 +274,7 @@ function mounted(
           hidden: () => void;
         },
       ) => {
+        addTabs.push(sessionId);
         readDuringAddTab.push(view.activeTime(sessionId));
         beforeCloses.set(sessionId, added.beforeClose);
         shownBy.set(sessionId, added.shown);
@@ -288,6 +299,14 @@ function mounted(
       ) => activities.push(activity?.word),
     },
     activeSessionId: () => activeSessionId,
+    ownerOf: (sessionId: string) =>
+      owners.has(sessionId) ? owners.get(sessionId) : null,
+    onRowAdded: (listener: (sessionId: string) => void) => {
+      rowAdded = listener;
+    },
+    otherSessionShown: () => {
+      otherShown.count += 1;
+    },
     onSessionRemoved: (listener: (sessionId: string) => void) => {
       removeSession = listener;
     },
@@ -383,6 +402,13 @@ function mounted(
   };
   return {
     view,
+    owners,
+    rowAdded: (sessionId: string, owner: string | null) => {
+      owners.set(sessionId, owner);
+      rowAdded(sessionId);
+    },
+    addTabs,
+    otherShown,
     keyCalls,
     boxCalls,
     visible,
@@ -1910,5 +1936,309 @@ describe('mountChatView focus', () => {
       ['row-1', true, 'row-1'],
       ['row-2', true, 'row-2'],
     ]);
+  });
+});
+
+describe('mountChatView mounts', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const sessionState = (sessionId: string) => stateOf([], { sessionId });
+  const childCount = (element: HTMLElement) => asFake(element).children.length;
+  // A view holding owned session `s1`, mounted into a fresh element.
+  const mountedOwned = () => {
+    const mount = mounted();
+    mount.owners.set('s1', 'practice');
+    mount.open(sessionState('s1'));
+    const element = document.createElement('div');
+    const handle = mount.view.mount(element, 's1');
+    return { mount, element, handle };
+  };
+
+  // Breaks: an owned row placed in a Sessions pane, or a key arriving before
+  // its row taken for a row with no owner.
+  it.each<{
+    case: string;
+    atArrival: string | null | 'no row';
+    rowArrives?: string | null;
+    addTabs: string[];
+  }>([
+    { case: 'owned at arrival', atArrival: 'practice', addTabs: [] },
+    { case: 'unowned at arrival', atArrival: null, addTabs: ['s1'] },
+    {
+      case: 'owned row after the key',
+      atArrival: 'no row',
+      rowArrives: 'practice',
+      addTabs: [],
+    },
+    {
+      case: 'unowned row after the key',
+      atArrival: 'no row',
+      rowArrives: null,
+      addTabs: ['s1'],
+    },
+  ])(
+    'ownedRow_Arrives_GetsNoSessionsTab: $case',
+    ({ atArrival, rowArrives, addTabs }) => {
+      const mount = mounted();
+      mount.owners.set('s1', atArrival === 'no row' ? undefined : atArrival);
+
+      mount.open(sessionState('s1'));
+      if (rowArrives !== undefined) {
+        mount.rowAdded('s1', rowArrives);
+      }
+
+      expect(mount.addTabs).toEqual(addTabs);
+      expect(mount.view.session('s1') !== undefined).toBe(addTabs.length > 0);
+    },
+  );
+
+  // Breaks: keys left on a hidden mount, or never given to a shown one.
+  it('mount_ShownThenHidden_TakesThenGivesUpTheChatKeys', () => {
+    const { mount, handle } = mountedOwned();
+    mount.keyCalls.length = 0;
+
+    handle.shown();
+
+    expect(mount.keyCalls[0]).toEqual(['setScope', 'chat']);
+    const focusTarget = mount.keyCalls.find(
+      ([call]) => call === 'setFocusTarget',
+    )?.[1];
+    expect(focusTarget).toBeTruthy();
+    expect(mount.view.visibleSessionId()).toBe('s1');
+
+    handle.hidden();
+    mount.logs.length = 0;
+    mount.view.hub.move(1);
+
+    expect(mount.view.visibleSessionId()).toBeNull();
+    expect(mount.logs).toContain('no Chat tab shown');
+  });
+
+  // Breaks: dialogs left acting on the Sessions tab's session once a mount of
+  // another session shows.
+  it('mount_AnotherSessionShownAfter_ClosesSessionDialogs', () => {
+    const mount = mounted();
+    mount.open(sessionState('s2'));
+    mount.visible.value = true;
+    mount.show('s2');
+    mount.owners.set('s1', 'practice');
+    mount.open(sessionState('s1'));
+    const handle = mount.view.mount(document.createElement('div'), 's1');
+
+    handle.shown();
+
+    expect(mount.otherShown.count).toBe(1);
+  });
+
+  // Breaks: a mount accepted for a Sessions row, a second view of one
+  // session, or a mount built on a stopped page.
+  it.each<{
+    case: string;
+    act: (mount: ReturnType<typeof mounted>) => void;
+    reason: string;
+  }>([
+    {
+      case: 'unowned',
+      act: (mount) => {
+        mount.open(sessionState('s2'));
+        mount.view.mount(document.createElement('div'), 's2');
+      },
+      reason: 'session s2 is not owned; it shows in Sessions',
+    },
+    {
+      case: 'mounted twice',
+      act: (mount) => {
+        mount.owners.set('s1', 'practice');
+        mount.open(sessionState('s1'));
+        mount.view.mount(document.createElement('div'), 's1');
+        mount.view.mount(document.createElement('div'), 's1');
+      },
+      reason: 'session s1 is already mounted',
+    },
+    {
+      case: 'mounted twice while waiting',
+      act: (mount) => {
+        mount.owners.set('s9', undefined);
+        mount.view.mount(document.createElement('div'), 's9');
+        mount.view.mount(document.createElement('div'), 's9');
+      },
+      reason: 'session s9 is already mounted',
+    },
+    {
+      case: 'page stopped',
+      act: (mount) => {
+        mount.owners.set('s1', 'practice');
+        mount.open(sessionState('s1'));
+        mount.view.dispose();
+        mount.view.mount(document.createElement('div'), 's1');
+      },
+      reason: 'chat page is stopped',
+    },
+  ])('mount_Refused_ThrowsTheReason: $case', ({ act, reason }) => {
+    const mount = mounted();
+
+    expect(() => act(mount)).toThrow(reason);
+  });
+
+  // Breaks: a mount that throws or stays empty when the host mounts right
+  // after the session starts, or one that attaches after its dispose.
+  it.each<{
+    case: string;
+    act: (
+      mount: ReturnType<typeof mounted>,
+      handle: ReturnType<ReturnType<typeof mounted>['view']['mount']>,
+    ) => void;
+    children: number;
+    addTabs?: string[];
+    takesKeys?: boolean;
+    logs?: string;
+  }>([
+    {
+      case: 'key then row',
+      act: (mount) => {
+        mount.open(sessionState('s9'));
+        mount.rowAdded('s9', 'practice');
+      },
+      children: 1,
+    },
+    {
+      case: 'row then key',
+      act: (mount) => {
+        mount.rowAdded('s9', 'practice');
+        mount.open(sessionState('s9'));
+      },
+      children: 1,
+    },
+    {
+      case: 'shown while waiting',
+      act: (mount, handle) => {
+        handle.shown();
+        mount.open(sessionState('s9'));
+        mount.rowAdded('s9', 'practice');
+      },
+      children: 1,
+      takesKeys: true,
+    },
+    {
+      case: 'disposed while waiting',
+      act: (mount, handle) => {
+        handle.dispose();
+        mount.open(sessionState('s9'));
+        mount.rowAdded('s9', 'practice');
+      },
+      children: 0,
+    },
+    {
+      case: 'row with no owner',
+      act: (mount) => {
+        mount.rowAdded('s9', null);
+        mount.open(sessionState('s9'));
+      },
+      children: 0,
+      addTabs: ['s9'],
+      logs: 'session s9 is not owned; it shows in Sessions',
+    },
+  ])(
+    'mount_BeforeTheSessionArrives_AttachesWhenBothArrive: $case',
+    ({ act, children, addTabs = [], takesKeys = false, logs }) => {
+      const mount = mounted();
+      mount.ready();
+      mount.owners.set('s9', undefined);
+      const element = document.createElement('div');
+      const handle = mount.view.mount(element, 's9');
+      expect(childCount(element)).toBe(0);
+      expect(mount.addTabs).toEqual([]);
+
+      act(mount, handle);
+
+      expect(childCount(element)).toBe(children);
+      expect(mount.addTabs).toEqual(addTabs);
+      expect(
+        mount.keyCalls.some(
+          ([call, scope]) => call === 'setScope' && scope === 'chat',
+        ),
+      ).toBe(takesKeys);
+      if (logs !== undefined) {
+        expect(mount.logs).toContain(logs);
+      }
+    },
+  );
+
+  // Breaks: a mount before the page's `ready` that draws the tab twice, or
+  // leaves it deaf to the slots once ready follows them.
+  it('mount_BeforeReadyWithKeyAndRow_AttachesOnceAndFollowsTheSlots', () => {
+    const mount = mounted();
+    mount.owners.set('s1', 'practice');
+    const { entries, controls, commands, queued, returned, ...info } =
+      sessionState('s1');
+    mount.writers.entries.replace('s1', entries);
+    mount.writers.controls.set('s1', controls);
+    mount.writers.commands.set('s1', commands);
+    mount.writers.queued.set('s1', queued);
+    mount.writers.returned.set('s1', returned);
+    mount.writers.session.set('s1', info);
+    const element = document.createElement('div');
+    mount.view.mount(element, 's1');
+    expect(childCount(element)).toBe(1);
+
+    mount.ready();
+    const notice: ChatEntry = {
+      kind: 'notice',
+      id: 'n1',
+      at: 1000,
+      text: 'hello',
+      tone: 'info',
+      raw: [],
+    };
+    mount.writers.entries.put('s1', notice);
+
+    expect(childCount(element)).toBe(1);
+    expect(mount.addTabs).toEqual([]);
+    expect(mount.view.session('s1')?.state.entries).toEqual([notice]);
+  });
+
+  // Breaks: a reveal of a mounted session that focuses its box while the mount
+  // is hidden, or never once it shows.
+  it('mount_Revealed_FocusesTheBoxWhenTheMountShows', () => {
+    const { mount, handle } = mountedOwned();
+    mount.boxCalls.length = 0;
+
+    mount.view.reveal('s1');
+    expect(mount.boxCalls).toEqual([]);
+    handle.shown();
+
+    expect(mount.boxCalls).toContainEqual(['focus', { insertAtEnd: true }]);
+    expect(mount.addTabs).toEqual([]);
+  });
+
+  // Breaks: a dispose that ends the session, keeps the view drawn, or leaves
+  // the session marked mounted.
+  it('mount_Disposed_LeavesTheSessionHeld', () => {
+    const { mount, element, handle } = mountedOwned();
+    handle.shown();
+
+    handle.dispose();
+
+    expect(childCount(element)).toBe(0);
+    expect(mount.invoked.map(([method]) => method)).toEqual(['loadHistory']);
+    expect(mount.writers.session.get('s1')).toBeDefined();
+    const again = document.createElement('div');
+    mount.view.mount(again, 's1');
+    expect(childCount(again)).toBe(1);
+  });
+
+  // Breaks: a mount left drawn, or still taking keys, after its row left.
+  it('mount_RowRemoved_TearsDownAndGoesDead', () => {
+    const { mount, element, handle } = mountedOwned();
+
+    mount.removeSession('s1');
+    mount.keyCalls.length = 0;
+    handle.shown();
+
+    expect(childCount(element)).toBe(0);
+    expect(mount.keyCalls).toEqual([]);
   });
 });

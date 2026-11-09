@@ -22,14 +22,23 @@ import { largeMainWorkflow } from './large-workflow';
 type FlowFields = Partial<SessionFlow & LargeState>;
 
 function flowWith(fields: FlowFields): SessionFlow {
-  const { planDir, progress, reviewRoundsAtMake, countdownEndsAt, ...flow } =
-    fields;
+  const {
+    planDir,
+    planReported,
+    unreportedPlanDir,
+    progress,
+    reviewRoundsAtMake,
+    countdownEndsAt,
+    ...flow
+  } = fields;
   return {
     ...newFlow('s1', '/r'),
     workflow: LARGE_WORKFLOW_ID,
     ...flow,
     state: {
       planDir: planDir ?? null,
+      planReported: planReported ?? false,
+      unreportedPlanDir: unreportedPlanDir ?? null,
       progress: progress ?? null,
       reviewRoundsAtMake: reviewRoundsAtMake ?? null,
       countdownEndsAt: countdownEndsAt ?? null,
@@ -90,12 +99,22 @@ const PROGRESS_TASK_LINKED: PlanProgress = {
 };
 
 const PLAN_X = '/r/docs/features/x/plan-a';
+// One plan in the repo and its copy in a worktree.
+const PLAN_IN_REPO = '/r/p/plan-a';
+const PLAN_IN_WORKTREE = '/w/p/plan-a';
+const PLAN_IN_WORKTREE_2 = '/w2/p/plan-a';
+const PLAN_B_IN_WORKTREE = '/w/p/plan-b';
+const PLAN_A_OTHER_FEATURE = '/w/q/plan-a';
 const UNCHANGED = 'unchanged';
 // A stage no Large rule names, so only the bookkeeping moves.
 const IN_C = { stage: 'c' } as const;
 
 function planChanged(progress: PlanProgress): WorkflowSignal {
   return largeSignal({ type: 'planChanged', progress });
+}
+
+function planReported(planDir: string): WorkflowSignal {
+  return largeSignal({ type: 'planReported', planDir });
 }
 
 const FOLD_ROWS: {
@@ -429,6 +448,153 @@ const FOLD_ROWS: {
     expected: flowWith({ reviewRoundsAtMake: 1 }),
   },
   {
+    name: 'planReported of another folder moves planDir, marks it and drops progress',
+    flow: flowWith({
+      stage: 'make',
+      planDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+    }),
+    signal: planReported(PLAN_IN_WORKTREE),
+    expected: flowWith({
+      stage: 'make',
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+    }),
+  },
+  {
+    name: 'planReported of another folder after a report keeps the unreported folder',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_IN_WORKTREE_2),
+    expected: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE_2,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+    }),
+  },
+  {
+    name: 'planReported of a folder named otherwise keeps no unreported folder',
+    flow: flowWith({
+      stage: 'make',
+      planDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_B_IN_WORKTREE),
+    expected: flowWith({
+      stage: 'make',
+      planDir: PLAN_B_IN_WORKTREE,
+      planReported: true,
+    }),
+  },
+  {
+    name: 'planReported of the same plan name under another feature keeps no unreported folder',
+    flow: flowWith({
+      stage: 'make',
+      planDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_A_OTHER_FEATURE),
+    expected: flowWith({
+      stage: 'make',
+      planDir: PLAN_A_OTHER_FEATURE,
+      planReported: true,
+    }),
+  },
+  {
+    name: 'planReported of a folder named otherwise after a report drops the unreported folder',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_B_IN_WORKTREE),
+    expected: flowWith({
+      ...IN_C,
+      planDir: PLAN_B_IN_WORKTREE,
+      planReported: true,
+    }),
+  },
+  {
+    name: 'planReported of the held folder marks it and keeps progress',
+    flow: flowWith({ ...IN_C, planDir: PLAN_IN_WORKTREE, progress: PROGRESS }),
+    signal: planReported(PLAN_IN_WORKTREE),
+    expected: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      progress: PROGRESS,
+    }),
+  },
+  {
+    name: 'planReported of the held, marked folder changes nothing',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_IN_WORKTREE),
+    expected: UNCHANGED,
+  },
+  {
+    name: 'wigley:make of another folder after a report moves planDir and drops the mark',
+    flow: flowWith({
+      stage: 'make',
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_X,
+      progress: PROGRESS,
+    }),
+    signal: skill('wigley:make', PLAN_IN_REPO),
+    expected: flowWith({ stage: 'make', planDir: PLAN_IN_REPO }),
+  },
+  {
+    name: 'dropping the plan drops the mark',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: skill('wigley:feature', null),
+    expected: flowWith({ stage: 'explore' }),
+  },
+  {
+    name: 'fileWritten of another plan after a report moves planDir and drops the mark',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_X,
+      progress: PROGRESS,
+    }),
+    signal: { type: 'fileWritten', path: `${PLAN_IN_REPO}/plan.md` },
+    expected: flowWith({ ...IN_C, planDir: PLAN_IN_REPO }),
+  },
+  {
+    name: 'fileWritten of the reported plan changes nothing',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: { type: 'fileWritten', path: `${PLAN_IN_WORKTREE}/plan.md` },
+    expected: UNCHANGED,
+  },
+  {
     name: 'a signal nothing answers changes nothing',
     flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
     signal: largeSignal({ type: 'planGone' }),
@@ -484,6 +650,14 @@ describe('largeStateOf', () => {
       name: 'a task line with neither file nor status',
       state: stateWithTask({ wave: 1, text: 'first', done: true }),
     },
+    {
+      name: 'a planReported not a boolean',
+      state: { ...EMPTY_LARGE_STATE, planReported: 'yes' },
+    },
+    {
+      name: 'an unreportedPlanDir not a string',
+      state: { ...EMPTY_LARGE_STATE, unreportedPlanDir: 3 },
+    },
   ])('largeStateOf_BadShape_ReadsEmpty ($name)', ({ state }) => {
     expect(largeStateOf({ ...newFlow('s1', '/r'), state })).toBe(
       EMPTY_LARGE_STATE,
@@ -497,6 +671,21 @@ describe('largeStateOf', () => {
     },
   ])('largeStateOf_ValidState_ReadsThatObject ($name)', ({ state }) => {
     expect(largeStateOf({ ...newFlow('s1', '/r'), state })).toBe(state);
+  });
+
+  it('largeStateOf_SavedBeforeReports_ReadsUnreported', () => {
+    const state = {
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+      countdownEndsAt: null,
+    };
+
+    expect(largeStateOf({ ...newFlow('s1', '/r'), state })).toEqual({
+      ...state,
+      planReported: false,
+      unreportedPlanDir: null,
+    });
   });
 
   it('withLargeState patches the state and keeps the rest of the flow', () => {
@@ -547,6 +736,18 @@ describe('sameLargeState', () => {
       name: 'an equal progress in another object',
       a: { ...EMPTY_LARGE_STATE, progress: PROGRESS },
       b: { ...EMPTY_LARGE_STATE, progress: structuredClone(PROGRESS) },
+      same: false,
+    },
+    {
+      name: 'another planReported',
+      a: EMPTY_LARGE_STATE,
+      b: { ...EMPTY_LARGE_STATE, planReported: true },
+      same: false,
+    },
+    {
+      name: 'another unreportedPlanDir',
+      a: EMPTY_LARGE_STATE,
+      b: { ...EMPTY_LARGE_STATE, unreportedPlanDir: PLAN_X },
       same: false,
     },
     {

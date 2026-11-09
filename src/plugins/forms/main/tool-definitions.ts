@@ -63,8 +63,10 @@ const ASK_ROUND_DESCRIPTION =
   'an ask_round for a different round waits until the user submits or ' +
   'cancels that round in the app; if its deadline passes first, it returns a ' +
   "'draft' whose 'next' says the round was not opened: send it again with " +
-  'ask_round, not collect_last_round. A new round never closes an ' +
-  'unfinished one: the user cancels a round you abandon.';
+  "ask_round, not collect_last_round. Outcome 'auto_answered' means the " +
+  'session is headless: the app showed no form and answered every question ' +
+  "and finding with its recommendation; follow its 'next'. A new round " +
+  'never closes an unfinished one: the user cancels a round you abandon.';
 
 const ROUND_LAYOUT_DESCRIPTION =
   "The layout that draws this round: a folder name in the app's forms " +
@@ -79,7 +81,8 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
   'any failure that lost the answers. ' +
   "Outcome 'no_round' means no round is open and no finished answers are " +
   "waiting: send the round again with ask_round, and the user's saved " +
-  'answers fill in.';
+  "answers fill in. After an 'auto_answered' round it returns that result " +
+  'again.';
 
 // The two wigley-forms tools as MCP tools/list publishes them. ask_round's item
 // lists come from the same formats parseRound validates with, so the schema

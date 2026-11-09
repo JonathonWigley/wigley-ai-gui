@@ -7,6 +7,7 @@ import type {
 } from '../../../contracts/keymap';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
+import { normalLeaderKeys } from '../../../shared/key-hints';
 import {
   isJsonObject,
   isSameJson,
@@ -22,7 +23,6 @@ import { type BindLine, isExpandable, keymapLeader } from './keymap-rows';
 
 // The sections the advanced box edits, in the order it shows them.
 const ADVANCED_SECTIONS = [
-  'groups',
   'remaps',
   'app',
   'intercept',
@@ -167,6 +167,34 @@ export function withCommandReset(
   });
 }
 
+// `layer` with `line`'s bind moved to `to`: a user bind's first entry equal
+// to it is dropped, a default gets the `keys` unbind entry `withRemovedBind`
+// writes, then `to` is added as `withAddedBind` adds it.
+export function withMovedBind(
+  layer: UserKeymap | null,
+  line: BindLine,
+  to: KeyBind,
+  schema: UserConfigSchema,
+): UserKeymap {
+  return withAddedBind(withoutLine(layer, line, schema), to, schema);
+}
+
+function withoutLine(
+  layer: UserKeymap | null,
+  line: BindLine,
+  schema: UserConfigSchema,
+): UserKeymap {
+  if (line.origin === 'default') {
+    return withRemovedBind(layer, line, schema);
+  }
+  const binds = [...(layer?.binds ?? [])];
+  const index = binds.findIndex((bind) => isSameJson(bind, line.bind));
+  if (index !== -1) {
+    binds.splice(index, 1);
+  }
+  return { ...layer, binds };
+}
+
 // `layer` with its `leader` set to `leader`, or without one for null.
 export function withLeader(
   layer: UserKeymap | null,
@@ -181,8 +209,30 @@ export function withLeader(
   return tidied(result);
 }
 
-// The advanced box's text: the layer's groups, remaps, app, intercept and
-// global binds and its accelerator unbind entries, as 2-space JSON.
+// `layer` with the `groups` name of `prefix` set to `name`, or removed for
+// null; an entry spelling the same keys another way under the layer's leader,
+// else the schema's default, is replaced. An emptied `groups` drops.
+export function withGroupName(
+  layer: UserKeymap | null,
+  prefix: string,
+  name: string | null,
+  schema: UserConfigSchema,
+): UserKeymap {
+  const leader = keymapLeader(schema, layer);
+  const normal = normalLeaderKeys(prefix, leader);
+  const groups = Object.fromEntries(
+    Object.entries(layer?.groups ?? {}).filter(
+      ([keys]) => normalLeaderKeys(keys, leader) !== normal,
+    ),
+  );
+  if (name !== null) {
+    groups[prefix] = name;
+  }
+  return tidied({ ...layer, groups });
+}
+
+// The advanced box's text: the layer's remaps, app, intercept and global binds
+// and its accelerator unbind entries, as 2-space JSON.
 export function advancedText(layer: UserKeymap | null): string {
   const shown: JsonObject = {};
   for (const section of ADVANCED_SECTIONS) {
@@ -206,13 +256,16 @@ function advancedKeyProblem(key: string): string | null {
   if (key === 'binds' || key === 'leader') {
     return `"${key}" belongs in the command rows`;
   }
+  if (key === 'groups') {
+    return '"groups" belongs in the Leader menu';
+  }
   const isAdvanced = (ADVANCED_SECTIONS as readonly string[]).includes(key);
   return isAdvanced ? null : `"${key}" is not a keymap section`;
 }
 
 // `layer` with the advanced box's sections replaced by those `text` holds,
-// keeping `binds`, `leader` and the `keys` unbind entries in their places; a
-// problem when the text is not a JSON object of advanced sections.
+// keeping `binds`, `leader`, `groups` and the `keys` unbind entries in their
+// places; a problem when the text is not a JSON object of advanced sections.
 export function withAdvanced(
   layer: UserKeymap | null,
   text: string,

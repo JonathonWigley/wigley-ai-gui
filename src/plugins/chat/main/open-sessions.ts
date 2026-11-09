@@ -29,6 +29,9 @@ export interface SavedSession {
   // The `AgentStart.resume` the row's last process start passed; false when
   // the row never started one.
   launchResume: boolean;
+  // Whether the row's last process start carried the headless note; the
+  // row's `headless` when the row never started one.
+  launchHeadless: boolean;
   // The controls the row held, as its process last reported them; [] when no
   // process reported any.
   controls: SessionControl[];
@@ -49,6 +52,15 @@ export interface SavedSession {
   // The row was launched unattended: each permission prompt is denied at once.
   // A file written without it reads as false.
   unattended: boolean;
+  // The row is headless, as the user or its launching session set it. A file
+  // written without it reads as false.
+  headless: boolean;
+  // The texts the row carries to its harness after the global ones. A file
+  // written without it reads as [].
+  instructions: string[];
+  // The plugin the row belongs to; null for a row with none, and in a file
+  // written without it.
+  owner: string | null;
 }
 
 // The titles of a session that has none.
@@ -67,12 +79,16 @@ type LaterSavedField =
   | 'returned'
   | 'launchControls'
   | 'launchResume'
+  | 'launchHeadless'
   | 'controls'
   | 'confirmedPicks'
   | 'returnedDrops'
   | 'activeMs'
   | 'rowId'
-  | 'unattended';
+  | 'unattended'
+  | 'headless'
+  | 'instructions'
+  | 'owner';
 
 type StoredSession = Omit<SavedSession, LaterSavedField> &
   Partial<Pick<SavedSession, LaterSavedField>>;
@@ -190,12 +206,17 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalStringRecord(value.launchControls) &&
     (value.launchResume === undefined ||
       typeof value.launchResume === 'boolean') &&
+    (value.launchHeadless === undefined ||
+      typeof value.launchHeadless === 'boolean') &&
     isOptionalControlList(value.controls) &&
     isOptionalStringRecord(value.confirmedPicks) &&
     isOptionalStrings(value.returnedDrops) &&
     isOptionalActiveMs(value.activeMs) &&
     isOptionalId(value.rowId) &&
-    (value.unattended === undefined || typeof value.unattended === 'boolean')
+    (value.unattended === undefined || typeof value.unattended === 'boolean') &&
+    (value.headless === undefined || typeof value.headless === 'boolean') &&
+    isOptionalStrings(value.instructions) &&
+    isOptionalId(value.owner)
   );
 }
 
@@ -233,12 +254,16 @@ function parseSavedSessions(text: string): SavedSessions {
       returned: stored.returned ?? [],
       launchControls: stored.launchControls ?? {},
       launchResume: stored.launchResume ?? false,
+      launchHeadless: stored.launchHeadless ?? stored.headless ?? false,
       controls: stored.controls ?? [],
       confirmedPicks: stored.confirmedPicks ?? {},
       returnedDrops: stored.returnedDrops ?? [],
       activeMs: stored.activeMs ?? 0,
       rowId: stored.rowId ?? null,
       unattended: stored.unattended ?? false,
+      headless: stored.headless ?? false,
+      instructions: stored.instructions ?? [],
+      owner: stored.owner ?? null,
     })),
     selectedHostSessionId,
   };

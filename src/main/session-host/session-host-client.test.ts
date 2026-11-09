@@ -242,14 +242,17 @@ function clientRig(
 function recordedEvents() {
   const lines: PipeLine[] = [];
   const closed: HostedExit[] = [];
+  const pids: number[] = [];
   const events: HostedProcessEvents = {
     line: (line) => lines.push(line),
     closed: (exit) => closed.push(exit),
+    spawned: (pid) => pids.push(pid),
   };
   return {
     events,
     lines,
     closed,
+    pids,
     seqs: () => lines.map((line) => line.seq),
     errors: () => closed.map((exit) => exit.error),
   };
@@ -299,6 +302,7 @@ function replySubscribed(
   message: SubscribeMessage,
   log: string | null,
   running = log !== null,
+  pid = running ? 4321 : null,
 ) {
   host.push({
     type: 'subscribe',
@@ -306,6 +310,7 @@ function replySubscribed(
     id: message.id,
     running,
     log,
+    pid,
   });
 }
 
@@ -841,6 +846,49 @@ describe('createSessionHostClient', () => {
 
     await expect(client.list()).rejects.toThrow();
   });
+
+  it.each([
+    { via: 'spawn', pids: [4321] },
+    { via: 'attach', pids: [] },
+    { via: 'attach of a detached spawn, then a spawned push', pids: [] },
+  ])(
+    'pid_SpawnedOrSubscribed_HeldUntilClosed: via $via',
+    async ({ via, pids }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const host = await hostWithLogs(channel, {
+        a: writePipeLog(dir, 'a', []),
+      });
+      const rig = clientRig(dir, channel);
+      const client = rig.create();
+      const recorded = recordedEvents();
+      const attaches = via !== 'spawn';
+      const pushesSpawned = via !== 'attach';
+
+      if (attaches && pushesSpawned) {
+        client.spawn(spawnRequest('a'), recordedEvents().events).detach();
+      }
+      const process = attaches
+        ? (await client.attach('a', recorded.events))?.process
+        : client.spawn(spawnRequest('a'), recorded.events);
+      if (attaches) {
+        rig.timers.fire(0);
+      }
+      if (pushesSpawned) {
+        await vi.waitFor(() =>
+          expect(sentOfType(host, 'spawn')).toHaveLength(1),
+        );
+        host.push({ type: 'spawned', id: 'a', pid: 4321 });
+      }
+
+      await vi.waitFor(() => expect(process?.pid).toBe(4321));
+      const exit: HostedExit = { code: 0, signal: null, error: null };
+      host.push({ type: 'closed', id: 'a', exit });
+      await vi.waitFor(() => expect(recorded.closed).toEqual([exit]));
+      expect(recorded.pids).toEqual(pids);
+      expect(process?.pid).toBeNull();
+    },
+  );
 
   it('hostExits_OpenProcesses_CloseWithAnError', async () => {
     const dir = tempFolder();

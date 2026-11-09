@@ -13,10 +13,15 @@ const NO_PLAN: SessionFlow = withLargeState(PLANNED, { planDir: null });
 const MAKE = { text: '/wigley:make /r/plan-a', images: [] };
 
 // Workflow actions over a chat fake that records each call in order;
-// `clearFails` makes `clear` reject. The flow `flowOf` returns is `flow`.
+// `clearFails` makes `clear` reject. The flow `flowOf` returns is `flow`, and
+// `headless` names the sessions chat reads as headless.
 function startActions(
   flow: SessionFlow | null,
-  options: { profile?: string | null; clearFails?: boolean } = {},
+  options: {
+    profile?: string | null;
+    clearFails?: boolean;
+    headless?: readonly string[];
+  } = {},
 ) {
   const calls: unknown[][] = [];
   const signals: WorkflowSignal[] = [];
@@ -38,6 +43,7 @@ function startActions(
       },
       profileOf: () =>
         options.profile === undefined ? 'personal' : options.profile,
+      isHeadless: (sessionId) => options.headless?.includes(sessionId) ?? false,
     },
     log: (line) => logs.push(line),
     flowOf: () => flow,
@@ -68,7 +74,15 @@ describe('createWorkflowActions', () => {
     {
       command: 'makeInNewSession',
       calls: [
-        ['launch', { projectDir: '/r', profile: 'personal', message: MAKE }],
+        [
+          'launch',
+          {
+            projectDir: '/r',
+            profile: 'personal',
+            message: MAKE,
+            headless: false,
+          },
+        ],
       ],
       signals: [largeSignal({ type: 'handedOff' })],
     },
@@ -158,6 +172,30 @@ describe('createWorkflowActions', () => {
       expect.stringMatching(new RegExp(`^${command}\\b.* s1\\b`)),
     ]);
   });
+
+  it.each([
+    { given: 'a headless source', headless: ['s1'], expected: true },
+    { given: 'a source not headless', headless: ['s9'], expected: false },
+  ])(
+    'makeInNewSession_HeadlessSource_LaunchesHeadless: $given',
+    async ({ headless, expected }) => {
+      const subject = startActions(PLANNED, { headless });
+
+      await subject.actions.run('s1', 'makeInNewSession');
+
+      expect(subject.calls).toEqual([
+        [
+          'launch',
+          {
+            projectDir: '/r',
+            profile: 'personal',
+            message: MAKE,
+            headless: expected,
+          },
+        ],
+      ]);
+    },
+  );
 
   it('clearAndMake_ClearRejects_SendsNothingAndRejects', async () => {
     const subject = startActions(PLANNED, { clearFails: true });

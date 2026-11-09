@@ -77,6 +77,8 @@ export function previewFlow(
   const progress = previewProgress(stage);
   const state: LargeState = {
     planDir: progress === null ? null : PREVIEW_PLAN_DIR,
+    planReported: false,
+    unreportedPlanDir: null,
     progress,
     reviewRoundsAtMake: null,
     countdownEndsAt: countdown ? now + autoStartSeconds * 1000 : null,

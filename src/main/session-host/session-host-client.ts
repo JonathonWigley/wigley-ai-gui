@@ -17,6 +17,7 @@ import {
   type LineEvent,
   type PipeLogRecord,
   SESSION_HOST_PROTOCOL,
+  type SpawnedEvent,
 } from '../../contracts/session-host-protocol';
 import {
   HOST_REPLY_LIMIT_MS,
@@ -56,13 +57,18 @@ export interface SessionHostClientDeps {
   log: Log;
 }
 
+// A message the host pushes for one process.
+type PushedEvent = LineEvent | ClosedEvent | SpawnedEvent;
+
 // One events object a `spawn` or an `attach` was given.
 interface Subscriber {
   events: HostedProcessEvents;
+  // True for the events a `spawn` was given: only they hear `spawned`.
+  fromSpawn: boolean;
   // The highest seq read from the log or delivered; lines at or below it are dropped.
   lastSeq: number;
   // Pushed messages held back while an attach reads the log, until its flush. Null once they flow live.
-  buffer: (LineEvent | ClosedEvent)[] | null;
+  buffer: PushedEvent[] | null;
   // True until the attach it belongs to has resolved.
   attaching: boolean;
   detached: boolean;
@@ -73,6 +79,7 @@ interface ProcessEntry {
   id: string;
   ended: boolean; // closed, or its host is gone
   subscriber: Subscriber | null; // the one live events object
+  pid: number | null; // the OS pid once the host reports it; null once ended
 }
 
 interface ConnectAttempt {
@@ -85,6 +92,7 @@ type ConnectedRun = (link: HostLink | null, failure: string) => void;
 
 function endEntry(processes: Map<string, ProcessEntry>, entry: ProcessEntry) {
   entry.ended = true;
+  entry.pid = null;
   if (processes.get(entry.id) === entry) {
     processes.delete(entry.id);
   }
@@ -95,7 +103,7 @@ function deliver(
   processes: Map<string, ProcessEntry>,
   entry: ProcessEntry,
   subscriber: Subscriber,
-  message: LineEvent | ClosedEvent,
+  message: PushedEvent,
 ) {
   if (entry.subscriber !== subscriber) {
     return;
@@ -104,6 +112,13 @@ function deliver(
     if (message.line.seq > subscriber.lastSeq) {
       subscriber.lastSeq = message.line.seq;
       subscriber.events.line(message.line);
+    }
+    return;
+  }
+  if (message.type === 'spawned') {
+    entry.pid = message.pid;
+    if (subscriber.fromSpawn) {
+      subscriber.events.spawned(message.pid);
     }
     return;
   }
@@ -140,7 +155,7 @@ export function createSessionHostClient(
   let waiting: ConnectedRun[] = [];
   let keepIdleMinutes = DEFAULT_KEEP_IDLE_MINUTES;
 
-  const pushed = (message: LineEvent | ClosedEvent) => {
+  const pushed = (message: PushedEvent) => {
     const entry = processes.get(message.id);
     if (!entry?.subscriber) {
       return;
@@ -163,6 +178,7 @@ export function createSessionHostClient(
     processes.clear();
     for (const entry of entries) {
       entry.ended = true;
+      entry.pid = null;
       const subscriber = entry.subscriber;
       if (subscriber === null || subscriber.attaching) {
         continue;
@@ -335,12 +351,18 @@ export function createSessionHostClient(
   ): { entry: ProcessEntry; subscriber: Subscriber } => {
     const subscriber: Subscriber = {
       events,
+      fromSpawn: !attaching,
       lastSeq: 0,
       buffer: attaching ? [] : null,
       attaching,
       detached: false,
     };
-    const entry = processes.get(id) ?? { id, ended: false, subscriber: null };
+    const entry = processes.get(id) ?? {
+      id,
+      ended: false,
+      subscriber: null,
+      pid: null,
+    };
     processes.set(id, entry);
     entry.subscriber = subscriber;
     return { entry, subscriber };
@@ -359,6 +381,9 @@ export function createSessionHostClient(
     };
     return {
       id,
+      get pid() {
+        return entry.ended ? null : entry.pid;
+      },
       write: (text) => sendWhileActive({ type: 'write', id, text }),
       endInput: () => sendWhileActive({ type: 'endInput', id }),
       kill: (signal) => sendWhileActive({ type: 'kill', id, signal }),
@@ -423,6 +448,7 @@ export function createSessionHostClient(
       throw new Error(`the connection dropped during the attach of ${id}`);
     }
     subscriber.attaching = false;
+    entry.pid = reply.pid;
     for (const line of log) {
       subscriber.lastSeq = Math.max(subscriber.lastSeq, line.seq);
     }
@@ -461,9 +487,10 @@ export function createSessionHostClient(
           }),
         );
         return hostedProcess(
-          { id: request.id, ended: true, subscriber: null },
+          { id: request.id, ended: true, subscriber: null, pid: null },
           {
             events,
+            fromSpawn: true,
             lastSeq: 0,
             buffer: null,
             attaching: false,

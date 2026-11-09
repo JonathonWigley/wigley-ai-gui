@@ -13,22 +13,22 @@
 Every session runs one of several workflows, and the app shows which one and where it stands. A good
 outcome: a glance down the session list says how heavy each run is, and a new workflow or a new look
 for one is a new plugin folder or layout, with no engine edit. The rules for picking a level live in
-`~/wigley-agents/workflows.md`; the steps of each live in the marketplace's `wigley:small`,
+`~/wigley-agents/workflows.md`; the steps of each live in the marketplace's `wigley:spike`, `wigley:small`,
 `wigley:medium` and `wigley:feature` skills.
 
 Where each part lives:
 
 - `docs/features/workflow/design.md` — the engine and every stage.
-- `src/plugins/workflow-small/`, `src/plugins/workflow-medium/` and `src/plugins/workflow-large/` — the three workflow
-  plugins.
+- `src/plugins/workflow-spike/`, `src/plugins/workflow-small/`, `src/plugins/workflow-medium/` and
+  `src/plugins/workflow-large/` — the four workflow plugins.
 - `~/wigley-agents/tools/workflow-gate/README.md` — the edit gate.
 - `~/wigley-agents/workflows.md` — the rules for picking a level.
-- `wigley:small` and `wigley:medium` — the steps of the two smaller workflows.
+- `wigley:spike`, `wigley:small` and `wigley:medium` — the steps of the three smaller workflows.
 
 ## Vocabulary
 
-- **Workflow** — a named set of stages a session runs, registered by one plugin. Small, Medium and
-  Large are the first three.
+- **Workflow** — a named set of stages a session runs, registered by one plugin. Spike, Small, Medium
+  and Large are the first four.
 - **Level** — the user's word for a workflow in its size order. The app's **Effort** control is
   Claude's reasoning effort, a different thing, so nothing here is called effort.
 - **Engine** — the `workflow` plugin: it keeps each session's flow and hosts the row, composer and
@@ -41,6 +41,7 @@ Where each part lives:
 
 ```
 workflow          engine: flows, the fold, the tools, part hosts, the run log, addWorkflow
+├─ workflow-spike    stages, skill rule, layout
 ├─ workflow-small    stages, skill rule, layout
 ├─ workflow-medium   stages, skill rule, layout
 └─ workflow-large    Large's stages, plan reading, Clear & make, auto-start, layout
@@ -58,15 +59,16 @@ stage rules, so two workflows may both have a `build` stage. Each plugin owns it
   The tool accepts the step words of every workflow, and the current workflow's rules answer it, so
   a word outside that workflow's stages is ignored.
 - **The checklist** comes from `set_workflow_checklist`, each call replacing the whole list, so a
-  missed call cannot leave the app out of step. Large never calls it: Large's skills are unchanged.
+  missed call cannot leave the app out of step. Large never calls it: Large's checklist comes from `plan.md`.
 - **Only the main agent** moves the stage and sets the checklist. A subagent's call of either tool succeeds and changes
   nothing, so delegated work never overwrites the session's own step.
-- **Large's checklist** reads the newest copy of the plan across the clone and its worktrees, and shows a task as
-  running while its task document reads `Status: in progress`.
+- **Large's checklist** reads the copy of the plan the run reported, through `plan.py` or `set_workflow_plan`, else
+  the moved copy across the clone and its worktrees (`docs/features/workflow/design.md` § Large's stages), and shows
+  a task as running while its task document reads `Status: in progress`.
 
 ## Where it draws
 
-- **Badge** — one letter, S, M or L, in the level's colour, with the full word in its tooltip, beside
+- **Badge** — one letter, X, S, M or L, in the level's colour, with the full word in its tooltip, beside
   the stage text on the session row.
 - **Trail** — in the composer for the whole run, as the `workflow-trail` work built it.
 - **Checklist** — in the side pane once a list or a plan exists.
@@ -81,8 +83,11 @@ user asks to tune `workflows.md`, and it is the evidence for judging Large's age
 
 ## Decisions
 
-- **Three levels.** No study sets the number; ITIL's three change types and vendor guidance are the
-  precedents. A fourth is one plugin away, plus its skill in `LEVEL_SKILLS` in
+- **Three levels, and Spike beside them.** No study sets the number; ITIL's three change types and vendor
+  guidance are the precedents. Spike is not a size: it is throwaway work with no review, so it sits outside the
+  size order. Its badge is X, for experiment, since S is Small's. Spike's stages loop — each ask goes back to
+  `build`, and a round mid-loop back to `interview` — so its stages accept a step word earlier in the trail.
+  A fifth level is one plugin away, plus its skill in `LEVEL_SKILLS` in
   `~/wigley-agents/tools/workflow-gate/workflow-gate` and a row in `~/wigley-agents/workflows.md`: without them the gate
   denies that level's sessions' edits.
 - **Large stays exactly as it was.** The user asked for no change to it. Published guidance argues
@@ -92,9 +97,9 @@ user asks to tune `workflows.md`, and it is the evidence for judging Large's age
   for. It covers the main agent's edit tools, not edits through a shell, and only Claude Code.
 - **No hook blocks finishing until tests pass.** The suites here run past fifteen minutes, and the
   project rules run them filtered to the change.
-- **Small and Medium report only in sessions the app started.** A tool call with the app closed would
+- **Spike, Small and Medium report only in sessions the app started.** A tool call with the app closed would
   start the app, so only the note in app-started sessions tells an agent to call the tools, and
-  `wigley:small` and `wigley:medium` report only there. Large's skills do not change: `wigley:feature`
+  `wigley:spike`, `wigley:small` and `wigley:medium` report only there. Large's skills do not change: `wigley:feature`
   and `wigley:make` call `set_workflow_step` on any host that has the tool, so a terminal Large run
   can start a closed app.
 

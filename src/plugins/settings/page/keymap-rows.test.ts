@@ -10,7 +10,9 @@ import type { UserConfigSchema } from '../../../contracts/user-config';
 import {
   type BindLine,
   coverTexts,
+  KEY_FILTERS,
   keymapRows,
+  matchesKeyFilter,
   replacedBy,
   type CommandRow,
 } from './keymap-rows';
@@ -32,6 +34,7 @@ function schema(
     scopes: [],
     defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app, global: [], intercept },
+    defaultGroups: {},
     defaultLeader: '<Space>',
   };
 }
@@ -160,9 +163,15 @@ describe('replacedBy', () => {
       [{ keys: 'g<CR>', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(ids(replacedBy(given, null, 'g<Enter>', 'p.s', 'p.z'))).toEqual([
-      'p.a',
-    ]);
+    expect(
+      ids(
+        replacedBy(given, null, {
+          keys: 'g<Enter>',
+          scope: 'p.s',
+          command: 'p.z',
+        }),
+      ),
+    ).toEqual(['p.a']);
   });
 
   it('replacedBy_RemovedDefault_NamesNone', () => {
@@ -172,7 +181,9 @@ describe('replacedBy', () => {
     );
     const layer = { unbind: [{ keys: 'x', scope: 'p.s' }] };
 
-    expect(replacedBy(given, layer, 'x', 'p.s', 'p.z')).toEqual([]);
+    expect(
+      replacedBy(given, layer, { keys: 'x', scope: 'p.s', command: 'p.z' }),
+    ).toEqual([]);
   });
 
   it('replacedBy_KeysThePageCannotBind_NamesNone', () => {
@@ -181,7 +192,9 @@ describe('replacedBy', () => {
       [{ keys: 'x', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(replacedBy(given, null, '<Nope>', 'p.s', 'p.z')).toEqual([]);
+    expect(
+      replacedBy(given, null, { keys: '<Nope>', scope: 'p.s', command: 'p.z' }),
+    ).toEqual([]);
   });
 
   it('replacedBy_DefaultHalfAndUserBindOnOtherHalf_NamesBoth', () => {
@@ -200,10 +213,15 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s', 'p.z'))).toEqual([
-      'p.a',
-      'p.b',
-    ]);
+    expect(
+      ids(
+        replacedBy(given, layer, {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.z',
+        }),
+      ),
+    ).toEqual(['p.a', 'p.b']);
   });
 
   it('replacedBy_KeysTheCommandsOwnDefaultHolds_LeavesTheCommandOut', () => {
@@ -222,9 +240,15 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s', 'p.a'))).toEqual([
-      'p.b',
-    ]);
+    expect(
+      ids(
+        replacedBy(given, layer, {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.a',
+        }),
+      ),
+    ).toEqual(['p.b']);
   });
 
   it('replacedBy_PluginDefaultOverCoreDefault_NamesPluginCommand', () => {
@@ -236,7 +260,9 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, null, 'x', 'p.s', 'p.z'))).toEqual(['p.b']);
+    expect(
+      ids(replacedBy(given, null, { keys: 'x', scope: 'p.s', command: 'p.z' })),
+    ).toEqual(['p.b']);
   });
 });
 
@@ -431,7 +457,11 @@ describe('a command with an argument', () => {
 
     expect(
       labels(
-        replacedBy(schema([pick], defaults), null, '<Leader>x', 'p.s', 'p.z'),
+        replacedBy(schema([pick], defaults), null, {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.z',
+        }),
       ),
     ).toEqual(['p.pick label: 1', 'p.pick label: 2']);
   });
@@ -443,9 +473,104 @@ describe('a command with an argument', () => {
     ];
     const withPick = schema([pick], defaults);
 
-    expect(labels(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 2))).toEqual(
-      ['p.pick label: 3'],
-    );
-    expect(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 3)).toEqual([]);
+    expect(
+      labels(
+        replacedBy(withPick, null, {
+          keys: '3',
+          scope: 'p.s',
+          command: 'p.pick',
+          arg: 2,
+        }),
+      ),
+    ).toEqual(['p.pick label: 3']);
+    expect(
+      replacedBy(withPick, null, {
+        keys: '3',
+        scope: 'p.s',
+        command: 'p.pick',
+        arg: 3,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('matchesKeyFilter', () => {
+  const given = schema(
+    ['p.a', 'p.b', 'p.c', 'p.d', 'p.e', 'p.f']
+      .map((id) => command(id))
+      .concat(command('p.menu', 'main')),
+    [
+      { keys: 'x', scope: 'p.s', command: 'p.a' },
+      { keys: 'z', scope: 'p.s', command: 'p.d' },
+      { keys: 'w', scope: 'p.s', command: 'p.e' },
+    ],
+    [{ accelerator: 'CommandOrControl+,', command: 'p.menu' }],
+  );
+  const layer: UserKeymap = {
+    binds: [
+      { keys: 'y', scope: 'p.s', command: 'p.c' },
+      { keys: 'w', scope: 'p.s', command: 'p.f' },
+    ],
+    unbind: [{ keys: 'z', scope: 'p.s' }, { app: 'CommandOrControl+,' }],
+  };
+  const groups = keymapRows(given, layer);
+
+  // Each case's verdict under bound, unbound and changed; `all` shows every
+  // row.
+  const CASES = [
+    {
+      case: 'a firing default',
+      id: 'p.a',
+      bound: true,
+      unbound: false,
+      changed: false,
+    },
+    {
+      case: 'no lines',
+      id: 'p.b',
+      bound: false,
+      unbound: true,
+      changed: false,
+    },
+    {
+      case: 'a user line',
+      id: 'p.c',
+      bound: true,
+      unbound: false,
+      changed: true,
+    },
+    {
+      case: 'a removed default half',
+      id: 'p.d',
+      bound: false,
+      unbound: true,
+      changed: true,
+    },
+    {
+      case: "a default only another command's user bind replaced",
+      id: 'p.e',
+      bound: false,
+      unbound: true,
+      changed: false,
+    },
+    {
+      case: 'a removed accelerator',
+      id: 'p.menu',
+      bound: false,
+      unbound: true,
+      changed: true,
+    },
+  ];
+
+  it.each(
+    CASES.flatMap((each) =>
+      KEY_FILTERS.map((filter) => ({
+        ...each,
+        filter,
+        expected: filter === 'all' ? true : each[filter],
+      })),
+    ),
+  )('matchesKeyFilter_$filter: $case', ({ id, filter, expected }) => {
+    expect(matchesKeyFilter(row(groups, id), filter)).toBe(expected);
   });
 });

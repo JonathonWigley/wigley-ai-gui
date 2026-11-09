@@ -111,7 +111,9 @@ export interface AgentFormSession<Payload> {
   // open tool or the collect tool, and that the host cancels when no other call
   // waits on that form, closes the unfinished form in the window as end does,
   // so the session's next form shows; a re-send of that form queued behind the
-  // call counts as waiting on it.
+  // call counts as waiting on it. While the service's auto-answer is on for
+  // the session, a call shows no form and waits on no earlier call: it saves
+  // and returns the auto-answer's answers at once, and an open form stays.
   open(
     args: unknown,
     toolUseId: string | null,
@@ -152,6 +154,16 @@ export interface AgentFormType<Form, Body, Payload> {
   notShownPayload(form: Form, blockingHeading: string | null): Payload;
 }
 
+// How a form type answers a form itself, with no window, while the session is
+// switched to answer them so.
+export interface AgentFormAutoAnswer<Form, Body, Payload> {
+  // Read at each open call; `sessionId` is the app's id for the session.
+  isOn(sessionId: string): boolean;
+  // The answers the form is saved and returned with.
+  body(form: Form): Body;
+  payload(form: Form, body: Body): Payload;
+}
+
 // The sessions plugin's `MarkOptions`: the toast's text and what its keys do.
 export interface AgentFormMarkOptions {
   text: string;
@@ -161,8 +173,6 @@ export interface AgentFormMarkOptions {
 // The parts of the sessions plugin's main exports a presenter uses.
 export interface AgentFormSessions {
   mark(sessionId: string, options: AgentFormMarkOptions): void;
-  // Selects the session's row only when it holds one.
-  activateExistingRow(sessionId: string): void;
   // `mayClose` refuses with a reason; `cancelHold` ends what it holds when
   // the user's close key asks.
   addCloseGuard(

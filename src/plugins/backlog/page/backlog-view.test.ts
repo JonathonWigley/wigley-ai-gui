@@ -53,7 +53,7 @@ function item(title: string): FollowupItem {
   };
 }
 
-// The plan's newest copy, in a linked worktree, and its task's.
+// The plan's moved copy, in a linked worktree, and its task's.
 const PLAN_COPY = '/wt/docs/features/feature/plan-p/plan.md';
 const TASK_COPY = '/wt/docs/features/feature/plan-p/01-t.md';
 
@@ -419,7 +419,7 @@ describe('backlog view layouts', () => {
     });
   });
 
-  it("a plan's detail reads its newest copy", async () => {
+  it("a plan's detail reads its moved copy", async () => {
     const { view, readDocs } = await backlogSetup();
 
     view.commands.listBottom();

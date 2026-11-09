@@ -109,6 +109,9 @@ interface SessionEntry {
   titles: SessionTitles;
   // Fixed at connect.
   profileDir: string | null;
+  // The plugin the session's row belongs to, fixed at `open`; null for a
+  // connected session and an `open` with no owner.
+  owner: string | null;
 }
 
 // A mark this soon after `release` closed the session's selected row is a
@@ -165,6 +168,7 @@ function rowOf(entry: SessionEntry): SessionRow {
     hostSessionId: info.sessionId,
     titles: { ...entry.titles },
     profileDir: entry.profileDir,
+    owner: entry.owner,
   };
 }
 
@@ -236,7 +240,7 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // connected session has no row until `mark` or `activate` adds it at the end,
 // and `release` closes that row again; an owned session gets its row at open,
 // under the `rowId` it was opened with, else a new id, selected unless opened
-// with `select` false, is joined by each relay carrying
+// with `select` false or with an `owner`, is joined by each relay carrying
 // its host id without a row of its own, a newer relay taking the join from an
 // older one, moves to a new host id by its `setHostSessionId()`, which retires
 // the old id and its relay, and ends only by its `end()`, or once
@@ -251,10 +255,12 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // from none, or `release` closed another selected row. A mark that reaches a
 // row not selected stores its options as the row's `markToast` unless the row
 // is still marked, so a toast left on a row a mark selected never outlives the
-// next mark; an activate clears it. `activateExistingRow` selects
-// only a row the session holds and logs and ignores one with none. `mark`,
-// `activate`, `activateExistingRow`, `release` and `closeSession` write only what
-// changed; `mark`, `activate`, `activateExistingRow`
+// next mark; an activate clears it. `mark` and
+// `activate` log and ignore a session opened with an
+// `owner`, and a closed selected row passes the selection to the nearest row
+// with no owner, right then left, so main never selects a row with an owner.
+// `mark`, `activate`, `release` and `closeSession` write
+// only what changed; `mark`, `activate`
 // and `closeSession` log and ignore an unknown session, `release` silently
 // ignores a session it cannot act on. `release` and `closeSession` log and
 // keep a row a close guard refuses, and emit `closed` for a row they close;
@@ -285,7 +291,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const { rows, selection } = deps;
   // The session whose selected row `release` closed, and when: its next mark
   // selects the row again within RESELECT_WINDOW_MS. Null after that mark, an
-  // activate or activateExistingRow, a selecting open, the session's end, or a
+  // activate, a selecting open, the session's end, or a
   // mark that selects another session from none; a release of another
   // selected row replaces it.
   let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
@@ -322,16 +328,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     writeSelection(row.sessionId);
   };
 
-  // The right neighbour takes over from a closed selected row, else the left.
+  // The nearest row with no owner to the right takes over from a closed
+  // selected row, else the nearest to the left.
   const removeRow = (sessionId: string) => {
-    const ids = [...rows.all().keys()];
-    const position = ids.indexOf(sessionId);
+    const held = [...rows.all().values()];
+    const position = held.findIndex((row) => row.sessionId === sessionId);
     rows.delete(sessionId);
     if (sessionId !== selectedSessionId()) {
       return;
     }
-    const neighbourId = ids[position + 1] ?? ids[position - 1] ?? null;
-    const neighbour = neighbourId === null ? undefined : rows.get(neighbourId);
+    const hasNoOwner = (row: SessionRow) => row.owner === null;
+    const neighbour =
+      held.slice(position + 1).find(hasNoOwner) ??
+      held.slice(0, position).findLast(hasNoOwner);
     if (neighbour === undefined) {
       writeSelection(null);
     } else {
@@ -443,6 +452,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const addEntry = (
     info: SessionInfo,
     owned: boolean,
+    owner: string | null,
     id: string = deps.randomHex(),
   ): SessionEntry => {
     const session: AgentSession = { id, info };
@@ -459,6 +469,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       retiredHostIds: new Set(),
       titles: { user: null, agent: null, firstMessage: null },
       profileDir: deps.configFolder(info),
+      owner,
     };
     entries.set(session.id, entry);
     if (info.projectDir !== null) {
@@ -644,7 +655,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   };
 
   // The kept session's new owner takes it as it is: its row, written again
-  // when the user closed it meanwhile, and selected unless `select` is false.
+  // when the user closed it meanwhile, and selected unless `select` is false
+  // or the row has an owner.
   const adopt = (
     entry: SessionEntry,
     hostId: string,
@@ -661,7 +673,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (rows.get(appId) === undefined) {
       rows.set(appId, rowOf(entry));
     }
-    if (select) {
+    if (select && entry.owner === null) {
       writeSelection(appId);
       reselectOnReturn = null;
     }
@@ -783,7 +795,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           `Host session ${hostId} was retired by session ${appId}`,
         );
       }
-      const entry = addEntry(info, false);
+      const entry = addEntry(info, false, null);
       deps.emit('connected', { ...entry.session, owned: false });
       return {
         session: entry.session,
@@ -812,9 +824,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (kept !== undefined) {
         return adopt(kept, hostId, isSelecting);
       }
-      const entry = addEntry(info, true, rowId);
+      const entry = addEntry(info, true, options?.owner ?? null, rowId);
       rows.set(entry.session.id, rowOf(entry));
-      if (isSelecting) {
+      if (isSelecting && entry.owner === null) {
         writeSelection(entry.session.id);
         reselectOnReturn = null;
       }
@@ -825,6 +837,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
         deps.log(`mark for unknown session ${sessionId} ignored`);
+        return;
+      }
+      if (entry.owner !== null) {
+        deps.log(`mark for session ${sessionId} with an owner ignored`);
         return;
       }
       lookUpHostName(entry);
@@ -858,24 +874,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log(`activate for unknown session ${sessionId} ignored`);
         return false;
       }
+      if (entry.owner !== null) {
+        deps.log(`activate for session ${sessionId} with an owner ignored`);
+        return false;
+      }
       lookUpHostName(entry);
       return activateRow(entry);
-    },
-    activateExistingRow(sessionId) {
-      const entry = entries.get(sessionId);
-      if (entry === undefined) {
-        deps.log(
-          `activateExistingRow for unknown session ${sessionId} ignored`,
-        );
-        return;
-      }
-      if (rows.get(sessionId) === undefined) {
-        deps.log(
-          `activateExistingRow for session ${sessionId} with no row ignored`,
-        );
-        return;
-      }
-      activateRow(entry);
     },
     release(sessionId) {
       const entry = entries.get(sessionId);

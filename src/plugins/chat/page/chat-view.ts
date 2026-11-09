@@ -39,7 +39,6 @@ import type {
   RowActivity,
   SessionRow,
   SessionsPageExports,
-  SessionTabHandle,
 } from '../../sessions/contract';
 import {
   type AppSlashCommand,
@@ -48,6 +47,7 @@ import {
   type ChatComposerPart,
   chatDenyEntryCommand,
   type ChatFocus,
+  type ChatMount,
   type ChatPlace,
   chatMoveFocusCommand,
   chatOpenImageCommand,
@@ -99,10 +99,14 @@ import type { SideSections, SideTab } from './side-sections';
 import { completionCommands } from './slash-commands';
 import { compactionLabel } from './working-turn';
 
+// The visible Chat tab is the shown tab, a Sessions tab or a mount
+// (`ChatTabs.mount`): the one whose `shown` ran last, while its host still
+// reads it visible.
 export interface ChatView {
-  // Shows the session's Chat tab: activates the session (Sessions mode shows),
-  // selects the tab, and focuses its box in insert mode with the cursor at
-  // the end the next time the tab is the visible tab (at once when it is). A
+  // Shows the session's Chat tab: a Sessions tab's activates the session
+  // (Sessions mode shows) and selects the tab, a mount's leaves where it shows
+  // to its host; either focuses its box in insert mode with the cursor at the
+  // end the next time the tab is the visible tab (at once when it is). A
   // session with no Chat tab yet gets this the moment its tab is added.
   reveal(sessionId: string): void;
   // The session whose Chat tab is the visible tab.
@@ -187,9 +191,11 @@ export interface HubKeys {
 // session's composer surface, for the part that places its activity dock.
 // `sessionFactsSource` is a held session's facts for the hub's Session section,
 // read live: `onChanged` fires after each status line draw. `hub` is the
-// session hub's keys.
+// session hub's keys. `mount` builds the Chat tab of a session whose row has an
+// owner into `element`, with the throws and the wait `ChatMount` states.
 export interface ChatTabs extends ChatView {
   hub: HubKeys;
+  mount(element: HTMLElement, sessionId: string): ChatMount;
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
@@ -226,6 +232,10 @@ export type ChatTabScope = 'chat' | 'hub';
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in, with that scope; `sessions` also takes each
 // row's activity, and `activeSessionId` names the focused pane's session.
+// `ownerOf` is the owner on the session's row, null for a row with none and
+// undefined while the page holds no row; `onRowAdded` hears each row arrive,
+// those already held at once. A session whose row has an owner gets no Sessions
+// tab: its tab is built only into a mount.
 // `slots` holds chat's slots, and `ready`, which the host calls once every page
 // part has started, reads the sessions already held and follows the slots from
 // then. `activeTimeListeners`
@@ -260,6 +270,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   homeDir: string;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
   activeSessionId(): string | null;
+  ownerOf(sessionId: string): string | null | undefined;
+  onRowAdded(listener: (sessionId: string) => void): void;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
@@ -304,9 +316,29 @@ export interface ChatSlotReaders {
   returned: KeyedSlotReader<ReturnedMessage[]>;
 }
 
+// Where a held tab shows: a Sessions tab, or a mount in another plugin's
+// element. `isVisible` reads whether the tab is on screen as the visible
+// surface now; `select` selects it among its session's tabs, and `reveal`
+// also brings its session to the front. A mount's host does neither: the
+// plugin that mounted it places it.
+interface TabHost {
+  isVisible(): boolean;
+  select(): void;
+  reveal(): void;
+}
+
+// A mount as `ChatTabs.mount` made it: `tab` is null while it waits for its
+// session's key or row, and `isShown` is set by `shown` and cleared by `hidden`.
+interface MountRecord {
+  element: HTMLElement;
+  isShown: boolean;
+  tab: HeldTab | null;
+}
+
 // A held session's Chat tab. `state` is the view's last applied state: the
-// baseline a `chat.session` write compares with. `handle` is null until `addTab` returns, and
-// `box` and `dropTarget` until the editor mounts into the attached tab.
+// baseline a `chat.session` write compares with. `host` is null until the tab
+// is attached, and `box` and `dropTarget` until the editor mounts into the
+// attached tab.
 // `composerSize` follows the drawn composer's height for as long as the tab is
 // held, and `rootSize` the tab's own size, under which the hub can hide.
 // `unseen` is the finished turn the row still shows, and `activity` the
@@ -322,7 +354,7 @@ interface HeldTab {
   sessionId: string;
   name: string;
   state: ChatSessionState;
-  handle: SessionTabHandle | null;
+  host: TabHost | null;
   unseen: Unseen;
   activity: RowActivity | null;
   box: TextEditor | null;
@@ -418,19 +450,22 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
   });
   let pendingReveal: string | null = null;
-  let lastShownSessionId: string | null = null;
+  let lastShown: HeldTab | null = null;
   let isDisposed = false;
+  // Each session mounted, attached or waiting, by session id.
+  const mounts = new Map<string, MountRecord>();
+  // The sessions whose `chat.session` key arrived before their row.
+  const awaitingRow = new Set<string>();
 
   const focusIfRevealed = (tab: HeldTab) => {
     const isWaiting = pendingReveal === tab.sessionId;
-    if (isWaiting && tab.box !== null && tab.handle?.isVisible() === true) {
+    if (isWaiting && tab.box !== null && tab.host?.isVisible() === true) {
       pendingReveal = null;
       tab.box.focus({ insertAtEnd: true });
     }
   };
   const showRevealed = (tab: HeldTab) => {
-    deps.sessions.activate(tab.sessionId);
-    tab.handle?.select();
+    tab.host?.reveal();
     focusIfRevealed(tab);
   };
 
@@ -453,37 +488,37 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     placeReturned({ tabs: view, channel, log }, session, fresh);
   };
 
-  const add = (info: ChatSessionInfo) => {
-    if (isDisposed || tabs.has(info.sessionId)) {
-      return;
-    }
+  const tabView: TabView = {
+    isHeld: (heldTab) => tabs.get(heldTab.sessionId) === heldTab,
+    // Chat keys act only on the visible Chat tab's session. Every Chat tab
+    // sets the same scope, so no pushed dialog hears a base change:
+    // `otherSessionShown` closes the session's dialogs.
+    shown: (shownTab) => {
+      shownTab.stop.leave();
+      takeKeys(shownTab, 'chat', deps);
+      askHistory(shownTab, deps);
+      if (lastShown !== null && lastShown.sessionId !== shownTab.sessionId) {
+        deps.otherSessionShown();
+      }
+      lastShown = shownTab;
+      log(`Chat tab shown in ${shownTab.name}`);
+      drawStatusLine(shownTab);
+      shownTab.entries.scrollToFocus();
+      focusIfRevealed(shownTab);
+      writeFocus(shownTab);
+    },
+    focusChanged: () => writeFocus(),
+    beforeClose: (closing, atOnce) => mayClose(closing, deps, atOnce),
+    resized: leaveUnreachableHub,
+  };
+
+  // Builds the session's tab, attached by `attach`, and holds it.
+  const hold = (
+    info: ChatSessionInfo,
+    attach: (tab: HeldTab) => TabHost,
+  ): HeldTab => {
     const state = stateInSlots(info, slots);
-    const tab = createTab(state, toastedKinds, deps, {
-      isHeld: (heldTab) => tabs.get(heldTab.sessionId) === heldTab,
-      // Chat keys act only on the visible Chat tab's session. Every Chat tab
-      // sets the same scope, so no pushed dialog hears a base change:
-      // `otherSessionShown` closes the session's dialogs.
-      shown: (shownTab) => {
-        shownTab.stop.leave();
-        takeKeys(shownTab, 'chat', deps);
-        askHistory(shownTab, deps);
-        if (
-          lastShownSessionId !== null &&
-          lastShownSessionId !== shownTab.sessionId
-        ) {
-          deps.otherSessionShown();
-        }
-        lastShownSessionId = shownTab.sessionId;
-        log(`Chat tab shown in ${shownTab.name}`);
-        drawStatusLine(shownTab);
-        shownTab.entries.scrollToFocus();
-        focusIfRevealed(shownTab);
-        writeFocus(shownTab);
-      },
-      focusChanged: () => writeFocus(),
-      beforeClose: (closing, atOnce) => mayClose(closing, deps, atOnce),
-      resized: leaveUnreachableHub,
-    });
+    const tab = createTab(state, toastedKinds, deps, tabView, attach);
     tabs.set(state.sessionId, tab);
     // A focus change while `createTab` ran found the tab not yet held.
     writeFocus();
@@ -493,7 +528,42 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       showRevealed(tab);
     }
     announceActiveTime(state.sessionId, state.activeTime);
+    return tab;
   };
+
+  // A session arrived or changed with no tab held: a row with no owner gets
+  // its Sessions tab; a row with an owner gets its tab only in a waiting
+  // mount; a session with no row yet waits for it.
+  const add = (info: ChatSessionInfo) => {
+    const { sessionId } = info;
+    if (isDisposed || tabs.has(sessionId)) {
+      return;
+    }
+    const owner = deps.ownerOf(sessionId);
+    if (owner === undefined) {
+      awaitingRow.add(sessionId);
+      return;
+    }
+    awaitingRow.delete(sessionId);
+    const mount = mounts.get(sessionId);
+    if (owner === null) {
+      if (mount !== undefined) {
+        mounts.delete(sessionId);
+        log(`session ${sessionId} is not owned; it shows in Sessions`);
+      }
+      hold(info, (tab) => attachToSessions(tab, deps, tabView));
+      return;
+    }
+    if (mount !== undefined) {
+      mount.tab = hold(info, (tab) => attachToMount(tab, mount, tabView));
+    }
+  };
+  deps.onRowAdded((sessionId) => {
+    const info = slots.session.get(sessionId);
+    if (awaitingRow.has(sessionId) && info !== undefined) {
+      add(info);
+    }
+  });
 
   // Runs the block of each value `info` changed. A fresh object from the Bridge
   // always differs by identity, so the two objects compare by what they hold.
@@ -547,7 +617,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const wasActive = tab.state.activity !== 'idle';
     tab.unseen = unseenAfterRest(tab.unseen, error, wasActive);
     drawActivity(tab, deps);
-    if (tab.handle?.isVisible() === true) {
+    if (tab.host?.isVisible() === true) {
       deps.visibleSessionRested();
     }
     if (error === null) {
@@ -558,6 +628,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
   });
   deps.onSessionRemoved((sessionId) => {
+    awaitingRow.delete(sessionId);
+    const mount = mounts.get(sessionId);
+    mounts.delete(sessionId);
     const tab = tabs.get(sessionId);
     if (tab === undefined) {
       return;
@@ -569,6 +642,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     log(`session closed: ${tab.name}`);
     tearDownTab(tab);
+    mount?.tab?.root.remove();
   });
   // Viewing a session, clearing its conversation or sending to it leaves
   // nothing unseen.
@@ -588,7 +662,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   deps.onScopeChanged((scope) => {
     scopeInForce = scope;
     for (const tab of tabs.values()) {
-      const isVisible = tab.handle?.isVisible() === true;
+      const isVisible = tab.host?.isVisible() === true;
       tab.stop.scopeChanged(isVisible);
       if (!isVisible || scope === CHAT_SCOPE) {
         tab.isAtHub = false;
@@ -603,13 +677,20 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
   });
 
-  const visibleTab = () =>
-    [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);
+  // The tab shown last, while it is held and its host reads it visible.
+  const visibleTab = (): HeldTab | undefined => {
+    const tab = lastShown;
+    const isHeldVisible =
+      tab !== null &&
+      tabs.get(tab.sessionId) === tab &&
+      tab.host?.isVisible() === true;
+    return isHeldVisible ? tab : undefined;
+  };
   // `chat.focus` as last written: chat's page writes null at its start.
   let writtenFocus: ChatFocus | null = null;
   // Writes the focus of `shownTab`, else of the visible tab, when it differs from
-  // the last written. A tab shown inside `addTab` is not yet in `tabs`, and its
-  // handle is not yet set, so `visibleTab` cannot find it.
+  // the last written. A tab shown inside `attach` is not yet in `tabs`, and its
+  // host is not yet set, so `visibleTab` cannot find it.
   const writeFocus = (shownTab?: HeldTab) => {
     const next = focusOf(shownTab ?? visibleTab());
     if (!isSameJson(next, writtenFocus)) {
@@ -683,6 +764,57 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     },
     visibleSessionId: () => visibleTab()?.sessionId ?? null,
     activeTime: (sessionId) => slots.session.get(sessionId)?.activeTime ?? null,
+    mount(element, sessionId) {
+      if (isDisposed) {
+        throw new Error('chat page is stopped');
+      }
+      if (deps.ownerOf(sessionId) === null) {
+        throw new Error(
+          `session ${sessionId} is not owned; it shows in Sessions`,
+        );
+      }
+      if (mounts.has(sessionId)) {
+        throw new Error(`session ${sessionId} is already mounted`);
+      }
+      const record: MountRecord = { element, isShown: false, tab: null };
+      mounts.set(sessionId, record);
+      const info = slots.session.get(sessionId);
+      if (info !== undefined) {
+        add(info);
+      }
+      const isLive = () => mounts.get(sessionId) === record;
+      return {
+        shown() {
+          if (!isLive()) {
+            return;
+          }
+          record.isShown = true;
+          if (record.tab !== null) {
+            tabView.shown(record.tab);
+          }
+        },
+        hidden() {
+          if (isLive()) {
+            record.isShown = false;
+            tabView.focusChanged();
+          }
+        },
+        // Leaves the session running: no call to main.
+        dispose() {
+          if (!isLive()) {
+            return;
+          }
+          mounts.delete(sessionId);
+          if (record.tab !== null) {
+            tabs.delete(sessionId);
+            writeFocus();
+            log(`chat view unmounted: ${record.tab.name}`);
+            tearDownTab(record.tab);
+            record.tab.root.remove();
+          }
+        },
+      };
+    },
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
@@ -736,9 +868,13 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     dispose() {
       isDisposed = true;
       const held = [...tabs.values()];
+      const mounted = [...mounts.values()];
       tabs.clear();
+      mounts.clear();
+      awaitingRow.clear();
       writeFocus();
       callEach(held, tearDownTab);
+      callEach(mounted, (mount) => mount.tab?.root.remove());
     },
     composerOf: (sessionId) => tabs.get(sessionId)?.composer ?? null,
     sessionFactsSource: (sessionId) => {
@@ -805,7 +941,7 @@ function tearDownTab(tab: HeldTab) {
 // part holding the entry cursor leaves first, and a visible tab's cursor goes
 // back on the entries.
 function drawComposer(tab: HeldTab) {
-  tab.stop.composerRedrawn(tab.handle?.isVisible() === true);
+  tab.stop.composerRedrawn(tab.host?.isVisible() === true);
   const hadFocus = tab.isBoxFocused;
   const composer = tab.composer.drawComposer(tab.main, composerInputOf(tab));
   tab.composerSize.disconnect();
@@ -1019,12 +1155,69 @@ function writeTabPlace(tab: HeldTab) {
   tab.place.write({ draft: tab.box.text(), ...tab.entries.place() });
 }
 
+// What a held tab calls back on the view. `shown` runs each time the tab
+// becomes the visible tab; `focusChanged` runs on each change of its entry
+// cursor or composer stop's hold, and when it is hidden; `beforeClose` is a
+// Sessions tab's close guard.
+interface TabView {
+  isHeld(tab: HeldTab): boolean;
+  shown(tab: HeldTab): void;
+  focusChanged(): void;
+  beforeClose(tab: HeldTab, atOnce: boolean): boolean | Promise<boolean>;
+  resized(tab: HeldTab): void;
+}
+
+// Adds the tab to its session as its Chat tab.
+function attachToSessions(
+  tab: HeldTab,
+  deps: Pick<ChatViewDeps, 'sessions'>,
+  view: TabView,
+): TabHost {
+  const handle = deps.sessions.addTab(tab.sessionId, {
+    id: 'chat',
+    title: 'Chat',
+    icon: 'comment',
+    element: tab.root,
+    order: 2,
+    beforeClose: (atOnce) => view.beforeClose(tab, atOnce),
+    shown: () => view.shown(tab),
+    hidden: () => view.focusChanged(),
+  });
+  return {
+    isVisible: () => handle.isVisible(),
+    select: () => handle.select(),
+    reveal() {
+      deps.sessions.activate(tab.sessionId);
+      handle.select();
+    },
+  };
+}
+
+// Appends the tab to the mount's element; a mount shown while it waited
+// takes the keys now.
+function attachToMount(
+  tab: HeldTab,
+  mount: MountRecord,
+  view: TabView,
+): TabHost {
+  mount.element.append(tab.root);
+  if (mount.isShown) {
+    view.shown(tab);
+  }
+  return {
+    isVisible: () => mount.isShown,
+    select: () => undefined,
+    reveal: () => undefined,
+  };
+}
+
 // The tab element (`div.chat-tab`: `div.chat-main`, then the session hub's
 // holder, which the caller fills through `side.sync` once it holds the tab;
 // `.chat-main` holds the entries, then the floating composer holding
 // other plugins' parts, the activity line, the attached images' strip, the box
-// and its status line) added to its session, with the box's editor mounted
-// once the element is attached; it is marked `is-at-stop` while a composer part's stop
+// and its status line) attached by `attach`, which places it as a Sessions tab
+// or in a mount, with the box's editor mounted once the element is attached;
+// it is marked `is-at-stop` while a composer part's stop
 // holds the entry cursor, and the box taking focus leaves that part, and
 // `is-at-hub` while the hub holds the keys; the box taking focus, a pointer
 // down on the entries, or the tab shrinking until the hub hides ends the hub's
@@ -1032,8 +1225,8 @@ function writeTabPlace(tab: HeldTab) {
 // settled, the tab then selects itself, so a new chat session opens on its Chat
 // tab whichever plugin's tab the session got first; a tab added before leaves
 // the session's saved selection in place, so a reload or a live restart keeps
-// it. `view.shown` may run inside `addTab`,
-// before the handle and box are set. Once the box is mounted the tab element is
+// it. `view.shown` may run inside `attach`, before the host and box are set.
+// Once the box is mounted the tab element is
 // the target of the files dropped or pasted on it; `view.isHeld` answers
 // whether the tab is still held, so a take that outlives it stops. The tab
 // element carries `data-chat-session` with its session id. `view.focusChanged`
@@ -1043,13 +1236,8 @@ function createTab(
   state: ChatSessionState,
   toastedKinds: Set<ChatEntryKind>,
   deps: ChatViewDeps,
-  view: {
-    isHeld(tab: HeldTab): boolean;
-    shown(tab: HeldTab): void;
-    focusChanged(): void;
-    beforeClose(tab: HeldTab, atOnce: boolean): boolean | Promise<boolean>;
-    resized(tab: HeldTab): void;
-  },
+  view: TabView,
+  attach: (tab: HeldTab) => TabHost,
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
   const { sessionId } = state;
@@ -1124,7 +1312,7 @@ function createTab(
     sessionId: state.sessionId,
     name,
     state,
-    handle: null,
+    host: null,
     unseen: null,
     activity: null,
     box: null,
@@ -1177,16 +1365,8 @@ function createTab(
   entries.setWorking(isWorking(state));
   drawComposer(tab);
   drawTurn(tab);
-  tab.handle = deps.sessions.addTab(state.sessionId, {
-    id: 'chat',
-    title: 'Chat',
-    icon: 'comment',
-    element: root,
-    order: 2,
-    beforeClose: (atOnce) => view.beforeClose(tab, atOnce),
-    shown: () => view.shown(tab),
-    hidden: () => view.focusChanged(),
-  });
+  const host = attach(tab);
+  tab.host = host;
   tab.box = deps.editor.create(
     boxElement,
     '',
@@ -1222,7 +1402,7 @@ function createTab(
   });
   drawActivity(tab, deps);
   if (!deps.hasSavedPlace(tab.sessionId)) {
-    tab.handle.select();
+    host.select();
   }
   return tab;
 }
@@ -1430,7 +1610,7 @@ function mayClose(
   if (!isBusy) {
     return true;
   }
-  tab.handle?.select();
+  tab.host?.select();
   blurFocusedElement();
   deps.log(`closing the session asks to end ${tab.name}`);
   return deps.confirm.open(tab.name);

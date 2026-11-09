@@ -35,6 +35,7 @@ const SCHEMA: UserConfigSchema = {
   scopes: [],
   defaultBindLayers: [],
   defaultAccelerators: { app: [], global: [], intercept: [] },
+  defaultGroups: {},
   defaultLeader: '<Space>',
 };
 
@@ -104,5 +105,32 @@ describe('settings page part', () => {
     const lines = harness.logs.map((line) => line.message);
     expect(lines).toContainEqual(expect.stringContaining('box closed'));
     expect(lines.filter((line) => line.startsWith('toast'))).toEqual([]);
+  });
+
+  it('recording_ModeHidden_DisposesTheCapture', async () => {
+    const harness = startPagePart(settingsPagePart, {
+      firstModeTaken: true,
+      invoke: async (method) => (method === 'schema' ? SCHEMA : EMPTY_READ),
+      services: {
+        markdown: PLAIN_MARKDOWN,
+        fuzzy: fakeFuzzyMatcher,
+        picker: fakeListPickerService(),
+      },
+    });
+    await settle();
+    const mode = harness.mode('settings.main');
+    const { commands } = harness.started();
+    mode.shown?.();
+    // Sections p, Plugins, then Keybindings.
+    commands.openSectionAt({ arg: 2 } as PageCommandContext<number>);
+    mode.focusMain?.();
+    commands.findByKey({} as PageCommandContext);
+    expect(harness.isCapturing()).toBe(true);
+
+    mode.hidden?.();
+
+    expect(harness.isCapturing()).toBe(false);
+    expect(() => harness.pressCapture('j')).toThrow('no key capture is armed');
+    await harness.stop();
   });
 });
