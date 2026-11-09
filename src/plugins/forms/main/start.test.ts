@@ -126,7 +126,7 @@ describe('forms main part', () => {
   it('stops with nothing live and starts again', async () => {
     const harness = startMainPart(formsMainPart, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
     });
     await flush();
     expect(harness.counts().registrations).toBeGreaterThan(0);
@@ -142,7 +142,7 @@ describe('forms main part', () => {
   it("stop ends the open preview's session", async () => {
     const sessions = previewSessions();
     const harness = startMainPart(formsMainPart, {
-      dependencies: [fakeChat, sessions.dependency],
+      dependencies: [fakeChat(), sessions.dependency],
     });
     harness.invoke('openPreview');
 
@@ -175,7 +175,7 @@ describe('forms main part', () => {
     };
     const harness = startMainPart(spied, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
       drive: true,
       services: {
         homeDir,
@@ -216,7 +216,7 @@ describe('forms main part', () => {
     const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-may-stop-'));
     const harness = startMainPart(formsMainPart, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
       drive: true,
       services: {
         homeDir,
@@ -235,6 +235,50 @@ describe('forms main part', () => {
     harness.invoke('finish', shown.formId, { kind: 'cancelled', body: {} });
     expect(harness.started().mayStop?.()).toBeNull();
 
+    await harness.stop();
+    rmSync(homeDir, { recursive: true, force: true });
+  });
+
+  it("headlessChat_AutoAnswersItsSessionsRounds_ButNotThePreview's", async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-headless-'));
+    const asked: string[] = [];
+    const harness = startMainPart(formsMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [
+        fakeChat((sessionId) => {
+          asked.push(sessionId);
+          return true;
+        }),
+      ],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { announce() {}, setOpenCount() {} },
+        git: { originRepoName: () => Promise.resolve(null) } as never,
+      },
+    });
+    const shownCount = () =>
+      harness.sent.filter((sent) => sent.message === 'formShown').length;
+
+    const opened = (await harness.drive?.run('openRound', {
+      sessionId: 'a',
+    })) as { rowId: string };
+    await flush();
+    const answers = (await harness.drive?.run('answers', {
+      sessionId: 'a',
+    })) as { content: { text: string }[] };
+
+    expect(asked).toEqual([opened.rowId]);
+    expect(JSON.parse(answers.content[0]?.text ?? '{}')).toMatchObject({
+      outcome: 'auto_answered',
+    });
+    expect(shownCount()).toBe(0);
+
+    harness.invoke('openPreview');
+    await flush();
+
+    expect(shownCount()).toBe(1);
+    expect(asked).toEqual([opened.rowId]);
     await harness.stop();
     rmSync(homeDir, { recursive: true, force: true });
   });
@@ -261,7 +305,7 @@ describe('forms main part', () => {
     };
     const harness = startMainPart(spied, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
       services: { files: { ...createMemoryFiles(), write: () => written } },
     });
 

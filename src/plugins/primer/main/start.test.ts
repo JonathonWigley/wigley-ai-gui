@@ -94,7 +94,7 @@ describe('primer main part', () => {
   it('stops with nothing live and starts again', async () => {
     const harness = startMainPart(primerMainPart, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
     });
     expect(harness.counts().registrations).toBeGreaterThan(0);
 
@@ -110,7 +110,7 @@ describe('primer main part', () => {
     const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-stop-'));
     const harness = startMainPart(primerMainPart, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
       drive: true,
       services: {
         homeDir,
@@ -141,7 +141,7 @@ describe('primer main part', () => {
     const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-may-stop-'));
     const harness = startMainPart(primerMainPart, {
       parts: [sessionsMainPart],
-      dependencies: [fakeChat],
+      dependencies: [fakeChat()],
       drive: true,
       services: {
         homeDir,
@@ -167,7 +167,7 @@ describe('primer main part', () => {
   it("stop ends the open preview's session", async () => {
     const sessions = previewSessions();
     const harness = startMainPart(primerMainPart, {
-      dependencies: [fakeChat, sessions.dependency],
+      dependencies: [fakeChat(), sessions.dependency],
     });
     harness.invoke('openPreview');
 

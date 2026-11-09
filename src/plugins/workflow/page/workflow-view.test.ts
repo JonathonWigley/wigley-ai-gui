@@ -1041,10 +1041,10 @@ describe('workflow view headless', () => {
   );
 
   it.each<{ given: string; calls: (boolean | undefined)[]; draws: number }>([
-    { given: 'unseen and true', calls: [true], draws: 1 },
+    { given: 'true while drawn false', calls: [true], draws: 1 },
     { given: 'the same value again', calls: [true, true], draws: 1 },
     { given: 'false after true', calls: [true, false], draws: 2 },
-    { given: 'unseen and false', calls: [false], draws: 0 },
+    { given: 'false while drawn false', calls: [false], draws: 0 },
     { given: 'undefined', calls: [undefined], draws: 0 },
     { given: 'true after undefined', calls: [true, undefined, true], draws: 2 },
   ])(
@@ -1059,6 +1059,11 @@ describe('workflow view headless', () => {
       const drawsBefore = run.held.chips.length + run.held.strips.length;
 
       for (const headless of calls) {
+        if (headless === true) {
+          run.headless.add('a');
+        } else {
+          run.headless.delete('a');
+        }
         run.view.headlessChanged('a', headless);
       }
 

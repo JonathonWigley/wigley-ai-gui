@@ -288,7 +288,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
-- **Tag** (`tag`): a small static label in a tone.
+- **Tag** (`tag`): a small static label in a tone. The workflow strip's Headless chip is the one Tag drawn as a
+  toggle button (`button.ui-tag`, its `data-state` and `aria-pressed` carrying on or off).
 - **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding
   on the sides only so the box keeps its line height, `font-mono`, a file Codicon in `fg-secondary`, then the file's
   name. The CodeMirror adapter draws it; it is not a builder
@@ -363,7 +364,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
   `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `fg-tertiary` text for Done, and nothing for Working, which the workflow chip's tag says; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
-  plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` tag beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
+  plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` and `Headless` tags beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
@@ -505,7 +506,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   row's label says it, and Large's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
   workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
   activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
-  pulsing, unless its stage tag is already running. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
+  pulsing, unless its stage tag is already running; while the session is headless the chip ends on an `accent` `Headless`
+  Tag in every stage, idle and no workflow included. The strip sits above the Chat composer: the stepper, the countdown,
+  the main action as a button, and last the Headless chip, a toggle Tag reading `Headless` in `accent` while on and in
+  `fg-tertiary` with a `border-default` outline and no fill while off. The stepper is a
   trail of step words with no marks, a `›` in `border-strong` between them, wrapping on a narrow pane: pending in
   `fg-tertiary`, done in `fg-secondary`, running in `accent` semibold with its word pulsing at `duration-pulse` (still
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status

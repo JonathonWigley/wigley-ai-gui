@@ -55,9 +55,9 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // side part. `stageAction` runs the view's gate for the session and action its arg
 // names; each engine key runs it on the selected session, each button on the
 // session it draws. A `chat.session` change that flips a session's headless
-// flag draws its parts again. `toggleSidePane` shows or hides the pane in every session, kept
-// in `uiState`. `openPreview` steps chat's preview session through every workflow's
-// samples (`createPreview`).
+// flag draws its parts again. `toggleSidePane` shows or hides the pane in
+// every session, kept in `uiState`. `openPreview` steps chat's preview session
+// through every workflow's samples (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {

@@ -77,9 +77,9 @@ export interface WorkflowViewDeps {
 // session `isHeadless`, the chip ends on an accent `Headless` tag in every
 // stage, and the strip input says so.
 // `activityChanged` draws the session's chip again. `headlessChanged` draws the
-// session's parts again when its headless value differs from the last one it
-// saw (an unseen session counts as not headless); `undefined`, a closed
-// session, drops what it saw and draws nothing. Every held part draws again on `setFlow` for its session and on `redraw`,
+// session's parts again when its headless value differs from the one they last
+// drew; `undefined`, a closed session, drops that value and draws nothing.
+// Every held part draws again on `setFlow` for its session and on `redraw`,
 // and each second while it shows a countdown, the side pane aside. `setFlow`, and
 // `redraw` for each session with a chip, also set the session's row activity. Each
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
@@ -155,7 +155,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const missingWorkflowsLogged = new Set<string>();
   const missingStagesLogged = new Set<string>();
   const finishedOpen = new Set<string>();
-  const seenHeadless = new Map<string, boolean>();
+  const drawnHeadless = new Map<string, boolean>();
   let isSidePaneHidden = false;
   let pendingTick: number | null = null;
 
@@ -323,12 +323,13 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     const workflow = pageWorkflowOf(flow);
     const stage = pageStageOf(flow);
     const { sessionId } = part;
+    const isHeadless = deps.isHeadless(sessionId);
+    drawnHeadless.set(sessionId, isHeadless);
     const drawsStage =
       workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
     switch (part.kind) {
       case 'chip': {
         const isWorking = deps.isWorking(part.sessionId);
-        const isHeadless = deps.isHeadless(part.sessionId);
         if (!drawsStage) {
           if (flow.workflow === null && flow.missedLevel) {
             part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
@@ -589,13 +590,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     },
     headlessChanged(sessionId, headless) {
       if (headless === undefined) {
-        seenHeadless.delete(sessionId);
+        drawnHeadless.delete(sessionId);
         return;
       }
-      if ((seenHeadless.get(sessionId) ?? false) === headless) {
+      if (drawnHeadless.get(sessionId) === headless) {
         return;
       }
-      seenHeadless.set(sessionId, headless);
       drawSession(sessionId);
     },
     forget(sessionId) {

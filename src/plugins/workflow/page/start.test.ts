@@ -433,26 +433,35 @@ describe('workflow page part', () => {
   it.each([
     {
       given: 'a notice that flips headless',
+      before: chatInfo(),
       next: chatInfo({ headless: true }),
       draws: 1,
       headless: true,
     },
     {
       given: 'a notice that changes only activity',
+      before: chatInfo(),
       next: chatInfo({ activity: 'working' }),
       draws: 0,
       headless: false,
     },
+    {
+      given: 'headless before ready, then a notice that turns it off',
+      before: chatInfo({ headless: true }),
+      next: chatInfo(),
+      draws: 1,
+      headless: false,
+    },
   ])(
     'ready_ChatSessionNotice_PassesHeadlessToTheView $given',
-    ({ next, draws, headless }) => {
+    ({ before, next, draws, headless }) => {
       const { harness, exportsFor, composerParts } = startWorkflow();
       const { workflow, strips } = stubSmall();
       exportsFor(createRegistrations()).addWorkflow(workflow);
       harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
       harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
       const sessions = harness.state.publish(chatSessionSlot);
-      sessions.set('s1', chatInfo());
+      sessions.set('s1', before);
       harness.ready();
       [...composerParts][0].build(asHtml(new FakeElement('div')), 's1');
       const drawsBefore = strips.length;

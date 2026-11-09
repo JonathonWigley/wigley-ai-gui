@@ -58,8 +58,9 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // handlers; the preview's rounds go through its quiet view. The agents'
 // service wakes the round's chat session when a round finishes with no call
 // waiting, and answers a headless chat session's rounds with their
-// recommendations; the preview's wakes nothing and answers none. Both services and the preview read
-// `layoutNames` for the layouts a round may name.
+// recommendations; the preview's wakes nothing and answers none. Both
+// services and the preview read `layoutNames` for the layouts a round may
+// name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,

@@ -58,7 +58,8 @@ export function sectionRowsOnce(
 
 // The session step's lines: the section rows of `step`'s folder and profile
 // whose session `rows` holds unarchived, then the new-session line and the
-// new-headless-session line, then the other rows in the order given, the archived ones only when `showArchived`.
+// new-headless-session line, then the other rows in the order given, the
+// archived ones only when `showArchived`.
 export function sessionItems(
   rows: readonly PastSessionRow[],
   sections: readonly ResumeSectionRows[],
