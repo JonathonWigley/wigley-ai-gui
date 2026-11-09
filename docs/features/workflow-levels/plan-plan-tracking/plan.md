@@ -202,5 +202,6 @@ Review base: 12745c21
 - plan.py writes its report file directly, with no temp file and rename: the app's watcher on macOS can miss the rename's target name (task 05's self-test lost it 1 run in 5), and a direct write reports under the real name; a torn read logs one line and the write's own event reads again — cost if wrong: a rare bad-JSON log line · lead
 ### Review rounds
 - 1 · e104dc38/78c536d · NEEDS FIXES (6 Important, 6 Minor, 1 pre-existing; lead-applied 96d3debf)
+- 2 (re-review) · 6bc84dbb..13cd07c6 + bfab0da · NEEDS FIXES (2 Important test gaps, 2 Minor; all round-1 findings closed)
 ### Test gate
 - picked: src/shared/plan-copies.test.ts, src/shared/plan-progress, src/plugins/backlog, src/plugins/workflow-large, src/plugins/workflow (every module the range touches and the engine that folds its signals) + typecheck + lint; selftest --plugin workflow-large,backlog (reported plan group, Backlog plan rows); marketplace plan tests (32) · 1164 vitest passed, typecheck and lint clean, selftest all passed, plan tests OK
