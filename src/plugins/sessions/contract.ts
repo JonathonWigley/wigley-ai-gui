@@ -521,8 +521,8 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // already added to its surface; adding a part and disposing its `Disposable`
 // each redraw that surface: the rows or the tab bars. A row part shares one
 // line: its wrapper keeps its content's width, an empty wrapper takes no room,
-// and a part may set its own wrapper's `order`; on a narrow or crowded row the
-// default layout moves the parts ordered 2 and later to a line of their own. A part
+// and a part may set its own wrapper's `order`; the default layout puts the
+// parts ordered 2 and later on a line of their own. A part
 // whose content can be long sets `flex: 0 1 auto; min-width: 0` on its wrapper,
 // `.session-row-part[data-part='<id>']`. `setActivity` sets the
 // activity `sourceId` (one per plugin or tab) holds for the session, null

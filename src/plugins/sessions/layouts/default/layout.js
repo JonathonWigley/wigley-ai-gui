@@ -9,8 +9,9 @@
 // activity, a needs you label while `marked` (a running activity draws no
 // label: the workflow chip's tag in the footer says it), a status edge for an
 // activity with an emphasis, and its on-screen mark,
-// over a footer line, wrapped only on a narrow or crowded row, holding other plugins' row parts
-// (`contributedParts`),
+// over a footer holding other plugins' row parts (`contributedParts`): the parts
+// ordered below 2 on the second line, and those ordered 2 and later always on
+// a third,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, each session

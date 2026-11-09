@@ -78,8 +78,8 @@
 
 /* Other plugins' row parts share the footer's line; each part styles its own
    content and may set its own wrapper's `order`. A part ordered 2 or later sits
-   in the row's end group, which the default layout moves to a line of its own on
-   a narrow footer or while the holder is `is-crowded` (`layout.css`). */
+   in the row's end group, which the default layout puts on a line of its own
+   (`layout.css`). */
 .session-row-parts {
   display: flex;
   flex: 1 1 auto;

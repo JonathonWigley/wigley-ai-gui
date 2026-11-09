@@ -172,8 +172,8 @@
 /* Each row is a compact card, so its title and parts read as one session:
    `card-background` under a `card-border` hairline with `radius-md`, the title
    and activity's label on the first line and the parts on a second line under
-   them, `space-1` above and below and `space-1_5` at the
-   sides. Hover strengthens the border; the selected card keeps the row
+   them and the end group on a third, `space-1` above and below and `space-1_5`
+   at the sides. Hover strengthens the border; the selected card keeps the row
    primitive's accent fill, and the keyboard cursor its focus ring. */
 .ui-row.session-row {
   align-items: center;
@@ -235,15 +235,18 @@
   vertical-align: text-bottom;
 }
 
-/* The footer is the card's second line: other plugins' row parts, on one line
-   that never wraps while the footer is wide enough. A footer with nothing in it
-   takes no space. */
+/* The footer holds other plugins' row parts on the card's second and third
+   lines: the parts ordered below 2 (the profile and the workflow chip) on the
+   second, and the end group, the parts ordered 2 and later (the context bar,
+   the run time and the cache mark), always on the third, so every card keeps
+   the same lines whatever its parts' widths. The break is a full-width item
+   ordered ahead of the end group. It always forms a flex line, empty on a row
+   with no part ahead of it, so the gap is each part's top margin, which the
+   holder takes back once: an empty line then adds no height, and the lines sit
+   one gap apart. A footer with nothing in it takes no space. */
 .session-row-foot {
-  container: session-row-foot / inline-size;
   display: flex;
-  flex-wrap: nowrap;
   align-items: center;
-  column-gap: var(--wg-space-1_5);
   grid-column: 1 / -1;
   min-width: 0;
   margin-top: var(--wg-space-0_5);
@@ -254,49 +257,21 @@
   display: none;
 }
 
-/* While the parts overflow their line (`is-crowded`), and on any footer under
-   220px, where a shrinking part would shrink too far, the end group — the parts
-   ordered 2 and later (the context bar, the run time and the cache mark) — moves
-   to a line of its own under the rest, its slots kept. The break is a
-   full-width item ordered ahead of the group's parts. Usage's `usage.css`
-   repeats both conditions, so its context bar fills that line. The break always
-   forms a flex line, empty on a row with no part ahead of it, so the gap is each
-   part's top margin, which the holder takes back once: an empty first line then
-   adds no height, and the lines sit one gap apart. */
-.session-row-parts.is-crowded {
+.session-row-foot > .session-row-parts {
   flex-wrap: wrap;
   row-gap: 0;
   margin-block-start: calc(-1 * var(--wg-space-0_5));
 }
 
-.session-row-parts.is-crowded > .session-row-part {
+.session-row-foot > .session-row-parts > .session-row-part {
   margin-block-start: var(--wg-space-0_5);
 }
 
-.session-row-parts.is-crowded::before {
+.session-row-foot > .session-row-parts::before {
   content: '';
   flex-basis: 100%;
   order: 2;
   height: 0;
-}
-
-@container session-row-foot (width < 220px) {
-  .session-row-parts {
-    flex-wrap: wrap;
-    row-gap: 0;
-    margin-block-start: calc(-1 * var(--wg-space-0_5));
-  }
-
-  .session-row-parts > .session-row-part {
-    margin-block-start: var(--wg-space-0_5);
-  }
-
-  .session-row-parts::before {
-    content: '';
-    flex-basis: 100%;
-    order: 2;
-    height: 0;
-  }
 }
 
 .ui-row.session-row:not(.is-selected) {
@@ -326,7 +301,7 @@
    title), then the trailing cell at the line's end, holding the activity's
    label. The trailing cell keeps its full width and never
    shrinks. The title ellipsizes in the rest and never goes under one character
-   and its ellipsis. The footer takes the whole second line. Each part has its
+   and its ellipsis. The footer takes the lines under it. Each part has its
    own column, so a row missing its trailing cell keeps the title in place. The
    trailing column's least width is the trailing cell's own, so the footer,
    which spans every column, stays inside the row rather than widens it. Two

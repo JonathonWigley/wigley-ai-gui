@@ -57,7 +57,6 @@ import type {
   TabBarPane,
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
-import { markCrowding } from './row-crowding';
 import type { SessionPart } from '../../contract';
 
 type SessionsCommand = keyof typeof sessionsManifest.commands & string;
@@ -227,7 +226,7 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
               throw new Error('row placed contributed parts twice');
             }
             isPlaced = true;
-            const holder = placeContributedParts(
+            return placeContributedParts(
               partsParent,
               input.sessionId,
               deps.rowParts.parts(),
@@ -235,8 +234,6 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
               deps.log,
               rollback,
             );
-            markCrowding(holder, rollback);
-            return holder;
           },
         };
         const row = builder(into, input, kit);

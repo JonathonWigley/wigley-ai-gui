@@ -182,7 +182,7 @@ means something.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
 - **Breakpoints** (raw in `@media` and `@container`): `950px` on the `docs-doc` container hides the docs page's right
-  column; `220px` on the `session-row-foot` container moves a session row's end group to a line of its own, as a crowded row's parts holder (`is-crowded`) does at any width; `800px` tightens content padding; `680px` lays the side bar
+  column; `800px` tightens content padding; `680px` lays the side bar
   over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
   least width (the primer popup's card column `320px`, every other pane `160px` or more): a narrowing
@@ -361,7 +361,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
   `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `fg-tertiary` text for Done, and nothing for Working, which the workflow chip's tag says; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
-  plugins' row parts on one line, the context bar, the run time and the cache mark at its end in slots of fixed least width, so the bars line up from row to row, gone while empty. When the parts overflow their line once the bar is at its least width, and on any footer narrower than `220px` (the side bar near its least width), that end group, the parts ordered 2 and later, moves to a line of its own `space-0_5` under the rest, keeping its slots, its bar filling the free room; a row with no part ahead of that group keeps its one line's height. Hover
+  plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` tag beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
