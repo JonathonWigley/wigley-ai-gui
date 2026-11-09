@@ -384,6 +384,62 @@ describe('session tabs view', () => {
     expect(savedSelectedTabId()).toBe('form');
   });
 
+  // Breaks if removing the selected tab forgets it: a plugin's restart
+  // removes its tab and adds it again, and the session would stay on the
+  // neighbour the removal selected.
+  it.each([
+    {
+      case: 'no pick between: the tab takes the selection back',
+      steps: ['remove chat', 'add chat'],
+      saved: 'chat',
+      selected: 'chat',
+    },
+    {
+      case: 'a pick between keeps the pick',
+      steps: ['remove chat', 'pick form', 'add chat'],
+      saved: 'form',
+      selected: 'form',
+    },
+    {
+      case: 'the neighbour removed too: the first removed stays named',
+      steps: ['remove chat', 'remove docs', 'add docs', 'add chat'],
+      saved: 'chat',
+      selected: 'chat',
+    },
+  ])(
+    'selectedTab_RemovedThenAddedAgain_TakesTheSelectionBack ($case)',
+    ({ steps, saved, selected }) => {
+      const places = createSlotStore(() => undefined).publish(
+        sessionsPlaceSlot,
+      );
+      const { view } = sessionsViewSetup(undefined, undefined, undefined, {
+        places,
+      });
+      const handles = new Map(
+        ['chat', 'docs', 'form'].map((id) => [
+          id,
+          view.tabs.add('s', tabView(id)),
+        ]),
+      );
+      const savedBeforeAdds: (string | null | undefined)[] = [];
+
+      for (const step of steps) {
+        const [action, id] = step.split(' ');
+        if (action === 'remove') {
+          handles.get(id)!.dispose();
+        } else if (action === 'pick') {
+          handles.get(id)!.select();
+        } else {
+          savedBeforeAdds.push(places.get('s')?.selectedTabId);
+          handles.set(id, view.tabs.add('s', tabView(id)));
+        }
+      }
+
+      expect(savedBeforeAdds[0]).toBe(saved);
+      expect(view.tabs.selectedTabOf('s')?.id).toBe(selected);
+    },
+  );
+
   it.each([
     {
       case: 'a restored popup the place had hidden comes back hidden',

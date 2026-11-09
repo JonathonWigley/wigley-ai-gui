@@ -63,9 +63,10 @@ interface Popup {
 // tabs' body, the text saying why no tab shows and the popup layer over them,
 // then the host of its hidden popups' bar; its tab ids and selection, and its
 // tabs by id, both in strip order; its popups, the one opened or hidden last
-// at the end; the place the last page saved for its session, null for none,
-// the tab that place had selected while that tab has not come back and no pick
-// moved the selection since the load (null once either happened), the popups
+// at the end; the place the last page saved for its session, or the one its
+// selected tab left when removed, null for none; the tab that place had
+// selected while that tab has not come back and no pick moved the selection
+// since that place was taken (null once either happened), the popups
 // that place had hidden that have not been added again since the load, and the
 // writes of its place.
 interface Frame {
@@ -211,7 +212,10 @@ export interface SessionTabsView {
 // hidden popups) to `places` on each change, and a new frame starts from the
 // place the last page wrote: a tab added late takes back the selection it had
 // while no pick moved it since (`tabsAfterRestoredAdd`), and until then the
-// place keeps naming that tab as the selected one; a restored popup the place
+// place keeps naming that tab as the selected one. A selected tab removed
+// while no tab is awaited is awaited the same way, so a tab its plugin's
+// restart removes and adds again takes the selection back; a tab still awaited
+// stays the one named. A restored popup the place
 // had hidden comes back hidden, and until it comes back the place keeps it
 // hidden. Until `render` hands it main's first state, it shows no text either.
 // The view keeps each tab's click, which runs `selectTab`, its tooltip and the
@@ -558,9 +562,9 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   // still awaited, and the saved hidden popups beside the hidden ones while
   // they are, so a reload before they come back keeps them.
   const writePlace = (frame: Frame) => {
-    const isPickedSinceLoad =
+    const isPickedSinceSaved =
       frame.saved !== null && frame.tabs.selections !== frame.saved.selections;
-    if (isPickedSinceLoad) {
+    if (isPickedSinceSaved) {
       frame.awaitedSelectedTabId = null;
     }
     frame.placeWrites.write({
@@ -631,9 +635,23 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     return frame?.entries.get(tab.view.id) === tab ? frame : undefined;
   };
 
+  // A selected tab removed while none is awaited becomes the awaited one, its
+  // place taken at the selection count now.
   const remove = (frame: Frame, tab: Tab) => {
     tab.view.element.remove();
-    frame.tabs = tabsAfterRemove(frame.tabs, tab.view.id);
+    const tabId = tab.view.id;
+    if (
+      frame.tabs.selectedTabId === tabId &&
+      frame.awaitedSelectedTabId === null
+    ) {
+      frame.awaitedSelectedTabId = tabId;
+      frame.saved = {
+        selectedTabId: tabId,
+        selections: frame.tabs.selections,
+        hiddenPopupIds: frame.saved?.hiddenPopupIds ?? [],
+      };
+    }
+    frame.tabs = tabsAfterRemove(frame.tabs, tabId);
     frame.entries.delete(tab.view.id);
     writePlace(frame);
     changed();

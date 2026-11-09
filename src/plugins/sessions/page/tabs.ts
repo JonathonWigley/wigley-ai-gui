@@ -140,16 +140,17 @@ function tabsWithSelected(tabs: TabsState, tabId: string): TabsState {
 }
 
 // The tabs after `tabId` was added, with `tabId` selected uncounted when it is the
-// tab the saved place had selected and no pick changed the selection since the
-// load: a tab added late, after another tab selected itself, takes its place back.
+// tab the saved place had selected and no pick changed the selection since that
+// place was taken (the load, or the selected tab's removal): a tab added late,
+// after another tab selected itself, takes its place back.
 export function tabsAfterRestoredAdd(
   tabs: TabsState,
   tabId: string,
   saved: SessionsPlace,
 ): TabsState {
   const isSavedTab = tabId === saved.selectedTabId;
-  const isUnpickedSinceLoad = tabs.selections === saved.selections;
-  return isSavedTab && isUnpickedSinceLoad
+  const isUnpickedSinceSaved = tabs.selections === saved.selections;
+  return isSavedTab && isUnpickedSinceSaved
     ? tabsWithSelected(tabs, tabId)
     : tabs;
 }

@@ -164,8 +164,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     };
     // A session whose row ended while no page ran leaves keys no tab takes;
     // the prune waits for the restore window to settle, so the rows chat's
-    // restore reopens are in the page mirror first.
+    // restore reopens are in the page mirror first. A tab added before then
+    // leaves its session's saved selection in place.
+    let restoresSettled = false;
     api.restores.onSettled(() => {
+      restoresSettled = true;
       const isLive = (sessionId: string) => rows.all().has(sessionId);
       pruneKeys(placeWriter, isLive);
       pruneKeys(imagesWriter, isLive);
@@ -316,6 +319,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       drops: api.drops,
       placeOf,
       writeFocus: (focus) => focusWriter.set(focus),
+      restoresSettled: () => restoresSettled,
     });
     sessions.addRowPart(rowClock.part);
     const rowProfile = createRowProfile({

@@ -157,7 +157,9 @@ const returnedTwo: ReturnedMessage = {
 // session's tab's `hidden`. `focus` is `chat.focus` as the view last wrote it,
 // null before any write; while `showsInAddTab.value` is set, `addTab` runs the
 // tab's `shown` before it returns, as the sessions plugin may, and
-// `focusAtAddTab` gets the focus as `addTab` returns.
+// `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
+// session of each tab handle's `select`; `restoresSettled` answers
+// `restores.settled`.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -183,6 +185,8 @@ function mounted(
   const focus = () => focusWrites.at(-1) ?? null;
   const showsInAddTab = { value: false };
   const focusAtAddTab: (ChatFocus | null)[] = [];
+  const selects: string[] = [];
+  const restores = { settled: true };
   let scopeChanged: (scope: string | undefined) => void = () => undefined;
   const sideTabs: SideTab[] = [];
   const sideParts = createPartStore<ChatSidePart>();
@@ -271,7 +275,7 @@ function mounted(
           focusAtAddTab.push(focus());
         }
         return {
-          select: noEvent,
+          select: () => selects.push(sessionId),
           remove: noEvent,
           isVisible: () => visible.value,
         };
@@ -357,6 +361,7 @@ function mounted(
       writeImages: noEvent,
     }),
     writeFocus: (written: ChatFocus | null) => focusWrites.push(written),
+    restoresSettled: () => restores.settled,
     toast: (text: string, tone: string) => toasts.push([text, tone]),
     visibleSessionRested: noEvent,
     confirm: {
@@ -386,6 +391,8 @@ function mounted(
     focus,
     showsInAddTab,
     focusAtAddTab,
+    selects,
+    restores,
     scopeChanged: (scope: string | undefined) => scopeChanged(scope),
     sideTabs,
     beforeClose: (sessionId: string, atOnce: boolean) =>
@@ -441,6 +448,34 @@ function recordingSideTabs(
     },
   };
 }
+
+describe('mountChatView tab selection', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks if a tab chat's restore reopens selects itself over the session's
+  // saved tab, or if a new session stops opening on its Chat tab.
+  it.each([
+    {
+      row: 'restores settled: a new session',
+      settled: true,
+      selects: ['row-1'],
+    },
+    { row: 'restores pending: a reopened one', settled: false, selects: [] },
+  ])(
+    'tab_Added_SelectsItselfOnlyOnceTheRestoresSettled: $row',
+    ({ settled, selects }) => {
+      const view = mounted();
+      view.restores.settled = settled;
+
+      view.open(stateOf([]));
+
+      expect(view.selects).toEqual(selects);
+    },
+  );
+});
 
 describe('mountChatView returned messages', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));

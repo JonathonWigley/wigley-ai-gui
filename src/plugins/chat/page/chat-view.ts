@@ -250,7 +250,8 @@ export type ChatTabScope = 'chat' | 'hub';
 // `drops` registers each Chat tab as the target of the
 // files dropped or pasted on it, and saves a pasted file that is not an
 // image. `writeFocus` writes `chat.focus` each time the visible Chat tab's focused
-// stop changes, null at the view's dispose.
+// stop changes, null at the view's dispose. `restoresSettled` is whether the
+// part's restore window has settled.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   slots: ChatSlotReaders;
@@ -289,6 +290,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   placeOf(sessionId: string): TabPlace;
   writeFocus(focus: ChatFocus | null): void;
+  restoresSettled(): boolean;
 }
 
 // Chat's slots as the page reads them.
@@ -365,8 +367,9 @@ function stateInSlots(
 // parts, running indicator, send) in its `.chat-main`, and the session hub
 // beside that, kept up to date from chat's slots. A key deleted from a slot
 // changes nothing: a closing session's tab stays as drawn until its row leaves.
-// Each tab is
-// selected in its session when added. A layout change draws every tab's
+// A tab added once the restore window settled is selected in its session; one
+// added before, which a reload or chat's restore reopens, leaves the selection
+// to the session's saved place. A layout change draws every tab's
 // entries, pending rows and composer again and builds its side parts again, and
 // a composer or status part added or removed draws every tab's composer again,
 // each box keeping its text, vim mode and focus. A side part added or removed
@@ -1024,9 +1027,11 @@ function writeTabPlace(tab: HeldTab) {
 // holds the entry cursor, and the box taking focus leaves that part, and
 // `is-at-hub` while the hub holds the keys; the box taking focus, a pointer
 // down on the entries, or the tab shrinking until the hub hides ends the hub's
-// turn (`view.resized` runs on each size change). The
-// tab then selects itself, so a chat session opens on its Chat tab whichever
-// plugin's tab the session got first. `view.shown` may run inside `addTab`,
+// turn (`view.resized` runs on each size change). Once the restore window
+// settled, the tab then selects itself, so a new chat session opens on its Chat
+// tab whichever plugin's tab the session got first; a tab added before leaves
+// the session's saved selection in place, so a reload or a live restart keeps
+// it. `view.shown` may run inside `addTab`,
 // before the handle and box are set. Once the box is mounted the tab element is
 // the target of the files dropped or pasted on it; `view.isHeld` answers
 // whether the tab is still held, so a take that outlives it stops. The tab
@@ -1215,7 +1220,9 @@ function createTab(
     take: (files) => void takeChatFiles(files, dropDeps),
   });
   drawActivity(tab, deps);
-  tab.handle.select();
+  if (deps.restoresSettled()) {
+    tab.handle.select();
+  }
   return tab;
 }
 
