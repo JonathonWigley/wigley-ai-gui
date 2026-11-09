@@ -214,7 +214,7 @@ export type StatsFixtureVariant = 'busy' | 'error'; // the drive and self-test s
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [SystemStats contract and macOS adapter](01-system-stats-contract-mac.md)
+- [x] [SystemStats contract and macOS adapter](01-system-stats-contract-mac.md)
 - [x] [Session process pid reaches chat](03-session-pid.md)
 - [x] [Sparkline primitive](04-sparkline-primitive.md)
 
@@ -236,11 +236,17 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 ### Groups
 - 04 · 615c8b4d · diff read: kit.sparkline in kit.d.ts and base-kit.ts present; worker's sparkline, base-kit, layout-contracts, gallery tests pass (64); typecheck clean for 04's files (other errors are 03 in flight) · concerns: docs/keymap.md fails oxfmt --check (pre-existing on the branch, from the docs-ahead commit)
 - 03 · 620b1b34 · diff read: HostedProcess.pid, AgentProcessEvents.pid, FAKE_AGENT_PID, ChatSessionInfo.pid present; worker's 17 test files pass (1284); typecheck clean for 03's files · concerns: session-part.test.ts and layout.test.ts hold ComposerInput, not ChatSessionInfo literals, left alone; a controls test now finds its event by name since pid leads; childHost double returns pid null
+- 01 · 00b45eeb · diff read: SystemStats contract word for word, MainServices.systemStats, systemStatsFor in main.ts, check-layers entries, notFaked; full typecheck exit 0 with wave 1 landed; worker's 7 test files pass (89) · concerns: adapter not run live (task 08); docs/keymap.md oxfmt failure pre-existing; scripts/drive-runs.mts and its test edited beyond the list, since StartOptions lives there
 ### Contract changes
 - kit.sparkline in kit.d.ts: one line → oxfmt wraps it over several lines, type unchanged · why: the repo formatter · consumers: 06 · group 04
 - FakeHostedProcessRecord: gains pid as planned → also a public spawnEvents (null for addRunning) · why: the record is the fake's only per-process state · consumers: none beyond tests · group 03
+- Drive start options: DriveInvocation start and StartOptions gain systemStats 'fake'|'live' (DriveSystemStats in scripts/drive-args.mts); RunEnvironment drive gains systemStats (DriveSystemStatsName in src/main/run-mode.ts) · why: the flag end to end · consumers: 08 · group 01
 ### Rulings
 - Client sets entry.pid from the subscribe reply once the attach succeeds, not on reply receipt — an abandoned attach leaves no pid — a pid a few awaits late if wrong · group 03 · group 03
 - A spawned push after the spawner detached is dropped like a line; a later attach takes the pid from its reply — a detached spawner reads pid null · group 03 · group 03
+- A sysctl timeout still rejects sample(); only its exit code is ignored — a slow sysctl fails the sample if wrong · group 01 · group 01
+- offscreenRunServices takes a systemStats builder like harness; task 02 adds Windows only inside systemStatsFor · group 01 · group 01
+- A restart of a drive run whose start.json predates the flag falls back to the fake — costs nothing · group 01 · group 01
+- docs/keymap.md's v row was one column too wide from the docs-ahead commit; oxfmt reformatted it (editor tooling, lead) so npm run lint passes — costs nothing · lead
 ### Review rounds
 ### Test gate

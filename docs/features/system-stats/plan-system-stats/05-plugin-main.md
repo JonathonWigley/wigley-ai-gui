@@ -1,6 +1,6 @@
 # 05 — system-stats main: sampling, snapshot, slot
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01, 03
 Plan: [plan.md](plan.md)

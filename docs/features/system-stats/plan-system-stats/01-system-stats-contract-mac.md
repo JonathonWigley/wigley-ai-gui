@@ -1,6 +1,6 @@
 # 01 — SystemStats contract and macOS adapter
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -266,3 +266,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 00b45eeb · proof: diff read: SystemStats contract word for word, MainServices.systemStats, systemStatsFor in main.ts, check-layers entries, notFaked; full typecheck exit 0 with wave 1 landed; worker's 7 test files pass (89) · concerns: adapter not run live (task 08); docs/keymap.md oxfmt failure pre-existing; scripts/drive-runs.mts and its test edited beyond the list, since StartOptions lives there
