@@ -962,8 +962,9 @@ export function createProblemWorkspace(
   };
 
   // ── Opening ────────────────────────────────────────────────────────────
-  // `settledShow` is the last `show` that showed or kept; a later `showCount`
-  // waits on a save.
+  // `settledShow` is the last `show` that showed or kept, or the count a
+  // `refresh` took to drop a waiting one; while `showCount` is ahead of it, a
+  // show waits on a save.
   let showCount = 0;
   let settledShow = 0;
 
