@@ -417,10 +417,13 @@ const TEXTS: Record<string, string> = {
 };
 
 // Docs mode's machine view over an index of the docs in `TEXTS`, guide.md
-// linking target.md, its right column laid out wide enough to be in sight.
+// linking `guideLinks` (target.md), its right column laid out wide enough to
+// be in sight. A path in `heldReads` reads as its promise settles.
 function startMachineView() {
+  const heldReads = new Map<string, Promise<string>>();
+  const guideLinks = [TARGET];
   const page = startDocsPage(async (method, ...args) => {
-    if (method === 'loadIndex') {
+    if (method === 'loadIndex' || method === 'rebuildIndex') {
       return {
         document: {
           schemaVersion: 5,
@@ -428,7 +431,7 @@ function startMachineView() {
           entries: [
             ownDoc(SECTIONED, 'Sectioned'),
             ownDoc(PLAIN, 'Plain'),
-            ownDoc(GUIDE, 'Guide', [TARGET]),
+            ownDoc(GUIDE, 'Guide', guideLinks),
             ownDoc(TARGET, 'Target'),
           ],
           contexts: [],
@@ -445,7 +448,8 @@ function startMachineView() {
       return null;
     }
     if (method === 'readDoc') {
-      return TEXTS[args[0] as string];
+      const path = args[0] as string;
+      return heldReads.get(path) ?? TEXTS[path];
     }
     return { clones: [] };
   });
@@ -478,6 +482,8 @@ function startMachineView() {
     ...page,
     mode,
     aside,
+    heldReads,
+    guideLinks,
     open,
     active,
     isDocFocused,
@@ -533,18 +539,31 @@ describe('docs view focus', () => {
     await view.harness.stop();
   });
 
-  // The column leaves sight (a doc with no column opens) while it holds the
-  // keys. Breaks: the doc taking DOM focus from the right bar, or while the
-  // view is not active; or not taking it otherwise.
+  // The column leaves sight (a doc with no column opens, or the window
+  // narrows) while it holds the keys. Breaks: the doc taking DOM focus from
+  // the right bar, or while the view is not active; or not taking it
+  // otherwise, as when a Linked from row's open that would have focused it
+  // fails or a later open replaces it, leaving focus on the body.
   it.each([
     { name: 'focus in the column', where: 'column', isDocFocused: true },
     { name: 'focus in the right bar', where: 'outside', isDocFocused: false },
     { name: 'the view not active', where: 'inactive', isDocFocused: false },
+    {
+      name: 'while a landing open fails',
+      where: 'failedOpen',
+      isDocFocused: true,
+    },
+    {
+      name: 'while a later open replaces a landing open',
+      where: 'supersededOpen',
+      isDocFocused: true,
+    },
   ])(
     'asideSightLost_ColumnLeavesSight $name',
     async ({ where, isDocFocused }) => {
       const view = startMachineView();
-      await view.open(SECTIONED);
+      const isLanding = where === 'failedOpen' || where === 'supersededOpen';
+      await view.open(isLanding ? TARGET : SECTIONED);
       focusIn(view.aside);
       const rightBar = document.createElement('div') as unknown as FakeElement;
       if (where === 'outside') {
@@ -555,7 +574,26 @@ describe('docs view focus', () => {
       }
       const logsBefore = view.docFocusedLogs();
 
-      await view.open(PLAIN);
+      if (isLanding) {
+        const guideRead = Promise.withResolvers<string>();
+        view.heldReads.set(GUIDE, guideRead.promise);
+        // Enter on Target's Linked from row opens Guide.
+        view.harness.started().commands.asideOpen({ arg: undefined });
+        if (where === 'failedOpen') {
+          // A rebuilt index with Guide's link gone empties the column.
+          view.guideLinks.length = 0;
+          view.harness.setSideBarShown(true);
+          view.harness.started().commands.rescan({ arg: undefined });
+          await vi.waitFor(() => expect(view.aside.hidden).toBe(true));
+          guideRead.reject(new Error('gone'));
+        } else {
+          await view.open(PLAIN);
+          guideRead.resolve(TEXTS[GUIDE]);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      } else {
+        await view.open(PLAIN);
+      }
 
       expect({
         isDocFocused: view.isDocFocused(),

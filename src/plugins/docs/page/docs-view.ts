@@ -719,9 +719,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   // Opens that run `openThenFocusDoc` and have not settled.
   let landingOpens = 0;
+  // Whether `asideSightLost` left the doc's DOM focus to a landing open, owed
+  // once the last one settles without focusing the doc.
+  let isDocFocusOwed = false;
 
   // Runs `open`, then focuses the doc once it opened: a link's open replaced
-  // the element holding focus, which fell to the body.
+  // the element holding focus, which fell to the body. The last open to
+  // settle pays a doc focus `asideSightLost` left to it, as when its open
+  // failed or a later open replaced it.
   const openThenFocusDoc = async (
     open: () => Promise<boolean> | boolean,
   ): Promise<void> => {
@@ -732,6 +737,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       }
     } finally {
       landingOpens--;
+      if (landingOpens === 0 && isDocFocusOwed) {
+        isDocFocusOwed = false;
+        if (focused === 'doc') {
+          focusDocWhereFree();
+        }
+      }
     }
   };
 
@@ -746,6 +757,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const focusDoc = () => {
+    isDocFocusOwed = false;
     focused = 'doc';
     doc.focus();
     applyScope();
@@ -793,23 +805,32 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
   };
 
-  // The column left sight while it held the keys: the doc takes them, its DOM
-  // focus moving only while this view is active, no pane outside the doc
-  // holds the focus (the right bar may hold it), and no open that focuses the
-  // doc as it lands is running.
-  const asideSightLost = () => {
-    if (focused !== 'aside') {
-      return;
-    }
-    focused = 'doc';
+  // Focuses the doc while this view is active and no pane outside the doc
+  // holds the focus (the right bar may hold it).
+  const focusDocWhereFree = () => {
     const active = globalThis.document.activeElement;
     const isFocusOutside =
       active !== null &&
       active !== globalThis.document.body &&
       !doc.element.contains(active);
-    const isOpenLanding = landingOpens > 0;
-    if (deps.isActive() && !isFocusOutside && !isOpenLanding) {
+    if (deps.isActive() && !isFocusOutside) {
       focusDocAndLog();
+    }
+  };
+
+  // The column left sight while it held the keys: the doc takes them, its DOM
+  // focus moving as `focusDocWhereFree` allows. While an open that focuses
+  // the doc as it lands is running, the focus is left to it and owed should
+  // none focus the doc.
+  const asideSightLost = () => {
+    if (focused !== 'aside') {
+      return;
+    }
+    focused = 'doc';
+    if (landingOpens > 0) {
+      isDocFocusOwed = true;
+    } else {
+      focusDocWhereFree();
     }
   };
 
