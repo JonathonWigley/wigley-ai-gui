@@ -556,6 +556,10 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/main/system-stats'],
     packages: [],
   },
+  'src/main/system-stats/windows-system-stats.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/system-stats'],
+    packages: [],
+  },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {

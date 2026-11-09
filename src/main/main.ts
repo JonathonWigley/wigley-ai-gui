@@ -151,6 +151,7 @@ import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
 import { createMacSystemStats } from './system-stats/mac-system-stats';
 import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
+import { createWindowsSystemStats } from './system-stats/windows-system-stats';
 import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
@@ -282,9 +283,14 @@ function alertsFor(osName: OsName, window: BrowserWindow, log: Log): Alerts {
 // The readings of the OS `osName`, its commands run through `runner`. Linux has
 // no adapter, so its samples reject.
 function systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats {
-  return osName === 'macos'
-    ? createMacSystemStats(runner, os.cpus)
-    : createUnavailableSystemStats(osName);
+  switch (osName) {
+    case 'macos':
+      return createMacSystemStats(runner, os.cpus);
+    case 'windows':
+      return createWindowsSystemStats(runner, os.cpus);
+    default:
+      return createUnavailableSystemStats(osName);
+  }
 }
 
 // The user's app: the OS Trash, native alerts and dialogs, Claude Code, whose

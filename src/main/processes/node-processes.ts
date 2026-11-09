@@ -33,6 +33,8 @@ function runToEnd(
       cwd: options?.cwd,
       env: envWithout(options?.unsetEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Off Windows the flag does nothing; on it, no console window flashes.
+      windowsHide: true,
     });
     const stdout = emptyOutput();
     const stderr = emptyOutput();
