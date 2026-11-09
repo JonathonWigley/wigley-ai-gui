@@ -50,10 +50,12 @@ const NEXT_ON_DRAFT =
   'Do not re-ask these questions and do not open a second round.';
 
 export const NEXT_ON_AUTO_ANSWERED =
-  'This session is headless: the app showed no form and answered every item ' +
-  'with its recommendation. Take these picks as your own decisions and list ' +
-  'each one as a Decided notice in your reply. Build no more rounds while the ' +
-  'session stays headless. A hard gate still stops the run.';
+  'This session is headless until a tool result says the session is no ' +
+  'longer headless: the app showed no form and answered every item with its ' +
+  'recommendation. Build no more rounds, and list every pick as a Decided ' +
+  'notice in your reply. An auto-answered pick never approves a hard-gated ' +
+  'action (third-party code, destroying user state, a push): name what the ' +
+  'gate needs in the reply and end the turn.';
 
 const NEXT_ON_NO_ROUND =
   'No round is open for this session, and no finished answers are waiting ' +

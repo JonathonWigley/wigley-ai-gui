@@ -31,10 +31,12 @@ export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
 // The note a headless row's agent starts with, and the line that tells it the
 // row is headless no longer.
 export const HEADLESS_NOTE =
-  'This session is headless: nobody answers forms rounds. Build no round: ' +
-  "take each item's recommended pick and list every pick as a Decided notice " +
-  'in your reply. A hard gate still stops the run: name what it needs in the ' +
-  'reply and end the turn.';
+  'This session is headless until a tool result says the session is no ' +
+  'longer headless: nobody answers forms rounds. Build no round: take each ' +
+  "item's recommended pick and list every pick as a Decided notice in your " +
+  'reply. An auto-answered pick never approves a hard-gated action ' +
+  '(third-party code, destroying user state, a push): name what the gate ' +
+  'needs in the reply and end the turn.';
 export const HEADLESS_OFF_NOTE =
   'This session is no longer headless: send each round to the form again.';
 
