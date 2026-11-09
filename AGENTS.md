@@ -958,9 +958,10 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`typecheck` in `vitest.config.mts`), and runs them once more at run time. Two adapters of one contract run one
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
-- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. An agent proving a change
-  runs the touched plugins' groups, and runs the whole self-test only when the user asks for it, since a whole run
-  takes half an hour or more: `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+- `npm run selftest` is the agent's loop, run filtered to what the change touches, which the user allows any time:
+  `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run takes half an hour
+  or more, so it runs only when the user asks for one in the current turn; a merge, a re-check after a fix and a final
+  pass all run filtered too. `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
   it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
   bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
