@@ -76,7 +76,8 @@ interface FakeBox {
 }
 
 // Chat's page part on the part harness, over a sessions fake that files each tab
-// with `consumer.track`, as its view does. `destroyEditor` is
+// with `consumer.track`, as its view does, and runs a tab's `shown` inside
+// `addTab` when `isTabVisible` reads true then. `destroyEditor` is
 // each editor's `destroy`, `setActivity` the fake's row activity call, and
 // `tabAdded` hears each added tab's element. `boxes` gets each box made, in
 // order, and `invoked` each call to main.
@@ -129,8 +130,14 @@ function startChatPage(
         sessionsPageKey,
         (consumer) =>
           ({
-            addTab: (_sessionId: string, tab: { element: HTMLElement }) => {
+            addTab: (
+              _sessionId: string,
+              tab: { element: HTMLElement; shown(): void },
+            ) => {
               tabAdded(tab.element);
+              if (isTabVisible()) {
+                tab.shown();
+              }
               return consumer.track({
                 dispose() {},
                 select() {},
@@ -146,12 +153,14 @@ function startChatPage(
   });
 }
 
-// Writes `states` to chat's slots as main holds them, then tells the part the page
-// is ready, so it draws a tab for each. Returns the writer of `chat.session`.
+// Writes each of `states` an unowned row and chat's slots, as main holds them,
+// then tells the part the page is ready, so it draws a Sessions tab for each.
+// Returns the writers of `chat.session` and `sessions.rows`.
 function loadSessions(
   harness: ReturnType<typeof startChatPage>,
   states: ChatSessionState[],
 ) {
+  const rows = harness.state.publish(sessionsRowsSlot);
   const session = harness.state.publish(chatSessionSlot);
   const entriesSlot = harness.state.publish(chatEntriesSlot);
   const controlsSlot = harness.state.publish(chatControlsSlot);
@@ -160,6 +169,7 @@ function loadSessions(
   const returnedSlot = harness.state.publish(chatReturnedSlot);
   for (const state of states) {
     const { entries, controls, commands, queued, returned, ...info } = state;
+    rows.set(state.sessionId, { ...ROW, sessionId: state.sessionId });
     entriesSlot.replace(state.sessionId, entries);
     controlsSlot.set(state.sessionId, controls);
     commandsSlot.set(state.sessionId, commands);
@@ -168,7 +178,7 @@ function loadSessions(
     session.set(state.sessionId, info);
   }
   harness.ready();
-  return session;
+  return { session, rows };
 }
 
 // Stops the page, leaves `places` and `images` in chat's place slots as the last
@@ -253,10 +263,8 @@ describe('chat page part', () => {
   it('sessionRemoved_HeldTab_DestroysItsBoxOnce', async () => {
     const destroyEditor = vi.fn<() => void>();
     const harness = startChatPage(destroyEditor);
-    loadSessions(harness, [SESSION]);
+    const { rows } = loadSessions(harness, [SESSION]);
 
-    const rows = harness.state.publish(sessionsRowsSlot);
-    rows.set(SESSION.sessionId, ROW);
     rows.delete(SESSION.sessionId);
 
     expect(destroyEditor).toHaveBeenCalledOnce();
@@ -286,9 +294,9 @@ describe('chat page part', () => {
       () => false,
       (_sessionId, _source, activity) => words.push(activity?.word),
     );
-    const rows = harness.state.publish(sessionsRowsSlot);
-    rows.set('s1', ROW);
-    const session = loadSessions(harness, [{ ...SESSION, running: true }]);
+    const { session, rows } = loadSessions(harness, [
+      { ...SESSION, running: true },
+    ]);
     const info = session.get('s1') as ChatSessionInfo;
     session.set('s1', { ...info, activity: 'working' });
     session.set('s1', { ...info, activity: 'idle' });
@@ -360,8 +368,7 @@ describe('chat page part', () => {
       () => undefined,
       { boxes, invoked },
     );
-    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
-    const session = loadSessions(harness, [
+    const { session } = loadSessions(harness, [
       { ...SESSION, entries: [notice('n1'), notice('n2')] },
     ]);
     // The tab's box is the last made: the dialogs make theirs at start.
@@ -387,9 +394,7 @@ describe('chat page part', () => {
 
   it('row_removed_clears_the_place', async () => {
     const harness = startChatPage();
-    const rows = harness.state.publish(sessionsRowsSlot);
-    rows.set('s1', ROW);
-    loadSessions(harness, [SESSION]);
+    const { rows } = loadSessions(harness, [SESSION]);
     await reloadWith(harness, { s1: placeWith('draft') }, { s1: [PNG] });
     expect(placeKeys(harness)).toEqual({ places: ['s1'], images: ['s1'] });
 
@@ -423,7 +428,6 @@ describe('chat page part', () => {
       () => undefined,
       { boxes },
     );
-    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
     loadSessions(harness, [SESSION]);
     // The tab's box is the last made: the dialogs make theirs at start.
     boxes.at(-1)?.type('not sent yet');
