@@ -562,9 +562,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   the focused pane, and the visible surface, whose `shown` sets the key scope and whose `isVisible` reads true, is the
   focused pane's top open popup, else its selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
-  An **owned session** — a row opened with an `owner`, the plugin it belongs to — has no place in the side bar, the
-  next and previous session keys or the pane tree: it shows only where its owner mounts its chat view through chat's
-  `mountChat` (Practice's interviewer, `docs/features/practice/design.md`).
+  A **row with an owner** — opened with an `owner`, the plugin it belongs to; not the "owned session" of `open` — has
+  no place in the side bar, the next and previous session keys or the pane tree: it shows only where its owner mounts
+  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box

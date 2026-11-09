@@ -9,7 +9,7 @@
 - **Progress** — status, attempts, submissions, the review ladder, peeking.
 - **Adding problems** — the import session and the `add_practice_problem` tool.
 - **The interviewer** — the side pane, its lifetime, its instructions, `read_practice_state`.
-- **Chat and sessions changes** — the embeddable chat view, per-session instructions, owned rows, main `resume`.
+- **Chat and sessions changes** — the embeddable chat view, per-session instructions, rows with an owner, main `resume`.
 - **Seams** — the modules and what each one owns.
 
 The decisions the user settled in the 2026-11-08 interview (four rounds, the design review and the agent's Decided
@@ -165,13 +165,17 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **Embeddable chat view:** chat's page exports `mountChat(element, sessionId)`, which builds a chat view of a
   session chat holds into the element and returns a handle with `shown`, `hidden` and `dispose`. The Chat tab and the
   mount fill one small host interface (attach, shown, hidden, visible), so the view stays one module with two
-  adapters. A session shows in one place: an owned session is never placed in a Sessions pane.
+  adapters. A session shows in one place: an session with an owner is never placed in a Sessions pane.
 - **Per-session instructions:** `LaunchRequest.instructions` (and `ResumeRequest.instructions`) carry text this
   session alone passes to its harness after the global `addInstructions` texts. They are saved with the session, so
   they hold across `/clear`, a relaunch and a resume.
-- **Owned rows:** `LaunchRequest.owner` and `ResumeRequest.owner` name the plugin that owns the session. Sessions
-  keeps the owner on the row and saves it; the Sessions side bar, the next and previous session keys and pane
-  placement skip an owned row.
+- **Rows with an owner:** `LaunchRequest.owner` and `ResumeRequest.owner` name the plugin a session belongs to.
+  Sessions keeps the owner on the row, and chat saves it with the session and passes it back on restore; the Sessions
+  side bar, the next and previous session keys and pane placement skip such a row, and it is never the selected row
+  and raises no "Turn finished" alert.
+- **Known limits:** a tab or popup another plugin opens for an interviewer session (a forms round, the primer) waits
+  for a Sessions row that never shows, so it never appears. A saved interviewer session still lists in the start
+  prompt's resume list for the practice folder; resuming it from there opens it as an ordinary visible session.
 - **Main `resume`:** chat's main part exports `resume(request)`, the channel's resume with the same new fields, so a
   plugin can bring back a saved session it owns.
 
