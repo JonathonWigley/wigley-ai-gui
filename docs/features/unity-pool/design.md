@@ -9,6 +9,7 @@
 - **Row badge** — what a session row shows for its clone.
 - **Panel** — the right-bar panel, which pool it shows, and what each clone and ticket shows.
 - **Hold and Release** — the two buttons, run through the CLI.
+- **Claims for a project** — the pool provider chat's start prompt claims through.
 - **Drawing** — the layout parts and what the app keeps.
 - **Decisions** — choices a future change would otherwise reopen.
 - **Out of scope**
@@ -127,6 +128,16 @@ The panel is a right-bar stop: `Alt+l` past main's right edge gives it the keys 
 entering on the shown session's clone holder, and Enter shows the cursor's session as a click on the holder does. The
 cursor's holder draws the focus ring only while the panel holds the keys. The Hold and Release buttons stay clicks.
 
+## Claims for a project
+
+A new session in a pool project (`docs/features/projects/design.md` § Pool projects) is claimed by the app, not by
+the agent: main registers itself with chat's `addPoolProvider` and answers three asks. `folders(pool)` gives the
+pool's clone paths from its state, `branches(pool, refresh)` the origin branches its clones last fetched, newest
+commit first (`refresh` runs `git fetch --no-recurse-submodules origin` in the lowest-numbered clone first), and
+`claim` runs `unity-pool claim --branch <branch> --pool <pool> --wait --json` under the session id and row id it is
+given, with no time limit, stopping the CLI when chat cancels it. An agent that runs `unity-pool claim` again in its
+clone keeps the clone, as the pool's rules give any holder.
+
 ## Drawing
 
 The plugin's layout owner is `unity-pool`, with two parts: `rowBadge` (one badge, drawn into a sessions row part)
@@ -152,5 +163,4 @@ pending runs and every redraw. The default look is in `DESIGN.md` § Surfaces (U
 ## Out of scope
 
 - Releasing an agent's claim or a stranded mark from the app (`release --force`).
-- Claiming a clone from the app: an agent claims for itself.
 - Codex sessions: they read the pool but do not claim.

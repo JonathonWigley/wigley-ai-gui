@@ -66,11 +66,14 @@ interview on 2026-10-23; this file is the record of both.
 ## Flow
 
 ```
- Space b n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
-                 │                     newest first, or the folder dialog), then profile (skipped with one profile),
-                 │                     then sign-in when that profile is signed out, then a new session or one of the
-                 │                     folder's saved sessions to resume; a registered resume section sits at the top of
-                 │                     the folder and session steps (`docs/features/session-log/design.md`)
+ Space b n ─► start prompt (overlay): project (each project in settings, then Other folder… for the folder step:
+                 │                     the app's recent folders and every folder the harness has sessions in, newest
+                 │                     first, or the folder dialog), then branch for a pool project, then profile
+                 │                     (skipped when the project fixes one, or with one profile), then sign-in when that
+                 │                     profile is signed out, then a new session or one of the project's or folder's
+                 │                     saved sessions to resume; a registered resume section sits at the top of the
+                 │                     project and session steps (`docs/features/session-log/design.md`,
+                 │                     `docs/features/projects/design.md`)
                  ▼
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
@@ -412,8 +415,10 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
-- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
-  the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
+- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the project — the
+  Project, Branch and Other folder steps are `docs/features/projects/design.md` § Start prompt — or, through Other
+  folder…, the folder, then the profile (a single profile is not asked, nor one the project fixes; the last profile
+  used in a folder is pre-selected). Esc at any step
   starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
   profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
@@ -510,8 +515,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
-- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the folders and above the new-session line. After the folder and profile, the start prompt offers a new session or one of the folder's
-  saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
+- **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the projects and above the new-session line. After the project or folder and the profile, the start prompt offers a new session or one of the
+  project's or folder's saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
   resumed with its earlier conversation read from the transcript. A resume lists the session host first, so a session
   never runs two processes: a process of the session running in the current host has the row open and attach to it,
