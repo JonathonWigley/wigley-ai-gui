@@ -42,10 +42,14 @@ export type SourceLoad =
   | { readonly kind: 'gone'; readonly id: string };
 
 // Where the catalog's plugins come from. `loadAll` loads every plugin the
-// source holds, leaving out `gone`; `watch` sends each later load, and
-// `reload` loads one id again.
+// source holds, leaving out `gone`.
 export interface PluginSource {
   loadAll(): Promise<readonly SourceLoad[]>;
+}
+
+// A source whose plugins change while the app runs: `watch` sends each load
+// a change makes, and `reload` loads one id again.
+export interface WatchedPluginSource extends PluginSource {
   watch(listener: (load: SourceLoad) => void): Disposable;
   reload(id: string): Promise<SourceLoad>;
 }

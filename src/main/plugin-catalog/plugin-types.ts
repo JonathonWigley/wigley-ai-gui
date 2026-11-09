@@ -20,10 +20,9 @@ const PLUGIN_DTS_FILE = 'plugin.d.ts';
 const PLUGIN_DTS_TEXT = "export type * from './contracts/user-plugin';\n";
 const SCHEMA_FILE = 'manifest.schema.json';
 // The folder the build emits the types to, beside the app (dev) or in the
-// app's resources (packaged): `tsconfig.plugin-types.json`'s `outDir`, and
-// what `packagerConfig.extraResource` copies it to.
-const DEV_EMITTED_FOLDER = '.plugin-types';
-const PACKAGED_EMITTED_FOLDER = 'plugin-types';
+// app's resources (packaged): `tsconfig.plugin-types.json`'s `outDir`, which
+// `packagerConfig.extraResource` copies under the same name.
+const EMITTED_FOLDER = '.plugin-types';
 
 // Writes the plugin contract types to `typesFolder`, so a user plugin's plain
 // JS can type itself with `// @ts-check`: every `.d.ts` the build emitted, at
@@ -59,14 +58,14 @@ export async function writePluginTypes(deps: PluginTypesDeps): Promise<void> {
 }
 
 // Where the build put the emitted `.d.ts` tree.
-export function emittedTypesFolder(app: {
-  isPackaged: boolean;
-  appPath: string;
-  resourcesPath: string;
-}): string {
-  return app.isPackaged
-    ? `${app.resourcesPath}/${PACKAGED_EMITTED_FOLDER}`
-    : `${app.appPath}/${DEV_EMITTED_FOLDER}`;
+export function emittedTypesFolder(
+  app: { isPackaged: boolean; appPath: string; resourcesPath: string },
+  paths: Paths,
+): string {
+  return paths.join(
+    app.isPackaged ? app.resourcesPath : app.appPath,
+    EMITTED_FOLDER,
+  );
 }
 
 async function copyDeclarations(

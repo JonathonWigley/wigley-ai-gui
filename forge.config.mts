@@ -9,6 +9,10 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { AD_HOC_IDENTITY, macSigningIdentity } from './scripts/mac-signing.mts';
+import {
+  copyDeclarationInputs,
+  nodeDeclarationFiles,
+} from './scripts/plugin-type-inputs.mts';
 
 // `tsconfig.plugin-types.json`'s `outDir`.
 const PLUGIN_TYPES_FOLDER = '.plugin-types';
@@ -19,17 +23,18 @@ const config: ForgeConfig = {
     win32metadata: { ProductName: 'Auri', FileDescription: 'Auri' },
     // Packager adds `.ico` on Windows and `.icns` on macOS.
     icon: 'assets/icon/icon',
-    // The plugin contract types `generateAssets` emits, copied to
-    // `<Resources>/plugin-types` outside the asar for the app to write to the
-    // user's `plugins/_types/` at start.
+    // The plugin contract types `generateAssets` emits, copied under the same
+    // name to `<Resources>/.plugin-types` outside the asar for the app to write
+    // to the user's `plugins/_types/` at start.
     extraResource: [PLUGIN_TYPES_FOLDER],
   },
   rebuildConfig: {},
   hooks: {
     // Emits the plugin contract types for `start`, `package` and `make`. They
     // go outside `.vite`, which the Vite plugin's own `preStart` and
-    // `prePackage` hooks delete after this hook runs. A failed emit stops
-    // start and packaging rather than ship stale or missing types.
+    // `prePackage` hooks delete after this hook runs. A failed emit, or an
+    // emitted import with no declaration, stops start and packaging rather
+    // than ship stale or missing types.
     generateAssets: async () => {
       emitPluginTypes();
     },
@@ -110,6 +115,11 @@ function emitPluginTypes(): void {
       cause: error,
     });
   }
+  copyDeclarationInputs(
+    path.join(repoDir, 'src'),
+    path.join(repoDir, PLUGIN_TYPES_FOLDER),
+    nodeDeclarationFiles,
+  );
 }
 
 function appBundleIn(outputPath: string): string {

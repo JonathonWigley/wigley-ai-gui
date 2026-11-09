@@ -3,14 +3,14 @@ import type {
   CatalogChange,
   CatalogEntry,
   PluginOrigin,
-  PluginSource,
   SourceLoad,
+  WatchedPluginSource,
 } from '../../contracts/plugin-catalog';
 import { startPluginCatalog } from './plugin-catalog';
 
 // A source whose `loadAll` resolves `loads`, whose watch keeps its listener
 // for `send`, and whose `reload` resolves `nextReload`.
-interface FakeSource extends PluginSource {
+interface FakeSource extends WatchedPluginSource {
   send(load: SourceLoad): void;
   reloaded: string[];
   nextReload: SourceLoad | null;
@@ -320,6 +320,31 @@ describe('startPluginCatalog', () => {
     expect(logLines).toEqual([
       '[plugin-catalog] change listener failed: listener broke',
     ]);
+  });
+
+  // Breaks if the watch starts after the start loads, or if a load it sent
+  // in that time is applied over the start load of its id.
+  it('loads again an id the watch loaded while the start loads ran', async () => {
+    const builtIn = fakeSource([]);
+    const user = fakeSource([]);
+    const startLoad = loaded('c');
+    user.loadAll = async () => {
+      user.send(loaded('c'));
+      return [startLoad];
+    };
+    const reload = loaded('c');
+    user.nextReload = reload;
+
+    const catalog = await startPluginCatalog({
+      builtIn,
+      user,
+      log: () => {},
+    });
+
+    expect(user.reloaded).toEqual(['c']);
+    expect(catalog.entry('c')?.manifest).toBe(
+      reload.kind === 'loaded' ? reload.entry.manifest : null,
+    );
   });
 
   it.each<{ id: string; rejects: string | null }>([

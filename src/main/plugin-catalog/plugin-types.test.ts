@@ -80,17 +80,16 @@ describe('writePluginTypes', () => {
 
 describe('emittedTypesFolder', () => {
   it.each([
-    { isPackaged: true, expected: '/Resources/plugin-types' },
+    { isPackaged: true, expected: '/Resources/.plugin-types' },
     { isPackaged: false, expected: '/repo/.plugin-types' },
   ])(
     'emittedTypesFolder_PicksResourcesWhenPackaged: packaged $isPackaged',
     ({ isPackaged, expected }) => {
       expect(
-        emittedTypesFolder({
-          isPackaged,
-          appPath: '/repo',
-          resourcesPath: '/Resources',
-        }),
+        emittedTypesFolder(
+          { isPackaged, appPath: '/repo', resourcesPath: '/Resources' },
+          posixPaths,
+        ),
       ).toBe(expected);
     },
   );

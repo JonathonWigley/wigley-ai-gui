@@ -86,8 +86,8 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
                  record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
                  readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
-                 `plugin-catalog.ts`: `CatalogEntry`, `PluginSource` and the `PluginCatalog` the host, the plugin switch
-                 and the config read;
+                 `plugin-catalog.ts`: `CatalogEntry`, `PluginSource`, the user side's `WatchedPluginSource` and the
+                 `PluginCatalog` the host, the plugin switch and the config read;
                  `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main

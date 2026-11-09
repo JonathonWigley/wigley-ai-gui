@@ -7,11 +7,16 @@ import type {
   PluginCatalog,
   PluginSource,
   SourceLoad,
+  WatchedPluginSource,
 } from '../../contracts/plugin-catalog';
 import { errorText } from '../../shared/error-text';
 import { dependencyOrder } from '../../shared/plugin-manifests';
 
 const LOG_SOURCE = 'plugin-catalog';
+
+function idOf(load: SourceLoad): string {
+  return load.kind === 'loaded' ? load.entry.manifest.id : load.id;
+}
 
 type SourceName = 'built-in' | 'user';
 
@@ -128,11 +133,13 @@ function sameProblems(
 
 // The plugins the app runs, merged from the built-in and user sources: a user
 // plugin replaces the built-in of its id, a failed load keeps the last good
-// entry, and a plugin whose dependency is not loaded is held back. Each load a
-// source's watch sends after start reaches every `onChanged` listener.
+// entry, and a plugin whose dependency is not loaded is held back. Each load
+// the user source's watch sends after start reaches every `onChanged`
+// listener; an id the watch loads while the start loads run loads again once
+// they are in.
 export async function startPluginCatalog(deps: {
   builtIn: PluginSource;
-  user: PluginSource;
+  user: WatchedPluginSource;
   log: Log;
 }): Promise<PluginCatalog & Disposable> {
   const { builtIn, user, log } = deps;
@@ -252,16 +259,31 @@ export async function startPluginCatalog(deps: {
     }
   };
 
+  // Started before the start loads so a save during them is not missed; the
+  // ids it loads in that time wait in `loadedWhileStarting`.
+  let started = false;
+  const loadedWhileStarting = new Set<string>();
+  const userWatch = user.watch((load) => {
+    if (started) {
+      applyWatched('user', load);
+    } else {
+      loadedWhileStarting.add(idOf(load));
+    }
+  });
+
   for (const load of await builtIn.loadAll()) {
     apply('built-in', load);
   }
   for (const load of await user.loadAll()) {
     apply('user', load);
   }
+  // A watched load may have settled before the start load of its id, so each
+  // loads again, after both.
+  for (const id of loadedWhileStarting) {
+    apply('user', await user.reload(id));
+  }
+  started = true;
   recompute();
-
-  const builtInWatch = builtIn.watch((load) => applyWatched('built-in', load));
-  const userWatch = user.watch((load) => applyWatched('user', load));
 
   const entry = (id: string) =>
     shown.find((shownEntry) => shownEntry.manifest.id === id);
@@ -290,7 +312,6 @@ export async function startPluginCatalog(deps: {
       throw new Error(`No plugin "${id}"`);
     },
     dispose: () => {
-      builtInWatch.dispose();
       userWatch.dispose();
     },
   };

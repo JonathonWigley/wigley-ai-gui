@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../contracts/files';
-import type { PluginSource, SourceLoad } from '../../contracts/plugin-catalog';
+import type {
+  SourceLoad,
+  WatchedPluginSource,
+} from '../../contracts/plugin-catalog';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import {
@@ -34,7 +37,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function createSource(pluginsFolder: Files = plugins): PluginSource {
+function createSource(pluginsFolder: Files = plugins): WatchedPluginSource {
   return createUserFolderSource({
     pluginsFolder,
     userRoot: USER_ROOT,
@@ -279,9 +282,59 @@ describe('createUserFolderSource', () => {
     ]);
   });
 
+  // Breaks if a link to a folder is read as a file (the whole load fails),
+  // or if a link back to a folder already listed is followed again.
+  it('copies the files of a linked folder, each real folder once', async () => {
+    await writePlugin('notes');
+    await plugins.write('_store/pkg/index.js', '// pkg');
+    const links: Record<string, string> = {
+      'notes/node_modules/pkg': '_store/pkg',
+      'notes/loop': 'notes',
+    };
+    const targetOf = (path: string) => {
+      for (const [link, target] of Object.entries(links)) {
+        if (path === link || path.startsWith(`${link}/`)) {
+          return target + path.slice(link.length);
+        }
+      }
+      return path;
+    };
+    // As the Node adapter lists, stats and resolves a link to a folder.
+    const linked: Files = {
+      ...plugins,
+      list: async (folder, options) => [
+        ...(await plugins.list(targetOf(folder), options)),
+        ...(folder === 'notes'
+          ? Object.keys(links).map((link) => ({
+              path: link.slice('notes/'.length),
+              kind: 'file' as const,
+            }))
+          : []),
+      ],
+      stat: async (path) =>
+        path in links ? { isFolder: true, isLink: true } : plugins.stat(path),
+      realPath: async (path) => targetOf(path),
+      readBytes: (path) => plugins.readBytes(targetOf(path)),
+    };
+
+    const load = await createSource(linked).reload('notes');
+
+    const copied = (await code.list('notes/1', { recursive: true }))
+      .filter((entry) => entry.kind === 'file')
+      .map((entry) => entry.path)
+      .sort();
+    expect(load.kind).toBe('loaded');
+    expect(copied).toEqual([
+      'main.js',
+      'manifest.json',
+      'node_modules/pkg/index.js',
+      'package.json',
+    ]);
+  });
+
   describe('watch', () => {
     // Waits for every load the watch queued to finish and reach the listener.
-    async function loadsDone(source: PluginSource): Promise<void> {
+    async function loadsDone(source: WatchedPluginSource): Promise<void> {
       await source.reload('settled-probe');
     }
 
@@ -299,7 +352,11 @@ describe('createUserFolderSource', () => {
       },
       { written: ['notes/layouts/default/layout.js'], loadedIds: [] },
       { written: ['_types/plugin.d.ts'], loadedIds: [] },
-      { written: ['notes/main.js.swp', 'notes/main.js~'], loadedIds: [] },
+      { written: ['notes/lib/helper.cjs'], loadedIds: ['notes'] },
+      {
+        written: ['notes/main.js.swp', 'notes/main.js~', 'notes/.cache/a.js'],
+        loadedIds: [],
+      },
     ])(
       'reloads a plugin once its saves settle: $written',
       async ({ written, apartMs = 0, loadedIds }) => {
@@ -327,6 +384,58 @@ describe('createUserFolderSource', () => {
             load.kind === 'loaded' ? load.entry.manifest.id : load.kind,
           ),
         ).toEqual(loadedIds);
+      },
+    );
+
+    // Each row sends `events` as the watch reports them, against a source
+    // that holds `notes`. A path of one segment is how macOS reports a change
+    // inside the folder as well as the folder's own.
+    it.each<{
+      events: string[];
+      arrange?: () => Promise<void>;
+      loads: string[];
+    }>([
+      { events: ['notes'], loads: [] },
+      { events: ['notes', 'notes/main.js'], loads: ['notes'] },
+      {
+        events: ['fresh'],
+        arrange: () => writePlugin('fresh'),
+        loads: ['fresh'],
+      },
+      {
+        events: ['notes'],
+        arrange: async () => plugins.remove('notes'),
+        loads: ['gone'],
+      },
+    ])(
+      'loads on a folder event only when the folder came or went: $events',
+      async ({ events, arrange, loads: expected }) => {
+        await writePlugin('notes');
+        let report: (path: string) => void = () => {};
+        const reported: Files = {
+          ...plugins,
+          watch: (_folder, onChange) => {
+            report = onChange;
+            return { dispose() {} };
+          },
+        };
+        const source = createSource(reported);
+        await source.reload('notes');
+        const loads: SourceLoad[] = [];
+        source.watch((load) => loads.push(load));
+        await arrange?.();
+
+        for (const event of events) {
+          report(event);
+        }
+        await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
+        await loadsDone(source);
+
+        expect(
+          loads.map((load) =>
+            load.kind === 'loaded' ? load.entry.manifest.id : load.kind,
+          ),
+        ).toEqual(expected);
       },
     );
 

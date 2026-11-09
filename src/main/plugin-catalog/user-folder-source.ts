@@ -3,11 +3,13 @@ import { readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import type { MainPart } from '../../contracts/plugin';
-import type { PluginSource, SourceLoad } from '../../contracts/plugin-catalog';
+import type {
+  SourceLoad,
+  WatchedPluginSource,
+} from '../../contracts/plugin-catalog';
 import type { UserMainModule } from '../../contracts/user-plugin';
 import { pluginIdProblem } from '../../shared/define-plugin';
 import { errorText } from '../../shared/error-text';
-import { isLayoutFileName } from '../../shared/layouts/layout-registry';
 import { validateManifest } from '../../shared/plugin-catalog/validate-manifest';
 import { pluginUrl } from '../../shared/plugin-url';
 
@@ -39,6 +41,14 @@ const MODULE_PACKAGE_TEXT = '{"type":"module"}';
 // reloads without restarting the plugin.
 const LAYOUTS_FOLDER = 'layouts';
 const REVISION_NAME = /^\d+$/;
+// The names editors give swap, backup and temporary files.
+const EDITOR_TEMP_FILE = /(~|\.swp|\.swx|\.tmp)$/;
+
+// Whether `path`, in a plugin folder, lies under a name starting with `.`,
+// which a load leaves out of its copy.
+function isHidden(path: string): boolean {
+  return path.split('/').some((segment) => segment.startsWith('.'));
+}
 
 // A load and whether the watch sends it: a `gone` goes out only for an id the
 // source loaded or failed before.
@@ -55,7 +65,7 @@ type MainImport = { module: Record<string, unknown> } | { problem: string };
 // module. A load never throws: a problem resolves `failed` with its message.
 export function createUserFolderSource(
   deps: UserFolderSourceDeps,
-): PluginSource {
+): WatchedPluginSource {
   const { pluginsFolder, codeFolder, paths, log } = deps;
   // The last revision each id took, kept for the life of the process.
   const revisions = new Map<string, number>();
@@ -93,22 +103,49 @@ export function createUserFolderSource(
     return revision;
   };
 
-  // Copies every file of the plugin folder but those under a name starting
-  // with `.`, and resolves the copied paths, relative to the copy.
+  // The files of the plugin folder a load copies, relative to it: every file
+  // not hidden, a link to a folder taken as that folder, each real folder
+  // listed once.
+  const filesToCopy = async (id: string): Promise<string[]> => {
+    const inPlugin = (path: string) => (path === ROOT ? id : `${id}/${path}`);
+    const found: string[] = [];
+    const listedFolders = new Set([await pluginsFolder.realPath(id)]);
+    const pending = [ROOT];
+    let folder: string | undefined;
+    while ((folder = pending.pop()) !== undefined) {
+      const entries = await pluginsFolder.list(inPlugin(folder), {
+        recursive: true,
+      });
+      for (const entry of entries) {
+        const path = folder === ROOT ? entry.path : `${folder}/${entry.path}`;
+        if (entry.kind !== 'file' || isHidden(path)) {
+          continue;
+        }
+        // A link to a folder lists as a file.
+        if ((await pluginsFolder.stat(inPlugin(path)))?.isFolder !== true) {
+          found.push(path);
+          continue;
+        }
+        const realFolder = await pluginsFolder.realPath(inPlugin(path));
+        if (!listedFolders.has(realFolder)) {
+          listedFolders.add(realFolder);
+          pending.push(path);
+        }
+      }
+    }
+    return found;
+  };
+
+  // Copies `filesToCopy` and resolves the copied paths, relative to the copy.
   const copyRevision = async (
     id: string,
     revision: number,
   ): Promise<Set<string>> => {
     const copied = new Set<string>();
-    const files = (await pluginsFolder.list(id, { recursive: true })).filter(
-      (entry) =>
-        entry.kind === 'file' &&
-        !entry.path.split('/').some((segment) => segment.startsWith('.')),
-    );
-    for (const file of files) {
-      const bytes = await pluginsFolder.readBytes(`${id}/${file.path}`);
-      await codeFolder.writeBytes(`${id}/${revision}/${file.path}`, bytes);
-      copied.add(file.path);
+    for (const path of await filesToCopy(id)) {
+      const bytes = await pluginsFolder.readBytes(`${id}/${path}`);
+      await codeFolder.writeBytes(`${id}/${revision}/${path}`, bytes);
+      copied.add(path);
     }
     await codeFolder.write(
       `${id}/${revision}/${MODULE_PACKAGE}`,
@@ -215,52 +252,79 @@ export function createUserFolderSource(
     };
   };
 
-  // Loads the id in turn with every other load, and notes whether the
-  // source holds it now. A problem `load` did not foresee fails the load.
+  // Loads the id and notes whether the source holds it now. A problem `load`
+  // did not foresee fails the load.
+  const trackedLoad = async (id: string): Promise<TrackedLoad> => {
+    let result: SourceLoad;
+    try {
+      result = await load(id);
+    } catch (error) {
+      result = failed(id, errorText(error));
+    }
+    const announced = result.kind !== 'gone' || held.has(id);
+    if (result.kind === 'gone') {
+      held.delete(id);
+    } else {
+      held.add(id);
+    }
+    return { load: result, announced };
+  };
+
+  // `trackedLoad` in turn with every other load.
   const loadInTurn = (id: string): Promise<TrackedLoad> =>
+    serially(() => trackedLoad(id));
+
+  // `loadInTurn` when the id's folder has come or gone since the source last
+  // loaded it; null when the source's hold of the id already matches it.
+  const loadWhenPresenceChanged = (id: string): Promise<TrackedLoad | null> =>
     serially(async () => {
-      let result: SourceLoad;
+      let isPresent: boolean;
       try {
-        result = await load(id);
-      } catch (error) {
-        result = failed(id, errorText(error));
+        isPresent = (await pluginsFolder.stat(id))?.isFolder === true;
+      } catch {
+        return trackedLoad(id);
       }
-      const announced = result.kind !== 'gone' || held.has(id);
-      if (result.kind === 'gone') {
-        held.delete(id);
-      } else {
-        held.add(id);
-      }
-      return { load: result, announced };
+      return isPresent === held.has(id) ? null : trackedLoad(id);
     });
 
   const watch = (listener: (load: SourceLoad) => void) => {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    // The ids with a save under their folder since their last settle.
+    const savedIds = new Set<string>();
     let disposed = false;
 
     const loadSettled = (id: string) => {
       timers.delete(id);
-      void loadInTurn(id).then(({ load: settled, announced }) => {
-        if (!disposed && announced) {
-          listener(settled);
+      const loading = savedIds.delete(id)
+        ? loadInTurn(id)
+        : loadWhenPresenceChanged(id);
+      void loading.then((tracked) => {
+        if (!disposed && tracked !== null && tracked.announced) {
+          listener(tracked.load);
         }
       });
     };
 
     // The first segment is the plugin's id; a path of one segment is the
-    // plugin folder itself, made, renamed or deleted.
+    // plugin folder itself: made, renamed or deleted, or on macOS a change
+    // inside it, so that alone loads only when the folder came or went.
     const onChange = (changed: string) => {
       const segments = changed.split('/');
       const id = segments[0];
       if (id.startsWith('_') || id.startsWith('.')) {
         return;
       }
-      const isDeeper = segments.length > 1;
-      const isLayoutSave = isDeeper && segments[1] === LAYOUTS_FOLDER;
-      const isIgnoredFile =
-        isDeeper && !isLayoutFileName(segments[segments.length - 1]);
-      if (isLayoutSave || isIgnoredFile) {
+      const isSave = segments.length > 1;
+      const isLayoutSave = isSave && segments[1] === LAYOUTS_FOLDER;
+      const isSkippedSave =
+        isSave &&
+        (isHidden(changed) ||
+          EDITOR_TEMP_FILE.test(segments[segments.length - 1]));
+      if (isLayoutSave || isSkippedSave) {
         return;
+      }
+      if (isSave) {
+        savedIds.add(id);
       }
       clearTimeout(timers.get(id));
       timers.set(
@@ -289,6 +353,7 @@ export function createUserFolderSource(
           clearTimeout(timer);
         }
         timers.clear();
+        savedIds.clear();
       },
     };
   };

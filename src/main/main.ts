@@ -1381,11 +1381,14 @@ function startApp() {
       await writePluginTypes({
         files,
         typesFolder: path.join(inputs.pluginsFolder, '_types'),
-        emittedFolder: emittedTypesFolder({
-          isPackaged: app.isPackaged,
-          appPath: app.getAppPath(),
-          resourcesPath: process.resourcesPath,
-        }),
+        emittedFolder: emittedTypesFolder(
+          {
+            isPackaged: app.isPackaged,
+            appPath: app.getAppPath(),
+            resourcesPath: process.resourcesPath,
+          },
+          paths,
+        ),
         paths,
         log: pageLog.log,
       });

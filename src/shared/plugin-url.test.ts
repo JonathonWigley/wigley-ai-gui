@@ -32,6 +32,10 @@ describe('pluginFilePath', () => {
     ['an empty path', 'wigley-plugin://my-tool/~1/'],
     ['an encoded / in a segment', 'wigley-plugin://my-tool/~1/lib%2Fa.js'],
     ['a .. climb', 'wigley-plugin://my-tool/~1/../../x/page.js'],
+    ['an encoded \\ in a segment', 'wigley-plugin://my-tool/~1/lib%5Ca.js'],
+    ['a .. host', 'wigley-plugin://../~1/page.js'],
+    ['an empty host', 'wigley-plugin:///~1/page.js'],
+    ['a drive-prefixed segment', 'wigley-plugin://my-tool/~1/C:/page.js'],
   ])('pluginFilePath_RefusesMalformed: %s', (_case, url) => {
     expect(pluginFilePath(url, '/c', posixPaths)).toBe(null);
   });
