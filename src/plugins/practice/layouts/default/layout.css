@@ -4,6 +4,7 @@
    rows. */
 .practice-pane[data-layout-owner='practice'] {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
@@ -74,11 +75,33 @@
   height: 100%;
 }
 
+/* A header too narrow for its parts wraps the console's actions under the
+   tabs bar. */
 [data-layout-owner='practice'] .practice-pane-header {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--wg-space-2);
   padding: 0 var(--wg-space-3);
+}
+
+/* The tabs bar takes the header's room; its strip shrinks and scrolls its
+   tabs, the hints keeping their width. */
+[data-layout-owner='practice'] .practice-tabs-bar {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+[data-layout-owner='practice'] .practice-tabs-bar > .practice-hint {
+  flex: none;
+}
+
+[data-layout-owner='practice'] .practice-tabs-bar > .ui-tabs {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 [data-layout-owner='practice'] .practice-file-name {
@@ -89,6 +112,7 @@
 
 [data-layout-owner='practice'] .practice-console-actions {
   display: flex;
+  flex: none;
   gap: var(--wg-space-2);
   margin-left: auto;
 }

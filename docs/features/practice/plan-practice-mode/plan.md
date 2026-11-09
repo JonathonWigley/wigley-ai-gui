@@ -327,5 +327,6 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 09: a click into the ask box gives the pane the keys; a click into a mounted chat view does not · group 09
 - 09: logs 'interviewer not read <slug>: <err>' and 'interviewer not mounted <slug>: <err>' with error toasts · group 09
 - 09: import box closes its scope with dispose(), sends trimmed requests, logs 'import failed' even after close · group 09
+- 10's filtered selftest failed only checksFit at the workspace's minimum width (split panes and pane headers overflow 368px), caused by 08's layout CSS: the overflow is fixed in the practice layout CSS by a fix dispatch, never by dropping checksFit — a real overflow stays visible — lead
 ### Review rounds
 ### Test gate

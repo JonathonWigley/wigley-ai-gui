@@ -29,19 +29,21 @@ const DIFFICULTY_TAGS = {
 };
 
 /**
- * A pane's header: the previous-tab hint, the tab strip, the next-tab hint.
+ * A pane's header, holding its tabs bar: the previous-tab hint, the tab strip
+ * that scrolls sideways, the next-tab hint.
  * @param {HTMLElement} root
  * @param {import('../layout').TabbedPaneKit} kit
  * @returns {HTMLElement}
  */
 function tabsHeader(root, kit) {
   const header = kit.el(root, 'div', 'practice-pane-header');
-  kit.keyHint(header, 'prevTab', {
+  const bar = kit.el(header, 'span', 'practice-tabs-bar');
+  kit.keyHint(bar, 'prevTab', {
     label: 'previous tab',
     className: 'practice-hint',
   });
-  kit.tabs(header);
-  kit.keyHint(header, 'nextTab', {
+  kit.tabs(bar).classList.add('ui-tabs--scroll');
+  kit.keyHint(bar, 'nextTab', {
     label: 'next tab',
     className: 'practice-hint',
   });
