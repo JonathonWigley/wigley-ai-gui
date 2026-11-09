@@ -264,3 +264,4 @@ Review base: 7ec307f1
 - 07: § 1 (drive checks) and § 3 (machine note) run now; § 2 (install-app, user settings.json) needs the branch on main, so it runs after landing, on the user's yes for the app restart, and § 4 goes to the wrap-up's Needs you
 ### Review rounds
 ### Test gate
+- picked over 7ec307f1..HEAD (chat, sessions, unity-pool, docs, workflow, usage, shared page, processes): full vitest 573 files / 11898 tests pass; selftest --plugin sessions, unity-pool, docs pass; chat failed 10 steps, pre-existing at base (stale ARCHIVE_STEPS since ec34cedd's headless line) — fixed in dee4a633, chat 251 PASS; workflow-small 17, workflow-medium 15, workflow-large 21 PASS; typecheck 0, lint 0
