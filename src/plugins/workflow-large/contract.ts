@@ -19,6 +19,9 @@ export const LARGE_WORKFLOW_ID = 'workflow-large';
 export interface LargeState {
   // The plan folder (holding plan.md), full path.
   planDir: string | null;
+  // True when the run reported `planDir` through `plan.py` or
+  // `set_workflow_plan`: the plan watch then reads that folder alone.
+  planReported: boolean;
   // Null until the plan folder is read.
   progress: PlanProgress | null;
   // The plan's review rounds when make was last entered: review lights only on
@@ -31,6 +34,7 @@ export interface LargeState {
 
 export const EMPTY_LARGE_STATE: LargeState = {
   planDir: null,
+  planReported: false,
   progress: null,
   reviewRoundsAtMake: null,
   countdownEndsAt: null,
@@ -55,6 +59,8 @@ export function withLargeState(
 
 export type LargeEvent =
   | { type: 'planChanged'; progress: PlanProgress }
+  // The run reported its plan folder.
+  | { type: 'planReported'; planDir: string }
   | { type: 'planGone' }
   // Make in new session gave this session's plan away.
   | { type: 'handedOff' }
@@ -62,6 +68,7 @@ export type LargeEvent =
 
 const LARGE_EVENT_TYPES: ReadonlySet<unknown> = new Set<LargeEvent['type']>([
   'planChanged',
+  'planReported',
   'planGone',
   'handedOff',
   'dismissed',
@@ -114,6 +121,7 @@ function isLargeState(value: unknown): value is LargeState {
   return (
     isJsonObject(value) &&
     (value.planDir === null || typeof value.planDir === 'string') &&
+    typeof value.planReported === 'boolean' &&
     (value.progress === null || isPlanProgress(value.progress)) &&
     isNumberOrNull(value.reviewRoundsAtMake) &&
     isNumberOrNull(value.countdownEndsAt)

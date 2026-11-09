@@ -427,8 +427,14 @@ type FlowFields = Partial<SessionFlow & LargeState>;
 // The engine's data folder holding a Large flow of `fields` as s1's saved flow under
 // h1.
 async function savedFlowData(fields: FlowFields): Promise<MemoryFiles> {
-  const { planDir, progress, reviewRoundsAtMake, countdownEndsAt, ...flow } =
-    fields;
+  const {
+    planDir,
+    planReported,
+    progress,
+    reviewRoundsAtMake,
+    countdownEndsAt,
+    ...flow
+  } = fields;
   const data = createMemoryFiles();
   await data.write(
     FLOWS_FILE,
@@ -443,6 +449,7 @@ async function savedFlowData(fields: FlowFields): Promise<MemoryFiles> {
             ...flow,
             state: {
               planDir: planDir ?? null,
+              planReported: planReported ?? false,
               progress: progress ?? null,
               reviewRoundsAtMake: reviewRoundsAtMake ?? null,
               countdownEndsAt: countdownEndsAt ?? null,
@@ -954,6 +961,7 @@ describe('workflowLargeMainPart', () => {
     const state = {
       countdownEndsAt: 5,
       planDir: null,
+      planReported: false,
       progress: null,
       reviewRoundsAtMake: null,
     };

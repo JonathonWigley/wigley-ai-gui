@@ -57,6 +57,7 @@ export function sameLargeState(a: unknown, b: unknown): boolean {
   const right = largeStateIn(b);
   return (
     left.planDir === right.planDir &&
+    left.planReported === right.planReported &&
     left.progress === right.progress &&
     left.reviewRoundsAtMake === right.reviewRoundsAtMake &&
     left.countdownEndsAt === right.countdownEndsAt
@@ -71,7 +72,7 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
       break;
     case 'fileWritten':
       if (isPlanFile(signal.path)) {
-        setPlanDir(next, planDirOf(signal.path));
+        followPlanDir(next, planDirOf(signal.path));
       }
       break;
     case 'skillStarted': {
@@ -79,7 +80,7 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
         ? planDirOfArgsPath(signal.argsPath)
         : null;
       if (planDir !== null) {
-        setPlanDir(next, planDir);
+        followPlanDir(next, planDir);
       }
       break;
     }
@@ -90,6 +91,9 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
           next.progress = event.progress;
         }
         next.reviewRoundsAtMake ??= event.progress.reviewRounds;
+      } else if (event?.type === 'planReported') {
+        setPlanDir(next, event.planDir);
+        next.planReported = true;
       }
       break;
     }
@@ -162,8 +166,18 @@ function setPlanDir(next: LargeState, planDir: string): void {
   }
 }
 
+// A folder seen in a write or a make argument, not reported: a new one drops
+// the report mark, and the folder already held keeps it.
+function followPlanDir(next: LargeState, planDir: string): void {
+  if (planDir !== next.planDir) {
+    setPlanDir(next, planDir);
+    next.planReported = false;
+  }
+}
+
 function clearPlan(next: LargeState): void {
   next.planDir = null;
+  next.planReported = false;
   next.progress = null;
 }
 

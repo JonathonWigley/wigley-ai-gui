@@ -109,8 +109,14 @@ function flowIn(
   sessionId = 'a',
 ): SessionFlow {
   const isIdle = stage === 'idle';
-  const { planDir, progress, reviewRoundsAtMake, countdownEndsAt, ...flow } =
-    fields;
+  const {
+    planDir,
+    planReported,
+    progress,
+    reviewRoundsAtMake,
+    countdownEndsAt,
+    ...flow
+  } = fields;
   return withLargeState(
     {
       ...newFlow(sessionId, '/p/proj'),
@@ -120,6 +126,7 @@ function flowIn(
     },
     {
       planDir: planDir === undefined ? (isIdle ? null : PLAN_DIR) : planDir,
+      planReported: planReported ?? false,
       progress:
         progress === undefined
           ? isIdle

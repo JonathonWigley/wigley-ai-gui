@@ -181,7 +181,7 @@ Shared names (every task uses them as written here):
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 12745c21
 
 ### Groups
 ### Contract changes

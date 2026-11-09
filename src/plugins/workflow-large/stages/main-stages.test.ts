@@ -32,7 +32,12 @@ const PROGRESS: PlanProgress = {
 function flowIn(stage: string): SessionFlow {
   return withLargeState(
     { ...newFlow('s1', '/r'), workflow: LARGE_WORKFLOW_ID, stage },
-    { planDir: '/r/plan-f', progress: PROGRESS, reviewRoundsAtMake: 0 },
+    {
+      planDir: '/r/plan-f',
+      planReported: false,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    },
   );
 }
 
