@@ -195,7 +195,7 @@ owner's layout (`AGENTS.md` § Intent).
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Key capture](01-key-capture.md)
+- [x] [Key capture](01-key-capture.md)
 - [ ] [The new leader tree](02-leader-tree.md)
 
 ### Wave 2
@@ -216,7 +216,10 @@ owner's layout (`AGENTS.md` § Intent).
 Review base: a42ed9f9
 
 ### Groups
+- 01 · 1fbe1a66 · diff read (captureKey, capture hooks, keyCapture, capturedKeys all present) + typecheck clean · concerns: capturedKeys spells Esc as <Esc> if called directly; engine capture() leaves pending keys to createPageApi; an onCancel that re-arms is overwritten
 ### Contract changes
 ### Rulings
+- captureKey_PluginStops_DisarmsTheCapture landed as a row in page-api.test.ts RECORDED_ROWS — that table owns part-stop disposal — none · group 01 · group 01
+- chordTokenFor returns null when its token fails parseChord — never spells a chord the matcher rejects — none · group 01 · group 01
 ### Review rounds
 ### Test gate

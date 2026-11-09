@@ -1,6 +1,6 @@
 # 01 — Key capture: `api.keys.captureKey`
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -161,3 +161,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 1fbe1a66 · proof: diff read (captureKey, capture hooks, keyCapture, capturedKeys all present) + typecheck clean · concerns: capturedKeys spells Esc as <Esc> if called directly; engine capture() leaves pending keys to createPageApi; an onCancel that re-arms is overwritten
