@@ -102,30 +102,36 @@ export interface PoolProvider {
   ): Promise<PoolClaimResult>;
 }
 
-export interface StartRequest {
-  projectDir: string;
-  profile: string;
-  // True opens the row headless.
-  headless?: boolean;
-}
+// Where a new session starts: a folder, or a project from chat's `projects`
+// setting with the branch a pool project's clone checks out (null for a folder
+// project).
+export type StartTarget =
+  | { projectDir: string }
+  | { project: string; branch: string | null };
 
-export interface LaunchRequest {
-  projectDir: string;
+// `headless`: true opens the row headless.
+export type StartRequest = StartTarget & {
+  profile: string;
+  headless?: boolean;
+};
+
+// `unattended`: true for a session nobody answers: chat denies each permission
+// prompt at once. Kept with the row across a relaunch.
+// `headless`: true opens the row headless; a caller launching from a session
+// passes that session's flag.
+// `instructions`: text this session alone carries to its harness, after the
+// global `addInstructions` texts. Kept with the row across a clear and a
+// relaunch.
+// `owner`: the plugin the row belongs to (sessions' `OpenOptions.owner`). Kept
+// with the row across a clear and a relaunch.
+export type LaunchRequest = StartTarget & {
   profile: string;
   message: UserMessage;
-  // True for a session nobody answers: chat denies each permission prompt at
-  // once. Kept with the row across a relaunch.
   unattended?: boolean;
-  // True opens the row headless; a caller launching from a session passes
-  // that session's flag.
   headless?: boolean;
-  // Text this session alone carries to its harness, after the global
-  // `addInstructions` texts. Kept with the row across a clear and a relaunch.
   instructions?: readonly string[];
-  // The plugin the row belongs to (sessions' `OpenOptions.owner`). Kept with
-  // the row across a clear and a relaunch.
   owner?: string;
-}
+};
 
 // `hostSessionId` is the harness's id for the saved session.
 export interface PastSessionRow {
@@ -133,6 +139,12 @@ export interface PastSessionRow {
   title: string;
   modified: number;
   archived: boolean;
+}
+
+// A project's saved session, with the folder it ran in, which a resume opens
+// it in.
+export interface ProjectPastSessionRow extends PastSessionRow {
+  projectDir: string;
 }
 
 // `title` is the saved session's title, which the new row takes as its
@@ -237,6 +249,8 @@ export interface ReturnedMessage extends UserMessage {
 // deleted at once.
 export interface ChatSessionInfo {
   sessionId: string;
+  // A pool project's row moves once, from the pool's lowest clone to the
+  // claimed one, before its process starts.
   projectDir: string;
   profile: string;
   activity: ProcessActivity;
@@ -372,8 +386,23 @@ export interface ChatChannel extends ChannelShape {
     // folder each profile's harness saved sessions in, one per folder, missing
     // folders and those in the OS's temp folders left out.
     recentFolders(): Promise<RecentFolder[]>;
-    // The new row's sessionId.
+    // The new row's sessionId; a pool project's row opens resting and starts
+    // its agent once a clone on the branch is claimed. Throws, opening nothing,
+    // on an unknown project, a missing or stray branch, a profile other than
+    // the project's, no pool provider, or a pool with no clones.
     start(request: StartRequest): string;
+    // Chat's checked projects, in settings order.
+    projects(): ChatProject[];
+    // A pool project's branches: pinned first, then every other origin branch,
+    // newest commit first. Rejects for a folder or unknown project, or with no
+    // pool provider.
+    branches(project: string, refresh: boolean): Promise<string[]>;
+    // The saved sessions of every folder the project covers under the
+    // profile, newest first, each with its folder.
+    projectPastSessions(
+      project: string,
+      profile: string,
+    ): Promise<ProjectPastSessionRow[]>;
     // Newest first; a session open in the app on a row chat does not hold or
     // on a row with an owner is left out, and one with another chat row is
     // listed.
@@ -537,7 +566,10 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // `sessionOpened`: a session chat now owns, with the profile it opened under,
 // its host id and folder, and how it came to open; a row whose profile is not
 // in chat's profiles setting fires none. It fires before the session's slots
-// exist and before chat's exports know the row.
+// exist and before chat's exports know the row. A pool project's row fires it
+// when its claim lands instead, with the clone as `projectDir` and after its
+// slots exist; it fires none, nor `sessionClosed`, when its claim fails or the
+// row closes first.
 // `sessionClosed`: chat closing a row it holds, before its state goes, with the
 // titles, `sent` and `headless` it had. A quit or relaunch fires none.
 // `sessionCleared`: a clear moving a row to a new host id, with the titles it
@@ -608,7 +640,10 @@ export interface ChatMainExports {
   // row's process starts; `owner` names the plugin the row belongs to, and
   // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
-  // refusal text), an unknown profile, or no chat harness.
+  // refusal text), an unknown profile, no chat harness, an unknown project, a
+  // missing or stray branch, a profile other than the project's, no pool
+  // provider, or a pool with no clones. A pool project's launch resolves once
+  // the row is open, its first message waiting for the claim.
   launch(request: LaunchRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner

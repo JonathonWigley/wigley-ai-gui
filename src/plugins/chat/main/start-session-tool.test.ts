@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FileStat } from '../../../contracts/files';
-import type { LaunchRequest } from '../contract';
+import type { ChatProject, LaunchRequest } from '../contract';
 import {
   START_SESSION_TOOL,
   startSessionToolSession,
@@ -19,6 +19,8 @@ interface Row {
   // Chat's default profile for the caller.
   defaultProfile?: string | null;
   profiles?: string[];
+  // Chat's projects; AI_DEV_TOOL and NEW_GAMES_TOOL when absent.
+  projects?: ChatProject[];
   // What `stat` answers, or the error it rejects with.
   stat?: FileStat | null | Error;
   launchError?: string;
@@ -34,6 +36,20 @@ interface Row {
 function message(text: string) {
   return { text, images: [] };
 }
+
+const AI_DEV_TOOL: ChatProject = {
+  kind: 'folder',
+  name: 'AI Dev',
+  folder: '/dev/ai',
+  profile: null,
+};
+const NEW_GAMES_TOOL: ChatProject = {
+  kind: 'pool',
+  name: 'New Games',
+  pool: 'ng',
+  profile: 'work',
+  pinnedBranches: [],
+};
 
 const ROWS: Row[] = [
   {
@@ -192,6 +208,103 @@ const ROWS: Row[] = [
     errors: ['profiles'],
     statCalled: false,
   },
+  {
+    name: 'a folder project takes the caller’s default profile',
+    args: { prompt: 'go', project: 'AI Dev' },
+    launched: {
+      project: 'AI Dev',
+      branch: null,
+      profile: 'home',
+      message: message('go'),
+      headless: false,
+    },
+    success:
+      'Launched session row-7 in project AI Dev under profile home. A failure to start shows on its row.',
+    statCalled: false,
+  },
+  {
+    name: 'a pool project’s own profile beats the caller’s default',
+    args: { prompt: 'go', project: 'New Games', branch: 'main' },
+    launched: {
+      project: 'New Games',
+      branch: 'main',
+      profile: 'work',
+      message: message('go'),
+      headless: false,
+    },
+    success:
+      'Launched session row-7 in project New Games on branch main under profile work. It starts once a Unity clone on main is claimed; a failure shows on its row.',
+    statCalled: false,
+  },
+  {
+    name: 'a named profile beats the caller’s default',
+    args: { prompt: 'go', project: 'AI Dev', profile: 'work' },
+    launched: {
+      project: 'AI Dev',
+      branch: null,
+      profile: 'work',
+      message: message('go'),
+      headless: false,
+    },
+    success:
+      'Launched session row-7 in project AI Dev under profile work. A failure to start shows on its row.',
+    statCalled: false,
+  },
+  {
+    name: 'a named profile other than the project’s goes to chat to refuse',
+    args: {
+      prompt: 'go',
+      project: 'New Games',
+      branch: 'main',
+      profile: 'home',
+    },
+    launched: {
+      project: 'New Games',
+      branch: 'main',
+      profile: 'home',
+      message: message('go'),
+      headless: false,
+    },
+    success:
+      'Launched session row-7 in project New Games on branch main under profile home. It starts once a Unity clone on main is claimed; a failure shows on its row.',
+    statCalled: false,
+  },
+  {
+    name: 'folder and project together',
+    args: { prompt: 'go', folder: '/other', project: 'AI Dev' },
+    errors: ['folder', 'project'],
+    statCalled: false,
+  },
+  {
+    name: 'a branch with no project',
+    args: { prompt: 'go', branch: 'main' },
+    errors: ['branch'],
+    statCalled: false,
+  },
+  {
+    name: 'a blank project',
+    args: { prompt: 'go', project: '  ' },
+    errors: ['project'],
+    statCalled: false,
+  },
+  {
+    name: 'a null project is absent',
+    args: { prompt: 'go', project: null },
+    launched: {
+      projectDir: '/caller',
+      profile: 'home',
+      message: message('go'),
+      headless: false,
+    },
+    success:
+      'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
+  },
+  {
+    name: 'a non-string branch',
+    args: { prompt: 'go', project: 'New Games', branch: 7 },
+    errors: ['branch'],
+    statCalled: false,
+  },
 ];
 
 function toolSession(row: Row) {
@@ -217,6 +330,7 @@ function toolSession(row: Row) {
         ? (row.defaultProfile ?? 'home')
         : null,
     profileNames: () => row.profiles ?? ['work', 'home'],
+    projects: () => row.projects ?? [AI_DEV_TOOL, NEW_GAMES_TOOL],
     isAbsolute: (path) => path.startsWith('/'),
     stat,
     log,
@@ -242,6 +356,9 @@ describe('start_session', () => {
     );
 
     const text = result.content[0]?.text;
+    if (row.statCalled === false) {
+      expect(stat).not.toHaveBeenCalled();
+    }
     if (row.success !== undefined) {
       expect(result.isError ?? false).toBe(false);
       expect(text).toBe(row.success);
@@ -254,9 +371,6 @@ describe('start_session', () => {
     }
     if (row.launchError === undefined) {
       expect(launch).not.toHaveBeenCalled();
-    }
-    if (row.statCalled === false) {
-      expect(stat).not.toHaveBeenCalled();
     }
     for (const fragment of row.logged ?? []) {
       expect(log).toHaveBeenCalledExactlyOnceWith(

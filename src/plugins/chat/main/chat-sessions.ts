@@ -16,6 +16,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
 import type { PluginLog } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
 import type {
   HostedProcessInfo,
@@ -48,12 +49,16 @@ import {
   type ChatChannel,
   type ChatMainEvents,
   type ChatProfile,
+  type ChatProject,
   type ChatSessionState,
   HEADLESS_NOTE,
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
+  type PoolClaimResult,
+  type PoolProvider,
   type ProcessEndReason,
+  type ProjectPastSessionRow,
   type QueuedMessage,
   type ResumeRequest,
   type ReturnedMessage,
@@ -84,6 +89,7 @@ import {
   readPermissionRequest,
   UNATTENDED_REASON,
 } from './permission-tool';
+import { branchChoices } from './projects';
 import type { RecentFolders } from './recent-folders';
 import type { ToolCallers } from './tool-callers';
 import {
@@ -98,11 +104,19 @@ export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
     SessionsMainExports,
-    'open' | 'mark' | 'activate' | 'setTitle' | 'titles' | 'label'
+    'open' | 'mark' | 'activate' | 'setTitle' | 'titles' | 'label' | 'relocate'
   >;
   selectedSessionId(): string | null;
   // Read at each session start.
   profiles(): readonly ChatProfile[];
+  // Read at each start, branch list and past-session read naming a project.
+  projects(): readonly ChatProject[];
+  // The newest registered pool provider, null with none; read at each pool
+  // start, branch list and past-session read.
+  poolProvider(): PoolProvider | null;
+  // Expand a folder project's `~`.
+  homeDir: string;
+  paths: Pick<Paths, 'expandTilde'>;
   randomUuid: RandomUuid;
   recent: RecentFolders;
   archived: ArchivedSessions;
@@ -146,7 +160,15 @@ export interface ChatSessions {
   // saves; the value it already holds changes nothing. Logs and does nothing
   // for a row chat does not hold.
   setHeadless(sessionId: string, headless: boolean): void;
-  // Opens a row selected; a request with `headless` true opens it headless.
+  // Opens a row selected; a request with `headless` true opens it headless. A
+  // folder, or a folder project's tilde-expanded folder, starts its process at
+  // once. A pool project's row opens resting in the pool's lowest clone and
+  // claims a clone on the branch through the pool provider; the process starts
+  // in the claimed clone once the claim lands, and a failed claim leaves the
+  // row resting, unsaved, refusing sends. Throws, opening nothing, on an
+  // unknown project, a pool project with no branch, a folder project with one,
+  // a profile other than the project's own, no pool provider, or a pool with
+  // no clones.
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
   // message; returns the row's sessionId. A request with `unattended` true
@@ -155,8 +177,24 @@ export interface ChatSessions {
   // `instructions` follow the global ones at each of the row's process starts,
   // and its `owner` goes to sessions with the row; both are kept across a clear
   // and a relaunch, and a row with an owner raises no `Turn finished` mark.
-  // Throws before opening anything on an image chat would refuse to attach.
+  // Throws before opening anything on an image chat would refuse to attach,
+  // and on each target `start` refuses. A pool project's first message is
+  // queued until the claim lands, written first once the process starts, and
+  // returned to the box when the claim fails.
   launch(request: LaunchRequest): string;
+  // A pool project's branches: its pinned ones first, then the provider's
+  // origin branches. Rejects for an unknown or folder project, or with no pool
+  // provider; the provider's rejection passes through.
+  branches(project: string, refresh: boolean): Promise<string[]>;
+  // `pastSessions` of every folder the project covers under the profile (a
+  // folder project's expanded folder, a pool project's clones), each row with
+  // its folder, newest first; rows of equal `modified` keep folder order.
+  // Rejects for an unknown project, with no pool provider for a pool project,
+  // and when any folder's read rejects.
+  projectPastSessions(
+    project: string,
+    profile: string,
+  ): Promise<ProjectPastSessionRow[]>;
   // Opens a row for each saved session in order, unselected, under its saved
   // row id, with its saved titles, queued messages and returned messages, then
   // activates the saved selection. A row whose
@@ -235,7 +273,9 @@ export interface ChatSessions {
   // holding unsent queued messages queues behind them and writes the oldest. A
   // written message is held until its entry arrives, and returned when the
   // harness reports it dropped. The first message written in a row with no
-  // first-message title sets it.
+  // first-message title sets it. A row claiming a clone queues the message
+  // until the claim lands; a row whose claim failed rejects with
+  // CLAIM_FAILED_TEXT.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries, as harness entries travel.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
@@ -255,7 +295,8 @@ export interface ChatSessions {
   // process raises no exit notice and no turn-finished mark. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
-  // is missing, or while the row attaches; a fresh start that throws leaves the
+  // is missing, while the row attaches, or on a row with a claim, running or
+  // failed; a fresh start that throws leaves the
   // row resting under the new id, then rethrows, with `sessionCleared` already
   // fired. An unheld process is left running on the host, since the fresh
   // process shares no transcript with it.
@@ -300,7 +341,8 @@ export interface ChatSessions {
   // drops its saved record, ends the process, then the owned session, which
   // drops its row; a resting session has its owned session ended at once.
   // During an attach it waits for the attach to settle first. An unheld process
-  // is left running on the host: chat holds nothing to end it with. Any other
+  // is left running on the host: chat holds nothing to end it with. A row with
+  // a claim fires no `sessionClosed`, and a running claim is aborted. Any other
   // session id does nothing.
   closed(sessionId: string, reason: SessionCloseReason): void;
   // Kills every process chat holds, a closed session's still ending included,
@@ -313,8 +355,9 @@ export interface ChatSessions {
   // resolving after it is killed too; a held row's is detached. It tries one
   // last save first, a running clock's span up to now included, and returns that
   // write's promise, which never rejects: a write that fails or is cut short
-  // leaves the last saved total. Nothing is saved or started after it, and every
-  // later process event is ignored.
+  // leaves the last saved total. Then aborts every running claim. Nothing is
+  // saved or started after it, and every later process event or claim result
+  // is ignored.
   detachAll(): Promise<void>;
   // Keeps every held row's owned session through chat's restart
   // (`OwnedSession.keep`), so the restarted chat's restore adopts the rows.
@@ -472,6 +515,46 @@ interface HeldSession {
   // The plugin the row belongs to, passed to sessions at open; null for none.
   // Saved with the row, kept across a clear.
   owner: string | null;
+  // A process start records the row's folder in the recent folders; false for
+  // a row started from a project, whose folder the Project step already offers.
+  recordsRecentFolder: boolean;
+  // A pool project's claim while the row waits on it, and its failure after;
+  // null for every other row and from the moment the claim lands. A row with a
+  // claim is left out of the saved sessions, fires no `sessionOpened` or
+  // `sessionClosed`, and starts no process.
+  claim:
+    | {
+        state: 'claiming';
+        abort: AbortController;
+        origin: SessionOrigin;
+        branch: string;
+        isQueuedShown: boolean;
+      }
+    | { state: 'failed' }
+    | null;
+}
+
+type PoolProject = Extract<ChatProject, { kind: 'pool' }>;
+
+// Where a start resolved to: a folder, from a folder or a folder project, or
+// a pool project's claim, resting meanwhile in `placeholder`, the pool's first
+// clone.
+type ResolvedTarget =
+  | { kind: 'folder'; projectDir: string; isProject: boolean }
+  | {
+      kind: 'pool';
+      project: PoolProject;
+      branch: string;
+      provider: PoolProvider;
+      placeholder: string;
+    };
+
+// The flags a new row opens with, as `HeldSession` keeps them.
+interface StartFlags {
+  unattended: boolean;
+  headless: boolean;
+  instructions: readonly string[];
+  owner: string | null;
 }
 
 // What one guard step on an unheld process leaves its caller to do: whether a
@@ -491,6 +574,9 @@ const OLDER_HOST_REFUSAL_TEXT =
   'This session is still finishing in another app version. Send again once it ends.';
 
 const STOPPED_TEXT = 'Session stopped. Your next message resumes this session.';
+
+export const CLAIM_FAILED_TEXT =
+  'This session has no Unity clone. Close it and start a new one.';
 
 // A Bash call input's `command`, when it holds a string.
 function commandOf(input: unknown): string | null {
@@ -672,7 +758,8 @@ function isRowIdHeldError(error: unknown, rowId: string): boolean {
 // the messages written to the agent it has not taken in yet;
 // the folder's saved sessions it can resume; and
 // the open sessions it saves across a relaunch, re-attaching to each process
-// the session host still runs. A session's state lives in the slots
+// the session host still runs; and the pool claims a project's new rows wait
+// on. A session's state lives in the slots
 // (`session.slots`), which creation clears of the rows an earlier run left,
 // and `send` carries only the moment a row rests.
 export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
@@ -704,9 +791,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // One object per `addResumeSection` call, in registration order.
   const resumeSectionRegistrations = new Set<{ section: ResumeSection }>();
 
+  // A row with a claim is left out: a relaunch mid-claim drops it rather than
+  // restoring it resting in the placeholder clone.
   function snapshot(): SavedSessions {
     const now = deps.clock.now();
-    const records = [...held.values()].map((session) =>
+    const unclaimed = [...held.values()].filter(
+      (session) => session.claim === null,
+    );
+    const records = unclaimed.map((session) =>
       savedSessionOf(
         session,
         sessions.titles(session.sessionId) ?? NO_TITLES,
@@ -752,9 +844,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session.slots.info().running && session.harnessActivity !== 'idle';
   }
 
-  // A message sent now queues rather than being written.
+  // A message sent now queues rather than being written; a row claiming a
+  // clone waits for the claim.
   function waits(session: HeldSession): boolean {
     return (
+      session.claim?.state === 'claiming' ||
       isTurnRunning(session) ||
       session.slots.info().compaction !== null ||
       isHoldUp(session)
@@ -1451,7 +1545,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // Opens the row for `opening.hostId` as `options` says, gives it each title
   // `opening.titles` holds, and holds its state, resting, with `entries`.
   // `profileDir` is null when the profile is not in chat's profiles setting;
-  // such a row emits no `sessionOpened`.
+  // such a row emits no `sessionOpened`, nor does a row opened with a claim,
+  // which emits it when the claim lands. A row with a claim reads no branch or
+  // worktrees: the placeholder's are not the session's.
   function openRow(
     projectDir: string,
     profileName: string,
@@ -1475,6 +1571,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       headless: boolean;
       instructions: readonly string[];
       owner: string | null;
+      recordsRecentFolder: boolean;
+      claim: HeldSession['claim'];
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1495,15 +1593,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         sessions.setTitle(sessionId, source, title);
       }
     }
-    if (profileDir !== null) {
-      deps.emit('sessionOpened', {
-        sessionId,
+    if (profileDir !== null && opening.claim === null) {
+      emitSessionOpened(
+        { sessionId, hostSessionId: hostId, projectDir },
+        profileName,
         profileDir,
-        hostSessionId: hostId,
-        projectDir,
-        profile: profileName,
-        origin: opening.origin,
-      });
+        opening.origin,
+      );
     }
     // The sessions plugin writes its selection inside `open`, before the row is
     // held, so `selected` cannot record it.
@@ -1573,12 +1669,30 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       launchHeadless: opening.launchHeadless,
       instructions: opening.instructions,
       owner,
+      recordsRecentFolder: opening.recordsRecentFolder,
+      claim: opening.claim,
     };
     held.set(sessionId, session);
     takeOverSkipped(session);
-    readBranch(session);
-    readWorktreeRoots(session);
+    if (opening.claim === null) {
+      readBranch(session);
+      readWorktreeRoots(session);
+    }
     return session;
+  }
+
+  function emitSessionOpened(
+    row: { sessionId: string; hostSessionId: string; projectDir: string },
+    profileName: string,
+    profileDir: string,
+    origin: SessionOrigin,
+  ) {
+    deps.emit('sessionOpened', {
+      ...row,
+      profileDir,
+      profile: profileName,
+      origin,
+    });
   }
 
   // The row's own record replaces any skipped one for its host id, and the row
@@ -1802,8 +1916,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Starts the session's process with the held mode and the confirmed picks,
-  // and records the folder; a throw from the harness leaves the session
-  // resting.
+  // and records the folder unless the row came from a project; a throw from
+  // the harness leaves the session resting.
   function startProcess(
     session: HeldSession,
     harness: AgentHarness,
@@ -1844,11 +1958,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     running.add(process);
     session.slots.setInfo({ running: true, pid: null });
     log(`session ${sessionId} process started (resume ${resume})`);
-    deps.recent
-      .record(projectDir, profile.name)
-      .catch((error: unknown) =>
-        log(`recent folders not saved: ${errorText(error)}`),
-      );
+    if (session.recordsRecentFolder) {
+      deps.recent
+        .record(projectDir, profile.name)
+        .catch((error: unknown) =>
+          log(`recent folders not saved: ${errorText(error)}`),
+        );
+    }
   }
 
   // The global texts in registration order, then the session's own, then the
@@ -2135,6 +2251,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       headless: boolean;
       instructions: readonly string[];
       owner: string | null;
+      recordsRecentFolder: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -2162,6 +2279,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         headless: opening.headless,
         instructions: opening.instructions,
         owner: opening.owner,
+        recordsRecentFolder: opening.recordsRecentFolder,
+        claim: null,
       },
       options,
     );
@@ -2227,6 +2346,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         headless: opening.headless,
         instructions: opening.instructions,
         owner: opening.owner,
+        recordsRecentFolder: true,
+        claim: null,
       },
       { select },
     );
@@ -2235,24 +2356,91 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session;
   }
 
-  // A new session in the folder, its row selected as `options` says.
+  // The project named `name`; throws naming every project when none is.
+  function projectNamed(name: string): ChatProject {
+    const projects = deps.projects();
+    const project = projects.find((each) => each.name === name);
+    if (project === undefined) {
+      const names =
+        projects.length === 0
+          ? 'none'
+          : projects.map((each) => each.name).join(', ');
+      throw new Error(`Unknown project "${name}". Projects: ${names}.`);
+    }
+    return project;
+  }
+
+  function requirePoolProvider(projectName: string): PoolProvider {
+    const provider = deps.poolProvider();
+    if (provider === null) {
+      throw new Error(
+        `No Unity pool provider is registered for project "${projectName}".`,
+      );
+    }
+    return provider;
+  }
+
+  // Where the request starts, or a throw naming why it cannot, before anything
+  // opens.
+  function resolveTarget(request: StartRequest): ResolvedTarget {
+    if ('projectDir' in request) {
+      return {
+        kind: 'folder',
+        projectDir: request.projectDir,
+        isProject: false,
+      };
+    }
+    const { branch } = request;
+    const project = projectNamed(request.project);
+    const { name } = project;
+    const isOtherProfile =
+      project.profile !== null && project.profile !== request.profile;
+    if (isOtherProfile) {
+      throw new Error(
+        `Project "${name}" runs under profile ${project.profile}, not ${request.profile}.`,
+      );
+    }
+    if (project.kind === 'folder') {
+      if (branch !== null) {
+        throw new Error(`Project "${name}" is a folder: it takes no branch.`);
+      }
+      return {
+        kind: 'folder',
+        projectDir: deps.paths.expandTilde(project.folder, deps.homeDir),
+        isProject: true,
+      };
+    }
+    if (branch === null) {
+      throw new Error(`Project "${name}" is a Unity pool: name a branch.`);
+    }
+    const provider = requirePoolProvider(name);
+    const placeholder = provider.folders(project.pool).at(0);
+    if (placeholder === undefined) {
+      throw new Error(`Pool "${project.pool}" has no clones.`);
+    }
+    return { kind: 'pool', project, branch, provider, placeholder };
+  }
+
+  // A new session at the request's target, its row selected as `options` says.
+  // `firstMessage`, when not null, is written once the process runs: at once in
+  // a folder, after the claim lands in a pool.
   function startNew(
     request: StartRequest,
     origin: SessionOrigin,
     options: OpenOptions,
-    flags: {
-      unattended: boolean;
-      headless: boolean;
-      instructions: readonly string[];
-      owner: string | null;
-    },
+    flags: StartFlags,
+    firstMessage: UserMessage | null,
   ): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
-    return openAndStart(
+    const target = resolveTarget(request);
+    if (target.kind === 'pool') {
+      return startInPool(profile, target, origin, options, flags, firstMessage);
+    }
+    const session = openAndStart(
       harness,
       profile,
-      request.projectDir,
+      target.projectDir,
       {
         hostId: deps.randomUuid(),
         resume: false,
@@ -2260,9 +2448,178 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         titles: NO_TITLES,
         origin,
         ...flags,
+        recordsRecentFolder: !target.isProject,
       },
       options,
     );
+    if (firstMessage !== null) {
+      deliverWritten(session, firstMessage);
+    }
+    return session;
+  }
+
+  // Opens the row resting in the pool's first clone and claims a clone on the
+  // branch; the claim's result lands in `claimSettled`. `firstMessage` waits
+  // in the queue meanwhile.
+  function startInPool(
+    profile: ChatProfile,
+    target: Extract<ResolvedTarget, { kind: 'pool' }>,
+    origin: SessionOrigin,
+    options: OpenOptions,
+    flags: StartFlags,
+    firstMessage: UserMessage | null,
+  ): HeldSession {
+    const { project, branch, provider, placeholder } = target;
+    const hostId = deps.randomUuid();
+    requireNotDetached(hostId);
+    const abort = new AbortController();
+    const session = openRow(
+      placeholder,
+      profile.name,
+      profileDirOf(profile),
+      {
+        hostId,
+        entries: [],
+        sent: false,
+        historyPending: false,
+        titles: NO_TITLES,
+        processId: null,
+        launchControls: {},
+        launchResume: false,
+        launchHeadless: flags.headless,
+        controls: [],
+        confirmedPicks: {},
+        returnedDrops: [],
+        activeMs: 0,
+        origin,
+        ...flags,
+        recordsRecentFolder: false,
+        claim: {
+          state: 'claiming',
+          abort,
+          origin,
+          branch,
+          isQueuedShown: false,
+        },
+      },
+      options,
+    );
+    const { sessionId } = session;
+    addNotice(session, `Claiming a Unity clone on ${branch}…`, 'info');
+    if (firstMessage !== null) {
+      appendQueued(session, firstMessage);
+    }
+    log(
+      `session ${sessionId} claiming a clone of ${project.pool} on ${branch}`,
+    );
+    let claiming: Promise<PoolClaimResult>;
+    try {
+      claiming = provider.claim(
+        { pool: project.pool, branch, hostSessionId: hostId, rowId: sessionId },
+        abort.signal,
+        () => showClaimQueued(session),
+      );
+    } catch (error) {
+      claiming = Promise.reject(error);
+    }
+    claiming
+      .catch((error: unknown): PoolClaimResult => ({
+        ok: false,
+        error: 'internal',
+        message: errorText(error),
+      }))
+      .then((result) => claimSettled(session, profile, result));
+    return session;
+  }
+
+  // The first call while the row still claims adds the waiting notice; every
+  // other call does nothing.
+  function showClaimQueued(session: HeldSession) {
+    const { claim } = session;
+    const isShowable =
+      held.get(session.sessionId) === session &&
+      claim?.state === 'claiming' &&
+      !claim.isQueuedShown;
+    if (!isShowable) {
+      return;
+    }
+    claim.isQueuedShown = true;
+    addNotice(session, 'Waiting for a Unity clone…', 'info');
+  }
+
+  // A landed claim moves the row to the clone and starts its process there; a
+  // failed one, or a move that throws, leaves the row resting unsaved. A
+  // result for a closed row, or after `detachAll`, changes nothing.
+  function claimSettled(
+    session: HeldSession,
+    openedProfile: ChatProfile,
+    result: PoolClaimResult,
+  ) {
+    const { sessionId, claim } = session;
+    const isRowGone =
+      held.get(sessionId) !== session ||
+      isDetached ||
+      claim?.state !== 'claiming';
+    if (isRowGone) {
+      log(`claim for session ${sessionId} settled after its row closed`);
+      return;
+    }
+    if (!result.ok) {
+      failClaim(session, result.error, result.message);
+      return;
+    }
+    try {
+      moveToClone(session, result.path);
+    } catch (error) {
+      failClaim(session, 'internal', errorText(error));
+      return;
+    }
+    if (result.note !== null) {
+      addNotice(session, result.note, 'info');
+    }
+    emitSessionOpened(
+      { sessionId, hostSessionId: session.hostId, projectDir: result.path },
+      openedProfile.name,
+      profileDirOf(openedProfile),
+      claim.origin,
+    );
+    log(`session ${sessionId} claimed ${result.path}`);
+    try {
+      // Read again: the settings may have changed during the claim.
+      const profile = profileNamed(session.slots.info().profile);
+      const harness = requireHarness();
+      startProcess(session, harness, profile, false);
+      writeNextQueued(session);
+    } catch (error) {
+      const reason = errorText(error);
+      addNotice(session, `Claude did not start: ${reason}`, 'error');
+      send('sessionRested', { sessionId, error: reason });
+      log(`session ${sessionId} not started after its claim: ${reason}`);
+    }
+    save();
+  }
+
+  // Moves the row from the placeholder to `clone`, dropping what it read of
+  // the placeholder, and ends its claim.
+  function moveToClone(session: HeldSession, clone: string) {
+    sessions.relocate(session.sessionId, clone);
+    session.slots.relocate(clone);
+    session.slots.setInfo({
+      repo: path.basename(clone),
+      branch: null,
+      worktrees: [],
+    });
+    session.worktreeRoots = [];
+    readBranch(session);
+    readWorktreeRoots(session);
+    session.claim = null;
+  }
+
+  function failClaim(session: HeldSession, error: string, message: string) {
+    session.claim = { state: 'failed' };
+    addNotice(session, `Unity clone not claimed: ${message}`, 'error');
+    returnAllHeld(session);
+    log(`session ${session.sessionId} claim failed (${error}): ${message}`);
   }
 
   // Runs `act` now, or once `session`'s running attach has settled.
@@ -2301,12 +2658,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // asked once the process runs, and a verdict holds the message instead. A send
   // that came to wait during the history read queues. An unheld row runs the
   // guard first, then `sendAgain`, since the guard may have attached a process.
+  // A row whose claim failed throws: it has no clone to start in.
   async function writeAtIdle(
     session: HeldSession,
     message: UserMessage,
     sendAgain: () => Promise<void>,
   ) {
     const { sessionId } = session;
+    if (session.claim !== null) {
+      throw new Error(CLAIM_FAILED_TEXT);
+    }
     if (!session.slots.info().running) {
       const profile = profileNamed(session.slots.info().profile);
       const harness = requireHarness();
@@ -2488,6 +2849,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log(`sendAllNow for unknown session ${sessionId} ignored`);
       return;
     }
+    if (session.claim?.state === 'claiming') {
+      if (message !== null) {
+        appendQueued(session, message);
+        save();
+      }
+      return;
+    }
     if (isHoldUp(session)) {
       if (message !== null) {
         appendQueued(session, message);
@@ -2607,7 +2975,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(refusal);
       }
     }
-    const session = startNew(
+    const { sessionId } = startNew(
       request,
       'launched',
       { select: false },
@@ -2617,11 +2985,56 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         instructions: request.instructions ?? [],
         owner: request.owner ?? null,
       },
+      request.message,
     );
-    deliverWritten(session, request.message);
-    const { sessionId } = session;
-    log(`launched session ${sessionId} in ${request.projectDir}`);
+    log(
+      'projectDir' in request
+        ? `launched session ${sessionId} in ${request.projectDir}`
+        : `launched session ${sessionId} in project ${request.project}`,
+    );
     return sessionId;
+  }
+
+  async function branches(
+    projectName: string,
+    refresh: boolean,
+  ): Promise<string[]> {
+    const project = projectNamed(projectName);
+    if (project.kind === 'folder') {
+      throw new Error(
+        `Project "${projectName}" is a folder: it has no branches.`,
+      );
+    }
+    const provider = requirePoolProvider(projectName);
+    const origin = await provider.branches(project.pool, refresh);
+    return branchChoices(project.pinnedBranches, origin);
+  }
+
+  // The folders a project covers: a folder project's expanded folder, a pool
+  // project's clones.
+  function foldersOf(project: ChatProject): readonly string[] {
+    if (project.kind === 'folder') {
+      return [deps.paths.expandTilde(project.folder, deps.homeDir)];
+    }
+    return requirePoolProvider(project.name).folders(project.pool);
+  }
+
+  // A stable sort, so rows of equal `modified` keep folder order, then each
+  // folder's own.
+  async function projectPastSessions(
+    projectName: string,
+    profileName: string,
+  ): Promise<ProjectPastSessionRow[]> {
+    const folders = foldersOf(projectNamed(projectName));
+    const lists = await Promise.all(
+      folders.map(async (folder) =>
+        (await pastSessions(folder, profileName)).map((row) => ({
+          ...row,
+          projectDir: folder,
+        })),
+      ),
+    );
+    return lists.flat().sort((a, b) => b.modified - a.modified);
   }
 
   // The session chat holds on the row of `hostSessionId`, if any.
@@ -2712,6 +3125,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           headless: record.headless,
           instructions: record.instructions,
           owner: record.owner,
+          recordsRecentFolder: true,
+          claim: null,
         },
         options,
       );
@@ -3127,6 +3542,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         headless: request.headless === true,
         instructions,
         owner,
+        recordsRecentFolder: true,
       },
       { select },
     );
@@ -3252,6 +3668,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (session.attaching !== null) {
       throw new Error(`session ${sessionId} is still attaching`);
     }
+    if (session.claim?.state === 'claiming') {
+      throw new Error(`session ${sessionId} is still claiming a Unity clone`);
+    }
+    if (session.claim?.state === 'failed') {
+      throw new Error(CLAIM_FAILED_TEXT);
+    }
     const profile = profileNamed(session.slots.info().profile);
     const harness = requireHarness();
     if (session.unheldProcessId !== null) {
@@ -3370,8 +3792,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           instructions: [],
           owner: null,
         },
+        null,
       ).sessionId,
     launch,
+    branches,
+    projectPastSessions,
     restore,
     loadHistory,
     titleChanged(sessionId) {
@@ -3460,6 +3885,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         log(`sendNow for unknown session ${sessionId} ignored`);
         return;
       }
+      if (session.claim?.state === 'claiming') {
+        log(`sendNow in session ${sessionId} ignored: claiming a Unity clone`);
+        return;
+      }
       const row = session.slots
         .queued()
         .find((queued) => queued.id === queuedId);
@@ -3508,7 +3937,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       if (!session) {
         return;
       }
-      fireSessionClosed(session, reason);
+      if (session.claim?.state === 'claiming') {
+        session.claim.abort.abort();
+      }
+      if (session.claim === null) {
+        fireSessionClosed(session, reason);
+      }
       drop(session);
       save();
       void afterAttach(session, () => endClosed(session));
@@ -3531,6 +3965,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     detachAll() {
       const lastSave = writeSaved();
       isDetached = true;
+      for (const session of held.values()) {
+        if (session.claim?.state === 'claiming') {
+          session.claim.abort.abort();
+        }
+      }
       const heldProcesses = new Set<AgentProcess>();
       for (const session of held.values()) {
         if (session.process !== null) {

@@ -16,6 +16,7 @@ import {
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   fakeDependency,
   noCounts,
@@ -25,6 +26,7 @@ import { createRegistrations } from '../../../shared/registrations';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentSession,
+  type ProjectNamer,
   type SessionsMainExports,
   sessionsMainKey,
   sessionsSelectionSlot,
@@ -40,6 +42,8 @@ import {
   chatEntriesSlot,
   type ChatSessionState,
   chatSessionSlot,
+  type PoolProvider,
+  type ProjectSetting,
   type SessionCloseReason,
   type SessionOrigin,
 } from '../contract';
@@ -220,14 +224,18 @@ describe('chat drive actions', () => {
 // `exports` is the part's main exports. `sessionHost` is a fake host whose `list`
 // is `options.list` when given, and `timers` a manual `Timers`. `options.data`
 // replaces the data folder. `holdConnects` holds each promise held, `harnessAttaches`
-// each attach request, `settingsChange` calls the settings listener, and
+// each attach request, `settingsChange` calls the settings listener with the
+// settings the part started on changed by its argument, and
 // `processDetach` and `processKill` record their process calls.
+// `options.projects` is the `projects` setting; `namers` holds each namer
+// `addProjectNamer` got, and `namerChanges.count` each `changed()` call.
 function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
     data?: Files;
     harnessId?: string;
     profiles?: { name: string; configDir: string }[];
+    projects?: ProjectSetting[];
   } = {},
 ) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -310,7 +318,19 @@ function startChatPart(
     start: (session: AgentSession) => ToolSession;
   }[] = [];
   const toolCallGuards: ToolCallGuard[] = [];
+  const namers: ProjectNamer[] = [];
+  const namerChanges = { count: 0 };
   const sessions = {
+    addProjectNamer: (namer: ProjectNamer) => {
+      namers.push(namer);
+      return {
+        changed: () => {
+          namerChanges.count += 1;
+        },
+        dispose: () => undefined,
+      };
+    },
+    relocate: () => undefined,
     addToolCallGuard: (guard: ToolCallGuard) => {
       toolCallGuards.push(guard);
       return { dispose: () => undefined };
@@ -352,6 +372,11 @@ function startChatPart(
       return held === undefined ? null : { ...held };
     },
   };
+  const startSettings = {
+    profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
+    keepIdleMinutes: 60,
+    projects: options.projects ?? [],
+  };
   const api = {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -369,10 +394,7 @@ function startChatPart(
       read: (key: KeyedSlotKey<unknown>) => store.read(key, 'chat'),
       publish: (key: KeyedSlotKey<unknown>) => store.publish(key),
     },
-    settings: () => ({
-      profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
-      keepIdleMinutes: 60,
-    }),
+    settings: () => startSettings,
     onSettingsChanged: (listener: (settings: unknown) => void) => {
       settingsListener = listener;
       return { dispose: () => undefined };
@@ -391,7 +413,10 @@ function startChatPart(
         samePath: (a: string, b: string) =>
           a.replace(/\/$/, '') === b.replace(/\/$/, ''),
         isAbsolute: () => true,
+        isInside: posixPaths.isInside,
+        expandTilde: posixPaths.expandTilde,
       },
+      homeDir: '/home/me',
       selfTest: null,
     },
     dependency: () => sessions,
@@ -454,11 +479,30 @@ function startChatPart(
     harnessAttaches,
     contributions,
     toolCallGuards,
-    settingsChange: (settings: unknown) => settingsListener(settings),
+    settingsChange: (settings: object) =>
+      settingsListener({ ...startSettings, ...settings }),
+    namers,
+    namerChanges,
   };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const NEW_GAMES_SETTING: ProjectSetting = {
+  name: 'New Games',
+  pool: 'ng',
+  pinnedBranches: ['main'],
+};
+
+// A provider over pool `ng`'s two clones listing `feature/x` then `main`,
+// whose claims never settle.
+function fakePoolProvider(): PoolProvider {
+  return {
+    folders: (pool) => (pool === 'ng' ? ['/pool/ng-1', '/pool/ng-2'] : []),
+    branches: () => Promise.resolve(['feature/x', 'main']),
+    claim: () => new Promise(() => {}),
+  };
+}
 
 // A data folder holding one saved session whose process id is `p1`.
 async function dataWithSavedRow(): Promise<Files> {
@@ -1081,10 +1125,22 @@ describe('chat main part', () => {
         chat.invoke('resumeSections'),
       expected: [],
     },
+    {
+      contribution: 'a pool provider',
+      contribute: (view: ChatMainExports) =>
+        view.addPoolProvider(fakePoolProvider()),
+      observe: async (chat: ReturnType<typeof startChatPart>) => {
+        const listing = chat.invoke('branches', 'New Games', false) as Promise<
+          string[]
+        >;
+        return listing.catch((error: unknown) => (error as Error).message);
+      },
+      expected: expect.stringContaining('No Unity pool provider'),
+    },
   ])(
     'exports_ConsumerDisposed_DropsContribution given $contribution',
     async ({ contribute, observe, expected }) => {
-      const chat = startChatPart();
+      const chat = startChatPart({ projects: [NEW_GAMES_SETTING] });
       const consumer = createRegistrations();
       contribute(chat.part.exports?.(consumer) as ChatMainExports);
 
@@ -1093,6 +1149,70 @@ describe('chat main part', () => {
       expect(await observe(chat)).toEqual(expected);
     },
   );
+
+  it('exports_PoolProviderDisposed_ReasksTheNamer', () => {
+    const chat = startChatPart({ projects: [NEW_GAMES_SETTING] });
+    const consumer = createRegistrations();
+    const view = chat.part.exports?.(consumer) as ChatMainExports;
+    view.addPoolProvider(fakePoolProvider());
+    const before = chat.namerChanges.count;
+
+    consumer.dispose();
+
+    expect(chat.namerChanges.count).toBe(before + 1);
+  });
+
+  it('projectNamer_NamesAFolderUnderAProject', () => {
+    const chat = startChatPart({
+      projects: [{ name: 'AI Dev', folder: '/home/me/ai-dev' }],
+    });
+
+    const [namer] = chat.namers;
+    expect(namer('/home/me/ai-dev/wigley-ai-gui')).toBe('AI Dev');
+    expect(namer('/elsewhere')).toBeNull();
+    expect(chat.namerChanges.count).toBe(1);
+  });
+
+  it.each([
+    {
+      name: 'projects changed',
+      change: { projects: [{ name: 'Other', folder: '/home/me/ai-dev' }] },
+      changes: 1,
+      named: 'Other',
+    },
+    {
+      name: 'another setting changed',
+      change: { keepIdleMinutes: 5 },
+      changes: 0,
+      named: 'AI Dev',
+    },
+  ])(
+    'settingsChange_ReasksTheNamerOnlyWhenProjectsChange: $name',
+    ({ change, changes, named }) => {
+      const chat = startChatPart({
+        projects: [{ name: 'AI Dev', folder: '/home/me/ai-dev' }],
+      });
+      const before = chat.namerChanges.count;
+
+      chat.settingsChange(change);
+
+      expect(chat.namerChanges.count).toBe(before + changes);
+      expect(chat.namers[0]('/home/me/ai-dev')).toBe(named);
+    },
+  );
+
+  it('branches_ThroughTheRegisteredProvider', async () => {
+    const chat = startChatPart({ projects: [NEW_GAMES_SETTING] });
+    const before = chat.namerChanges.count;
+
+    chat.exports.addPoolProvider(fakePoolProvider());
+
+    expect(chat.namerChanges.count).toBe(before + 1);
+    await expect(chat.invoke('branches', 'New Games', false)).resolves.toEqual([
+      'main',
+      'feature/x',
+    ]);
+  });
 
   it('exports_AddResumeSection_ReachesResumeSections', async () => {
     const chat = startChatPart();
@@ -1175,6 +1295,8 @@ function startChatOnHarness() {
             contributeTools: () => consumer.track({ dispose() {} }),
             addToolCallGuard: () => consumer.track({ dispose() {} }),
             holdConnects() {},
+            addProjectNamer: () =>
+              consumer.track({ changed() {}, dispose() {} }),
             open: () => {
               rows += 1;
               const id = `row-${rows}`;

@@ -45,12 +45,16 @@ import {
   chatEntriesSlot,
   type ChatMainEvents,
   type ChatProfile,
+  type ChatProject,
   chatQueuedSlot,
   chatReturnedSlot,
   type ChatSessionInfo,
   type ChatSessionState,
   chatSessionSlot,
   HEADLESS_NOTE,
+  type PoolClaimRequest,
+  type PoolClaimResult,
+  type PoolProvider,
   type QueuedMessage,
   type ReturnedMessage,
   type SendGate,
@@ -412,6 +416,8 @@ function setUp(
     sessionHost?: ChatSessionsDeps['sessionHost'];
     // Row ids an earlier run of chat left in the session slot.
     keptRowIds?: string[];
+    projects?: ChatProject[];
+    poolProvider?: PoolProvider | null;
   } = {},
 ) {
   let clockNow = options.clockNow ?? 1000;
@@ -465,6 +471,9 @@ function setUp(
   // Every `setTitle` call, and the titles of each row opened.
   const titleCalls: [string, TitleSource, string | null][] = [];
   const titles = new Map<string, SessionTitles>();
+  // Each `relocate` call, and what the next one throws.
+  const relocated: [string, string][] = [];
+  let relocateError: Error | null = null;
   // Rows are numbered in open order: the first is ROW_ID.
   const sessions: ChatSessionsDeps['sessions'] = {
     open: (info, options) => {
@@ -506,6 +515,12 @@ function setUp(
     titles: (sessionId) => {
       const held = titles.get(sessionId);
       return held === undefined ? null : { ...held };
+    },
+    relocate: (sessionId, projectDir) => {
+      if (relocateError !== null) {
+        throw relocateError;
+      }
+      relocated.push([sessionId, projectDir]);
     },
   };
   const chat = createChatSessions({
@@ -556,6 +571,10 @@ function setUp(
     log,
     clock,
     sessionHost: options.sessionHost ?? sessionHost,
+    projects: () => options.projects ?? [],
+    poolProvider: () => options.poolProvider ?? null,
+    homeDir: '/home/me',
+    paths: posixPaths,
   });
   const agentSession: AgentSession = {
     id: ROW_ID,
@@ -595,6 +614,10 @@ function setUp(
       clockNow = now;
     },
     hostIdChanges,
+    relocated,
+    failNextRelocate: (error: Error) => {
+      relocateError = error;
+    },
     ownedEnds: () => ownedEnds,
     setFocused: (focused: boolean) => {
       isFocused = focused;
@@ -8852,4 +8875,510 @@ describe('createChatSessions restored entries', () => {
     expect(replaced.entries.at(-1)?.id).toBe('replayed');
     expect(test.chat.sessions()[0].entries).toEqual(replaced.entries);
   });
+});
+
+const NEW_GAMES: ChatProject = {
+  kind: 'pool',
+  name: 'New Games',
+  pool: 'ng',
+  profile: 'work',
+  pinnedBranches: ['main'],
+};
+const AI_DEV: ChatProject = {
+  kind: 'folder',
+  name: 'AI Dev',
+  folder: '~/ai-dev',
+  profile: null,
+};
+const CLONES = { ng: ['/pool/ng-1', '/pool/ng-2'] };
+
+interface FakeClaim {
+  request: PoolClaimRequest;
+  signal: AbortSignal;
+  queued: () => void;
+  settle(result: PoolClaimResult): void;
+}
+
+// A pool provider whose clones are `folders`, recording each branch list and
+// each claim, which stays pending until the test settles it.
+function fakePoolProvider(folders: Record<string, string[]>) {
+  const claims: FakeClaim[] = [];
+  const branchCalls: [string, boolean][] = [];
+  const double = {
+    branchesAnswer: ['feature/x', 'main'],
+  };
+  const provider: PoolProvider = {
+    folders: (pool) => folders[pool] ?? [],
+    branches: (pool, refresh) => {
+      branchCalls.push([pool, refresh]);
+      return Promise.resolve(double.branchesAnswer);
+    },
+    claim: (request, signal, queued) =>
+      new Promise((settle) => claims.push({ request, signal, queued, settle })),
+  };
+  return { provider, claims, branchCalls, double };
+}
+
+const CLAIMED: PoolClaimResult = { ok: true, path: '/pool/ng-2', note: null };
+
+describe('createChatSessions projects', () => {
+  // A restored test whose pool start of New Games on main is claiming; each
+  // folder git reads is recorded.
+  function claimingPool(
+    request: { message?: UserMessage } = {},
+    projects: ChatProject[] = [NEW_GAMES],
+  ) {
+    const pool = fakePoolProvider(CLONES);
+    const gitReads: string[] = [];
+    const test = setUp({
+      projects,
+      poolProvider: pool.provider,
+      git: {
+        ...NO_CLONE,
+        topLevel: (folder) => {
+          gitReads.push(folder);
+          return Promise.resolve(null);
+        },
+      },
+    });
+    test.chat.restore(NOTHING_SAVED, []);
+    const target = { project: 'New Games', branch: 'main', profile: 'work' };
+    const rowId =
+      request.message === undefined
+        ? test.chat.start(target)
+        : test.chat.launch({ ...target, message: request.message });
+    return { ...test, ...pool, rowId, gitReads };
+  }
+
+  it('start_folderProject_StartsInTheExpandedFolder', async () => {
+    const pool = fakePoolProvider(CLONES);
+    const test = setUp({ projects: [AI_DEV], poolProvider: pool.provider });
+
+    test.chat.start({ project: 'AI Dev', branch: null, profile: 'personal' });
+    await flush();
+
+    expect(test.opened[0].projectDir).toBe('/home/me/ai-dev');
+    expect(test.harness.processes[0].request.projectDir).toBe(
+      '/home/me/ai-dev',
+    );
+    expect(pool.claims).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: 'an unknown project names the known ones',
+      projects: [NEW_GAMES, AI_DEV],
+      folders: CLONES,
+      request: { project: 'Nope', branch: null },
+      profile: 'work',
+      fragment: 'New Games, AI Dev',
+    },
+    {
+      name: 'an unknown project with none set',
+      projects: [],
+      folders: CLONES,
+      request: { project: 'Nope', branch: null },
+      profile: 'work',
+      fragment: 'Projects: none',
+    },
+    {
+      name: 'a pool project with no branch',
+      projects: [NEW_GAMES],
+      folders: CLONES,
+      request: { project: 'New Games', branch: null },
+      profile: 'work',
+      fragment: 'name a branch',
+    },
+    {
+      name: 'a folder project with a branch',
+      projects: [AI_DEV],
+      folders: CLONES,
+      request: { project: 'AI Dev', branch: 'main' },
+      profile: 'work',
+      fragment: 'takes no branch',
+    },
+    {
+      name: "a profile other than the pool project's",
+      projects: [NEW_GAMES],
+      folders: CLONES,
+      request: { project: 'New Games', branch: 'main' },
+      profile: 'personal',
+      fragment: 'profile work, not personal',
+    },
+    {
+      name: "a profile other than the folder project's",
+      projects: [{ ...AI_DEV, profile: 'work' }],
+      folders: CLONES,
+      request: { project: 'AI Dev', branch: null },
+      profile: 'personal',
+      fragment: 'profile work, not personal',
+    },
+    {
+      name: 'no provider registered',
+      projects: [NEW_GAMES],
+      folders: null,
+      request: { project: 'New Games', branch: 'main' },
+      profile: 'work',
+      fragment: 'No Unity pool provider',
+    },
+    {
+      name: 'a pool with no clones',
+      projects: [NEW_GAMES],
+      folders: {},
+      request: { project: 'New Games', branch: 'main' },
+      profile: 'work',
+      fragment: 'Pool "ng" has no clones',
+    },
+  ])(
+    'start_RejectedTarget_ThrowsAndOpensNothing: $name',
+    ({ projects, folders, request, profile, fragment }) => {
+      const pool = fakePoolProvider(folders ?? {});
+      const test = setUp({
+        projects,
+        poolProvider: folders === null ? null : pool.provider,
+      });
+
+      expect(() => test.chat.start({ ...request, profile })).toThrow(fragment);
+      expect(test.opened).toEqual([]);
+      expect(pool.claims).toEqual([]);
+    },
+  );
+
+  it('start_PoolProject_OpensRestingInTheFirstCloneAndClaims', () => {
+    const test = claimingPool();
+
+    expect(test.rowId).toBe(ROW_ID);
+    expect(test.opened[0].projectDir).toBe('/pool/ng-1');
+    expect(test.openOptions).toEqual([{ select: true }]);
+    expect(test.harness.processes).toEqual([]);
+    expect(noticesOf(test)).toEqual([
+      { kind: 'notice', tone: 'info', text: 'Claiming a Unity clone on main…' },
+    ]);
+    expect(test.claims[0].request).toEqual({
+      pool: 'ng',
+      branch: 'main',
+      hostSessionId: 'uuid-1',
+      rowId: ROW_ID,
+    });
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+    test.chat.titleChanged(ROW_ID);
+    expect(test.saved.last()?.sessions).toEqual([]);
+    expect(test.gitReads).not.toContain('/pool/ng-1');
+  });
+
+  it.each([
+    {
+      name: 'ok',
+      result: CLAIMED,
+      notices: [['Claiming a Unity clone on main…', 'info']],
+    },
+    {
+      name: 'diverged keeps the clone with the note',
+      result: { ...CLAIMED, note: 'main diverged from origin' },
+      notices: [
+        ['Claiming a Unity clone on main…', 'info'],
+        ['main diverged from origin', 'info'],
+      ],
+    },
+  ])('claim_Lands: $name', async ({ result, notices }) => {
+    const test = claimingPool();
+
+    test.claims[0].settle(result);
+    await flush();
+
+    expect(test.relocated).toEqual([[ROW_ID, '/pool/ng-2']]);
+    const [row] = test.chat.sessions();
+    expect(row.projectDir).toBe('/pool/ng-2');
+    expect(row.repo).toBe('ng-2');
+    expect(row.worktrees).toEqual([]);
+    const { request } = test.harness.processes[0];
+    expect([request.projectDir, request.sessionId]).toEqual([
+      '/pool/ng-2',
+      'uuid-1',
+    ]);
+    expect(
+      emittedOf(test, 'sessionOpened').map(({ projectDir, origin }) => ({
+        projectDir,
+        origin,
+      })),
+    ).toEqual([{ projectDir: '/pool/ng-2', origin: 'new' }]);
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.projectDir),
+    ).toEqual(['/pool/ng-2']);
+    expect(await test.data.stat(RECENT_FOLDERS_FILE)).toBeNull();
+    expect(noticesOf(test).map(({ text, tone }) => [text, tone])).toEqual(
+      notices,
+    );
+  });
+
+  it('claim_LandsButTheMoveThrows_FailsTheClaim', async () => {
+    const test = claimingPool();
+    test.failNextRelocate(new Error('relocate for unknown session row-1'));
+
+    test.claims[0].settle(CLAIMED);
+    await flush();
+
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'error',
+      text: 'Unity clone not claimed: relocate for unknown session row-1',
+    });
+    expect(test.harness.processes).toEqual([]);
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      'This session has no Unity clone',
+    );
+  });
+
+  it('claim_Queued_ShowsTheWaitingNoticeOnce', () => {
+    const test = claimingPool();
+
+    test.claims[0].queued();
+    test.claims[0].queued();
+
+    expect(
+      noticesOf(test).filter(
+        (notice) => notice.text === 'Waiting for a Unity clone…',
+      ),
+    ).toEqual([
+      { kind: 'notice', tone: 'info', text: 'Waiting for a Unity clone…' },
+    ]);
+  });
+
+  it('claim_Fails_RowRestsUnsavedAndRefusesSends', async () => {
+    const test = claimingPool();
+
+    test.claims[0].settle({
+      ok: false,
+      error: 'dirty',
+      message: 'clone 2 has uncommitted changes',
+    });
+    await flush();
+
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'error',
+      text: 'Unity clone not claimed: clone 2 has uncommitted changes',
+    });
+    expect(test.harness.processes).toEqual([]);
+    expect(test.relocated).toEqual([]);
+    test.chat.titleChanged(ROW_ID);
+    expect(test.saved.last()?.sessions).toEqual([]);
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      'This session has no Unity clone',
+    );
+    expect(test.harness.processes).toEqual([]);
+    expect(() => test.chat.clear(ROW_ID)).toThrow(
+      'This session has no Unity clone',
+    );
+    test.chat.closed(ROW_ID, 'user');
+    expect(emittedOf(test, 'sessionClosed')).toEqual([]);
+  });
+
+  it('claimingRow_SendQueuesUntilTheClaimLands', async () => {
+    const test = claimingPool();
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    expect(test.harness.processes).toEqual([]);
+    const [queued] = test.chat.sessions()[0].queued;
+    expect(queued.text).toBe('idle send');
+    expect(() => test.chat.clear(ROW_ID)).toThrow('still claiming');
+    await test.chat.sendAllNow(ROW_ID, null);
+    expect(test.chat.sessions()[0].queued).toEqual([queued]);
+    test.chat.sendNow(ROW_ID, queued.id);
+    expect(test.logged).toContain(
+      `sendNow in session ${ROW_ID} ignored: claiming a Unity clone`,
+    );
+    test.chat.selected(ROW_ID);
+    expect(test.saved.last()?.selectedHostSessionId).toBeNull();
+
+    test.claims[0].settle(CLAIMED);
+    await flush();
+
+    expect(test.harness.processes[0].calls).toEqual([sendCall(IDLE_SEND)]);
+  });
+
+  it('claimingRow_Closed_AbortsAndIgnoresTheResult', async () => {
+    const test = claimingPool();
+
+    test.chat.closed(ROW_ID, 'user');
+
+    expect(test.claims[0].signal.aborted).toBe(true);
+    expect(emittedOf(test, 'sessionClosed')).toEqual([]);
+    expect(test.ownedEnds()).toBe(1);
+    test.claims[0].settle(CLAIMED);
+    await flush();
+    expect(test.relocated).toEqual([]);
+    expect(test.harness.processes).toEqual([]);
+    expect(test.logged).toContain(
+      'claim for session row-1 settled after its row closed',
+    );
+  });
+
+  it('detachAll_AbortsARunningClaim', async () => {
+    const test = claimingPool();
+
+    await test.chat.detachAll();
+
+    expect(test.claims[0].signal.aborted).toBe(true);
+    test.claims[0].settle(CLAIMED);
+    await flush();
+    expect(test.harness.processes).toEqual([]);
+  });
+
+  const FIX_THE_CHIP: UserMessage = { text: 'fix the chip', images: [] };
+
+  it('launch_PoolProject_SendsTheFirstMessageOnceStarted', async () => {
+    const test = claimingPool({ message: FIX_THE_CHIP });
+
+    expect(test.rowId).toBe(ROW_ID);
+    expect(test.openOptions).toEqual([{ select: false }]);
+    expect(test.harness.processes).toEqual([]);
+    test.claims[0].settle(CLAIMED);
+    await flush();
+
+    expect(test.harness.processes[0].calls).toEqual([sendCall(FIX_THE_CHIP)]);
+    expect(
+      emittedOf(test, 'sessionOpened').map((opened) => opened.origin),
+    ).toEqual(['launched']);
+  });
+
+  it('launch_PoolProject_ClaimFails_ReturnsTheMessageToTheBox', async () => {
+    const test = claimingPool({ message: FIX_THE_CHIP });
+
+    test.claims[0].settle({ ok: false, error: 'no-cli', message: 'no cli' });
+    await flush();
+
+    expect(test.sentReturned()).toEqual([
+      { sessionId: ROW_ID, messages: [FIX_THE_CHIP] },
+    ]);
+  });
+
+  it('claim_LandsButStartThrows_RestsInTheCloneSaved', async () => {
+    const test = claimingPool();
+    test.harness.failNextStart('boom');
+
+    test.claims[0].settle(CLAIMED);
+    await flush();
+
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'error',
+      text: 'Claude did not start: boom',
+    });
+    expect(test.sent('sessionRested')).toEqual([
+      { sessionId: ROW_ID, error: 'boom' },
+    ]);
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.projectDir),
+    ).toEqual(['/pool/ng-2']);
+  });
+
+  const ONE = PAST_ONE.sessionId;
+  const TWO = PAST_TWO.sessionId;
+
+  it.each([
+    {
+      name: 'a pool’s clones, newest first across them',
+      project: 'New Games',
+      listed: ['/pool/ng-1', '/pool/ng-2'],
+      rows: [
+        [ONE, '/pool/ng-1'],
+        [ONE, '/pool/ng-2'],
+        [TWO, '/pool/ng-1'],
+        [TWO, '/pool/ng-2'],
+      ],
+    },
+    {
+      name: "a folder project's expanded folder",
+      project: 'AI Dev',
+      listed: ['/home/me/ai-dev'],
+      rows: [
+        [ONE, '/home/me/ai-dev'],
+        [TWO, '/home/me/ai-dev'],
+      ],
+    },
+  ])(
+    'projectPastSessions_MergesEveryCoveredFolder: $name',
+    async ({ project, listed, rows }) => {
+      const pool = fakePoolProvider(CLONES);
+      const test = setUp({
+        projects: [NEW_GAMES, AI_DEV],
+        poolProvider: pool.provider,
+      });
+
+      const found = await test.chat.projectPastSessions(project, 'personal');
+
+      expect(
+        test.harness.pastSessionCalls.map((call) => call.projectDir),
+      ).toEqual(listed);
+      expect(found.map((row) => [row.hostSessionId, row.projectDir])).toEqual(
+        rows,
+      );
+    },
+  );
+
+  it('projectPastSessions_UnknownProject_Rejects', async () => {
+    const test = setUp({ projects: [NEW_GAMES] });
+
+    await expect(
+      test.chat.projectPastSessions('Nope', 'personal'),
+    ).rejects.toThrow('Unknown project');
+  });
+
+  it.each([
+    {
+      name: 'pinned first, refresh passed on',
+      folders: CLONES,
+      project: 'New Games',
+      refresh: true,
+      resolves: ['main', 'feature/x'],
+      rejects: null,
+      branchCalls: [['ng', true]],
+    },
+    {
+      name: 'a folder project',
+      folders: CLONES,
+      project: 'AI Dev',
+      refresh: false,
+      resolves: null,
+      rejects: 'is a folder: it has no branches',
+      branchCalls: [],
+    },
+    {
+      name: 'an unknown project',
+      folders: CLONES,
+      project: 'Nope',
+      refresh: false,
+      resolves: null,
+      rejects: 'Unknown project',
+      branchCalls: [],
+    },
+    {
+      name: 'no provider',
+      folders: null,
+      project: 'New Games',
+      refresh: false,
+      resolves: null,
+      rejects: 'No Unity pool provider',
+      branchCalls: [],
+    },
+  ])(
+    'branches_PinnedFirstAndRejections: $name',
+    async ({ folders, project, refresh, resolves, rejects, branchCalls }) => {
+      const pool = fakePoolProvider(folders ?? {});
+      const test = setUp({
+        projects: [NEW_GAMES, AI_DEV],
+        poolProvider: folders === null ? null : pool.provider,
+      });
+
+      const listing = test.chat.branches(project, refresh);
+
+      if (rejects === null) {
+        await expect(listing).resolves.toEqual(resolves);
+      } else {
+        await expect(listing).rejects.toThrow(rejects);
+      }
+      expect(pool.branchCalls).toEqual(branchCalls);
+    },
+  );
 });

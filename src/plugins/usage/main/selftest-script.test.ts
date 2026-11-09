@@ -54,7 +54,9 @@ function setUp(
       },
       launch: async (request) => {
         launches.push(request);
-        calls.push(`launch ${request.projectDir}`);
+        calls.push(
+          `launch ${'projectDir' in request ? request.projectDir : request.project}`,
+        );
         if (options.launchError !== undefined) {
           throw options.launchError;
         }

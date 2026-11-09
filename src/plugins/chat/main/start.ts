@@ -17,6 +17,7 @@ import {
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
+import { isSameJson } from '../../../shared/json';
 import {
   type SessionsMainEvents,
   type SessionsMainExports,
@@ -47,7 +48,7 @@ import { requireChatHarness } from './lookups';
 import { createOpenSessions } from './open-sessions';
 import { PERMISSION_TOOLS } from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
-import { createPoolProviders } from './projects';
+import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
 import { callerGuard, createToolCallers } from './tool-callers';
@@ -269,7 +270,9 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
 // sections the start prompt lists, and one of the pool provider a pool
-// project's branches, clones and claim come from.
+// project's branches, clones and claim come from. It names each row's project
+// from the `projects` setting for the side bar, and lists the projects, a pool
+// project's branches and a project's saved sessions for the start prompt.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -295,6 +298,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       log: services.log,
     });
     const poolProviders = createPoolProviders();
+    const poolProvider = () => poolProviders.current();
+    // Checked once per settings change, so a bad entry logs once.
+    let projectSettings = api.settings().projects;
+    let projects = readProjects(projectSettings, services.log);
     const accounts = createAccounts({
       harness,
       profiles,
@@ -330,7 +337,22 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       log: services.log,
       clock: services.clock,
       sessionHost: services.sessionHost,
+      projects: () => projects,
+      poolProvider,
+      homeDir: services.homeDir,
+      paths: services.paths,
     });
+    const namer = sessions.addProjectNamer(
+      (projectDir) =>
+        projectOf(
+          projectDir,
+          projects,
+          (pool) => poolProvider()?.folders(pool) ?? [],
+          services.homeDir,
+          services.paths,
+        )?.name ?? null,
+    );
+    namer.changed();
     sessions.addToolCallGuard(
       callerGuard({
         callers: toolCallers,
@@ -357,6 +379,13 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // page that is gone, and would refuse every later one.
     api.channel.handle('loaded', () => accounts.cancelRunning());
     api.channel.handle('start', (request) => chat.start(request));
+    api.channel.handle('projects', () => [...projects]);
+    api.channel.handle('branches', (project, refresh) =>
+      chat.branches(project, refresh),
+    );
+    api.channel.handle('projectPastSessions', (project, profile) =>
+      chat.projectPastSessions(project, profile),
+    );
     api.channel.handle('pastSessions', (projectDir, profile) =>
       chat.pastSessions(projectDir, profile),
     );
@@ -475,6 +504,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         isHeadless: (sessionId) => chat.isHeadless(sessionId),
         defaultProfile,
         profileNames,
+        projects: () => projects,
         isAbsolute: (folder) => services.paths.isAbsolute(folder),
         stat: (folder) => services.files.stat(folder),
         log: services.log,
@@ -498,7 +528,15 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const passKeepIdle = (keepIdleMinutes: number) =>
       services.sessionHost.setKeepIdleMinutes(Math.max(0, keepIdleMinutes));
     passKeepIdle(api.settings().keepIdleMinutes);
-    api.onSettingsChanged((settings) => passKeepIdle(settings.keepIdleMinutes));
+    api.onSettingsChanged((settings) => {
+      passKeepIdle(settings.keepIdleMinutes);
+      if (isSameJson(settings.projects, projectSettings)) {
+        return;
+      }
+      projectSettings = settings.projects;
+      projects = readProjects(projectSettings, services.log);
+      namer.changed();
+    });
     services.selfTest?.run(
       chatSelfTestScript({
         homeDir: services.homeDir,
@@ -571,8 +609,17 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       compact: (sessionId, reason) => chat.compact(sessionId, reason),
       addResumeSection: (section) =>
         consumer.track(chat.addResumeSection(section)),
-      addPoolProvider: (provider) =>
-        consumer.track(poolProviders.add(provider)),
+      // Rows in a pool's clones regroup when a provider registers or goes.
+      addPoolProvider: (provider) => {
+        const registration = poolProviders.add(provider);
+        namer.changed();
+        return consumer.track({
+          dispose() {
+            registration.dispose();
+            namer.changed();
+          },
+        });
+      },
     });
     return {
       commands: {},
