@@ -32,7 +32,7 @@ function fakeTimers() {
 }
 
 function modelOf(pending: PendingKeys): WhichKeyModel {
-  return { title: pending.keys.join(' '), entries: [] };
+  return { title: pending.keys.join(' '), name: null, entries: [] };
 }
 
 function setup(

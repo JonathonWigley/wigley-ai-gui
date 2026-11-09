@@ -662,6 +662,31 @@ const CHOICES_STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[keys] which-key closed' },
 ];
 
+const LEADER_SEARCH_STEPS: SelfTestStep[] = [
+  { keys: [' '], expect: '[keys] which-key shows Space' },
+  {
+    keys: ['b'],
+    expect: '[keys] which-key shows Space b',
+    screenshot: 'which-key-shelf',
+  },
+  { keys: ['Escape'], expect: '[keys] which-key closed' },
+  {
+    keys: [' ', '/'],
+    expect: '[keys] picker shown: Leader actions',
+    screenshot: 'leader-search',
+  },
+  {
+    keys: ['h', 'e', 'l', 'p', 'Enter'],
+    expect: '[keys] leader search ran keys.toggleHelp',
+  },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  { keys: [' ', '/'], expect: '[keys] picker shown: Leader actions' },
+  {
+    keys: ['Escape', 'Escape', 'Escape'],
+    expect: '[keys] picker closed: Leader actions',
+  },
+];
+
 const PANE_RESIZE_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-l>'], expect: '[page] <A-S-l> ran panes.resizePaneRight' },
   { keys: ['<A-S-h>'], expect: '[page] <A-S-h> ran panes.resizePaneLeft' },
@@ -1401,6 +1426,11 @@ export function formsSelfTestScript(
         name: 'choices',
         why: "Question 1's choice clears and re-picks by key and Enter replaces the pick with the recommendation; Option+n finds no unanswered item, and which-key enters and cancels the Space z group.",
         steps: CHOICES_STEPS,
+      },
+      {
+        name: 'leader search',
+        why: 'Space b opens the session group on the shelf; Space / searches every leader action in force, Enter runs the pick, and three Escapes close the search: INSERT, the list, closed.',
+        steps: LEADER_SEARCH_STEPS,
       },
       {
         name: 'pane resize',

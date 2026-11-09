@@ -19,9 +19,12 @@ export interface WhichKeyEntry {
   kind: 'command' | 'prefix';
 }
 
-// `title` is the pending keys as the user reads them, e.g. `Space a`.
+// `title` is the pending keys as the user reads them, e.g. `Space a`;
+// `name` is the keymap's `groups` name for those keys, null when none names
+// them.
 export interface WhichKeyModel {
   title: string;
+  name: string | null;
   entries: WhichKeyEntry[];
 }
 
@@ -33,9 +36,10 @@ interface Candidate {
 // The keys that continue `pending`, in keymap order: those firing in the
 // pending scope (or `any`), on the page or in a box. A prefix the keymap's
 // `groups` names is labelled with that name, matched in the pending keys'
-// own spelling: page keys on the page, vim tokens in a box.
-// Neighbouring entries of one kind and label merge into one, and chords print
-// for `platform`. Null when no bind continues the sequence.
+// own spelling: page keys on the page, vim tokens in a box; the model's
+// `name` is the pending keys' own group name. Neighbouring entries of one
+// kind and label merge into one, and chords print for `platform`. Null when
+// no bind continues the sequence.
 export function whichKeyModel(
   pending: PendingKeys,
   keymap: Keymap,
@@ -65,6 +69,7 @@ export function whichKeyModel(
   );
   return {
     title: pending.keys.map(readKey).join(' '),
+    name: groupName(pending.keys, groups) ?? null,
     entries: mergeNeighbours(entries),
   };
 }
@@ -156,7 +161,7 @@ function groupName(keys: string[], groups: GroupPrefix[]): string | undefined {
   return undefined;
 }
 
-// A key with any bind running past it is a prefix, labelled `+` and its
+// A key with any bind running past it is a prefix, labelled with its
 // `groupName`, or without one its binds' command groups; otherwise it runs
 // its command.
 function entry(
@@ -172,7 +177,7 @@ function entry(
     return { keys, label: label(binds[0].command), kind: 'command' };
   }
   if (groupName !== undefined) {
-    return { keys, label: `+${groupName}`, kind: 'prefix' };
+    return { keys, label: groupName, kind: 'prefix' };
   }
   const groups = new Set<string>();
   for (const bind of binds) {
@@ -181,7 +186,7 @@ function entry(
       groups.add(group);
     }
   }
-  return { keys, label: `+${[...groups].join(', ')}`, kind: 'prefix' };
+  return { keys, label: [...groups].join(', '), kind: 'prefix' };
 }
 
 function mergeNeighbours(entries: WhichKeyEntry[]): WhichKeyEntry[] {

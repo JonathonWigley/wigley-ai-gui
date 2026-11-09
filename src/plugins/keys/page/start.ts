@@ -11,6 +11,7 @@ import {
   scrollToEdge,
 } from '../../../shared/content-scroll';
 import { element } from '../../../shared/page/dom';
+import { listPickerCommands } from '../../../shared/page/list-picker';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -21,6 +22,7 @@ import type { Layout } from '../layouts/layout';
 import { keysManifest } from '../manifest';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
+import { type LeaderAction, leaderActions } from './leader-search';
 import { createKeysParts, type Drawn } from './layout/keys-parts';
 import { readKeysLayout } from './layout/read-keys-layout';
 import { startUnplacedLog } from './unplaced-log';
@@ -40,13 +42,16 @@ type KeysApi = PageApi<
 // Shows which-key over every pending key sequence, on the page and in a box;
 // the help overlay over the `help` scope while it is open, closing when the
 // scope under it changes; and the Keys button at the title bar's end, its key
-// prompt inside it, which opens help. Each draws through the `keys.layout`
-// layout: help and the Keys button draw again on a new set, which-key at its
-// next show. Each reads the keymap and settings as they are now, and help
-// redraws when the keymap changes; help's line, half-page and edge scrolls
-// step its panel, logging how far it went. The core holds the anchors: this part tells
-// it the `showHints` setting. Records each scope in force and checks it against
-// the core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
+// prompt inside it, which opens help. `searchLeader` opens the list picker
+// over the leader actions in the scope in force, its filter focused, and runs
+// the chosen row's command with its arg, logging the run; a cancel logs the
+// close. Each draws through the `keys.layout` layout: help, the Keys button
+// and an open search draw again on a new set, which-key at its next show.
+// Each reads the keymap and settings as they are now, and help redraws when
+// the keymap changes; help's line, half-page and edge scrolls step its panel,
+// logging how far it went. The core holds the anchors: this part tells it the
+// `showHints` setting. Records each scope in force and checks it against the
+// core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
 // `document` listener `dispose` removes.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
@@ -130,6 +135,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       services.log(edgeText('the key help', edge));
     };
 
+    const picker = services.picker.create({ filter: true });
+
     const keysButtonSlot = element('span', 'keys-title-bar-slot');
     api.areas.titleBar.contribute(keysButtonSlot, { align: 'end' });
     let keysButton: Drawn = parts.titleBarButton(keysButtonSlot);
@@ -148,11 +155,40 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
               keysButton = parts.titleBarButton(keysButtonSlot);
             },
             () => help.layoutsChanged(),
+            () => picker.redraw(),
           ],
           (step) => step(),
         );
       },
     });
+
+    const runLeaderAction = (action: LeaderAction) => {
+      if (action.arg === undefined) {
+        services.log(`leader search ran ${action.command}`);
+        void api.commands.run(action.command);
+        return;
+      }
+      services.log(
+        `leader search ran ${action.command} ${JSON.stringify(action.arg)}`,
+      );
+      void api.commands.run({ id: action.command }, action.arg);
+    };
+    const searchLeader = () => {
+      const title = 'Leader actions';
+      picker.open({
+        title,
+        items: leaderActions(keys.keymap(), keys.scope(), keys.label, platform),
+        label: (action) => action.label,
+        drawRow: (list, action) =>
+          parts.leaderSearchRow(list, {
+            label: action.label,
+            keys: action.keys,
+          }),
+        chosen: runLeaderAction,
+        cancelled: () => services.log(`picker closed: ${title}`),
+      });
+      picker.focusFilter();
+    };
 
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());
@@ -207,6 +243,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
         halfPageUp: () => scrollHelp('halfPage', -1),
         scrollTop: () => scrollHelpTo('top'),
         scrollEnd: () => scrollHelpTo('end'),
+        searchLeader,
+        ...listPickerCommands(picker),
       },
     };
   },

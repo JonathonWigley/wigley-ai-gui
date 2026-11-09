@@ -168,6 +168,7 @@ describe('createKeysParts', () => {
     const view = mountWhichKeyView(overlay.area, parts);
     const model = {
       title: 'Space',
+      name: null,
       entries: [{ keys: 'a', label: 'agents', kind: 'prefix' as const }],
     };
     view.show(model);

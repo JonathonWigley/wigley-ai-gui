@@ -8,6 +8,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   helpRow: true,
   whichKey: true,
   whichKeyEntry: true,
+  leaderSearchRow: true,
   titleBarButton: true,
 };
 

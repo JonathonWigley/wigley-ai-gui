@@ -161,6 +161,7 @@ export const LIST_PICKER_SCOPES = [
   'settings.picker',
   'backlog.picker',
   'notes.picker',
+  'keys.picker',
 ] as const;
 
 type ListPickerScope = (typeof LIST_PICKER_SCOPES)[number];
@@ -350,6 +351,7 @@ export const defaultKeymap = {
 
     // ── Help ───────────────────────────────────────────────────────────────
     { keys: '<Leader>?', scope: 'any', command: 'keys.toggleHelp' },
+    { keys: '<Leader>/', scope: 'any', command: 'keys.searchLeader' },
     { keys: '<Esc>', scope: 'keys.help', command: 'keys.closeHelp' },
     { keys: 'j', scope: 'keys.help', command: 'keys.lineDown' },
     { keys: 'k', scope: 'keys.help', command: 'keys.lineUp' },

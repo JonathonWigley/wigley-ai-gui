@@ -1,16 +1,20 @@
-/* Which-key: a floating panel docked above the status bar while it shows, and
-   at the window's bottom edge otherwise, over the content and over an open
-   dialog's scrim, help's included. Display only: the overlay layer gives its
-   children the pointer, and this panel takes none. Compounded with
+/* Which-key: a full-width glass shelf on the window's bottom edge, over the
+   content, the status bar and an open dialog's scrim, help's included; only
+   its top edge and top corners drawn. Display only: the overlay layer gives
+   its children the pointer, and this panel takes none. Compounded with
    `ui-floating` so its placement wins over the panel's own layer. */
 .ui-floating.which-key {
-  bottom: calc(var(--wg-status-bar-height) + var(--wg-sheet-gutter));
-  left: var(--wg-sheet-gutter);
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: var(--wg-radius-lg) var(--wg-radius-lg) 0 0;
+  border-right: 0;
+  bottom: 0;
+  left: 0;
   max-height: 50vh;
   overflow: hidden;
   pointer-events: none !important;
   position: fixed;
-  right: var(--wg-sheet-gutter);
+  right: 0;
   z-index: calc(var(--wg-z-dialog) + 2);
 }
 

@@ -1,6 +1,7 @@
-// The keys layout contract: the parts a keys layout draws for the help overlay, the which-key panel and the title
-// bar's Keys button, and the kit each part gets. The app keeps the help dialog (its title, scrim and Close button),
-// the which-key panel's placement and timers, the Keys button's slot in the title bar, and every key and scope.
+// The keys layout contract: the parts a keys layout draws for the help overlay, the which-key panel, the leader
+// search's rows and the title bar's Keys button, and the kit each part gets. The app keeps the help dialog (its title,
+// scrim and Close button), the which-key panel's placement and timers, the leader search's list picker (its filter,
+// cursor and clicks), the Keys button's slot in the title bar, and every key and scope.
 //
 // Keys reach a part already printed for the platform: draw them with `kit.kbd(parent, keys)`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
@@ -17,15 +18,24 @@ export interface HelpSectionInput {
 export interface HelpInput {
   sections: readonly HelpSectionInput[];
 }
-// One key that continues a pending sequence.
+// One key that continues a pending sequence: a `command` it runs, labelled with the command's label, or a `prefix`
+// that leads to more keys, labelled with its group's name (or its commands' groups, joined), with no mark of its own.
 export interface WhichKeyEntryInput {
   keys: string;
   label: string;
   kind: 'command' | 'prefix';
 }
+// `title` is the keys pressed so far, e.g. `Space b`; `name` is the group those keys name, e.g. `session`, null when
+// no group names them (the bare leader, an unnamed prefix).
 export interface WhichKeyInput {
   title: string;
+  name: string | null;
   entries: readonly WhichKeyEntryInput[];
+}
+// One leader action in the leader search: its command's label, and every key that runs it.
+export interface LeaderSearchRowInput {
+  label: string;
+  keys: string;
 }
 
 // The kit every keys part gets. `keyHint` and `keys` name the keys plugin's commands (`toggleHelp`, `closeHelp`).
@@ -55,7 +65,8 @@ export interface WhichKeyKit extends KeysKit {
 // Each part comes from the first layout that defines it among the `keys.layout` setting and `default`; a part that
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
 // Every part appends one element to `parent` and returns it. `help` draws the help dialog's body, `whichKey` the
-// which-key panel's contents, and `titleBarButton` the Keys button in its title bar slot.
+// which-key panel's contents, `leaderSearchRow` one row of the leader search's list (the picker sets its `is-cursor`
+// class and makes it clickable), and `titleBarButton` the Keys button in its title bar slot.
 export interface Layout {
   help?(parent: HTMLElement, input: HelpInput, kit: HelpKit): HTMLElement;
   helpSection?(
@@ -72,6 +83,11 @@ export interface Layout {
   whichKeyEntry?(
     parent: HTMLElement,
     input: WhichKeyEntryInput,
+    kit: KeysKit,
+  ): HTMLElement;
+  leaderSearchRow?(
+    parent: HTMLElement,
+    input: LeaderSearchRowInput,
     kit: KeysKit,
   ): HTMLElement;
   titleBarButton?(parent: HTMLElement, kit: KeysKit): HTMLElement;

@@ -7,9 +7,9 @@ import type { Drawn, KeysParts } from './layout/keys-parts';
 import type { WhichKeyView } from './which-key-controller';
 import type { WhichKeyModel } from './which-key';
 
-// The which-key panel in `overlay`, docked above the status bar while it
-// shows and at the window's bottom edge otherwise, its contents drawn through
-// the `whichKey` part of `parts` on each show, with the layouts set then.
+// The which-key panel in `overlay`, a full-width shelf on the window's bottom
+// edge over the content and the status bar, its contents drawn through the
+// `whichKey` part of `parts` on each show, with the layouts set then.
 // Display-only, and hidden while closed.
 export function mountWhichKeyView(
   overlay: Area,
