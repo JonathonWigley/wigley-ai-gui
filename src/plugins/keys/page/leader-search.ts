@@ -6,6 +6,7 @@ import {
   formatKeys,
   joinKeys,
 } from '../../../shared/key-hints';
+import { isSameJson } from '../../../shared/json';
 import { pageKeysFor } from '../../../shared/key-notation';
 import { qualify } from '../../../shared/plugin-manifests';
 import { keysManifest } from '../manifest';
@@ -24,7 +25,7 @@ const SEARCH_LEADER = qualify(keysManifest.id, 'searchLeader');
 // The leader actions firing in `scope`: the page binds starting with the
 // leader's page key whose scope is `scope` or `any`, the search's own bind
 // left out. A bind only a box holds is no page bind, so it is never listed.
-// One row per command and arg (a record's compared field by field), in
+// One row per command and arg (compared as JSON data), in
 // keymap order of its first bind; its keys are each bind's, joined.
 export function leaderActions(
   keymap: Keymap,
@@ -45,7 +46,8 @@ export function leaderActions(
     const keys = formatKeys(bind.keys, platform);
     const row = rows.find(
       (each) =>
-        each.bind.command === bind.command && sameArg(each.bind.arg, bind.arg),
+        each.bind.command === bind.command &&
+        isSameJson(each.bind.arg, bind.arg),
     );
     if (row === undefined) {
       rows.push({ bind, keys: [keys] });
@@ -59,15 +61,4 @@ export function leaderActions(
     label: label(bind.command),
     keys: joinKeys(keys),
   }));
-}
-
-function sameArg(a: CommandArg | undefined, b: CommandArg | undefined) {
-  if (typeof a !== 'object' || typeof b !== 'object') {
-    return a === b;
-  }
-  const fields = Object.keys(a);
-  return (
-    fields.length === Object.keys(b).length &&
-    fields.every((field) => a[field] === b[field])
-  );
 }

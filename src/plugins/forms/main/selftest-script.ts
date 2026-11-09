@@ -681,10 +681,8 @@ const LEADER_SEARCH_STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   { keys: [' ', '/'], expect: '[keys] picker shown: Leader actions' },
-  {
-    keys: ['Escape', 'Escape', 'Escape'],
-    expect: '[keys] picker closed: Leader actions',
-  },
+  { keys: ['Escape', 'Escape'], expect: '[keys] picker list: Leader actions' },
+  { keys: ['Escape'], expect: '[keys] picker closed: Leader actions' },
 ];
 
 const PANE_RESIZE_STEPS: SelfTestStep[] = [

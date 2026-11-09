@@ -109,6 +109,49 @@ describe('leaderActions', () => {
       ],
     },
     {
+      case: 'one command on three leader keys with differing record args',
+      page: [
+        {
+          keys: [' ', 'm', 'a'],
+          scope: 's',
+          command: 'p.move',
+          arg: { to: 'a' },
+        },
+        {
+          keys: [' ', 'm', 'b'],
+          scope: 's',
+          command: 'p.move',
+          arg: { to: 'b' },
+        },
+        {
+          keys: [' ', 'm', 'c'],
+          scope: 's',
+          command: 'p.move',
+          arg: { to: 'a', by: 2 },
+        },
+      ],
+      rows: [
+        {
+          command: 'p.move',
+          arg: { to: 'a' },
+          label: 'label of p.move',
+          keys: 'Space m a',
+        },
+        {
+          command: 'p.move',
+          arg: { to: 'b' },
+          label: 'label of p.move',
+          keys: 'Space m b',
+        },
+        {
+          command: 'p.move',
+          arg: { to: 'a', by: 2 },
+          label: 'label of p.move',
+          keys: 'Space m c',
+        },
+      ],
+    },
+    {
       case: 'a comma leader',
       leader: ',',
       page: [

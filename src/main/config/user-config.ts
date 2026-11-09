@@ -1,5 +1,5 @@
 import type { Files } from '../../contracts/files';
-import type { KeyGroups, UserKeymap } from '../../contracts/keymap';
+import type { UserKeymap } from '../../contracts/keymap';
 import type { SettingInfo } from '../../contracts/plugin';
 import type {
   ConfigFileRead,
@@ -217,10 +217,7 @@ function userConfigSchema(
       global: fixed.defaultKeymap.global,
       intercept: fixed.defaultKeymap.intercept,
     },
-    defaultGroups: layers.reduce<KeyGroups>(
-      (names, layer) => ({ ...names, ...layer.groups }),
-      {},
-    ),
+    defaultGroups: fixed.defaultKeymap.groups,
     defaultLeader: fixed.defaultLeader,
   };
 }
@@ -242,7 +239,7 @@ function withRuntime(
       layer.binds === undefined || layer.binds.length === 0
         ? schema.defaultBindLayers
         : [...schema.defaultBindLayers, layer.binds],
-    defaultGroups: { ...schema.defaultGroups, ...layer.groups },
+    defaultGroups: merged.groups,
     defaultAccelerators: {
       app: merged.app,
       global: merged.global,
