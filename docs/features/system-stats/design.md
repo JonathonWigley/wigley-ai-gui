@@ -63,8 +63,8 @@ module, which takes the two samples and the time between them:
 - **RAM used** counts memory as Activity Monitor does: app memory, wired and compressed, out of total
   RAM. Memory pressure and swap used are shown on a line under the meter.
 - **Grouping**: a process joins its app's group (its outermost `.app` bundle on macOS, else its
-  executable name, on any OS), which shows the summed numbers. A Chat session's process tree forms a group
-  of its own (below). A group opens to show its processes.
+  executable name, on any OS), which shows the summed numbers. Every Chat session's process tree is one row
+  in the Claude group (below). A group opens to show its rows.
 - **History** is a ring of the last 60 seconds per meter, kept in main and published with the
   snapshot, so a page reload keeps it and an app restart starts it again. Each show of the panel
   starts it empty, so a sparkline never joins readings from before a hide.
@@ -83,9 +83,11 @@ Each Chat session's `claude` process is spawned by the session host. The host re
 process's OS pid over its protocol, the `AgentHarness` adapter passes it up, and chat publishes it
 as `pid` on the session's `chat.session` entry (null while no process runs). The panel joins those
 pids with the `sessions.rows` titles and finds each session's whole process tree from the parent
-pids in the sample. The tree becomes one group, titled `claude · <session title>`, summing the
-`claude` process and everything it started (shells, MCP servers, test runs). Sessions started
-outside the app stay ordinary processes.
+pids in the sample. The tree becomes one row, titled `claude · <session title>`, summing the
+`claude` process and everything it started (shells, MCP servers, test runs); it never opens. While
+any session holds a process, those rows make up one `Claude` group (`app:claude`), followed by the
+`claude` processes no session holds, such as sessions started in a terminal. With no session
+holding a process, `claude` processes group as any other app does.
 
 ## The panel
 
@@ -93,8 +95,7 @@ The panel is shown by default. `Space v y` hides or shows it, and the choice is 
 `uiState`. Its layout draws a section header with the sort key's hint at its end, five meters (CPU, GPU, RAM,
 Network, Disk), each with its value and a sparkline (a shared UI primitive, redrawn on each
 snapshot), then the process list under a heading row: one row per group or process, with CPU, RAM and
-GPU columns, sorted by one of them. Every Chat session group shows, however low it sorts, so a session can
-always be found and opened. RAM's memory note is its row's tooltip. Under a 360px container query,
+GPU columns, sorted by one of them. RAM's memory note is its row's tooltip. Under a 360px container query,
 each meter keeps one line (label, meter, value) and hides its sparkline, and a row's cells drop under
 its name.
 
@@ -102,7 +103,7 @@ With the panel focused (Alt+l, as in the unity-pool panel), `j`/`k`/`gg`/`G` mov
 cycles the sort column through CPU, RAM and GPU, Enter or `l` opens a group, and `h` closes it.
 
 Three settings: `system-stats.refreshSeconds` (default 2), `system-stats.processRows` (default
-5), the number of rows other than Chat session groups shown with groups closed, and `system-stats.layout`
+5), the number of top-level rows shown with groups closed, every group and the Other row included, and `system-stats.layout`
 (default `default`), the layout that draws the panel.
 
 ## Rejected

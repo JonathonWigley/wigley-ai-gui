@@ -4,7 +4,7 @@ import type { SessionRow } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import type { StatsProcessRow } from '../contract';
 import { appKeyOf, groupProcesses, sessionProcesses } from './grouping';
-import type { ProcessRate } from './snapshot';
+import type { ProcessRate, SessionProcess } from './snapshot';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const CHROME_HELPER =
@@ -60,100 +60,128 @@ describe('appKeyOf', () => {
 });
 
 describe('groupProcesses', () => {
-  it('groupProcesses_Tree', () => {
-    const finder = rate(
-      300,
-      1,
-      'Finder',
-      '/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder',
-      0.5,
-      400,
-      0,
-    );
-    const chrome = rate(501, 1, 'Google Chrome', CHROME, 4, 600, 1);
-    const claude = rate(
-      610,
-      1,
-      'claude',
-      '/Users/u/.local/bin/claude',
-      6,
-      500,
-      null,
-    );
-    const helper = rate(
-      502,
-      501,
-      'Google Chrome Helper (Renderer)',
-      CHROME_HELPER,
-      18.5,
-      1200,
-      null,
-    );
-    const zsh = rate(611, 610, 'zsh', '/bin/zsh', 3, 200, null);
-    const node = rate(612, 611, 'node', CODE_NODE, 2, 300, null);
-    // A second session's agent, started under the first session's tree.
-    const innerClaude = rate(
-      700,
-      612,
-      'claude',
-      '/Users/u/.local/bin/claude',
-      1.5,
-      250,
-      2,
-    );
-    const innerShell = rate(701, 700, 'bash', '/bin/bash', 0.25, 50, null);
-    const launchd = rate(1, 0, 'launchd', '/sbin/launchd', 0.1, 10, null);
+  const CLAUDE_BIN = '/Users/u/.local/bin/claude';
+  const finder = rate(
+    300,
+    1,
+    'Finder',
+    '/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder',
+    0.5,
+    400,
+    0,
+  );
+  const chrome = rate(501, 1, 'Google Chrome', CHROME, 4, 600, 1);
+  const claude = rate(610, 1, 'claude', CLAUDE_BIN, 6, 500, null);
+  const helper = rate(
+    502,
+    501,
+    'Google Chrome Helper (Renderer)',
+    CHROME_HELPER,
+    18.5,
+    1200,
+    null,
+  );
+  const zsh = rate(611, 610, 'zsh', '/bin/zsh', 3, 200, null);
+  const node = rate(612, 611, 'node', CODE_NODE, 2, 300, null);
+  // A second session's agent, started under the first session's tree.
+  const innerClaude = rate(700, 612, 'claude', CLAUDE_BIN, 1.5, 250, 2);
+  const innerShell = rate(701, 700, 'bash', '/bin/bash', 0.25, 50, null);
+  const launchd = rate(1, 0, 'launchd', '/sbin/launchd', 0.1, 10, null);
+  // A terminal session the app did not start.
+  const terminalClaude = rate(800, 1, 'claude', CLAUDE_BIN, 0.5, 100, null);
+  const PROCESSES = [
+    finder,
+    chrome,
+    claude,
+    helper,
+    zsh,
+    node,
+    innerClaude,
+    innerShell,
+    launchd,
+    terminalClaude,
+  ];
+  const CHROME_GROUP: StatsProcessRow = {
+    id: 'app:Google Chrome.app',
+    name: 'Google Chrome',
+    kind: 'app',
+    cpuPercent: 22.5,
+    rssBytes: 1800,
+    gpuPercent: 1,
+    children: [row(chrome), row(helper)],
+  };
 
-    const rows = groupProcesses(
-      [
-        finder,
-        chrome,
-        claude,
-        helper,
-        zsh,
-        node,
-        innerClaude,
-        innerShell,
-        launchd,
-      ],
-      [
+  it.each<{
+    case: string;
+    sessions: SessionProcess[];
+    expected: StatsProcessRow[];
+  }>([
+    {
+      case: 'sessions holding processes join the Claude group with the terminal claude',
+      sessions: [
         { sessionId: 'outer', pid: 610, title: 'fix login' },
         { sessionId: 'inner', pid: 700, title: 'run tests' },
         { sessionId: 'again', pid: 610, title: 'same pid' },
+        { sessionId: 'gone', pid: 999, title: 'exited' },
       ],
-    );
-
-    expect(rows).toEqual([
-      {
-        id: 'session:outer',
-        name: 'claude · fix login',
-        kind: 'session',
-        cpuPercent: 11,
-        rssBytes: 1000,
-        gpuPercent: null,
-        children: [row(claude), row(zsh), row(node)],
-      },
-      {
-        id: 'session:inner',
-        name: 'claude · run tests',
-        kind: 'session',
-        cpuPercent: 1.75,
-        rssBytes: 300,
-        gpuPercent: 2,
-        children: [row(innerClaude), row(innerShell)],
-      },
-      row(finder),
-      {
-        id: 'app:Google Chrome.app',
-        name: 'Google Chrome',
-        kind: 'app',
-        cpuPercent: 22.5,
-        rssBytes: 1800,
-        gpuPercent: 1,
-        children: [row(chrome), row(helper)],
-      },
-      row(launchd),
-    ]);
+      expected: [
+        {
+          id: 'app:claude',
+          name: 'Claude',
+          kind: 'app',
+          cpuPercent: 13.25,
+          rssBytes: 1400,
+          gpuPercent: 2,
+          children: [
+            {
+              id: 'session:outer',
+              name: 'claude · fix login',
+              kind: 'process',
+              cpuPercent: 11,
+              rssBytes: 1000,
+              gpuPercent: null,
+              children: [],
+            },
+            {
+              id: 'session:inner',
+              name: 'claude · run tests',
+              kind: 'process',
+              cpuPercent: 1.75,
+              rssBytes: 300,
+              gpuPercent: 2,
+              children: [],
+            },
+            row(terminalClaude),
+          ],
+        },
+        row(finder),
+        CHROME_GROUP,
+        row(launchd),
+      ],
+    },
+    {
+      case: 'no session holding a process groups claude as any app',
+      sessions: [{ sessionId: 'gone', pid: 999, title: 'exited' }],
+      expected: [
+        row(finder),
+        CHROME_GROUP,
+        {
+          id: 'app:claude',
+          name: 'claude',
+          kind: 'app',
+          cpuPercent: 8,
+          rssBytes: 850,
+          gpuPercent: 2,
+          children: [row(claude), row(innerClaude), row(terminalClaude)],
+        },
+        row(zsh),
+        row(node),
+        row(innerShell),
+        row(launchd),
+      ],
+    },
+  ])('groupProcesses_Tree: $case', ({ sessions, expected }) => {
+    expect(groupProcesses(PROCESSES, sessions)).toEqual(expected);
   });
 });
 

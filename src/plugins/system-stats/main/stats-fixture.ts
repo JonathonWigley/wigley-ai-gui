@@ -16,8 +16,8 @@ const MIB = 1_048_576;
 const HISTORY_LENGTH = 30;
 const CPU_PERCENT = 48;
 
-// The fixed snapshot a seed writes, taken at `now`: a busy machine whose Other row holds the CPU its process rows
-// don't, and for `error`, the same with a sample error.
+// The fixed snapshot a seed writes, taken at `now`: a busy machine with a Chat session and a terminal `claude` in the
+// Claude group, whose Other row holds the CPU its process rows don't, and for `error`, the same with a sample error.
 export function statsFixture(
   variant: StatsFixtureVariant,
   now: number,
@@ -33,12 +33,15 @@ export function statsFixture(
       ],
     },
     {
-      ...processRow(0, 'claude · fix login', 9, 700, null),
-      id: 'session:selftest-session',
-      kind: 'session',
+      ...processRow(0, 'Claude', 9, 700, null),
+      id: 'app:claude',
+      kind: 'app',
       children: [
-        processRow(610, 'claude', 6, 500, null),
-        processRow(611, 'zsh', 3, 200, null),
+        {
+          ...processRow(0, 'claude · fix login', 6, 500, null),
+          id: 'session:selftest-session',
+        },
+        processRow(700, 'claude', 3, 200, null),
       ],
     },
     processRow(120, 'WindowServer', 12, 300, 31),

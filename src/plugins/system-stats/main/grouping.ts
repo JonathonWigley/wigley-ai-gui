@@ -6,6 +6,8 @@ import type { ProcessRate, SessionProcess } from './snapshot';
 
 const APP_BUNDLE = '.app';
 const OTHER_ROW_NAME = 'Other (exited processes, system)';
+const CLAUDE_APP_ID = 'app:claude';
+const CLAUDE_GROUP_NAME = 'Claude';
 
 // The app a process belongs to: the outermost `.app` bundle in its path, else its own name.
 export function appKeyOf(process: Pick<ProcessSample, 'name' | 'path'>): {
@@ -20,9 +22,10 @@ export function appKeyOf(process: Pick<ProcessSample, 'name' | 'path'>): {
     : { id: `app:${bundle}`, name: bundle.slice(0, -APP_BUNDLE.length) };
 }
 
-// One row per session holding a process, in `sessions` order, then one per app key in the order of its first
-// process: a group for two or more processes, a lone row for one. A process belongs to the session whose pid is its
-// own or its nearest ancestor's; a pid two sessions hold goes to the first.
+// One row per app key in the order of its first process: a group for two or more processes, a lone row for one. When
+// a Chat session holds a process, the Claude group comes first instead of the `claude` app key's row: one leaf per
+// session holding a process, in `sessions` order, then the `claude` processes no session holds. A process belongs to
+// the session whose pid is its own or its nearest ancestor's; a pid two sessions hold goes to the first.
 export function groupProcesses(
   processes: readonly ProcessRate[],
   sessions: readonly SessionProcess[],
@@ -54,25 +57,27 @@ export function groupProcesses(
     app.members.push(process);
     appMembers.set(key.id, app);
   }
-  const sessionRows = sessions.flatMap((session) => {
+  const sessionLeaves = sessions.flatMap((session) => {
     const members = sessionMembers.get(session);
-    return members === undefined
-      ? []
-      : [
-          groupRow(
-            `session:${session.sessionId}`,
-            `claude · ${session.title}`,
-            'session',
-            members,
-          ),
-        ];
+    return members === undefined ? [] : [sessionLeaf(session, members)];
   });
+  const claudeRows: StatsProcessRow[] = [];
+  if (sessionLeaves.length > 0) {
+    const looseClaude = appMembers.get(CLAUDE_APP_ID)?.members ?? [];
+    appMembers.delete(CLAUDE_APP_ID);
+    claudeRows.push(
+      groupRow(CLAUDE_APP_ID, CLAUDE_GROUP_NAME, [
+        ...sessionLeaves,
+        ...looseClaude.map(processRow),
+      ]),
+    );
+  }
   const appRows = [...appMembers].map(([id, { name, members }]) =>
     members.length === 1
       ? processRow(members[0])
-      : groupRow(id, name, 'app', members),
+      : groupRow(id, name, members.map(processRow)),
   );
-  return [...sessionRows, ...appRows];
+  return [...claudeRows, ...appRows];
 }
 
 // The CPU meter's share no top-level row holds: kernel and system time, and the CPU of every process that exited
@@ -147,23 +152,39 @@ function processRow(process: ProcessRate): StatsProcessRow {
   };
 }
 
+// A Chat session's whole process tree as one row inside the Claude group, which never opens.
+function sessionLeaf(
+  session: SessionProcess,
+  members: readonly ProcessRate[],
+): StatsProcessRow {
+  return {
+    ...groupRow(
+      `session:${session.sessionId}`,
+      `claude · ${session.title}`,
+      members.map(processRow),
+    ),
+    kind: 'process',
+    children: [],
+  };
+}
+
+// An app group summing its rows; its GPU is null when no row has a reading.
 function groupRow(
   id: string,
   name: string,
-  kind: 'app' | 'session',
-  members: readonly ProcessRate[],
+  children: StatsProcessRow[],
 ): StatsProcessRow {
-  const gpuValues = members.flatMap(({ gpuPercent }) =>
+  const gpuValues = children.flatMap(({ gpuPercent }) =>
     gpuPercent === null ? [] : [gpuPercent],
   );
   return {
     id,
     name,
-    kind,
-    cpuPercent: sum(members.map(({ cpuPercent }) => cpuPercent)),
-    rssBytes: sum(members.map(({ rssBytes }) => rssBytes)),
+    kind: 'app',
+    cpuPercent: sum(children.map(({ cpuPercent }) => cpuPercent)),
+    rssBytes: sum(children.map(({ rssBytes }) => rssBytes ?? 0)),
     gpuPercent: gpuValues.length === 0 ? null : sum(gpuValues),
-    children: members.map(processRow),
+    children,
   };
 }
 

@@ -1,7 +1,7 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // The system stats panel in the right bar: CPU, GPU, RAM, network and disk meters, each with a sparkline, over one
-// process list grouped by app and by Chat session. Main samples the machine only while a page shows the panel. It
+// process list grouped by app, every Chat session a row in the Claude group. Main samples the machine only while a page shows the panel. It
 // reads `chat` for each session's process pid and `sessions` for its title.
 export const systemStatsManifest = definePlugin({
   id: 'system-stats',
@@ -39,7 +39,7 @@ export const systemStatsManifest = definePlugin({
     processRows: {
       label: 'Process rows',
       description:
-        'How many rows besides Chat sessions the process list shows with its groups closed; every Chat session always shows.',
+        'How many rows the process list shows with its groups closed, groups and the Other row included.',
     },
     layout: {
       label: 'System stats layout',

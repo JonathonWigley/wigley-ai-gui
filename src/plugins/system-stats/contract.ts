@@ -16,12 +16,12 @@ export interface StatsMeter {
 
 export interface StatsProcessRow {
   id: string; // stable across samples: 'app:<bundle or exe>', 'session:<sessionId>', 'pid:<pid>', 'other'
-  name: string; // app name, 'claude · <session title>', process name, or the Other row's name
-  kind: 'app' | 'session' | 'process' | 'other'; // 'other': the CPU no process row holds, never opened
+  name: string; // app name, 'Claude', 'claude · <session title>', process name, or the Other row's name
+  kind: 'app' | 'process' | 'other'; // 'other': the CPU no process row holds, never opened
   cpuPercent: number; // share of the whole machine
   rssBytes: number | null; // null on the Other row
   gpuPercent: number | null;
-  children: StatsProcessRow[]; // the group's processes, [] for a lone process
+  children: StatsProcessRow[]; // the group's rows, [] for a lone process or a Chat session
 }
 
 export interface StatsSnapshot {

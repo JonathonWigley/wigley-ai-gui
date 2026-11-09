@@ -11,9 +11,10 @@ export interface SystemStatsSelfTestDeps {
 const line = (text: string) => `[system-stats] ${text}`;
 const TOGGLE = [' ', 'v', 'y'];
 const OTHER = 'Other (exited processes, system)';
-const BY_CPU = `Google Chrome, WindowServer, claude · fix login, ${OTHER}, Finder`;
+const BY_CPU = `Google Chrome, WindowServer, Claude, ${OTHER}, Finder`;
 const CHROME_OPENED =
   'opened Google Chrome: Google Chrome Helper (Renderer), Google Chrome';
+const CLAUDE_OPENED = 'opened Claude: claude · fix login, claude';
 
 // `open` seeds the `busy` fixture, so the panel draws fixed rows; the self-test starts with the panel hidden. The
 // script runs after unity-pool's, so two Alt+l reach the right bar from a Chat tab with its hub.
@@ -59,14 +60,14 @@ export function systemStatsSelfTestScript(
         {
           keys: ['s'],
           expect: line(
-            `sorted by ram: Finder, Google Chrome, claude · fix login, WindowServer, ${OTHER}`,
+            `sorted by ram: Finder, Google Chrome, Claude, WindowServer, ${OTHER}`,
           ),
           screenshot: 'sorted-ram',
         },
         {
           keys: ['s'],
           expect: line(
-            `sorted by gpu: WindowServer, Google Chrome, Finder, ${OTHER}, claude · fix login`,
+            `sorted by gpu: WindowServer, Google Chrome, Finder, Claude, ${OTHER}`,
           ),
         },
         { keys: ['s'], expect: line(`sorted by cpu: ${BY_CPU}`) },
@@ -74,7 +75,7 @@ export function systemStatsSelfTestScript(
     },
     {
       name: 'groups',
-      why: 'Enter and l open the cursor’s group with its processes sorted under it, h closes it from a child or from the group, a lone process and the Other row have no group, and Alt+h gives the keys back.',
+      why: 'Enter and l open the cursor’s group with its rows sorted under it, h closes it from a child or from the group, the Claude group opens to its Chat session row, which has no group of its own, a lone process and the Other row have no group, and Alt+h gives the keys back.',
       steps: [
         {
           keys: ['Enter'],
@@ -92,6 +93,15 @@ export function systemStatsSelfTestScript(
         },
         { keys: ['l'], expect: line(CHROME_OPENED) },
         { keys: ['h'], expect: line('closed Google Chrome') },
+        { keys: ['j', 'j'], expect: line('cursor on Claude') },
+        { keys: ['l'], expect: line(CLAUDE_OPENED) },
+        { keys: ['j'], expect: line('cursor on claude · fix login') },
+        { keys: ['l'], expect: line('no group: claude · fix login') },
+        {
+          keys: ['h'],
+          expect: line('closed Claude'),
+          alsoExpect: [/^\[system-stats\] cursor on Claude$/],
+        },
         { keys: ['G'], expect: line('cursor on Finder') },
         { keys: ['l'], expect: line('no group: Finder') },
         { keys: ['k'], expect: line(`cursor on ${OTHER}`) },

@@ -23,14 +23,14 @@ export interface StatsMeterInput {
   note: string | null; // RAM's memory note (`default` shows it as the row's tooltip); null on every other meter
 }
 
-// One process-list row: a group (an app or a Chat session's process tree), a process, or the Other row, which holds
-// the CPU no process row does and never opens. `cpu`, `ram` and `gpu` are the column texts: `22.5%`, `700 MB` or
+// One process-list row: a group (an app, or Claude with one row per Chat session's process tree), a process, or the
+// Other row, which holds the CPU no process row does and never opens. `cpu`, `ram` and `gpu` are the column texts: `22.5%`, `700 MB` or
 // `1.8 GB`, and `6.0%`; `—` with no reading, as on the Other row's RAM and GPU.
 export interface StatsRowInput {
   id: string;
   name: string;
-  kind: 'app' | 'session' | 'process' | 'other';
-  depth: 0 | 1; // 1: a process inside an open group
+  kind: 'app' | 'process' | 'other';
+  depth: 0 | 1; // 1: a row inside an open group
   isOpen: boolean; // true on an open group; false on a closed group, on every process and on the Other row
   cpu: string;
   ram: string;

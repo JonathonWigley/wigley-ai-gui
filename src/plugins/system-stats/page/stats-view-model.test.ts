@@ -70,22 +70,11 @@ const GROUP = proc('g', 30, 1200, 4, [
   proc('g2', 26, 400, 3),
 ]);
 
-// A Chat session's group: by CPU it sorts below every row in ROWS; s1 sorts above them all.
-function session(
-  id: string,
-  cpuPercent: number,
-  ramMib: number,
-  children: StatsProcessRow[],
-): StatsProcessRow {
-  return { ...proc(id, cpuPercent, ramMib, null, children), kind: 'session' };
-}
 const OTHER: StatsProcessRow = {
   ...proc('other', 6, 0, null),
   kind: 'other',
   rssBytes: null,
 };
-const IDLE_SESSION = session('s0', 0, 315, [proc('s0a', 0, 315, null)]);
-const BUSY_SESSION = session('s1', 40, 600, [proc('s1a', 40, 600, null)]);
 
 const names = (shown: { rows: { row: StatsProcessRow; depth: number }[] }) =>
   shown.rows.map(({ row, depth }) => `${depth}:${row.name}`);
@@ -180,24 +169,6 @@ describe('visibleRows', () => {
       processRows: 0,
       shown: ['0:e'],
       moreRows: 4,
-    },
-    {
-      name: 'a session past the cut still shown, in its sort position',
-      rows: [IDLE_SESSION, ...ROWS],
-      sort: 'cpu',
-      openIds: [],
-      processRows: 3,
-      shown: ['0:e', '0:d', '0:c', '0:s0'],
-      moreRows: 2,
-    },
-    {
-      name: 'sessions take no place from the other rows, an open one shows its processes',
-      rows: [...ROWS, IDLE_SESSION, BUSY_SESSION],
-      sort: 'cpu',
-      openIds: ['s0'],
-      processRows: 2,
-      shown: ['0:s1', '0:e', '0:d', '0:s0', '1:s0a'],
-      moreRows: 3,
     },
   ])('visibleRows_SortCutAndOpen: $name', (row) => {
     const shown = visibleRows(
@@ -339,10 +310,9 @@ describe('panelInput', () => {
 describe('isGroup', () => {
   it.each([
     { row: GROUP, isGroup: true },
-    { row: IDLE_SESSION, isGroup: true },
     { row: proc('p', 1, 10, 0), isGroup: false },
     { row: OTHER, isGroup: false },
-  ])('isGroup_AppsAndSessions: $row.kind', ({ row, isGroup: expected }) => {
+  ])('isGroup_AppsOnly: $row.kind', ({ row, isGroup: expected }) => {
     expect(isGroup(row)).toBe(expected);
   });
 });

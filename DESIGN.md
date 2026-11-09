@@ -430,8 +430,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   OS reports it); RAM's pressure and swap are its row's
   tooltip. The process list follows under a heading row naming the columns, the sorted one
   marked: one row per group or process, its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of
-  them; the keyboard cursor's row takes `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show
-  its processes under it. A process with no GPU reading shows a dash in its GPU column. An `Other (exited processes,
+  them; the keyboard cursor's row takes `is-cursor`. A group row (an app, or `Claude` holding one `claude · <session title>` row per Chat
+  session) opens to show its rows under it. A process with no GPU reading shows a dash in its GPU column. An `Other (exited processes,
   system)` row holds the CPU no other row does, sorts with them, never opens, and shows dashes for RAM and GPU. Under a 360px container query
   each meter keeps one line, its Meter filling the room between label and value and its Sparkline hidden, and a row's
   cells drop under its name.
