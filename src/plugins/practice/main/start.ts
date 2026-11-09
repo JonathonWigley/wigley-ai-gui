@@ -1,7 +1,13 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
-import type { MainApi, MainPart } from '../../../contracts/plugin';
+import type {
+  MainApi,
+  MainPart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
+import { sessionsMainKey } from '../../sessions/contract';
 import type {
   OpenedProblem,
   PracticeChannel,
@@ -10,14 +16,28 @@ import type {
 import { practiceManifest } from '../manifest';
 import { createJudge } from './judge';
 import { createPracticeRuns } from './practice-runs';
+import { createPracticeSessions } from './practice-sessions';
+import {
+  ADD_PRACTICE_PROBLEM_TOOL,
+  READ_PRACTICE_STATE_TOOL,
+  startPracticeTools,
+} from './practice-tools';
 import { createProblemStore, type ProblemStore } from './problem-store';
 import { createProgress, type Progress } from './progress';
 
-type PracticeApi = MainApi<typeof practiceManifest, PracticeChannel>;
+type PracticeApi = MainApi<
+  typeof practiceManifest,
+  PracticeChannel,
+  Record<never, never>,
+  QualifiedEvents<'chat', ChatMainEvents>
+>;
 
 // Serves the page the practice folder's problems through the problem store,
 // progress and the judge, and watches `problems/`, sending `changed` with the
-// slug of each change; a change of the `folder` setting moves the watch.
+// slug of each change; a change of the `folder` setting moves the watch. Runs
+// the import and interviewer sessions through chat, hearing chat's session
+// events, and gives every session the `add_practice_problem` and
+// `read_practice_state` tools.
 export const practiceMainPart: MainPart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
@@ -52,6 +72,37 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
       },
     });
     const runs = createPracticeRuns({ store, progress, judge });
+    const chat = api.dependency(chatMainKey);
+    const sessions = api.dependency(sessionsMainKey);
+    const practiceSessions = createPracticeSessions({
+      chat,
+      store,
+      progress,
+      files: services.files,
+      paths: services.paths,
+      timers: services.timers,
+      log: services.log,
+    });
+    api.events.on('chat.sessionOpened', (event) =>
+      practiceSessions.opened(event),
+    );
+    api.events.on('chat.sessionClosed', (event) =>
+      practiceSessions.closed(event),
+    );
+    api.events.on('chat.sessionCleared', (event) =>
+      practiceSessions.cleared(event),
+    );
+    sessions.contributeTools(
+      [ADD_PRACTICE_PROBLEM_TOOL, READ_PRACTICE_STATE_TOOL],
+      startPracticeTools({
+        store,
+        progress,
+        judge,
+        lastResult: runs.lastResult,
+        interviewerSlug: practiceSessions.interviewerSlug,
+        log: services.log,
+      }),
+    );
     channel.handle('list', () => listProblems(store, progress, services.log));
     channel.handle('open', (slug) => openProblem(store, progress, slug));
     channel.handle('saveCode', (slug, text) =>
@@ -73,6 +124,15 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
       ]);
       return { approach: approach ?? '', reference: reference ?? '' };
     });
+    channel.handle('startImport', (request) =>
+      practiceSessions.startImport(request),
+    );
+    channel.handle('askInterviewer', (slug, text) =>
+      practiceSessions.askInterviewer(slug, text),
+    );
+    channel.handle('interviewerOf', (slug) =>
+      practiceSessions.interviewerOf(slug),
+    );
     const watchProblems = (): Disposable | null => {
       try {
         return store.watch((slug) => channel.send('changed', { slug }));

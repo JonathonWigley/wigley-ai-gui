@@ -1,6 +1,6 @@
 # 06 — Practice: tools, import and interviewer sessions
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02, 05
 Plan: [plan.md](plan.md)

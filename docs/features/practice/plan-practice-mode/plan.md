@@ -231,7 +231,7 @@ does not consume.
 
 ### Wave 2
 - [x] [Chat main: per-session instructions, owner, main resume](02-chat-main-instructions-owner-resume.md) — after 01
-- [ ] [Practice main: problem store, judge, progress](05-practice-main.md) — after 04
+- [x] [Practice main: problem store, judge, progress](05-practice-main.md) — after 04
 
 ### Wave 3
 - [x] [Chat page: mountChat](03-chat-page-mount.md) — after 02
@@ -264,8 +264,10 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 02 · 4a6843cd · diff read: LaunchRequest/ResumeRequest instructions+owner, ChatMainExports.resume, SavedSession.instructions/owner present; typecheck clean; worker ran chat-sessions and open-sessions tests green (477), oxlint+oxfmt clean on chat (check-layers blocked by in-flight 04) · concerns: none
 - 04 · 22cf5824 · diff read: every Produces export present in problem/driver/compare/compile-errors/ladder; typecheck clean; worker ran 5 test files green (88), oxlint+oxfmt clean, scratch clang++ build of prelude and three drivers clean and run; lint layer check deferred to 05 (lead ruling) · concerns: the driverSource guard refusing a quote or line break in the path has no test row (05's clang suite proves driver paths); long long row uses Number.MAX_SAFE_INTEGER + 1 since oxlint refuses the literal
 - 03 · 626a107b · diff read: ChatMount, ChatPageExports.mountChat, ChatTabs.mount, ChatViewDeps.ownerOf/onRowAdded, TabHost present; npm run typecheck clean; worker ran chat-view + chat-commands tests (208 passed) · concerns: mount before page ready() attaches at once if key present, untested; dispose logs 'chat view unmounted: <name>' (unspecified log line); lint blocked only by 05's in-progress practice files
+- 05 · e307542a · diff read: practiceManifest, contract types and PracticeChannel, judge/problem-store/progress/practice-runs exports, practiceMainPart present; typecheck clean; npm run lint clean over all practice (closes 04's deferred lint proof); worker ran src/plugins/practice tests 148 green incl. real clang · concerns: case time includes sanitizer crash report, slow symbolizing may read as TLE (ProcessRunner has no env option for ASAN_OPTIONS symbolize=0); UBSan null load exits 0, runtimeError only via stderr rule; files.watch creates <folder>/problems at start; no .exe so not Windows-ready (out of scope)
 ### Contract changes
 - driverSource include of solutionPath: a C string literal with \ and " escaped → the path written verbatim, driverSource throwing on a path holding " or a line break · why: clang reads an #include "…" path literally with no escape processing, so escaping breaks any backslash path · consumers: 05 · group 04
+- 05 main/problem-store.ts ProblemStoreDeps gains log: PluginLog (logs unparsable submission files and 'watch stopped: <reason>'); consumers: 06 builds nothing from it (only start.ts builds the store)
 ### Rulings
 - 04's `npm run lint` proof moves to 05: check-layers.mts fails a plugin folder with no manifest.ts (line 817), and 05 adds the manifest — typecheck and the five tests prove 04 — a layer break in the root modules surfaces one wave later · lead
 - activateExistingRow checks the owner before the no-row check, logging 'activateExistingRow for session <id> with an owner ignored' — the owner rule holds whether a row exists or not — only the log line differs if wrong · group 01 · group 01
@@ -279,5 +281,12 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 03: visibleTab requires lastShown still held (tabs.get(id) === lastShown); lastShown is kept after removal for otherSessionShown · group 03
 - 03: onRowAdded re-runs add only for sessions in awaitingRow; a row before its key waits for the key's arrival · group 03
 - 03: test harness rowAdded(sessionId, owner) sets owner then fires; ownerOf returns null for a session absent from owners · group 03
+- 05: hasProblem(slug) true only when problem.json exists · group 05
+- 05: submit reads solution.cpp before judging so recorded code is the judged code · group 05
+- 05: recordSubmission and peek append an attempt when progress.json has none · group 05
+- 05: start.ts catches a watch that cannot start and logs 'watch not started: <reason>' · group 05
+- 05: reference refusal names the verdict by its id · group 05
+- 05: real-clang judge tests use timeLimitMs 3000 · group 05
+- 05: shared fixtures in main/practice-fixtures.test-support.ts · group 05
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 05 — Practice main: problem store, judge, progress
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -386,3 +386,5 @@ the test gate runs the five test files above, all green, the clang suite include
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e307542a · proof: diff read: practiceManifest, contract types and PracticeChannel, judge/problem-store/progress/practice-runs exports, practiceMainPart present; typecheck clean; npm run lint clean over all practice (closes 04's deferred lint proof); worker ran src/plugins/practice tests 148 green incl. real clang · concerns: case time includes sanitizer crash report, slow symbolizing may read as TLE (ProcessRunner has no env option for ASAN_OPTIONS symbolize=0); UBSan null load exits 0, runtimeError only via stderr rule; files.watch creates <folder>/problems at start; no .exe so not Windows-ready (out of scope)
