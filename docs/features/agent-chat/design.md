@@ -520,8 +520,9 @@ interview on 2026-10-23; this file is the record of both.
   page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
 - **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the projects and above the new-session line. After the project or folder and the profile, the start prompt's session step offers a new session or one of
-  the project's or folder's saved sessions and resume-section rows; a step that would hold the New session line alone
-  (no saved sessions, a listing that failed, or `Ctrl+n`) is skipped, and the session starts at once. A resumed
+  the project's or folder's saved sessions and resume-section rows; with no saved sessions to list (archived ones
+  count, so `.` still reaches them), a listing that failed, or `Ctrl+n`, the step is skipped and the session starts
+  at once. A resumed
   session that was headless resumes headless. Saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay or on a row another plugin owns is left out, and picking one that has a chat row selects that row
   instead of opening a second; a resume onto a held row whose owner is not the request's rejects, naming both),
