@@ -507,7 +507,13 @@ export interface ModeHandle extends Disposable {
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
 // the first mode's `shown`, and its side bar callback, before it returns, so
 // that neither can read the handle; `onChanged` listeners then hear that mode's
-// id. `shown` is the shown mode's id and throws
+// id. The registry keeps the id of the shown mode a `dispose` takes away, even
+// when no mode remains; a fallback shown in its place that gives way too keeps
+// the older id. An `add` of that id shows the added mode as `show` would, and
+// the registry forgets the id; so does a `show` that changes the shown mode.
+// So the mode shown before a plugin's stop shows again at its start, for a
+// restart and for a switch-off then switch-on with no other mode picked in
+// between. `shown` is the shown mode's id and throws
 // before any `add` and once every mode is disposed. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
@@ -661,12 +667,16 @@ export interface KeyHints {
   onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
 }
 
-// A page load's restores: what the parts put back from their place slots. A
-// part hands `track` each restore that settles after its `start` returns (a doc
-// reopened through main), and a restore started inside a tracked one is tracked
-// before that one settles. The restores have settled once every part's
-// `ready()` ran and no tracked restore is pending: a restore nobody tracked is
-// not waited on, nor one tracked after they settled. A tracked restore can wait
+// The restores of a restore window: what the parts put back from their place
+// slots. Restores belong to a restore window, which a page load or a live
+// start opens; a live start during an open window joins it. A part hands
+// `track` each restore that settles after its `start` returns (a doc reopened
+// through main), and a restore started inside a tracked one is tracked before
+// that one settles. A window has settled once every part its opener started
+// ran `ready()` and none of its tracked restores is pending: a restore nobody
+// tracked is not waited on, nor one tracked while no window is open (the last
+// one settled and no live start opened another). A restore of a settled window
+// that settles later changes nothing in a newer one. A tracked restore can wait
 // on main: docs' restored open waits on its view's index read, and on a rebuild
 // when that index does not list the doc, so the restores can settle seconds
 // after every part's `ready()` ran. A restore main never answers, or one no
@@ -674,8 +684,10 @@ export interface KeyHints {
 // the restores settle with the count still pending logged. Until they settle,
 // a part cannot tell a restore's key base change from the user's: the user's
 // moves before then leave notes' restored popup open. `onSettled` calls its
-// listener once they settle, or at once when they already have, until its
-// `dispose`.
+// listener once the open window settles, or at once with no window open,
+// until its `dispose`. A part that prunes the saved places of rows main does
+// not hold prunes from `onSettled` in its `start`, so the rows a restore
+// reopens are in the page mirror first.
 export interface PageRestores {
   track(restore: Promise<unknown>): void;
   onSettled(listener: () => void): Disposable;
@@ -736,7 +748,8 @@ export interface PageRestores {
 // `drops.addTarget` registers an element and what takes the files dropped or
 // pasted on it, returning the `Disposable` that removes it; `drops.savePasted`
 // saves a file with no path and returns its path.
-// `restores` is the page load's restores, as `PageRestores` says; its
+// `restores` is the restores of the page's restore windows, as `PageRestores`
+// says; its
 // `onSettled` handles are filed in the part's registrations.
 // `dependency` takes the page key from a provider's contract, for a plugin the
 // manifest lists in `dependsOn.page`, and returns this part's view of that

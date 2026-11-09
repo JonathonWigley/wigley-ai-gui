@@ -232,9 +232,8 @@ function createExports(
 // selection write follows, so the state that settles it places the panes, and
 // the focus and the visible tab follow in a microtask, after every reader heard
 // the notice. Each session's place (`sessionsPlaceSlot`) outlives a reload:
-// a row leaving deletes it, and `ready` first deletes the places of rows
-// main does not hold: rows that ended while no page ran, and on a live
-// restart rows that chat's restore has not reopened yet. Activating a session
+// a row leaving deletes it, and once the restore window settles the part
+// deletes the places of rows that ended while no page ran. Activating a session
 // focuses the pane showing it, or loads it into the focused pane; closing one
 // asks main, and a pane whose session leaves closes, the last pane staying.
 // The visible surface, the focused pane's session's top open popup, else its
@@ -281,8 +280,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     for (const sessionId of activities.all().keys()) {
       activities.delete(sessionId);
     }
-    // Each session's place outlives a reload, not its row.
+    // Each session's place outlives a reload, not its row. The places of rows
+    // main does not hold leave once the restore window settles, so the rows
+    // chat's restore reopens are in the mirror first.
     const places = api.state.publish(sessionsPlaceSlot);
+    api.restores.onSettled(() =>
+      pruneKeys(places, (sessionId) => rows.all().has(sessionId)),
+    );
     let state: SessionsState = { rows: [], selectedSessionId: null };
     // False until the first state's focus is written to `active`.
     let hasPublished = false;
@@ -1171,7 +1175,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           followRows(rows, { removed: listener }),
         ),
       ready() {
-        pruneKeys(places, (sessionId) => rows.all().has(sessionId));
         apply(currentState());
       },
       dispose: () => view.dispose(),

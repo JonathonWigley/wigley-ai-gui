@@ -152,6 +152,7 @@ const placeAt = (
 function startDocsPage(
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>,
   anchorDispose?: () => void,
+  holdsRestores = false,
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const picker = fakeListPickerService();
@@ -169,6 +170,7 @@ function startDocsPage(
     anchorDispose,
     firstModeTaken: true,
     invoke,
+    holdsRestores,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
@@ -455,6 +457,26 @@ describe('docs page part lifecycle', () => {
       await harness.stop();
     },
   );
+
+  // A row chat's restore reopens after the restart keeps its place: the prune
+  // runs only once the restore window settles.
+  it('rowGone_PruneWaitsForTheRestoresToSettle', async () => {
+    const page = startDocsPage(undefined, undefined, true);
+    const { harness } = page;
+
+    const rows = await reloadWith(
+      page,
+      { [sessionSourceId('r')]: placeAt('/p/r.md') },
+      [],
+    );
+    rows.set('r', projectRow('r'));
+    harness.settleRestores();
+
+    expect([...harness.state.read(docsPlaceSlot, 'test').all().keys()]).toEqual(
+      [sessionSourceId('r')],
+    );
+    await harness.stop();
+  });
 
   // The tab's view outlives the row for a moment: docs and the tab each follow
   // the rows, in either order.

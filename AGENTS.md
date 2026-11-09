@@ -146,7 +146,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue), and the page place slots' helpers (`place-slot.ts`: `placeWrites`, which drops a write
                  equal to the last, and `pruneKeys`, which deletes the keys of rows or forms that ended while no page
-                 ran (on a live restart it can also drop the places of rows chat's restore has not reopened yet);
+                 ran, called once the restore window settles;
                  `page-hide.ts`: `onPageHide`, which hears the page's teardown; `session-form-places.ts`: the
                  place follow, restore and prune that forms and the primer share)
                  → imported only by src/renderer and plugins' page/ parts
@@ -211,7 +211,8 @@ src/renderer/    core page; renderer.ts is its composition root
   plugins/       the page-side plugin API
   state/         the page mirror (`page-state.ts`: main's snapshot, then each push, and the page's own writes sent back)
                  and `core-slots.ts`, which writes `core.mode`, `core.scope` and `core.theme`
-  page-restores.ts the page load's restores behind `api.restores`: the tracked ones, and when they settle (§ A slot)
+  page-restores.ts the page's restore windows behind `api.restores`, one per page load and live start: the tracked
+                 restores, and when each window settles (§ A slot)
   key-anchors.ts the anchors: draws a command's keys into an element a view names (§ Key hints); `anchor-wiring.ts`
                  redraws and shows or hides them on a keymap or scope change, and `box-focus.ts` tells whether focus is in
                  a text box
@@ -473,11 +474,13 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   in a `<id>.place` slot it writes as the state changes and reads at start (`chat.place` with `chat.draftImages`,
   `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). A restore that settles after the part's
   start returns and can move the key base goes to `api.restores.track` (docs' reopened doc once its view shows, forms'
-  and primer's open forms read, sessions' first placing of the panes), and `api.restores.onSettled` hears the page
-  load's restores settle: every part's `ready()` ran and no tracked restore pending (`PageRestores` in
-  `src/contracts/plugin.ts`). The restores belong to a page load: the page calls
-  `pageHost.ready(); restores.partsReady()` once the page's parts started at load, and a part started live later gets no
-  new restore window. A key base change before then is a restore's, so notes' restored popup stays open through it.
+  and primer's open forms read, sessions' first placing of the panes), and `api.restores.onSettled` hears the
+  restore window settle: every part its opener started ran `ready()` and none of its tracked restores is pending
+  (`PageRestores` in `src/contracts/plugin.ts`). Restores belong to a restore window, which a page load or a live start
+  opens: the page calls `pageHost.ready(); restores.partsReady()` once the page's parts started at load, and the
+  `start` answer reopens the window before its parts start and calls `partsReady` after. A part that prunes the places
+  of rows main does not hold prunes from `onSettled`, so the rows chat's restore reopens are in the mirror first. A key
+  base change before the window settles is a restore's, so notes' restored popup stays open through it.
   `sessions.activity` clears itself at each page start, since its sources set their activities again, and
   `sessions.active` goes back to null until the first panes are placed. A new start publishes the same key and reads the
   last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only reads a slot or hears

@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { PluginPartsRequest } from '../contracts/bridge';
 import { answerPluginParts } from './plugin-parts-answer';
 
-// A page host whose parts `a`, `b` and `c` start and stop through `started`.
+// A page host whose parts `a`, `b` and `c` start and stop through `started`,
+// recording each start in `steps` as `start <ids>`.
 // Stopping `b` stops `c`, its dependent, first. `throwsOn` names the one id
 // whose step throws, as the real host does: its stop throws after stopping its
 // parts, its start before it starts, and its `mayStop` when asked.
-function fakeHost(startedIds: readonly string[], throwsOn?: string) {
+function fakeHost(
+  startedIds: readonly string[],
+  steps: string[],
+  throwsOn?: string,
+) {
   const started = new Map<string, unknown>(startedIds.map((id) => [id, {}]));
   const failure = (step: string, id: string) =>
     new Error(`${step} of ${id} failed`);
@@ -19,6 +24,7 @@ function fakeHost(startedIds: readonly string[], throwsOn?: string) {
       return null;
     },
     start(ids: readonly string[]) {
+      steps.push(`start ${ids.join(',')}`);
       for (const id of ids) {
         if (id === throwsOn) {
           throw failure('start', id);
@@ -48,7 +54,7 @@ describe('answerPluginParts', () => {
       request: { kind: 'stop', ids: ['b', 'c', 'a'] } as PluginPartsRequest,
       reply: { stopped: ['c', 'b', 'a'] },
       logs: [],
-      reapplied: 0,
+      steps: [],
     },
     {
       case: 'start replies the ids new in started',
@@ -56,7 +62,7 @@ describe('answerPluginParts', () => {
       request: { kind: 'start', ids: ['a', 'b'] } as PluginPartsRequest,
       reply: { started: ['b'] },
       logs: [],
-      reapplied: 1,
+      steps: ['reopen', 'start a,b', 'partsReady', 'reapply'],
     },
     {
       case: 'a stop that throws after stopping its parts replies them and goes on',
@@ -65,7 +71,7 @@ describe('answerPluginParts', () => {
       request: { kind: 'stop', ids: ['b', 'a'] } as PluginPartsRequest,
       reply: { stopped: ['c', 'b', 'a'] },
       logs: ['plugin-switch: page stop failed: stop of b failed'],
-      reapplied: 0,
+      steps: [],
     },
     {
       case: 'a mayStop that throws replies a reason naming its part',
@@ -74,7 +80,7 @@ describe('answerPluginParts', () => {
       request: { kind: 'mayStop', ids: ['b', 'a'] } as PluginPartsRequest,
       reply: { reason: 'b: mayStop failed: mayStop of b failed' },
       logs: ['plugin-switch: page mayStop failed: mayStop of b failed'],
-      reapplied: 0,
+      steps: [],
     },
     {
       case: 'a start that throws partway replies the ids started before it',
@@ -83,25 +89,25 @@ describe('answerPluginParts', () => {
       request: { kind: 'start', ids: ['a', 'b', 'c'] } as PluginPartsRequest,
       reply: { started: ['a'] },
       logs: ['plugin-switch: page start failed: start of b failed'],
-      reapplied: 1,
+      steps: ['reopen', 'start a,b,c', 'partsReady', 'reapply'],
     },
   ])('answerPluginParts_$case', async (row) => {
     const logs: string[] = [];
-    let reapplied = 0;
+    const steps: string[] = [];
 
     const reply = await answerPluginParts(
-      fakeHost(row.started, row.throwsOn),
+      fakeHost(row.started, steps, row.throwsOn),
       row.request,
       {
-        reapplyPush: () => {
-          reapplied += 1;
+        restores: {
+          reopen: () => steps.push('reopen'),
+          partsReady: () => steps.push('partsReady'),
         },
+        reapplyPush: () => steps.push('reapply'),
         log: (source, message) => logs.push(`${source}: ${message}`),
       },
     );
 
-    expect(reply).toEqual(row.reply);
-    expect(logs).toEqual(row.logs);
-    expect(reapplied).toBe(row.reapplied);
+    expect([reply, logs, steps]).toEqual([row.reply, row.logs, row.steps]);
   });
 });

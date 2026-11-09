@@ -620,9 +620,10 @@ export const sessionsActivitySlot: KeyedSlotKey<
 
 // Each session's place, by the session id, written on each change to its tabs,
 // their selection or which of its popups are hidden; a row leaving deletes its
-// key, and the sessions page part's `ready()` deletes the keys of rows main
-// does not hold: rows that ended while no page ran, and on a live restart rows
-// that chat's restore has not reopened yet.
+// key. Restores belong to a restore window, which a page load or a live start
+// opens: once the window of the sessions page part's start settles, the part
+// deletes the keys of rows main does not hold, the rows that ended while no
+// page ran.
 export const sessionsPlaceSlot: KeyedSlotKey<
   SessionsPlace,
   'page',

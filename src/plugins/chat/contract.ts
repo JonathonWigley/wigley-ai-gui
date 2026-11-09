@@ -276,6 +276,11 @@ export interface ChatChannel extends ChannelShape {
     // Sent once on each page load; cancels any running sign-in, since the page
     // that started it is gone.
     loaded(): void;
+    // Settles once main's restore of the saved rows ends, a failed one
+    // included, so it never rejects. Main sends each reopened row's slot
+    // writes to the page before this reply, so the rows are in the page's
+    // mirror when it settles.
+    restored(): Promise<void>;
     // Newest first: the folders chat started sessions in merged with every
     // folder each profile's harness saved sessions in, one per folder, missing
     // folders and those in the OS's temp folders left out.

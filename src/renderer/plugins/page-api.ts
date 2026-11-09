@@ -86,7 +86,7 @@ export type PageApiServices = Omit<
 // gives each plugin its own scope of the ui state. `layouts` shows each owner's
 // layouts. `paneTargets` takes the resize and focus targets and the outer panes
 // a plugin hands the pane commands, and releases them. `drops` is the page's one
-// drop registry, and `restores` the page load's restores. `registrations` is the part's own store, which the host
+// drop registry, and `restores` the page's restore windows. `registrations` is the part's own store, which the host
 // disposes when the part stops. `state` is the page load's slot store, and
 // `commands` the page's commands, which each plugin reaches under its id.
 // `anchors` holds every key hint of the page load, and `boxFocus` tells whether

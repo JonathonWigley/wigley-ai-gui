@@ -395,6 +395,108 @@ describe('disposing a mode', () => {
     expect(calls).toContain('shown a');
   });
 
+  // `steps` runs `add`, `show` and `dispose` of each id in order; `calls` is
+  // what the last step drove, and `hidden` the ids whose element it left
+  // hidden.
+  it.each<{
+    case: string;
+    steps: readonly string[];
+    shown: string;
+    hidden: readonly string[];
+    calls: readonly string[];
+  }>([
+    {
+      case: 're-add after the shown mode gave way',
+      steps: ['add a', 'add b', 'dispose a', 'add a'],
+      shown: 'a',
+      hidden: ['b'],
+      calls: [
+        'place a',
+        'hidden b',
+        'marked a',
+        'side bar hidden',
+        'context null',
+        'shown a',
+        'changed a',
+      ],
+    },
+    {
+      case: 'a show in between',
+      steps: ['add a', 'add b', 'add c', 'dispose a', 'show c', 'add a'],
+      shown: 'c',
+      hidden: ['b', 'a'],
+      calls: ['place a'],
+    },
+    {
+      case: 'another id added',
+      steps: ['add a', 'add b', 'dispose a', 'add d'],
+      shown: 'b',
+      hidden: ['d'],
+      calls: ['place d'],
+    },
+    {
+      case: 'the last mode gave way, then another id added first',
+      steps: ['add a', 'dispose a', 'add d', 'add a'],
+      shown: 'a',
+      hidden: ['d'],
+      calls: [
+        'place a',
+        'hidden d',
+        'marked a',
+        'side bar hidden',
+        'context null',
+        'shown a',
+        'changed a',
+      ],
+    },
+    {
+      case: 'the fallback gave way too',
+      steps: [
+        'add a',
+        'add b',
+        'show b',
+        'dispose b',
+        'dispose a',
+        'add a',
+        'add b',
+      ],
+      shown: 'b',
+      hidden: ['a'],
+      calls: [
+        'place b',
+        'hidden a',
+        'marked b',
+        'side bar hidden',
+        'context null',
+        'shown b',
+        'changed b',
+      ],
+    },
+  ])('add_IdOfTheModeThatGaveWay_ShowsItAgain: $case', (row) => {
+    const { modes, calls, add } = setup();
+    const live = new Map<string, ReturnType<typeof add>>();
+    for (const step of row.steps) {
+      calls.length = 0;
+      const [action, id] = step.split(' ');
+      if (action === 'add') {
+        live.set(id, add(id, id.toUpperCase()));
+      } else if (action === 'show') {
+        live.get(id)?.handle.show();
+      } else {
+        live.get(id)?.handle.dispose();
+        live.delete(id);
+      }
+    }
+
+    expect({
+      shown: modes.shown(),
+      hidden: [...live]
+        .filter(([, added]) => added.element.hidden)
+        .map(([id]) => id),
+      calls,
+    }).toEqual({ shown: row.shown, hidden: row.hidden, calls: row.calls });
+  });
+
   it('a disposed mode handle does nothing', () => {
     const { calls, add } = setup();
     const a = add('a', 'A', true);

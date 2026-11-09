@@ -114,7 +114,7 @@ export interface NotePopupDeps {
   encoder: ImageEncoder;
   // Hears the page tearing down, when autosave saves an unsaved edit at once.
   onPageHide(listener: () => void): Disposable;
-  // Whether the page load's restores have settled (`PageRestores`).
+  // Whether the restore window's restores have settled (`PageRestores`).
   restoresSettled(): boolean;
   // Hears the place after each change to the popup's open state or cursors.
   placeChanged(place: NotesPlace): void;
@@ -127,8 +127,8 @@ export interface NotePopup {
   setLayouts(shown: ShownLayouts<Layout>): void;
   // Puts back a reloaded page's place: an open popup opens through `open`,
   // its cursors applied once the draft loads, on its fields with no box
-  // focused. It stays open through the key base changes made before the page
-  // load's restores settle.
+  // focused. It stays open through the key base changes made before the
+  // restore window's restores settle.
   restorePlace(place: NotesPlace): void;
   // A refusal while the draft is not saved: unsaved, saving, held back while
   // the popup is locked, or after a failed save, which names the save's error;
@@ -747,8 +747,8 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // ── Opening and closing ───────────────────────────────────────────────────
   // `restored` is a reloaded page's place: its cursors replace the body's, no
-  // box takes focus, and a base change closes the popup only once the page
-  // load's restores have settled.
+  // box takes focus, and a base change closes the popup only once the
+  // restore window's restores have settled.
   const open = async (restored?: NotesPlace) => {
     phase = 'loading';
     writePlace();

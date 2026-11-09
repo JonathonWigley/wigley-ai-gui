@@ -190,7 +190,8 @@ export interface HarnessAnchor {
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
 // order. `restores` holds each restore handed to `restores.track`; the harness
 // runs no page load, so `restores.onSettled` calls its listener at once, unless
-// the options hold the restores: then each page load's restores settle at
+// the options hold the restores: then each start of the part under test
+// (`startPagePart` and `restart`) opens a restore window, held until
 // `settleRestores`. `changeBase` moves the base scope and tells each pushed
 // scope's `onBaseChanged`, as a scope change another view made would; a part's
 // own `keys.setScope` tells none.
@@ -241,8 +242,8 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 // never settles. A replaced `editor` or `markdown` still runs through its
 // per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
-// added. `holdsRestores` keeps each page load's restores unsettled until the
-// harness's `settleRestores`. `parts` and `state` are as on main.
+// added. `holdsRestores` holds the restore window each start of the part under
+// test opens until the harness's `settleRestores`. `parts` and `state` are as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
   // Runs at each fake anchor's `dispose`, to make one throw.
   anchorDispose?(): void;
@@ -1668,7 +1669,7 @@ export function startPagePart<M extends PluginManifest>(
   lifecycle.start();
   return {
     ...baseHarness(lifecycle, world, record.counts),
-    // A new page load's restores are held again.
+    // The restart's restore window is held again.
     restart() {
       world.areRestoresSettled = !holdsRestores;
       return lifecycle.restart();

@@ -55,7 +55,7 @@ describe('page restores', () => {
       partsReady: true,
       capPassed: false,
       settled: true,
-      logged: [],
+      logged: ['restores settled'],
     },
     {
       name: 'one of two pending',
@@ -75,6 +75,7 @@ describe('page restores', () => {
       settled: true,
       logged: [
         `restores settled at the ${RESTORES_CAP_MS} ms cap, 1 still pending`,
+        'restores settled',
       ],
     },
     {
@@ -84,7 +85,7 @@ describe('page restores', () => {
       partsReady: true,
       capPassed: true,
       settled: true,
-      logged: [],
+      logged: ['restores settled'],
     },
     {
       name: 'both settled, before parts ready',
@@ -148,6 +149,77 @@ describe('page restores', () => {
 
     expect([settledBeforeInner, settledNow(restores)]).toEqual([false, true]);
   });
+
+  // Each row settles the load window first, the `capped` row at the cap with
+  // a restore still pending, then reopens; `beforeReopen` reopens before the
+  // load window settled instead, with a listener added before the reopen.
+  it.each([
+    {
+      name: 'nothing tracked',
+      capped: false,
+      beforeReopen: false,
+      tracked: false,
+      settled: true,
+    },
+    {
+      name: 'one tracked, pending',
+      capped: false,
+      beforeReopen: false,
+      tracked: true,
+      settled: false,
+    },
+    {
+      name: 'a restore left from the capped window settles',
+      capped: true,
+      beforeReopen: false,
+      tracked: true,
+      settled: false,
+    },
+    {
+      name: 'reopen before the load window settled',
+      capped: false,
+      beforeReopen: true,
+      tracked: false,
+      settled: false,
+    },
+  ])(
+    'reopen_OpensANewWindowThatSettlesOncePartsReadyAndItsRestoresSettle: $name',
+    async ({ capped, beforeReopen, tracked, settled }) => {
+      const setup = startRestores();
+      const { restores } = setup;
+      const loadRestore = Promise.withResolvers<void>();
+      const liveRestore = Promise.withResolvers<void>();
+      const heard: string[] = [];
+      if (capped || beforeReopen) {
+        restores.track(loadRestore.promise);
+      }
+      if (beforeReopen) {
+        restores.onSettled(() => heard.push('before reopen'));
+      } else {
+        restores.partsReady();
+        await settle();
+        if (capped) {
+          setup.passCap();
+        }
+      }
+      setup.logged.length = 0;
+
+      restores.reopen();
+      restores.onSettled(() => heard.push('after reopen'));
+      if (tracked) {
+        restores.track(liveRestore.promise);
+      }
+      if (capped) {
+        loadRestore.resolve();
+      }
+      restores.partsReady();
+      await settle();
+
+      expect([heard, setup.logged]).toEqual(
+        settled ? [['after reopen'], ['restores settled']] : [[], []],
+      );
+    },
+  );
 
   it('track_AfterSettled_IsNotWaitedOn', async () => {
     const { restores } = startRestores();

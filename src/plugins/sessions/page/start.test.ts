@@ -289,7 +289,7 @@ const SAVED_PLACE: SessionsPlace = {
 
 // The last page's places for `s-live` and `s-gone`, and a new page started over
 // them with rows `rowIds` in the mirror.
-function startOverSavedPlaces(rowIds: string[]) {
+function startOverSavedPlaces(rowIds: string[], holdsRestores = false) {
   const state = createSlotStore(() => undefined);
   const oldPage = state.publish(sessionsPlaceSlot);
   oldPage.set('s-live', SAVED_PLACE);
@@ -302,6 +302,7 @@ function startOverSavedPlaces(rowIds: string[]) {
   const harness = startPagePart(sessionsPagePart, {
     state,
     services: { picker: fakeListPickerService() },
+    holdsRestores,
   });
   return { state, harness, rowsWriter };
 }
@@ -415,14 +416,18 @@ describe('sessions page part', () => {
     expect(placeKeys(state)).toEqual(['s-live']);
   });
 
-  it('prune_waits_for_ready', () => {
-    const { state, harness, rowsWriter } = startOverSavedPlaces([]);
+  it('prune_WaitsForTheRestoresToSettle', () => {
+    const { state, harness, rowsWriter } = startOverSavedPlaces([], true);
 
-    expect(placeKeys(state)).toEqual(['s-live', 's-gone']);
-    rowsWriter.set('s-live', sessionRow('s-live'));
     harness.ready();
+    const afterReady = placeKeys(state);
+    rowsWriter.set('s-live', sessionRow('s-live'));
+    harness.settleRestores();
 
-    expect(placeKeys(state)).toEqual(['s-live']);
+    expect([afterReady, placeKeys(state)]).toEqual([
+      ['s-live', 's-gone'],
+      ['s-live'],
+    ]);
   });
 
   it('addTab_TabAdded_FiresTabAdded', async () => {

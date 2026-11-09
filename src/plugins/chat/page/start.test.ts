@@ -87,13 +87,21 @@ function startChatPage(
   {
     boxes = [],
     invoked = [],
-  }: { boxes?: FakeBox[]; invoked?: unknown[][] } = {},
+    restored = Promise.resolve(),
+    holdsRestores = false,
+  }: {
+    boxes?: FakeBox[];
+    invoked?: unknown[][];
+    restored?: Promise<void>;
+    holdsRestores?: boolean;
+  } = {},
 ) {
   return startPagePart(chatPagePart, {
     invoke: (...args: unknown[]) => {
       invoked.push(args);
-      return Promise.resolve();
+      return args[0] === 'restored' ? restored : Promise.resolve();
     },
+    holdsRestores,
     services: {
       picker: fakeListPickerService(),
       editor: {
@@ -413,6 +421,36 @@ describe('chat page part', () => {
   });
 
   // The view owns the rule; this proves the part hands it the rows.
+  it('restoredInvoke_IsTracked', async () => {
+    const restored = Promise.withResolvers<void>();
+    const harness = startChatPage(undefined, undefined, undefined, undefined, {
+      restored: restored.promise,
+    });
+
+    expect(harness.restores).toContain(restored.promise);
+    await harness.stop();
+  });
+
+  // A row chat's restore reopens after the restart keeps its keys: the prune
+  // runs only once the restore window settles.
+  it('prune_WaitsForTheRestoresToSettle', async () => {
+    const harness = startChatPage(undefined, undefined, undefined, undefined, {
+      holdsRestores: true,
+    });
+    const rows = harness.state.publish(sessionsRowsSlot);
+
+    await reloadWith(harness, { r: placeWith('kept') }, { r: [PNG] });
+    const afterRestart = placeKeys(harness);
+    rows.set('r', sessionRow('r', { hostSessionId: 'host-r' }));
+    harness.settleRestores();
+
+    expect([afterRestart, placeKeys(harness)]).toEqual([
+      { places: ['r'], images: ['r'] },
+      { places: ['r'], images: ['r'] },
+    ]);
+    await harness.stop();
+  });
+
   it('mayStop_TypedDraft_NamesTheRowsChat', async () => {
     const boxes: FakeBox[] = [];
     const harness = startChatPage(

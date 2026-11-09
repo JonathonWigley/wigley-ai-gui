@@ -484,6 +484,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         services.log(`open sessions not restored: ${errorText(error)}`);
       });
     sessions.holdConnects(restored);
+    // A page part's restore window waits for the rows chat reopens.
+    api.channel.handle('restored', () => restored);
     const passKeepIdle = (keepIdleMinutes: number) =>
       services.sessionHost.setKeepIdleMinutes(Math.max(0, keepIdleMinutes));
     passKeepIdle(api.settings().keepIdleMinutes);

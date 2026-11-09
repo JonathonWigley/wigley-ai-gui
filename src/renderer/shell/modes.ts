@@ -112,6 +112,10 @@ export function createModes(deps: ModesDeps): CoreModes {
   const added = new Map<string, AddedMode>();
   const listeners = createListeners<string>();
   let shownMode: AddedMode | null = null;
+  // The id of the shown mode a `dispose` took away, shown again at its next
+  // `add`, until a `show` changes the shown mode. A fallback shown in its
+  // place that gives way too keeps the older id.
+  let gaveWayId: string | null = null;
   let isNarrow = deps.isNarrow;
 
   const layoutOf = (entry: AddedMode): SideBarLayout =>
@@ -159,6 +163,16 @@ export function createModes(deps: ModesDeps): CoreModes {
     tellSideBarChanged(entry, null);
   };
 
+  // Hides the shown mode, telling it, and shows `entry`, telling listeners.
+  const showInstead = (entry: AddedMode) => {
+    if (shownMode !== null) {
+      setHidden(shownMode.mode, true);
+      shownMode.mode.hidden();
+    }
+    reveal(entry);
+    listeners.tell(entry.mode.id);
+  };
+
   const showFirstRemaining = () => {
     const first = added.values().next().value;
     if (first === undefined) {
@@ -184,12 +198,8 @@ export function createModes(deps: ModesDeps): CoreModes {
           if (shownMode === entry || isDisposed()) {
             return;
           }
-          if (shownMode !== null) {
-            setHidden(shownMode.mode, true);
-            shownMode.mode.hidden();
-          }
-          reveal(entry);
-          listeners.tell(mode.id);
+          gaveWayId = null;
+          showInstead(entry);
         },
         isShown: () => shownMode === entry,
         setContext(context) {
@@ -232,15 +242,18 @@ export function createModes(deps: ModesDeps): CoreModes {
           added.delete(mode.id);
           placement.dispose();
           if (shownMode === entry) {
+            gaveWayId ??= mode.id;
             shownMode = null;
             showFirstRemaining();
           }
         },
       };
       const placement = deps.place(mode, handle);
-      if (shownMode === null) {
-        reveal(entry);
-        listeners.tell(mode.id);
+      if (gaveWayId === mode.id) {
+        gaveWayId = null;
+        showInstead(entry);
+      } else if (shownMode === null) {
+        showInstead(entry);
       } else {
         setHidden(mode, true);
       }

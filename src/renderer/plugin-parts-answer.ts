@@ -2,8 +2,12 @@ import type { PluginPartsReply, PluginPartsRequest } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import { errorText } from '../shared/error-text';
 import type { PluginHost } from '../shared/plugin-host';
+import type { PageRestoresHost } from './page-restores';
 
 export interface PluginPartsAnswerDeps {
+  // A start opens a restore window before its parts start, and readies it
+  // once each started part ran `ready()`.
+  restores: Pick<PageRestoresHost, 'reopen' | 'partsReady'>;
   // Applies the last pushed config again, so the binds of the parts a start
   // brought up join.
   reapplyPush(): void;
@@ -13,8 +17,11 @@ export interface PluginPartsAnswerDeps {
 // The page's answer to one of main's plugin parts requests, through the page's
 // host. It never rejects: a throw is logged under `plugin-switch`. A `mayStop`
 // that throws gives the reason `<id>: mayStop failed: <error>`; a stop that
-// throws goes on to the next id, and a start that throws starts no more. The
-// reply holds every id that stopped or started.
+// throws goes on to the next id, and a start that throws starts no more. A
+// start opens a restore window (`reopen`) and calls `partsReady` after the
+// host started its parts, a throw included, then applies the push again; a
+// stop and a `mayStop` touch no window. The reply holds every id that stopped
+// or started.
 export async function answerPluginParts(
   host: Pick<PluginHost<unknown>, 'started' | 'start' | 'stop' | 'mayStop'>,
   request: PluginPartsRequest,
@@ -70,11 +77,13 @@ export async function answerPluginParts(
     }
     case 'start': {
       const before = new Set(host.started.keys());
+      deps.restores.reopen();
       try {
         host.start(request.ids);
       } catch (error) {
         fail(error);
       }
+      deps.restores.partsReady();
       try {
         deps.reapplyPush();
       } catch (error) {

@@ -57,7 +57,7 @@ export function noteSessions(
 // a host session id, so the popup can attach one. The popup's open state and
 // cursors go to `notes.place` on each change, and a page load opens the popup
 // again where the last page left it, open through the base changes made
-// before the page load's restores settle. A draft not yet saved refuses a
+// before the restore window's restores settle. A draft not yet saved refuses a
 // switch-off.
 export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,

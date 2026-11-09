@@ -1,8 +1,8 @@
 import type { Timers } from '../contracts/ambient';
 import type { PageRestores } from '../contracts/plugin';
 
-// The latest the restores settle after every part's `ready()` ran: well past a
-// docs index rebuild, which can take seconds.
+// The latest a restore restoreWindow settles after every part's `ready()` ran: well
+// past a docs index rebuild, which can take seconds.
 export const RESTORES_CAP_MS = 30_000;
 
 export interface PageRestoresDeps {
@@ -10,69 +10,108 @@ export interface PageRestoresDeps {
   log(message: string): void;
 }
 
-// The page load's one `PageRestores`. The composition root calls `partsReady`
-// once every part's `ready()` ran, after which the restores settle as
-// soon as no tracked restore is pending, or at `RESTORES_CAP_MS` after it,
-// logging the count still pending.
+// The one host of the page's restore windows, created with the page load's
+// window open. `reopen` opens the window of a live start: a new one once the
+// last settled, else the open window again, its parts not ready and its cap
+// cleared. The composition root and the `start` answer call `partsReady` once
+// every part they started ran `ready()`, after which the window settles as
+// soon as none of its tracked restores is pending, or at `RESTORES_CAP_MS`
+// after it, logging the count still pending. Each window logs
+// `restores settled` as it settles.
 export interface PageRestoresHost extends PageRestores {
+  reopen(): void;
   partsReady(): void;
 }
 
+interface RestoreWindow {
+  arePartsReady: boolean;
+  isSettled: boolean;
+  pending: number;
+  cap: number | null;
+  listeners: Set<() => void>;
+}
+
+const openWindow = (): RestoreWindow => ({
+  arePartsReady: false,
+  isSettled: false,
+  pending: 0,
+  cap: null,
+  listeners: new Set(),
+});
+
 export function createPageRestores(deps: PageRestoresDeps): PageRestoresHost {
-  let arePartsReady = false;
-  let isSettled = false;
-  let pending = 0;
-  let cap: number | null = null;
-  const listeners = new Set<() => void>();
-  const settle = () => {
-    isSettled = true;
-    if (cap !== null) {
-      deps.timers.clear(cap);
-      cap = null;
+  let current = openWindow();
+  const clearCap = (restoreWindow: RestoreWindow) => {
+    if (restoreWindow.cap !== null) {
+      deps.timers.clear(restoreWindow.cap);
+      restoreWindow.cap = null;
     }
-    const settledListeners = [...listeners];
-    listeners.clear();
+  };
+  const settle = (restoreWindow: RestoreWindow) => {
+    restoreWindow.isSettled = true;
+    clearCap(restoreWindow);
+    deps.log('restores settled');
+    const settledListeners = [...restoreWindow.listeners];
+    restoreWindow.listeners.clear();
     for (const listener of settledListeners) {
       listener();
     }
   };
-  const settleWhenIdle = () => {
-    if (arePartsReady && pending === 0 && !isSettled) {
-      settle();
+  const settleWhenIdle = (restoreWindow: RestoreWindow) => {
+    if (
+      restoreWindow.arePartsReady &&
+      restoreWindow.pending === 0 &&
+      !restoreWindow.isSettled
+    ) {
+      settle(restoreWindow);
     }
   };
-  const settleAtCap = () => {
-    cap = null;
+  const settleAtCap = (restoreWindow: RestoreWindow) => {
+    restoreWindow.cap = null;
     deps.log(
-      `restores settled at the ${RESTORES_CAP_MS} ms cap, ${pending} still pending`,
+      `restores settled at the ${RESTORES_CAP_MS} ms cap, ${restoreWindow.pending} still pending`,
     );
-    settle();
+    settle(restoreWindow);
   };
   return {
     track(restore) {
-      if (isSettled) {
+      const restoreWindow = current;
+      if (restoreWindow.isSettled) {
         return;
       }
-      pending += 1;
+      restoreWindow.pending += 1;
       const restoreSettled = () => {
-        pending -= 1;
-        settleWhenIdle();
+        restoreWindow.pending -= 1;
+        settleWhenIdle(restoreWindow);
       };
       restore.then(restoreSettled, restoreSettled);
     },
     onSettled(listener) {
-      if (isSettled) {
+      const restoreWindow = current;
+      if (restoreWindow.isSettled) {
         listener();
         return { dispose() {} };
       }
-      listeners.add(listener);
-      return { dispose: () => listeners.delete(listener) };
+      restoreWindow.listeners.add(listener);
+      return { dispose: () => restoreWindow.listeners.delete(listener) };
+    },
+    reopen() {
+      if (current.isSettled) {
+        current = openWindow();
+        return;
+      }
+      current.arePartsReady = false;
+      clearCap(current);
     },
     partsReady() {
-      arePartsReady = true;
-      settleWhenIdle();
-      if (!isSettled) {
-        cap = deps.timers.set(settleAtCap, RESTORES_CAP_MS);
+      const restoreWindow = current;
+      restoreWindow.arePartsReady = true;
+      settleWhenIdle(restoreWindow);
+      if (!restoreWindow.isSettled) {
+        restoreWindow.cap = deps.timers.set(
+          () => settleAtCap(restoreWindow),
+          RESTORES_CAP_MS,
+        );
       }
     },
   };

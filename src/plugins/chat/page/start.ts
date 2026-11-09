@@ -111,6 +111,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       .catch((error: unknown) =>
         services.log(`chat page load not sent: ${errorText(error)}`),
       );
+    // The restore window waits for main's restore of the saved rows.
+    api.restores.track(api.channel.invoke('restored'));
     const sessions = api.dependency(sessionsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
@@ -157,13 +159,13 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       held?.images.reset();
     };
     // A session whose row ended while no page ran leaves keys no tab takes;
-    // the prune waits for the page mirror to hold the rows. On a live restart
-    // it can also drop the keys of rows chat's restore has not reopened yet.
-    const pruneEndedPlaces = () => {
+    // the prune waits for the restore window to settle, so the rows chat's
+    // restore reopens are in the page mirror first.
+    api.restores.onSettled(() => {
       const isLive = (sessionId: string) => rows.all().has(sessionId);
       pruneKeys(placeWriter, isLive);
       pruneKeys(imagesWriter, isLive);
-    };
+    });
     const run = (command: string) => api.commands.run(command);
     const runKey = keyRunner(api.commands, services.log);
     const layouts = createChatLayouts(services.log);
@@ -416,7 +418,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       },
       exports,
       ready() {
-        pruneEndedPlaces();
         view.ready();
       },
       mayStop: () => view.mayStop(rows.all().values()),

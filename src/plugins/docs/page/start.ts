@@ -124,6 +124,15 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const { log } = services;
     const rows = api.state.read(sessionsRowsSlot);
     const placeWriter = api.state.publish(docsPlaceSlot);
+    // A session source whose row ended while no page ran leaves a place no
+    // view takes; the prune waits for the restore window to settle, so the
+    // rows chat's restore reopens are in the page mirror first.
+    api.restores.onSettled(() =>
+      pruneKeys(placeWriter, (sourceId) => {
+        const sessionId = sessionIdOfSource(sourceId);
+        return sessionId === null || rows.all().has(sessionId);
+      }),
+    );
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
@@ -687,14 +696,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }),
       mayStop,
       ready() {
-        // A session source's place leaves with its row, and one whose row ended
-        // while no page ran is pruned; the prune waits for the page mirror to
-        // hold the rows. On a live restart it can also drop the places of rows
-        // chat's restore has not reopened yet.
-        pruneKeys(placeWriter, (sourceId) => {
-          const sessionId = sessionIdOfSource(sourceId);
-          return sessionId === null || rows.all().has(sessionId);
-        });
+        // A session source's place leaves with its row.
         followRows(rows, {
           removed: (sessionId) =>
             placeWriter.delete(sessionSourceId(sessionId)),

@@ -359,7 +359,6 @@ async function start() {
     timers,
     log: (message) => log('page', message),
   });
-  restores.onSettled(() => log('page', 'restores settled'));
   const layouts = createPageLayouts({
     bridge,
     importModule: (url) => import(/* @vite-ignore */ url),
@@ -433,7 +432,11 @@ async function start() {
   );
   // Main sends plugin parts requests once `started` is set, so the page
   // listens first: a later throw in this start still answers them.
-  const answerDeps = { reapplyPush: () => applyLivePush(lastPush), log };
+  const answerDeps = {
+    restores,
+    reapplyPush: () => applyLivePush(lastPush),
+    log,
+  };
   bridge.onPluginParts((request) =>
     answerPluginParts(pageHost, request, answerDeps),
   );
