@@ -124,7 +124,9 @@ function applyEnteredStage(
   if (entered.stage?.clearsPlan === true && signal.type === 'skillStarted') {
     clearPlan(next);
   }
-  if (entered.stage?.recordsReviewRounds === true) {
+  // A run reopening from closed keeps the review rounds its make recorded.
+  const reopens = flow.stage === 'closed' && entered.id !== flow.stage;
+  if (entered.stage?.recordsReviewRounds === true && !reopens) {
     next.reviewRoundsAtMake = next.progress?.reviewRounds ?? null;
   }
 }

@@ -28,10 +28,16 @@ const PROGRESS: PlanProgress = {
 };
 
 // A flow in `stage` that meets every other condition a built-in rule checks:
-// a plan read with boxes and a review round since make started, nothing busy.
+// a plan read with boxes and a review round since make started, closed from
+// review, nothing busy outside closed, where a subagent runs.
 function flowIn(stage: string): SessionFlow {
   return withLargeState(
-    { ...newFlow('s1', '/r'), workflow: LARGE_WORKFLOW_ID, stage },
+    {
+      ...newFlow('s1', '/r'),
+      workflow: LARGE_WORKFLOW_ID,
+      stage,
+      runningSubagents: stage === 'closed' ? ['a1'] : [],
+    },
     {
       planDir: '/r/plan-f',
       planReported: false,

@@ -892,6 +892,7 @@ describe('workflowLargeMainPart', () => {
     await settled();
     expect(workflow.lastFlow()?.stage).toBe('closed');
 
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
     await workflow.project.write(PLAN_FILE, PLAN_TICKED);
     await workflow.agentEvent({
       type: 'fileWritten',
@@ -905,6 +906,41 @@ describe('workflowLargeMainPart', () => {
     );
     expect(workflow.lastFlow()?.stage).toBe('make');
   });
+
+  it.each([
+    { name: 'a subagent still running', running: true, expected: 'make' },
+    { name: 'nothing running', running: false, expected: 'closed' },
+  ])(
+    'planFolderBackAfterPlanGone_TurnEnd ($name)',
+    async ({ running, expected }) => {
+      const workflow = startWorkflowPart(SETTINGS);
+      await workflow.project.write(PLAN_FILE, PLAN);
+      await workflow.openS1();
+      await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+      if (running) {
+        await workflow.agentEvent({
+          type: 'agentSpawned',
+          at: 1,
+          agentId: 'a1',
+          parentAgentId: 'main',
+          agentType: 'worker',
+          description: 'd',
+          name: 'worker',
+          model: null,
+          effort: null,
+        });
+      }
+      workflow.project.remove(PLAN_DIR);
+      await settled();
+      expect(workflow.lastFlow()?.stage).toBe('closed');
+
+      await workflow.project.write(PLAN_FILE, PLAN_TICKED);
+      await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+      await settled();
+
+      expect(workflow.lastFlow()?.stage).toBe(expected);
+    },
+  );
 
   it('StepTool_Large', async () => {
     const workflow = startWorkflowPart(SETTINGS);

@@ -33,6 +33,13 @@ type WorkflowLargeApi = MainApi<
   WorkflowLargeChannel
 >;
 
+const ACTIVITY_SIGNALS: ReadonlySet<string> = new Set([
+  'turnStarted',
+  'turnEnded',
+  'subagentStarted',
+  'subagentFinished',
+]);
+
 const autoCommandOf = (stageId: string): string | undefined =>
   LARGE_MAIN_STAGES.find((stage) => stage.id === stageId)?.autoCommand;
 
@@ -163,6 +170,9 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       }
     };
 
+    // A closed run's watch closed with its `planGone`: each turn or subagent
+    // start or end follows the plan again, which reopens the watch, so a plan
+    // folder a branch switch brought back is read while the run still works.
     const followPlan = ({ sessionId, before, after, signal }: FoldEvent) => {
       const plan = largeStateOf(after);
       const was = largeStateOf(before);
@@ -175,7 +185,11 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
         plan.planDir !== was.planDir ||
         plan.planReported !== was.planReported ||
         plan.unreportedPlanDir !== was.unreportedPlanDir;
-      if (wrotePlan || followedPlanChanged) {
+      const closedRunMoved =
+        after.stage === 'closed' &&
+        plan.planDir !== null &&
+        ACTIVITY_SIGNALS.has(signal.type);
+      if (wrotePlan || followedPlanChanged || closedRunMoved) {
         planWatch.follow(sessionId, plan);
       }
     };

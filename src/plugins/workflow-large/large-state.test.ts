@@ -608,7 +608,47 @@ const FOLD_ROWS: {
     }),
   },
   {
-    name: 'the plan read again reopens a closed run in the stage it closed from',
+    name: 'the plan read again while a subagent runs reopens a closed run in the stage it closed from',
+    flow: flowWith({
+      stage: 'closed',
+      runningSubagents: ['a1'],
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+      closedFrom: 'fix',
+    }),
+    signal: planChanged({ ...PROGRESS, reviewRounds: 2 }),
+    expected: flowWith({
+      stage: 'fix',
+      runningSubagents: ['a1'],
+      planDir: PLAN_X,
+      progress: { ...PROGRESS, reviewRounds: 2 },
+      reviewRoundsAtMake: 0,
+      closedFrom: 'fix',
+    }),
+  },
+  {
+    name: 'the plan read again during a turn reopens a closed run into make keeping its recorded review rounds',
+    flow: flowWith({
+      stage: 'closed',
+      turnRunning: true,
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+      closedFrom: 'make',
+    }),
+    signal: planChanged({ ...PROGRESS, reviewRounds: 2 }),
+    expected: flowWith({
+      stage: 'make',
+      turnRunning: true,
+      planDir: PLAN_X,
+      progress: { ...PROGRESS, reviewRounds: 2 },
+      reviewRoundsAtMake: 0,
+      closedFrom: 'make',
+    }),
+  },
+  {
+    name: 'the plan read again with nothing running leaves a closed run closed',
     flow: flowWith({
       stage: 'closed',
       planDir: PLAN_X,
@@ -618,7 +658,7 @@ const FOLD_ROWS: {
     }),
     signal: planChanged({ ...PROGRESS, reviewRounds: 2 }),
     expected: flowWith({
-      stage: 'fix',
+      stage: 'closed',
       planDir: PLAN_X,
       progress: { ...PROGRESS, reviewRounds: 2 },
       reviewRoundsAtMake: 0,
@@ -629,6 +669,7 @@ const FOLD_ROWS: {
     name: 'the plan read again leaves a closed run saved with no stage it closed from closed',
     flow: flowWith({
       stage: 'closed',
+      runningSubagents: ['a1'],
       planDir: PLAN_X,
       progress: PROGRESS,
       reviewRoundsAtMake: 0,
@@ -636,6 +677,7 @@ const FOLD_ROWS: {
     signal: planChanged({ ...PROGRESS, reviewRounds: 2 }),
     expected: flowWith({
       stage: 'closed',
+      runningSubagents: ['a1'],
       planDir: PLAN_X,
       progress: { ...PROGRESS, reviewRounds: 2 },
       reviewRoundsAtMake: 0,
