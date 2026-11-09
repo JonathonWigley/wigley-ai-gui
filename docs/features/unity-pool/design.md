@@ -132,14 +132,18 @@ cursor's holder draws the focus ring only while the panel holds the keys. The Ho
 ## Claims for a project
 
 A new session in a pool project (`docs/features/projects/design.md` § Pool projects) is claimed by the app, not by
-the agent: main registers itself with chat's `addPoolProvider` and answers three asks. `folders(pool)` gives the
+the agent: main registers itself with chat's `addPoolProvider`, calls the handle's `changed()` on each state change so
+chat regroups clone rows, and answers four asks. `folders(pool)` gives the
 pool's clone paths from its state, `branches(pool, refresh)` the origin branches its clones last fetched, newest
-commit first (`refresh` runs `git fetch --no-recurse-submodules origin` in the lowest-numbered clone first), and
+commit first (`refresh` runs `git fetch --no-recurse-submodules origin` in the lowest-numbered clone first),
 `claim` runs `unity-pool claim --branch <branch> --pool <pool> --wait --json` under the session id and row id it is
-given, with no time limit, stopping the CLI when chat cancels it and then running `unity-pool release --json` under
-those ids. A `diverged` answer keeps its clone: the provider finds it in the fresh state file and returns its path
-with the CLI's message as a note. An agent that runs `unity-pool claim` again in its
-clone keeps the clone, as the pool's rules give any holder.
+given, with no time limit, stopping the CLI when chat cancels it, and `release` runs `unity-pool release --json` under
+those ids from the home folder, so the CLI finds the pool by the session's claim rather than the app's folder. A claim
+that chat cancels, or that answers `internal` or `cli-failed`, runs that release before it settles; the log reads a
+`not-holder` answer as nothing to release. Once the plugin stops its processes are killed and no release runs: the
+pool's claim expiry frees the clone. A `diverged` answer keeps its clone: the provider finds it in the fresh state
+file and returns its path with the CLI's message as a note. An agent that runs `unity-pool claim` again in its clone
+keeps the clone, as the pool's rules give any holder.
 
 ## Drawing
 

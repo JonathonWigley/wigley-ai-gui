@@ -374,8 +374,8 @@ export interface SessionsMainEvents extends EventShape {
 // until an activate clears it;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
 // when the session connects, `projectDir` also changed by the owner through
-// `relocate`, `hostSessionId` through `setHostSessionId`. `titles` are the session's titles, kept across a host id
-// change.
+// `relocate`, `hostSessionId` through `setHostSessionId`. `titles` are the
+// session's titles, kept across a host id change.
 export interface SessionRow {
   sessionId: string;
   label: string;

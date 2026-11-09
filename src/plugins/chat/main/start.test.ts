@@ -494,13 +494,17 @@ const NEW_GAMES_SETTING: ProjectSetting = {
   pinnedBranches: ['main'],
 };
 
-// A provider over pool `ng`'s two clones listing `feature/x` then `main`,
-// whose claims never settle.
-function fakePoolProvider(): PoolProvider {
+// A provider over pool `ng`'s clones, `/pool/ng-1` and `/pool/ng-2` unless
+// `clones` says otherwise, listing `feature/x` then `main`, whose claims never
+// settle.
+function fakePoolProvider(
+  clones: () => readonly string[] = () => ['/pool/ng-1', '/pool/ng-2'],
+): PoolProvider {
   return {
-    folders: (pool) => (pool === 'ng' ? ['/pool/ng-1', '/pool/ng-2'] : []),
+    folders: (pool) => (pool === 'ng' ? clones() : []),
     branches: () => Promise.resolve(['feature/x', 'main']),
     claim: () => new Promise(() => {}),
+    release: () => Promise.resolve(),
   };
 }
 
@@ -1160,6 +1164,25 @@ describe('chat main part', () => {
     consumer.dispose();
 
     expect(chat.namerChanges.count).toBe(before + 1);
+  });
+
+  it('exports_PoolProviderChanged_ReasksTheNamerUntilDisposed', () => {
+    const chat = startChatPart({ projects: [NEW_GAMES_SETTING] });
+    let clones: string[] = [];
+    const handle = chat.exports.addPoolProvider(fakePoolProvider(() => clones));
+    const [namer] = chat.namers;
+    expect(namer('/pool/ng-2/sub')).toBeNull();
+    const before = chat.namerChanges.count;
+
+    clones = ['/pool/ng-1', '/pool/ng-2'];
+    handle.changed();
+
+    expect(chat.namerChanges.count).toBe(before + 1);
+    expect(namer('/pool/ng-2/sub')).toBe('New Games');
+    handle.dispose();
+    const afterDispose = chat.namerChanges.count;
+    handle.changed();
+    expect(chat.namerChanges.count).toBe(afterDispose);
   });
 
   it('projectNamer_NamesAFolderUnderAProject', () => {

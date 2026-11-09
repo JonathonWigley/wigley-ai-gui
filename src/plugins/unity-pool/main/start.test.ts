@@ -25,14 +25,19 @@ import {
 } from './selftest-fixture';
 import { unityPoolMainPart } from './start';
 
-// The fake chat records each provider `addPoolProvider` registers and counts each registration's dispose.
+// The fake chat records each provider `addPoolProvider` registers, counts each registration's dispose, and records
+// the self-test pool's folders as the provider gave them at each `changed()`.
 function startOnHarness(os: OsName = 'macos') {
   const providers: PoolProvider[] = [];
+  const foldersAtChanges: (readonly string[])[] = [];
   let disposed = 0;
   const chat = {
     addPoolProvider: (provider: PoolProvider) => {
       providers.push(provider);
       return {
+        changed: () => {
+          foldersAtChanges.push(provider.folders(SELFTEST_POOL));
+        },
         dispose: () => {
           disposed++;
         },
@@ -52,6 +57,7 @@ function startOnHarness(os: OsName = 'macos') {
   });
   return Object.assign(harness, {
     providers,
+    foldersAtChanges,
     disposedRegistrations: () => disposed,
   });
 }
@@ -129,7 +135,7 @@ describe('unityPoolMainPart', () => {
     expect(harness.disposedRegistrations()).toBe(1);
   });
 
-  it('poolProvider_Folders_ReadTheWatchSnapshot', async () => {
+  it('poolProvider_Folders_ReadTheWatchSnapshot_AndChatHearsTheChange', async () => {
     const harness = startOnHarness();
     await harness.files.write(
       `/home/${SELFTEST_STATE_PATH}`,
@@ -147,6 +153,7 @@ describe('unityPoolMainPart', () => {
         '/x/2',
       ]),
     );
+    expect(harness.foldersAtChanges).toContainEqual(['/x/1', '/x/2']);
   });
 
   it('poolProvider_Claim_Diverged_ReadsTheStateFile', async () => {

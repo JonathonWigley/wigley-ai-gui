@@ -289,8 +289,9 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // and at the lookup's landing, writing the row of a session whose project
 // changed, until `stop`. `relocate` moves an owned session to another folder,
 // renumbering its label there, asking its project again and starting the new
-// folder's lookup; the old folder's late landing changes nothing. Each `mark` and `activate` of a connected session reads its
-// harness's name for it into its `firstMessage` title, until `stop`.
+// folder's lookup; the old folder's late landing changes nothing. Each `mark`
+// and `activate` of a connected session reads its harness's name for it into
+// its `firstMessage` title, until `stop`.
 // The rows and the selection live in the writers, whose slots outlive a stop, so
 // creation clears them. One operation runs in one synchronous block: every row
 // write, then the selection write, then its events, with `activated` before them

@@ -14,6 +14,7 @@ import {
   resolveScriptPath,
   runPoolClaim,
   runPoolCommand,
+  runPoolRelease,
 } from './pool-cli';
 
 function exited(
@@ -254,7 +255,7 @@ describe('readClaimAnswer', () => {
   });
 });
 
-describe('runPoolClaim', () => {
+describe('runPoolClaim and runPoolRelease', () => {
   const request = {
     pool: 'p',
     branch: 'main',
@@ -269,10 +270,8 @@ describe('runPoolClaim', () => {
   // The script is present at `/h/x` only.
   function claimDeps() {
     const processes = new FakeProcesses();
-    const logs: string[] = [];
     return {
       processes,
-      logs,
       deps: {
         processes,
         files: {
@@ -283,7 +282,6 @@ describe('runPoolClaim', () => {
         homeDir: '/h',
         scriptPath: '~/x',
         pythonCommand: 'python3',
-        log: (line: string) => logs.push(line),
       },
     };
   }
@@ -312,44 +310,62 @@ describe('runPoolClaim', () => {
     expect(claim.unsetEnv).not.toContain('WIGLEY_SESSION_ROW');
   });
 
-  it.each<{ name: string; release: ProcessResult | Error; logged: string }>([
+  it('runPoolClaim_Cancelled_AnswersCancelledAndRunsNothingMore', async () => {
+    const run = claimDeps();
+    const controller = new AbortController();
+    run.processes.script(
+      'python3',
+      claimCommandArgs('/h/x', 'p', 'main'),
+      deferred<ProcessResult>().promise,
+    );
+
+    const answer = runPoolClaim(run.deps, request, controller.signal);
+    await vi.waitFor(() => expect(run.processes.runs).toHaveLength(1));
+    controller.abort();
+
+    expect(await answer).toEqual({
+      ok: false,
+      error: 'cancelled',
+      message: 'claim cancelled',
+    });
+    expect(run.processes.runs).toHaveLength(1);
+  });
+
+  it.each<{
+    name: string;
+    release: ProcessResult | Error;
+    expected: PoolActionResult;
+  }>([
     {
       name: 'release answers ok',
       release: exited(0, '{"ok": true, "pool": "p", "clone": 2}\n'),
-      logged: 'claim p main cancelled; release: ok',
+      expected: { ok: true, pool: 'p', clone: 2 },
     },
     {
       name: 'release rejects',
       release: new Error('spawn failed'),
-      logged: 'claim p main cancelled; release: cli-failed: spawn failed',
+      expected: { ok: false, error: 'cli-failed', message: 'spawn failed' },
     },
   ])(
-    'claim_Cancelled_ReleasesUnderTheSameIds: $name',
-    async ({ release, logged }) => {
+    'runPoolRelease_RunsUnderTheClaimsIdsInTheHomeFolder: $name',
+    async ({ release, expected }) => {
       const run = claimDeps();
-      const controller = new AbortController();
       run.processes.script(
         'python3',
         claimCommandArgs('/h/x', 'p', 'main'),
-        deferred<ProcessResult>().promise,
+        exited(0, '{"ok": true, "path": "/c/1"}\n'),
       );
       run.processes.script('python3', releaseCommandArgs('/h/x'), release);
+      await runPoolClaim(run.deps, request, new AbortController().signal);
 
-      const answer = runPoolClaim(run.deps, request, controller.signal);
-      await vi.waitFor(() => expect(run.processes.runs).toHaveLength(1));
-      controller.abort();
-
-      expect(await answer).toEqual({
-        ok: false,
-        error: 'cancelled',
-        message: 'claim cancelled',
-      });
+      expect(await runPoolRelease(run.deps, request)).toEqual(expected);
       expect(run.processes.runs[1]).toMatchObject({
         args: releaseCommandArgs('/h/x'),
+        cwd: '/h',
+        timeoutMs: 30_000,
         setEnv: sessionIds,
         unsetEnv: run.processes.runs[0].unsetEnv,
       });
-      expect(run.logs).toEqual([logged]);
     },
   );
 

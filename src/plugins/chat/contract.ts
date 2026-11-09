@@ -82,8 +82,11 @@ export interface PoolClaimRequest {
 }
 
 // `note` is the CLI's message on a `diverged` claim, else null. `error` is the
-// CLI's error code (`dirty`, `unknown-branch`, `no-cli`, `internal`), or
-// `cancelled` when the claim's signal aborted.
+// CLI's error code (`dirty`, `unknown-branch`, `diverged`, `internal` and the
+// rest), `no-cli` when the CLI is missing, `cli-failed` when it ran but gave
+// no answer, or `cancelled` when the claim's signal aborted. Chat records
+// `internal` itself for a provider that throws or a move to the clone that
+// fails.
 export type PoolClaimResult =
   | { ok: true; path: string; note: string | null }
   | { ok: false; error: string; message: string };
@@ -95,11 +98,21 @@ export interface PoolProvider {
   branches(pool: string, refresh: boolean): Promise<string[]>;
   // Claims a clone on `branch` for the session's ids, calling `queued` when
   // the claim waits in the pool's queue; stops the claim when `signal` aborts.
+  // A claim that does not answer ok leaves no clone held.
   claim(
     request: PoolClaimRequest,
     signal: AbortSignal,
     queued: () => void,
   ): Promise<PoolClaimResult>;
+  // Releases the clone a claim under the request's ids landed, for a landed
+  // claim chat drops; never rejects.
+  release(request: PoolClaimRequest): Promise<void>;
+}
+
+// `changed()` says the provider's `folders` changed, so chat re-asks every
+// row's project; `dispose` removes the provider.
+export interface PoolProviderHandle extends Disposable {
+  changed(): void;
 }
 
 // Where a new session starts: a folder, or a project from chat's `projects`
@@ -722,8 +735,9 @@ export interface ChatMainExports {
   // The newest provider still registered answers every pool question;
   // disposing the handle removes it, and the one registered before it answers
   // again. With none registered a pool project lists no branches and cannot
-  // start.
-  addPoolProvider(provider: PoolProvider): Disposable;
+  // start. Each row's project is re-asked at the add, at the handle's
+  // `changed()` and at its `dispose`; `changed()` after `dispose` does nothing.
+  addPoolProvider(provider: PoolProvider): PoolProviderHandle;
 }
 
 export const chatMainKey: DependencyKey<ChatMainExports, 'main', 'chat'> = {

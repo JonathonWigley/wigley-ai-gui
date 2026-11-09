@@ -456,6 +456,8 @@ function setUp(
     | { emitted: Emitted }
   )[] = [];
   let ownedEnds = 0;
+  // The row id of each owned session kept, in order.
+  const keptRows: string[] = [];
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
   let uuidCalls = 0;
@@ -496,7 +498,9 @@ function setUp(
         setHostSessionId: (hostSessionId) => {
           hostIdChanges.push(hostSessionId);
         },
-        keep: () => undefined,
+        keep: () => {
+          keptRows.push(id);
+        },
       };
     },
     mark: (sessionId, options) => {
@@ -619,6 +623,7 @@ function setUp(
       relocateError = error;
     },
     ownedEnds: () => ownedEnds,
+    keptRows,
     setFocused: (focused: boolean) => {
       isFocused = focused;
     },
@@ -8899,10 +8904,11 @@ interface FakeClaim {
   settle(result: PoolClaimResult): void;
 }
 
-// A pool provider whose clones are `folders`, recording each branch list and
-// each claim, which stays pending until the test settles it.
+// A pool provider whose clones are `folders`, recording each branch list,
+// each release and each claim, which stays pending until the test settles it.
 function fakePoolProvider(folders: Record<string, string[]>) {
   const claims: FakeClaim[] = [];
+  const releases: PoolClaimRequest[] = [];
   const branchCalls: [string, boolean][] = [];
   const double = {
     branchesAnswer: ['feature/x', 'main'],
@@ -8915,8 +8921,12 @@ function fakePoolProvider(folders: Record<string, string[]>) {
     },
     claim: (request, signal, queued) =>
       new Promise((settle) => claims.push({ request, signal, queued, settle })),
+    release: (request) => {
+      releases.push(request);
+      return Promise.resolve();
+    },
   };
-  return { provider, claims, branchCalls, double };
+  return { provider, claims, releases, branchCalls, double };
 }
 
 const CLAIMED: PoolClaimResult = { ok: true, path: '/pool/ng-2', note: null };
@@ -9066,52 +9076,77 @@ describe('createChatSessions projects', () => {
     expect(test.gitReads).not.toContain('/pool/ng-1');
   });
 
-  it.each([
+  it.each<{
+    name: string;
+    result: PoolClaimResult;
+    profiles?: ChatProfile[];
+    profileDir: string;
+    notices: string[][];
+  }>([
     {
       name: 'ok',
       result: CLAIMED,
+      profileDir: '~/.claude',
       notices: [['Claiming a Unity clone on main…', 'info']],
     },
     {
       name: 'diverged keeps the clone with the note',
       result: { ...CLAIMED, note: 'main diverged from origin' },
+      profileDir: '~/.claude',
       notices: [
         ['Claiming a Unity clone on main…', 'info'],
         ['main diverged from origin', 'info'],
       ],
     },
-  ])('claim_Lands: $name', async ({ result, notices }) => {
-    const test = claimingPool();
+    {
+      name: "the profile's folder changed during the claim",
+      result: CLAIMED,
+      profiles: [{ name: 'work', configDir: '/moved/.claude' }],
+      profileDir: '/moved/.claude',
+      notices: [['Claiming a Unity clone on main…', 'info']],
+    },
+  ])(
+    'claim_Lands: $name',
+    async ({ result, profiles, profileDir, notices }) => {
+      const test = claimingPool();
+      if (profiles !== undefined) {
+        test.setProfiles(profiles);
+      }
 
-    test.claims[0].settle(result);
-    await flush();
+      test.claims[0].settle(result);
+      await flush();
 
-    expect(test.relocated).toEqual([[ROW_ID, '/pool/ng-2']]);
-    const [row] = test.chat.sessions();
-    expect(row.projectDir).toBe('/pool/ng-2');
-    expect(row.repo).toBe('ng-2');
-    expect(row.worktrees).toEqual([]);
-    const { request } = test.harness.processes[0];
-    expect([request.projectDir, request.sessionId]).toEqual([
-      '/pool/ng-2',
-      'uuid-1',
-    ]);
-    expect(
-      emittedOf(test, 'sessionOpened').map(({ projectDir, origin }) => ({
-        projectDir,
-        origin,
-      })),
-    ).toEqual([{ projectDir: '/pool/ng-2', origin: 'new' }]);
-    expect(
-      test.saved.last()?.sessions.map((saved) => saved.projectDir),
-    ).toEqual(['/pool/ng-2']);
-    expect(await test.data.stat(RECENT_FOLDERS_FILE)).toBeNull();
-    expect(noticesOf(test).map(({ text, tone }) => [text, tone])).toEqual(
-      notices,
-    );
-  });
+      expect(test.relocated).toEqual([[ROW_ID, '/pool/ng-2']]);
+      const [row] = test.chat.sessions();
+      expect(row.projectDir).toBe('/pool/ng-2');
+      expect(row.repo).toBe('ng-2');
+      expect(row.worktrees).toEqual([]);
+      const { request } = test.harness.processes[0];
+      expect([request.projectDir, request.sessionId]).toEqual([
+        '/pool/ng-2',
+        'uuid-1',
+      ]);
+      expect(test.harness.processes[0].request.profileDir).toBe(profileDir);
+      expect(
+        emittedOf(test, 'sessionOpened').map(
+          ({ projectDir, origin, profileDir: opened }) => ({
+            projectDir,
+            origin,
+            profileDir: opened,
+          }),
+        ),
+      ).toEqual([{ projectDir: '/pool/ng-2', origin: 'new', profileDir }]);
+      expect(
+        test.saved.last()?.sessions.map((saved) => saved.projectDir),
+      ).toEqual(['/pool/ng-2']);
+      expect(await test.data.stat(RECENT_FOLDERS_FILE)).toBeNull();
+      expect(noticesOf(test).map(({ text, tone }) => [text, tone])).toEqual(
+        notices,
+      );
+    },
+  );
 
-  it('claim_LandsButTheMoveThrows_FailsTheClaim', async () => {
+  it('claim_LandsButTheMoveThrows_FailsTheClaimAndReleases', async () => {
     const test = claimingPool();
     test.failNextRelocate(new Error('relocate for unknown session row-1'));
 
@@ -9121,8 +9156,9 @@ describe('createChatSessions projects', () => {
     expect(noticesOf(test).at(-1)).toEqual({
       kind: 'notice',
       tone: 'error',
-      text: 'Unity clone not claimed: relocate for unknown session row-1',
+      text: 'Unity clone not used, releasing it: relocate for unknown session row-1',
     });
+    expect(test.releases).toEqual([test.claims[0].request]);
     expect(test.harness.processes).toEqual([]);
     await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
       'This session has no Unity clone',
@@ -9161,6 +9197,7 @@ describe('createChatSessions projects', () => {
     });
     expect(test.harness.processes).toEqual([]);
     expect(test.relocated).toEqual([]);
+    expect(test.releases).toEqual([]);
     test.chat.titleChanged(ROW_ID);
     expect(test.saved.last()?.sessions).toEqual([]);
     await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
@@ -9197,7 +9234,7 @@ describe('createChatSessions projects', () => {
     expect(test.harness.processes[0].calls).toEqual([sendCall(IDLE_SEND)]);
   });
 
-  it('claimingRow_Closed_AbortsAndIgnoresTheResult', async () => {
+  it('claimingRow_Closed_AbortsAndReleasesALateGrant', async () => {
     const test = claimingPool();
 
     test.chat.closed(ROW_ID, 'user');
@@ -9212,7 +9249,33 @@ describe('createChatSessions projects', () => {
     expect(test.logged).toContain(
       'claim for session row-1 settled after its row closed',
     );
+    expect(test.releases).toEqual([test.claims[0].request]);
   });
+
+  // Breaks if a restart keeps a claim row no restore adopts, leaving it on
+  // the side bar until sessions' kept-row timeout ends it.
+  it.each<{ name: string; result: PoolClaimResult | null; kept: string[] }>([
+    { name: 'claiming', result: null, kept: [] },
+    {
+      name: 'claim failed',
+      result: { ok: false, error: 'dirty', message: 'clone 2 is dirty' },
+      kept: [],
+    },
+    { name: 'claim landed', result: CLAIMED, kept: [ROW_ID] },
+  ])(
+    'keepRows_PoolRow_KeepsOnlyALandedClaim: $name',
+    async ({ result, kept }) => {
+      const test = claimingPool();
+      if (result !== null) {
+        test.claims[0].settle(result);
+        await flush();
+      }
+
+      test.chat.keepRows();
+
+      expect(test.keptRows).toEqual(kept);
+    },
+  );
 
   it('detachAll_AbortsARunningClaim', async () => {
     const test = claimingPool();
@@ -9253,25 +9316,41 @@ describe('createChatSessions projects', () => {
     ]);
   });
 
-  it('claim_LandsButStartThrows_RestsInTheCloneSaved', async () => {
-    const test = claimingPool();
-    test.harness.failNextStart('boom');
+  it.each([
+    { name: 'the start throws', profileGone: false, reason: 'boom', opens: 1 },
+    {
+      name: 'the profile went during the claim',
+      profileGone: true,
+      reason: 'chat has no profile "work"',
+      opens: 0,
+    },
+  ])(
+    'claim_LandsButCannotStart_RestsInTheCloneSaved: $name',
+    async ({ profileGone, reason, opens }) => {
+      const test = claimingPool();
+      if (profileGone) {
+        test.setProfiles([]);
+      } else {
+        test.harness.failNextStart('boom');
+      }
 
-    test.claims[0].settle(CLAIMED);
-    await flush();
+      test.claims[0].settle(CLAIMED);
+      await flush();
 
-    expect(noticesOf(test).at(-1)).toEqual({
-      kind: 'notice',
-      tone: 'error',
-      text: 'Claude did not start: boom',
-    });
-    expect(test.sent('sessionRested')).toEqual([
-      { sessionId: ROW_ID, error: 'boom' },
-    ]);
-    expect(
-      test.saved.last()?.sessions.map((saved) => saved.projectDir),
-    ).toEqual(['/pool/ng-2']);
-  });
+      expect(noticesOf(test).at(-1)).toEqual({
+        kind: 'notice',
+        tone: 'error',
+        text: `Claude did not start: ${reason}`,
+      });
+      expect(test.sent('sessionRested')).toEqual([
+        { sessionId: ROW_ID, error: reason },
+      ]);
+      expect(emittedOf(test, 'sessionOpened')).toHaveLength(opens);
+      expect(
+        test.saved.last()?.sessions.map((saved) => saved.projectDir),
+      ).toEqual(['/pool/ng-2']);
+    },
+  );
 
   const ONE = PAST_ONE.sessionId;
   const TWO = PAST_TWO.sessionId;

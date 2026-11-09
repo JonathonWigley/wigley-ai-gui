@@ -55,6 +55,7 @@ import {
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
+  type PoolClaimRequest,
   type PoolClaimResult,
   type PoolProvider,
   type ProcessEndReason,
@@ -360,7 +361,10 @@ export interface ChatSessions {
   // is ignored.
   detachAll(): Promise<void>;
   // Keeps every held row's owned session through chat's restart
-  // (`OwnedSession.keep`), so the restarted chat's restore adopts the rows.
+  // (`OwnedSession.keep`), so the restarted chat's restore adopts the rows. A
+  // row with a claim, running or failed, is not saved, so no restore adopts
+  // it: it is left to end with chat's stop, its running claim aborted by
+  // `detachAll`.
   keepRows(): void;
   // The sessions plugin's `connected` and `hostSessionChanged` events: records
   // the session's current host id as open in the app.
@@ -2512,12 +2516,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     log(
       `session ${sessionId} claiming a clone of ${project.pool} on ${branch}`,
     );
+    const request: PoolClaimRequest = {
+      pool: project.pool,
+      branch,
+      hostSessionId: hostId,
+      rowId: sessionId,
+    };
     let claiming: Promise<PoolClaimResult>;
     try {
-      claiming = provider.claim(
-        { pool: project.pool, branch, hostSessionId: hostId, rowId: sessionId },
-        abort.signal,
-        () => showClaimQueued(session),
+      claiming = provider.claim(request, abort.signal, () =>
+        showClaimQueued(session),
       );
     } catch (error) {
       claiming = Promise.reject(error);
@@ -2528,7 +2536,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         error: 'internal',
         message: errorText(error),
       }))
-      .then((result) => claimSettled(session, profile, result));
+      .then((result) => claimSettled(session, provider, request, result));
     return session;
   }
 
@@ -2547,12 +2555,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     addNotice(session, 'Waiting for a Unity clone…', 'info');
   }
 
-  // A landed claim moves the row to the clone and starts its process there; a
-  // failed one, or a move that throws, leaves the row resting unsaved. A
-  // result for a closed row, or after `detachAll`, changes nothing.
+  // A landed claim moves the row to the clone and starts its process there,
+  // under the profile and harness read now, since the settings may have
+  // changed during the claim; with either gone it stays resting in the clone
+  // and no `sessionOpened` fires. A failed claim, or a move that throws,
+  // leaves the row resting unsaved. A result for a closed row, or after
+  // `detachAll`, changes nothing. A landed claim chat drops goes back to the
+  // provider.
   function claimSettled(
     session: HeldSession,
-    openedProfile: ChatProfile,
+    provider: PoolProvider,
+    request: PoolClaimRequest,
     result: PoolClaimResult,
   ) {
     const { sessionId, claim } = session;
@@ -2562,32 +2575,44 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       claim?.state !== 'claiming';
     if (isRowGone) {
       log(`claim for session ${sessionId} settled after its row closed`);
+      if (result.ok) {
+        releaseClaim(provider, request);
+      }
       return;
     }
     if (!result.ok) {
-      failClaim(session, result.error, result.message);
+      failClaim(
+        session,
+        result.error,
+        `Unity clone not claimed: ${result.message}`,
+      );
       return;
     }
     try {
       moveToClone(session, result.path);
     } catch (error) {
-      failClaim(session, 'internal', errorText(error));
+      releaseClaim(provider, request);
+      const reason = errorText(error);
+      failClaim(
+        session,
+        'internal',
+        `Unity clone not used, releasing it: ${reason}`,
+      );
       return;
     }
     if (result.note !== null) {
       addNotice(session, result.note, 'info');
     }
-    emitSessionOpened(
-      { sessionId, hostSessionId: session.hostId, projectDir: result.path },
-      openedProfile.name,
-      profileDirOf(openedProfile),
-      claim.origin,
-    );
     log(`session ${sessionId} claimed ${result.path}`);
     try {
-      // Read again: the settings may have changed during the claim.
       const profile = profileNamed(session.slots.info().profile);
       const harness = requireHarness();
+      emitSessionOpened(
+        { sessionId, hostSessionId: session.hostId, projectDir: result.path },
+        profile.name,
+        profileDirOf(profile),
+        claim.origin,
+      );
       startProcess(session, harness, profile, false);
       writeNextQueued(session);
     } catch (error) {
@@ -2597,6 +2622,19 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log(`session ${sessionId} not started after its claim: ${reason}`);
     }
     save();
+  }
+
+  // Hands a landed claim's clone back to the provider that claimed it.
+  function releaseClaim(provider: PoolProvider, request: PoolClaimRequest) {
+    let releasing: Promise<void>;
+    try {
+      releasing = provider.release(request);
+    } catch (error) {
+      releasing = Promise.reject(error);
+    }
+    releasing.catch((error: unknown) =>
+      log(`release for session ${request.rowId} failed: ${errorText(error)}`),
+    );
   }
 
   // Moves the row from the placeholder to `clone`, dropping what it read of
@@ -2615,11 +2653,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.claim = null;
   }
 
-  function failClaim(session: HeldSession, error: string, message: string) {
+  // `notice` is the error notice the row shows.
+  function failClaim(session: HeldSession, error: string, notice: string) {
     session.claim = { state: 'failed' };
-    addNotice(session, `Unity clone not claimed: ${message}`, 'error');
+    addNotice(session, notice, 'error');
     returnAllHeld(session);
-    log(`session ${session.sessionId} claim failed (${error}): ${message}`);
+    log(`session ${session.sessionId} claim failed (${error}): ${notice}`);
   }
 
   // Runs `act` now, or once `session`'s running attach has settled.
@@ -3986,7 +4025,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     },
     keepRows() {
       for (const session of held.values()) {
-        session.owned.keep();
+        if (session.claim === null) {
+          session.owned.keep();
+        }
       }
     },
     recordOpenHostId(session) {

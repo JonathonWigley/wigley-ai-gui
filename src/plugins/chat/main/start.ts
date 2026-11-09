@@ -609,12 +609,20 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       compact: (sessionId, reason) => chat.compact(sessionId, reason),
       addResumeSection: (section) =>
         consumer.track(chat.addResumeSection(section)),
-      // Rows in a pool's clones regroup when a provider registers or goes.
+      // Rows in a pool's clones regroup when a provider registers, says its
+      // folders changed, or goes.
       addPoolProvider: (provider) => {
         const registration = poolProviders.add(provider);
+        let isRegistered = true;
         namer.changed();
         return consumer.track({
+          changed() {
+            if (isRegistered) {
+              namer.changed();
+            }
+          },
           dispose() {
+            isRegistered = false;
             registration.dispose();
             namer.changed();
           },

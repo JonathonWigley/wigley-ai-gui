@@ -9,13 +9,23 @@ import type {
   PoolClaimResult,
   PoolProvider,
 } from '../../chat/contract';
-import type { PoolSnapshot, PoolState } from '../contract';
+import type { PoolActionResult, PoolSnapshot, PoolState } from '../contract';
 import { type ClaimAnswer, lastLine } from './pool-cli';
 
 const FETCH_TIMEOUT_MS = 60_000;
 const LIST_TIMEOUT_MS = 10_000;
 const ORIGIN_PREFIX = 'origin/';
 const DATED_REF = /^(\d+) (.+)$/;
+// The claim errors the CLI may answer after it granted a clone: it can fail or be killed past the grant.
+const GRANT_UNKNOWN_ERRORS: ReadonlySet<string> = new Set([
+  'internal',
+  'cli-failed',
+]);
+const CANCELLED: PoolClaimResult = {
+  ok: false,
+  error: 'cancelled',
+  message: 'claim cancelled',
+};
 
 // One origin branch as a clone's refs hold it; `committedAt` in Unix seconds.
 export interface OriginBranch {
@@ -73,6 +83,8 @@ export interface PoolProviderDeps {
     request: PoolClaimRequest,
     signal: AbortSignal,
   ): Promise<ClaimAnswer>;
+  // Releases the clone the request's session holds; never rejects.
+  runRelease(request: PoolClaimRequest): Promise<PoolActionResult>;
   rescan(): void;
   log: PluginLog;
 }
@@ -87,7 +99,10 @@ export interface UnityPoolProvider extends PoolProvider {
 // Chat's pool provider over unity-pool's state and CLI. `folders` reads the watch's snapshot; `branches` lists
 // origin's refs in every clone with git, after one fetch in the lowest-numbered clone when asked to refresh, and
 // never rejects; `claim` runs the CLI, calls `queued` once when a snapshot shows the claim's ticket, keeps a
-// `diverged` clone the fresh state file shows held by the session, and reads every pool again once it settles.
+// `diverged` clone the fresh state file shows held by the session, and reads every pool again once it settles. A
+// claim whose signal aborted, or that answered an error the CLI may give after granting (`internal`, `cli-failed`),
+// runs `release` before it settles; an aborted one answers `cancelled` whatever the CLI answered. `release` logs its
+// answer, `not-holder` as nothing to release.
 export function createPoolProvider(deps: PoolProviderDeps): UnityPoolProvider {
   const { processes, log } = deps;
   const stopping = new AbortController();
@@ -200,6 +215,13 @@ export function createPoolProvider(deps: PoolProviderDeps): UnityPoolProvider {
       : answer;
   };
 
+  const release = async (request: PoolClaimRequest): Promise<void> => {
+    const result = await deps.runRelease(request);
+    log(
+      `release ${request.pool} for ${request.rowId}: ${releaseOutcome(result)}`,
+    );
+  };
+
   const claim = async (
     request: PoolClaimRequest,
     signal: AbortSignal,
@@ -212,16 +234,20 @@ export function createPoolProvider(deps: PoolProviderDeps): UnityPoolProvider {
       }
     };
     snapshotListeners.add(listener);
+    const runSignal = AbortSignal.any([signal, stopping.signal]);
     let answer: ClaimAnswer;
     try {
-      answer = await deps.runClaim(
-        request,
-        AbortSignal.any([signal, stopping.signal]),
-      );
+      answer = await deps.runClaim(request, runSignal);
     } finally {
       snapshotListeners.delete(listener);
     }
-    const result = await resultOf(request, answer);
+    const isGrantUnknown = !answer.ok && GRANT_UNKNOWN_ERRORS.has(answer.error);
+    if (runSignal.aborted || isGrantUnknown) {
+      await release(request);
+    }
+    const result = runSignal.aborted
+      ? CANCELLED
+      : await resultOf(request, answer);
     log(
       `claim ${request.pool} ${request.branch}: ${result.ok ? `ok ${result.path}` : `${result.error}: ${result.message}`}`,
     );
@@ -233,6 +259,7 @@ export function createPoolProvider(deps: PoolProviderDeps): UnityPoolProvider {
     folders,
     branches,
     claim,
+    release,
     snapshotChanged(snapshot) {
       for (const listener of snapshotListeners) {
         listener(snapshot);
@@ -255,6 +282,16 @@ function holdsTicket(
       ?.queue.some((ticket) => ticket.session === request.hostSessionId) ??
     false
   );
+}
+
+// `not-holder`, the answer of a session that holds nothing, is the usual one after a claim that granted nothing.
+function releaseOutcome(result: PoolActionResult): string {
+  if (result.ok) {
+    return 'ok';
+  }
+  return result.error === 'not-holder'
+    ? 'nothing to release'
+    : `${result.error}: ${result.message}`;
 }
 
 function gitFailure(result: ProcessResult): string {

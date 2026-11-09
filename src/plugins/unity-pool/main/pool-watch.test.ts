@@ -252,6 +252,22 @@ describe('createPoolWatch', () => {
     expect(poolNames(changes.at(-1))).toEqual(['a']);
   });
 
+  it('poolWatch_RescanAfterDispose_OpensNothing', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${ROOT}/a/state.json`, stateText('a', ONE_CLONE));
+    const hand = handWatchedFiles(files);
+    const { watch, changes } = startWatch(hand.files);
+    await settled();
+    watch.dispose();
+    const changesBefore = changes.length;
+
+    watch.rescan();
+    await settled();
+
+    expect(hand.counts()).toEqual({ opened: 1, closed: 1, lists: 1 });
+    expect(changes).toHaveLength(changesBefore);
+  });
+
   it('poolWatch_OnError_Rescans', async () => {
     const files = createMemoryFiles();
     await files.write(`${ROOT}/a/state.json`, stateText('a', ONE_CLONE));

@@ -4,6 +4,7 @@ import { FakeProcesses } from '../../../shared/fake-processes';
 import { deferred } from '../../../shared/plugin-part-harness.test-support';
 import type { PoolClaimRequest } from '../../chat/contract';
 import type {
+  PoolActionResult,
   PoolClone,
   PoolSnapshot,
   PoolState,
@@ -69,6 +70,12 @@ const POOLS: PoolSnapshot = {
   ],
 };
 
+const CANCELLED_ANSWER: ClaimAnswer = {
+  ok: false,
+  error: 'cancelled',
+  message: 'claim cancelled',
+};
+
 const REQUEST: PoolClaimRequest = {
   pool: 'p',
   branch: 'main',
@@ -91,7 +98,8 @@ function listArgs(clone: string): string[] {
   ];
 }
 
-// A provider over `snapshot`, every git run scripted on its `processes`.
+// A provider over `snapshot`, every git run scripted on its `processes`; each release run is recorded and answers
+// ok.
 function providerOver(
   snapshot: PoolSnapshot = POOLS,
   changes: Partial<PoolProviderDeps> = {},
@@ -99,16 +107,21 @@ function providerOver(
   const processes = new FakeProcesses();
   const logs: string[] = [];
   const rescan = vi.fn();
+  const releases: PoolClaimRequest[] = [];
   const provider = createPoolProvider({
     processes,
     snapshot: () => snapshot,
     readPool: async () => null,
     runClaim: async () => ({ ok: true, path: '/c/1' }),
+    runRelease: async (request) => {
+      releases.push(request);
+      return { ok: true, pool: request.pool, clone: 1 };
+    },
     rescan,
     log: (line) => logs.push(line),
     ...changes,
   });
-  return { provider, processes, logs, rescan };
+  return { provider, processes, logs, rescan, releases };
 }
 
 // Clone 1 lists `main` at 200 and `old` at 100; clone 2 lists `old` at 300.
@@ -263,45 +276,66 @@ describe('createPoolProvider', () => {
     answer: ClaimAnswer;
     fresh: PoolState | null;
     expected: unknown;
+    released: boolean;
   }>([
     {
       name: 'ok',
       answer: { ok: true, path: '/c/2' },
       fresh: null,
       expected: { ok: true, path: '/c/2', note: null },
+      released: false,
     },
     {
       name: 'diverged, held in the fresh state',
       answer: DIVERGED,
       fresh: pool('p', [clone(1, '/c/1'), clone(2, '/c/2', 'host-1')]),
       expected: { ok: true, path: '/c/2', note: 'm' },
+      released: false,
     },
     {
       name: 'diverged, held by another session',
       answer: DIVERGED,
       fresh: pool('p', [clone(1, '/c/1'), clone(2, '/c/2', 'host-9')]),
       expected: DIVERGED,
+      released: false,
     },
     {
       name: 'diverged, no state file',
       answer: DIVERGED,
       fresh: null,
       expected: DIVERGED,
+      released: false,
     },
     {
       name: 'dirty',
       answer: { ok: false, error: 'dirty', message: 'd' },
       fresh: null,
       expected: { ok: false, error: 'dirty', message: 'd' },
+      released: false,
     },
     {
-      name: 'cancelled',
-      answer: { ok: false, error: 'cancelled', message: 'claim cancelled' },
+      name: 'no-cli',
+      answer: { ok: false, error: 'no-cli', message: 'n' },
       fresh: null,
-      expected: { ok: false, error: 'cancelled', message: 'claim cancelled' },
+      expected: { ok: false, error: 'no-cli', message: 'n' },
+      released: false,
     },
-  ])('claim: $name', async ({ answer, fresh, expected }) => {
-    const { provider, rescan } = providerOver(STALE, {
+    {
+      name: 'internal, after the CLI may have granted, releases',
+      answer: { ok: false, error: 'internal', message: 'i' },
+      fresh: null,
+      expected: { ok: false, error: 'internal', message: 'i' },
+      released: true,
+    },
+    {
+      name: 'cli-failed, after the CLI may have granted, releases',
+      answer: { ok: false, error: 'cli-failed', message: 'f' },
+      fresh: null,
+      expected: { ok: false, error: 'cli-failed', message: 'f' },
+      released: true,
+    },
+  ])('claim: $name', async ({ answer, fresh, expected, released }) => {
+    const { provider, rescan, releases } = providerOver(STALE, {
       runClaim: async () => answer,
       readPool: async () => fresh,
     });
@@ -309,7 +343,52 @@ describe('createPoolProvider', () => {
     expect(
       await provider.claim(REQUEST, new AbortController().signal, () => {}),
     ).toEqual(expected);
+    expect(releases).toEqual(released ? [REQUEST] : []);
     expect(rescan).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<{ name: string; answer: ClaimAnswer }>([
+    { name: 'cancelled', answer: CANCELLED_ANSWER },
+    { name: 'ok after the abort', answer: { ok: true, path: '/c/2' } },
+  ])('claim_Aborted_ReleasesAndAnswersCancelled: $name', async ({ answer }) => {
+    const run = deferred<ClaimAnswer>();
+    const { provider, releases } = providerOver(POOLS, {
+      runClaim: () => run.promise,
+    });
+    const chat = new AbortController();
+
+    const claim = provider.claim(REQUEST, chat.signal, () => {});
+    chat.abort();
+    run.resolve(answer);
+
+    expect(await claim).toEqual(CANCELLED_ANSWER);
+    expect(releases).toEqual([REQUEST]);
+  });
+
+  it.each<{ name: string; answer: PoolActionResult; logged: string }>([
+    {
+      name: 'ok',
+      answer: { ok: true, pool: 'p', clone: 2 },
+      logged: 'release p for row-1: ok',
+    },
+    {
+      name: 'not-holder is nothing to release',
+      answer: { ok: false, error: 'not-holder', message: 'holds none' },
+      logged: 'release p for row-1: nothing to release',
+    },
+    {
+      name: 'a failure',
+      answer: { ok: false, error: 'cli-failed', message: 'spawn failed' },
+      logged: 'release p for row-1: cli-failed: spawn failed',
+    },
+  ])('release_LogsTheAnswer: $name', async ({ answer, logged }) => {
+    const { provider, logs } = providerOver(POOLS, {
+      runRelease: async () => answer,
+    });
+
+    await provider.release(REQUEST);
+
+    expect(logs).toEqual([logged]);
   });
 
   it('claim_QueueTicket_FiresQueuedOnceWhileRunning', async () => {
@@ -362,11 +441,7 @@ describe('createPoolProvider', () => {
       }
 
       expect((runSignal as AbortSignal | null)?.aborted).toBe(true);
-      run.resolve({
-        ok: false,
-        error: 'cancelled',
-        message: 'claim cancelled',
-      });
+      run.resolve(CANCELLED_ANSWER);
       await claim;
     },
   );

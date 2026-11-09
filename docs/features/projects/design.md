@@ -54,12 +54,14 @@ folder project, or a name an earlier entry took is left out, and the log names t
 ## Start prompt
 
 `Space b n` opens on **Project**: each project in settings order, labelled by name and its folder or pool, then
-**Other folder…**, which opens the folder step as it was before projects (recent folders, `Choose folder…`).
+**Other folder…**, which opens the folder step as it was before projects (recent folders, `Choose folder…`). With no
+projects in the settings, `Space b n` opens the folder step, as before projects.
 
 - A pool project goes to **Branch**: its pinned branches, then every other branch on origin, newest commit first,
   filtered as the user types (`/`). The list opens from the refs each clone last fetched, and refreshes once a
-  background fetch lands, keeping the cursor's branch and any filter typed meanwhile. When both reads fail or list
-  nothing, the step does not open and a toast names the fetch's reason.
+  background fetch lands, keeping the cursor's branch and any filter typed meanwhile. When the fetch fails or lists
+  nothing while the last-fetched list shows, an info toast says `Branches not refreshed: <reason>`. When both reads
+  fail or list nothing, the step does not open and an error toast names the fetch's reason.
 - A project with no `profile` goes to **Profile**; a project with one passes it over, and one naming a profile the
   settings lack stops with a toast. The sign-in check runs either way.
 - The session step lists the project's saved sessions from every folder it covers — for a pool project, all its
@@ -78,15 +80,25 @@ that id exists only once the row is open:
    `/clear` hands it to the fresh session as for any claim.
 3. When the claim lands, chat moves the row to the clone it got (`sessions.relocate`) and starts the agent there, so
    its `AGENTS.md`, skills and transcript are the clone's from the first message. Sessions emits `relocated`, so
-   plugins that copied the folder at connect (docs, workflow) take the clone, and chat fires `sessionOpened` only
-   now, with the clone as the folder; a row whose claim never lands fires neither `sessionOpened` nor
+   docs, which copied the folder at connect, takes the clone, and chat fires `sessionOpened` only now, with the
+   clone as the folder, which workflow's flow takes; a row whose claim never lands fires neither `sessionOpened` nor
    `sessionClosed`.
 
 Closing the row while the claim runs cancels the claim: the provider stops the CLI, then runs `unity-pool release
---json` under the same ids, since the CLI may have been killed after it granted a clone. A claim that fails (`dirty`,
+--json` under the same ids, since the CLI may have been killed after it granted a clone. The provider releases the
+same way after a claim that answers `internal` or `cli-failed`, which the CLI can give past the grant, and chat hands a
+landed claim back through the provider's `release` when the row closed before it landed or the move to the clone
+throws; that row's notice reads `Unity clone not used, releasing it: <reason>`. A claim stopped by the app quitting
+gets no release: the pool's claim expiry frees its clone. A claim cancelled while it
+queues leaves its queue ticket behind: the pool drops a ticket nobody polls after two minutes. A claim that fails (`dirty`,
 `unknown-branch`, `no-cli`, `cli-failed`, `internal`) leaves the row resting with the error notice `Unity clone not
 claimed: <the CLI's message>`; a message sent to that row is refused. A `diverged` claim keeps its clone, by the pool's rules, so the agent
 starts there with the CLI's message as a notice, to settle the divergence.
+
+A restart cancels a running claim too, and the provider releases it as for a closed row. Unity-pool restarting alone
+stops its provider, so the row rests with `Unity clone not claimed: claim cancelled`. Chat restarting takes unity-pool
+with it and ends the row: chat keeps only the rows its restore adopts, and a row with a claim, running or failed, is
+not saved. A row whose claim landed is saved in its clone and comes back like any other.
 
 Resuming a pool project's saved session reopens it in the clone it ran in, with no claim: a transcript is tied to its
 folder, and the pool's sticky ranking and stranded hand-back already return that clone to the row.
@@ -101,7 +113,9 @@ Sessions started through Other folder, sessions already open, and saved ones all
 
 - **Side bar**: the row's `project` is the project's name when its folder has one, else the origin repo name as
   before (`docs/features/session-groups/design.md` § Projects). Chat registers the rule with sessions main
-  (`addProjectNamer`).
+  (`addProjectNamer`) and re-asks it when the projects setting changes, when a pool provider registers or goes, and
+  when the provider's handle says its clones changed, as unity-pool's does on each state change, so clone rows take
+  the project's name once the pool's first read lands.
 - **Session step**: a project's saved sessions are those whose folders it covers.
 
 ## Starting from an agent
@@ -115,8 +129,8 @@ For a pool project the tool answers once the row is open, before the claim lands
 ## Decisions
 
 - **Chat owns projects; unity-pool plugs in.** unity-pool depends on chat, so chat cannot call it. Chat exports
-  `addPoolProvider`, as it exports `addResumeSection`, and unity-pool registers its branch list, clone folders and
-  claim through it.
+  `addPoolProvider`, as it exports `addResumeSection`, and unity-pool registers its branch list, clone folders, claim
+  and release through it.
 - **The claim waits on the row, not in the picker.** The claim needs the row id, and a claim takes seconds even with a
   clone free; the user keeps working while it waits, and the wait shows where the session will live.
 - **Membership is worked out from the folder, never stored.** It matches how the side bar already groups, and covers

@@ -114,15 +114,18 @@ function readProject(
     return 'pool must be a non-empty string';
   }
   const profile = present(element, 'profile');
-  if (profile !== undefined && typeof profile !== 'string') {
-    return 'profile must be a string';
+  if (
+    profile !== undefined &&
+    (typeof profile !== 'string' || profile === '')
+  ) {
+    return 'profile must be a non-empty string';
   }
   const pinnedBranches = present(element, 'pinnedBranches');
   if (pinnedBranches !== undefined && folder !== undefined) {
     return 'pinnedBranches belongs to a pool project';
   }
   if (pinnedBranches !== undefined && !isNameList(pinnedBranches)) {
-    return 'pinnedBranches must be a list of branch names';
+    return 'pinnedBranches must be a list of non-empty branch names';
   }
   if (kept.some((project) => project.name === name)) {
     return 'the name an earlier project took';
@@ -141,7 +144,8 @@ function readProject(
 
 function isNameList(value: unknown): value is string[] {
   return (
-    Array.isArray(value) && value.every((branch) => typeof branch === 'string')
+    Array.isArray(value) &&
+    value.every((branch) => typeof branch === 'string' && branch !== '')
   );
 }
 

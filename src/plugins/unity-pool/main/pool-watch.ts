@@ -19,7 +19,7 @@ const MISSING_ROOT_CHECK_MS = 60_000;
 // and never created, since `Files.watch` creates the folder it watches. `rescan` closes the watch, lists the pools
 // again and reads each one, for a change the OS watcher missed. A file that does not parse keeps the pool's last good
 // state; one of an unknown version drops the pool. A read that settles after a newer read of its folder started is
-// dropped.
+// dropped. `rescan` after `dispose` does nothing.
 export interface PoolWatch {
   snapshot(): PoolSnapshot;
   rescan(): void;
@@ -188,6 +188,9 @@ export function createPoolWatch(deps: {
   };
 
   function rescan() {
+    if (disposed) {
+      return;
+    }
     stop();
     const current = scanNumber;
     scan(current).catch((error: unknown) => {

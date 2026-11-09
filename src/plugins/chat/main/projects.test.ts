@@ -130,17 +130,19 @@ describe('readProjects', () => {
         { name: 'A', folder: 3 },
         { name: 'B', pool: '' },
         { name: 'C', folder: '/c', profile: true },
+        { name: 'D', pool: 'p', profile: '' },
       ] as unknown as ProjectSetting[],
       expected: [],
-      skipped: [0, 1, 2],
+      skipped: [0, 1, 2, 3],
     },
     {
       name: 'pinned branches that are not names',
       raw: [
         { name: 'A', pool: 'p', pinnedBranches: ['main', 4] },
+        { name: 'B', pool: 'p', pinnedBranches: ['main', ''] },
       ] as unknown as ProjectSetting[],
       expected: [],
-      skipped: [0],
+      skipped: [0, 1],
     },
     {
       name: 'a skipped entry leaves the rest in order',
