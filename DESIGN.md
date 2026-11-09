@@ -127,7 +127,7 @@ means something.
 | Running                | `status-running` (sapphire)                                             | An agent working, a tool running                                                                                    |
 | Success / added        | `status-success`                                                        |                                                                                                                     |
 | Warning                | `status-warning`                                                        |                                                                                                                     |
-| Needs you              | `status-attention` (peach)                                              | A permission prompt, an open round: "your turn", apart from warning                                                 |
+| Needs you              | `status-attention` (peach)                                              | A permission prompt, an open round, a run paused short of its end: "your turn", apart from warning                  |
 | Error / removed        | `status-error`                                                          |                                                                                                                     |
 | Text selection, cursor | `selection-background`, `cursor`, `editor-active-line`                  | Catppuccin convention; the active line's band in a focused document editor                                          |
 | Changed sections       | `diff-inserted-mark`, `diff-removed-mark`, `diff-changed-mark` (peach)  | The mark on an inserted, removed or changed section in rendered markdown                                            |

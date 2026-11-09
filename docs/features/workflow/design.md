@@ -76,7 +76,7 @@ Dismiss. `wigley:make` starting moves any stage to make, fix included, and claim
 workflow or none holds it. A standalone `wigley:explore` or `wigley:review` shows its level and trail through the level
 skill that started the run.
 
-Running means the flow is busy: a turn or a subagent at any depth runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's Needs you label marks a waiting round.
+Running means the flow is busy: a turn or a subagent at any depth runs. A permission prompt or an open round waits inside a running turn, so it reads as running, and chat or forms puts Needs you on the row. Paused means nothing runs. A run paused short of its end waits on the user — an agent that stopped to ask in chat, or a crash — so the row shows Needs you for it too (Row label, below).
 
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
   `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a subagent runs.
@@ -266,6 +266,12 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   `raised`, so the built-in sessions layout draws it as a tinted Tag in place of a finished turn's `Done`, with a status
   edge on the card, one step under the solid Tag of an `urgent` Needs you. Its rank sits above chat's done and below chat's working, so a running turn, an error and a waiting round still
   take the label.
+- **Paused run** — every other stage of a run, while the flow is paused, sets Needs you (`attention`, `urgent`) at
+  rank 18, so a session that stopped mid-run says so even when the agent asked in chat rather than in a round. A stage
+  that ends its run (its `finishes`: Small's and Medium's Done, Large's Closed) and Large's idle set none. The rank
+  sits under chat's working, so a session waiting on its own background command or Monitor still reads Working, and
+  under chat's error, so an unseen error shows first. It lasts until a turn or a subagent starts; viewing the session
+  leaves it.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, S, M or L,
   in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the stage's label as
   one tag toned by its status (`running`, pulsing, while running; `success` with a check when done; neutral while
