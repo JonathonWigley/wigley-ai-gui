@@ -141,6 +141,7 @@ import { createPluginChannels } from './plugins/plugin-channel';
 import { createPluginSwitch, type PluginSwitch } from './plugins/plugin-switch';
 import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
+import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
@@ -368,7 +369,14 @@ const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
-const git = createProcessGit({ processes, files, paths });
+// Git runs at most this many at once, so a burst of reads cannot pile up
+// exited children faster than main's event loop reaps them.
+const MAX_GIT_RUNS = 4;
+const git = createProcessGit({
+  processes: limitRuns(processes, MAX_GIT_RUNS),
+  files,
+  paths,
+});
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;

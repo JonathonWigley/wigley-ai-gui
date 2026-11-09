@@ -666,7 +666,35 @@ function createBacklogMain(deps: BacklogDeps) {
     return read;
   }
 
-  const load = () => serve(() => docs.machineIndex());
+  // One load runs at a time: every call made while one runs shares the single
+  // load that starts once it ends, so a burst of `changed` events costs two
+  // loads, and each caller still gets a read begun after its call.
+  let runningLoad: Promise<BacklogRead> | null = null;
+  let queuedLoad: Promise<BacklogRead> | null = null;
+
+  function startLoad(): Promise<BacklogRead> {
+    const started = serve(() => docs.machineIndex());
+    runningLoad = started;
+    const settle = () => {
+      if (runningLoad === started) {
+        runningLoad = null;
+      }
+    };
+    void started.then(settle, settle);
+    return started;
+  }
+
+  function load(): Promise<BacklogRead> {
+    if (runningLoad === null) {
+      return startLoad();
+    }
+    const settled = () => undefined;
+    queuedLoad ??= runningLoad.then(settled, settled).then(() => {
+      queuedLoad = null;
+      return startLoad();
+    });
+    return queuedLoad;
+  }
 
   function imagesRootOf(home: BacklogHome): string {
     return paths.join(home.root, IMAGES_FOLDER);
