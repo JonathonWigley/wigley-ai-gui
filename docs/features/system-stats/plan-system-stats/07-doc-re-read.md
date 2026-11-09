@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -31,3 +31,5 @@ Commit:    one commit, "System stats docs re-read against the landed code", or n
            nothing was stale (say so in Proof)
 
 ## Proof
+
+Commit 9dc539c0 · proof: Diff read: DESIGN.md Sparkline and System stats bullets, design.md § The panel match the code (sort hint, heading row, 260px narrow form, system-stats.layout setting); oxfmt --check passes on both. AGENTS.md, docs/keymap.md, session-host and layouts design docs, drive SKILL.md checked and unchanged. · concerns: design.md adapter table's Windows memory row omits Win32_PerfRawData_PerfOS_Memory, which windows-system-stats.ts reads for AvailableBytes; rides to the review.

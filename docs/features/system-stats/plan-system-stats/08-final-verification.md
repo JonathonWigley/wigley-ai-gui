@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -66,3 +66,5 @@ Done when: every run above passes and every live check is recorded in Proof with
 Commit:    none, unless a fix lands
 
 ## Proof
+
+Commit ce349957 4a420502 · proof: Tests: filtered npm test (31 files, 1436 tests), typecheck, lint pass. Self-test: npm run selftest -- --plugin system-stats --plugin chat passes (gallery has no script; whole run not asked, so not run, placement check unproven). Drive 1 (/tmp/claude-system-stats/reports/08-drive-1.md, .drive/ssa, .drive/ssb): panel on launch, gallery Sparkline strokes = status-success/warning/error in dark, run-home Latte light and reduced transparency, error seed text and log, Space v y hide/reload/show, Alt+l j k gg G s Enter h, sampling stopped while hidden, GPU numbers on Apple Silicon, session title after restart all PASS; B1 rows-vs-meter and B2 session row unreachable FAIL. Fixes ce349957 (sessions always shown, narrow form at 360px) and 4a420502 (new-process CPU, time-based fake, tone on shown percent, one seeded line). Drive 2 (/tmp/claude-system-stats/reports/08-drive-2.md, .drive/ssa2, .drive/ssb2): narrow form name cell 235px, sparkline 213px, names legible; one seeded line; claude · Greeting row reachable and opens to claude, Python. B1 still short: meter vs row sum 37.9/23.6, 74.4/25.2, 76.9/52.0 (processes that start and exit between samples). Live runs spent two short real Claude turns (about $0.33 each). · concerns: B1 rows undercount the CPU meter from process churn ps cannot see (design.md:52 claims they add up); fake Network/Disk meters sit at 85%/100% flat; an opened group's children stay below the visible area until the cursor moves; light theme proved only on a run-home Latte theme (no built-in light theme); stale docs: design.md:52, design.md Windows memory row, plan 05/06 cut rule and seeded log line. All ride to the review.

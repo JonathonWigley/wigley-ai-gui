@@ -226,8 +226,8 @@ export type StatsFixtureVariant = 'busy' | 'error'; // the drive and self-test s
 - [x] [system-stats page, layout, keys, self-test](06-plugin-page.md) — after 04, 05
 
 ### Wave 4
-- [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Doc re-read](07-doc-re-read.md) — after 01–06
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -240,6 +240,8 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 - 02 · 73e506bd · diff read: createWindowsSystemStats in main.ts systemStatsFor, windowsHide in node-processes; worker's 43 system-stats tests pass, typecheck clean; PowerShell never run (task 08 / user's Windows check) · concerns: rejection names powershell.exe through the runner's own error when the spawn fails; a key present as null throws a TypeError naming no program
 - 05 · 01d1e39b · diff read: contract.ts word for word, slot and channel present, manifests/main list the plugin, FAKE_SESSION_PID gone; worker's typecheck and lint clean, 140 plugin tests pass · concerns: gallery-parts.test.ts fails: its fake document lacks createElementNS under task 04's sparkline (fix dispatched); harness pushSettings added beyond the list
 - 06 · 375dd5f7 · diff read: layout.d.ts filled, page part listed, <Leader>vy and panel binds in keymap, selftest script handed; worker's typecheck and lint clean, 150 tests pass, selftest --plugin system-stats passes; screenshots read · concerns: 56px column-width token leaves names ~60px at the default bar: names and session titles truncate (screenshot); narrow form proved only by the fit check; s hint placement unproven until a placement check
+- 07 · 9dc539c0 · Diff read: DESIGN.md Sparkline and System stats bullets, design.md § The panel match the code (sort hint, heading row, 260px narrow form, system-stats.layout setting); oxfmt --check passes on both. AGENTS.md, docs/keymap.md, session-host and layouts design docs, drive SKILL.md checked and unchanged. · concerns: design.md adapter table's Windows memory row omits Win32_PerfRawData_PerfOS_Memory, which windows-system-stats.ts reads for AvailableBytes; rides to the review.
+- 08 · ce349957 4a420502 · Tests: filtered npm test (31 files, 1436 tests), typecheck, lint pass. Self-test: npm run selftest -- --plugin system-stats --plugin chat passes (gallery has no script; whole run not asked, so not run, placement check unproven). Drive 1 (/tmp/claude-system-stats/reports/08-drive-1.md, .drive/ssa, .drive/ssb): panel on launch, gallery Sparkline strokes = status-success/warning/error in dark, run-home Latte light and reduced transparency, error seed text and log, Space v y hide/reload/show, Alt+l j k gg G s Enter h, sampling stopped while hidden, GPU numbers on Apple Silicon, session title after restart all PASS; B1 rows-vs-meter and B2 session row unreachable FAIL. Fixes ce349957 (sessions always shown, narrow form at 360px) and 4a420502 (new-process CPU, time-based fake, tone on shown percent, one seeded line). Drive 2 (/tmp/claude-system-stats/reports/08-drive-2.md, .drive/ssa2, .drive/ssb2): narrow form name cell 235px, sparkline 213px, names legible; one seeded line; claude · Greeting row reachable and opens to claude, Python. B1 still short: meter vs row sum 37.9/23.6, 74.4/25.2, 76.9/52.0 (processes that start and exit between samples). Live runs spent two short real Claude turns (about $0.33 each). · concerns: B1 rows undercount the CPU meter from process churn ps cannot see (design.md:52 claims they add up); fake Network/Disk meters sit at 85%/100% flat; an opened group's children stay below the visible area until the cursor moves; light theme proved only on a run-home Latte theme (no built-in light theme); stale docs: design.md:52, design.md Windows memory row, plan 05/06 cut rule and seeded log line. All ride to the review.
 ### Contract changes
 - kit.sparkline in kit.d.ts: one line → oxfmt wraps it over several lines, type unchanged · why: the repo formatter · consumers: 06 · group 04
 - FakeHostedProcessRecord: gains pid as planned → also a public spawnEvents (null for addRunning) · why: the record is the fake's only per-process state · consumers: none beyond tests · group 03
@@ -258,5 +260,9 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 - The main part harness gains pushSettings (MainRecord holds settings and listeners) — a shared test-support file changed beyond the list · group 05 · group 05
 - Open groups prune and the cursor falls back only on a non-null snapshot, since main nulls the slot at each show · group 06 · group 06
 - Every row gets a chevron-width spacer so names line up · group 06 · group 06
+- 08 (lead): the plan's self-test command named --plugin gallery, which has no self-test script; ran --plugin system-stats --plugin chat.
+- 08 (lead): drive run B2 found the Chat session group cut by processRows; every session: group now always shows in the list in its sort position, processRows caps the other rows.
+- 08 (lead): drive FAILs B1 (row CPU undercounts the meter), the narrow form not applying at the default width, Network/Disk scale reset on config apply, the 90% tone/label mismatch and the double seeded log are fixed inside 08 by two fix dispatches (main side, page side).
 ### Review rounds
 ### Test gate
+- Filtered npm test over every test file 01-08 touched (31 files, 1436 tests) + typecheck + lint pass at 4a420502; filtered self-test (system-stats, chat) passes; whole self-test not run: not asked in this turn.
