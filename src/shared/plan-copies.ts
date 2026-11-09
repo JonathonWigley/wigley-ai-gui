@@ -2,7 +2,11 @@ import { type Files, isMissingFile, readIfPresent } from '../contracts/files';
 import type { Git } from '../contracts/git';
 import type { Paths } from '../contracts/paths';
 import { isSameJson } from './json';
-import { type PlanProgress, readPlanProgress } from './plan-progress';
+import {
+  type PlanProgress,
+  readPlanProgress,
+  type TaskStatus,
+} from './plan-progress';
 
 // One checkout's copy of a plan folder: `planDir` in `checkout`, and the
 // newest modified time of its `plan.md` and task documents.
@@ -32,6 +36,14 @@ export interface PlanCopyDeps {
 
 // A task document's file name in a plan folder.
 const TASK_DOCUMENT = /^\d{2}-.+\.md$/;
+
+// How far a run has moved a task's status; a status with no rank is never
+// behind.
+const STATUS_RANK: Readonly<Record<TaskStatus, number>> = {
+  'not started': 0,
+  'in progress': 1,
+  done: 2,
+};
 
 interface Anchor {
   // The nearest folder at or above the plan folder that exists.
@@ -87,11 +99,15 @@ export async function planCopies(
 
 // The copy a run moved, with its progress, among the copies whose `plan.md`
 // reads: with no main tree's copy, the latest-changed copy. Otherwise the newest
-// worktree copy whose progress differs from the main tree's and has no fewer
-// ticked boxes, else the main tree's copy: a run only ticks boxes forward, so
-// a copy behind main's is an idle worktree left at an older state. Newest is
-// the largest `changedAt`, the earlier in `planCopies` order on a tie. Null
-// when no copy reads.
+// worktree copy whose progress differs from the main tree's and is not behind
+// it, else the main tree's copy: a run only ticks boxes and moves statuses
+// forward (not started, in progress, done), so a copy behind main's is an idle
+// worktree left at an older state. A copy is behind with fewer ticked boxes,
+// or with a task document's status ranked before main's for the same task
+// document; a status outside that order is never behind. Newest is the
+// largest `changedAt`, the earlier in `planCopies` order on a tie. Null when
+// no copy reads. Rejects on a files failure other than a missing file in any
+// checkout.
 export async function readMovedCopy(
   planDir: string,
   deps: PlanCopyDeps,
@@ -161,12 +177,34 @@ export async function readPlanCopy(
 }
 
 // Whether `read` is a worktree copy whose progress moved from the main tree's
-// `main`: different, and with no fewer ticked boxes.
+// `main`: different, and not behind it.
 function isMovedFromMain(read: ReadCopy, main: ReadCopy): boolean {
   const isWorktreeCopy = !read.copy.isMainTree;
   const differsFromMain = !isSameJson(read.progress, main.progress);
-  const isBehindMain = read.progress.checked < main.progress.checked;
-  return isWorktreeCopy && differsFromMain && !isBehindMain;
+  const hasFewerTicks = read.progress.checked < main.progress.checked;
+  const hasAStatusBehind = hasStatusBehind(read.progress, main.progress);
+  return (
+    isWorktreeCopy && differsFromMain && !hasFewerTicks && !hasAStatusBehind
+  );
+}
+
+// Whether any task document in `progress` has a status ranked before the
+// same task document's status in `main`.
+function hasStatusBehind(progress: PlanProgress, main: PlanProgress): boolean {
+  const mainRanks = new Map<string, number>();
+  for (const task of main.tasks) {
+    if (task.file !== null && task.status !== null) {
+      mainRanks.set(task.file, STATUS_RANK[task.status]);
+    }
+  }
+  return progress.tasks.some((task) => {
+    const mainRank = task.file === null ? undefined : mainRanks.get(task.file);
+    return (
+      task.status !== null &&
+      mainRank !== undefined &&
+      STATUS_RANK[task.status] < mainRank
+    );
+  });
 }
 
 // The read with the largest `changedAt`, the earlier one on a tie; null when

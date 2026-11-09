@@ -339,6 +339,28 @@ describe('readMovedCopy', () => {
       expected: '/r',
     },
     {
+      name: 'a newer worktree copy with an earlier status, equal ticks',
+      writes: [
+        [MAIN, 10],
+        [`/r/${PLAN}/01-a.md`, 10, 'Status: in progress\n'],
+        [FIRST, 50],
+        [`/w1/${PLAN}/01-a.md`, 50, 'Status: not started\n'],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/r',
+    },
+    {
+      name: 'a newer worktree copy with a later status, equal ticks',
+      writes: [
+        [MAIN, 10],
+        [`/r/${PLAN}/01-a.md`, 10, 'Status: in progress\n'],
+        [FIRST, 50],
+        [`/w1/${PLAN}/01-a.md`, 50, 'Status: done\n'],
+      ] satisfies Write[],
+      vanished: undefined,
+      expected: '/w1',
+    },
+    {
       name: 'two moved copies at equal times',
       writes: [
         [MAIN, 10, planTicked(1)],
