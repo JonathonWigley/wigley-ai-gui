@@ -3,6 +3,7 @@ import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 import { overrideSettings } from '../shared/plugin-manifests';
 import { SCREENSHOT_NAME } from './drive/page-driver';
+import { SELFTEST_USER_ID } from './selftest-user-plugin';
 
 // A script as the self-test received it, with the id of the plugin that handed
 // it over.
@@ -98,9 +99,10 @@ function pressFiles(base: string, repeatMax: number | undefined): string[] {
 
 // Throws on a script whose groups the runner cannot report or run: a group
 // with a blank `name` or `why`, two groups of one script with one name, a step
-// whose `why` is given but blank, a `repeat` whose `max` is not a whole number
-// of at least 2 or whose `until` is blank, a `repeat` beside `alsoExpect`, and
-// a `width` that is neither `'start'` nor a positive whole number.
+// whose `why` or `remove` is given but blank, a `repeat` whose `max` is not a
+// whole number of at least 2 or whose `until` is blank, a `repeat` beside
+// `alsoExpect`, and a `width` that is neither `'start'` nor a positive whole
+// number.
 export function checkGroups(handed: readonly HandedScript[]): void {
   for (const { pluginId, script } of handed) {
     const names = new Set<string>();
@@ -127,6 +129,12 @@ export function checkGroups(handed: readonly HandedScript[]): void {
 function checkStep(where: string, step: SelfTestStep): void {
   if (step.why !== undefined && step.why.trim() === '') {
     throw new Error(`${where} has a step (${step.expect}) with no why`);
+  }
+  // A blank `remove` resolves to the temp home itself.
+  if (step.remove !== undefined && step.remove.trim() === '') {
+    throw new Error(
+      `${where} has a step (${step.expect}) with a blank remove: a remove names a file or folder under the temp home`,
+    );
   }
   const isWidthValid =
     step.width === undefined ||
@@ -159,22 +167,20 @@ function checkStep(where: string, step: SelfTestStep): void {
 }
 
 // `config` as the self-test serves it: the scripts' page binds after every
-// bind, and their settings laid over the plugin settings. A script bind whose
-// command `config.commands` lacks and whose text before the first `.` names no
-// plugin in `config.plugins` is dropped, as a plugin that is not loaded (the
-// runtime loader's fixture, once its folder goes) takes its commands with it;
-// every other script bind is kept, so one naming an unknown command of a
-// loaded plugin still fails as a config problem. Throws on a setting no plugin
-// holds.
+// bind, and their settings laid over the plugin settings. A script bind to a
+// command of the fixture user plugin (`SELFTEST_USER_ID`) is dropped while
+// `config.plugins` lacks the fixture; every other script bind is kept. Throws
+// on a setting no plugin holds.
 export function applySelfTestConfig(
   config: AppConfig,
   selfTest: SelfTestConfig,
 ): AppConfig {
-  const loaded = new Set(config.plugins.map((plugin) => plugin.id));
+  const isFixtureLoaded = config.plugins.some(
+    (plugin) => plugin.id === SELFTEST_USER_ID,
+  );
   const scriptBinds = selfTest.pageBinds.filter(
     (bind) =>
-      Object.hasOwn(config.commands, bind.command) ||
-      loaded.has(bind.command.split('.', 1)[0]),
+      isFixtureLoaded || bind.command.split('.', 1)[0] !== SELFTEST_USER_ID,
   );
   return {
     ...config,

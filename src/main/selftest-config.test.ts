@@ -19,6 +19,7 @@ import {
   selectScripts,
   selfTestFilterOf,
 } from './selftest-config';
+import { SELFTEST_USER_ID } from './selftest-user-plugin';
 
 function handed(
   pluginId: string,
@@ -99,21 +100,45 @@ describe('mergeSelfTestConfigs', () => {
 });
 
 describe('applySelfTestConfig', () => {
-  it.each<{ given: string; command: string; isKept: boolean }>([
-    { given: 'a known command', command: 'core.help', isKept: true },
+  it.each<{
+    given: string;
+    command: string;
+    isFixtureLoaded: boolean;
+    isKept: boolean;
+  }>([
     {
-      given: 'an unknown command of a loaded plugin',
-      command: 'p.zap',
+      given: 'a known command',
+      command: 'core.help',
+      isFixtureLoaded: false,
       isKept: true,
     },
     {
-      given: 'a command of a plugin not loaded',
+      given: 'an unknown command of a loaded plugin',
+      command: 'p.zap',
+      isFixtureLoaded: false,
+      isKept: true,
+    },
+    {
+      given: 'a command of another plugin not loaded',
       command: 'gone.hello',
+      isFixtureLoaded: false,
+      isKept: true,
+    },
+    {
+      given: 'a command of the loaded fixture',
+      command: `${SELFTEST_USER_ID}.hello`,
+      isFixtureLoaded: true,
+      isKept: true,
+    },
+    {
+      given: 'a command of the fixture not loaded',
+      command: `${SELFTEST_USER_ID}.hello`,
+      isFixtureLoaded: false,
       isKept: false,
     },
   ])(
     "applySelfTestConfig appends page binds and lays settings over the plugins': a script bind to $given",
-    ({ command, isKept }) => {
+    ({ command, isFixtureLoaded, isKept }) => {
       const userBind: PageBind = {
         keys: ['j'],
         scope: 'any',
@@ -153,7 +178,12 @@ describe('applySelfTestConfig', () => {
           isDev: true,
         },
         runMode: 'live',
-        plugins: [{ id: 'p' } as ServedPlugin],
+        plugins: [
+          { id: 'p' } as ServedPlugin,
+          ...(isFixtureLoaded
+            ? [{ id: SELFTEST_USER_ID } as ServedPlugin]
+            : []),
+        ],
         problems: [],
       };
 
@@ -279,6 +309,7 @@ describe('checkGroups', () => {
             steps: [
               { ...step, width: 600 },
               { ...step, width: 'start' },
+              { ...step, remove: 'p/old' },
               { ...step, repeat: { until: 'end', max: 2 } },
             ],
           },
@@ -332,6 +363,17 @@ describe('checkGroups', () => {
       ]);
 
     expect(check).toThrow(/forms.*rounds.*\(x\)/);
+  });
+
+  it.each(['', '  '])('throws on a step whose remove is "%s"', (remove) => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [
+          { name: 'rounds', why: 'w', steps: [{ ...step, remove }] },
+        ]),
+      ]);
+
+    expect(check).toThrow(/forms.*rounds.*\(x\).*remove/);
   });
 
   it.each([1, 2.5])('throws on a repeat with max %s', (max) => {

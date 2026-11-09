@@ -302,7 +302,8 @@ const GROUPS: SelfTestGroup[] = [
       {
         writeFile: fixtureFile(MANIFEST_FILE, FIXTURE_MANIFEST),
         keys: [],
-        expect: '[selftest-user] main started v2',
+        expect: '[plugin-switch] reloaded selftest-user',
+        alsoExpect: [/^\[selftest-user\] main started v2$/],
         why: "A good save loads again, with v2's main.js still on disk.",
       },
     ],

@@ -595,6 +595,11 @@ Duplication and drift with no user-visible defect.
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
 
+- **A sessions restart may leave Gallery mode showing** — *agent-ready*: unproven since the runtime loader landed.
+  Before it, a live restart of sessions left the app in Gallery mode, because the re-added Sessions mode is added
+  hidden. 61a0e287 only keeps the re-added mode's activity bar place (`src/renderer/shell/shell-chrome.ts` `addMode`).
+  Restart sessions in a drive run while Sessions mode shows, and check which mode shows after; if Gallery, show the
+  mode the restart stopped.
 - **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
   that session gets its stored answers back from form-service's `replaysLastSubmitted`
   (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same
