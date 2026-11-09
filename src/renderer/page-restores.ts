@@ -1,7 +1,7 @@
 import type { Timers } from '../contracts/ambient';
 import type { PageRestores } from '../contracts/plugin';
 
-// The latest a restore restoreWindow settles after every part's `ready()` ran: well
+// The latest a restore window settles after every part's `ready()` ran: well
 // past a docs index rebuild, which can take seconds.
 export const RESTORES_CAP_MS = 30_000;
 

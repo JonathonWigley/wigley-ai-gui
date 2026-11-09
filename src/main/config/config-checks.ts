@@ -53,9 +53,10 @@ import { heldBackUserBinds, parseUserKeymap } from './user-keymap';
 import { mergeUserSettings, type UserSettings } from './user-settings';
 
 // What the checks of the user config files read: the core settings and keys,
-// the manifests of the plugins the ConfigStore admitted, and the themes. `resolveTheme` resolves a theme as
-// the theme loader does, running `checkTokens`, the check of the tokens the
-// native window takes, on every theme it resolves.
+// the manifests of the plugins the ConfigStore admitted, and the themes.
+// `resolveTheme` resolves a theme as the theme loader does, running
+// `checkTokens`, the check of the tokens the native window takes, on every
+// theme it resolves.
 export interface ConfigCheckDeps {
   defaults: Settings;
   optionalSettings: Readonly<Record<string, SettingKind>>;

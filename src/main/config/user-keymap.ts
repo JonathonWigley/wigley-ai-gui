@@ -546,13 +546,14 @@ function readGroups(value: unknown): KeyGroups {
 }
 
 // The user keymap `text`, a `keymap.json`, holds, its leader spelled as
-// `readLeader` gives it, each bind naming a scope of `names` or of a plugin that
-// is not loaded, and either a command of `names` that runs in the bind's process
-// and fits the bind's `arg`, or an id `names` does not hold, for
-// `heldBackUserBinds` to judge; each unbind's scope one a bind may name; each bind's and
-// unbind's keys and `where` ones the merge expands, each insert bind a key of
-// `UNBOUND_INSERT_KEYS`, and each accelerator one Electron accepts. Throws an
-// Error whose message is the first problem found, as the user reads it.
+// `readLeader` gives it, each bind naming a scope of `names` or of a plugin
+// that is not loaded, and either a command of `names` that runs in the bind's
+// process and fits the bind's `arg`, or an id `names` does not hold, for
+// `heldBackUserBinds` to judge; each unbind's scope one a bind may name; each
+// bind's and unbind's keys and `where` ones the merge expands, each insert bind
+// a key of `UNBOUND_INSERT_KEYS`, and each accelerator one Electron accepts.
+// Throws an Error whose message is the first problem found, as the user reads
+// it.
 export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   const file = parseJsonObject(text);
   for (const key of Object.keys(file)) {
