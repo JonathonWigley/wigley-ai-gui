@@ -94,14 +94,15 @@ The panel is shown by default. `Space v y` hides or shows it, and the choice is 
 Network, Disk), each with its value and a sparkline (a shared UI primitive, redrawn on each
 snapshot), then the process list under a heading row: one row per group or process, with CPU, RAM and
 GPU columns, sorted by one of them. Every Chat session group shows, however low it sorts, so a session can
-always be found and opened. Under a 360px container query, each meter takes two lines and a
-row's cells drop under its name.
+always be found and opened. RAM's memory note is its row's tooltip. Under a 360px container query,
+each meter keeps one line (label, meter, value) and hides its sparkline, and a row's cells drop under
+its name.
 
 With the panel focused (Alt+l, as in the unity-pool panel), `j`/`k`/`gg`/`G` move the cursor, `s`
 cycles the sort column through CPU, RAM and GPU, Enter or `l` opens a group, and `h` closes it.
 
 Three settings: `system-stats.refreshSeconds` (default 2), `system-stats.processRows` (default
-10), the number of rows other than Chat session groups shown with groups closed, and `system-stats.layout`
+5), the number of rows other than Chat session groups shown with groups closed, and `system-stats.layout`
 (default `default`), the layout that draws the panel.
 
 ## Rejected

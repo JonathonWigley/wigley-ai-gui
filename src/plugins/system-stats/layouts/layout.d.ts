@@ -20,7 +20,7 @@ export interface StatsMeterInput {
   tone: MeterTone;
   history: readonly number[]; // 0–100, oldest first; for kit.sparkline
   value: string;
-  note: string | null; // the line under the row: RAM's memory note; null on every other meter
+  note: string | null; // RAM's memory note (`default` shows it as the row's tooltip); null on every other meter
 }
 
 // One process-list row: a group (an app or a Chat session's process tree), a process, or the Other row, which holds

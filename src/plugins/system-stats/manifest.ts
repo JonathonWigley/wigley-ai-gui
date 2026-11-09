@@ -29,7 +29,7 @@ export const systemStatsManifest = definePlugin({
     closeGroup: { label: 'close the group', group: 'panel', runsIn: 'page' },
   },
   scopes: { panel: 'In the system stats panel' },
-  settings: { refreshSeconds: 2, processRows: 10, layout: 'default' },
+  settings: { refreshSeconds: 2, processRows: 5, layout: 'default' },
   settingInfo: {
     refreshSeconds: {
       label: 'System stats refresh',

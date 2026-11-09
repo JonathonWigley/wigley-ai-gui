@@ -48,13 +48,6 @@
   visibility: hidden;
 }
 
-[data-layout-owner='system-stats'][data-layout='default']
-  .system-stats-meter-note {
-  grid-column: 1 / -1;
-  font-size: var(--wg-text-12);
-  color: var(--wg-fg-tertiary);
-}
-
 [data-layout-owner='system-stats'][data-layout='default'] .system-stats-error {
   margin: 0;
   padding-inline: var(--wg-space-1);
@@ -125,50 +118,19 @@
   color: var(--wg-fg-tertiary);
 }
 
-/* A narrow bar: each meter takes two lines (label and value, then the Meter
-   and the Sparkline), and each row's cells drop under its name, the cell lines
-   sharing one width at every depth so their columns line up. */
+/* A narrow bar: each meter keeps one line (label, Meter, value) and drops its
+   Sparkline, and each row's cells drop under its name, the cell lines sharing
+   one width at every depth so their columns line up. */
 @container system-stats-panel (width < 360px) {
   [data-layout-owner='system-stats'][data-layout='default']
     .system-stats-meters {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--wg-space-0_5);
-  }
-
-  [data-layout-owner='system-stats'][data-layout='default']
-    .system-stats-meter {
-    display: grid;
-    grid-template-areas:
-      'label value'
-      'meter sparkline';
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: var(--wg-space-1_5);
-  }
-
-  [data-layout-owner='system-stats'][data-layout='default']
-    .system-stats-meter-label {
-    grid-area: label;
-  }
-
-  [data-layout-owner='system-stats'][data-layout='default']
-    .system-stats-meter
-    > .ui-meter {
-    grid-area: meter;
-  }
-
-  [data-layout-owner='system-stats'][data-layout='default']
-    .system-stats-meter-value {
-    grid-area: value;
-    white-space: normal;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   [data-layout-owner='system-stats'][data-layout='default']
     .system-stats-meter
     > .ui-sparkline {
-    grid-area: sparkline;
+    display: none;
   }
 
   [data-layout-owner='system-stats'][data-layout='default']

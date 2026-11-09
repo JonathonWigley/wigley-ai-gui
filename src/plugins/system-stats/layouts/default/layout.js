@@ -1,10 +1,10 @@
 // @ts-check
 
 // The built-in system stats look: a section header, then one row per meter (its label, a Meter, the value and a
-// Sparkline), RAM's memory note under its row, then the process list: a heading row naming the columns, the sorted one
-// marked, and one tree row per group or process with its CPU, RAM and GPU cells. A group row leads with a chevron;
-// the keyboard cursor's row takes the focus ring. The sort key's hint sits at the end of the section header. In a
-// narrow bar each meter takes two lines and each row's cells drop under its name.
+// Sparkline), RAM's memory note as its row's tooltip, then the process list: a heading row naming the columns, the
+// sorted one marked, and one tree row per group or process with its CPU, RAM and GPU cells. A group row leads with a
+// chevron; the keyboard cursor's row takes the focus ring. The sort key's hint sits at the end of the section header.
+// In a narrow bar each meter keeps one line and drops its Sparkline, and each row's cells drop under its name.
 
 /** @type {ReadonlyArray<{ column: 'cpu' | 'ram' | 'gpu', text: string }>} */
 const COLUMNS = [
@@ -61,7 +61,7 @@ function drawMeter(parent, meter, kit) {
   kit.el(row, 'span', 'system-stats-meter-value', meter.value);
   kit.sparkline(row, meter.history, meter.tone);
   if (meter.note !== null) {
-    kit.el(parent, 'div', 'system-stats-meter-note', meter.note);
+    row.title = meter.note;
   }
 }
 
