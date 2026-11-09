@@ -152,7 +152,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   the user fail.
 - **Lifetime:** one interviewer per attempt. The pane shows a plain ask box until the user's first message, which
   launches the interviewer with that message; the pane then shows the chat view of that session. Reopening the
-  problem brings the same session back (resumed if its row is gone); a new attempt starts a fresh one.
+  problem brings the same session back (resumed if its row is gone); a new attempt starts a fresh one and closes the
+  old attempt's interviewer, which has no Sessions row the user could close it from.
 - Talking to the interviewer is not a peek.
 - **Instructions:** built into the plugin; `interviewer.md` in the practice folder replaces them when present. They
   reach the harness as the session's own instructions, not as a message.
@@ -164,7 +165,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
 ## Chat and sessions changes
 
 - **Embeddable chat view:** chat's page exports `mountChat(element, sessionId)`, which builds a chat view of a
-  session chat holds into the element and returns a handle with `shown`, `hidden` and `dispose`. The Chat tab and the
+  session chat holds into the element and returns a handle with `shown`, `hidden` and `dispose`; a session whose
+  record or row has not reached the page yet is drawn once both arrive. The Chat tab and the
   mount fill one small host interface (attach, shown, hidden, visible), so the view stays one module with two
   adapters. A session shows in one place: an session with an owner is never placed in a Sessions pane.
 - **Per-session instructions:** `LaunchRequest.instructions` (and `ResumeRequest.instructions`) carry text this
