@@ -860,7 +860,9 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // integer. `repeat`, when set, presses the keys again after each `expect` line
 // until the `until` line is logged, failing when `max` presses (the first
 // included, at least 2) have not reached it; its `screenshot` saves one PNG per
-// press, as `<pluginId>-<screenshot>-<n>.png`.
+// press, as `<pluginId>-<screenshot>-<n>.png`. `timeoutMs`, when set, is how
+// long the step waits for each of its lines in place of the run's step wait, for
+// slow work such as a compile; a positive integer.
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   keys: string[];
@@ -871,6 +873,7 @@ export interface SelfTestStep {
   why?: string;
   width?: number | 'start';
   repeat?: { until: string; max: number };
+  timeoutMs?: number;
 }
 
 // A script's steps under one name. `name` is short words naming what the group

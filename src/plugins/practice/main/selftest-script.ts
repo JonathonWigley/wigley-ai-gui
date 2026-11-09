@@ -22,6 +22,10 @@ export interface PracticeSelfTestDeps {
 // its record.
 const CHECK_TIMEOUT_MS = 60_000;
 
+// How long the Run and Submit steps wait for their result line: a cold
+// compiler start can take far longer than the run's default step wait.
+const COMPILE_STEP_TIMEOUT_MS = 60_000;
+
 // The problem the steps submit.
 const SUBMITTED_SLUG = 'lru-cache';
 
@@ -76,6 +80,7 @@ const practiceGroups: SelfTestGroup[] = [
       {
         keys: [],
         expect: '[practice] run two-sum: accepted 2/2',
+        timeoutMs: COMPILE_STEP_TIMEOUT_MS,
         screenshot: 'run-result',
       },
     ],
@@ -111,6 +116,7 @@ const practiceGroups: SelfTestGroup[] = [
       {
         keys: [],
         expect: '[practice] submit lru-cache: wrongAnswer 0/1',
+        timeoutMs: COMPILE_STEP_TIMEOUT_MS,
         screenshot: 'wrong-answer',
       },
     ],
