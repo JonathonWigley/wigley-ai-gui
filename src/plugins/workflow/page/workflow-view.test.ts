@@ -285,7 +285,7 @@ describe('workflow view', () => {
   it('the fold is kept per session: a preview session flips it through runFor', async () => {
     const { view, workflows, put, logged } = setUp(['a']);
     const items = (done: boolean) => [{ text: 'x', done }];
-    const light = stubWorkflow('light', undefined, {
+    const small = stubWorkflow('small', undefined, {
       checklist: () => ({
         title: 'List',
         checked: 1,
@@ -296,17 +296,17 @@ describe('workflow view', () => {
         ],
       }),
     });
-    workflows.push(light.workflow);
-    put(flowOf('light'));
+    workflows.push(small.workflow);
+    put(flowOf('small'));
     view
-      .sidePartFor(light.workflow)
+      .sidePartFor(small.workflow)
       .build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
 
     await view.runFor('a', 'toggleFinishedWaves');
     await settle();
 
     expect(logged.at(-1)).toBe('finished waves open in proj');
-    expect(light.sidePanes.at(-1)?.finishedOpen).toBe(true);
+    expect(small.sidePanes.at(-1)?.finishedOpen).toBe(true);
   });
 
   it('hold_FirstDrawThrows_LetsThePartGo', () => {
@@ -491,16 +491,16 @@ describe('workflow view over several workflows', () => {
 
   it('logFlow_LevelAndTrail_LogOncePerChange', () => {
     const { view, workflows, put, logged } = setUp();
-    const light = stubWorkflow('light', stageOf('a', 'A', 10), {
-      badge: 'L',
+    const small = stubWorkflow('small', stageOf('a', 'A', 10), {
+      badge: 'S',
       stages: [stageOf('a', 'A', 10), stageOf('b', 'B', 20)],
       progressText: () => '1/2',
     });
     const medium = stubWorkflow('medium', stageOf('c', 'C', 10), {
       badge: 'M',
     });
-    workflows.push(light.workflow, medium.workflow);
-    const flow = flowOf('light', {}, 'a');
+    workflows.push(small.workflow, medium.workflow);
+    const flow = flowOf('small', {}, 'a');
 
     put(flow);
     put(flow);
@@ -513,7 +513,7 @@ describe('workflow view over several workflows', () => {
     put(flow);
 
     expect(firstWorkflow).toEqual([
-      'proj level L',
+      'proj level S',
       'proj trail A › B',
       'proj shows a',
       'proj progress 1/2',
@@ -525,7 +525,7 @@ describe('workflow view over several workflows', () => {
   it('logFlow_SharedStepSlot_TrailCountsItOnce', () => {
     const { workflows, put, logged } = setUp();
     workflows.push(
-      stubWorkflow('light', undefined, {
+      stubWorkflow('small', undefined, {
         stages: [
           stageOf('a', 'A', 10),
           stageOf('land', 'Land', 20, { stepSlot: 'land' }),
@@ -534,8 +534,8 @@ describe('workflow view over several workflows', () => {
       }).workflow,
     );
 
-    put(flowOf('light', {}, 'a'));
-    put(flowOf('light', {}, 'done'));
+    put(flowOf('small', {}, 'a'));
+    put(flowOf('small', {}, 'done'));
 
     expect(logged.filter((line) => line.includes(' trail '))).toEqual([
       'proj trail A › Land',
@@ -560,18 +560,18 @@ describe('workflow view over several workflows', () => {
 
   it('Chip_Input_CarriesBadge', () => {
     const { view, workflows, put } = setUp();
-    const light = stubWorkflow('light', undefined, {
-      badge: 'L',
-      label: 'Light',
+    const small = stubWorkflow('small', undefined, {
+      badge: 'S',
+      label: 'Small',
     });
-    workflows.push(light.workflow);
+    workflows.push(small.workflow);
     view.chipPart.build(asHtml(new FakeElement('div')), 'a');
 
-    put(flowOf('light'));
+    put(flowOf('small'));
 
-    expect(light.chips.at(-1)).toMatchObject({
-      badge: 'L',
-      workflowLabel: 'Light',
+    expect(small.chips.at(-1)).toMatchObject({
+      badge: 'S',
+      workflowLabel: 'Small',
     });
   });
 
@@ -614,20 +614,20 @@ describe('workflow view over several workflows', () => {
     'SidePane_DefaultChecklist $name',
     ({ checklist, hasChecklist, pane, summary }) => {
       const { view, workflows, put } = setUp();
-      const light = stubWorkflow('light');
-      workflows.push(light.workflow);
+      const small = stubWorkflow('small');
+      workflows.push(small.workflow);
       const section = recordingSection();
       view.stripPart.build(asHtml(new FakeElement('div')), 'a');
       view
-        .sidePartFor(light.workflow)
+        .sidePartFor(small.workflow)
         .build(asHtml(new FakeElement('div')), 'a', section);
 
-      put(flowOf('light', { checklist }));
+      put(flowOf('small', { checklist }));
 
-      expect(light.strips.at(-1)?.hasChecklist).toBe(hasChecklist);
-      expect(light.sidePanes.length > 0).toBe(pane !== null);
+      expect(small.strips.at(-1)?.hasChecklist).toBe(hasChecklist);
+      expect(small.sidePanes.length > 0).toBe(pane !== null);
       if (pane !== null) {
-        expect(light.sidePanes.at(-1)).toMatchObject(pane);
+        expect(small.sidePanes.at(-1)).toMatchObject(pane);
       }
       expect(section.summaries.at(-1)).toBe(summary);
     },
@@ -682,7 +682,7 @@ describe('workflow view over several workflows', () => {
     },
   ])('SidePane_ItemRunning_PicksTheMark ($name)', ({ item, stage, state }) => {
     const { view, workflows, put } = setUp();
-    const heavy = stubWorkflow('heavy', stageOf('build', 'Build', 10, stage), {
+    const large = stubWorkflow('large', stageOf('build', 'Build', 10, stage), {
       checklist: () => ({
         title: 'Plan',
         checked: 0,
@@ -695,14 +695,14 @@ describe('workflow view over several workflows', () => {
         ],
       }),
     });
-    workflows.push(heavy.workflow);
+    workflows.push(large.workflow);
     view
-      .sidePartFor(heavy.workflow)
+      .sidePartFor(large.workflow)
       .build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
 
-    put(flowOf('heavy'));
+    put(flowOf('large'));
 
-    expect(heavy.sidePanes.at(-1)?.currentGroup?.items).toEqual([
+    expect(large.sidePanes.at(-1)?.currentGroup?.items).toEqual([
       { text: 'a', state },
       { text: 'b', state: 'pending' },
     ]);
@@ -710,13 +710,13 @@ describe('workflow view over several workflows', () => {
 
   it('HasChecklist_ReadsHasPlan', () => {
     const { view, workflows, put } = setUp();
-    const light = stubWorkflow('light', undefined, { hasPlan: () => false });
-    workflows.push(light.workflow);
+    const small = stubWorkflow('small', undefined, { hasPlan: () => false });
+    workflows.push(small.workflow);
     view.stripPart.build(asHtml(new FakeElement('div')), 'a');
 
-    put(flowOf('light', { checklist: [{ text: 'a', done: false }] }));
+    put(flowOf('small', { checklist: [{ text: 'a', done: false }] }));
 
-    expect(light.strips.at(-1)?.hasChecklist).toBe(false);
+    expect(small.strips.at(-1)?.hasChecklist).toBe(false);
   });
 
   it('SidePart_PerWorkflow', () => {
@@ -747,24 +747,24 @@ describe('workflow view over several workflows', () => {
   it('Countdown_Generic', () => {
     const { view, workflows, put, logged, sets } = setUp();
     let text: string | null = '5s';
-    const light = stubWorkflow('light', undefined, {
+    const small = stubWorkflow('small', undefined, {
       countdownText: () => text,
     });
-    workflows.push(light.workflow);
+    workflows.push(small.workflow);
     view.chipPart.build(asHtml(new FakeElement('div')), 'a');
 
-    put(flowOf('light'));
+    put(flowOf('small'));
     const shown = logged.at(-1);
-    const chipsBeforeTick = light.chips.length;
+    const chipsBeforeTick = small.chips.length;
     sets[0].run();
-    const chipsAfterTick = light.chips.length;
+    const chipsAfterTick = small.chips.length;
     text = null;
-    put(flowOf('light'));
+    put(flowOf('small'));
 
     expect(shown).toBe('countdown shown in proj');
     expect(chipsAfterTick).toBe(chipsBeforeTick + 1);
-    expect(light.chips.at(-2)?.countdown).toBe('5s');
-    expect(light.chips.at(-1)?.countdown).toBeNull();
+    expect(small.chips.at(-2)?.countdown).toBe('5s');
+    expect(small.chips.at(-1)?.countdown).toBeNull();
     expect(logged.at(-1)).toBe('countdown stopped in proj');
   });
 
@@ -775,12 +775,12 @@ describe('workflow view over several workflows', () => {
     const { workflows, put, logged } = setUp();
     let text: string | null = null;
     workflows.push(
-      stubWorkflow('light', undefined, { progressText: () => text }).workflow,
+      stubWorkflow('small', undefined, { progressText: () => text }).workflow,
     );
 
     for (const each of texts) {
       text = each;
-      put(flowOf('light'));
+      put(flowOf('small'));
     }
 
     expect(logged.filter((line) => line.includes(' progress '))).toEqual(
@@ -790,11 +790,11 @@ describe('workflow view over several workflows', () => {
 });
 
 describe('workflow kit', () => {
-  const LIGHT = { id: 'workflow-light', commands: {} };
+  const SMALL = { id: 'workflow-small', commands: {} };
 
-  // The kit under the manifest `workflow-light` for session `b`, the anchors it
+  // The kit under the manifest `workflow-small` for session `b`, the anchors it
   // names and the commands its clicks run.
-  const lightKit = () => testWorkflowKit(LIGHT, NOW, 'b');
+  const smallKit = () => testWorkflowKit(SMALL, NOW, 'b');
 
   it.each<{
     case: string;
@@ -831,7 +831,7 @@ describe('workflow kit', () => {
   ])(
     'button_Click_RunsStageActionForTheKitsSession $case',
     ({ draw, action }) => {
-      const { kit, runs } = lightKit();
+      const { kit, runs } = smallKit();
 
       asFake(draw(kit, asHtml(new FakeElement('div')))).fire('click', {
         stopPropagation: () => undefined,
@@ -850,7 +850,7 @@ describe('workflow kit', () => {
     { state: 'paused', icon: 'codicon-debug-pause' },
     { state: 'done', icon: 'codicon-pass-filled' },
   ])('statusMark_$state_DrawsItsCodiconAtTheClock', ({ state, icon }) => {
-    const { kit } = lightKit();
+    const { kit } = smallKit();
     const parent = new FakeElement('div');
 
     kit.statusMark(asHtml(parent), state);
@@ -862,24 +862,24 @@ describe('workflow kit', () => {
   });
 
   it('badge_TakesTheColourOfTheDrawingPluginsToken', () => {
-    const { kit } = lightKit();
+    const { kit } = smallKit();
     const parent = new FakeElement('div');
 
-    kit.badge(asHtml(parent), 'L', 'Light');
+    kit.badge(asHtml(parent), 'S', 'Small');
 
     const [badge] = findAll(parent, 'workflow-badge');
-    expect(badge.textContent).toBe('L');
-    expect(badge.title).toBe('Light');
+    expect(badge.textContent).toBe('S');
+    expect(badge.title).toBe('Small');
     expect(badge.style['--workflow-badge-color']).toBe(
-      'var(--wg-workflow-light-badge)',
+      'var(--wg-workflow-small-badge)',
     );
   });
 
   it.each([
-    { main: false, command: 'workflow-light.go' },
+    { main: false, command: 'workflow-small.go' },
     { main: true, command: 'workflow.mainAction' },
   ])('actionButton_main$main_Anchors $command', ({ main, command }) => {
-    const { kit, anchors } = lightKit();
+    const { kit, anchors } = smallKit();
 
     kit.actionButton(asHtml(new FakeElement('div')), {
       command: 'go',
@@ -892,7 +892,7 @@ describe('workflow kit', () => {
   });
 
   it('finishedFold_AnchorsTheEnginesCommand', () => {
-    const { kit, anchors } = lightKit();
+    const { kit, anchors } = smallKit();
 
     kit.finishedFold(asHtml(new FakeElement('div')), 'x', false);
 

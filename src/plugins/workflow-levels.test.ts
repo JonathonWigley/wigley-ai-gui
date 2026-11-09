@@ -16,11 +16,11 @@ import {
   FAKE_SESSIONS,
   startEngineMainPart,
 } from './workflow/main/engine-fakes.test-support';
-import { HEAVY_WORKFLOW_ID } from './workflow-heavy/contract';
-import { heavyMainWorkflow } from './workflow-heavy/heavy-workflow';
-import { LIGHT_WORKFLOW_ID } from './workflow-light/contract';
-import { workflowLightMainPart } from './workflow-light/main/start';
-import { lightMainWorkflow } from './workflow-light/stages';
+import { LARGE_WORKFLOW_ID } from './workflow-large/contract';
+import { largeMainWorkflow } from './workflow-large/large-workflow';
+import { SMALL_WORKFLOW_ID } from './workflow-small/contract';
+import { workflowSmallMainPart } from './workflow-small/main/start';
+import { smallMainWorkflow } from './workflow-small/stages';
 import { MEDIUM_WORKFLOW_ID } from './workflow-medium/contract';
 import { workflowMediumMainPart } from './workflow-medium/main/start';
 import { mediumMainWorkflow } from './workflow-medium/stages';
@@ -28,9 +28,9 @@ import { mediumMainWorkflow } from './workflow-medium/stages';
 const settled = () => new Promise((settle) => setImmediate(settle));
 
 const WORKFLOWS = [
-  lightMainWorkflow,
+  smallMainWorkflow,
   mediumMainWorkflow,
-  heavyMainWorkflow,
+  largeMainWorkflow,
 ].sort((a, b) => a.order - b.order);
 
 function skill(name: string): WorkflowSignal {
@@ -48,28 +48,28 @@ function flowOf(workflow: string, stage: string): SessionFlow {
 
 describe('workflow levels', () => {
   it('claimOrder_MovesUp', () => {
-    const light = fold(
+    const small = fold(
       { ...NEW_FLOW, checklist: [{ text: 'a', done: true }] },
-      skill('wigley:light'),
+      skill('wigley:small'),
     );
     const medium = fold(
-      { ...light, checklist: [{ text: 'a', done: true }] },
+      { ...small, checklist: [{ text: 'a', done: true }] },
       skill('wigley:medium'),
     );
-    const heavy = fold(medium, skill('wigley:feature'));
+    const large = fold(medium, skill('wigley:feature'));
 
-    expect(light).toMatchObject({
-      workflow: LIGHT_WORKFLOW_ID,
+    expect(small).toMatchObject({
+      workflow: SMALL_WORKFLOW_ID,
       movedUpFrom: null,
     });
     expect(medium).toMatchObject({
       workflow: MEDIUM_WORKFLOW_ID,
-      movedUpFrom: LIGHT_WORKFLOW_ID,
+      movedUpFrom: SMALL_WORKFLOW_ID,
       stage: 'interview',
       checklist: null,
     });
-    expect(heavy).toMatchObject({
-      workflow: HEAVY_WORKFLOW_ID,
+    expect(large).toMatchObject({
+      workflow: LARGE_WORKFLOW_ID,
       movedUpFrom: MEDIUM_WORKFLOW_ID,
     });
   });
@@ -77,17 +77,17 @@ describe('workflow levels', () => {
   it('movingDown_SetsMovedUpFromToo', () => {
     const flow = fold(
       fold(NEW_FLOW, skill('wigley:medium')),
-      skill('wigley:light'),
+      skill('wigley:small'),
     );
 
     expect(flow).toMatchObject({
-      workflow: LIGHT_WORKFLOW_ID,
+      workflow: SMALL_WORKFLOW_ID,
       movedUpFrom: MEDIUM_WORKFLOW_ID,
     });
   });
 
   it.each([
-    { workflow: LIGHT_WORKFLOW_ID, stage: 'build' },
+    { workflow: SMALL_WORKFLOW_ID, stage: 'build' },
     { workflow: MEDIUM_WORKFLOW_ID, stage: 'review' },
   ])(
     'sharedStageIds_FoldOnlyTheCurrentWorkflow $workflow',
@@ -109,7 +109,7 @@ describe('workflow levels', () => {
   );
 
   it.each([
-    'wigley:light',
+    'wigley:small',
     'wigley:medium',
     'wigley:feature',
     'wigley:feature-primer',
@@ -124,10 +124,10 @@ describe('workflow levels', () => {
 
   it.each([
     {
-      workflow: LIGHT_WORKFLOW_ID,
-      claim: 'wigley:light',
+      workflow: SMALL_WORKFLOW_ID,
+      claim: 'wigley:small',
       start: (dependencies: readonly FakeDependency<'main'>[]) =>
-        startMainPart(workflowLightMainPart, { dependencies }),
+        startMainPart(workflowSmallMainPart, { dependencies }),
     },
     {
       workflow: MEDIUM_WORKFLOW_ID,

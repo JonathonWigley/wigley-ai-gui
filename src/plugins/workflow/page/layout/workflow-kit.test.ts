@@ -9,7 +9,7 @@ import {
 import type { StageStatus } from '../../layouts/layout';
 import { testWorkflowKit } from '../engine-parts.test-support';
 
-const KIT_MANIFEST = { id: 'workflow-light', commands: {} };
+const KIT_MANIFEST = { id: 'workflow-small', commands: {} };
 
 describe('workflow kit stage tag', () => {
   beforeEach(() => installFakeDom(vi.stubGlobal));

@@ -41,8 +41,8 @@ function workflow(
 
 const NO_RULE: MainStage['enter'] = () => null;
 
-// Both hold a stage `done`; only Light's finishes its workflow.
-const LIGHT = workflow('light', 10, 'wigley:light', 'scope', [
+// Both hold a stage `done`; only Small's finishes its workflow.
+const SMALL = workflow('small', 10, 'wigley:small', 'scope', [
   { id: 'build', order: 10, enter: reportedBuild },
   { id: 'done', order: 20, finishes: true, enter: NO_RULE },
 ]);
@@ -50,12 +50,12 @@ const MEDIUM = workflow('medium', 20, 'wigley:medium', 'interview', [
   { id: 'build', order: 10, enter: reportedBuild },
   { id: 'done', order: 20, enter: NO_RULE },
 ]);
-const WORKFLOWS = [LIGHT, MEDIUM];
+const WORKFLOWS = [SMALL, MEDIUM];
 
 const CHECKLIST = [{ text: 'a', done: false }];
 const UNCHANGED = 'unchanged';
 
-const LIGHT_AT_BUILD = { workflow: 'light', stage: 'build' };
+const SMALL_AT_BUILD = { workflow: 'small', stage: 'build' };
 
 const WORKFLOW_ROWS: {
   name: string;
@@ -66,9 +66,9 @@ const WORKFLOW_ROWS: {
   {
     name: 'a claim of a new flow goes to the first stage and clears missedLevel',
     flow: flowWith({ missedLevel: true }),
-    signal: skill('wigley:light'),
+    signal: skill('wigley:small'),
     expected: {
-      workflow: 'light',
+      workflow: 'small',
       stage: 'scope',
       movedUpFrom: null,
       missedLevel: false,
@@ -77,7 +77,7 @@ const WORKFLOW_ROWS: {
   {
     name: 'a claim by another workflow moves up and starts over',
     flow: flowWith({
-      ...LIGHT_AT_BUILD,
+      ...SMALL_AT_BUILD,
       checklist: [{ text: 'a', done: true }],
       state: { n: 1 },
     }),
@@ -85,28 +85,28 @@ const WORKFLOW_ROWS: {
     expected: {
       workflow: 'medium',
       stage: 'interview',
-      movedUpFrom: 'light',
+      movedUpFrom: 'small',
       state: null,
       checklist: null,
     },
   },
   {
     name: "the current workflow's own claim with no list changes nothing",
-    flow: flowWith({ ...LIGHT_AT_BUILD, movedUpFrom: 'medium' }),
-    signal: skill('wigley:light'),
+    flow: flowWith({ ...SMALL_AT_BUILD, movedUpFrom: 'medium' }),
+    signal: skill('wigley:small'),
     expected: UNCHANGED,
   },
   {
     name: "the current workflow's own claim mid-run empties the list and keeps the rest",
     flow: flowWith({
-      ...LIGHT_AT_BUILD,
+      ...SMALL_AT_BUILD,
       movedUpFrom: 'medium',
       checklist: CHECKLIST,
       state: { n: 1 },
     }),
-    signal: skill('wigley:light'),
+    signal: skill('wigley:small'),
     expected: {
-      workflow: 'light',
+      workflow: 'small',
       stage: 'build',
       movedUpFrom: 'medium',
       state: { n: 1 },
@@ -116,29 +116,29 @@ const WORKFLOW_ROWS: {
   {
     name: "the current workflow's own claim from a finished stage starts a new run",
     flow: flowWith({
-      workflow: 'light',
+      workflow: 'small',
       stage: 'done',
       movedUpFrom: 'medium',
       checklist: CHECKLIST,
     }),
-    signal: skill('wigley:light'),
-    expected: { workflow: 'light', movedUpFrom: null, checklist: null },
+    signal: skill('wigley:small'),
+    expected: { workflow: 'small', movedUpFrom: null, checklist: null },
   },
   {
     name: "another workflow's claim from a finished stage starts a new run",
-    flow: flowWith({ workflow: 'light', stage: 'done', movedUpFrom: 'heavy' }),
+    flow: flowWith({ workflow: 'small', stage: 'done', movedUpFrom: 'large' }),
     signal: skill('wigley:medium'),
     expected: { workflow: 'medium', stage: 'interview', movedUpFrom: null },
   },
   {
     name: 'a stage of that id finishing in the claiming workflow alone moves up',
     flow: flowWith({ workflow: 'medium', stage: 'done' }),
-    signal: skill('wigley:light'),
-    expected: { workflow: 'light', stage: 'scope', movedUpFrom: 'medium' },
+    signal: skill('wigley:small'),
+    expected: { workflow: 'small', stage: 'scope', movedUpFrom: 'medium' },
   },
   {
     name: 'a skill no workflow claims changes nothing',
-    flow: flowWith(LIGHT_AT_BUILD),
+    flow: flowWith(SMALL_AT_BUILD),
     signal: skill('wigley:review'),
     expected: UNCHANGED,
   },
@@ -150,13 +150,13 @@ const WORKFLOW_ROWS: {
   },
   {
     name: 'a checklist replaces the list',
-    flow: flowWith(LIGHT_AT_BUILD),
+    flow: flowWith(SMALL_AT_BUILD),
     signal: { type: 'checklistReported', items: CHECKLIST },
     expected: { checklist: CHECKLIST },
   },
   {
     name: 'an equal checklist keeps the flow',
-    flow: flowWith({ ...LIGHT_AT_BUILD, checklist: CHECKLIST }),
+    flow: flowWith({ ...SMALL_AT_BUILD, checklist: CHECKLIST }),
     signal: { type: 'checklistReported', items: structuredClone(CHECKLIST) },
     expected: UNCHANGED,
   },
@@ -168,10 +168,10 @@ const WORKFLOW_ROWS: {
   },
   {
     name: 'cleared clears missedLevel and keeps the workflow, stage and state',
-    flow: flowWith({ ...LIGHT_AT_BUILD, missedLevel: true, state: { n: 1 } }),
+    flow: flowWith({ ...SMALL_AT_BUILD, missedLevel: true, state: { n: 1 } }),
     signal: { type: 'cleared' },
     expected: {
-      workflow: 'light',
+      workflow: 'small',
       stage: 'build',
       state: { n: 1 },
       missedLevel: false,
@@ -215,19 +215,19 @@ describe('foldFlow', () => {
   });
 
   it("foldFlow_Workflows: a report runs only the current workflow's rule", () => {
-    const lightEnter = vi.fn(reportedBuild);
-    const light = workflow('light', 10, 'wigley:light', 'scope', [
-      { id: 'build', order: 10, enter: lightEnter },
+    const smallEnter = vi.fn(reportedBuild);
+    const small = workflow('small', 10, 'wigley:small', 'scope', [
+      { id: 'build', order: 10, enter: smallEnter },
     ]);
     const flow = flowWith({ workflow: 'medium', stage: 'interview' });
 
     const folded = foldFlow(flow, { type: 'stepReported', step: 'build' }, [
-      light,
+      small,
       MEDIUM,
     ]);
 
     expect(folded.stage).toBe('build');
-    expect(lightEnter).not.toHaveBeenCalled();
+    expect(smallEnter).not.toHaveBeenCalled();
   });
 
   it('the first stage rule in array order wins', () => {
@@ -396,7 +396,7 @@ describe('markMissedLevel', () => {
 
   it.each([
     { name: 'already set', fields: { missedLevel: true } },
-    { name: 'a workflow', fields: { workflow: 'light' } },
+    { name: 'a workflow', fields: { workflow: 'small' } },
   ])('keeps the same flow with $name', ({ fields }) => {
     const flow = flowWith(fields);
 

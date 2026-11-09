@@ -51,10 +51,10 @@ describe('manifests', () => {
     expect(problems).toEqual([]);
   });
 
-  it('manifests_WorkflowHeavy_ListsItsCommandsAndSettings', () => {
-    const heavy = manifests.find(({ id }) => id === 'workflow-heavy');
+  it('manifests_WorkflowLarge_ListsItsCommandsAndSettings', () => {
+    const large = manifests.find(({ id }) => id === 'workflow-large');
 
-    expect(Object.keys(heavy?.commands ?? {}).sort()).toEqual(
+    expect(Object.keys(large?.commands ?? {}).sort()).toEqual(
       [
         'clearAndMake',
         'cancelCountdown',
@@ -65,16 +65,16 @@ describe('manifests', () => {
         'dismiss',
       ].sort(),
     );
-    expect(Object.keys(heavy?.settings ?? {}).sort()).toEqual(
+    expect(Object.keys(large?.settings ?? {}).sort()).toEqual(
       ['layout', 'autoClearAndMake', 'autoStartSeconds'].sort(),
     );
   });
 
-  it('manifests_WorkflowLight_HasItsLayoutSettingAndBadgeToken', () => {
-    const light = manifests.find(({ id }) => id === 'workflow-light');
+  it('manifests_WorkflowSmall_HasItsLayoutSettingAndBadgeToken', () => {
+    const small = manifests.find(({ id }) => id === 'workflow-small');
 
-    expect(Object.keys(light?.settings ?? {})).toEqual(['layout']);
-    expect(light?.themeTokens?.badge.default).toBe('var(--wg-status-info)');
+    expect(Object.keys(small?.settings ?? {})).toEqual(['layout']);
+    expect(small?.themeTokens?.badge.default).toBe('var(--wg-status-info)');
   });
 
   it('manifests_WorkflowMedium_HasItsLayoutSettingAndBadgeToken', () => {

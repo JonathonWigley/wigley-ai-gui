@@ -110,7 +110,7 @@ export interface MainStage {
 
 export interface MainWorkflow {
   id: WorkflowId;
-  // Light 10, medium 20, heavy 30. The lowest order's claim wins a skill two
+  // Small 10, medium 20, large 30. The lowest order's claim wins a skill two
   // workflows claim.
   order: number;
   claims(signal: WorkflowSignal): boolean;
@@ -368,9 +368,9 @@ export interface WorkflowDraw {
 // A workflow's page half.
 export interface PageWorkflow {
   id: WorkflowId;
-  // Its word: 'Light'.
+  // Its word: 'Small'.
   label: string;
-  // Its letter on the session row: 'L'.
+  // Its letter on the session row: 'S'.
   badge: string;
   stages: readonly PageStage[];
   // From `createWorkflowDraw`, called with the plugin's own api.

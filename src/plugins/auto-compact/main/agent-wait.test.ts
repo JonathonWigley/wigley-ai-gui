@@ -59,8 +59,8 @@ describe('agent wait', () => {
   }>([
     { case: 'WaitingAbove', expected: REASON },
     {
-      case: 'LightLevel',
-      flow: flowOf({ workflow: 'light' }),
+      case: 'SmallLevel',
+      flow: flowOf({ workflow: 'small' }),
       expected: REASON,
     },
     { case: 'NoWorkflow', flow: flowOf({ workflow: null }), expected: null },

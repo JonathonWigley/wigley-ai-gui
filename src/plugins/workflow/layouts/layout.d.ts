@@ -55,7 +55,7 @@ export interface ActionInput {
   main: boolean;
 }
 
-// `badge` is the workflow's letter (`L`), `workflowLabel` its word (`Light`), `stage` the stage's id (`build`), `label`
+// `badge` is the workflow's letter (`S`), `workflowLabel` its word (`Small`), `stage` the stage's id (`build`), `label`
 // its word (`Build`), `status` what it is doing, `statusText` the two as one (`Build · running`), `detail` its line
 // (`3/7 · Claim grants`, or ''), `countdown` the seconds left (`9s`) or null, `mainAction` the stage's main
 // action, null when it has none, and `onRowLabel` whether the row's own label already says the stage's state.

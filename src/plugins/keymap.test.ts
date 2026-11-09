@@ -39,13 +39,13 @@ describe('defaultKeymap', () => {
   });
 
   it.each([
-    { keys: '<Leader>wn', command: 'workflow-heavy.makeInNewSession' },
-    { keys: '<Leader>wr', command: 'workflow-heavy.resumeMake' },
-    { keys: '<Leader>wo', command: 'workflow-heavy.openPlan' },
-    { keys: '<Leader>wt', command: 'workflow-heavy.retro' },
-    { keys: '<Leader>wd', command: 'workflow-heavy.dismiss' },
+    { keys: '<Leader>wn', command: 'workflow-large.makeInNewSession' },
+    { keys: '<Leader>wr', command: 'workflow-large.resumeMake' },
+    { keys: '<Leader>wo', command: 'workflow-large.openPlan' },
+    { keys: '<Leader>wt', command: 'workflow-large.retro' },
+    { keys: '<Leader>wd', command: 'workflow-large.dismiss' },
     { keys: '<Leader>ww', command: 'workflow.mainAction' },
-  ])('workflowHeavyCommands_KeepTheirChords $keys', ({ keys, command }) => {
+  ])('workflowLargeCommands_KeepTheirChords $keys', ({ keys, command }) => {
     expect(
       defaultKeymap.binds.find((bind) => bind.keys === keys)?.command,
     ).toBe(command);

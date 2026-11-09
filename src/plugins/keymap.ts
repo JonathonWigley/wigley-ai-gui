@@ -312,12 +312,12 @@ export const defaultKeymap = {
     {
       keys: '<Leader>wn',
       scope: 'any',
-      command: 'workflow-heavy.makeInNewSession',
+      command: 'workflow-large.makeInNewSession',
     },
-    { keys: '<Leader>wr', scope: 'any', command: 'workflow-heavy.resumeMake' },
-    { keys: '<Leader>wo', scope: 'any', command: 'workflow-heavy.openPlan' },
-    { keys: '<Leader>wt', scope: 'any', command: 'workflow-heavy.retro' },
-    { keys: '<Leader>wd', scope: 'any', command: 'workflow-heavy.dismiss' },
+    { keys: '<Leader>wr', scope: 'any', command: 'workflow-large.resumeMake' },
+    { keys: '<Leader>wo', scope: 'any', command: 'workflow-large.openPlan' },
+    { keys: '<Leader>wt', scope: 'any', command: 'workflow-large.retro' },
+    { keys: '<Leader>wd', scope: 'any', command: 'workflow-large.dismiss' },
     { keys: '<Leader>ws', scope: 'any', command: 'workflow.toggleSidePane' },
     {
       keys: '<Leader>wf',

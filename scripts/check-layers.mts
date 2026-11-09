@@ -25,25 +25,25 @@ import {
 
 const NODE_ONLY: Partial<LayerRule> = { packages: ['node:'] };
 
-const HEAVY_SUBLAYERS = ['src/plugins/workflow-heavy/stages'];
+const LARGE_SUBLAYERS = ['src/plugins/workflow-large/stages'];
 
-// Heavy's tests that run a stage rule through the engine's real fold.
-const HEAVY_FOLD_TEST_RULE: LayerRule = {
+// Large's tests that run a stage rule through the engine's real fold.
+const LARGE_FOLD_TEST_RULE: LayerRule = {
   layers: [
     'src/contracts',
     'src/shared',
     'src/plugins/workflow',
     'src/plugins/workflow/contract.ts',
-    'src/plugins/workflow-heavy',
-    'src/plugins/workflow-heavy/contract.ts',
-    'src/plugins/workflow-heavy/stages',
+    'src/plugins/workflow-large',
+    'src/plugins/workflow-large/contract.ts',
+    'src/plugins/workflow-large/stages',
     'src/plugins/chat/contract.ts',
-    'src/plugins/workflow-heavy/main',
+    'src/plugins/workflow-large/main',
   ],
   packages: [],
 };
-const HEAVY_FOLD_TESTS = [
-  'heavy-state.test.ts',
+const LARGE_FOLD_TESTS = [
+  'large-state.test.ts',
   'main/actions.test.ts',
   'main/countdown.test.ts',
   'stages/main-stages.test.ts',
@@ -187,30 +187,30 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     main: { packages: ['node:'] },
   },
   // Its root and parts share the stages; main uses `node:path`.
-  'workflow-heavy': {
-    root: { layers: HEAVY_SUBLAYERS },
+  'workflow-large': {
+    root: { layers: LARGE_SUBLAYERS },
     contract: { layers: ['src/shared'] },
-    main: { layers: HEAVY_SUBLAYERS, packages: ['node:'] },
-    page: { layers: HEAVY_SUBLAYERS },
+    main: { layers: LARGE_SUBLAYERS, packages: ['node:'] },
+    page: { layers: LARGE_SUBLAYERS },
     sublayers: {
-      'src/plugins/workflow-heavy/stages': {
+      'src/plugins/workflow-large/stages': {
         layers: [
           'src/contracts',
           'src/shared',
-          'src/plugins/workflow-heavy',
-          'src/plugins/workflow-heavy/contract.ts',
+          'src/plugins/workflow-large',
+          'src/plugins/workflow-large/contract.ts',
           'src/plugins/workflow/contract.ts',
         ],
         packages: [],
       },
       ...Object.fromEntries(
-        HEAVY_FOLD_TESTS.map((file) => [
-          `src/plugins/workflow-heavy/${file}`,
-          HEAVY_FOLD_TEST_RULE,
+        LARGE_FOLD_TESTS.map((file) => [
+          `src/plugins/workflow-large/${file}`,
+          LARGE_FOLD_TEST_RULE,
         ]),
       ),
-      // Starts the real engine page part and Heavy's on it.
-      'src/plugins/workflow-heavy/page/start.test.ts': {
+      // Starts the real engine page part and Large's on it.
+      'src/plugins/workflow-large/page/start.test.ts': {
         layers: [
           'src/contracts',
           'src/shared',
@@ -219,75 +219,75 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/workflow',
           'src/plugins/workflow/contract.ts',
           'src/plugins/workflow/page',
-          'src/plugins/workflow-heavy/contract.ts',
-          'src/plugins/workflow-heavy/page',
+          'src/plugins/workflow-large/contract.ts',
+          'src/plugins/workflow-large/page',
         ],
         packages: [],
       },
       // Draws through the engine's layout types.
-      'src/plugins/workflow-heavy/layouts/default/layout.test.ts': {
+      'src/plugins/workflow-large/layouts/default/layout.test.ts': {
         layers: [
           'src/shared',
           'src/shared/page',
-          'src/plugins/workflow-heavy/layouts',
+          'src/plugins/workflow-large/layouts',
           'src/plugins/workflow/layouts',
         ],
         packages: [],
       },
     },
   },
-  'workflow-light': {
+  'workflow-small': {
     main: {
       layers: [
-        'src/plugins/workflow-light/stages',
-        'src/plugins/workflow-light/main/selftest-script.ts',
+        'src/plugins/workflow-small/stages',
+        'src/plugins/workflow-small/main/selftest-script.ts',
       ],
     },
-    page: { layers: ['src/plugins/workflow-light/stages'] },
+    page: { layers: ['src/plugins/workflow-small/stages'] },
     sublayers: {
-      // Self-test support: Light's script is built on the engine's level script.
-      'src/plugins/workflow-light/main/selftest-script.ts': {
+      // Self-test support: Small's script is built on the engine's level script.
+      'src/plugins/workflow-small/main/selftest-script.ts': {
         layers: ['src/contracts', 'src/plugins/workflow/main'],
         packages: [],
       },
-      'src/plugins/workflow-light/stages': {
+      'src/plugins/workflow-small/stages': {
         layers: [
           'src/contracts',
-          'src/plugins/workflow-light',
-          'src/plugins/workflow-light/contract.ts',
+          'src/plugins/workflow-small',
+          'src/plugins/workflow-small/contract.ts',
           'src/plugins/workflow/contract.ts',
         ],
         packages: [],
       },
-      // Runs Light's stage rules through the engine's real fold.
-      'src/plugins/workflow-light/stages/light-stages.test.ts': {
+      // Runs Small's stage rules through the engine's real fold.
+      'src/plugins/workflow-small/stages/small-stages.test.ts': {
         layers: [
           'src/plugins/workflow',
           'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow-light/contract.ts',
-          'src/plugins/workflow-light/stages',
+          'src/plugins/workflow-small/contract.ts',
+          'src/plugins/workflow-small/stages',
         ],
         packages: [],
       },
-      // Starts the real engine page part and Light's on it.
-      'src/plugins/workflow-light/page/start.test.ts': {
+      // Starts the real engine page part and Small's on it.
+      'src/plugins/workflow-small/page/start.test.ts': {
         layers: [
           'src/shared',
           'src/plugins/workflow',
           'src/plugins/workflow/contract.ts',
           'src/plugins/workflow/page',
-          'src/plugins/workflow-light',
-          'src/plugins/workflow-light/contract.ts',
-          'src/plugins/workflow-light/page',
-          'src/plugins/workflow-light/stages',
+          'src/plugins/workflow-small',
+          'src/plugins/workflow-small/contract.ts',
+          'src/plugins/workflow-small/page',
+          'src/plugins/workflow-small/stages',
         ],
         packages: [],
       },
       // Draws with the engine's real kit.
-      'src/plugins/workflow-light/layouts/default/layout.test.ts': {
+      'src/plugins/workflow-small/layouts/default/layout.test.ts': {
         layers: [
           'src/shared/page',
-          'src/plugins/workflow-light/layouts',
+          'src/plugins/workflow-small/layouts',
           'src/plugins/workflow/layouts',
           'src/plugins/workflow/page',
         ],
@@ -602,8 +602,8 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
-  // The real engine's main part and Heavy's on its exports.
-  'src/plugins/workflow-heavy-main.test.ts': {
+  // The real engine's main part and Large's on its exports.
+  'src/plugins/workflow-large-main.test.ts': {
     layers: [
       'src/contracts',
       'src/shared',
@@ -613,14 +613,14 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow',
       'src/plugins/workflow/contract.ts',
       'src/plugins/workflow/main',
-      'src/plugins/workflow-heavy/contract.ts',
-      'src/plugins/workflow-heavy/main',
-      'src/plugins/workflow-heavy',
+      'src/plugins/workflow-large/contract.ts',
+      'src/plugins/workflow-large/main',
+      'src/plugins/workflow-large',
     ],
     packages: [],
   },
-  // The real engine's page part and Heavy's on its exports.
-  'src/plugins/workflow-heavy-page.test.ts': {
+  // The real engine's page part and Large's on its exports.
+  'src/plugins/workflow-large-page.test.ts': {
     layers: [
       'src/contracts',
       'src/shared',
@@ -634,25 +634,25 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow/contract.ts',
       'src/plugins/workflow/layouts',
       'src/plugins/workflow/page',
-      'src/plugins/workflow-heavy/contract.ts',
-      'src/plugins/workflow-heavy/layouts',
-      'src/plugins/workflow-heavy/page',
+      'src/plugins/workflow-large/contract.ts',
+      'src/plugins/workflow-large/layouts',
+      'src/plugins/workflow-large/page',
     ],
     packages: [],
   },
   // The three level workflows' main rules through the engine's real fold, and
-  // Light's and Medium's main parts on the real engine.
+  // Small's and Medium's main parts on the real engine.
   'src/plugins/workflow-levels.test.ts': {
     layers: [
       'src/shared',
       'src/plugins/workflow',
       'src/plugins/workflow/contract.ts',
       'src/plugins/workflow/main',
-      'src/plugins/workflow-heavy',
-      'src/plugins/workflow-heavy/contract.ts',
-      'src/plugins/workflow-light/contract.ts',
-      'src/plugins/workflow-light/main',
-      'src/plugins/workflow-light/stages',
+      'src/plugins/workflow-large',
+      'src/plugins/workflow-large/contract.ts',
+      'src/plugins/workflow-small/contract.ts',
+      'src/plugins/workflow-small/main',
+      'src/plugins/workflow-small/stages',
       'src/plugins/workflow-medium/contract.ts',
       'src/plugins/workflow-medium/main',
       'src/plugins/workflow-medium/stages',

@@ -7,7 +7,7 @@ const LINE: RunLogLine = {
   at: 10,
   sessionId: 's1',
   projectDir: '/r',
-  workflow: 'workflow-light',
+  workflow: 'workflow-small',
   movedUpFrom: null,
   activeMs: 2000,
   costUsd: 0.25,
@@ -25,7 +25,7 @@ describe('createRunLog', () => {
     await settled();
 
     expect(await files.read(RUNS_FILE)).toBe(
-      '{"at":10,"sessionId":"s1","projectDir":"/r","workflow":"workflow-light","movedUpFrom":null,"activeMs":2000,"costUsd":0.25,"fixCycles":0}\n',
+      '{"at":10,"sessionId":"s1","projectDir":"/r","workflow":"workflow-small","movedUpFrom":null,"activeMs":2000,"costUsd":0.25,"fixCycles":0}\n',
     );
   });
 

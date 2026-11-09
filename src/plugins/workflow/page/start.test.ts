@@ -138,9 +138,9 @@ function stageOf(id: string, order: number): PageStage {
   };
 }
 
-// A workflow `light` over a draw that records each strip and draws one `div` for
+// A workflow `small` over a draw that records each strip and draws one `div` for
 // each part.
-function stubLight(stages: readonly PageStage[] = [stageOf('build', 10)]) {
+function stubSmall(stages: readonly PageStage[] = [stageOf('build', 10)]) {
   const strips: StripInput[] = [];
   const part = (parent: HTMLElement) => {
     const element = asHtml(new FakeElement('div'));
@@ -157,9 +157,9 @@ function stubLight(stages: readonly PageStage[] = [stageOf('build', 10)]) {
     sidePane: part,
   };
   const workflow: PageWorkflow = {
-    id: 'light',
-    label: 'Light',
-    badge: 'L',
+    id: 'small',
+    label: 'Small',
+    badge: 'S',
     stages,
     draw,
     runAction: async () => undefined,
@@ -167,8 +167,8 @@ function stubLight(stages: readonly PageStage[] = [stageOf('build', 10)]) {
   return { workflow, strips };
 }
 
-function flowOfLight(stage: string): SessionFlow {
-  return { ...newFlow('s1', '/p'), workflow: 'light', stage };
+function flowOfSmall(stage: string): SessionFlow {
+  return { ...newFlow('s1', '/p'), workflow: 'small', stage };
 }
 
 describe('workflow page part', () => {
@@ -200,19 +200,19 @@ describe('workflow page part', () => {
   it('exports_AddWorkflow_DrawsAndConsumerDisposeRemovesBoth', () => {
     const { harness, exportsFor, rowParts, ids } = startWorkflow();
     const consumer = createRegistrations();
-    const { workflow } = stubLight();
+    const { workflow } = stubSmall();
     const wrapper = new FakeElement('div');
 
     exportsFor(consumer).addWorkflow(workflow);
-    harness.state.publish(workflowFlowsSlot).set('s1', flowOfLight('build'));
+    harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
     [...rowParts][0].build(asHtml(wrapper), 's1');
     const whileAdded = { chip: wrapper.children.length, ids: ids() };
     consumer.dispose();
 
     expect(whileAdded.chip).toBe(1);
-    expect(whileAdded.ids).toContain('light.sidePane');
+    expect(whileAdded.ids).toContain('small.sidePane');
     expect(wrapper.children).toHaveLength(0);
-    expect(ids()).not.toContain('light.sidePane');
+    expect(ids()).not.toContain('small.sidePane');
     expect(() =>
       exportsFor(createRegistrations()).addWorkflow(workflow),
     ).not.toThrow();
@@ -286,11 +286,11 @@ describe('workflow page part', () => {
   it('exports_AddWorkflow_HeldId_Throws', () => {
     const { exportsFor } = startWorkflow();
     const consumer = createRegistrations();
-    const { workflow } = stubLight();
+    const { workflow } = stubSmall();
     exportsFor(consumer).addWorkflow(workflow);
 
     expect(() => exportsFor(consumer).addWorkflow(workflow)).toThrow(
-      'light is already added',
+      'small is already added',
     );
   });
 
@@ -298,14 +298,14 @@ describe('workflow page part', () => {
     const { harness, exportsFor, composerParts } = startWorkflow();
     harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
     harness.ready();
-    const { workflow, strips } = stubLight([
+    const { workflow, strips } = stubSmall([
       stageOf('later', 20),
       stageOf('first', 10),
     ]);
     exportsFor(createRegistrations()).addWorkflow(workflow);
     [...composerParts][0].build(asHtml(new FakeElement('div')), 's1');
 
-    harness.state.publish(workflowFlowsSlot).set('s1', flowOfLight('first'));
+    harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('first'));
 
     expect(strips.at(-1)?.steps.map((step) => step.id)).toEqual([
       'first',
@@ -316,23 +316,23 @@ describe('workflow page part', () => {
   it('AddWorkflow_AfterItsFlowArrived_LogsItsLevelAndTrail', () => {
     const { harness, exportsFor } = startWorkflow();
     harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
-    harness.state.publish(workflowFlowsSlot).set('s1', flowOfLight('build'));
-    const { workflow } = stubLight();
+    harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
+    const { workflow } = stubSmall();
 
     exportsFor(createRegistrations()).addWorkflow(workflow);
 
     expect(harness.logs).toEqual(
       expect.arrayContaining([
-        { source: 'workflow', message: 's1 level L' },
+        { source: 'workflow', message: 's1 level S' },
         { source: 'workflow', message: 's1 trail build' },
       ]),
     );
   });
 
-  // The engine past `ready` holding the workflow `light`, whose stage
+  // The engine past `ready` holding the workflow `small`, whose stage
   // `build` holds the action `go`, with rows `a` and `b`, `a` selected and `b`'s
   // flow in `build`. `ran` holds each `runAction` call.
-  function startWithLightAction() {
+  function startWithSmallAction() {
     const started = startWorkflow();
     const { harness, exportsFor } = started;
     const ran: [string, string, SessionFlow][] = [];
@@ -342,7 +342,7 @@ describe('workflow page part', () => {
       available: () => true,
       enabled: () => true,
     };
-    const { workflow } = stubLight([
+    const { workflow } = stubSmall([
       { ...stageOf('build', 10), actions: [go] },
     ]);
     exportsFor(createRegistrations()).addWorkflow({
@@ -357,7 +357,7 @@ describe('workflow page part', () => {
     harness.state.publish(sessionsActiveSlot).set('a');
     const flowOfB = {
       ...newFlow('b', '/r'),
-      workflow: 'light',
+      workflow: 'small',
       stage: 'build',
     };
     harness.state.publish(workflowFlowsSlot).set('b', flowOfB);
@@ -379,7 +379,7 @@ describe('workflow page part', () => {
       line: 'nothing to run for nope in b',
     },
   ])('stageAction_RunsTheGateForTheArgsSession $case', async (row) => {
-    const { harness, commands, ran, flowOfB } = startWithLightAction();
+    const { harness, commands, ran, flowOfB } = startWithSmallAction();
 
     await commands().run(workflowStageActionCommand, row.arg);
 
