@@ -1,6 +1,6 @@
 # 06 — system-stats page, layout, keys, self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04, 05
 Plan: [plan.md](plan.md)
@@ -279,3 +279,5 @@ the `s` anchor and the drive and visual checks are deferred to "08 — Final ver
 Commit: one commit for the group: `system-stats page: the right-bar panel, its layout, keys and self-test`.
 
 ## Proof
+
+Commit 375dd5f7 · proof: diff read: layout.d.ts filled, page part listed, <Leader>vy and panel binds in keymap, selftest script handed; worker's typecheck and lint clean, 150 tests pass, selftest --plugin system-stats passes; screenshots read · concerns: 56px column-width token leaves names ~60px at the default bar: names and session titles truncate (screenshot); narrow form proved only by the fit check; s hint placement unproven until a placement check

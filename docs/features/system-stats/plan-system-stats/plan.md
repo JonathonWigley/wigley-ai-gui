@@ -223,7 +223,7 @@ export type StatsFixtureVariant = 'busy' | 'error'; // the drive and self-test s
 - [x] [system-stats main: sampling, snapshot, slot](05-plugin-main.md) — after 01, 03
 
 ### Wave 3
-- [ ] [system-stats page, layout, keys, self-test](06-plugin-page.md) — after 04, 05
+- [x] [system-stats page, layout, keys, self-test](06-plugin-page.md) — after 04, 05
 
 ### Wave 4
 - [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
@@ -239,11 +239,13 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 - 01 · 00b45eeb · diff read: SystemStats contract word for word, MainServices.systemStats, systemStatsFor in main.ts, check-layers entries, notFaked; full typecheck exit 0 with wave 1 landed; worker's 7 test files pass (89) · concerns: adapter not run live (task 08); docs/keymap.md oxfmt failure pre-existing; scripts/drive-runs.mts and its test edited beyond the list, since StartOptions lives there
 - 02 · 73e506bd · diff read: createWindowsSystemStats in main.ts systemStatsFor, windowsHide in node-processes; worker's 43 system-stats tests pass, typecheck clean; PowerShell never run (task 08 / user's Windows check) · concerns: rejection names powershell.exe through the runner's own error when the spawn fails; a key present as null throws a TypeError naming no program
 - 05 · 01d1e39b · diff read: contract.ts word for word, slot and channel present, manifests/main list the plugin, FAKE_SESSION_PID gone; worker's typecheck and lint clean, 140 plugin tests pass · concerns: gallery-parts.test.ts fails: its fake document lacks createElementNS under task 04's sparkline (fix dispatched); harness pushSettings added beyond the list
+- 06 · 375dd5f7 · diff read: layout.d.ts filled, page part listed, <Leader>vy and panel binds in keymap, selftest script handed; worker's typecheck and lint clean, 150 tests pass, selftest --plugin system-stats passes; screenshots read · concerns: 56px column-width token leaves names ~60px at the default bar: names and session titles truncate (screenshot); narrow form proved only by the fit check; s hint placement unproven until a placement check
 ### Contract changes
 - kit.sparkline in kit.d.ts: one line → oxfmt wraps it over several lines, type unchanged · why: the repo formatter · consumers: 06 · group 04
 - FakeHostedProcessRecord: gains pid as planned → also a public spawnEvents (null for addRunning) · why: the record is the fake's only per-process state · consumers: none beyond tests · group 03
 - Drive start options: DriveInvocation start and StartOptions gain systemStats 'fake'|'live' (DriveSystemStats in scripts/drive-args.mts); RunEnvironment drive gains systemStats (DriveSystemStatsName in src/main/run-mode.ts) · why: the flag end to end · consumers: 08 · group 01
 - snapshot.ts also exports DEFAULT_REFRESH_SECONDS and refreshSecondsOf; StatsPollerDeps gains log; StatsDriveDeps drops clock; contract.ts word for word with doc comments · why: one home for the refresh rule, the poller logs handler throws, seed reads its own time · consumers: 06 · group 05
+- Layout: the s sort hint sits at the end of the System stats header, not the column heading row; layout.css adds a narrow form under a 260px container query; <Leader>vy after <Leader>vu (no vf bind exists); view model also exports isGroup · why: room at 300px and the 184px fit check · consumers: 07, 08 · group 06
 ### Rulings
 - Client sets entry.pid from the subscribe reply once the attach succeeds, not on reply receipt — an abandoned attach leaves no pid — a pid a few awaits late if wrong · group 03 · group 03
 - A spawned push after the spawner detached is dropped like a line; a later attach takes the pid from its reply — a detached spawner reads pid null · group 03 · group 03
@@ -254,5 +256,7 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 - Windows parser's missing-key check is key-in-document; a null-valued key throws an unnamed TypeError — only a wording loss, since the script always writes the four keys · group 02 · group 02
 - Poller waits FIRST_GAP_MS until a show has 2 good samples, then the interval — a rejection right after the first good sample waits 1 s · group 05 · group 05
 - The main part harness gains pushSettings (MainRecord holds settings and listeners) — a shared test-support file changed beyond the list · group 05 · group 05
+- Open groups prune and the cursor falls back only on a non-null snapshot, since main nulls the slot at each show · group 06 · group 06
+- Every row gets a chevron-width spacer so names line up · group 06 · group 06
 ### Review rounds
 ### Test gate

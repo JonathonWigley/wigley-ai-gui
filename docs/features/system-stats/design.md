@@ -79,15 +79,18 @@ outside the app stay ordinary processes.
 ## The panel
 
 The panel is shown by default. `Space v y` hides or shows it, and the choice is kept in the page's
-`uiState`. Its layout draws a section header, five meters (CPU, GPU, RAM, Network, Disk), each with
-its value and a sparkline (a shared UI primitive), then the process list: one row per group or
-process, with CPU, RAM and GPU columns, sorted by one of them.
+`uiState`. Its layout draws a section header with the sort key's hint at its end, five meters (CPU, GPU, RAM,
+Network, Disk), each with its value and a sparkline (a shared UI primitive, redrawn on each
+snapshot), then the process list under a heading row: one row per group or process, with CPU, RAM and
+GPU columns, sorted by one of them. Under a 260px container query, each meter takes two lines and a
+row's cells drop under its name.
 
 With the panel focused (Alt+l, as in the unity-pool panel), `j`/`k`/`gg`/`G` move the cursor, `s`
 cycles the sort column through CPU, RAM and GPU, Enter or `l` opens a group, and `h` closes it.
 
-Two settings: `system-stats.refreshSeconds` (default 2) and `system-stats.processRows` (default
-10), the number of rows shown with groups closed.
+Three settings: `system-stats.refreshSeconds` (default 2), `system-stats.processRows` (default
+10), the number of rows shown with groups closed, and `system-stats.layout` (default `default`),
+the layout that draws the panel.
 
 ## Rejected
 
