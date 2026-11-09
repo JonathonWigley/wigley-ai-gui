@@ -35,7 +35,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   grouping by list.
 - **Filter:** `/` filters the list. Each word narrows it: `easy`, `medium` or `hard` keeps that difficulty; `new`,
   `attempted`, `solved`, `unsolved` (new or attempted) or `due` keeps that status; a word naming one of the problem's
-  tags or lists (case-insensitive, whole word) keeps those; any other word matches the title by fuzzy match.
+  tags or lists (case-insensitive, whole word) keeps those; any other word matches the title by fuzzy match. A word
+  that is a tag or list word of any problem never falls back to title matching.
 - **Content, stacked full width:** the problem pane on top with the tabs Description, Submissions, Notes and Solution;
   the editor holding `solution.cpp` in the middle; the console at the bottom with the tabs Testcase and Result. The
   interviewer pane sits to the right of the whole column, hidden until toggled. Every divider is a `Split`, its size
@@ -57,7 +58,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `a` | list | start an import session from a one-line request |
   | `⌘'` | every Practice scope, the editor included | Run |
   | `⌘↩` | every Practice scope, the editor included | Submit |
-  | `gt` / `gT` | problem pane | next / previous tab of the problem pane |
+  | `gt` / `gT` | problem pane, console | next / previous tab of that pane |
   | `Space v i` | any | show or hide the interviewer pane |
   | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer |
 
