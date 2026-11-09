@@ -720,7 +720,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Opens that run `openThenFocusDoc` and have not settled.
   let landingOpens = 0;
   // Whether `asideSightLost` left the doc's DOM focus to a landing open, owed
-  // once the last one settles without focusing the doc.
+  // once the last one settles without focusing the doc. A focus placed in the
+  // doc meanwhile settles it.
   let isDocFocusOwed = false;
 
   // Runs `open`, then focuses the doc once it opened: a link's open replaced
@@ -872,6 +873,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         event.target instanceof HTMLElement &&
         doc.aside.element.contains(event.target);
       focused = isInAside ? 'aside' : scope;
+      // A focus placed in the doc settles a doc focus owed, which would
+      // otherwise pull it off the element that took it.
+      if (focused === 'doc') {
+        isDocFocusOwed = false;
+      }
       applyScope();
     });
   }

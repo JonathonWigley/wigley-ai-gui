@@ -543,7 +543,12 @@ describe('docs view focus', () => {
   // narrows) while it holds the keys. Breaks: the doc taking DOM focus from
   // the right bar, or while the view is not active; or not taking it
   // otherwise, as when a Linked from row's open that would have focused it
-  // fails or a later open replaces it, leaving focus on the body.
+  // fails or a later open replaces it, leaving focus on the body. The
+  // `failedOpen*` rows move the focus after the column hides and before the
+  // open fails, so the owed focus is paid against where it went: they break
+  // when the pay calls `focusDocAndLog` in place of `focusDocWhereFree`
+  // (right bar, inactive), drops its `focused === 'doc'` check (tree), or a
+  // focus placed in the doc leaves the debt owed (click).
   it.each([
     { name: 'focus in the column', where: 'column', isDocFocused: true },
     { name: 'focus in the right bar', where: 'outside', isDocFocused: false },
@@ -558,19 +563,65 @@ describe('docs view focus', () => {
       where: 'supersededOpen',
       isDocFocused: true,
     },
+    {
+      name: 'failed open after focus moved to the right bar',
+      where: 'failedOpenRightBar',
+      isDocFocused: false,
+    },
+    {
+      // The tree's focused row is redrawn away, its DOM focus falling to
+      // the body while the tree keeps the keys.
+      name: 'failed open after focus moved to the tree',
+      where: 'failedOpenTree',
+      isDocFocused: false,
+    },
+    {
+      name: 'failed open after the view went inactive',
+      where: 'failedOpenInactive',
+      isDocFocused: false,
+    },
+    {
+      name: 'failed open after a click inside the doc keeps the clicked element focused',
+      where: 'failedOpenClick',
+      isDocFocused: true,
+    },
   ])(
     'asideSightLost_ColumnLeavesSight $name',
     async ({ where, isDocFocused }) => {
       const view = startMachineView();
-      const isLanding = where === 'failedOpen' || where === 'supersededOpen';
+      const isFailed = where.startsWith('failedOpen');
+      const isLanding = isFailed || where === 'supersededOpen';
       await view.open(isLanding ? TARGET : SECTIONED);
       focusIn(view.aside);
       const rightBar = document.createElement('div') as unknown as FakeElement;
-      if (where === 'outside') {
-        (rightBar as unknown as { focus(): void }).focus();
-      }
-      if (where === 'inactive') {
-        view.harness.state.publish(coreModeSlot).set('other.mode');
+      const [docPane] = findAll(asFake(view.mode.element), 'docs-doc');
+      const clicked = document.createElement('a') as unknown as FakeElement;
+      docPane.append(clicked);
+      // The element that must still hold the focus at the end, if any.
+      const kept = {
+        outside: rightBar,
+        failedOpenRightBar: rightBar,
+        failedOpenClick: clicked,
+      }[where];
+      const moveFocus = () => {
+        if (where === 'outside' || where === 'failedOpenRightBar') {
+          (rightBar as unknown as { focus(): void }).focus();
+        }
+        if (where === 'inactive' || where === 'failedOpenInactive') {
+          view.harness.state.publish(coreModeSlot).set('other.mode');
+        }
+        if (where === 'failedOpenTree') {
+          // The machine view's tree is the mode's side bar.
+          const treePane = asFake(view.mode.sideBar as HTMLElement);
+          focusIn(treePane);
+          (treePane as unknown as { blur(): void }).blur();
+        }
+        if (where === 'failedOpenClick') {
+          focusIn(clicked);
+        }
+      };
+      if (!isLanding) {
+        moveFocus();
       }
       const logsBefore = view.docFocusedLogs();
 
@@ -579,12 +630,13 @@ describe('docs view focus', () => {
         view.heldReads.set(GUIDE, guideRead.promise);
         // Enter on Target's Linked from row opens Guide.
         view.harness.started().commands.asideOpen({ arg: undefined });
-        if (where === 'failedOpen') {
+        if (isFailed) {
           // A rebuilt index with Guide's link gone empties the column.
           view.guideLinks.length = 0;
           view.harness.setSideBarShown(true);
           view.harness.started().commands.rescan({ arg: undefined });
           await vi.waitFor(() => expect(view.aside.hidden).toBe(true));
+          moveFocus();
           guideRead.reject(new Error('gone'));
         } else {
           await view.open(PLAIN);
@@ -598,11 +650,11 @@ describe('docs view focus', () => {
       expect({
         isDocFocused: view.isDocFocused(),
         docFocusedLogs: view.docFocusedLogs() - logsBefore,
-        isRightBarKept: where !== 'outside' || view.active() === rightBar,
+        isFocusKept: kept === undefined || view.active() === kept,
       }).toEqual({
         isDocFocused,
-        docFocusedLogs: isDocFocused ? 1 : 0,
-        isRightBarKept: true,
+        docFocusedLogs: isDocFocused && kept === undefined ? 1 : 0,
+        isFocusKept: true,
       });
       await view.harness.stop();
     },
