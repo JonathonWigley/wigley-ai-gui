@@ -547,12 +547,12 @@ function buildAnswerKit(
       const notApplicable = textButton(
         'Not applicable',
         itemRunner(card, kit, 'toggleNotApplicableAt'),
-        { variant: 'ghost' },
+        { variant: 'secondary' },
       );
       const dontAsk = textButton(
         "Don't ask me this",
         itemRunner(card, kit, 'toggleDontAskAt'),
-        { variant: 'ghost' },
+        { variant: 'secondary' },
       );
       appendCardKeys(card, notApplicable, formsCommand('toggleNotApplicable'));
       appendCardKeys(card, dontAsk, formsCommand('toggleDontAsk'));
@@ -644,7 +644,7 @@ function appendAnswerArea(
   label: string | null,
 ): HTMLElement {
   const clear = textButton('Clear', itemRunner(card, kit, 'clearChoiceAt'), {
-    variant: 'ghost',
+    variant: 'secondary',
   });
   appendCardKeys(card, clear, formsCommand('clearChoice'));
   const answerArea = element('div', 'answer');
