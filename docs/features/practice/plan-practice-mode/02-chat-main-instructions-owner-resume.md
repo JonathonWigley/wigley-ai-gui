@@ -1,6 +1,6 @@
 # 02 — Chat main: per-session instructions, owner, main resume
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -148,3 +148,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 4a6843cd · proof: diff read: LaunchRequest/ResumeRequest instructions+owner, ChatMainExports.resume, SavedSession.instructions/owner present; typecheck clean; worker ran chat-sessions and open-sessions tests green (477), oxlint+oxfmt clean on chat (check-layers blocked by in-flight 04) · concerns: none

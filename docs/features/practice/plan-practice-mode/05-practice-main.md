@@ -1,6 +1,6 @@
 # 05 — Practice main: problem store, judge, progress
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)

@@ -760,6 +760,8 @@ export type CompletionRowDraw = (
 // no key there; read the total at a moment with `activeMsAt`.
 // `setHeadless` turns the session's headless flag on or off through the
 // channel's `setHeadless`; the flag shows in `chat.session`.
+// `mountChat` draws the Chat tab's view of a session whose row has an owner
+// into `element`, in place of a Sessions tab (`ChatMount`).
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;
@@ -771,6 +773,25 @@ export interface ChatPageExports {
   focusedBlock(): HTMLElement | null;
   activeTime(sessionId: string): ActiveTime | null;
   setHeadless(sessionId: string, headless: boolean): Promise<void>;
+  mountChat(element: HTMLElement, sessionId: string): ChatMount;
+}
+
+// A session's chat view drawn into another plugin's element by `mountChat`:
+// its entries, composer and session hub, as its Chat tab would show them. The
+// host calls `shown` each time its pane becomes the visible surface, which hands
+// the view chat's keys, and `hidden` when it stops, before it sets its own
+// scope. `mountChat` throws an `Error` whose message is the reason when the
+// page has stopped (`chat page is stopped`), when the session's row has no
+// owner (`session <id> is not owned; it shows in Sessions`), or when the
+// session is already mounted (`session <id> is already mounted`). A mount made
+// before the session's `chat.session` key or its row reaches the page returns at
+// once, leaves `element` empty, and draws once both arrive; one whose row
+// arrives with no owner draws nothing. `dispose` removes the view and leaves
+// the session running, and the session may be mounted again; the session's row
+// leaving disposes the mount, and each call on a disposed mount does nothing.
+export interface ChatMount extends Disposable {
+  shown(): void;
+  hidden(): void;
 }
 
 export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {

@@ -1,6 +1,6 @@
 # 04 — Practice: pure core
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -334,3 +334,5 @@ importing only `src/contracts`), and the test gate runs the five test files abov
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 22cf5824 · proof: diff read: every Produces export present in problem/driver/compare/compile-errors/ladder; typecheck clean; worker ran 5 test files green (88), oxlint+oxfmt clean, scratch clang++ build of prelude and three drivers clean and run; lint layer check deferred to 05 (lead ruling) · concerns: the driverSource guard refusing a quote or line break in the path has no test row (05's clang suite proves driver paths); long long row uses Number.MAX_SAFE_INTEGER + 1 since oxlint refuses the literal
