@@ -907,8 +907,12 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // `writeFile`, when set, writes `text` to `path` before the keys run, as an
 // outside program changing a file on disk would; `path` is relative to the
 // self-test's temp home (`MainServices.homeDir` under the self-test), and one
-// that resolves outside it fails the self-test. `expect` is a line the page
-// logs once the write and the keys have run, and `alsoExpect`, when set, holds
+// that resolves outside it fails the self-test. `remove`, when set, removes
+// the file or folder at `path` (relative to the self-test's temp home, as
+// `writeFile`'s path is) after the write and before the keys, as an outside
+// program deleting it would; one that resolves outside the home fails the
+// self-test. `expect` is a line the page logs once the write, the removal and
+// the keys have run, and `alsoExpect`, when set, holds
 // patterns that each match a line logged after the step began, before or
 // after `expect`, for a line carrying a value the script cannot know, such as
 // a random id, or a second line the step's keys cause, in either order; a
@@ -929,6 +933,7 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // press, as `<pluginId>-<screenshot>-<n>.png`.
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
+  remove?: string;
   keys: string[];
   expect: string;
   alsoExpect?: RegExp[];

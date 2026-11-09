@@ -160,6 +160,11 @@ import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
 import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
+import {
+  SELFTEST_USER_ID,
+  seedSelfTestUserPlugin,
+  userPluginSelfTestScript,
+} from './selftest-user-plugin';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
@@ -1128,6 +1133,17 @@ function createWindow(
     }
   });
   onSelfTestExit('the layouts service', () => layouts.dispose());
+  // Handed over last, so it runs after every plugin's script and its
+  // replacement of a built-in is undone before the run ends. Its `open` runs
+  // once the switch below exists.
+  selfTest?.hostFor(SELFTEST_USER_ID).run(
+    userPluginSelfTestScript({
+      homeFiles: scopedFiles(files, inputs.homeDir, paths),
+      catalog,
+      settled: () => pluginSwitch?.settled() ?? Promise.resolve(),
+      log: pageLog.log,
+    }),
+  );
   // The config needs the page binds and settings of the scripts the plugins
   // handed the self-test.
   const selfTestConfig = selfTest?.closeHandover() ?? {
@@ -1345,6 +1361,14 @@ function startApp() {
         process.env.PATH = shellPath;
       }
       const inputs = await readStartInputs();
+      // The temp home is new each run, so the seed overwrites no user file.
+      if (runMode === 'selfTest') {
+        await seedSelfTestUserPlugin({
+          files,
+          paths,
+          pluginsFolder: inputs.pluginsFolder,
+        });
+      }
       const catalog = await startCatalog(inputs);
       onQuit(() => catalog.dispose());
       onSelfTestExit('the plugin catalog', () => catalog.dispose());

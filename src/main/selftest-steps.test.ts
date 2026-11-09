@@ -523,6 +523,66 @@ describe('runScript', () => {
       ],
     );
   });
+
+  it('runStep_Remove_TrashesBeforeTheKeys', async () => {
+    const order: string[] = [];
+    const { window, log } = page((key, pageLog) => {
+      order.push(`key ${key}`);
+      pageLog.unshift(`[t] ${key}`);
+    });
+    const homeFiles = {
+      write: async (path: string) => {
+        order.push(`write ${path}`);
+      },
+      trash: async (path: string) => {
+        order.push(`trash ${path}`);
+      },
+    } as unknown as Files;
+
+    const failures = await runScript(
+      window,
+      homeFiles,
+      {
+        pluginId: 't',
+        script: {
+          pageBinds: [],
+          settings: {},
+          open: () => {
+            log.unshift('[t] shown');
+            return { shownLine: '[t] shown', result: Promise.resolve(null) };
+          },
+          groups: [
+            {
+              name: 'files',
+              why: 'an outside program changes the home',
+              steps: [
+                {
+                  writeFile: { path: 'p/a.txt', text: 'a' },
+                  remove: 'p/old',
+                  keys: ['j'],
+                  expect: '[t] j',
+                },
+              ],
+            },
+          ],
+          scrollsItself: [],
+          problems: () => [],
+        },
+        checksResult: true,
+      },
+      new Map(),
+      START_WIDTH,
+      1,
+      () => true,
+      50,
+    );
+
+    expect(failures).toBe(0);
+    expect(order).toEqual(['write p/a.txt', 'trash p/old', 'key j']);
+    expect(lines).toContain(
+      '[selftest] PASS write p/a.txt, remove p/old, j -> [t] j',
+    );
+  });
 });
 
 describe('checkPlacement', () => {

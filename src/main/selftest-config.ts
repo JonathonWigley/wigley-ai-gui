@@ -159,17 +159,28 @@ function checkStep(where: string, step: SelfTestStep): void {
 }
 
 // `config` as the self-test serves it: the scripts' page binds after every
-// bind, and their settings laid over the plugin settings. Throws on a setting
-// no plugin holds.
+// bind, and their settings laid over the plugin settings. A script bind whose
+// command `config.commands` lacks and whose text before the first `.` names no
+// plugin in `config.plugins` is dropped, as a plugin that is not loaded (the
+// runtime loader's fixture, once its folder goes) takes its commands with it;
+// every other script bind is kept, so one naming an unknown command of a
+// loaded plugin still fails as a config problem. Throws on a setting no plugin
+// holds.
 export function applySelfTestConfig(
   config: AppConfig,
   selfTest: SelfTestConfig,
 ): AppConfig {
+  const loaded = new Set(config.plugins.map((plugin) => plugin.id));
+  const scriptBinds = selfTest.pageBinds.filter(
+    (bind) =>
+      Object.hasOwn(config.commands, bind.command) ||
+      loaded.has(bind.command.split('.', 1)[0]),
+  );
   return {
     ...config,
     keymap: {
       ...config.keymap,
-      page: [...config.keymap.page, ...selfTest.pageBinds],
+      page: [...config.keymap.page, ...scriptBinds],
     },
     pluginSettings: overrideSettings(config.pluginSettings, selfTest.settings),
   };

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind } from '../contracts/keymap';
 import type {
+  CommandInfo,
   SelfTestGroup,
   SelfTestScript,
   SelfTestStep,
 } from '../contracts/plugin';
+import type { ServedPlugin } from '../contracts/plugin-catalog';
 import type { AppConfig } from '../contracts/settings';
 import { fakePlatform } from '../shared/platform.test-support';
 import {
@@ -97,56 +99,75 @@ describe('mergeSelfTestConfigs', () => {
 });
 
 describe('applySelfTestConfig', () => {
-  it("applySelfTestConfig appends page binds and lays settings over the plugins'", () => {
-    const userBind: PageBind = { keys: ['j'], scope: 'any', command: 'p.down' };
-    const scriptBind: PageBind = {
-      keys: ['z'],
-      scope: 'any',
+  it.each<{ given: string; command: string; isKept: boolean }>([
+    { given: 'a known command', command: 'core.help', isKept: true },
+    {
+      given: 'an unknown command of a loaded plugin',
       command: 'p.zap',
-    };
-    const config: AppConfig = {
-      settings: {
-        window: { width: 1, height: 1, minWidth: 1, minHeight: 1 },
-        theme: 't',
-        transparency: 'system',
-        fonts: {},
-        keySequenceTimeoutMs: 1,
-        claude: { command: 'claude' },
-        shell: { layout: 'default' },
-        plugins: { disabled: ['p'] },
-      },
-      keymap: {
-        editor: { leader: ' ', remaps: [], binds: [] },
-        page: [userBind],
-        app: [],
-        intercept: [],
-        global: [],
-        groups: {},
-      },
-      commands: {},
-      scopes: [],
-      pluginSettings: { p: { size: 1, speed: 2 } },
-      theme: { name: 't', colorScheme: 'dark', tokens: {}, reduced: {} },
-      platform: fakePlatform('macos'),
-      homeDir: '/Users/u',
-      appInstance: {
-        id: 'wigley-ai-gui-dev',
-        displayName: 'Auri Dev',
-        isDev: true,
-      },
-      runMode: 'live',
-      plugins: [],
-      problems: [],
-    };
+      isKept: true,
+    },
+    {
+      given: 'a command of a plugin not loaded',
+      command: 'gone.hello',
+      isKept: false,
+    },
+  ])(
+    "applySelfTestConfig appends page binds and lays settings over the plugins': a script bind to $given",
+    ({ command, isKept }) => {
+      const userBind: PageBind = {
+        keys: ['j'],
+        scope: 'any',
+        command: 'p.down',
+      };
+      const scriptBind: PageBind = { keys: ['z'], scope: 'any', command };
+      const config: AppConfig = {
+        settings: {
+          window: { width: 1, height: 1, minWidth: 1, minHeight: 1 },
+          theme: 't',
+          transparency: 'system',
+          fonts: {},
+          keySequenceTimeoutMs: 1,
+          claude: { command: 'claude' },
+          shell: { layout: 'default' },
+          plugins: { disabled: ['p'] },
+        },
+        keymap: {
+          editor: { leader: ' ', remaps: [], binds: [] },
+          page: [userBind],
+          app: [],
+          intercept: [],
+          global: [],
+          groups: {},
+        },
+        commands: {
+          'core.help': { id: 'core.help', plugin: 'core' } as CommandInfo,
+        },
+        scopes: [],
+        pluginSettings: { p: { size: 1, speed: 2 } },
+        theme: { name: 't', colorScheme: 'dark', tokens: {}, reduced: {} },
+        platform: fakePlatform('macos'),
+        homeDir: '/Users/u',
+        appInstance: {
+          id: 'wigley-ai-gui-dev',
+          displayName: 'Auri Dev',
+          isDev: true,
+        },
+        runMode: 'live',
+        plugins: [{ id: 'p' } as ServedPlugin],
+        problems: [],
+      };
 
-    const served = applySelfTestConfig(config, {
-      pageBinds: [scriptBind],
-      settings: { p: { speed: 9 } },
-    });
+      const served = applySelfTestConfig(config, {
+        pageBinds: [scriptBind],
+        settings: { p: { speed: 9 } },
+      });
 
-    expect(served.keymap.page).toEqual([userBind, scriptBind]);
-    expect(served.pluginSettings).toEqual({ p: { size: 1, speed: 9 } });
-  });
+      expect(served.keymap.page).toEqual(
+        isKept ? [userBind, scriptBind] : [userBind],
+      );
+      expect(served.pluginSettings).toEqual({ p: { size: 1, speed: 9 } });
+    },
+  );
 });
 
 describe('screenshotFiles', () => {
