@@ -176,7 +176,7 @@ no level skill has started.
 
 A main half that declares `reportedAs` takes that value of `set_workflow_step`'s `step`: the tool's accepted values
 derive from the registered stages (§ Signals). Its entry rule still decides whether a report moves the flow. A stage with
-`finishes` writes the run log line when a flow enters it: Large's `closed`, Small's, Medium's and Spike's `done`.
+`finishes` writes the run log line when a flow enters it: Large's `closed`, Small's `done` and `answered`, Medium's and Spike's `done`.
 
 A workflow plugin hands its stages to the engine through the engine's `addWorkflow` export, once in each process: main
 takes a `MainWorkflow` (its claims, first stage and `MainStage`s, and optionally its state fold), the page a

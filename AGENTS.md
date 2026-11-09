@@ -391,7 +391,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   workflow-spike/ manifest.ts, contract.ts, stages/<stage>/ (interview, build, check, land, done; build, check and
                  interview re-enter per ask), main/ (its self-test script), page/, layouts/ (the built-in `default`
                  layout); claims `wigley:spike`
-  workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
+  workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done, answered), main/ (its self-test
                  script), page/, layouts/ (the built-in `default` layout); claims `wigley:small`
   workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
