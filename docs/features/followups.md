@@ -605,6 +605,18 @@ because the earlier items rewrite many of these tests anyway.
   startup loop (`src/renderer/renderer.ts`) skips Y while X is withheld. When X later starts, main's
   `pageStart([X])` names only X, so Y's page part stays unstarted. No built-in has such a dependency today.
   Pre-existing: the runtime loader did not introduce it.
+- **A reload can stop a main part as a `restart` that never restarts** — *needs a feature plan*: `reloadRunning`
+  (`src/main/plugins/plugin-switch.ts`) picks each stop's `PartStop` before it knows whether a start follows.
+  `removeMain(id, 'restart')` stops the old main part as a `restart` even when the new version has no main part. The
+  handler-check fallback stops the new part as a `restart` whenever the last good version has a main part, but
+  `restoreLastGood` starts it only while the config store admits that version. A part told `restart` keeps state for
+  a successor. Chat keeps its rows until `KEPT_SESSION_MS` expires them. Decide whether the stop kind is settled
+  after the start is known, or whether a `restart` with no successor is part of the contract.
+- **Plugin main-part file watchers can miss a save on macOS** — *agent-ready*: a watch opening or closing in the main
+  process drops the other watches' pending events. `WatchOptions.onMissed` (`src/contracts/files.ts`) reports it, and
+  the user plugin folder source, the config store and the layout registry rescan on it. Plugin main parts that watch
+  through `api.files` do not use it yet: workflow-large's plan watch, unity-pool's pool watch, backlog's start watch and
+  docs' doc-files. Give each an `onMissed` rescan.
 - **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
   that session gets its stored answers back from form-service's `replaysLastSubmitted`
   (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same
