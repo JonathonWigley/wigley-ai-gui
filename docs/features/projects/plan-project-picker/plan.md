@@ -213,8 +213,8 @@ Boundary rules: chat imports no unity-pool file; sessions imports no chat file; 
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Sessions: project namers and relocate](01-sessions-namer-relocate.md)
-- [ ] [Chat: projects setting, membership and pool provider registry](02-chat-projects-core.md)
+- [x] [Sessions: project namers and relocate](01-sessions-namer-relocate.md)
+- [x] [Chat: projects setting, membership and pool provider registry](02-chat-projects-core.md)
 
 ### Wave 2
 - [ ] [docs and workflow follow a relocated row](01b-relocated-listeners.md) — after 01
@@ -232,10 +232,17 @@ Boundary rules: chat imports no unity-pool file; sessions imports no chat file; 
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 7ec307f1
 
 ### Groups
+- 01 · fdaa002d · diff read (all Produces present word for word), typecheck and lint clean, session-list and start tests pass · concerns: test 5 catches a stale group but not a stale number (test 4 covers the number); addEntry asks namers before tool sessions start, so a throwing start has asked a namer for a session that never exists
+- 02 · 3a2a0444 · diff read (every Produces present; ChatProject pool variant only reformatted), typecheck and lint clean, projects.test.ts 36 pass · concerns: readProject casts pool as string since unknown does not narrow; branchChoices relies on Set insertion order
 ### Contract changes
 ### Rulings
+- A project lookup landing for an entry the list no longer holds, or for a folder the session no longer holds, changes nothing — closes a reused-rowId hazard — a late project would be lost only for an ended entry · group 01 · group 01
+- The consumer view relocates only sessions that dependent opened, throwing otherwise; it wraps end before filing it so a dependent's stop forgets the id — chat must relocate through its own sessions view, which it does — a plugin relocating another's row would throw · group 01 · group 01
+- relocate has no isStopped check, since the task named none — a relocate after sessions stops would write a row — low, owners stop with sessions · group 01 · group 01
+- A JSON null counts as absent for every key of a project entry, not only folder and profile — matches the null-as-absent decision — a null pinnedBranches reads as none · group 02 · group 02
+- A skipped entry's log line names a string name through JSON.stringify (empty shows as ""), any other as unnamed — cosmetic · group 02 · group 02
 ### Review rounds
 ### Test gate

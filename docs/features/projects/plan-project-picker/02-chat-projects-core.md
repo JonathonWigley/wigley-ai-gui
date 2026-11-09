@@ -1,6 +1,6 @@
 # 02 — Chat: projects setting, membership and pool provider registry
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -304,3 +304,4 @@ addPoolProvider, whose newest registration answers pool questions`.
 
 ## Proof
 
+Commit 3a2a0444 · proof: diff read (every Produces present; ChatProject pool variant only reformatted), typecheck and lint clean, projects.test.ts 36 pass · concerns: readProject casts pool as string since unknown does not narrow; branchChoices relies on Set insertion order

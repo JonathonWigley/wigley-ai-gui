@@ -1,6 +1,6 @@
 # 01 — Sessions: project namers and relocate
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -294,3 +294,4 @@ folder, renumbering its label and re-reading its project)`.
 
 ## Proof
 
+Commit fdaa002d · proof: diff read (all Produces present word for word), typecheck and lint clean, session-list and start tests pass · concerns: test 5 catches a stale group but not a stale number (test 4 covers the number); addEntry asks namers before tool sessions start, so a throwing start has asked a namer for a session that never exists
