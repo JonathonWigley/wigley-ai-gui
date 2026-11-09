@@ -1000,7 +1000,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run runs every script, several
   minutes of a full Electron app against well under one for a plugin, so it runs only when the user asks for one in
   the current turn; a merge, a re-check after a fix and a final
-  pass all run filtered too. `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+  pass all run filtered too, and only when the change's risk tier calls for a live run
+  (`~/wigley-agents/decisions.md` § Risk). `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
   it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
   bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
@@ -1051,8 +1052,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`src/plugins/settings/main/selftest-script.ts`) drives the form over the temp home's empty config folder, its
   steps editing `settings.json` and `keymap.json` through the form and, as outside changes, through `writeFile`. The
   self-test emulates page focus as a drive run does, so a focus-dependent check can be a self-test step.
-- A drive run (`npm run drive`) is how the agent checks a change in the running app: every change to what the app
-  shows or how it reacts is driven end to end, and its captures read, before the work is done. It runs offscreen as
+- A drive run (`npm run drive`) is how the agent checks a change in the running app: a change to what the app
+  shows or how it reacts, at a risk tier that calls for a live run (`~/wigley-agents/decisions.md` § Risk),
+  is driven end to end, and its captures read, before the work is done. It runs offscreen as
   an accessory app on its own temp home, beside the user's app, so the agent starts one whenever a check needs it.
   The `drive` skill (`.agents/skills/drive/SKILL.md`) holds the loop. A plugin offers its fixtures to a drive run as
   drive actions (`api.drive`), so a new plugin's fixtures need no core edit.
