@@ -53,9 +53,9 @@ export interface PluginHost<Started, Part = unknown> {
   // at a time in `start`'s order, each as `start([id])` would, so each part's
   // `ready` runs before its dependents start: a part whose start or check
   // throws, a dependent of a part that threw included, does not keep the next
-  // from starting. Returns each throw with the id of the part
-  // that threw, in that order. Throws `Plugin host is stopping`, starting
-  // nothing, once `stopAll` began.
+  // from starting. Returns each throw with the id of the part that threw, in
+  // that order. Throws `Plugin host is stopping`, starting nothing, once
+  // `stopAll` began.
   startEach(pluginIds: readonly string[]): { id: string; error: unknown }[];
   // Whether the host holds a part of `pluginId`, started or not.
   holds(pluginId: string): boolean;

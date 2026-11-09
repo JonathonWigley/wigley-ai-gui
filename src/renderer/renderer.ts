@@ -147,8 +147,9 @@ async function start() {
   // depending on one in the page, is loaded, added and started after load,
   // one start request at a time (`createPluginPartsAnswers`), so a throw in
   // one fails only that part and a plugin that is off has its `page.js`
-  // imported only at its switch-on. Held as `disabled` ids instead, a built-in naming one in
-  // `dependsOn.main` would fail the host's disabled check.
+  // imported only at its switch-on. Held as `disabled` ids instead, a
+  // built-in naming one in `dependsOn.main` would fail the host's disabled
+  // check.
   const deferred = deferredPageIds(served.plugins);
   const startsAtLoad = pagePartIds(served.plugins, pageParts).filter(
     (id) => !deferred.includes(id),
