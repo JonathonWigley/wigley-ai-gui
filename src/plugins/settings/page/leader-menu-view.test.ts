@@ -342,28 +342,42 @@ describe('createLeaderMenuView', () => {
     {
       case: 'Add_MovesAnAlreadyBoundCommand',
       id: NEW,
-      expected: {
-        unbind: [{ keys: '<Leader>bn', scope: 'any' }],
-        binds: [bind('<Leader>bq', NEW)],
-      },
+      key: 'q',
+      expected: [
+        {
+          unbind: [{ keys: '<Leader>bn', scope: 'any' }],
+          binds: [bind('<Leader>bq', NEW)],
+        },
+      ],
+      toasts: [],
     },
     {
       case: 'Add_AddsAnUnboundCommand',
       id: 'p.free',
-      expected: { binds: [bind('<Leader>bq', 'p.free')] },
+      key: 'q',
+      expected: [{ binds: [bind('<Leader>bq', 'p.free')] }],
+      toasts: [],
     },
-  ])('leaderMenu_$case', ({ id, expected }) => {
+    {
+      case: 'Add_AnyOverAScopedItem_Refused',
+      id: 'p.free',
+      key: 's',
+      expected: [],
+      toasts: ['Space b s already runs "scoped" in In p'],
+    },
+  ])('leaderMenu_$case', ({ id, key, expected, toasts }) => {
     const menu = shownMenu();
     onSessionItem(menu, 0);
 
     menu.view.commands.addBind();
-    menu.recordings[0].keep('q');
+    menu.recordings[0].keep(key);
     pickRow(menu, 0, id);
     menu.pickers[1].chosen('any', null);
 
     expect(menu.recordings[0].key).toBe('add <Leader>b');
     expect(menu.pickers.map((each) => each.title)).toEqual(['Action', 'Scope']);
-    expect(menu.committed.map((each) => each.layer)).toEqual([expected]);
+    expect(menu.committed.map((each) => each.layer)).toEqual(expected);
+    expect(menu.toasts).toEqual(toasts);
   });
 
   it.each([
@@ -544,6 +558,18 @@ describe('createLeaderMenuView', () => {
       expect(menu.toasts).toEqual(toasts);
     },
   );
+
+  it('leaderMenu_FocusOnItems_GroupsPromptStaysInItsCursorRow', () => {
+    const menu = shownMenu();
+
+    menu.view.commands.open();
+
+    const promptsIn = (key: string) =>
+      menu.view.drawnRow(key)?.actions.children.length;
+    expect([promptsIn('group top'), promptsIn('opens <Leader>b')]).toEqual([
+      1, 1,
+    ]);
+  });
 
   it('leaderMenu_CursorFollowsTheMovedBind', () => {
     const menu = shownMenu();

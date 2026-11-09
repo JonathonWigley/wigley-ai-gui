@@ -1,5 +1,5 @@
-import type { CommandArg, CommandId } from '../../../contracts/commands';
-import type { ViewScope } from '../../../contracts/keymap';
+import type { CommandId } from '../../../contracts/commands';
+import type { KeyBind, ViewScope } from '../../../contracts/keymap';
 import { commandTarget } from '../../../shared/command-args';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
@@ -28,6 +28,7 @@ import {
   type CommandRow,
   coverTexts,
   firesAnywhere,
+  isExpandable,
   KEY_FILTERS,
   type KeyFilter,
   keymapLeader,
@@ -40,6 +41,7 @@ import type {
   KeyFiltersInput,
   KeyLineInput,
   KeyRowInput,
+  RecordingInput,
 } from '../layouts/layout';
 import type {
   RowActions,
@@ -58,6 +60,10 @@ const ACCELERATOR_TAGS: Record<AcceleratorLine['kind'], string> = {
 const ACCELERATORS_TEXT = 'Accelerators are edited in the advanced box';
 
 const RECORD_PROMPT = 'Press a key or chord — Tab types it, Esc cancels';
+
+// The key of `?`'s recording, which names no row: every command id holds a
+// dot.
+export const FIND_KEY = 'find';
 
 const CHIP_LABELS: Record<KeyFilter, string> = {
   all: 'All',
@@ -140,14 +146,12 @@ function acceleratorLine(ctx: RowContext, line: AcceleratorLine): KeyLineInput {
   return { kind: 'accelerator', keys, tags, isStruck: line.state !== 'active' };
 }
 
-// The typed keys as Kbd, and the other rows a bind of `command` on them in
-// `scope` replaces, each by its row label.
+// The typed keys as Kbd, and the other rows the bind `bindOn` writes on them
+// replaces, each by its row label.
 function keysPreview(
   ctx: RowContext,
   text: string,
-  scope: ViewScope,
-  command: CommandId,
-  arg: CommandArg | undefined,
+  bindOn: (keys: string) => KeyBind,
 ): HTMLElement | null {
   const keys = text.trim();
   if (keys === '') {
@@ -155,14 +159,7 @@ function keysPreview(
   }
   const node = element('span', 'settings-bind');
   node.append(keysKbd(ctx, keys));
-  const replaced = replacedBy(
-    ctx.schema,
-    ctx.keymapLayer(),
-    keys,
-    scope,
-    command,
-    arg,
-  );
+  const replaced = replacedBy(ctx.schema, ctx.keymapLayer(), bindOn(keys));
   if (replaced.length > 0) {
     node.append(
       element(
@@ -179,25 +176,22 @@ function replacedLabels(rows: readonly CommandRow[]): string {
   return andList(rows.map((row) => row.label));
 }
 
-// What a scope picker opens on: `keys` to bind to `command` with `arg`, the
+// What a scope picker opens on: `bindIn` the bind it writes in a scope, the
 // scope it preselects, and what it does with the scope chosen; `expectedText`
 // is the keymap's text when the picker opened.
 export interface ScopePickRequest {
-  keys: string;
-  command: CommandId;
-  arg?: CommandArg;
+  bindIn(scope: ViewScope): KeyBind;
   preselected: ViewScope;
   chosen(scope: ViewScope, expectedText: string | null): void;
   cancelled?(): void;
 }
 
 // The list picker `Scope` over `any` and every scope, each line naming the
-// rows a bind of `request.keys` there would replace.
+// rows `request.bindIn` there would replace.
 export function openScopePicker(
   ctx: RowContext,
   request: ScopePickRequest,
 ): void {
-  const { keys, command, arg } = request;
   const scopes: ViewScope[] = [
     'any',
     ...ctx.schema.scopes.map((info) => info.id),
@@ -210,10 +204,7 @@ export function openScopePicker(
       const replaced = replacedBy(
         ctx.schema,
         ctx.keymapLayer(),
-        keys,
-        scope,
-        command,
-        arg,
+        request.bindIn(scope),
       );
       const title = scopeTitle(ctx, scope);
       return replaced.length === 0
@@ -240,11 +231,11 @@ function leaderRefusal(ctx: RowContext, keys: string): Judgement | null {
   };
 }
 
-// A reassign's judgement of `keys` for `line` of `row`: the leader refused,
-// keys other rows hold in the line's scope moving here, else free.
+// A reassign's judgement of `keys` for `line`, judging the bind it writes:
+// the leader refused, a chord the line's `where` cannot take refused, keys
+// other rows hold on the halves it fires on moving here, else free.
 function reassignJudgement(
   ctx: RowContext,
-  row: CommandRow,
   line: BindLine,
   keys: string,
 ): Judgement {
@@ -252,15 +243,16 @@ function reassignJudgement(
   if (refusal !== null) {
     return refusal;
   }
+  const written: KeyBind = { ...line.bind, keys };
+  if (!isExpandable(written, leader(ctx))) {
+    return {
+      type: 'refused',
+      note: `${printedKeys(ctx, keys)} is a chord, which fires in a box too: a "${line.bind.where}" bind takes none`,
+      reason: 'chord',
+    };
+  }
   const { scope } = line.bind;
-  const replaced = replacedBy(
-    ctx.schema,
-    ctx.keymapLayer(),
-    keys,
-    scope,
-    row.command.id,
-    row.arg,
-  );
+  const replaced = replacedBy(ctx.schema, ctx.keymapLayer(), written);
   if (replaced.length === 0) {
     return { type: 'free' };
   }
@@ -301,7 +293,7 @@ function recordReassign(ctx: RowContext, row: CommandRow, line: BindLine) {
     replacing: row.binds.indexOf(line),
     prompt: RECORD_PROMPT,
     confirm: 'enter',
-    judge: (keys) => reassignJudgement(ctx, row, line, keys),
+    judge: (keys) => reassignJudgement(ctx, line, keys),
     keep: (keys) => {
       moveLine(ctx, line, keys, null);
     },
@@ -313,7 +305,7 @@ function recordReassign(ctx: RowContext, row: CommandRow, line: BindLine) {
         editor: {
           type: 'line',
           preview: (text) =>
-            keysPreview(ctx, text, line.bind.scope, command, arg),
+            keysPreview(ctx, text, (keys) => ({ ...line.bind, keys })),
         },
         accept(box) {
           const keys = box.text().trim();
@@ -360,12 +352,14 @@ function addBind(ctx: RowContext, row: CommandRow) {
   const key = commandTarget(command, arg);
   const firstDefault = row.binds.find((line) => line.origin === 'default');
   const preselected: ViewScope = firstDefault?.bind.scope ?? 'any';
+  const bindOn = (keys: string, scope: ViewScope): KeyBind => ({
+    keys,
+    scope,
+    command,
+    ...(arg !== undefined && { arg }),
+  });
   const added = (keys: string, scope: ViewScope) =>
-    withAddedBind(
-      ctx.keymapLayer(),
-      { keys, scope, command, ...(arg !== undefined && { arg }) },
-      ctx.schema,
-    );
+    withAddedBind(ctx.keymapLayer(), bindOn(keys, scope), ctx.schema);
   const request: RecordRequest = {
     key,
     replacing: null,
@@ -374,9 +368,7 @@ function addBind(ctx: RowContext, row: CommandRow) {
     judge: (keys) => leaderRefusal(ctx, keys) ?? { type: 'free' },
     keep: (keys) =>
       openScopePicker(ctx, {
-        keys,
-        command,
-        arg,
+        bindIn: (scope) => bindOn(keys, scope),
         preselected,
         chosen: (scope, expectedText) =>
           ctx.commitKeymap(added(keys, scope), { expectedText }),
@@ -388,7 +380,8 @@ function addBind(ctx: RowContext, row: CommandRow) {
         text: typed,
         editor: {
           type: 'line',
-          preview: (text) => keysPreview(ctx, text, preselected, command, arg),
+          preview: (text) =>
+            keysPreview(ctx, text, (keys) => bindOn(keys, preselected)),
         },
         accept(box) {
           const keys = box.text().trim();
@@ -397,9 +390,7 @@ function addBind(ctx: RowContext, row: CommandRow) {
             return;
           }
           openScopePicker(ctx, {
-            keys,
-            command,
-            arg,
+            bindIn: (scope) => bindOn(keys, scope),
             preselected,
             chosen: (scope) => ctx.commitKeymap(added(keys, scope), { box }),
             cancelled: () => box.focus(),
@@ -463,13 +454,30 @@ function commandActions(ctx: RowContext, row: CommandRow): RowActions {
   };
 }
 
+// The recording on the row `key` as the row draws it, its keys printed for
+// the platform; null with none there.
+export function recordingOn(
+  ctx: RowContext,
+  key: string,
+): RecordingInput | null {
+  const recording = ctx.recording();
+  if (recording === null || recording.key !== key) {
+    return null;
+  }
+  return {
+    keys: recording.keys === null ? null : printedKeys(ctx, recording.keys),
+    prompt: recording.prompt,
+    note: recording.note,
+    isRefused: recording.isRefused,
+  };
+}
+
 // A command row's input: its row label capitalised, its manifest group, its
 // binds then its accelerators, and the recording on it, if any.
 export function keyRowInput(ctx: RowContext, row: CommandRow): KeyRowInput {
   const { command } = row;
-  const recording = ctx.recording();
-  const isRecordingHere =
-    recording !== null && recording.key === commandTarget(command.id, row.arg);
+  const recording = recordingOn(ctx, commandTarget(command.id, row.arg));
+  const replacing = ctx.recording()?.replacing ?? null;
   return {
     command: command.id,
     label: capitalised(row.label),
@@ -479,16 +487,7 @@ export function keyRowInput(ctx: RowContext, row: CommandRow): KeyRowInput {
       ...row.binds.map((line) => bindLine(ctx, line)),
       ...row.accelerators.map((line) => acceleratorLine(ctx, line)),
     ],
-    recording: isRecordingHere
-      ? {
-          line: recording.replacing,
-          keys:
-            recording.keys === null ? null : printedKeys(ctx, recording.keys),
-          prompt: recording.prompt,
-          note: recording.note,
-          isRefused: recording.isRefused,
-        }
-      : null,
+    recording: recording === null ? null : { ...recording, line: replacing },
   };
 }
 
@@ -584,7 +583,7 @@ function keyFiltersInput(
     })),
     find: {
       keys: state.findKeys === null ? null : printedKeys(ctx, state.findKeys),
-      isRecording: ctx.recording()?.key === 'find',
+      isRecording: ctx.recording()?.key === FIND_KEY,
     },
   };
 }

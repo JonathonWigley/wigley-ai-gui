@@ -14,7 +14,6 @@ import type {
   LeaderGroupRowInput,
   LeaderItemRowInput,
   LeaderPanesInput,
-  RecordingInput,
 } from '../layouts/layout';
 import type { Judgement } from './key-recorder';
 import {
@@ -30,7 +29,7 @@ import {
   keymapLeader,
   keymapRows,
 } from './keymap-rows';
-import { openScopePicker, scopeTitle } from './keymap-view';
+import { openScopePicker, recordingOn, scopeTitle } from './keymap-view';
 import type { BuiltLeaderPanes, BuiltRow } from './layout/settings-kit';
 import {
   freeKeys,
@@ -99,20 +98,26 @@ export interface LeaderMenuDeps {
 // keys changes; `blur` takes them away. Its focus target moves between the
 // panes and leaves every other move to the core. Each cursor move logs
 // `cursor <row key>`; an edit that moves or adds a bind or group moves the
-// cursors to it once its write lands. Row keys: `group top`,
-// `group <prefix>`, `item <scope> <keys>` (` set` appended for a user bind),
-// `opens <prefix>` and `add <prefix>`. `drawnRow` finds a drawn row by key,
-// for the box and the recording drawn on it.
+// cursors to it once its write lands; an add whose key the scope chosen
+// refuses logs `add refused <keys> in <scope>: <reason>` and toasts why. Row
+// keys: `group top`, `group <prefix>`, `item <scope> <keys>` (` set` appended
+// for a user bind), `opens <prefix>` and `add <prefix>`. `drawnRow` finds a
+// drawn row by key, for the box and the recording drawn on it. `isEdit` is
+// whether `command` on the cursor row edits the keymap rather than moving
+// the cursors.
 export interface LeaderMenuView {
   draw(parent: HTMLElement): void;
   focus(): void;
   blur(): void;
   reset(): void;
   drawnRow(key: string): BuiltRow | undefined;
+  isEdit(command: LeaderMenuCommand): boolean;
   commands: Record<LeaderMenuCommand, () => void>;
 }
 
-type RowAction = Exclude<LeaderMenuCommand, 'down' | 'up' | 'top' | 'bottom'>;
+const MOVES = ['down', 'up', 'top', 'bottom'] as const;
+
+type RowAction = Exclude<LeaderMenuCommand, (typeof MOVES)[number]>;
 
 interface PromptHint {
   command: LeaderMenuCommand;
@@ -128,7 +133,7 @@ const GROUP_HINTS = {
 const ITEM_HINTS = {
   changeAction: { command: 'open', label: 'change action' },
   open: { command: 'open', label: 'open' },
-  add: { command: 'open', label: 'add' },
+  add: { command: 'addBind', label: 'add' },
   changeKey: { command: 'changeKey', label: 'change key' },
   clear: { command: 'removeBind', label: 'clear' },
   move: { command: 'moveToGroup', label: 'move to group' },
@@ -139,12 +144,14 @@ type GroupHint = keyof typeof GROUP_HINTS;
 type ItemHint = keyof typeof ITEM_HINTS;
 
 // One row of a pane: its key, the part that draws it, what each command does
-// on it, and the cursor prompt's hints it shows.
+// on it, the cursor prompt's hints it shows, and whether its `open` only
+// moves the cursors.
 interface PaneRow<H extends string> {
   key: string;
   draw: LeaderRowPart;
   actions: Partial<Record<RowAction, () => void>>;
   hints: readonly H[];
+  isOpenAMove?: boolean;
 }
 
 // Where the cursors go once an edit's write lands.
@@ -257,19 +264,6 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   const currentGroup = (group: LeaderGroup): LeaderGroup =>
     tree.find((each) => each.prefix === group.prefix) ?? group;
 
-  const recordingOn = (key: string): RecordingInput | null => {
-    const recording = ctx.recording();
-    if (recording === null || recording.key !== key) {
-      return null;
-    }
-    return {
-      keys: recording.keys === null ? null : printed(recording.keys),
-      prompt: recording.prompt,
-      note: recording.note,
-      isRefused: recording.isRefused,
-    };
-  };
-
   // A recorded press as the key it binds under a prefix: the leader in force
   // is the key `<Leader>`.
   const asItemKey = (keys: string): string =>
@@ -313,14 +307,14 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   };
 
   // Records one key in `group` on the row `key`, then hands `keep` the keys
-  // it binds there: the group's prefix and the key.
+  // it binds there, the group's prefix and the key, and the key alone.
   const recordIn = (
     group: LeaderGroup,
     key: string,
     prompt: string,
     scope: ViewScope | null,
     moving: BindLine | null,
-    keep: (keys: string) => void,
+    keep: (keys: string, itemKey: string) => void,
   ) =>
     ctx.recordKey({
       key,
@@ -328,7 +322,10 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       prompt,
       confirm: 'press',
       judge: (keys) => judge(group, keys, scope, moving),
-      keep: (keys) => keep(currentGroup(group).prefix + asItemKey(keys)),
+      keep: (keys) => {
+        const itemKey = asItemKey(keys);
+        keep(currentGroup(group).prefix + itemKey, itemKey);
+      },
     });
 
   const commit = (
@@ -433,6 +430,9 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
 
   // ── Item edits ──────────────────────────────────────────────────────────
 
+  // Records the new item's key, which meets only `any` items until the Scope
+  // picker names its scope; the key is judged again in the scope chosen, and
+  // refused there it writes nothing.
   const addItem = (group: LeaderGroup) =>
     recordIn(
       group,
@@ -440,29 +440,34 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       "Press the new item's key — Esc cancels",
       null,
       null,
-      (keys) =>
+      (keys, itemKey) =>
         openActionPicker(actionRows(), undefined, (row) => {
           const moving = leaderLine(row);
           const firstDefault = row.binds.find(
             (line) => line.origin === 'default',
           );
+          const bindIn = (scope: ViewScope): KeyBind =>
+            moving === undefined
+              ? {
+                  keys,
+                  scope,
+                  command: row.command.id,
+                  ...(row.arg !== undefined && { arg: row.arg }),
+                }
+              : { ...moving.bind, keys, scope };
           openScopePicker(ctx, {
-            keys,
-            command: row.command.id,
-            arg: row.arg,
+            bindIn,
             preselected:
               moving?.bind.scope ?? firstDefault?.bind.scope ?? 'any',
             chosen(scope, expectedText) {
+              const judged = judge(group, itemKey, scope, moving ?? null);
+              if (judged.type === 'refused') {
+                log(`add refused ${keys} in ${scope}: ${judged.reason}`);
+                ctx.toast(judged.note, 'info');
+                return;
+              }
               const layer = ctx.keymapLayer();
-              const to: KeyBind =
-                moving === undefined
-                  ? {
-                      keys,
-                      scope,
-                      command: row.command.id,
-                      ...(row.arg !== undefined && { arg: row.arg }),
-                    }
-                  : { ...moving.bind, keys, scope };
+              const to = bindIn(scope);
               const edited =
                 moving === undefined
                   ? withAddedBind(layer, to, ctx.schema)
@@ -572,7 +577,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
           isSet: group.isSet,
           depth: Math.max(group.path.length - 1, 0),
           count: group.entries.length,
-          recording: recordingOn(key),
+          recording: recordingOn(ctx, key),
         },
       },
       actions: isTop
@@ -613,7 +618,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
           label: capitalised(item.command.label),
           command: commandTarget(item.command.id, item.arg),
           tags: itemTags(item),
-          recording: recordingOn(key),
+          recording: recordingOn(ctx, key),
         },
       },
       actions: {
@@ -658,6 +663,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       },
       actions: { open: () => openNested(prefix) },
       hints: ['open'],
+      isOpenAMove: true,
     };
   };
 
@@ -669,7 +675,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
         part: 'leaderAddRow',
         input: {
           freeKeys: freeKeys(group).map((free) => printed(free)),
-          recording: recordingOn(key),
+          recording: recordingOn(ctx, key),
         },
       },
       actions: { open: () => addItem(group) },
@@ -695,8 +701,8 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     at === 'groups' ? panes?.groupRows : panes?.itemRows;
 
   // Marks each pane's cursor row selected, ringed while its pane holds the
-  // keys, the pane without them inactive, and puts the cursor prompt of the
-  // pane holding the keys in its cursor row.
+  // keys, the pane without them inactive, and puts each pane's cursor prompt
+  // in its cursor row; a prompt out of scope hides in place.
   const mark = () => {
     for (const at of ['groups', 'items'] as const) {
       for (const [key, row] of drawn[at]) {
@@ -723,10 +729,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     rows: readonly PaneRow<H>[],
     at: LeaderPane,
   ) => {
-    const row =
-      holding === at
-        ? rows.find((each) => each.key === cursors[at])
-        : undefined;
+    const row = rows.find((each) => each.key === cursors[at]);
     const into = row === undefined ? undefined : drawn[at].get(row.key);
     if (row === undefined || into === undefined) {
       prompt.prompt.remove();
@@ -858,9 +861,22 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     }
   };
 
+  const cursorRow = () =>
+    rowsOf(pane).find((each) => each.key === cursors[pane]);
+
   const runRow = (action: RowAction) => {
-    const row = rowsOf(pane).find((each) => each.key === cursors[pane]);
-    row?.actions[action]?.();
+    cursorRow()?.actions[action]?.();
+  };
+
+  // `open` on the groups pane focuses the items pane.
+  const isEdit = (command: LeaderMenuCommand): boolean => {
+    if ((MOVES as readonly LeaderMenuCommand[]).includes(command)) {
+      return false;
+    }
+    if (command !== 'open') {
+      return true;
+    }
+    return pane === 'items' && cursorRow()?.isOpenAMove !== true;
   };
 
   const commands: Record<LeaderMenuCommand, () => void> = {
@@ -909,6 +925,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       itemRows = [];
     },
     drawnRow: (key) => drawn.groups.get(key) ?? drawn.items.get(key),
+    isEdit,
     commands,
   };
 }

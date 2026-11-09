@@ -163,9 +163,15 @@ describe('replacedBy', () => {
       [{ keys: 'g<CR>', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(ids(replacedBy(given, null, 'g<Enter>', 'p.s', 'p.z'))).toEqual([
-      'p.a',
-    ]);
+    expect(
+      ids(
+        replacedBy(given, null, {
+          keys: 'g<Enter>',
+          scope: 'p.s',
+          command: 'p.z',
+        }),
+      ),
+    ).toEqual(['p.a']);
   });
 
   it('replacedBy_RemovedDefault_NamesNone', () => {
@@ -175,7 +181,9 @@ describe('replacedBy', () => {
     );
     const layer = { unbind: [{ keys: 'x', scope: 'p.s' }] };
 
-    expect(replacedBy(given, layer, 'x', 'p.s', 'p.z')).toEqual([]);
+    expect(
+      replacedBy(given, layer, { keys: 'x', scope: 'p.s', command: 'p.z' }),
+    ).toEqual([]);
   });
 
   it('replacedBy_KeysThePageCannotBind_NamesNone', () => {
@@ -184,7 +192,9 @@ describe('replacedBy', () => {
       [{ keys: 'x', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(replacedBy(given, null, '<Nope>', 'p.s', 'p.z')).toEqual([]);
+    expect(
+      replacedBy(given, null, { keys: '<Nope>', scope: 'p.s', command: 'p.z' }),
+    ).toEqual([]);
   });
 
   it('replacedBy_DefaultHalfAndUserBindOnOtherHalf_NamesBoth', () => {
@@ -203,10 +213,15 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s', 'p.z'))).toEqual([
-      'p.a',
-      'p.b',
-    ]);
+    expect(
+      ids(
+        replacedBy(given, layer, {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.z',
+        }),
+      ),
+    ).toEqual(['p.a', 'p.b']);
   });
 
   it('replacedBy_KeysTheCommandsOwnDefaultHolds_LeavesTheCommandOut', () => {
@@ -225,9 +240,15 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s', 'p.a'))).toEqual([
-      'p.b',
-    ]);
+    expect(
+      ids(
+        replacedBy(given, layer, {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.a',
+        }),
+      ),
+    ).toEqual(['p.b']);
   });
 
   it('replacedBy_PluginDefaultOverCoreDefault_NamesPluginCommand', () => {
@@ -239,7 +260,9 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, null, 'x', 'p.s', 'p.z'))).toEqual(['p.b']);
+    expect(
+      ids(replacedBy(given, null, { keys: 'x', scope: 'p.s', command: 'p.z' })),
+    ).toEqual(['p.b']);
   });
 });
 
@@ -434,7 +457,11 @@ describe('a command with an argument', () => {
 
     expect(
       labels(
-        replacedBy(schema([pick], defaults), null, '<Leader>x', 'p.s', 'p.z'),
+        replacedBy(schema([pick], defaults), null, {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.z',
+        }),
       ),
     ).toEqual(['p.pick label: 1', 'p.pick label: 2']);
   });
@@ -446,10 +473,24 @@ describe('a command with an argument', () => {
     ];
     const withPick = schema([pick], defaults);
 
-    expect(labels(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 2))).toEqual(
-      ['p.pick label: 3'],
-    );
-    expect(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 3)).toEqual([]);
+    expect(
+      labels(
+        replacedBy(withPick, null, {
+          keys: '3',
+          scope: 'p.s',
+          command: 'p.pick',
+          arg: 2,
+        }),
+      ),
+    ).toEqual(['p.pick label: 3']);
+    expect(
+      replacedBy(withPick, null, {
+        keys: '3',
+        scope: 'p.s',
+        command: 'p.pick',
+        arg: 3,
+      }),
+    ).toEqual([]);
   });
 });
 

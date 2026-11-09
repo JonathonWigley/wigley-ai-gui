@@ -305,13 +305,16 @@ describe('keymapSection filters', () => {
 });
 
 describe('reassign', () => {
-  // p.a holds `x` everywhere, p.b `<A-o>` everywhere, p.c `q` and `w`.
+  // p.a holds `x` everywhere, p.b `<A-o>` everywhere, p.c `q` and `w`, p.d
+  // `b` in a box only and p.e `v` on the page only.
   const given = schema(
     [
       { keys: 'x', scope: 'any', command: 'p.a' },
       { keys: '<A-o>', scope: 'any', command: 'p.b' },
       { keys: 'q', scope: 'any', command: 'p.c' },
       { keys: 'w', scope: 'p.s', command: 'p.c' },
+      { keys: 'b', scope: 'any', command: 'p.d', where: 'box' },
+      { keys: 'v', scope: 'any', command: 'p.e', where: 'page' },
     ],
     [],
   );
@@ -374,6 +377,24 @@ describe('reassign', () => {
         note: '⌥O runs "p.b label" everywhere: it moves here',
         from: ['p.b'],
       },
+    },
+    {
+      case: 'a chord is refused for a box-only line',
+      id: 'p.d',
+      act: (shown: ReturnType<typeof reassigned>) =>
+        shown.recordings[0].judge('<C-x>'),
+      expected: {
+        type: 'refused',
+        note: '⌃X is a chord, which fires in a box too: a "box" bind takes none',
+        reason: 'chord',
+      },
+    },
+    {
+      case: 'keys another row holds only on the page are free in a box',
+      id: 'p.d',
+      act: (shown: ReturnType<typeof reassigned>) =>
+        shown.recordings[0].judge('v'),
+      expected: { type: 'free' },
     },
     {
       case: 'the leader is refused',

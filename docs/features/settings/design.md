@@ -107,7 +107,8 @@ merged keymap: defaults, each manifest's `keys`, then the user's layer.
     the user presses is recorded in its place, shown live; Enter keeps it, Esc cancels, and Tab turns the row into a
     one-line box for vim notation with the live Kbd preview. When the keys are taken in that scope the row shows
     "<keys> runs "<label>" in <scope>: it moves here" under it before the commit. Reassign keeps the bind's scope,
-    `where` and `mode`; a row with several binds reassigns the one the list picker chooses.
+    `where` and `mode`, and judges the keys as that bind: a chord is refused for a `box` or `both` bind, and only the
+    halves the bind fires on displace another; a row with several binds reassigns the one the list picker chooses.
   - **Add key** (`a`) records the same way, then opens the list picker of scopes (`any` and every scope),
     preselecting the scope of the command's first default bind, else `any`, each scope's line naming what the bind
     would replace there. A bind added here carries no `where` or `mode`.
@@ -140,11 +141,13 @@ The leader tree as which-key shows it, edited in place, in two panes moved betwe
 - **Items**, on the right: every bind directly under the selected group, in key order, a nested group's row opening it
   on Enter. A row shows its key, the action's label (always the command's label: leader items take no label of their
   own), its qualified id dim, and a Tag when it fires only in one scope (the scope's title) or only in a box (`in a
-  box`). The cursor row's prompt: `↩ change action`, `c change key`, `d clear`, `m move to group`, `r reset`.
+  box`). The cursor row's prompt: `↩ change action`, `c change key`, `d clear`, `m move to group`, `r reset`; the
+  `add…` row's: `a add`.
   - **Add** (`a`, also the `add…` row at the end, which lists the group's free keys) records one key, refusing one the
     group already holds in an overlapping scope, then opens the list picker over every page command by label. A
     command already bound under the leader shows that key in `status-warning`; picking it moves that bind instead of
-    adding a second. The scope picker then opens as Add key's does.
+    adding a second. The scope picker then opens as Add key's does; a scope where the key meets an item in an
+    overlapping scope is refused with the same note, writing nothing.
   - **Change action** opens the same command picker and keeps the key and scope. A picked command that already has a
     leader bind elsewhere moves that bind here and the item's old bind goes, as Add does: one leader path per command; **change key** records a new key in
     the same group; **move to group** picks a group, then records the key there. Each is one user-layer edit: a user

@@ -61,20 +61,22 @@ const SCHEMA: UserConfigSchema = {
   defaultLeader: '<Space>',
 };
 
-// A channel serving `schema`, `keymap` and an empty settings file, recording
-// each settings write and each keymap write, which the next read then serves,
-// and each `mayDisable` asked, which `mayDisable` answers.
+// A channel serving `schema`, `keymap` (or `keymapRead`, when given) and an
+// empty settings file, recording each settings write and each keymap write,
+// which the next read then serves, and each `mayDisable` asked, which
+// `mayDisable` answers.
 function fakeChannel(
   schema: UserConfigSchema,
   keymap: UserKeymap | null,
   mayDisable: (pluginId: string) => Promise<string | null>,
+  keymapRead?: UserConfigRead['keymap'],
 ) {
   const written: Record<string, unknown>[] = [];
   const writtenKeymaps: UserKeymap[] = [];
   const asked: string[] = [];
   const read: UserConfigRead = {
     settings: { state: 'ok', layer: null, text: null },
-    keymap: { state: 'ok', layer: keymap, text: null },
+    keymap: keymapRead ?? { state: 'ok', layer: keymap, text: null },
     themes: [],
   };
   const invoke = async (method: string, ...args: unknown[]) => {
@@ -107,6 +109,7 @@ function fakeChannel(
 interface ShownViewOptions {
   schema?: UserConfigSchema;
   keymap?: UserKeymap | null;
+  keymapRead?: UserConfigRead['keymap'];
   // A reloaded page's place, put back before the load.
   restored?: SettingsPlace;
   plugins?: () => readonly PluginStatus[];
@@ -122,6 +125,7 @@ interface ShownViewOptions {
 async function shownView({
   schema = SCHEMA,
   keymap = null,
+  keymapRead,
   restored,
   plugins = () => [],
   mayDisable = async () => null,
@@ -130,6 +134,7 @@ async function shownView({
     schema,
     keymap,
     mayDisable,
+    keymapRead,
   );
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
@@ -275,6 +280,7 @@ describe('createSettingsView', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it.each([
@@ -469,6 +475,32 @@ describe('createSettingsView', () => {
       { binds: [bind('a', 1), bind('c', 3)] },
       { binds: [bind('a', 1)] },
     ]);
+  });
+
+  // Section p's rows: Name, then Mode; the sheet scrolled down first.
+  it.each([
+    {
+      case: 'a later row keeps the scroll and follows the row into view',
+      moves: ['down'] as const,
+      scrollTop: 40,
+    },
+    {
+      case: 'the first row scrolls the sheet to its top',
+      moves: ['down', 'up'] as const,
+      scrollTop: 0,
+    },
+  ])('markCursor_ScrollsToTheCursor: $case', async ({ moves, scrollTop }) => {
+    const { view, sheet } = await shownView();
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    sheet.scrollTop = 40;
+
+    for (const move of moves) {
+      view.commands[move]();
+    }
+
+    expect(sheet.scrollTop).toBe(scrollTop);
+    // Only the move down to Mode follows a row into view.
+    expect(scrolled).toHaveBeenCalledTimes(1);
   });
 
   it('a row a new filter hides hands the cursor to the first match', async () => {
@@ -968,8 +1000,8 @@ describe('createSettingsView', () => {
   };
 
   // A view open on the Leader menu with its groups pane focused.
-  async function leaderView() {
-    const shown = await shownView({ schema: LEADER_SCHEMA });
+  async function leaderView(options: ShownViewOptions = {}) {
+    const shown = await shownView({ schema: LEADER_SCHEMA, ...options });
     shown.view.openSectionAt(LEADER_INDEX);
     shown.move('right');
     return shown;
@@ -992,6 +1024,48 @@ describe('createSettingsView', () => {
     expect(logs).toContain('leader groups focused');
     expect(logs).toContain('cursor group <Leader>b');
     expect(logs).toContain('box open group <Leader>b');
+  });
+
+  // Top level's items: the b group, then c.
+  it.each([
+    {
+      case: 'open on the groups pane focuses the items pane',
+      act: (view: SettingsView) => view.commands.open(),
+      log: 'leader items focused',
+    },
+    {
+      case: 'open on a nested group row opens the group',
+      act(view: SettingsView) {
+        view.commands.open();
+        view.commands.open();
+      },
+      log: 'cursor group <Leader>b',
+    },
+    {
+      case: 'open on an item row, changing its action, is refused',
+      act(view: SettingsView) {
+        view.commands.open();
+        view.commands.down();
+        view.commands.open();
+      },
+      log: 'cursor item any <Leader>c',
+    },
+    {
+      case: 'add is refused',
+      act: (view: SettingsView) => view.commands.addBind(),
+      log: 'leader groups focused',
+    },
+  ])('leaderMenu_BrokenKeymap_OpenStillMoves: $case', async ({ act, log }) => {
+    const { view, logs, overlay, capture } = await leaderView({
+      keymapRead: { state: 'broken', problem: 'bad json', text: '{' },
+    });
+
+    act(view);
+    await settle();
+
+    expect(logs).toContain(log);
+    expect(only(overlay, 'ui-picker-layer').hidden).toBe(true);
+    expect(capture.isArmed()).toBe(false);
   });
 
   it('leaderMenu_Recording_SurvivesRedraw', async () => {

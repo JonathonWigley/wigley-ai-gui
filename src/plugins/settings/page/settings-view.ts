@@ -72,7 +72,7 @@ import {
   type Recording,
 } from './key-recorder';
 import { KEY_FILTERS } from './keymap-rows';
-import { keymapSection, type KeysViewState } from './keymap-view';
+import { FIND_KEY, keymapSection, type KeysViewState } from './keymap-view';
 import {
   buildEntry,
   buildLeaderPanes,
@@ -108,10 +108,6 @@ const PLUGINS_SECTION = { id: 'plugins', title: 'Plugins' };
 // `keys`.
 const KEYS_SECTION = { id: 'keymap', title: 'Keybindings' };
 const LEADER_SECTION = { id: 'leader', title: 'Leader menu' };
-
-// The key of `?`'s recording, which names no row: every command id holds a
-// dot.
-const FIND_KEY = 'find';
 
 const NO_KEYS_FILTER: KeysViewState = { filter: 'all', findKeys: null };
 
@@ -1292,8 +1288,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const runLeader = (command: LeaderMenuCommand) => {
     const isBusy =
       openBox !== null || picker.isOpen() || recorder.current() !== null;
-    const isMove = ['down', 'up', 'top', 'bottom'].includes(command);
-    if (isBusy || (!isMove && isBroken('keymap'))) {
+    const isRefusedEdit = isBroken('keymap') && leaderMenu.isEdit(command);
+    if (isBusy || isRefusedEdit) {
       return;
     }
     leaderMenu.commands[command]();

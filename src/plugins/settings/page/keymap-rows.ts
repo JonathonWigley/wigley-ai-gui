@@ -352,35 +352,29 @@ export function keymapRows(
   return [...groups.values()].filter((group) => group.rows.length > 0);
 }
 
-// Every other row a new bind of `command` with `arg` on `keys` in `scope` would
-// displace, in row order: each whose default bind fires on a half the new bind
-// shares, and each whose user bind `withAddedBind` drops; judged half by half
-// as the merge does. A command's arg rows count apart, each naming its own
-// argument in its label. The row of `command` and `arg` itself is left out,
-// since a bind on keys it already holds displaces nothing. Empty when none, or
-// when the merge cannot expand those keys.
+// Every other row writing `bind` would displace, in row order: each whose
+// default bind fires on a half `bind` shares, and each whose user bind
+// `withAddedBind` drops; judged half by half as the merge does. A command's
+// arg rows count apart, each naming its own argument in its label. The row of
+// `bind`'s command and argument itself is left out, since a bind on keys it
+// already holds displaces nothing. Empty when none, or when the merge cannot
+// expand `bind`.
 export function replacedBy(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
-  keys: string,
-  scope: string,
-  command: CommandId,
-  arg?: CommandArg,
+  bind: KeyBind,
 ): CommandRow[] {
   const leader = keymapLeader(schema, layer);
-  const typed: KeyBind = { keys, scope, command };
-  if (!isExpandable(typed, leader)) {
+  if (!isExpandable(bind, leader)) {
     return [];
   }
+  const target = commandTarget(bind.command, bind.arg);
   const rows = keymapRows(schema, layer).flatMap((group) => group.rows);
   return rows
-    .filter(
-      (row) =>
-        commandTarget(row.command.id, row.arg) !== commandTarget(command, arg),
-    )
+    .filter((row) => commandTarget(row.command.id, row.arg) !== target)
     .filter((row) =>
       row.binds.some((line) => {
-        const shared = sharedHalves(typed, line.bind, leader);
+        const shared = sharedHalves(bind, line.bind, leader);
         const takesPage = shared.page && line.page?.state === 'active';
         const takesEditor = shared.editor && line.editor?.state === 'active';
         return takesPage || takesEditor;
