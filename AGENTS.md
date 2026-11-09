@@ -445,7 +445,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   can be switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
   plugins).
 - **A user plugin** is a folder in `~/.config/wigley-ai-gui/plugins/<id>/`: `manifest.json`, an optional `main.js`
-  and an optional `page.js`, plain ES modules typed with `// @ts-check` against the `.d.ts` files and
+  and an optional `page.js`, plain ES modules that each export a named `start(api)`, typed with `// @ts-check` against the `.d.ts` files and
   `manifest.schema.json` the app writes to `plugins/_types/` at start, and an optional `layouts/default/`. The plugin
   catalog (`src/main/plugin-catalog/`) is the one live list of plugins: it merges the built-in source and the
   user-folder source, a user plugin with a built-in's id replacing the whole built-in, and the host, the switch, the

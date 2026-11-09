@@ -299,7 +299,7 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
 `plan-runtime-loader/`.
 
 - **User-folder plugins only.** A plugin in `~/.config/wigley-ai-gui/plugins/<id>/` (`manifest.json`, an optional
-  `main.js`, an optional `page.js`, plain ES modules) loads at start and reloads with new code. Both the stable and the
+  `main.js`, an optional `page.js`, plain ES modules that each export a named `start(api)`) loads at start and reloads with new code. Both the stable and the
   dev app load the folder, as they share layouts and themes. Built-ins stay compiled: changing one still needs a
   rebuild. Built-in hot reload would compile TypeScript inside the running app, which needs a compiler shipped with it.
 - **One seam for both kinds.** A `PluginSource` hands the catalog its plugins: the built-in source over the compiled
