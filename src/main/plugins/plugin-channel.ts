@@ -27,7 +27,10 @@ type Handler = (...args: unknown[]) => unknown;
 
 // Routes every plugin's invokes from the page to the handler that plugin
 // registered, and sends each plugin's messages to `page()` under its id;
-// `page()` yields null while no page can receive one, as once it is destroyed.
+// `page()` yields null while no page can receive one, as once it is destroyed
+// or the quit has begun. An invoke with no handler rejects, except while
+// `page()` is null: a page tearing down can still invoke a part already
+// stopped, and no page awaits the reply, so it resolves to undefined.
 export function createPluginChannels(
   ipc: IpcLike,
   page: () => WebContentsLike | null,
@@ -37,6 +40,9 @@ export function createPluginChannels(
   ipc.handle(BRIDGE_CHANNELS.pluginInvoke, (_event, pluginId, method, args) => {
     const handler = handlers.get(pluginId)?.get(method);
     if (!handler) {
+      if (page() === null) {
+        return undefined;
+      }
       throw new Error(
         `Plugin "${pluginId}" has no main handler for "${method}"`,
       );

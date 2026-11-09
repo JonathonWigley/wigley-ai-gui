@@ -41,14 +41,19 @@ describe('createPluginChannels', () => {
     expect(received).toEqual([1]);
   });
 
-  it('rejects an unknown plugin or method', () => {
+  it('rejects an unknown plugin or method, and drops it quietly while there is no page', () => {
     const ipc = fakeIpc();
-    createPluginChannels(ipc, () => null)
+    let page: ReturnType<typeof fakePage> | null = fakePage();
+    createPluginChannels(ipc, () => page)
       .forPlugin('p')
-      .handle('save', () => undefined);
+      .handle('save', () => 'saved');
 
     expect(() => ipc.invoke('q', 'save', [])).toThrow(/"q".*"save"/);
     expect(() => ipc.invoke('p', 'load', [])).toThrow(/"p".*"load"/);
+    page = null;
+    expect(ipc.invoke('q', 'save', [])).toBeUndefined();
+    expect(ipc.invoke('p', 'load', [])).toBeUndefined();
+    expect(ipc.invoke('p', 'save', [])).toBe('saved');
   });
 
   it("sends a message under the plugin's id", () => {
@@ -82,7 +87,8 @@ describe('createPluginChannels', () => {
 
   it('drops a disposed handler, so an invoke rejects and the method registers again', () => {
     const ipc = fakeIpc();
-    const channel = createPluginChannels(ipc, () => null).forPlugin('p');
+    const page = fakePage();
+    const channel = createPluginChannels(ipc, () => page).forPlugin('p');
     const handle = channel.handle('save', () => 'first');
 
     handle.dispose();
