@@ -5,8 +5,12 @@ import type {
   PaneDirection,
   ResizeTarget,
 } from '../contracts/panes';
+import type { PushedScope } from '../contracts/plugin';
+import { createScopeStack } from './key-scope';
 import {
   createPaneTargets,
+  listenToRightBarFocus,
+  listenToScopes,
   type PaneAreas,
   type PaneTargets,
   type RightBarStop,
@@ -305,7 +309,9 @@ describe('createPaneTargets', () => {
   // that record each ask into the same `asked`: `side bar`, `main`, and
   // `stop <n>` for the nth right-bar stop, plus `left <n>` when `hasLeft`.
   // `focusSideBar` answers `sideBar`, after the targets' own `baseChanged`
-  // when `sideBarSetsScope`, as a mode's own `setScope` runs it.
+  // when `sideBarSetsScope`, as a mode's own `setScope` runs it. The targets
+  // hear a real scope stack through `listenToScopes`; `push` pushes an overlay
+  // that pops itself when the base changes, as overlays do.
   function areaTargets(options: {
     sideBar?: boolean;
     stops?: number;
@@ -313,7 +319,8 @@ describe('createPaneTargets', () => {
     sideBarSetsScope?: boolean;
   }) {
     const fakes = recordingTargets();
-    let isPushed = false;
+    const scopes = createScopeStack('main.view');
+    let overlay: PushedScope | null = null;
     const stops: RightBarStop[] = Array.from(
       { length: options.stops ?? 0 },
       (_, index) => ({
@@ -327,7 +334,7 @@ describe('createPaneTargets', () => {
     const deferred: (() => void)[] = [];
     const targets: PaneTargets = createPaneTargets(
       fakes.resizer('side bar resize', true),
-      () => isPushed,
+      () => scopes.anyPushed(),
       fakes.log,
       {
         focusSideBar() {
@@ -342,6 +349,7 @@ describe('createPaneTargets', () => {
       },
       (run) => deferred.push(run),
     );
+    listenToScopes(scopes, targets);
     targets.setFocusTarget(fakes.mover('view', false));
     targets.setOuterPanes({
       focus: fakes.mover('outer', false),
@@ -351,12 +359,13 @@ describe('createPaneTargets', () => {
       ...fakes,
       targets,
       stops,
-      push: () => {
-        isPushed = true;
+      push() {
+        const pushed = scopes.push('overlay.popup');
+        pushed.onBaseChanged(() => pushed.pop());
+        overlay = pushed;
       },
-      pop: () => {
-        isPushed = false;
-      },
+      pop: () => overlay?.pop(),
+      setBase: (scope: string) => scopes.setBase(scope),
       remove(stop: RightBarStop) {
         liveStops = liveStops.filter((live) => live !== stop);
         targets.stopRemoved(stop);
@@ -573,25 +582,27 @@ describe('createPaneTargets', () => {
         fakes.push();
         fakes.remove(fakes.stops[0]);
         fakes.targets.pushedScopesClosed();
+        fakes.flush();
         fakes.asked.push('popped');
         fakes.pop();
+        fakes.flush();
         fakes.targets.pushedScopesClosed();
-        fakes.targets.pushedScopesClosed();
+        fakes.flush();
       },
       asked: ['left 1', 'popped', 'main'],
       logged: ['focus back in main'],
     },
     {
-      // Breaks when a base change under the overlay leaves main owed the keys.
+      // Breaks when the overlay's own pop on the base change pays main's
+      // debt before `baseChanged` drops it, taking the base the view just set.
       case: 'the holding stop removed under a pushed scope, then a base change',
       act(fakes) {
         fakes.targets.focus('right');
         fakes.clear();
         fakes.push();
         fakes.remove(fakes.stops[0]);
-        fakes.targets.baseChanged();
-        fakes.pop();
-        fakes.targets.pushedScopesClosed();
+        fakes.setBase('backlog.homes');
+        fakes.flush();
       },
       asked: ['left 1'],
       logged: [],
@@ -718,4 +729,114 @@ describe('createPaneTargets', () => {
 
     expect(fakes.asked).toEqual(['view left', 'outer left', 'side bar']);
   });
+
+  const STOP = { name: 'stop' };
+  const MAIN = { name: 'main' };
+  const BODY = { name: 'body' };
+
+  it.each<{
+    row: string;
+    event: 'focusin' | 'focusout';
+    target: object;
+    relatedTarget?: object | null;
+    activeAfter?: object | null;
+    told: string[];
+  }>([
+    {
+      // Breaks when a focusin outside the right bar no longer ends the turn.
+      row: 'focusin outside the right bar',
+      event: 'focusin',
+      target: MAIN,
+      told: ['left'],
+    },
+    {
+      row: 'focusin inside the right bar',
+      event: 'focusin',
+      target: STOP,
+      told: [],
+    },
+    {
+      // Breaks when a click on no focusable spot leaves the stop the keys.
+      row: 'focusout from the right bar to nothing, focus settles on the body',
+      event: 'focusout',
+      target: STOP,
+      relatedTarget: null,
+      activeAfter: BODY,
+      told: ['dropped'],
+    },
+    {
+      row: 'focusout from the right bar to nothing, focus settles on none',
+      event: 'focusout',
+      target: STOP,
+      relatedTarget: null,
+      activeAfter: null,
+      told: ['dropped'],
+    },
+    {
+      // Breaks when a window blur, which keeps activeElement, ends the turn.
+      row: 'window blur from the right bar',
+      event: 'focusout',
+      target: STOP,
+      relatedTarget: null,
+      activeAfter: STOP,
+      told: [],
+    },
+    {
+      // Breaks when the check reads activeElement during focusout, not after
+      // the move settles.
+      row: 'focusout to nothing, focus then lands on an element',
+      event: 'focusout',
+      target: STOP,
+      relatedTarget: null,
+      activeAfter: MAIN,
+      told: [],
+    },
+    {
+      row: 'focusout from the right bar to an element',
+      event: 'focusout',
+      target: STOP,
+      relatedTarget: MAIN,
+      activeAfter: BODY,
+      told: [],
+    },
+    {
+      row: 'focusout to nothing from outside the right bar',
+      event: 'focusout',
+      target: MAIN,
+      relatedTarget: null,
+      activeAfter: BODY,
+      told: [],
+    },
+  ])(
+    'tells the pane targets where focus went from the right bar: $row',
+    ({ event, target, relatedTarget = null, activeAfter = null, told }) => {
+      const listeners = new Map<string, (event: unknown) => void>();
+      const page = {
+        activeElement: BODY as object | null,
+        body: BODY,
+        addEventListener(type: string, listener: (event: unknown) => void) {
+          listeners.set(type, listener);
+        },
+      };
+      const deferred: (() => void)[] = [];
+      const heard: string[] = [];
+      listenToRightBarFocus(
+        page as unknown as Document,
+        (node) => (node as object) === STOP,
+        (run) => deferred.push(run),
+        {
+          focusLeftRightBar: () => heard.push('left'),
+          focusDroppedFromRightBar: () => heard.push('dropped'),
+        },
+      );
+
+      listeners.get(event)?.({ target, relatedTarget });
+      page.activeElement = activeAfter;
+      for (const run of deferred.splice(0)) {
+        run();
+      }
+
+      expect(heard).toEqual(told);
+    },
+  );
 });

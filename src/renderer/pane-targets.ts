@@ -4,6 +4,7 @@ import type {
   PaneDirection,
   ResizeTarget,
 } from '../contracts/panes';
+import type { ScopeStack } from './key-scope';
 
 // One right-bar contribution that passed `focus`: a stop for the core's focus
 // keys. `focus` hands it the keys; `left` tells it its turn ended.
@@ -50,8 +51,10 @@ export interface PaneAreas {
 // it leave the right bar for no element: the stop's turn ends with
 // `focusMain`. While `isScopePushed()` both do nothing, the pushed scope's
 // overlay holding the DOM focus over the stop's turn, and `stopRemoved` ends
-// the turn but holds `focusMain` until `pushedScopesClosed` runs with no scope
-// pushed; a base change first drops it. Every end of a stop's turn calls its
+// the turn but owes main `focusMain`: `pushedScopesClosed` pays it once `defer`
+// runs with no scope pushed, unless a base change came first and dropped it
+// (a base change pops an overlay before `baseChanged` hears it, so the debt
+// cannot be paid inside the pop). Every end of a stop's turn calls its
 // `left`. `release` empties every slot holding `target`, by identity, and
 // leaves a slot holding anything else.
 export interface PaneTargets {
@@ -84,7 +87,7 @@ export function createPaneTargets(
   let area: FocusArea = 'main';
   let heldStop: RightBarStop | null = null;
   // Set when a held stop was removed under a pushed scope: main's pane gets
-  // the keys back once no scope is pushed.
+  // the keys back once no scope is pushed and no base change came first.
   let isMainOwed = false;
   // Set while a turn ended by focus landing outside the right bar waits to
   // see whether the element's view sets its own base scope.
@@ -215,11 +218,16 @@ export function createPaneTargets(
       }
     },
     pushedScopesClosed() {
-      if (isMainOwed && !isScopePushed()) {
-        isMainOwed = false;
-        areas.focusMain();
-        log('focus back in main');
+      if (!isMainOwed) {
+        return;
       }
+      defer(() => {
+        if (isMainOwed && !isScopePushed()) {
+          isMainOwed = false;
+          areas.focusMain();
+          log('focus back in main');
+        }
+      });
     },
     release(target) {
       if (resizeTarget === target) {
@@ -255,4 +263,55 @@ export function createPaneTargets(
       }
     },
   };
+}
+
+// Runs `targets.baseChanged` on every base scope change, and
+// `targets.pushedScopesClosed` on each change of the current scope that leaves
+// none pushed.
+export function listenToScopes(
+  scopes: Pick<ScopeStack, 'onBaseChange' | 'onChange' | 'anyPushed'>,
+  targets: Pick<PaneTargets, 'baseChanged' | 'pushedScopesClosed'>,
+): void {
+  // Targets a view set under the previous base belong to a view no longer in
+  // force, and the base change ends an area's turn.
+  scopes.onBaseChange(() => targets.baseChanged());
+  scopes.onChange(() => {
+    if (!scopes.anyPushed()) {
+      targets.pushedScopesClosed();
+    }
+  });
+}
+
+// Tells `targets` where the DOM focus goes from the right bar, as
+// `rightBarHolds` places each event target: a `focusin` outside it runs
+// `focusLeftRightBar`; a `focusout` from inside it with no `relatedTarget`
+// runs `focusDroppedFromRightBar` once `defer` runs, only if the focus then
+// sits on the body or nothing. A window blur has no `relatedTarget` either but
+// keeps `activeElement`, so it runs nothing.
+export function listenToRightBarFocus(
+  document: Document,
+  rightBarHolds: (target: EventTarget) => boolean,
+  defer: (run: () => void) => void,
+  targets: Pick<PaneTargets, 'focusLeftRightBar' | 'focusDroppedFromRightBar'>,
+): void {
+  const isInRightBar = (target: EventTarget | null) =>
+    target !== null && rightBarHolds(target);
+  document.addEventListener('focusin', (event) => {
+    if (!isInRightBar(event.target)) {
+      targets.focusLeftRightBar();
+    }
+  });
+  document.addEventListener('focusout', (event) => {
+    const isLeavingForNothing =
+      event.relatedTarget === null && isInRightBar(event.target);
+    if (!isLeavingForNothing) {
+      return;
+    }
+    defer(() => {
+      const active = document.activeElement;
+      if (active === null || active === document.body) {
+        targets.focusDroppedFromRightBar();
+      }
+    });
+  });
 }

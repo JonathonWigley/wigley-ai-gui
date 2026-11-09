@@ -59,7 +59,11 @@ import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
-import { createPaneTargets } from './pane-targets';
+import {
+  createPaneTargets,
+  listenToRightBarFocus,
+  listenToScopes,
+} from './pane-targets';
 import { createPendingKeys } from './pending-keys';
 import {
   createPageApi,
@@ -261,40 +265,16 @@ async function start() {
     },
     queueMicrotask,
   );
-  // Targets a view set under the previous base belong to a view no longer in
-  // force, and the base change ends an area's turn.
-  scopeStack.onBaseChange(() => paneTargets.baseChanged());
-  scopeStack.onChange(() => {
-    if (!scopeStack.anyPushed()) {
-      paneTargets.pushedScopesClosed();
-    }
-  });
+  listenToScopes(scopeStack, paneTargets);
   shell.onRightBarStopRemoved((stop) => paneTargets.stopRemoved(stop));
-  document.addEventListener('focusin', (event) => {
-    const isInRightBar =
-      event.target instanceof Node && shell.rightBarHolds(event.target);
-    if (!isInRightBar) {
-      paneTargets.focusLeftRightBar();
-    }
-  });
   // A click on no focusable spot sends the focus to the body with no
-  // `focusin`; a window blur also has no `relatedTarget` but keeps
-  // `activeElement`, so the check waits until the focus move is done.
-  document.addEventListener('focusout', (event) => {
-    const isLeavingForNothing =
-      event.relatedTarget === null &&
-      event.target instanceof Node &&
-      shell.rightBarHolds(event.target);
-    if (!isLeavingForNothing) {
-      return;
-    }
-    queueMicrotask(() => {
-      const active = document.activeElement;
-      if (active === null || active === document.body) {
-        paneTargets.focusDroppedFromRightBar();
-      }
-    });
-  });
+  // `focusin`, so a `focusout` from the right bar tells that drop.
+  listenToRightBarFocus(
+    document,
+    (target) => target instanceof Node && shell.rightBarHolds(target),
+    queueMicrotask,
+    paneTargets,
+  );
   const drops = createDropTargets({
     document,
     bridge,
