@@ -20,13 +20,15 @@ export const FAKE_SESSIONS = fakeDependency(
     }) as unknown as SessionsMainExports,
 );
 
-// Chat for a harness's parts: every instruction taken and disposable.
+// Chat for a harness's parts: every instruction taken and disposable, and the
+// one profile `personal`.
 export const FAKE_CHAT = fakeDependency(
   chatMainKey,
   (consumer) =>
     ({
       addInstructions: () => consumer.track({ dispose: () => undefined }),
       activeTime: () => null,
+      profiles: () => [{ name: 'personal', configDir: '~/.c' }],
     }) as unknown as ChatMainExports,
 );
 

@@ -9,10 +9,15 @@ import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import layoutTypes from '../layouts/layout.d.ts?raw';
-import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
+import {
+  type ChatMainEvents,
+  chatMainKey,
+  chatSessionSlot,
+} from '../../chat/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
   type ChecklistItem,
@@ -58,7 +63,8 @@ type WorkflowApi = MainApi<
 
 // Folds each owned Chat-tab session's agent events and session events into its
 // flow through the registered workflows, keeps the flows in `flows.json` keyed by
-// host session id, folds a re-attach's replay only past the flow's last save,
+// host session id, opens at start each row chat already holds as its open events
+// would have, folds a re-attach's replay only past the flow's last save,
 // marks a live turn with agent work and no workflow as a missed level, tells each
 // observer every fold, open, close and replay, contributes `set_workflow_step`
 // while a workflow has a reportable stage, which lists every workflow's stages'
@@ -75,6 +81,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const { log, clock } = services;
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
+    const rows = api.state.read(sessionsRowsSlot);
+    const chatSessions = api.state.read(chatSessionSlot);
     const workflows = createStageList<MainWorkflow>();
     const store = createFlowStore({
       flows: api.state.publish(workflowFlowsSlot),
@@ -295,6 +303,36 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       };
     };
 
+    const openFlow = (
+      sessionId: string,
+      hostSessionId: string,
+      projectDir: string,
+    ) => {
+      const flow = store.open(sessionId, hostSessionId, projectDir);
+      tellObservers((observer) => observer.opened(flow));
+    };
+
+    // A start while chat and sessions run hears no `connected` or
+    // `sessionOpened` for the rows they already hold, so each row chat holds
+    // under a profile in its settings opens here under its row's host id, as
+    // those events would have opened it. A row an event opened first is left.
+    const openRowsAlreadyOpen = () => {
+      const profileNames = new Set(chat.profiles().map(({ name }) => name));
+      for (const [sessionId, info] of chatSessions.all()) {
+        const row = rows.get(sessionId);
+        const hostSessionId = row?.hostSessionId ?? null;
+        const projectDir = row?.projectDir ?? null;
+        if (hostSessionId === null || projectDir === null) {
+          continue;
+        }
+        const isHeld = store.hostIdOf(sessionId) !== null;
+        if (isHeld || !profileNames.has(info.profile)) {
+          continue;
+        }
+        openFlow(sessionId, hostSessionId, projectDir);
+      }
+    };
+
     events.on('sessions.connected', ({ id, info }) => {
       const { sessionId: hostSessionId, projectDir } = info;
       void ready.then(() => {
@@ -311,8 +349,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           return;
         }
         connected.delete(sessionId);
-        const flow = store.open(sessionId, pair.hostSessionId, pair.projectDir);
-        tellObservers((observer) => observer.opened(flow));
+        if (store.hostIdOf(sessionId) === pair.hostSessionId) {
+          return;
+        }
+        openFlow(sessionId, pair.hostSessionId, pair.projectDir);
       });
     });
     events.on('sessions.hostSessionChanged', ({ id, info }) => {
@@ -399,6 +439,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     };
     return {
       commands: {},
+      ready() {
+        void ready.then(openRowsAlreadyOpen);
+      },
+      dispose: () => store.flushed(),
       exports: (consumer): WorkflowMainExports => ({
         signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
         flowOf: (sessionId) => store.get(sessionId),

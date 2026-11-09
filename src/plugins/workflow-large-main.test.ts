@@ -3,6 +3,7 @@ import type { ActiveTime } from '../contracts/active-time';
 import type { AgentEvent, UsageAgentEvent } from '../contracts/agent';
 import { type Files, readIfPresent } from '../contracts/files';
 import type { QualifiedEvents } from '../contracts/plugin';
+import type { KeyedSlotKey } from '../contracts/state';
 import { createMemoryFiles, type MemoryFiles } from '../shared/memory-files';
 import { posixPaths } from '../shared/paths/posix-paths';
 import {
@@ -208,7 +209,10 @@ function startWorkflowPart(
   };
   const layouts = { register: () => ({ dispose: () => undefined }) };
   const engine = workflowMainPart.start({
-    state: { publish: () => store.publish(workflowFlowsSlot) },
+    state: {
+      publish: () => store.publish(workflowFlowsSlot),
+      read: (key: KeyedSlotKey<unknown>) => store.read(key, 'workflow'),
+    },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {

@@ -247,6 +247,13 @@ replay or a countdown's Cancel or firing. A replayed event
 at or before that time is already in the flow, so it updates only the running turn and subagents; a later one, from a
 turn that ended while the app was closed, folds as usual. A flow saved without the time counts as saved when it loaded.
 
+A flow opens when chat opens its row (`chat.sessionOpened`, paired with the host id `sessions.connected` gave). The
+engine restarting on its own while chat and sessions run hears neither for the rows already open, so its `ready()`
+opens each row in `chat.session` whose profile is in chat's settings, under the host id and folder its
+`sessions.rows` entry holds, after `flows.json` loads; an open event for a row already opened under the same host id
+opens nothing more. Every change writes the whole file, and the part's stop waits for the last write, so the flow a
+restart opens is the one the stopped engine held.
+
 ## Where it draws
 
 Each workflow draws through its own layout, over the engine's contract and kit: the built-in `default` of each workflow
