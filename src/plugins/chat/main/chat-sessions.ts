@@ -1221,6 +1221,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       profile,
       titles: sessions.titles(sessionId) ?? NO_TITLES,
       sent: session.sent,
+      headless: session.headless,
       reason,
     });
   }
@@ -2184,6 +2185,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       hosted: HostedProcessInfo;
       instructions: readonly string[];
       owner: string | null;
+      headless: boolean;
     },
     select: boolean,
   ): HeldSession {
@@ -2207,7 +2209,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeMs: 0,
         origin: 'resumed',
         unattended: false,
-        headless: false,
+        headless: opening.headless,
         instructions: opening.instructions,
         owner: opening.owner,
       },
@@ -3077,6 +3079,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           hosted: runningHere,
           instructions,
           owner,
+          headless: request.headless === true,
         },
         select,
       );
@@ -3105,7 +3108,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         titles,
         origin: 'resumed',
         unattended: false,
-        headless: false,
+        headless: request.headless === true,
         instructions,
         owner,
       },

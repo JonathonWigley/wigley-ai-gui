@@ -72,6 +72,10 @@ describe('createStashStore', () => {
       given: 'a note that is no string',
       text: JSON.stringify([{ ...record('a', 1), note: 5 }]),
     },
+    {
+      given: 'a headless flag that is no boolean',
+      text: JSON.stringify([{ ...record('a', 1), headless: 'yes' }]),
+    },
   ])(
     'recordsAddRemove_UnreadableFile_RejectAndKeepIt given $given',
     async ({ text }) => {

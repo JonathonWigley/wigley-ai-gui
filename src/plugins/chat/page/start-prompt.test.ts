@@ -253,6 +253,7 @@ const closedAlpha: ResumeSectionRow = {
   title: 'Fix login',
   at: 5,
 };
+const headlessAlpha: ResumeSectionRow = { ...closedAlpha, headless: true };
 const closedElsewhere: ResumeSectionRow = {
   hostSessionId: 'e',
   projectDir: '/Users/u/dev/other',
@@ -421,6 +422,7 @@ describe('start prompt', () => {
         profile: 'work',
         hostSessionId: 'a',
         title: 'Fix login',
+        headless: false,
       },
     ]);
     expect(run.revealed).toEqual(['row-2']);
@@ -475,7 +477,40 @@ describe('start prompt', () => {
         profile: 'work',
         hostSessionId: 'a',
         title: 'Fix login',
+        headless: false,
       },
+    ]);
+  });
+
+  it.each([
+    {
+      step: 'folder step',
+      pick: async () => {
+        const run = setUp({
+          answers: { resumeSections: recentlyClosed(headlessAlpha) },
+        });
+        await flush();
+        pickFolder(run.last(), folderSectionLabel(headlessAlpha, 'app'));
+        return run;
+      },
+    },
+    {
+      step: 'session step',
+      pick: async () => {
+        const run = await atSessionStep(
+          { resumeSections: recentlyClosed(headlessAlpha) },
+          [alpha, beta],
+        );
+        pickItem(run.last(), `Fix login · ${sessionTime(headlessAlpha.at)}`);
+        return run;
+      },
+    },
+  ])('pick_HeadlessSectionRow_ResumesHeadless ($step)', async ({ pick }) => {
+    const run = await pick();
+    await flush();
+
+    expect(run.resumed).toEqual([
+      expect.objectContaining({ hostSessionId: 'a', headless: true }),
     ]);
   });
 
@@ -520,6 +555,8 @@ describe('start prompt', () => {
     pickFolder(run.opened[0], '~/dev/app');
     pickItem(run.opened[1], 'work · ~/.claude');
     await flush();
+    pickItem(run.last(), NEW_SESSION_LABEL);
+    await flush();
     expect(run.started).toEqual([
       { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
@@ -527,12 +564,17 @@ describe('start prompt', () => {
     expect(run.logs).toEqual([expect.stringContaining('work')]);
   });
 
-  it('recentFolder_oneProfile_startsAtOnce', async () => {
+  it('recentFolder_oneProfile_skipsTheProfileStep', async () => {
     const run = setUp({ profiles: [work] });
     await flush();
     pickFolder(run.opened[0], '~/dev/app');
     await flush();
-    expect(run.opened.map((opened) => opened.title)).toEqual(['Folder']);
+    expect(run.opened.map((opened) => opened.title)).toEqual([
+      'Folder',
+      SESSION_STEP_TITLE,
+    ]);
+    pickItem(run.last(), NEW_SESSION_LABEL);
+    await flush();
     expect(run.started).toEqual([
       { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
@@ -550,6 +592,8 @@ describe('start prompt', () => {
     ]);
     expect(run.opened[1].selected).toBe(0);
     pickItem(run.opened[1], 'personal · ~/.claude-personal');
+    await flush();
+    pickItem(run.last(), NEW_SESSION_LABEL);
     await flush();
     expect(run.started).toEqual([
       { projectDir: '/Users/u/dev/new', profile: 'personal', headless: false },
@@ -612,6 +656,8 @@ describe('start prompt', () => {
     await flush();
     pickFolder(run.opened[0], '~/dev/app');
     await flush();
+    pickItem(run.last(), NEW_SESSION_LABEL);
+    await flush();
     expect(run.revealed).toEqual([]);
     expect(run.logs).toEqual([
       expect.stringContaining('work'),
@@ -622,7 +668,7 @@ describe('start prompt', () => {
     ]);
   });
 
-  it('openForNewSession_savedSessions_startsWithoutTheSessionStep', async () => {
+  it('openForNewSession_savedSessions_SessionStepHoldsTheNewLinesAlone', async () => {
     const run = setUp({
       answers: { pastSessions: () => Promise.resolve([alpha, beta]) },
     });
@@ -632,11 +678,16 @@ describe('start prompt', () => {
     await flush();
     pickItem(run.last(), 'work · ~/.claude');
     await flush();
-    expect(run.opened.map(({ title }) => title)).toEqual(['Folder', 'Profile']);
-    expect(run.invoked).not.toContain('pastSessions');
-    expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
+    expect(run.opened.map(({ title }) => title)).toEqual([
+      'Folder',
+      'Profile',
+      SESSION_STEP_TITLE,
     ]);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+    ]);
+    expect(run.invoked).not.toContain('pastSessions');
   });
 
   it('sessionStep_savedSessions_opensOnNewThenUnarchivedRows', async () => {
@@ -687,6 +738,7 @@ describe('start prompt', () => {
         profile: 'work',
         hostSessionId: 'b',
         title: 'Beta',
+        headless: false,
       },
     ]);
     expect(run.revealed).toEqual(['row-2']);
@@ -758,13 +810,55 @@ describe('start prompt', () => {
     expect(run.logs).toEqual(['New headless session cannot be archived']);
   });
 
+  // The session step for ~/dev/app with one profile, reached by `open` over
+  // `rows`, or by `openForNewSession`.
+  async function reachSessionStep(
+    reach: 'open' | 'openForNewSession',
+    rows: PastSessionRow[],
+  ) {
+    if (reach === 'open') {
+      return atSessionStep({}, rows);
+    }
+    const run = setUp({ profiles: [work] });
+    run.prompt.openForNewSession();
+    await flush();
+    pickFolder(run.last(), '~/dev/app');
+    await flush();
+    return run;
+  }
+
   it.each([
-    { line: NEW_SESSION_LABEL, headless: false },
-    { line: NEW_HEADLESS_SESSION_LABEL, headless: true },
-  ])(
-    'sessionStep_NewHeadlessSession_StartsWithHeadless: $line → $headless',
-    async ({ line, headless }) => {
-      const run = await atSessionStep();
+    { reach: 'open', rows: [alpha], line: NEW_SESSION_LABEL, headless: false },
+    {
+      reach: 'open',
+      rows: [alpha],
+      line: NEW_HEADLESS_SESSION_LABEL,
+      headless: true,
+    },
+    { reach: 'open', rows: [], line: NEW_SESSION_LABEL, headless: false },
+    {
+      reach: 'open',
+      rows: [],
+      line: NEW_HEADLESS_SESSION_LABEL,
+      headless: true,
+    },
+    {
+      reach: 'openForNewSession',
+      rows: [],
+      line: NEW_SESSION_LABEL,
+      headless: false,
+    },
+    {
+      reach: 'openForNewSession',
+      rows: [],
+      line: NEW_HEADLESS_SESSION_LABEL,
+      headless: true,
+    },
+  ] as const)(
+    'sessionStep_NewHeadlessSession_StartsWithHeadless: $reach over $rows.length rows, $line → $headless',
+    async ({ reach, rows, line, headless }) => {
+      const run = await reachSessionStep(reach, [...rows]);
+      expect(run.last().title).toBe(SESSION_STEP_TITLE);
       expect(run.last().labels.slice(0, 2)).toEqual([
         NEW_SESSION_LABEL,
         NEW_HEADLESS_SESSION_LABEL,
@@ -962,6 +1056,8 @@ describe('start prompt', () => {
     expect(run.logs).toContainEqual(
       expect.stringContaining('claude not found'),
     );
+    pickItem(run.last(), NEW_SESSION_LABEL);
+    await flush();
     expect(run.started).toEqual([
       { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);

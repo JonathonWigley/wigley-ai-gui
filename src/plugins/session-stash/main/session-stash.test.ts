@@ -20,6 +20,7 @@ function closed(sessionId: string, changes: Partial<Closed> = {}): Closed {
     profile: 'work',
     titles: { user: null, agent: `${sessionId} title`, firstMessage: 'hi' },
     sent: true,
+    headless: false,
     reason: 'user',
     ...changes,
   };
@@ -39,15 +40,18 @@ function opened(
   };
 }
 
-function row(sessionId: string, note?: string): ResumeSectionRow {
-  const base = {
+function row(
+  sessionId: string,
+  changes: Partial<ResumeSectionRow> = {},
+): ResumeSectionRow {
+  return {
     hostSessionId: `host-${sessionId}`,
     projectDir: `/projects/${sessionId}`,
     profile: 'work',
     title: `${sessionId} title`,
     at: AT,
+    ...changes,
   };
-  return note === undefined ? base : { ...base, note };
 }
 
 function setUp() {
@@ -79,16 +83,23 @@ describe('createSessionStash', () => {
     {
       given: 'a note',
       note: 'after lunch',
-      expected: [row('s1', 'after lunch')],
+      headless: false,
+      expected: [row('s1', { note: 'after lunch' })],
     },
-    { given: 'no note', note: null, expected: [row('s1')] },
+    { given: 'no note', note: null, headless: false, expected: [row('s1')] },
+    {
+      given: 'a headless session',
+      note: null,
+      headless: true,
+      expected: [row('s1', { headless: true })],
+    },
   ])(
     'closed_PendingUserCloseSent_ListsTheStash given $given',
-    async ({ note, expected }) => {
+    async ({ note, headless, expected }) => {
       const test = setUp();
 
       test.stash.request({ sessionId: 's1', note });
-      test.stash.closed(closed('s1'));
+      test.stash.closed(closed('s1', { headless }));
       await test.settled();
 
       expect(await test.stash.rows(anyResumable)).toEqual(expected);

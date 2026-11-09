@@ -1695,6 +1695,100 @@ describe('auto-answer', () => {
     );
   });
 
+  // The user submits NAMING in the window after its call returned a draft.
+  async function submitAfterDraftReply(session: AgentFormSession<TestPayload>) {
+    autoAnswerOn = false;
+    const asking = session.open(NAMING_ARGS, null, live());
+    await expireDeadline();
+    await asking;
+    presenter.submit(presenter.latest().formId, body('mine'));
+    autoAnswerOn = true;
+  }
+
+  it.each([
+    {
+      case: 'the same form finished in the window',
+      leaveAnswers: submitAfterDraftReply,
+      args: NAMING_ARGS,
+      expected: TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+      ),
+    },
+    {
+      case: 'another form finished in the window',
+      leaveAnswers: submitAfterDraftReply,
+      args: PLACEMENT_ARGS,
+      expected: TEST_FORM_TYPE.handedBackPayload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+      ),
+    },
+    {
+      case: 'the same form finished before a restart',
+      leaveAnswers: async () => {
+        saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
+      },
+      args: NAMING_ARGS,
+      expected: TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        HALF_BODY,
+      ),
+    },
+    {
+      case: 'another form finished before a restart',
+      leaveAnswers: async () => {
+        saveEarlier(NAMING_ARGS, 'cancelled', HALF_BODY);
+      },
+      args: PLACEMENT_ARGS,
+      expected: TEST_FORM_TYPE.handedBackPayload(
+        parse(NAMING_ARGS),
+        'cancelled',
+        HALF_BODY,
+      ),
+    },
+  ])(
+    'returns answers no reply has carried before auto-answering: $case',
+    async ({ leaveAnswers, args, expected }) => {
+      const { session } = startAutoSession();
+      await leaveAnswers(session);
+
+      const payload = await session.open(args, null, live());
+
+      expect(payload).toEqual(expected);
+      expect(savedFiles()).not.toContainEqual(
+        expect.objectContaining({ auto_answered: true }),
+      );
+    },
+  );
+
+  it("waits on the same form still unfinished in the window, and returns the user's answers", async () => {
+    const { session } = startAutoSession();
+    autoAnswerOn = false;
+    void session.open(NAMING_ARGS, null, live());
+    autoAnswerOn = true;
+
+    const resent = session.open(NAMING_ARGS, null, live());
+    const state = watch(resent);
+    await vi.advanceTimersByTimeAsync(0);
+    const settledBeforeSubmit = state.settled;
+    const closedBeforeSubmit = [...presenter.closed];
+    presenter.submit(presenter.latest().formId, body('mine'));
+
+    expect(settledBeforeSubmit).toBe(false);
+    expect(await resent).toEqual(
+      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('mine')),
+    );
+    expect(presenter.shown).toHaveLength(1);
+    expect(closedBeforeSubmit).toEqual([]);
+    expect(savedFiles()).not.toContainEqual(
+      expect.objectContaining({ auto_answered: true }),
+    );
+  });
+
   it('writes a second file for the same form after the host moves', async () => {
     const { session, moveHost } = startAutoSession();
     await session.open(NAMING_ARGS, null, live());

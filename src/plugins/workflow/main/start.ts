@@ -42,6 +42,7 @@ import {
 } from './checklist-tool';
 import { addDriveActions } from './drive-actions';
 import { createFlowStore } from './flow-store';
+import { createHeadlessLines } from './headless-line';
 import { createRunLog } from './run-log';
 import { createRunMeter } from './run-meter';
 import { SESSION_NOTE } from './session-note';
@@ -233,10 +234,14 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, { type: 'stepReported', step: stage.id }, 'live');
         return store.get(sessionId)?.stage === stage.id;
       });
+    // One headless-line state per session, shared by both workflow tools.
+    const headlessLines = createHeadlessLines((sessionId) =>
+      chat.isHeadless(sessionId),
+    );
     const startStepToolSession = startStepTool({
       workflows: () => workflows.all(),
       reportStep,
-      isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      lines: headlessLines,
     });
 
     // Folds a reported checklist as a live event; resolves whether a registered
@@ -254,7 +259,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       });
     const startChecklistToolSession = startChecklistTool({
       reportChecklist,
-      isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      lines: headlessLines,
     });
     sessions.contributeTools(
       [checklistToolDefinition()],
@@ -413,6 +418,15 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       },
     );
 
+    // The tool session a self-test call stands for, under the flow's host id.
+    const selfTestToolSession = (sessionId: string) => ({
+      id: sessionId,
+      info: {
+        sessionId: store.hostIdOf(sessionId),
+        projectDir: null,
+        harness: null,
+      },
+    });
     const selfTestHooks: WorkflowSelfTestHooks = {
       forgetFlows(projectDir) {
         for (const sessionId of store.forgetFlows(projectDir)) {
@@ -422,14 +436,14 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         }
       },
       callStepTool(sessionId, step) {
-        void startStepToolSession({ id: sessionId }).call(
+        void startStepToolSession(selfTestToolSession(sessionId)).call(
           SET_WORKFLOW_STEP_TOOL,
           { step },
           { toolUseId: null, signal: new AbortController().signal },
         );
       },
       callChecklistTool(sessionId, items) {
-        void startChecklistToolSession({ id: sessionId }).call(
+        void startChecklistToolSession(selfTestToolSession(sessionId)).call(
           SET_WORKFLOW_CHECKLIST_TOOL,
           { items },
           { toolUseId: null, signal: new AbortController().signal },

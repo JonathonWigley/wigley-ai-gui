@@ -1,5 +1,4 @@
 import {
-  type AgentSession,
   errorResult,
   textResult,
   type ToolDefinition,
@@ -8,7 +7,7 @@ import {
 } from '../../sessions/contract';
 import type { ChecklistItem } from '../contract';
 import { isChecklistItem } from './flow-store';
-import { createHeadlessLines } from './headless-line';
+import type { HeadlessLineSession, HeadlessLines } from './headless-line';
 
 export const SET_WORKFLOW_CHECKLIST_TOOL = 'set_workflow_checklist';
 
@@ -64,18 +63,17 @@ export interface ChecklistToolDeps {
     sessionId: string,
     items: readonly ChecklistItem[],
   ): Promise<boolean>;
-  // Read on each call; a headless session's results carry the headless line.
-  isHeadless(sessionId: string): boolean;
+  // Shared with every workflow tool; adds the headless line to each success.
+  lines: HeadlessLines;
 }
 
 // Bad items are an error. A session with no workflow succeeds with text saying
 // so, since a skill's first call may come before the app knows of the flow.
-// `lines` adds the headless line to each success.
+// `deps.lines` adds the headless line to each success.
 async function setWorkflowChecklist(
   deps: ChecklistToolDeps,
-  sessionId: string,
+  session: HeadlessLineSession,
   args: unknown,
-  lines: { append(text: string): string },
 ): Promise<ToolResult> {
   const items = parseChecklistItems(
     (args as { items?: unknown } | null | undefined)?.items,
@@ -83,14 +81,18 @@ async function setWorkflowChecklist(
   if (typeof items === 'string') {
     return errorResult(items);
   }
-  if (!(await deps.reportChecklist(sessionId, items))) {
+  if (!(await deps.reportChecklist(session.id, items))) {
     return textResult(
-      lines.append('Ignored the checklist: this session has no workflow yet.'),
+      deps.lines.append(
+        session,
+        'Ignored the checklist: this session has no workflow yet.',
+      ),
     );
   }
   const done = items.filter((item) => item.done).length;
   return textResult(
-    lines.append(
+    deps.lines.append(
+      session,
       `Checklist set: ${String(done)} of ${String(items.length)} done.`,
     ),
   );
@@ -100,15 +102,15 @@ async function setWorkflowChecklist(
 // report that session's checklist.
 export function startChecklistTool(
   deps: ChecklistToolDeps,
-): (session: Pick<AgentSession, 'id'>) => ToolSession {
+): (session: HeadlessLineSession) => ToolSession {
   return (session) => {
-    const lines = createHeadlessLines(() => deps.isHeadless(session.id));
+    deps.lines.track(session);
     return {
       call(name, args) {
         if (name !== SET_WORKFLOW_CHECKLIST_TOOL) {
           return Promise.reject(new Error(`no workflow tool "${name}"`));
         }
-        return setWorkflowChecklist(deps, session.id, args, lines);
+        return setWorkflowChecklist(deps, session, args);
       },
       end: () => undefined,
     };

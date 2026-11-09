@@ -1,5 +1,4 @@
 import {
-  type AgentSession,
   errorResult,
   textResult,
   type ToolDefinition,
@@ -7,7 +6,7 @@ import {
   type ToolSession,
 } from '../../sessions/contract';
 import type { MainWorkflow } from '../contract';
-import { createHeadlessLines } from './headless-line';
+import type { HeadlessLineSession, HeadlessLines } from './headless-line';
 
 export const SET_WORKFLOW_STEP_TOOL = 'set_workflow_step';
 
@@ -47,28 +46,28 @@ export interface StepToolDeps {
   // Folds the report; resolves whether the flow is now in the stage its own
   // workflow reports as `step`.
   reportStep(sessionId: string, step: string): Promise<boolean>;
-  // Read on each call; a headless session's results carry the headless line.
-  isHeadless(sessionId: string): boolean;
+  // Shared with every workflow tool; adds the headless line to each success.
+  lines: HeadlessLines;
 }
 
 // A step no workflow lists is an error naming the accepted ones. A report the
 // flow's own workflow does not take, or from a session with no flow, succeeds with
-// text saying so, and `lines` adds the headless line to each success.
+// text saying so, and `deps.lines` adds the headless line to each success.
 async function setWorkflowStep(
   deps: StepToolDeps,
-  sessionId: string,
+  session: HeadlessLineSession,
   args: unknown,
-  lines: { append(text: string): string },
 ): Promise<ToolResult> {
   const step = (args as { step?: unknown } | null | undefined)?.step;
   const accepted = reportedSteps(deps.workflows());
   if (typeof step !== 'string' || !accepted.includes(step)) {
     return errorResult(`Unknown step. Use one of: ${accepted.join(', ')}.`);
   }
-  return (await deps.reportStep(sessionId, step))
-    ? textResult(lines.append(`Step set to ${step}.`))
+  return (await deps.reportStep(session.id, step))
+    ? textResult(deps.lines.append(session, `Step set to ${step}.`))
     : textResult(
-        lines.append(
+        deps.lines.append(
+          session,
           `Ignored ${step}: this session is not at a place in the workflow that takes it.`,
         ),
       );
@@ -78,15 +77,15 @@ async function setWorkflowStep(
 // report that session's step.
 export function startStepTool(
   deps: StepToolDeps,
-): (session: Pick<AgentSession, 'id'>) => ToolSession {
+): (session: HeadlessLineSession) => ToolSession {
   return (session) => {
-    const lines = createHeadlessLines(() => deps.isHeadless(session.id));
+    deps.lines.track(session);
     return {
       call(name, args) {
         if (name !== SET_WORKFLOW_STEP_TOOL) {
           return Promise.reject(new Error(`no workflow tool "${name}"`));
         }
-        return setWorkflowStep(deps, session.id, args, lines);
+        return setWorkflowStep(deps, session, args);
       },
       end: () => undefined,
     };

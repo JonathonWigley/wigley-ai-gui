@@ -113,7 +113,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
                  its per-session open form, deadline, re-attach and hand-back, its optional auto-answer
                  (`AgentFormAutoAnswer`: while `isOn` holds for a session, an open call shows no form and saves and
-                 returns the type's own answers at once, the file marked `auto_answered`), the wake (a form the user finishes
+                 returns the type's own answers at once, the file marked `auto_answered`; answers the user gave come
+                 first — a re-send of the form still unfinished in the window waits on it, and a finished form no reply
+                 has carried is returned or handed back as usual), the wake (a form the user finishes
                  while no call waits on it sends its session a message naming the collect tool, through the
                  `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
                  other), the saved-form folder and memory stores,
@@ -354,7 +356,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  rules of the flow's current workflow alone), main/ (the engine: hears `chat.agentEvent` and the sessions
                  events, keeps each session's flow in its plugin data and writes it to the `workflow.flows` slot, contributes
                  `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools` (each result of a headless
-                 session but an error ends on chat's `HEADLESS_NOTE`, and the first after headless turns off on `HEADLESS_OFF_NOTE`), appends a line to
+                 session but an error ends on chat's `HEADLESS_NOTE`, and the first from either tool after headless turns off on
+                 `HEADLESS_OFF_NOTE`: one line state per app session across tool sessions, started again by a new host id), appends a line to
                  `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HEADLESS_NOTE } from '../../chat/contract';
 import type { ToolCallContext } from '../../sessions/contract';
 import type { MainStage, MainWorkflow } from '../contract';
+import { createHeadlessLines } from './headless-line';
 import { startStepTool, stepToolDefinition } from './step-tool';
 
 const NO_CALL_CONTEXT: ToolCallContext = {
@@ -36,8 +37,8 @@ function toolWith(applies: boolean, headless = false) {
       reports.push([sessionId, step]);
       return applies;
     },
-    isHeadless: (sessionId) => headless && sessionId === 's1',
-  })({ id: 's1' });
+    lines: createHeadlessLines((sessionId) => headless && sessionId === 's1'),
+  })({ id: 's1', info: { sessionId: 'h1', projectDir: null, harness: null } });
   const call = (args: unknown) =>
     tool.call('set_workflow_step', args, NO_CALL_CONTEXT);
   return { call, tool, reports };

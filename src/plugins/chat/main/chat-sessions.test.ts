@@ -3841,6 +3841,46 @@ describe('createChatSessions saved sessions', () => {
     },
   );
 
+  it.each([
+    {
+      given: 'headless: true',
+      flag: { headless: true },
+      list: [],
+      expected: true,
+    },
+    { given: 'headless absent', flag: {}, list: [], expected: false },
+    {
+      given: 'headless: true, its process running here',
+      flag: { headless: true },
+      list: [{ ...HOSTED_PAST_ONE }],
+      expected: true,
+    },
+  ])(
+    'resume_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
+    async ({ flag, list, expected }) => {
+      const test = setUp({
+        sessionHost: { list: () => Promise.resolve(list) },
+      });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      const sessionId = await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title: PAST_ONE.title,
+        ...flag,
+      });
+      await flush();
+
+      expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.sessions()[0].headless).toBe(expected);
+    },
+  );
+
   it('restore_SavedHeadless_OpensTheRowHeadless', () => {
     const test = setUp();
 
@@ -8048,15 +8088,17 @@ describe('createChatSessions lifecycle events', () => {
   );
 
   it.each([
-    { given: 'a sent row', sends: true, sent: true },
-    { given: 'an unsent row', sends: false, sent: false },
+    { given: 'a sent row', sends: true, sent: true, headless: false },
+    { given: 'an unsent row', sends: false, sent: false, headless: false },
+    { given: 'a headless row', sends: true, sent: true, headless: true },
   ])(
     'sessionClosed_RestingRow_CarriesTitlesBeforeEnded given $given',
-    async ({ sends, sent }) => {
+    async ({ sends, sent, headless }) => {
       const test = await started();
       if (sends) {
         await test.chat.send(ROW_ID, IDLE_SEND);
       }
+      test.chat.setHeadless(ROW_ID, headless);
       test.process.events.ended({ code: 0, error: null });
       test.setRowTitles(ROW_ID, AGENT_TITLES);
       let closedAtOwnedEnd: unknown[] = [];
@@ -8075,6 +8117,7 @@ describe('createChatSessions lifecycle events', () => {
           profile: 'personal',
           titles: AGENT_TITLES,
           sent,
+          headless,
           reason: 'user',
         },
       ]);
@@ -8213,6 +8256,7 @@ describe('createChatSessions lifecycle events', () => {
         profile: 'personal',
         titles: NO_TITLES,
         sent: false,
+        headless: false,
         reason: 'start-failed',
       },
     ]);

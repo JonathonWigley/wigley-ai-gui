@@ -547,6 +547,24 @@ function requireCallerHostId<Form, Body, Payload>(
   }
 }
 
+// The answers of a finished form no reply has carried, which win over the
+// call's own form: as its answers when it is the call's form, or else handed
+// back so the agent sends its form again.
+function unreturnedFinishedPayload<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  formFingerprint: string,
+): Payload | null {
+  const handed = takeUnreturnedFinished(session);
+  if (handed === null) {
+    return null;
+  }
+  if (handed.fingerprint === formFingerprint) {
+    return finishedPayload(session.type, handed);
+  }
+  handed.handedBack = true;
+  return handedBackFinishedPayload(session.type, handed);
+}
+
 // `signal` wakes the call's wait early; `host` is the caller's own signal,
 // whose abort may abandon the form.
 async function openParsedForm<Form, Body, Payload>(
@@ -576,13 +594,9 @@ async function openParsedForm<Form, Body, Payload>(
   if (replaysLastSubmitted) {
     return finishedPayload(session.type, last);
   }
-  const handed = takeUnreturnedFinished(session);
-  if (handed !== null) {
-    if (handed.fingerprint === formFingerprint) {
-      return finishedPayload(session.type, handed);
-    }
-    handed.handedBack = true;
-    return handedBackFinishedPayload(session.type, handed);
+  const unreturned = unreturnedFinishedPayload(session, formFingerprint);
+  if (unreturned !== null) {
+    return unreturned;
   }
   // One open form per session: an unfinished form is never replaced.
   const unfinished = session.open;
@@ -823,8 +837,11 @@ async function collectLastForm<Form, Body, Payload>(
 
 // Answers the call's form with `autoAnswer` at once, outside the call queue,
 // after the checks every call runs: the args, a live caller, and the host id
-// the session's forms were made under. A form open in the window stays, unless
-// the host moved. A re-send of the form last auto-answered returns its answers
+// the session's forms were made under. Answers the user gave come first: a
+// re-send of the form still unfinished in the window takes the normal path
+// and waits on it, and a finished form no reply has carried is returned as
+// the normal path returns it. A form open in the window stays, unless the
+// host moved. A re-send of the form last auto-answered returns its answers
 // again; any other form is saved answered and returned, and shows nowhere.
 async function autoAnswerForm<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
@@ -837,6 +854,18 @@ async function autoAnswerForm<Form, Body, Payload>(
   const formFingerprint = session.type.fingerprint(form);
   requireLiveCaller(session, signal);
   leaveFormsOfPastHost(session);
+  const open = session.open;
+  const resendsUnfinishedOpen =
+    open !== null &&
+    open.end === null &&
+    open.record.fingerprint === formFingerprint;
+  if (resendsUnfinishedOpen) {
+    return openFormInTurn(session, args, toolUseId, signal);
+  }
+  const unreturned = unreturnedFinishedPayload(session, formFingerprint);
+  if (unreturned !== null) {
+    return unreturned;
+  }
   const last = session.lastFinished;
   const replaysLastAutoAnswered =
     last !== null && last.autoAnswered && last.fingerprint === formFingerprint;

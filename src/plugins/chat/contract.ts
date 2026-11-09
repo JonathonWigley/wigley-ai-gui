@@ -84,7 +84,8 @@ export interface PastSessionRow {
 
 // `title` is the saved session's title, which the new row takes as its
 // first-message title. `instructions` and `owner` are as `LaunchRequest` has
-// them; a resume with `owner` opens its row unselected.
+// them; a resume with `owner` opens its row unselected. True `headless` opens
+// the row headless, as a stashed session that was headless resumes.
 export interface ResumeRequest {
   projectDir: string;
   profile: string;
@@ -92,6 +93,7 @@ export interface ResumeRequest {
   title: string;
   instructions?: readonly string[];
   owner?: string;
+  headless?: boolean;
 }
 
 // A message sent while its session's turn ran, held by chat main until the
@@ -139,7 +141,7 @@ export interface SendGateVerdict {
 export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
 // A saved session a resume section lists. `note` is the section's word about
-// the session, drawn after its title.
+// the session, drawn after its title. True `headless` resumes it headless.
 export interface ResumeSectionRow {
   hostSessionId: string;
   projectDir: string;
@@ -147,6 +149,7 @@ export interface ResumeSectionRow {
   title: string;
   note?: string;
   at: number;
+  headless?: boolean;
 }
 
 // One section's answer; `rows` is never empty.
@@ -210,7 +213,8 @@ export interface ChatSessionInfo {
   // worktree is removed; [] until one is touched.
   worktrees: string[];
   // The row is headless. Saved with the row, kept across `/clear` and a
-  // relaunch; a resumed saved session starts with it off.
+  // relaunch, and a stashed row's resume; any other resumed saved session
+  // starts with it off.
   headless: boolean;
 }
 
@@ -474,7 +478,7 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // in chat's profiles setting fires none. It fires before the session's slots
 // exist and before chat's exports know the row.
 // `sessionClosed`: chat closing a row it holds, before its state goes, with the
-// titles and `sent` it had. A quit or relaunch fires none.
+// titles, `sent` and `headless` it had. A quit or relaunch fires none.
 // `sessionCleared`: a clear moving a row to a new host id, with the titles it
 // holds and whether the old conversation was sent a message.
 // `processEnded`: a row's live process exiting, outside a replay;
@@ -509,6 +513,7 @@ export interface ChatMainEvents extends EventShape {
     profile: string;
     titles: SessionTitles;
     sent: boolean;
+    headless: boolean;
     reason: SessionCloseReason;
   };
   sessionCleared: {

@@ -20,6 +20,8 @@ import {
   type ChatMainExports,
   type ChatSessionInfo,
   chatSessionSlot,
+  HEADLESS_NOTE,
+  HEADLESS_OFF_NOTE,
 } from '../../chat/contract';
 import {
   type AgentSession,
@@ -132,12 +134,13 @@ function startWorkflowPart(
   const time = handTime();
   const instructions: string[] = [];
   let activeTime: ActiveTime | null = null;
+  let headless = false;
   const chat: Pick<
     ChatMainExports,
     'activeTime' | 'addInstructions' | 'isHeadless' | 'profiles'
   > = {
     activeTime: () => activeTime,
-    isHeadless: () => false,
+    isHeadless: () => headless,
     profiles: () => [],
     addInstructions: (text) => {
       instructions.push(text);
@@ -269,6 +272,9 @@ function startWorkflowPart(
     dispose: async () => part.dispose?.(),
     setActiveTime: (next: ActiveTime) => {
       activeTime = next;
+    },
+    setHeadless: (next: boolean) => {
+      headless = next;
     },
     sent,
     emit,
@@ -689,6 +695,28 @@ describe('workflowMainPart', () => {
     await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]);
 
     expect(await workflow.savedAt()).toBe(START + 5);
+  });
+
+  it('Tools_HeadlessTurnsOff_OffNoteOnTheFirstResultOfEitherTool', async () => {
+    const workflow = startSmallAndMedium();
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:small', ''));
+    workflow.setHeadless(true);
+    const whileOn = await workflow.callStepTool('s1', 'build');
+    workflow.setHeadless(false);
+
+    const results = [
+      await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]),
+      await workflow.callStepTool('s1', 'build'),
+      await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]),
+    ];
+
+    expect(whileOn.content[0].text).toContain(HEADLESS_NOTE);
+    expect(results.map((result) => result.content[0].text)).toEqual([
+      `Checklist set: 0 of 1 done.\n${HEADLESS_OFF_NOTE}`,
+      'Step set to build.',
+      'Checklist set: 0 of 1 done.',
+    ]);
   });
 
   it('Start_AddsTheSessionNote', () => {

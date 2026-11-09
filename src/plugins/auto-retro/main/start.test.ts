@@ -54,6 +54,7 @@ function closedEvent(
     profile: 'work',
     titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
     sent: true,
+    headless: false,
     reason,
   };
 }
