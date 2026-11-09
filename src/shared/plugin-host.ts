@@ -45,6 +45,15 @@ export interface PluginHost<Started, Part = unknown> {
   // rethrown. Once `stopAll` began, it throws `Plugin host is stopping` and
   // starts nothing.
   start(pluginIds: readonly string[]): void;
+  // Starts each held part that `pluginIds` names and that is not started, one
+  // at a time in `start`'s order, each as `start([id])` would: a part whose
+  // start or check throws, a dependent of a part that threw included, does not
+  // keep the next from starting. Returns each throw with the id of the part
+  // that threw, in that order. Throws `Plugin host is stopping`, starting
+  // nothing, once `stopAll` began.
+  startEach(pluginIds: readonly string[]): { id: string; error: unknown }[];
+  // Whether the host holds a part of `pluginId`, started or not.
+  holds(pluginId: string): boolean;
   // Stops the started dependents of `pluginId` in this process, newest first,
   // then the part, and resolves to the ids it stopped, in that stop order.
   // Logs `stopping <id>` before each part. Each stop awaits the part's
@@ -465,6 +474,27 @@ export function startPlugins<
     }
   }
 
+  function startEach(pluginIds: readonly string[]) {
+    if (stopAllBegan) {
+      throw new Error('Plugin host is stopping');
+    }
+    let pending = held.filter(
+      (part) =>
+        pluginIds.includes(part.manifest.id) && !started.has(part.manifest.id),
+    );
+    const failures: { id: string; error: unknown }[] = [];
+    while (pending.length > 0) {
+      const next = nextToStart(pending, process);
+      pending = pending.filter((part) => part !== next);
+      try {
+        startNamed([next.manifest.id]);
+      } catch (error) {
+        failures.push({ id: next.manifest.id, error });
+      }
+    }
+    return failures;
+  }
+
   async function stop(pluginId: string) {
     const ids = stopOrder(pluginId, process, records);
     const errors: unknown[] = [];
@@ -482,6 +512,8 @@ export function startPlugins<
       readyEach([...started.keys()], started, log);
     },
     start: startNamed,
+    startEach,
+    holds: (pluginId) => held.some((part) => part.manifest.id === pluginId),
     stop,
     add(part) {
       if (stopAllBegan) {

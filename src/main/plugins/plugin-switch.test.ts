@@ -94,7 +94,9 @@ interface SetupOptions {
 // host does. `page.mayStopHold` holds a page `mayStop` and `page.hold` a page
 // stop. A page start naming `page.startRejects` rejects after it is pushed;
 // `page.startProblems` are the start reply's problems for the ids it names,
-// and `page.reloadProblem` the reload reply's problem. `setPaused` pushes
+// which it does not start, `page.startsNothing` makes it start nothing with
+// no problem, as a page that is gone answers, and `page.reloadProblem` is the
+// reload reply's problem. `setPaused` pushes
 // `paused <ids>`. `main.startErrors` holds, by id, the messages its next
 // starts throw, one per start; `main.commands` the handlers a started part
 // returns. A main remove stops the started part and its started direct
@@ -139,6 +141,7 @@ function setup({
     mayStopHold: null as Promise<void> | null,
     startRejects: null as string | null,
     startProblems: [] as CatalogProblem[],
+    startsNothing: false,
     reloadProblem: null as string | null,
   };
   const catalog = {
@@ -246,11 +249,17 @@ function setup({
       ) {
         throw new Error(`page start of ${page.startRejects} failed`);
       }
+      if (page.startsNothing) {
+        return { started: [], problems: [] };
+      }
+      const problems = page.startProblems.filter(({ id }) =>
+        request.ids.includes(id),
+      );
       return {
-        started: request.ids,
-        problems: page.startProblems.filter(({ id }) =>
-          request.ids.includes(id),
+        started: request.ids.filter((id) =>
+          problems.every((problem) => problem.id !== id),
         ),
+        problems,
       };
     },
     applied: {
@@ -829,6 +838,30 @@ describe('createPluginSwitch', () => {
       ],
       row: { origin: 'user', on: true, problem: null },
     },
+    {
+      case: 'a new main part with a running main dependent',
+      before: [
+        user('u', { hasMain: false }),
+        user('d', { manifest: DEPENDS_ON_U }),
+      ],
+      after: [user('u', { revision: 2 }), 'd'],
+      calls: [
+        'paused u,d',
+        'servedChanged',
+        'setPlugins',
+        'page stop u',
+        'main remove u',
+        'main add u',
+        'main stop d',
+        'main start u',
+        'main start d',
+        'paused',
+        'servedChanged',
+        'page reload u',
+        'page start u,d',
+      ],
+      row: { origin: 'user', on: true, problem: null },
+    },
   ])('catalogChange_Reloaded_RunsTheReloadOrder: $case', async (row) => {
     const switched = setup({ entries: row.before, applied: row.applied });
     switched.page.stopReply = row.pageStopped ?? null;
@@ -1042,6 +1075,105 @@ describe('createPluginSwitch', () => {
     expect(pageStarts).toEqual(['page start u,d']);
     expect(switched.row('u')?.problem).toBe(null);
   });
+
+  // `d1` and `d2` depend on `u` in main and the page, so their main parts
+  // restart too, and `d1`'s page part failed at launch. The page fails `d1`
+  // again, or starts nothing as a gone page does.
+  it.each([
+    {
+      case: 'a reload, the page fails d1 again',
+      restart: false,
+      startsNothing: false,
+    },
+    {
+      case: 'a restart, the page fails d1 again',
+      restart: true,
+      startsNothing: false,
+    },
+    {
+      case: 'a restart the page answers starting nothing',
+      restart: true,
+      startsNothing: true,
+    },
+  ])(
+    'pageStart_OnePausedPartCannotStart_OnlyItKeepsAProblem: $case',
+    async (row) => {
+      const ON_U = { manifest: { dependsOn: { main: ['u'], page: ['u'] } } };
+      const switched = setup({
+        entries: [user('u'), user('d1', ON_U), user('d2', ON_U)],
+        applied: ['u', 'd1', 'd2'],
+        disabled: [],
+      });
+      const boom = { id: 'd1', message: 'Page part did not start: boom' };
+      switched.page.startProblems = [boom];
+      await switched.pluginSwitch.settled();
+      switched.page.startsNothing = row.startsNothing;
+      switched.main.stopReply = ['d2', 'd1', 'u'];
+      const before = switched.calls.length;
+
+      if (row.restart) {
+        await switched.pluginSwitch.restart('u');
+      } else {
+        const [, d1, d2] = switched.catalog.entries;
+        await changeCatalog(switched, [user('u', { revision: 2 }), d1, d2]);
+      }
+
+      expect(
+        switched.calls
+          .slice(before)
+          .filter((call) => call.startsWith('page start')),
+      ).toEqual(['page start u,d1,d2']);
+      expect(
+        ['u', 'd1', 'd2'].map((id) => switched.row(id)?.problem ?? null),
+      ).toEqual([null, boom.message, null]);
+    },
+  );
+
+  // `p` depends on `u` in the page only and has no main part.
+  it.each([
+    {
+      case: 'u leaves the catalog, then comes back',
+      fails: false,
+      next: (u: CatalogEntry, p: CatalogEntry) => [p],
+      comesBack: true,
+    },
+    {
+      case: 'u reloads, and neither version starts',
+      fails: true,
+      next: (_u: CatalogEntry, p: CatalogEntry) => [
+        user('u', { revision: 2 }),
+        p,
+      ],
+      comesBack: false,
+    },
+  ])(
+    'catalogChange_DependencyStopsRunning_WithholdsAPageOnlyDependent: $case',
+    async (row) => {
+      const u = user('u');
+      const p = user('p', {
+        hasMain: false,
+        manifest: { dependsOn: { main: [], page: ['u'] } },
+      });
+      const switched = setup({ entries: [u, p] });
+      if (row.fails) {
+        switched.main.startErrors = { u: ['first', 'second'] };
+      }
+
+      const calls = await changeCatalog(switched, row.next(u, p));
+
+      const { on, problem } = switched.row('p') ?? {};
+      expect({ on, problem }).toEqual({
+        on: false,
+        problem: 'Needs plugin "u", which did not start',
+      });
+      expect(calls).not.toContain('page start p');
+      if (row.comesBack) {
+        const back = await changeCatalog(switched, [u, p]);
+        expect(back).toContain('page start p');
+        expect(switched.row('p')?.on).toBe(true);
+      }
+    },
+  );
 
   it('catalogChange_ReloadStartFails_NoLastGoodStaysStopped', async () => {
     // A built-in that came back after its replacement failed, and now fails
@@ -1487,12 +1619,17 @@ describe('createPluginSwitch', () => {
       'servedChanged',
       'page stop a',
       'main stop a',
-      'main start b,a',
+      'main start a',
+      'main start b',
       'paused',
       'servedChanged',
       'page start a,b',
     ]);
-    expect(logs).toEqual(['[plugin-switch] restarted a']);
+    expect(logs).toEqual([
+      '[plugin-switch] on a',
+      '[plugin-switch] on b',
+      '[plugin-switch] restarted a',
+    ]);
   });
 
   const DEPENDS_ON_X = { main: ['x'], page: [] };
@@ -1509,28 +1646,11 @@ describe('createPluginSwitch', () => {
         'page stop a',
         'main stop a',
         'main start a',
+        'paused',
+        'servedChanged',
         'page start a',
-        'paused',
-        'servedChanged',
       ],
-      logs: [],
-    },
-    {
-      case: 'main start throws',
-      manifests: [manifest('a'), manifest('b')],
-      id: 'a',
-      fail: { startThrowsAt: 'a' },
-      calls: [
-        'paused a',
-        'servedChanged',
-        'page stop a',
-        'main stop a',
-        'main start a',
-        'main start a',
-        'paused',
-        'servedChanged',
-      ],
-      logs: ['[plugin-switch] failed: start of a failed'],
+      logs: ['[plugin-switch] on a'],
     },
     {
       case: 'one dependent fails to start again',
@@ -1554,11 +1674,12 @@ describe('createPluginSwitch', () => {
         'main start x',
         'main start z',
         'main start y',
-        'page start x,z',
+        'applied y',
         'paused',
         'servedChanged',
+        'page start x,z',
       ],
-      logs: ['[plugin-switch] failed: start of y failed'],
+      logs: ['[plugin-switch] on x', '[plugin-switch] on z'],
     },
     {
       case: 'page start rejects',
@@ -1575,9 +1696,8 @@ describe('createPluginSwitch', () => {
         'paused',
         'servedChanged',
         'page start a',
-        'page start a',
       ],
-      logs: ['[plugin-switch] failed: page start of a failed'],
+      logs: ['[plugin-switch] on a'],
     },
   ])('restart_StepFails_StartsWhatItStopped: $case', async (row) => {
     const switched = setup({ manifests: row.manifests });
@@ -1591,6 +1711,44 @@ describe('createPluginSwitch', () => {
 
     expect(switched.calls).toEqual(row.calls);
     expect(switched.logs).toEqual(row.logs);
+  });
+
+  // `b` depends on `a` in main; `a`'s start throws.
+  it('restart_StartThrows_ResolvesWithTheProblemAndWithholds', async () => {
+    const switched = setup({
+      manifests: [
+        manifest('a'),
+        manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+      ],
+    });
+    switched.main.stopReply = ['b', 'a'];
+    switched.main.startErrors = { a: ['boom'] };
+
+    await switched.pluginSwitch.restart('a');
+
+    expect(switched.calls).toEqual([
+      'paused a,b',
+      'servedChanged',
+      'page stop a',
+      'main stop a',
+      'main start a',
+      'applied a',
+      'applied a,b',
+      'paused',
+      'servedChanged',
+    ]);
+    expect(
+      ['a', 'b'].map((id) => {
+        const { on, problem } = switched.row(id) ?? {};
+        return { id, on, problem };
+      }),
+    ).toEqual([
+      { id: 'a', on: false, problem: 'Did not start: boom' },
+      { id: 'b', on: false, problem: 'Needs plugin "a", which did not start' },
+    ]);
+    expect(switched.logs).toEqual([
+      '[plugin-switch] restart of a failed: Did not start: boom',
+    ]);
   });
 
   it.each([

@@ -667,6 +667,11 @@ describe('startPlugins', () => {
 
       await expect(host.remove(remove)).resolves.toEqual(stopped);
 
+      // `b` is stopped but still held.
+      expect([host.holds('a'), host.holds('b')]).toEqual([
+        remove !== 'a',
+        true,
+      ]);
       if (remove === 'a') {
         host.start(['a']);
         expect(host.started.size).toBe(0);
@@ -765,6 +770,52 @@ describe('startPlugins', () => {
     },
   );
 
+  // Every part is held, disabled; `throwing` throws in its start.
+  it.each([
+    {
+      name: 'a dependency throws and each dependent is blamed',
+      parts: [part('x'), part('y', ['x']), part('z', ['x']), part('w')],
+      ids: ['y', 'x', 'z', 'w'],
+      failed: [
+        ['x', 'x start failed'],
+        ['y', 'Plugin "y" depends on plugin "x", which is not started'],
+        ['z', 'Plugin "z" depends on plugin "x", which is not started'],
+      ],
+      started: ['w'],
+    },
+    {
+      name: 'a dependency held later in the list throws first',
+      parts: [part('a', ['x']), part('b'), part('x')],
+      ids: ['a', 'b', 'x'],
+      failed: [
+        ['x', 'x start failed'],
+        ['a', 'Plugin "a" depends on plugin "x", which is not started'],
+      ],
+      started: ['b'],
+    },
+  ])(
+    'startEach starts the rest past a throw, naming the id that threw: $name',
+    ({ parts, ids, failed, started }) => {
+      const host = startHooked(
+        parts,
+        (id) => {
+          if (id === 'x') {
+            throw new Error('x start failed');
+          }
+          return {};
+        },
+        parts.map((each) => each.manifest.id),
+      );
+
+      const failures = host.startEach(ids);
+
+      expect(
+        failures.map(({ id, error }) => [id, (error as Error).message]),
+      ).toEqual(failed);
+      expect([...host.started.keys()]).toEqual(started);
+    },
+  );
+
   it('a ready that throws inside start(ids) is logged and not rethrown', () => {
     const logged: string[] = [];
     const host = startHooked(
@@ -783,12 +834,18 @@ describe('startPlugins', () => {
     expect(logged).toContain('plugin-host: ready of x failed: x ready failed');
   });
 
-  it('start after stopAll began throws', async () => {
+  it.each([
+    { name: 'start', run: (host: PluginHost<unknown>) => host.start(['x']) },
+    {
+      name: 'startEach',
+      run: (host: PluginHost<unknown>) => host.startEach(['x']),
+    },
+  ])('$name after stopAll began throws', async ({ run }) => {
     const host = startHooked([part('a'), part('x')], () => ({}), ['x']);
 
     const stopped = host.stopAll();
 
-    expect(() => host.start(['x'])).toThrow('Plugin host is stopping');
+    expect(() => run(host)).toThrow('Plugin host is stopping');
     expect(host.started.has('x')).toBe(false);
     await stopped;
   });

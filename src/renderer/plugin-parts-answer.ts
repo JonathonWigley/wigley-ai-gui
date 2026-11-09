@@ -5,12 +5,11 @@ import type { CatalogProblem, ServedPlugin } from '../contracts/plugin-catalog';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 import type { PluginHost } from '../shared/plugin-host';
-import { dependencyOrder } from '../shared/plugin-manifests';
 import type { PageRestoresHost } from './page-restores';
 
 export interface PluginPartsAnswerDeps {
   // A start opens a restore window before its parts start, and readies it
-  // once each started part ran `ready()`.
+  // once each started part ran `ready()`, a start that threw included.
   restores: Pick<PageRestoresHost, 'reopen' | 'partsReady'>;
   // Applies the last pushed config again, so the binds of the parts a start
   // brought up join.
@@ -21,26 +20,23 @@ export interface PluginPartsAnswerDeps {
   // The page part a served plugin runs, null for one with none; rejects when
   // its `page.js` does not load.
   loadPart(plugin: ServedPlugin): Promise<PagePart | null>;
-  // The ids of the parts the host holds, in its held order: the composition
-  // root seeds it with the parts it handed the host, and the answer adds and
-  // deletes the ids it adds and removes.
-  held: Set<string>;
 }
 
 type PageHost = Pick<
   PluginHost<unknown, PagePart>,
-  'started' | 'start' | 'stop' | 'mayStop' | 'add' | 'remove'
+  'started' | 'startEach' | 'holds' | 'stop' | 'mayStop' | 'add' | 'remove'
 >;
 
 // The page's answer to one of main's plugin parts requests, through the page's
 // host. It never rejects: a throw is logged under `plugin-switch`. A `mayStop`
 // that throws gives the reason `<id>: mayStop failed: <error>`; a stop that
-// throws goes on to the next id, and a start that throws starts no more. A
-// start first loads and adds each requested id the host does not hold, then
-// opens a restore window (`reopen`), starts, and calls `partsReady` after the
-// host started its parts, a throw included, then applies the push again; its
-// reply's `problems` names a page.js that did not load and the part whose
-// start threw. A `reload` swaps the held part for the served one and starts
+// throws goes on to the next id. A start first loads and adds each requested
+// id the host does not hold, then opens a restore window (`reopen`), starts
+// each id on its own (`startEach`), and calls `partsReady` once the host is
+// done, then applies the push again; a part whose start throws keeps no other
+// part from starting. Its reply's `problems` holds one problem per id that did
+// not start: a page.js that did not load, or the start or dependency check
+// that threw for that id. A `reload` swaps the held part for the served one and starts
 // nothing; a failed import keeps the old part. A `remove` stops and forgets
 // the part. A stop, `mayStop`, `reload` and `remove` touch no window. The
 // reply holds every id that stopped, started or was swapped.
@@ -107,18 +103,18 @@ export async function answerPluginParts(
       const before = new Set(host.started.keys());
       deps.restores.reopen();
       try {
-        host.start(request.ids);
-      } catch (error) {
-        fail(error);
-        const threw = firstNotStarted(request.ids, host, deps);
-        if (threw !== undefined) {
+        for (const { id, error } of host.startEach(request.ids)) {
+          fail(error);
           problems.push({
-            id: threw,
+            id,
             message: `Page part did not start: ${errorText(error)}`,
           });
         }
+      } catch (error) {
+        fail(error);
+      } finally {
+        deps.restores.partsReady();
       }
-      deps.restores.partsReady();
       try {
         deps.reapplyPush();
       } catch (error) {
@@ -144,12 +140,11 @@ export async function answerPluginParts(
         }
       }
       try {
-        await removeHeld(host, id, deps);
+        await host.remove(id);
         if (part === null) {
           return { reloaded: [], problem: null };
         }
         host.add(part);
-        deps.held.add(id);
         return { reloaded: [id], problem: null };
       } catch (error) {
         fail(error);
@@ -159,7 +154,7 @@ export async function answerPluginParts(
     case 'remove': {
       const startedBefore = [...host.started.keys()];
       try {
-        return { stopped: await removeHeld(host, request.id, deps) };
+        return { stopped: await host.remove(request.id) };
       } catch (error) {
         fail(error);
         return { stopped: stoppedSince(startedBefore, host) };
@@ -184,23 +179,6 @@ function loadFailure(id: string, error: unknown): string {
   return `page.js of ${id} failed to load: ${errorText(error)}`;
 }
 
-// `host.remove(id)`, forgetting `id` in `held` also when it rejects; `[]`
-// for an id `held` lacks.
-async function removeHeld(
-  host: PageHost,
-  id: string,
-  deps: Pick<PluginPartsAnswerDeps, 'held'>,
-): Promise<string[]> {
-  if (!deps.held.has(id)) {
-    return [];
-  }
-  try {
-    return await host.remove(id);
-  } finally {
-    deps.held.delete(id);
-  }
-}
-
 // Loads and adds the served part of `id` when the host does not hold it. Null
 // when the host holds it, when nothing is served for it or it has no page
 // part, or when it was added; else the problem of a load or an add that
@@ -211,7 +189,7 @@ async function addUnheld(
   deps: PluginPartsAnswerDeps,
 ): Promise<CatalogProblem | null> {
   const entry = servedEntry(id, deps);
-  if (deps.held.has(id) || entry === undefined) {
+  if (host.holds(id) || entry === undefined) {
     return null;
   }
   let part: PagePart | null;
@@ -228,23 +206,5 @@ async function addUnheld(
   } catch (error) {
     return { id, message: `Page part did not start: ${errorText(error)}` };
   }
-  deps.held.add(id);
   return null;
-}
-
-// The first of `ids` the host holds and has not started, in the host's start
-// order: held order, each part after its dependencies. After a start that
-// threw, that is the part that threw, since the host stops at it.
-function firstNotStarted(
-  ids: readonly string[],
-  host: PageHost,
-  deps: Pick<PluginPartsAnswerDeps, 'held' | 'served'>,
-): string | undefined {
-  const manifests = deps.served().plugins.map((plugin) => plugin.manifest);
-  const heldManifests = [...deps.held].flatMap((id) =>
-    manifests.filter((manifest) => manifest.id === id),
-  );
-  return dependencyOrder(heldManifests)
-    .map((manifest) => manifest.id)
-    .find((id) => ids.includes(id) && !host.started.has(id));
 }

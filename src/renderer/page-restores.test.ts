@@ -221,6 +221,34 @@ describe('page restores', () => {
     },
   );
 
+  // `first`'s handle is disposed, as its part's stop does; `second` stays
+  // pending in the second row.
+  it.each([
+    { name: 'released while pending', firstSettles: false, settled: true },
+    {
+      name: 'released after it settled, beside a pending restore',
+      firstSettles: true,
+      settled: false,
+    },
+  ])(
+    'track_HandleDisposed_StopsWaitingOnThatRestoreOnce: $name',
+    async ({ firstSettles, settled }) => {
+      const { restores } = startRestores();
+      const first = Promise.withResolvers<void>();
+      const handle = restores.track(first.promise);
+      if (firstSettles) {
+        restores.track(new Promise(() => undefined));
+        first.resolve();
+        await settle();
+      }
+
+      handle.dispose();
+      restores.partsReady();
+
+      expect(settledNow(restores)).toBe(settled);
+    },
+  );
+
   it('track_AfterSettled_IsNotWaitedOn', async () => {
     const { restores } = startRestores();
     restores.partsReady();

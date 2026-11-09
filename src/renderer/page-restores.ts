@@ -1,4 +1,5 @@
 import type { Timers } from '../contracts/ambient';
+import type { Disposable } from '../contracts/disposable';
 import type { PageRestores } from '../contracts/plugin';
 
 // The latest a restore window settles after every part's `ready()` ran: well
@@ -17,8 +18,12 @@ export interface PageRestoresDeps {
 // every part they started ran `ready()`, after which the window settles as
 // soon as none of its tracked restores is pending, or at `RESTORES_CAP_MS`
 // after it, logging the count still pending. Each window logs
-// `restores settled` as it settles.
+// `restores settled` as it settles. `track` returns the handle that stops
+// waiting on that restore, as its promise settling does, so a part's stop can
+// release the restores it left pending; a handle disposed after either is a
+// no-op.
 export interface PageRestoresHost extends PageRestores {
+  track(restore: Promise<unknown>): Disposable;
   reopen(): void;
   partsReady(): void;
 }
@@ -77,14 +82,20 @@ export function createPageRestores(deps: PageRestoresDeps): PageRestoresHost {
     track(restore) {
       const restoreWindow = current;
       if (restoreWindow.isSettled) {
-        return;
+        return { dispose() {} };
       }
       restoreWindow.pending += 1;
-      const restoreSettled = () => {
+      let isPending = true;
+      const release = () => {
+        if (!isPending) {
+          return;
+        }
+        isPending = false;
         restoreWindow.pending -= 1;
         settleWhenIdle(restoreWindow);
       };
-      restore.then(restoreSettled, restoreSettled);
+      restore.then(release, release);
+      return { dispose: release };
     },
     onSettled(listener) {
       const restoreWindow = current;

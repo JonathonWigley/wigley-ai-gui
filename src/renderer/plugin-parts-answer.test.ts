@@ -38,12 +38,16 @@ function served(ids: readonly string[]): AppConfig {
 }
 
 // A page host holding `heldIds` as `old` parts, whose held parts start and
-// stop through `started`, recording each start in `steps` as `start <ids>`
-// and each add and remove as `add <id>` and `remove <id>`. A start skips an
-// id it does not hold. Stopping `b` stops `c`, its dependent, first.
+// stop through `started`, recording each start in `steps` as `start <id>`
+// and each add and remove of a held id as `add <id>` and `remove <id>`; a
+// remove of an id it does not hold stops nothing. `startEach` starts
+// the held, not started ids in request order, one at a time, and returns the
+// throw of each that did not start: `throwsOn`, or a part whose page
+// dependency is not started. Stopping `b` stops `c`, its dependent, first.
 // `throwsOn` names the one id whose step throws, as the real host does: its
 // stop throws after stopping its parts, its start before it starts, and its
-// `mayStop` when asked.
+// `mayStop` when asked; `throwsOn: 'stopping'` makes `startEach` throw as a
+// host whose `stopAll` began does.
 function fakeHost(
   heldIds: readonly string[],
   startedIds: readonly string[],
@@ -74,21 +78,42 @@ function fakeHost(
       }
       return null;
     },
-    start(ids: readonly string[]) {
-      steps.push(`start ${ids.join(',')}`);
-      for (const id of ids.filter((each) => held.has(each))) {
-        if (id === throwsOn) {
-          throw failure('start', id);
-        }
-        started.set(id, {});
+    startEach(ids: readonly string[]) {
+      if (throwsOn === 'stopping') {
+        throw new Error('Plugin host is stopping');
       }
+      const failures: { id: string; error: unknown }[] = [];
+      for (const id of ids) {
+        if (!held.has(id) || started.has(id)) {
+          continue;
+        }
+        steps.push(`start ${id}`);
+        const notStarted = (PAGE_DEPENDENCIES[id] ?? []).find(
+          (dependency) => !started.has(dependency),
+        );
+        if (id === throwsOn) {
+          failures.push({ id, error: failure('start', id) });
+        } else if (notStarted !== undefined) {
+          failures.push({
+            id,
+            error: new Error(`${id} needs ${notStarted}, which is not started`),
+          });
+        } else {
+          started.set(id, {});
+        }
+      }
+      return failures;
     },
+    holds: (id: string) => held.has(id),
     stop,
     add(added: PagePart) {
       steps.push(`add ${added.manifest.id}`);
       held.set(added.manifest.id, added);
     },
     async remove(id: string) {
+      if (!held.has(id)) {
+        return [];
+      }
       steps.push(`remove ${id}`);
       try {
         return await stop(id);
@@ -134,7 +159,7 @@ const ROWS: Row[] = [
     request: { kind: 'start', ids: ['a', 'b'] },
     reply: { started: ['b'], problems: [] },
     logs: [],
-    steps: ['reopen', 'start a,b', 'partsReady', 'reapply'],
+    steps: ['reopen', 'start b', 'partsReady', 'reapply'],
   },
   {
     case: 'a stop that throws after stopping its parts replies them and goes on',
@@ -155,18 +180,34 @@ const ROWS: Row[] = [
     steps: [],
   },
   {
-    case: 'a start that throws partway replies the ids started before it',
+    case: 'a start that throws blames its own id and its dependent, and the rest start',
     started: [],
     throwsOn: 'b',
-    request: { kind: 'start', ids: ['a', 'b', 'c'] },
+    request: { kind: 'start', ids: ['b', 'c', 'a'] },
     reply: {
       started: ['a'],
       problems: [
         { id: 'b', message: 'Page part did not start: start of b failed' },
+        {
+          id: 'c',
+          message: 'Page part did not start: c needs b, which is not started',
+        },
       ],
     },
-    logs: ['plugin-switch: page start failed: start of b failed'],
-    steps: ['reopen', 'start a,b,c', 'partsReady', 'reapply'],
+    logs: [
+      'plugin-switch: page start failed: start of b failed',
+      'plugin-switch: page start failed: c needs b, which is not started',
+    ],
+    steps: ['reopen', 'start b', 'start c', 'start a', 'partsReady', 'reapply'],
+  },
+  {
+    case: 'a start the host refuses still readies the window',
+    started: [],
+    throwsOn: 'stopping',
+    request: { kind: 'start', ids: ['a'] },
+    reply: { started: [], problems: [] },
+    logs: ['plugin-switch: page start failed: Plugin host is stopping'],
+    steps: ['reopen', 'partsReady', 'reapply'],
   },
   {
     case: 'start of an id the host does not hold loads, adds and starts it',
@@ -190,7 +231,7 @@ const ROWS: Row[] = [
     logs: [
       'plugin-switch: page start failed: page.js of u failed to load: boom',
     ],
-    steps: ['reopen', 'start u', 'partsReady', 'reapply'],
+    steps: ['reopen', 'partsReady', 'reapply'],
     heldAfter: ['a:old', 'b:old', 'c:old'],
   },
   {
@@ -213,7 +254,7 @@ const ROWS: Row[] = [
     request: { kind: 'start', ids: ['a'] },
     reply: { started: [], problems: [] },
     logs: [],
-    steps: ['reopen', 'start a', 'partsReady', 'reapply'],
+    steps: ['reopen', 'partsReady', 'reapply'],
   },
   {
     case: 'reload of a held part swaps in the new part and starts nothing',
@@ -316,7 +357,6 @@ describe('answerPluginParts', () => {
         }
         return row.load === 'none' ? null : part(plugin.id, 'new');
       },
-      held: new Set(heldIds),
     });
 
     expect([reply, logs, steps]).toEqual([row.reply, row.logs, row.steps]);
