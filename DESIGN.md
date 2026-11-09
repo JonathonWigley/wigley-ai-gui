@@ -320,7 +320,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
 - **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
-- **Dialog** (`createDialog`): a modal over the `scrim`.
+- **Dialog** (`createDialog`): a modal over the `scrim`; `restoreFocusAfterDialog` gives focus back to its opener on
+  close.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
 - **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items

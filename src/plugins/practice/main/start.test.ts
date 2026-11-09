@@ -77,6 +77,7 @@ describe('practice main part', () => {
 
   it('sends changed with the slug of a changed file', async () => {
     const harness = startPractice();
+    await harness.invoke('list');
 
     await harness.files.write(
       `${PRACTICE_FOLDER}/problems/two-sum/notes.md`,

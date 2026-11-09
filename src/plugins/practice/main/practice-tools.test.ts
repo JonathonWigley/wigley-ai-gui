@@ -191,6 +191,16 @@ describe('practice tools', () => {
       ],
     },
     {
+      case: 'a compiler that cannot start',
+      args: addArgs(),
+      judge: () => {
+        throw new Error('Could not run clang++: spawn clang++ ENOENT');
+      },
+      text: [
+        'reference.cpp was not judged: Could not run clang++: spawn clang++ ENOENT',
+      ],
+    },
+    {
       case: 'a reference failing cases 3 and 7',
       args: addArgs({ cases: EIGHT_CASES }),
       judge: (cases) =>
@@ -253,7 +263,7 @@ describe('practice tools', () => {
           { ...TWO_SUM.cases[1], source: 'hidden' },
           { ...TWO_SUM.cases[2], source: 'hidden' },
         ],
-        options: { stopAtFirstFailure: false },
+        options: { stopAtFirstFailure: false, code: REFERENCE },
       },
     ]);
   });

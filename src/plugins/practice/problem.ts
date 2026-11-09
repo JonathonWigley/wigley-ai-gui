@@ -83,7 +83,7 @@ export class ProblemError extends Error {
   }
 }
 
-const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
+export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 const COMPARE_MODES: readonly CompareMode[] = [
   'exact',
   'anyOrder',
@@ -218,7 +218,10 @@ export function parseCustomCases(
   });
 }
 
-/** A custom case with `expected` read as `problem.json` reads a case's answer; throws a `ProblemError` naming `expected` when it does not fit the signature. */
+/**
+ * A custom case with `expected` read as `problem.json` reads a case's answer;
+ * throws a `ProblemError` naming `expected` when it does not fit the signature.
+ */
 export function answeredCase(
   input: CustomInput,
   expected: unknown,
@@ -508,7 +511,10 @@ function readValue(value: unknown, type: ValueType, path: string): JsonValue {
   return type === 'TreeNode*' ? readTree(value as JsonValue[], path) : value;
 }
 
-/** A level-order tree without its trailing nulls; throws when a value has no parent node left to hang from. */
+/**
+ * A level-order tree without its trailing nulls; throws when a value has no
+ * parent node left to hang from.
+ */
 function readTree(values: JsonValue[], path: string): JsonValue[] {
   let end = values.length;
   while (end > 0 && values[end - 1] === null) {

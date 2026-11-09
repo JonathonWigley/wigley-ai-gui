@@ -6,7 +6,8 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
-import type { CaseResult, JudgeResult, Verdict } from '../contract';
+import { errorText } from '../../../shared/error-text';
+import { type CaseResult, type JudgeResult, VERDICT_NAMES } from '../contract';
 import { stubSource } from '../driver';
 import {
   parseProblem,
@@ -141,14 +142,6 @@ const PROBLEM_FIELDS = [
 const TEXT_FIELDS = ['slug', 'statement', 'reference', 'approach'] as const;
 const SHOWN_JSON_LENGTH = 200;
 
-const VERDICT_NAMES: Record<Verdict, string> = {
-  accepted: 'Accepted',
-  wrongAnswer: 'Wrong Answer',
-  timeLimit: 'Time Limit Exceeded',
-  runtimeError: 'Runtime Error',
-  compileError: 'Compile Error',
-};
-
 function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
@@ -236,9 +229,15 @@ async function addProblem(
     ...testCase,
     source: testCase.visible ? 'example' : 'hidden',
   }));
-  const result = await deps.judge.judge(problem, path, cases, {
-    stopAtFirstFailure: false,
-  });
+  let result: JudgeResult;
+  try {
+    result = await deps.judge.judge(problem, path, cases, {
+      stopAtFirstFailure: false,
+      code: reference,
+    });
+  } catch (error) {
+    return errorResult(`reference.cpp was not judged: ${errorText(error)}`);
+  }
   const refusal = referenceRefusal(result);
   if (refusal !== null) {
     return errorResult(refusal);

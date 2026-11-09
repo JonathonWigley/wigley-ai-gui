@@ -38,8 +38,9 @@ export interface PracticeSessionsDeps {
 // one slug run one at a time. `interviewerOf` resolves null when the current
 // attempt has no interviewer, and resumes a row chat no longer holds,
 // concurrent calls for one slug sharing one resume; a resume chat refuses
-// clears the stored interviewer, so the next ask launches a fresh one. `opened`, `closed` and
-// `cleared` hear chat's `sessionOpened`, `sessionClosed` and `sessionCleared`.
+// clears the stored interviewer, so the next ask launches a fresh one.
+// `opened`, `closed` and `cleared` hear chat's `sessionOpened`,
+// `sessionClosed` and `sessionCleared`.
 // `interviewerSlug` names the problem whose current attempt's interviewer is
 // `session`, null for any other session.
 export interface PracticeSessions {

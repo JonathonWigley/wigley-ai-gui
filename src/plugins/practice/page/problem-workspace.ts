@@ -61,6 +61,7 @@ import {
   practiceOpenSubmissionRowCommand,
   practiceShowTabCommand,
   type SubmissionRecord,
+  VERDICT_NAMES,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -85,7 +86,6 @@ import {
   PROBLEM_TABS,
   type ProblemTab,
   submissionsNewestFirst,
-  VERDICT_LABELS,
   type WorkspaceAction,
   type WorkspaceState,
   workspaceReducer,
@@ -681,7 +681,7 @@ export function createProblemWorkspace(
               into,
               {
                 time: localTime(shown.time),
-                verdictLabel: VERDICT_LABELS[shown.verdict],
+                verdictLabel: VERDICT_NAMES[shown.verdict],
               },
               {
                 ...kitFor('problem', rollback),
@@ -1340,7 +1340,7 @@ function submissionRowInput(record: SubmissionRecord) {
   return {
     time: localTime(record.time),
     verdict: record.verdict,
-    verdictLabel: VERDICT_LABELS[record.verdict],
+    verdictLabel: VERDICT_NAMES[record.verdict],
     passed: record.passed,
     total: record.total,
     runtime: `${String(record.ms)} ms`,
@@ -1373,7 +1373,7 @@ function resultInput(judge: JudgeState): ResultInput {
         ...empty,
         kind: judge.kind,
         verdict: result.verdict,
-        verdictLabel: VERDICT_LABELS[result.verdict],
+        verdictLabel: VERDICT_NAMES[result.verdict],
         passed: result.passed,
         total: result.total,
         runtime: `${String(result.ms)} ms`,

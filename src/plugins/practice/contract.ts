@@ -22,6 +22,15 @@ export type Verdict =
   | 'runtimeError'
   | 'compileError';
 
+// LeetCode's names for the verdicts.
+export const VERDICT_NAMES: Record<Verdict, string> = {
+  accepted: 'Accepted',
+  wrongAnswer: 'Wrong Answer',
+  timeLimit: 'Time Limit Exceeded',
+  runtimeError: 'Runtime Error',
+  compileError: 'Compile Error',
+};
+
 // One case the judge ran. `index` is the case's place in the list judged;
 // `input` is a function case's input array, or a design case's `{ ops, args }`.
 // `output` is the parsed answer, null when the program wrote none. `stdout` and
@@ -54,6 +63,11 @@ export interface JudgeResult {
 // New: never submitted; attempted: submitted, never Accepted; solved: Accepted
 // at least once.
 export type ProblemStatus = 'new' | 'attempted' | 'solved';
+export const PROBLEM_STATUSES: readonly ProblemStatus[] = [
+  'new',
+  'attempted',
+  'solved',
+];
 
 // One problem's list row; `due` is true once its review date has come.
 export interface ProblemSummary {

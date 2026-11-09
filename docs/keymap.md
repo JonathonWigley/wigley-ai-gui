@@ -83,7 +83,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and
   detail, the primer popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat
-  tab's transcript, box and session hub), then, at the view's edge, to the neighbouring chat pane in Sessions mode, then, at main's edge, to
+  tab's transcript, box and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode, Practice's
+  interviewer pane beside its column), then, at main's edge, to
   the shown mode's side bar on the left (the Sessions list, the docs tree, the Backlog homes, the Settings sections)
   and the right bar on the right (each part of it that has rows, Alt+j/k between them). From the side bar Alt+l, and
   from the right bar Alt+h, return to main's last pane. A hidden side bar or right bar is no stop: focus stops at the

@@ -32,7 +32,10 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **Side bar:** one flat list of every problem, sorted by status (attempted, then new, then solved), then difficulty
   (easy, medium, hard), then title. Each row shows the title, the difficulty, a status mark and a due mark when its
   review date has come. A header line counts solved of total for each difficulty. There is no Due section and no
-  grouping by list.
+  grouping by list. A list read that fails shows its error in place of the rows.
+- **Opening another problem** saves the shown problem's drafts first. A draft that fails to save keeps the shown
+  problem open and selected, logs `kept <slug>: a draft did not save` and toasts
+  `<title> not opened: a draft did not save`.
 - **Filter:** `/` filters the list. Each word narrows it: `easy`, `medium` or `hard` keeps that difficulty; `new`,
   `attempted`, `solved`, `unsolved` (new or attempted) or `due` keeps that status; a word naming one of the problem's
   tags or lists (case-insensitive, whole word) keeps those; any other word matches the title by fuzzy match. A word
@@ -70,7 +73,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
 
   `practice.ask` is a base scope the view sets through `setScope`, so it sits in the `<C-n>` list beside the list,
   problem, editor and console scopes and is never pushed; `practice.box`, `practice.confirm` and `practice.import` are
-  pushed over the base scope while their box or prompt is open.
+  pushed over the base scope while their box or prompt is open. A click into the list or into a pane of the column
+  hands that pane the keys.
 
   The interviewer's mounted chat view holds chat's own keys, so there `⌘↩` sends the message and Run and Submit wait
   until the keys leave the view.
@@ -89,13 +93,15 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `reference.cpp` | the agent's reference solution | import |
   | `approach.md` | the agent's approach write-up | import |
   | `solution.cpp` | the user's code; a stub from the signature at import and at each fresh attempt | import, user |
+  | `solution.<attempt id>.cpp` | a due problem's earlier code, kept as a fresh attempt starts | app |
   | `notes.md` | the user's notes | user |
   | `custom-cases.json` | the user's own Testcase inputs | user |
   | `progress.json` | status, attempts, review step and date | app |
   | `submissions/<time>.json` | one Submit: verdict, counts, runtime, the failing case, the code | app |
 
 - `interviewer.md` at the folder's root, when present, replaces the built-in interviewer instructions.
-- `.build/` at the folder's root holds the prelude, generated drivers and binaries. The app writes
+- `.build/` at the folder's root holds the prelude, generated drivers, binaries and a snapshot of the code each judge
+  call compiles, so the code recorded with a submission is the code that ran. The app writes
   `.build/.gitignore` holding `*`, so the folder ignores itself without the user's own `.gitignore` changing.
 - `problem.json` kinds:
   - `function`: a `Solution` class with one method; the signature names the method, its parameters (name and type)
@@ -118,12 +124,15 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - Compile command, flags and time limit are settings: `compiler` (default `clang++`), `flags` (default
   `-std=c++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer`) and `timeLimitMs` (default `2000`).
 - Each case runs as its own process, under the time limit, so one slow case reports Time Limit Exceeded on that case
-  and a crash ends only its case.
+  and a crash ends only its case. A program's stdout and stderr are each read up to 1 MB; the rest is dropped.
+- A compiler that cannot start is an error (`Could not run <compiler>: <reason>`), not a Compile Error: Run and Submit
+  show the error in place of a verdict, and Submit records nothing.
 - **Run** runs the visible cases and the user's custom cases, and records nothing. A custom case's expected answer
   comes from running `reference.cpp` on it, as LeetCode's Run does.
 - **Submit** runs every case in order, stops at the first that fails, and records a submission.
 - **Verdicts:** Accepted, Wrong Answer, Time Limit Exceeded, Runtime Error (a non-zero exit or a sanitizer report),
-  Compile Error.
+  Compile Error. A sanitizer report is a Runtime Error even when the run also passed the time limit, since writing
+  the report can take that long.
 - **A failed case** shows its input, the expected answer, the output and the case's stdout; a Runtime Error also
   shows stderr. **Compile errors** show the compiler's output with each location rewritten to `solution.cpp:<line>`.
 - **Runtime** is the measured wall time of the cases, on the sanitizer build: a number for comparing the user's own
@@ -132,7 +141,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   `anyOrderDeep` (each inner list sorted, then the outer list); `float` (numbers within `1e-5`, absolute or relative).
 - **Value types:** `int`, `long long`, `double`, `bool`, `char`, `string`, `vector`s and nested `vector`s of these,
   `ListNode*` and `TreeNode*` in LeetCode's array form (`[1,2,null,3]`). The import tool refuses a problem whose
-  signature uses any other type.
+  signature uses any other type. A tree's trailing nulls are trimmed as `problem.json` is read, and a tree with values
+  past its last node is refused.
 
 ## Progress
 
@@ -142,8 +152,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **The review ladder** is the `reviewSteps` setting, default `[1, 3, 7, 14, 30, 60]` days. A clean solve — the
   attempt's first Accepted Submit, with no peek — moves the problem one step up and sets its next review date that many
   days ahead. Opening the Solution tab drops the problem to the first step. A Wrong Answer does not move it.
-- **Opening a problem:** a due problem (its review date reached) opens on a fresh stub in a new attempt; the old code
-  stays in its submissions and in git. Any other problem opens on its last code in its current attempt.
+- **Opening a problem:** a due problem (its review date reached) opens on a fresh stub in a new attempt; old code that
+  is not the stub is kept as `solution.<previous attempt id>.cpp`, and stays in its submissions. Any other problem opens on its last code in its current attempt.
 - Problem lists (Blind 75, Graphs and the like) come from the agent at import, in `problem.json`'s `lists`.
 
 ## Adding problems
@@ -151,8 +161,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - `a` on the list opens a one-line box; the request ("add the Blind 75 graph problems") starts an import session
   through chat's `launch` in the practice folder with the default profile, carrying the built-in import
   instructions. It is an ordinary chat session with its own row in the Sessions side bar.
-  A blank request is refused with `Write what to add.`; a launch that fails shows an error toast and logs
-  `import failed`.
+  The box refuses a blank request with `Type what to import.` under it. A launch that fails keeps the box open with
+  the error under it and logs `import failed: <error>`.
 - `add_practice_problem` is an MCP tool every session lists. It takes the problem's `problem.json` fields, the
   statement, the reference solution and the approach. Every refusal starts `Refused:` and writes nothing: a blank or
   non-string `slug`, `statement`, `reference` or `approach`; a bad schema or an unsupported type (the message names the
@@ -171,7 +181,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   the user fail.
 - **Lifetime:** one interviewer per attempt. The pane shows a plain ask box until the user's first message, which
   launches the interviewer with that message; the pane then shows the chat view of that session. Reopening the
-  problem brings the same session back (resumed if chat no longer holds it); a new attempt's first message launches a
+  problem brings the same session back (resumed if chat no longer holds it); a resume chat refuses clears the stored
+  interviewer, and the next ask launches a fresh one. A new attempt's first message launches a
   fresh one and closes the latest earlier interviewer that chat still holds, since that one has no Sessions row the
   user could close. Asks for one problem run one at a time. A launch that gets no host session id from chat within
   two seconds is closed and fails; a failed read or mount of the interviewer shows an error toast and logs
@@ -201,14 +212,17 @@ notices), kept so the plan is written from them. A decision here stands unless t
   side bar, the next and previous session keys and pane placement skip such a row, and it is never the selected row
   and raises no "Turn finished" alert.
 - **Known limits:** a tab or popup another plugin opens for an interviewer session (a forms round, the primer) waits
-  for a Sessions row that never shows, so it never appears. A saved interviewer session still lists in the start
-  prompt's resume list for the practice folder; resuming it from there opens it as an ordinary visible session.
+  for a Sessions row that never shows, so it never appears. While chat holds an interviewer's row, the start
+  prompt's saved sessions leave it out. Once chat no longer holds it, it lists in the start prompt's resume list for
+  the practice folder, and resuming it from there opens it as an ordinary visible session.
 - **Main `resume`:** chat's main part exports `resume(request)`, the channel's resume with the same new fields, so a
-  plugin can bring back a saved session it owns.
+  plugin can bring back a saved session it owns. When chat holds a row for the session, a resume whose owner differs
+  from the row's (no owner counting as one) rejects, naming both.
 
 ## Seams
 
-- **Problem store** (main): reads and validates `problem.json` and its siblings, writes the app's files. The list,
+- **Problem store** (main): reads and validates `problem.json` and its siblings, writes the app's files, and
+  watches `problems/` from its first list on, so an app start that never lists creates no folder. The list,
   the judge and both tools read through it, so a bad file gets one error naming the file and the field.
 - **Judge** (main): takes the problem, the code and the cases, receives `ProcessRunner` and `Files`, and returns a
   verdict per case. Run, Submit and the import tool's reference check all go through it.

@@ -1,10 +1,11 @@
 import type { Clock, RandomHex } from '../../../contracts/ambient';
-import type {
-  Attempt,
-  JudgeResult,
-  ProblemStatus,
-  ProblemSummary,
-  SubmissionRecord,
+import {
+  type Attempt,
+  type JudgeResult,
+  PROBLEM_STATUSES,
+  type ProblemStatus,
+  type ProblemSummary,
+  type SubmissionRecord,
 } from '../contract';
 import { errorText } from '../../../shared/error-text';
 import { stubSource } from '../driver';
@@ -33,8 +34,8 @@ export interface ProgressDeps {
 // starts an attempt only when the problem has none, or is due and its current
 // attempt started before the due day, writing the stub to `solution.cpp`
 // then; a due problem's `solution.cpp` that is not the stub is kept first as
-// `solution.<previous attempt id>.cpp`. Otherwise it writes nothing. `peek` marks the current attempt peeked
-// and drops the ladder to its first step. `recordSubmission` writes the
+// `solution.<previous attempt id>.cpp`. Otherwise it writes nothing. `peek`
+// marks the current attempt peeked and drops the ladder to its first step. `recordSubmission` writes the
 // submission and moves the status, and the ladder one step on the attempt's
 // first clean Accepted. Every write runs one at a time, in call order.
 export interface Progress {
@@ -53,8 +54,6 @@ export interface Progress {
     interviewer: Attempt['interviewer'],
   ): Promise<void>;
 }
-
-const STATUSES: readonly ProblemStatus[] = ['new', 'attempted', 'solved'];
 
 export function createProgress(deps: ProgressDeps): Progress {
   const { store, clock, randomHex } = deps;
@@ -203,8 +202,8 @@ async function readProgress(
 function parseProgress(json: unknown): ProgressFile {
   const file = asRecord(json, '(root)');
   const status = file.status;
-  if (!STATUSES.some((choice) => choice === status)) {
-    throw new Error(`status: expected one of ${STATUSES.join(', ')}`);
+  if (!PROBLEM_STATUSES.some((choice) => choice === status)) {
+    throw new Error(`status: expected one of ${PROBLEM_STATUSES.join(', ')}`);
   }
   const review = asRecord(file.review, 'review');
   if (review.step !== null && !Number.isInteger(review.step)) {

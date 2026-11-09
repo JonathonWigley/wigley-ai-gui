@@ -3,12 +3,7 @@ import {
   finishSave,
   startSave,
 } from '../../../shared/page/autosave';
-import type {
-  JudgeResult,
-  OpenedProblem,
-  SubmissionRecord,
-  Verdict,
-} from '../contract';
+import type { JudgeResult, OpenedProblem, SubmissionRecord } from '../contract';
 
 // The problem pane's tabs and the console's, in the order `gt` cycles them.
 export type ProblemTab = 'description' | 'submissions' | 'notes' | 'solution';
@@ -99,15 +94,6 @@ export type WorkspaceAction =
   | { type: 'judgeStarted'; kind: JudgeKind }
   | { type: 'judgeDone'; slug: string; result: JudgeResult }
   | { type: 'judgeFailed'; slug: string; message: string };
-
-// LeetCode's names for the verdicts.
-export const VERDICT_LABELS: Record<Verdict, string> = {
-  accepted: 'Accepted',
-  wrongAnswer: 'Wrong Answer',
-  timeLimit: 'Time Limit Exceeded',
-  runtimeError: 'Runtime Error',
-  compileError: 'Compile Error',
-};
 
 export function initialWorkspaceState(): WorkspaceState {
   return {

@@ -309,7 +309,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
                  that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress
                  and the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
-                 interviewer sessions through chat's `launch` and `resume`, the self-test's script and its `writeFixture` drive action), page/ (Practice mode: the problem list in
+                 interviewer sessions through chat's `launch` and `resume`, a `problems/` watch started at the first list, the self-test's script and its `writeFixture` drive action), page/ (Practice mode: the problem list in
                  the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
                  `mountChat`, the import box), layouts/ (the practice Layout contract and the built-in `default` layout);
                  `docs/features/practice/design.md`
@@ -581,7 +581,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
   A **row with an owner** — opened with an `owner`, the plugin it belongs to; not the "owned session" of `open` — has
   no place in the side bar, the next and previous session keys or the pane tree: it shows only where its owner mounts
-  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`).
+  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`). The start
+  prompt's saved sessions leave out a session on such a row, and a `resume` whose `owner` differs from the held row's
+  (no owner counting as one) rejects; Practice then launches a fresh interviewer.
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
@@ -641,7 +643,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses
   the pushed scope, or move focus behind it. **The outer panes** are the
   panes around the view, handed over by the mode that tiles them with `api.panes.setOuterPanes({ focus, resize })`
-  and kept across scope changes until that mode sets null (Sessions mode's chat panes, set while the mode shows). A
+  and kept across scope changes until that mode sets null (Sessions mode's chat panes and Practice's interviewer
+  pane, each set while its mode shows). A
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the

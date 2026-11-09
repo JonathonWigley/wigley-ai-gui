@@ -1,7 +1,12 @@
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
-import type { PracticePlace, ProblemStatus, ProblemSummary } from '../contract';
+import {
+  type PracticePlace,
+  PROBLEM_STATUSES,
+  type ProblemStatus,
+  type ProblemSummary,
+} from '../contract';
 import type { EmptyReason } from '../layouts/layout';
-import type { Difficulty } from '../problem';
+import { DIFFICULTIES, type Difficulty } from '../problem';
 
 // The pane holding the keys: the side bar's list, the problem column, or the
 // interviewer's pane.
@@ -42,9 +47,6 @@ const DIFFICULTY_ORDER: Record<Difficulty, number> = {
   medium: 1,
   hard: 2,
 };
-
-const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
-const STATUSES: readonly ProblemStatus[] = ['new', 'attempted', 'solved'];
 
 export function initialPracticeState(): PracticeState {
   return {
@@ -279,5 +281,5 @@ function isDifficulty(word: string): word is Difficulty {
 }
 
 function isStatus(word: string): word is ProblemStatus {
-  return (STATUSES as readonly string[]).includes(word);
+  return (PROBLEM_STATUSES as readonly string[]).includes(word);
 }
