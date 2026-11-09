@@ -79,21 +79,34 @@ describe('createFakeSessionHost', () => {
     expect(() => host.output(id, 'out', 'x')).toThrow(id);
   });
 
-  it('spawned_ReachesTheEventsAndThePidUntilClose', async () => {
-    const host = createFakeSessionHost(clock);
-    const heard = recordingEvents();
-    const spawned = host.spawn(spawnRequest('a'), heard.events);
+  it.each([
+    { when: 'before an attach', spawnPids: [4321] },
+    { when: 'after an attach', spawnPids: [] },
+  ])(
+    'spawned_ReachesTheEventsAndThePidUntilClose: $when',
+    async ({ when, spawnPids }) => {
+      const host = createFakeSessionHost(clock);
+      const heard = recordingEvents();
+      const attachHeard = recordingEvents();
+      const spawned = host.spawn(spawnRequest('a'), heard.events);
 
-    host.spawned('a', 4321);
-    const attached = await host.attach('a', recordingEvents().events);
+      if (when === 'before an attach') {
+        host.spawned('a', 4321);
+      }
+      const attached = await host.attach('a', attachHeard.events);
+      if (when === 'after an attach') {
+        host.spawned('a', 4321);
+      }
 
-    expect(heard.pids).toEqual([4321]);
-    expect(spawned.pid).toBe(4321);
-    expect(attached?.process.pid).toBe(4321);
-    host.close('a', EXITED);
-    expect(spawned.pid).toBeNull();
-    expect(attached?.process.pid).toBeNull();
-  });
+      expect(heard.pids).toEqual(spawnPids);
+      expect(attachHeard.pids).toEqual([]);
+      expect(spawned.pid).toBe(4321);
+      expect(attached?.process.pid).toBe(4321);
+      host.close('a', EXITED);
+      expect(spawned.pid).toBeNull();
+      expect(attached?.process.pid).toBeNull();
+    },
+  );
 
   it('write_AfterClose_ChangesNothing', () => {
     const host = createFakeSessionHost(clock);
