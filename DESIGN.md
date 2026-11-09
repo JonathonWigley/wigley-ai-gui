@@ -245,7 +245,7 @@ The keyboard is first; the mouse works everywhere.
     its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
-  - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⌃P ⌃N`) or in
+  - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⇧⇥ ⇥`) or in
     the pane's header (`/ filter`, `a new`). The chat composer's status line holds the transcript's
     keys as box hints with no labels (`J K V y`), after the box's labelled `i` and `a`.
 - **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and

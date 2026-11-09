@@ -568,7 +568,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   leader group is named in the file's `groups` for which-key (layered the same way, by prefix). Each process checks every keymap it installs, at startup and on
   each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
-  `<D-w>`; its key is a lowercase letter, a digit, `;`, `'` or Enter, as in `<A-'>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
+  `<D-w>`; its key is a lowercase letter, a digit, `;`, `'`, Enter or Tab, as in `<A-'>`, and Tab needs no modifier: `<Tab>`, `<S-Tab>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor, except a key the editor takes itself (`EditorHost.takesChordKey`: an open completion popup's). A plugin's own text box may keep typed keys from the page keys while
   Tab, Enter, Escape and chords still reach its scope's binds (`textBoxInput`, `src/shared/page/text-box.ts`, which docs and settings share). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,

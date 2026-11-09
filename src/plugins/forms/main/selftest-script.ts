@@ -441,10 +441,10 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   },
   { keys: ['d'], expect: '[forms] focused dontAskReason on question 1' },
   {
-    keys: ['A', ...LONG_WORD, '<C-p>'],
+    keys: ['A', ...LONG_WORD, '<S-Tab>'],
     expect: '[forms] focused notes on question 1',
     checksFit: true,
-    why: 'Ctrl+p, still in INSERT, moves back from the reason box to the notes box.',
+    why: 'Shift+Tab, still in INSERT, moves back from the reason box to the notes box.',
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
@@ -474,21 +474,21 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['Escape', ' '], expect: '[keys] which-key shows Space' },
   {
-    keys: ['<C-n>'],
+    keys: ['<Tab>'],
     expect: '[keys] which-key closed',
-    why: 'Ctrl+n moves to the reason box, which it focuses in INSERT, and that closes which-key.',
+    why: 'Tab moves to the reason box, which it focuses in INSERT, and that closes which-key.',
   },
   { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
-    keys: ['Escape', 'd', '<C-n>'],
+    keys: ['Escape', 'd', '<Tab>'],
     expect: '[forms] focused dontAskReason on question 1',
-    why: 'Ctrl+n moves from the notes box to the reason box.',
+    why: 'Tab moves from the notes box to the reason box.',
   },
   {
-    keys: ['<C-p>'],
+    keys: ['<S-Tab>'],
     expect: '[forms] focused notes on question 1',
-    why: 'Ctrl+p moves back to the notes box.',
+    why: 'Shift+Tab moves back to the notes box.',
   },
   {
     keys: ['w', 'Escape'],
@@ -556,6 +556,15 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
     keys: ['<C-k>'],
     expect: '[forms] scrolled the form up a line to the top',
   },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  {
+    keys: ['<C-n>'],
+    expect: '[chat] picker shown: Folder',
+    why: 'Ctrl+n, in INSERT inside a form box, opens the new-session prompt as it does in every view.',
+  },
+  { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
 ];
 
 const BROKEN_BIND_STEPS: SelfTestStep[] = [
@@ -650,6 +659,12 @@ const CHOICES_STEPS: SelfTestStep[] = [
   },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['c'], expect: '[forms] cleared the choice on question 1' },
+  { keys: ['2'], expect: '[forms] chose 2 on question 1' },
+  {
+    keys: [' ', 'a', 'c'],
+    expect: '[forms] cleared the choice on question 1',
+    why: "Space a c clears the pick on the form's page as it does in a box's NORMAL mode.",
+  },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   {
     keys: ['Enter'],

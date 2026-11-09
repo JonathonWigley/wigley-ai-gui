@@ -53,11 +53,11 @@ plan is written from them. A decision here stands unless the user changes it.
   | `Alt+h` / `Alt+l` | list ↔ detail pane |
   | `Cmd+Enter` | save the editor |
   | `Esc` | in a box's normal mode, leave the box; on the editor page, cancel (a changed draft asks to discard first) |
-  | `Ctrl+n` / `Ctrl+p` | next / previous editor field |
+  | `Tab` / `Shift+Tab` | next / previous editor field |
   | `T` | in the editor, pick a tag for the draft's Tags field |
 
-  `C` is uppercase so the one outward step is never a single lowercase slip. The editor's `Cmd+Enter`, `Ctrl+n`
-  and `Ctrl+p` carry no `where`, so they fire inside a box as well as on the page; `Esc` and `T` carry one.
+  `C` is uppercase so the one outward step is never a single lowercase slip. The editor's `Cmd+Enter`, `Tab`
+  and `Shift+Tab` carry no `where`, so they fire inside a box as well as on the page; `Esc` and `T` carry one.
 
 ## Follow-ups
 

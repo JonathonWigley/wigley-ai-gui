@@ -86,7 +86,7 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
   (Electron's `Input.code`, present in Electron 44.9.0), since macOS turns Option+o into `ø`.
 - Ctrl+h / Ctrl+l move to the previous / next question, on the page and inside a box (inside a box this takes
   Ctrl+h from backspace); `<Leader>n` / `<Leader>p` go.
-- Ctrl+n / Ctrl+p move to the next / previous box, on the page and inside a box; `<Leader>j` / `<Leader>k` go
+- Tab / Shift+Tab move to the next / previous box, on the page and inside a box (Ctrl+n / Ctrl+p until Ctrl+n became the new-session key in every view); `<Leader>j` / `<Leader>k` go
   (Ctrl+j / Ctrl+k until the forms scroll keys moved them, `docs/keymap.md`).
 - There is no jump to question N; a bare digit on the page still picks a choice (changed by ui-design plan C).
 - `<A-n>` / `<A-p>` jump to the next / previous unanswered question, on the page and inside a box (changed by

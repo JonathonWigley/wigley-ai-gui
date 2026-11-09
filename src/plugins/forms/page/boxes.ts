@@ -54,7 +54,7 @@ export const FORMS_BOX_IDENTITY: BoxIdentity<BoxRef> = {
   describe: boxDescription,
 };
 
-// The boxes the user can reach now, in Ctrl+n order: the active round's boxes
+// The boxes the user can reach now, in Tab order: the active round's boxes
 // in `state.view`.
 export function shownBoxes(state: FormsState): BoxRef[] {
   const round = activeForm(state);

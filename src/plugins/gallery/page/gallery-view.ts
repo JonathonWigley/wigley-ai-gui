@@ -348,12 +348,12 @@ function keyAnchorsCells(platform: OsName): SampleCell[][] {
     ],
     [
       cell(
-        onFrame(boxHint('', [shown('<C-p>'), shown('<C-n>')])),
+        onFrame(boxHint('', [shown('<S-Tab>'), shown('<Tab>')])),
         'Box hint',
         true,
       ),
       cell(
-        onFrame(boxHint('', [hidden('<C-p>'), hidden('<C-n>')])),
+        onFrame(boxHint('', [hidden('<S-Tab>'), hidden('<Tab>')])),
         'Box hint, hidden, paints nothing',
         true,
       ),

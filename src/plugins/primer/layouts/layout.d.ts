@@ -168,10 +168,10 @@ export interface PrimerKit extends BaseKit {
   needTag(parent: HTMLElement, need: PrimerNeed): HTMLElement;
 }
 
-// A text box in its labelled field (`div.primer-field`), with its key hint beside the label and its `⌃P ⌃N` box keys
+// A text box in its labelled field (`div.primer-field`), with its key hint beside the label and its `⇧⇥ ⇥` box keys
 // on the frame. Each box mounts once per card; asking for it again, or for a box the card does not have, throws. The
-// app appends each box a card leaves out at the card's end, in its field, so the box keys always reach it; `⌃N` and
-// `⌃P` step through the boxes in the app's order, whatever their place on the card.
+// app appends each box a card leaves out at the card's end, in its field, so the box keys always reach it; `⇥` and
+// `⇧⇥` step through the boxes in the app's order, whatever their place on the card.
 export interface FeatureKit extends PrimerKit {
   textBox(
     parent: HTMLElement,

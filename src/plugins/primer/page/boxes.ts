@@ -63,7 +63,7 @@ export const PRIMER_BOX_IDENTITY: BoxIdentity<PrimerBox> = {
   describe: boxDescription,
 };
 
-// The boxes the user can reach now, in Ctrl+n order: the active primer's
+// The boxes the user can reach now, in Tab order: the active primer's
 // boxes in `state.view`.
 export function shownBoxes(state: PrimerState): PrimerBox[] {
   const primer = activeForm(state);

@@ -45,7 +45,20 @@ describe('parseChord', () => {
     });
   });
 
-  it.each(['<D-enter>', '<D-Tab>'])(
+  it.each([
+    ['<Tab>', false],
+    ['<S-Tab>', true],
+  ])('parseChord_TabKey_ChordWithOrWithoutShift %s', (token, shift) => {
+    expect(parseChord(token)).toEqual({
+      ctrl: false,
+      alt: false,
+      shift,
+      meta: false,
+      key: 'Tab',
+    });
+  });
+
+  it.each(['<D-enter>', '<tab>', '<D-Esc>'])(
     'parseChord_OtherNamedKeys_Rejected %s',
     (token) => {
       expect(parseChord(token)).toBeNull();

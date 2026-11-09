@@ -5,14 +5,14 @@ import { parseChord } from './chord-notation';
 import { vimTokens } from './key-hints';
 
 // The page key of each named vim key the page can bind, by its lowercase
-// spelling, as vim reads names in any case.
+// spelling, as vim reads names in any case; Tab is a chord in every spelling.
 const PAGE_KEY_BY_VIM_NAME: Partial<Record<string, string>> = {
   space: ' ',
   cr: 'Enter',
   enter: 'Enter',
   return: 'Enter',
   esc: 'Escape',
-  tab: 'Tab',
+  tab: '<Tab>',
   bs: 'Backspace',
   lt: '<',
   bar: '|',

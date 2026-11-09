@@ -234,10 +234,10 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Row title takes a local command's text** — *agent-ready*: a new session whose first message is a control
   command (`/effort auto`, seen in a live run) names its row after that command, though it starts no conversation.
   The first-message title source should wait for a message that reaches the model.
-- **`<C-n>` in a forms round leaves the focused box off screen** — *agent-ready*: the box takes focus at y900 in a
+- **`<Tab>` in a forms round leaves the focused box off screen** — *agent-ready*: the box takes focus at y900 in a
   700px window and the pane does not scroll, so the user types into a box they cannot see. `focusBoxItem` reads the same
   on the base (`7001a175`), so it looks old, not proved. Steps: open a forms round with the notes box on a finding, size
-  the window to 700px high, press `<C-n>`, then read the box's rect (`.cm-focused`) or take a screenshot; the box lies
+  the window to 700px high, press `<Tab>`, then read the box's rect (`.cm-focused`) or take a screenshot; the box lies
   below the window until the caret moves.
 - **`forms.choose` with an arg through `runCommand` across the Bridge is not proved live** — *agent-ready*:
   `window.wigley.runCommand("forms.choose", 2)` resolved with no `[forms]` line, with the round's row not the one

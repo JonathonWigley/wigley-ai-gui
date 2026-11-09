@@ -131,7 +131,8 @@ interface ParsedChord extends ChordPress {
 }
 
 // A letter matches its `Key` code, a digit its top-row `Digit` code, `;` and
-// `'` their US-layout codes, and `Enter` the main Enter key's code.
+// `'` their US-layout codes, `Enter` the main Enter key's code, and `Tab` its
+// own.
 function toParsedChord(bind: PageBind, chord: Chord): ParsedChord {
   return {
     bind,
@@ -147,6 +148,7 @@ const NAMED_KEY_CODES: Partial<Record<string, string>> = {
   ';': 'Semicolon',
   "'": 'Quote',
   Enter: 'Enter',
+  Tab: 'Tab',
 };
 
 function chordCode(key: string): string {

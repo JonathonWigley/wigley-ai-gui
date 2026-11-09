@@ -27,7 +27,7 @@ import type {
 // - a slot: the app appends it at the end of the part's root; the cursor prompt with no `cursorActions` goes at the
 //   end of the row root.
 // - a field box of the `editor` pane: the app appends a `label.backlog-editor-label` and the frame at the end of the
-//   pane, so `Ctrl+n` / `Ctrl+p` always reach four boxes.
+//   pane, so `Tab` / `Shift+Tab` always reach four boxes.
 // - a `pickerRow`'s `trailing`: the app appends it at the end of the row root.
 // - a `confirmBody`'s button: the prompt appends it to its actions row, so both commands keep an anchor.
 // The app sets the click on each row root and toggles `is-selected` and `is-cursor` there, so a row gives `kit.row`
