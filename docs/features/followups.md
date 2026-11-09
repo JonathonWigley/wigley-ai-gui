@@ -378,6 +378,9 @@ What Windows support and installers need.
   privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS
   ties the folder permission to one build and each `npm run install-app` can drop it for every running agent. Confirm
   the cause, then decide which signing identity `install-app` uses.
+- **The app install waits while `main` holds half-finished work** — *agent-ready*: a half-finished state on `main`,
+  such as an in-progress merge, blocks `npm run install-app`: one install rebuilt mid-merge and broke. Make the
+  install wait until `main` is clean of it.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
 ## Plugin extension points
