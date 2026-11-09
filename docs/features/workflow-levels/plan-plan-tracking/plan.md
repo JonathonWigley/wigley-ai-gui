@@ -203,5 +203,7 @@ Review base: 12745c21
 ### Review rounds
 - 1 · e104dc38/78c536d · NEEDS FIXES (6 Important, 6 Minor, 1 pre-existing; lead-applied 96d3debf)
 - 2 (re-review) · 6bc84dbb..13cd07c6 + bfab0da · NEEDS FIXES (2 Important test gaps, 2 Minor; all round-1 findings closed)
+- 3 (re-review) · 9d523f79 · PASS (1 Minor open: same-named plan of another feature kept as fallback; taken as fix now at step 8)
 ### Test gate
 - picked: src/shared/plan-copies.test.ts, src/shared/plan-progress, src/plugins/backlog, src/plugins/workflow-large, src/plugins/workflow (every module the range touches and the engine that folds its signals) + typecheck + lint; selftest --plugin workflow-large,backlog (reported plan group, Backlog plan rows); marketplace plan tests (32) · 1164 vitest passed, typecheck and lint clean, selftest all passed, plan tests OK
+- after fixes (92803821 / bfab0da): vitest plan-copies, plan-progress, backlog, workflow-large, workflow 1183 passed; typecheck, lint clean; selftest --plugin workflow-large,backlog all passed (at 9d523f79); marketplace plan tests 32 OK
