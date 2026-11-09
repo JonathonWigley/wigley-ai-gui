@@ -52,6 +52,12 @@ export interface SavedSession {
   // The row is headless, as the user or its launching session set it. A file
   // written without it reads as false.
   headless: boolean;
+  // The texts the row carries to its harness after the global ones. A file
+  // written without it reads as [].
+  instructions: string[];
+  // The plugin the row belongs to; null for a row with none, and in a file
+  // written without it.
+  owner: string | null;
 }
 
 // The titles of a session that has none.
@@ -76,7 +82,9 @@ type LaterSavedField =
   | 'activeMs'
   | 'rowId'
   | 'unattended'
-  | 'headless';
+  | 'headless'
+  | 'instructions'
+  | 'owner';
 
 type StoredSession = Omit<SavedSession, LaterSavedField> &
   Partial<Pick<SavedSession, LaterSavedField>>;
@@ -200,7 +208,9 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalActiveMs(value.activeMs) &&
     isOptionalId(value.rowId) &&
     (value.unattended === undefined || typeof value.unattended === 'boolean') &&
-    (value.headless === undefined || typeof value.headless === 'boolean')
+    (value.headless === undefined || typeof value.headless === 'boolean') &&
+    isOptionalStrings(value.instructions) &&
+    isOptionalId(value.owner)
   );
 }
 
@@ -245,6 +255,8 @@ function parseSavedSessions(text: string): SavedSessions {
       rowId: stored.rowId ?? null,
       unattended: stored.unattended ?? false,
       headless: stored.headless ?? false,
+      instructions: stored.instructions ?? [],
+      owner: stored.owner ?? null,
     })),
     selectedHostSessionId,
   };

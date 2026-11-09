@@ -66,6 +66,12 @@ export interface LaunchRequest {
   // True opens the row headless; a caller launching from a session passes
   // that session's flag.
   headless?: boolean;
+  // Text this session alone carries to its harness, after the global
+  // `addInstructions` texts. Kept with the row across a clear and a relaunch.
+  instructions?: readonly string[];
+  // The plugin the row belongs to (sessions' `OpenOptions.owner`). Kept with
+  // the row across a clear and a relaunch.
+  owner?: string;
 }
 
 // `hostSessionId` is the harness's id for the saved session.
@@ -77,12 +83,15 @@ export interface PastSessionRow {
 }
 
 // `title` is the saved session's title, which the new row takes as its
-// first-message title.
+// first-message title. `instructions` and `owner` are as `LaunchRequest` has
+// them; a resume with `owner` opens its row unselected.
 export interface ResumeRequest {
   projectDir: string;
   profile: string;
   hostSessionId: string;
   title: string;
+  instructions?: readonly string[];
+  owner?: string;
 }
 
 // A message sent while its session's turn ran, held by chat main until the
@@ -311,8 +320,8 @@ export interface ChatChannel extends ChannelShape {
     resumeSections(): Promise<ResumeSectionRows[]>;
     setArchived(hostSessionId: string, archived: boolean): Promise<void>;
     // Resolves to the new row's sessionId; a session with a chat row selects
-    // that row and resolves to its sessionId, and one open in the app on any
-    // other row rejects.
+    // that row, when it has no owner, and resolves to its sessionId, and one
+    // open in the app on any other row rejects.
     resume(request: ResumeRequest): Promise<string>;
     // Starts a resting session's process first; rejects, leaving it resting,
     // when its profile is missing or the start fails. A restored session's
@@ -527,10 +536,19 @@ export interface ChatMainEvents extends EventShape {
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
   // selected row as it was. With `unattended` true the row denies each
-  // permission prompt at once and raises no `Turn finished` alert. Resolves
-  // to the new row's sessionId; rejects, opening nothing, on an image chat
-  // refuses (with the refusal text), an unknown profile, or no chat harness.
+  // permission prompt at once and raises no `Turn finished` alert.
+  // `instructions` follow the global `addInstructions` texts at each of the
+  // row's process starts; `owner` names the plugin the row belongs to, and
+  // such a row raises no `Turn finished` alert. Resolves to the new row's
+  // sessionId; rejects, opening nothing, on an image chat refuses (with the
+  // refusal text), an unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
+  // The channel's resume for another plugin: resolves to the row's sessionId.
+  // A row chat holds for the host id is returned as it is, activated only when
+  // it has no owner; a session open on a row chat does not hold rejects.
+  // `instructions` and `owner` are as `launch` has them, and a resume with
+  // `owner` opens its row unselected.
+  resume(request: ResumeRequest): Promise<string>;
   // Chat's profiles, in settings order, read at each call. The first profile
   // is the one a drive `chat.start` takes when it names none, and the only
   // choice the start prompt skips to.
@@ -565,7 +583,8 @@ export interface ChatMainExports {
   close(sessionId: string, reason: SessionCloseReason): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started
-  // with. Disposing it leaves later starts without it.
+  // with. Disposing it leaves later starts without it. A session's own
+  // `instructions` follow these texts.
   addInstructions(text: string): Disposable;
   // Gates are asked in registration order before a write to an idle session; the
   // first non-null verdict holds the send, and no later gate is asked. A gate

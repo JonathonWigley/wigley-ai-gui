@@ -36,6 +36,8 @@ const TWO_SESSIONS: SavedSessions = {
       rowId: 'row-alpha',
       unattended: true,
       headless: true,
+      instructions: ['own note'],
+      owner: 'practice',
     },
     {
       hostSessionId: 's-beta',
@@ -56,6 +58,8 @@ const TWO_SESSIONS: SavedSessions = {
       rowId: 'row-beta',
       unattended: false,
       headless: false,
+      instructions: [],
+      owner: null,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -82,6 +86,8 @@ const ONE_SESSION: SavedSessions = {
       rowId: null,
       unattended: false,
       headless: false,
+      instructions: [],
+      owner: null,
     },
   ],
   selectedHostSessionId: null,
@@ -145,6 +151,8 @@ describe('createOpenSessions', () => {
             rowId: null,
             unattended: false,
             headless: false,
+            instructions: [],
+            owner: null,
           },
         ],
         selectedHostSessionId: null,
@@ -185,6 +193,24 @@ describe('createOpenSessions', () => {
       ]),
       expected: {
         sessions: [{ ...TWO_SESSIONS.sessions[0], headless: false }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without instructions',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], instructions: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], instructions: [] }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without owner',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], owner: undefined }]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], owner: null }],
         selectedHostSessionId: null,
       },
     },
@@ -316,6 +342,16 @@ describe('createOpenSessions', () => {
     {
       file: 'headless a string',
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], headless: 'yes' }]),
+    },
+    {
+      file: 'instructions a string',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], instructions: 'own note' },
+      ]),
+    },
+    {
+      file: 'owner a number',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], owner: 7 }]),
     },
     {
       file: 'selectedHostSessionId a number',

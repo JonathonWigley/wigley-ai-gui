@@ -520,6 +520,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     };
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
+      resume: (request) => chat.resume(request),
       profiles,
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),

@@ -308,6 +308,8 @@ function record(
     rowId: null,
     unattended: false,
     headless: false,
+    instructions: [],
+    owner: null,
     ...fields,
   };
 }
@@ -887,6 +889,30 @@ describe('createChatSessions', () => {
     ]);
   });
 
+  it('launch_InstructionsFollowTheGlobalOnesAndSurviveAClear', async () => {
+    const test = setUp();
+    test.chat.addInstructions('global note');
+
+    const launchedId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: { text: 'go', images: [] },
+      instructions: ['own note'],
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    expect(
+      test.harness.processes.map((process) => process.request.instructions),
+    ).toEqual([['global note', 'own note'], ['global note']]);
+
+    test.chat.clear(launchedId);
+    await flush();
+    expect(test.harness.processes[2].request.instructions).toEqual([
+      'global note',
+      'own note',
+    ]);
+  });
+
   it('pastSessions_LeavesOutOpenAndMarksArchived', async () => {
     const test = setUp();
     await test.archived.set(PAST_ONE.sessionId, true);
@@ -1274,6 +1300,47 @@ describe('createChatSessions', () => {
     expect(test.saved.last()?.sessions[0].processId).toBe(HOSTED_PAST_ONE.id);
   });
 
+  it.each([
+    {
+      given: 'history read, new process',
+      hosted: [],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.processes[0].request.instructions,
+    },
+    {
+      given: 'process running here',
+      hosted: [HOSTED_PAST_ONE],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.attachCalls[0].instructions,
+    },
+  ])(
+    'resume_OwnerAndInstructions_OpenUnselectedAndStartWithThem: $given',
+    async ({ hosted, instructionsOf }) => {
+      const test = setUp({
+        sessionHost: { list: () => Promise.resolve(hosted) },
+      });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+      test.chat.addInstructions('global note');
+
+      await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title: PAST_ONE.title,
+        instructions: ['own note'],
+        owner: 'practice',
+      });
+      await flush();
+
+      expect(test.openOptions).toEqual([{ select: false, owner: 'practice' }]);
+      expect(instructionsOf(test)).toEqual(['global note', 'own note']);
+    },
+  );
+
   it('resume_AlreadyOpen_Rejects', async () => {
     const test = setUp();
     const hostId = PAST_ONE.sessionId;
@@ -1335,6 +1402,27 @@ describe('createChatSessions', () => {
     expect(test.titleCalls).toEqual([]);
   });
 
+  it('resume_HostIdChatHoldsOnARowWithAnOwner_ReturnsItWithoutActivating', async () => {
+    const test = setUp();
+    const launchedId = test.chat.launch({
+      projectDir: '/w/app',
+      profile: 'work',
+      message: { text: 'go', images: [] },
+      owner: 'practice',
+    });
+    await flush();
+
+    const sessionId = await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: 'uuid-1',
+      title: 'go',
+    });
+
+    expect(sessionId).toBe(launchedId);
+    expect(test.activated).toEqual([]);
+  });
+
   it('commands_StoredAndSentOnChange', async () => {
     const test = await started();
 
@@ -1389,23 +1477,34 @@ describe('createChatSessions', () => {
     expect(test.openOptions).toEqual([{ select: true }]);
   });
 
-  it('launch_OpensUnselectedAndSendsFirstMessage', async () => {
-    const test = setUp();
+  it.each([
+    { given: 'owner absent', owner: {}, options: { select: false } },
+    {
+      given: 'owner practice',
+      owner: { owner: 'practice' },
+      options: { select: false, owner: 'practice' },
+    },
+  ])(
+    'launch_OpensUnselectedAndSendsFirstMessage: $given',
+    async ({ owner, options }) => {
+      const test = setUp();
 
-    const sessionId = test.chat.launch({
-      projectDir: PROJECT_DIR,
-      profile: DEFAULT_PROFILES[0].name,
-      message: { text: 'fix the chip', images: [] },
-    });
-    await flush();
+      const sessionId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: DEFAULT_PROFILES[0].name,
+        message: { text: 'fix the chip', images: [] },
+        ...owner,
+      });
+      await flush();
 
-    expect(sessionId).toBe(ROW_ID);
-    expect(test.openOptions).toEqual([{ select: false }]);
-    expect(test.harness.processes[0].calls).toEqual([
-      { method: 'send', text: 'fix the chip', imageCount: 0 },
-    ]);
-    expect(test.activated).toEqual([]);
-  });
+      expect(sessionId).toBe(ROW_ID);
+      expect(test.openOptions).toEqual([options]);
+      expect(test.harness.processes[0].calls).toEqual([
+        { method: 'send', text: 'fix the chip', imageCount: 0 },
+      ]);
+      expect(test.activated).toEqual([]);
+    },
+  );
 
   it('launch_ImageOverCap_RejectsAndOpensNothing', () => {
     const test = setUp();
@@ -1671,8 +1770,9 @@ describe('createChatSessions', () => {
   it.each([
     { given: 'unattended: true', flag: { unattended: true }, alerts: 0 },
     { given: 'unattended absent', flag: {}, alerts: 1 },
+    { given: 'owner: practice', flag: { owner: 'practice' }, alerts: 0 },
   ])(
-    'turnFinished_LaunchedRow_AlertsByUnattended: $given → $alerts alerts',
+    'turnFinished_LaunchedRow_AlertsUnlessUnattendedOrOwned: $given → $alerts alerts',
     async ({ flag, alerts }) => {
       const test = setUp();
       const sessionId = test.chat.launch({
@@ -3559,6 +3659,8 @@ describe('createChatSessions saved sessions', () => {
         rowId: ROW_ID,
         unattended: false,
         headless: false,
+        instructions: [],
+        owner: null,
       },
     ]);
   });
@@ -3566,27 +3668,41 @@ describe('createChatSessions saved sessions', () => {
   it.each([
     { given: 'as launched', clear: false },
     { given: 'after a clear', clear: true },
-  ])('save_LaunchedRow_RecordKeepsUnattended: $given', async ({ clear }) => {
-    const test = setUp();
-    test.chat.restore(NOTHING_SAVED, []);
+  ])(
+    'save_LaunchedRow_RecordKeepsItsLaunchFlags: $given',
+    async ({ clear }) => {
+      const test = setUp();
+      test.chat.restore(NOTHING_SAVED, []);
 
-    const launchedId = test.chat.launch({
-      projectDir: PROJECT_DIR,
-      profile: 'personal',
-      message: { text: 'go', images: [] },
-      unattended: true,
-    });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
-    await flush();
-    if (clear) {
-      test.chat.clear(launchedId);
+      const launchedId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        message: { text: 'go', images: [] },
+        unattended: true,
+        instructions: ['own note'],
+        owner: 'practice',
+      });
+      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
       await flush();
-    }
+      if (clear) {
+        test.chat.clear(launchedId);
+        await flush();
+      }
 
-    expect(
-      test.saved.last()?.sessions.map((saved) => saved.unattended),
-    ).toEqual([true, false]);
-  });
+      expect(
+        test.saved
+          .last()
+          ?.sessions.map(({ unattended, instructions, owner }) => ({
+            unattended,
+            instructions,
+            owner,
+          })),
+      ).toEqual([
+        { unattended: true, instructions: ['own note'], owner: 'practice' },
+        { unattended: false, instructions: [], owner: null },
+      ]);
+    },
+  );
 
   it.each([{ headless: true }, { headless: false }])(
     'setHeadless_HeldRow_PublishesAndSaves: $headless',
@@ -3776,6 +3892,55 @@ describe('createChatSessions saved sessions', () => {
       message: UNATTENDED_REASON,
     });
   });
+
+  it.each([
+    {
+      given: 'resting, then a send',
+      processId: null,
+      hosted: [],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.processes[0].request.instructions,
+    },
+    {
+      given: 'running here',
+      processId: 'p1',
+      hosted: [hostedP1()],
+      instructionsOf: (test: ReturnType<typeof setUp>) =>
+        test.harness.attachCalls[0].instructions,
+    },
+  ])(
+    'restore_RecordWithInstructionsAndOwner_ReopensWithBoth: $given',
+    async ({ processId, hosted, instructionsOf }) => {
+      const test = setUp();
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+      test.chat.addInstructions('global note');
+
+      test.chat.restore(
+        {
+          sessions: [
+            record('host-a', {
+              instructions: ['own note'],
+              owner: 'practice',
+              processId,
+            }),
+          ],
+          selectedHostSessionId: null,
+        },
+        hosted,
+      );
+      if (processId === null) {
+        await test.chat.send(ROW_ID, { text: 'hi', images: [] });
+      }
+      await flush();
+
+      expect(test.openOptions).toEqual([{ select: false, owner: 'practice' }]);
+      expect(instructionsOf(test)).toEqual(['global note', 'own note']);
+    },
+  );
 
   it('save_BeforeRestore_WritesNothing', async () => {
     const test = setUp();
@@ -4608,6 +4773,8 @@ describe('createChatSessions clear', () => {
           rowId: ROW_ID,
           unattended: false,
           headless: false,
+          instructions: [],
+          owner: null,
         },
       ],
       selectedHostSessionId: 'uuid-2',

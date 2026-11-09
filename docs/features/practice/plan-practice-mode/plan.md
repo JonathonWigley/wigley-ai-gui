@@ -226,7 +226,7 @@ does not consume.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Sessions: owned rows](01-sessions-owned-rows.md)
+- [x] [Sessions: owned rows](01-sessions-owned-rows.md)
 - [ ] [Practice: pure core](04-practice-pure-core.md)
 
 ### Wave 2
@@ -260,8 +260,11 @@ does not consume.
 Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 
 ### Groups
+- 01 · 9dc961ad · diff read: OpenOptions.owner, SessionRow.owner, sessionRow owner null present; typecheck clean; worker ran the 4 named test files green (271 tests) and lint clean · concerns: a second full-row literal in session-list.test.ts (~:911) needed owner: null, which the task doc did not name
 ### Contract changes
 ### Rulings
 - 04's `npm run lint` proof moves to 05: check-layers.mts fails a plugin folder with no manifest.ts (line 817), and 05 adds the manifest — typecheck and the five tests prove 04 — a layer break in the root modules surfaces one wave later · lead
+- activateExistingRow checks the owner before the no-row check, logging 'activateExistingRow for session <id> with an owner ignored' — the owner rule holds whether a row exists or not — only the log line differs if wrong · group 01 · group 01
+- page start.ts pruneKeys still reads the unfiltered rows slot — a row with an owner never gets a place, so the read changes nothing — a stale place survives one reload if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate

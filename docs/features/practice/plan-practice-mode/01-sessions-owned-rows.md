@@ -1,6 +1,6 @@
 # 01 — Sessions: owned rows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -120,3 +120,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9dc961ad · proof: diff read: OpenOptions.owner, SessionRow.owner, sessionRow owner null present; typecheck clean; worker ran the 4 named test files green (271 tests) and lint clean · concerns: a second full-row literal in session-list.test.ts (~:911) needed owner: null, which the task doc did not name
