@@ -98,7 +98,7 @@ worktree of that clone. A `wigley:make` run in a worktree ticks the worktree's c
 must learn which copy the run writes. The run reports it two ways, and the latest report wins:
 
 - **`plan.py`** — every progress write (`base`, `start`, `land`, `strike`, `log`) in a session the app started writes
-  `{"planDir": <absolute folder>, "at": <epoch ms>}` to `plan-runs/<row id>.json` in the app's endpoint folder, read
+  `{"planDir": <absolute folder>}` to `plan-runs/<row id>.json` in the app's endpoint folder, read
   from `WIGLEY_AI_GUI_ENDPOINT_DIR` and `WIGLEY_SESSION_ROW`. A failed write warns and never fails the command, and
   `close` writes nothing.
 - **`set_workflow_plan`** — the agent's tool, which `workflow-large` contributes. It takes `folder`, refuses one with no
@@ -107,8 +107,9 @@ must learn which copy the run writes. The run reports it two ways, and the lates
 A reported folder is read alone. With no report, or once the reported folder holds no `plan.md`, Large reads the
 **moved copy**: a copy whose progress differs from the main tree's copy, the most recently modified of them when
 several differ, else the main tree's copy. A fresh worktree checks out the main tree's progress, so it never wins,
-however new its files' modified times are. A plan outside a git clone (`~/wigley-features/`) has one copy. The app
-deletes a row's report file when the row ends.
+however new its files' modified times are. A plan outside a git clone (`~/wigley-features/`) has one copy. A report
+applies when its file changes; a row's file stays after the row ends, since the live `Files.trash` would fill the
+user's Trash, and a new row never reuses an old row's id.
 
 ## Small's stages
 
