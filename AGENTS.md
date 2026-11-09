@@ -303,6 +303,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `load`, `tags` and `fileNote` it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
+  practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
+                 that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress
+                 and the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
+                 interviewer sessions through chat's `launch` and `resume`), page/ (Practice mode: the problem list in
+                 the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
+                 `mountChat`), layouts/ (the practice Layout contract and the built-in `default` layout);
+                 `docs/features/practice/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
@@ -312,7 +319,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is) and `defaultProfile` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the placement check over the core's anchors), layouts/
@@ -555,6 +562,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   the focused pane, and the visible surface, whose `shown` sets the key scope and whose `isVisible` reads true, is the
   focused pane's top open popup, else its selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
+  An **owned session** — a row opened with an `owner`, the plugin it belongs to — has no place in the side bar, the
+  next and previous session keys or the pane tree: it shows only where its owner mounts its chat view through chat's
+  `mountChat` (Practice's interviewer, `docs/features/practice/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
