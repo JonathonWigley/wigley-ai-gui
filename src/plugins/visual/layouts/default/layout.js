@@ -2,8 +2,8 @@
 
 // The built-in visual look: a running dot and a line of text while the block
 // streams, then the frame in a clipped, rounded box as wide as its column
-// over a bar holding the expand control, its `v` hint on a chat entry's first
-// visual only; the overlay shows the frame in a sheet filling the window, with
+// over a bar holding the widen and expand controls, their `w` and `v` hints on
+// a chat entry's first visual only; the overlay shows the frame in a sheet filling the window, with
 // its place under it when there is more than one.
 
 /** @type {import('../layout').CompleteLayout} */
@@ -18,6 +18,8 @@ const layout = {
     const root = kit.el(parent, 'div', 'visual');
     kit.frame(root);
     const bar = kit.el(root, 'div', 'visual-bar');
+    const widen = kit.widen(bar);
+    kit.keyHint(widen, 'toggleWidth', { className: 'visual-open-hint' });
     const button = kit.expand(bar);
     kit.keyHint(button, 'openVisuals', { className: 'visual-open-hint' });
     return root;

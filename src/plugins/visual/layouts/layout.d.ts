@@ -16,6 +16,11 @@ export interface VisualKit extends BaseKit {
   // `openVisuals` opens a chat entry's visuals from its first, so a hint given the class `visual-open-hint` shows
   // on a chat entry's first visual only.
   expand(parent: HTMLElement): HTMLButtonElement;
+  // Appends the widen control to `parent` and returns it: a small icon button that never takes focus, whose click
+  // flips this visual between the reading width and its column's whole width. A part that never calls it gets the
+  // button at its root's end, after the expand control; a second call throws `widen placed twice`. Its key hint is
+  // the layout's own `keyHint(button, 'toggleWidth')`, which flips the same visual `openVisuals` opens at.
+  widen(parent: HTMLElement): HTMLButtonElement;
 }
 
 // The overlay's place among the visuals it steps through: `index` from 0, of `count`.

@@ -22,18 +22,21 @@ export function createVisualBaseKit(
 }
 
 // The kit one `visual` draw builds with: the base kit, its keys in chat's
-// scope, plus `frame` and `expand`, which place the frame and the expand
-// control through `placeFrame` and `placeExpand`.
+// scope, plus `frame`, `expand` and `widen`, which place the frame and the
+// expand and widen controls through `placeFrame`, `placeExpand` and
+// `placeWiden`.
 export function createVisualKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
   placeFrame: (parent: HTMLElement) => HTMLElement,
   placeExpand: (parent: HTMLElement) => HTMLButtonElement,
+  placeWiden: (parent: HTMLElement) => HTMLButtonElement,
 ): VisualKit {
   return {
     ...createVisualBaseKit(services, rollback, { qualified: 'chat.chat' }),
     frame: placeFrame,
     expand: placeExpand,
+    widen: placeWiden,
   };
 }
 

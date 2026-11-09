@@ -44,15 +44,28 @@ export interface VisualPartsDeps {
 // `frame`, each moves the slot, and the visual stays loaded only when the
 // slot and the element it moves into are both in the document: a part that
 // places it in a detached element, or whose draw throws, reloads it. `visual`
-// also places an expand button whose click runs `expand`, where the part calls
-// `kit.expand`, else at its root's end after the frame. `card` and `overlay`
+// also places an expand button whose click runs `actions.expand`, where the
+// part calls `kit.expand`, and a widen button whose click runs
+// `actions.widen`, where it calls `kit.widen`, else each at its root's end
+// after the frame, expand first. `card` and `overlay`
 // anchor keys in no scope and the overlay's scope, `visual` in chat's.
 // `setLayouts` only stores the set; the fence and the overlay draw again.
 export interface VisualParts {
   card(parent: HTMLElement): Drawn;
-  visual(parent: HTMLElement, frame: HTMLElement, expand: () => void): Drawn;
+  visual(
+    parent: HTMLElement,
+    frame: HTMLElement,
+    actions: VisualActions,
+  ): Drawn;
   overlay(parent: HTMLElement, frame: HTMLElement, input: OverlayInput): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
+}
+
+// What a visual's controls run: `expand` opens it full size, `widen` flips it
+// between the reading width and wide.
+export interface VisualActions {
+  expand(): void;
+  widen(): void;
 }
 
 type PartName = keyof CompleteLayout;
@@ -111,11 +124,23 @@ export function createVisualParts(deps: VisualPartsDeps): VisualParts {
         card(slot, createVisualBaseKit(deps.kit, rollback, null)),
       );
     },
-    visual(parent, frame, expand) {
+    visual(parent, frame, actions) {
       return draw('visual', parent, (visual, slot, rollback) => {
         const frameSlot = createFrameSlot(frame, rollback);
-        const button = iconButton('screen-full', 'Expand', expand, 'sm');
+        const button = iconButton(
+          'screen-full',
+          'Expand',
+          actions.expand,
+          'sm',
+        );
         const expandSlot = appSlot(button, 'expand', rollback);
+        const widenButton = iconButton(
+          'arrow-both',
+          'Widen or narrow',
+          actions.widen,
+          'sm',
+        );
+        const widenSlot = appSlot(widenButton, 'widen', rollback);
         const root = visual(
           slot,
           createVisualKit(
@@ -126,10 +151,15 @@ export function createVisualParts(deps: VisualPartsDeps): VisualParts {
               expandSlot.place(at);
               return button;
             },
+            (at) => {
+              widenSlot.place(at);
+              return widenButton;
+            },
           ),
         );
         frameSlot.placeIfLeftOut(root);
         expandSlot.placeIfLeftOut(root);
+        widenSlot.placeIfLeftOut(root);
         return root;
       });
     },

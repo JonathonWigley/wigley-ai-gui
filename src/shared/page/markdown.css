@@ -2,6 +2,11 @@
 .md {
   font-size: var(--wg-text-prose);
   line-height: var(--wg-leading-prose);
+}
+
+/* The reading width holds block by block, so one block (a wide visual) can
+   take the column's whole width while the prose around it keeps the measure. */
+.md > * {
   max-width: var(--wg-prose-measure);
 }
 

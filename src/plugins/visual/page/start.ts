@@ -32,7 +32,8 @@ type VisualApi = PageApi<
 // Contributes the live `html` fence to the markdown service while it runs, so
 // every markdown owner draws an agent's html block as a visual through the
 // `visual.layout` layout, and the full-size overlay, which `v` opens on chat's
-// focused entry's visuals and each visual's expand control on that visual;
+// focused entry's visuals and each visual's expand control on that visual,
+// and `w` and each visual's widen control flip a visual's width;
 // each live view and the open overlay draw again on each layouts set. A stop
 // closes the overlay and disposes every live view.
 export const visualPagePart: PagePart<typeof visualManifest> = {

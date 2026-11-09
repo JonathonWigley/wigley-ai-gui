@@ -120,6 +120,61 @@ describe('createVisualCommands', () => {
     },
   );
 
+  it.each([
+    {
+      name: 'no focused stop',
+      focused: 'none',
+      block: null,
+      logs: ['no focused entry'],
+      wide: [],
+    },
+    {
+      name: 'an entry with no visual',
+      focused: 'no visual',
+      block: null,
+      logs: ['no visuals in the focused entry'],
+      wide: [],
+    },
+    {
+      name: 'an entry with two visuals',
+      focused: 'two visuals',
+      block: null,
+      logs: ['visual width: wide'],
+      wide: [true, false],
+    },
+    {
+      name: 'a cursor on the second visual',
+      focused: 'two visuals',
+      block: 2,
+      logs: ['visual width: wide'],
+      wide: [false, true],
+    },
+  ] as const)(
+    'toggleWidth_FocusedEntry_FlipsTheVisualOrLogs $name',
+    ({ focused, block, logs, wide }) => {
+      const registry = createVisualRegistry();
+      const { entry, blocks } = focusedEntry(focused, registry);
+      const logged: string[] = [];
+      const commands = createVisualCommands({
+        chat: {
+          focusedEntry: () => entry,
+          focusedBlock: () => (block === null ? null : blocks[block]),
+        },
+        registry,
+        overlay: recordingOverlay().overlay,
+        log: (message: string) => logged.push(message),
+      });
+
+      commands.toggleWidth();
+
+      expect(logged).toEqual(logs);
+      const hosts = entry === null ? [] : registry.hostsIn(entry);
+      expect(hosts.map((host) => host.classList.contains('is-wide'))).toEqual(
+        wide,
+      );
+    },
+  );
+
   it('overlayCommands_CallTheOverlay', () => {
     const fake = recordingOverlay();
     const commands = createVisualCommands({

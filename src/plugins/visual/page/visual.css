@@ -20,6 +20,14 @@
   display: contents;
 }
 
+/* A wide visual's block, and a forms or primer card holding one, drops the
+   reading width, so the visual takes its column's whole width. */
+.md > :has(> .visual-host.is-wide),
+:where(.form-tab) .round-main > :has(.visual-host.is-wide),
+.primer-tab .primer-card > :has(.visual-host.is-wide) {
+  max-width: none;
+}
+
 /* The frame takes the column's width; the visual frames service sets its
    height. */
 .visual-frame-slot > * {

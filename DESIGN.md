@@ -157,8 +157,9 @@ means something.
 - **Sentence case everywhere.** A section header is `text-12`, semibold, `fg-secondary`. Capitals
   shout, and a calm tool does not shout.
 - **Prose** (rendered markdown wherever it renders: chat, docs, forms cards): `text-prose`,
-  `leading-prose`, at most `prose-measure` wide. A markdown `h3` is `text-prose` too. No surface
-  overrides it.
+  `leading-prose`, each block at most `prose-measure` wide. A markdown `h3` is `text-prose` too. No
+  surface overrides it; only a wide visual's block, and the forms or primer card holding it, takes
+  its column's whole width (`docs/features/visuals/design.md` § Decisions).
 - **Numbers that change** (counts, timers, costs, line numbers) use tabular numerals, so they do
   not jitter.
 - The user's `fonts` settings, when set, override the theme's font families and base sizes:

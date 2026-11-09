@@ -9,6 +9,7 @@ import {
   type VisualParts,
 } from './layout/visual-parts';
 import type { VisualRegistry } from './visual-registry';
+import { marksWide, setWide, toggleWidth } from './visual-width';
 
 // `expand` is what a visual's expand control runs with its source.
 export interface HtmlFenceDeps {
@@ -23,7 +24,8 @@ export interface HtmlFenceDeps {
 // holding the `card` part while its block is open, and once it is closed the
 // `visual` part around a frame opened on its source, its host held in the
 // registry under that source until the view's dispose, logged as
-// `visual mounted: <title>`. `redraw` draws every live view's part again with
+// `visual mounted: <title>`. A closed view opens wide when its source carries
+// the agent's wide mark, and its widen control flips it. `redraw` draws every live view's part again with
 // the layouts last set, moving each view's frame into the new part: it stays
 // loaded only when its host is in the document and the part places it in an
 // element already there. `dispose` disposes every live view; a view's second
@@ -85,9 +87,14 @@ export function createHtmlFence(deps: HtmlFenceDeps): HtmlFence {
         }
         const { frame, slot } = openFrameSlot(deps.frames, source);
         const registered = deps.registry.add(host, source);
+        setWide(host, marksWide(source));
         const view = mountView(
           host,
-          (into) => deps.parts.visual(into, slot, () => deps.expand(source)),
+          (into) =>
+            deps.parts.visual(into, slot, {
+              expand: () => deps.expand(source),
+              widen: () => toggleWidth(host, deps.log),
+            }),
           () => {
             registered.dispose();
             frame.dispose();

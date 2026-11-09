@@ -601,6 +601,7 @@ export const defaultKeymap = {
 
     // ── Visual ─────────────────────────────────────────────────────────────
     { keys: 'v', scope: 'chat.chat', command: 'visual.openVisuals' },
+    { keys: 'w', scope: 'chat.chat', command: 'visual.toggleWidth' },
     { keys: 'h', scope: 'visual.overlay', command: 'visual.prevVisual' },
     { keys: 'l', scope: 'visual.overlay', command: 'visual.nextVisual' },
     { keys: '<Esc>', scope: 'visual.overlay', command: 'visual.closeVisual' },

@@ -294,6 +294,17 @@ const VISUAL_STEPS: SelfTestStep[] = [
     why: 'The result is no stop, so focus follows the reply holding both visuals.',
   },
   {
+    keys: ['w'],
+    expect: '[visual] visual width: wide',
+    screenshot: 'visual-wide',
+    why: "From the rest position, the reply's last block, w widens the second visual to the column's whole width.",
+  },
+  {
+    keys: ['w'],
+    expect: '[visual] visual width: reading',
+    why: 'A second w takes the same visual back to the reading width.',
+  },
+  {
     keys: ['v'],
     expect: '[visual] visual overlay showing 2 of 2',
     why: "From the rest position, the reply's last block, v opens on the second visual.",

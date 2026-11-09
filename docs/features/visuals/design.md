@@ -86,6 +86,13 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   other, so a subset would break.
   The theme arrives after the frame's own scripts ran, so the frame stays hidden until the first theme message and
   never paints unthemed.
+- **Reading width by default, wide on the agent's mark or the user's flip.** A visual's frame takes its
+  block's width, and prose keeps the reading width (`prose-measure`) block by block, so a visual that fits its
+  panes to its width drew squeezed. The app cannot tell such a visual is wide from inside it, so the agent says so:
+  `<meta name="visual-width" content="wide">` in the document opens it at the column's whole width. Each visual's
+  widen control and `w` on the focused chat entry flip any visual either way, at the same visual `v` opens at. The
+  width lives on the visual's host for the view's life: a redraw keeps it, a page reload goes back to the mark.
+  Letting the whole column take the pane's width was tried and dropped: every line of prose ran the full pane.
 - **Focus.** A click gives the visual the user's clicks and typing; `Esc` inside it hands focus back to the page.
 - **Overlay.** `v` on the focused chat entry opens its visuals full size, at the first one in the cursor's block when it holds one; `h`/`l` move between them and `Esc` closes.
   Each visual also carries an expand control, which is the route outside chat.

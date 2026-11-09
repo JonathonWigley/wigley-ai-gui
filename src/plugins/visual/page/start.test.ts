@@ -99,7 +99,10 @@ describe('visualPagePart', () => {
     mountVisual(started, '<p>one</p>');
     const second = mountVisual(started, '<p>two</p>');
 
-    second.querySelector('.ui-icon-button')?.click();
+    second
+      .querySelectorAll('.ui-icon-button')
+      .find((button) => button.title === 'Expand')
+      ?.click();
 
     await vi.waitFor(() =>
       expect(started.runs).toEqual([['visual.expand', '<p>two</p>']]),

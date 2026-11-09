@@ -74,6 +74,13 @@ function sourcesAround(registry: VisualRegistry, view: FenceView): string[] {
   return registry.sourcesIn(asHtml(entry));
 }
 
+// The view's icon button titled `title`.
+function controlOf(view: FenceView, title: string): FakeElement | undefined {
+  return asFake(view.element)
+    .querySelectorAll('.ui-icon-button')
+    .find((button) => button.title === title);
+}
+
 // The part root in the host's one `div.visual-draw`.
 function partRoot(view: FenceView): FakeElement {
   const draws = asFake(view.element).children;
@@ -113,7 +120,7 @@ describe('createHtmlFence', () => {
       expanded: [],
     },
     {
-      name: "left-out frame and expand are placed at the root's end",
+      name: "left-out frame, expand and widen are placed at the root's end",
       layouts: 'mine',
       source: '<b>x</b>',
       closed: true,
@@ -144,7 +151,7 @@ describe('createHtmlFence', () => {
 
       const view = test.fence.contribution.mount(source, closed);
       if (want.expanded.length > 0) {
-        asFake(view.element).querySelector('.ui-icon-button')?.click();
+        controlOf(view, 'Expand')?.click();
       }
 
       expect(test.opened.map((frame) => frame.source)).toEqual(opened);
@@ -158,16 +165,69 @@ describe('createHtmlFence', () => {
         expect(slot).toBeNull();
       }
       if (layouts === 'mine') {
-        const ends = root.children.slice(-2);
+        const ends = root.children.slice(-3);
         expect(ends[0]).toBe(slot);
-        expect(ends[1].tagName).toBe('BUTTON');
-        expect(ends[1].classList.contains('ui-icon-button')).toBe(true);
+        expect(ends.slice(1).map((button) => button.title)).toEqual([
+          'Expand',
+          'Widen or narrow',
+        ]);
       }
       expect(sourcesAround(test.registry, view)).toEqual(registered);
       expect(test.logs).toEqual(want.logs);
       expect(test.expanded).toEqual(want.expanded);
     },
   );
+
+  it.each([
+    { name: 'no mark', source: '<p>x</p>', wide: false },
+    {
+      name: 'name then content',
+      source: '<meta name="visual-width" content="wide"><p>x</p>',
+      wide: true,
+    },
+    {
+      name: 'content then name, unquoted',
+      source: '<META content=wide name=visual-width><p>x</p>',
+      wide: true,
+    },
+    {
+      name: 'another width',
+      source: '<meta name="visual-width" content="reading"><p>x</p>',
+      wide: false,
+    },
+    {
+      name: 'another meta',
+      source: '<meta name="viewport" content="wide"><p>x</p>',
+      wide: false,
+    },
+  ])('htmlFence_MountClosed_OpensWideOnTheMark $name', ({ source, wide }) => {
+    const test = fenceFixture();
+
+    const view = test.fence.contribution.mount(source, true);
+
+    expect(asFake(view.element).classList.contains('is-wide')).toBe(wide);
+  });
+
+  it('htmlFence_WidenControl_FlipsWidthAndKeepsItOnRedraw', () => {
+    const test = fenceFixture();
+    const view = test.fence.contribution.mount('<p>x</p>', true);
+    const host = asFake(view.element);
+
+    controlOf(view, 'Widen or narrow')?.click();
+    const wideAfterClick = host.classList.contains('is-wide');
+    test.parts.setLayouts(withUser<Layout>(defaultLayout, MINE));
+    test.fence.redraw();
+    const wideAfterRedraw = host.classList.contains('is-wide');
+    controlOf(view, 'Widen or narrow')?.click();
+
+    expect([wideAfterClick, wideAfterRedraw]).toEqual([true, true]);
+    expect(host.classList.contains('is-wide')).toBe(false);
+    expect(test.logs).toEqual([
+      'visual mounted: untitled',
+      'visual width: wide',
+      'visual width: reading',
+    ]);
+  });
 
   it('htmlFence_DisposeClosedView_DisposesTheFrame', () => {
     const test = fenceFixture();
