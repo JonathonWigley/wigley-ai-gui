@@ -1,6 +1,6 @@
 # 03 — Marketplace version bump
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -14,3 +14,5 @@ Done when: `python3 scripts/check_manifests.py` and `python3 scripts/check_manif
 Commit:    one commit for the group. This task runs after task 04, so the bump is the series' last marketplace commit with no reorder.
 
 ## Proof
+
+Commit wigley-ai-marketplace 3ea99a0 · proof: diff read: both manifests 2.3.0; check_manifests and --against origin/main pass · concerns: origin/main moved to 2.2.0 mid-run; marketplace branch rebased onto origin/main (8a981dd docs-ahead) before the bump

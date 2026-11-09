@@ -1,6 +1,6 @@
 # 02 — workflow-spike plugin
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -126,3 +126,5 @@ Done when: `npm test`, `npm run typecheck` and `npm run lint` pass in the worktr
 Commit:    one commit for the group
 
 ## Proof
+
+Commit wigley-ai-gui f7e76347 · proof: diff read: all five Produces present; typecheck clean; worker ran npm test, lint and filtered selftest (workflow-spike) green · concerns: none

@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -22,3 +22,5 @@ Done when: every stale line is fixed; `python3 scripts/check_pointers.py` passes
 Commit:    one commit per repo that changed. A marketplace fix lands before task 03's bump, which runs after this task.
 
 ## Proof
+
+Commit none (no doc stale) · proof: every named claim checked true against 817afc6 and f7e76347; check_pointers passes; trees clean · concerns: gui AGENTS.md says build, check and interview re-enter per ask; land and done also answer any time — loose, not false

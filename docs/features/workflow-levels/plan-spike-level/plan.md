@@ -115,13 +115,13 @@ layouts kit), `chat` and `sessions` contracts for its self-test, and its own fil
 
 ### Wave 1
 - [x] [Gate accepts wigley:spike](01-gate-accepts-spike.md)
-- [ ] [workflow-spike plugin](02-workflow-spike-plugin.md)
+- [x] [workflow-spike plugin](02-workflow-spike-plugin.md)
 
 ### Wave 2
-- [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02
+- [x] [Doc re-read](04-doc-re-read.md) — after 01, 02
 
 ### Wave 3
-- [ ] [Marketplace version bump](03-marketplace-version-bump.md) — after 04, so the bump is the series' last marketplace commit
+- [x] [Marketplace version bump](03-marketplace-version-bump.md) — after 04, so the bump is the series' last marketplace commit
 
 ### Wave 4
 - [ ] [Final verification](05-final-verification.md) — after 03
@@ -132,11 +132,17 @@ Review base: e0a14b8a
 
 ### Groups
 - 01 · wigley-agents 817afc6 · diff read: LEVEL_SKILLS holds wigley:spike and spike, DENIAL matches the pinned text; unittest 14 OK · concerns: none beyond line numbers drifting; no other level-skill list in the gate
+- 02 · wigley-ai-gui f7e76347 · diff read: all five Produces present; typecheck clean; worker ran npm test, lint and filtered selftest (workflow-spike) green · concerns: none
+- 04 · none (no doc stale) · every named claim checked true against 817afc6 and f7e76347; check_pointers passes; trees clean · concerns: gui AGENTS.md says build, check and interview re-enter per ask; land and done also answer any time — loose, not false
+- 03 · wigley-ai-marketplace 3ea99a0 · diff read: both manifests 2.3.0; check_manifests and --against origin/main pass · concerns: origin/main moved to 2.2.0 mid-run; marketplace branch rebased onto origin/main (8a981dd docs-ahead) before the bump
 ### Contract changes
+- one new version in both manifests: 2.2.0 → 2.3.0 · why: origin/main reached 2.2.0 (f16f7a2) mid-run; the task's rule gives 2.3.0 · consumers: 05 · group 03
 ### Rulings
 - Rebased all three spike-level branches onto main before dispatch (gui e0a14b8a, wigley-agents 103e260, marketplace 40b959f); review bases for the other repos are those SHAs — main had moved, no conflicts · lead
 - plan-paused-needs-you landed on main before the run (folder gone after the rebase), so task 02's Open plan overlap step is moot: the copy of Small's layout files carries its change — lead
 - Marketplace origin/main is at 2.1.3 (not 2.1.2), so task 03's rule gives 2.2.0 — lead
 - Spike entries go first in each LEVEL_SKILLS group, matching the denial order — set order is not behaviour · group 01 · group 01
+- Small's table already had check→build and build→review rows, so only build→interview was added · group 02 · group 02
+- Self-test full-run why adds one clause naming the build-after-check loop · group 02 · group 02
 ### Review rounds
 ### Test gate
