@@ -86,7 +86,8 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
                  record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
                  readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
-                 `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
+                 `list-picker.ts`: the shared list picker's contract behind `services.picker`; `system-stats.ts`: the
+                 `SystemStats` service behind `services.systemStats` and its raw sample); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
@@ -181,6 +182,10 @@ src/main/        core main process; main.ts is its composition root
   alerts/        native notification behind Alerts, with a Mac variant (Dock bounce, badge), a Windows variant (taskbar
                  flash, overlay dot) and a plain one for Linux; the badge sums the open counts each source sets
   images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
+  system-stats/  the macOS and Windows adapters behind SystemStats, each reading the OS's own commands (`ps`, `vm_stat`,
+                 `ioreg`, `netstat`; CIM and performance counters on Windows) and Node's `os.cpus()` into one raw
+                 sample of cumulative counters, each parser a pure function over a command's text;
+                 `docs/features/system-stats/design.md`
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also resolves a profile's config folder, lists
                  and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and status
                  and `claude -p /usage` (the plan usage poll), and asks each session for `get_context_usage` and
@@ -383,6 +388,12 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `unity-pool hold|release` for the panel and `unity-pool claim` as chat's pool provider, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
+  system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a
+                 page shows the panel, folds two samples into the snapshot with rates, groups and 60 s history, joins
+                 `chat.session` pids with `sessions.rows` titles into one group per session's process tree, hands its
+                 self-test script), page/ (the right-bar panel through `api.areas.rightBar.contribute` with `focus` and
+                 `left`, hidden and shown by `Space v y`), layouts/ (the system-stats Layout contract and the built-in
+                 `default` layout); `docs/features/system-stats/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
@@ -798,7 +809,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
@@ -1020,7 +1031,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

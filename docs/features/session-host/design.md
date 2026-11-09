@@ -133,6 +133,12 @@ shape, so any host can end what any other left.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
 
+Each hosted process's OS pid reaches the app: `subscribe`'s reply carries `pid` (null when it has none), and the host
+sends the connection that spawned a process `{ type: 'spawned', id, pid }` once the OS reports it (both since
+protocol 3). `HostedProcessEvents.spawned(pid)` hands it to the spawner and `HostedProcess`
+exposes it; the harness adapter passes it up, and chat publishes it as `pid` on the session's `chat.session` entry,
+null while no process runs (`docs/features/system-stats/design.md` § Session processes).
+
 A pipe log line is `{ seq, dir, at, text }`: `seq` counts from 1 per process, `dir` is `in`, `out` or `err`, `at` is
 epoch ms, `text` the line without its newline. On attach the app subscribes first, reads the log, then takes live
 lines past the last `seq` it read.

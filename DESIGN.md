@@ -300,6 +300,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **StatusDot** (`statusDot`): a static dot for idle, running, success, warning, attention or error.
 - **Meter** (`meter`): a small bar filled to a percent in a status tone (`normal`, `warning`, `critical`); `setMeter`
   changes it.
+- **Sparkline** (`sparkline`): an SVG line of recent values from 0 to 100, in the tone of the Meter beside it; a fixed
+  height and no axes. A layout draws one with `kit.sparkline(parent, values, tone)`.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab. The `ui-tabs--scroll` strip scrolls
@@ -420,6 +422,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
   `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
+- **System stats:** the right bar holds the system stats panel while it is shown (`Space v y`): a section header,
+  then five meter rows (CPU, GPU, RAM, Network, Disk), each its label, a Meter, its value in tabular numerals and a
+  Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %, `critical` from 90 %); RAM's pressure and
+  swap sit on a `text-12` `fg-tertiary` line under its row. The process list follows: one row per group or process,
+  its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of them; the keyboard cursor's row takes
+  `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show its processes under it. A process
+  with no GPU reading shows a dash in its GPU column.
 - **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
   (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token
   (`15%` of the frame's body), the tab under it dimmed by the `scrim`. It slides up on open and down on hide over
