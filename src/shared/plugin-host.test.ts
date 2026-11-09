@@ -550,18 +550,178 @@ describe('startPlugins', () => {
     expect([...host.started.keys()]).toEqual(['a', 'b', 'c']);
   });
 
-  it('restart rejects and starts nothing when its stop rejects', async () => {
-    const host = startHooked([part('a'), part('b', ['a'])], (id) => ({
-      dispose: () => {
-        if (id === 'b') {
-          throw new Error('b dispose failed');
-        }
+  // A later `start(['b'])` brings `b` back only while the host holds it.
+  it.each([
+    {
+      name: 'restart',
+      run: (host: PluginHost<unknown>) => host.restart('b'),
+      heldAfter: true,
+    },
+    {
+      name: 'remove',
+      run: (host: PluginHost<unknown>) => host.remove('b'),
+      heldAfter: false,
+    },
+  ])(
+    '$name rejects and starts nothing when its stop rejects',
+    async ({ run, heldAfter }) => {
+      const host = startHooked([part('a'), part('b', ['a'])], (id) => ({
+        dispose: () => {
+          if (id === 'b') {
+            throw new Error('b dispose failed');
+          }
+        },
+      }));
+
+      await expect(run(host)).rejects.toThrow('b dispose failed');
+
+      expect(host.started.has('b')).toBe(false);
+      host.start(['b']);
+      expect(host.started.has('b')).toBe(heldAfter);
+    },
+  );
+
+  it('add holds a part that a later start brings up', () => {
+    const recorded: string[] = [];
+    const host = startHooked([part('a')], recordingHooks(recorded));
+    recorded.length = 0;
+
+    host.add(part('c', ['a']));
+    expect(recorded).toEqual([]);
+    host.start(['c']);
+
+    expect(recorded).toEqual(['start c', 'ready c']);
+    expect([...host.started.keys()]).toEqual(['a', 'c']);
+  });
+
+  // Each host is `a` and `b` (on `a`), started; the cycle row adds `x`,
+  // disabled, depending on `c`, with `c`'s manifest known.
+  it.each([
+    {
+      name: 'an id the host holds',
+      disabledX: false,
+      run: (host: PluginHost<unknown, TestPart>) => host.add(part('a')),
+      error: 'Two plugins have the id "a"',
+    },
+    {
+      name: 'a dependency not known',
+      disabledX: false,
+      run: (host: PluginHost<unknown, TestPart>) =>
+        host.add(part('c', ['zzz'])),
+      error: 'depends on plugins not in the list: zzz',
+    },
+    {
+      name: 'a cycle through a disabled part',
+      disabledX: true,
+      run: (host: PluginHost<unknown, TestPart>) => host.add(part('c', ['x'])),
+      error: 'cycle',
+    },
+    {
+      name: 'stopAll began',
+      disabledX: false,
+      run: (host: PluginHost<unknown, TestPart>) => {
+        void host.stopAll();
+        host.add(part('c'));
       },
-    }));
+      error: 'Plugin host is stopping',
+    },
+  ])('add refuses $name, changing nothing', ({ disabledX, run, error }) => {
+    const log: string[] = [];
+    const parts = [part('a'), part('b', ['a'])];
+    if (disabledX) {
+      parts.push(part('x', ['c']));
+    }
+    const host = startPlugins(
+      parts,
+      'main',
+      (started, context) => {
+        const { id } = started.manifest;
+        context.registrations.track({ dispose: () => log.push(`regs ${id}`) });
+        return {
+          dispose: async () => {
+            await Promise.resolve();
+            log.push(`dispose ${id}`);
+          },
+        };
+      },
+      disabledX
+        ? [...parts.map((each) => each.manifest), part('c').manifest]
+        : undefined,
+      disabledX ? ['x'] : [],
+    );
 
-    await expect(host.restart('b')).rejects.toThrow('b dispose failed');
+    expect(() => run(host)).toThrow(error);
 
-    expect(host.started.has('b')).toBe(false);
+    expect([...host.started.keys()]).toEqual(['a', 'b']);
+    expect(log).toEqual([]);
+  });
+
+  it.each([
+    { remove: 'a', stopped: ['b', 'a'] },
+    { remove: 'zzz', stopped: [] },
+  ])(
+    'remove $remove stops the part with its dependents and forgets it',
+    async ({ remove, stopped }) => {
+      const log: string[] = [];
+      const host = startLogging([part('a'), part('b', ['a'])], log);
+
+      await expect(host.remove(remove)).resolves.toEqual(stopped);
+
+      if (remove === 'a') {
+        host.start(['a']);
+        expect(host.started.size).toBe(0);
+        expect(() => host.start(['b'])).toThrow(
+          'Plugin "b" depends on plugins not in the list: a',
+        );
+        expect(host.started.size).toBe(0);
+      }
+    },
+  );
+
+  it('start checks only the parts it would start', () => {
+    const recorded: string[] = [];
+    const b = part('b', ['p']);
+    const c = part('c', ['p']);
+    const p = part('p').manifest;
+    let known = [b.manifest, c.manifest, p];
+    const host = startPlugins(
+      [b, c],
+      'main',
+      (started) => {
+        recorded.push(started.manifest.id);
+        return {};
+      },
+      () => known,
+      ['c'],
+    );
+    known = [b.manifest, c.manifest];
+
+    expect(() => host.start(['b'])).not.toThrow();
+    expect(() => host.start(['c'])).toThrow(
+      'Plugin "c" depends on plugins not in the list: p',
+    );
+
+    expect(recorded).toEqual(['b']);
+    expect([...host.started.keys()]).toEqual(['b']);
+  });
+
+  it('known as a function is read at each check', () => {
+    let known = [part('a').manifest];
+    const host = startPlugins(
+      [part('a')],
+      'main',
+      () => ({}),
+      () => known,
+    );
+
+    expect(() => host.add(part('b', ['p']))).toThrow(
+      'depends on plugins not in the list: p',
+    );
+    known = [...known, part('p').manifest];
+    host.add(part('b', ['p']));
+    host.start(['b']);
+
+    expect([...host.started.keys()]).toEqual(['a', 'b']);
   });
 
   // `y` depends on `x` and its start number `throwingStart` throws, so `z`,
