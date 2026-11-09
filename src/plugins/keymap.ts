@@ -290,6 +290,7 @@ export const defaultKeymap = {
       command: 'backlog.toggleAgentReadyOnly',
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
+    { keys: '<Leader>vy', scope: 'any', command: 'system-stats.togglePanel' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -997,6 +998,48 @@ export const defaultKeymap = {
       keys: '<CR>',
       scope: 'unity-pool.panel',
       command: 'unity-pool.showHolder',
+    },
+
+    // ── System stats ───────────────────────────────────────────────────────
+    {
+      keys: 'j',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorDown',
+    },
+    {
+      keys: 'k',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorUp',
+    },
+    {
+      keys: 'gg',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorTop',
+    },
+    {
+      keys: 'G',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cursorBottom',
+    },
+    {
+      keys: 's',
+      scope: 'system-stats.panel',
+      command: 'system-stats.cycleSort',
+    },
+    {
+      keys: '<CR>',
+      scope: 'system-stats.panel',
+      command: 'system-stats.openGroup',
+    },
+    {
+      keys: 'l',
+      scope: 'system-stats.panel',
+      command: 'system-stats.openGroup',
+    },
+    {
+      keys: 'h',
+      scope: 'system-stats.panel',
+      command: 'system-stats.closeGroup',
     },
 
     // ── Gallery ────────────────────────────────────────────────────────────

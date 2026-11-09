@@ -18,6 +18,7 @@ import { primerPagePart } from './primer/page/start';
 import { sessionStashPagePart } from './session-stash/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
+import { systemStatsPagePart } from './system-stats/page/start';
 import { unityPoolPagePart } from './unity-pool/page/start';
 import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
@@ -46,6 +47,7 @@ export const pageParts: readonly PagePart[] = [
   workflowSmallPagePart,
   workflowMediumPagePart,
   unityPoolPagePart,
+  systemStatsPagePart,
   autoRetroPagePart,
   agentStripPagePart,
   agentSkillsPagePart,

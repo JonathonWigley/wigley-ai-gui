@@ -1,6 +1,6 @@
 # 06 — system-stats page, layout, keys, self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 04, 05
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 05 — system-stats main: sampling, snapshot, slot
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 03
 Plan: [plan.md](plan.md)
@@ -358,3 +358,5 @@ the layer rules); the Vitest files above pass. The self-test and drive checks wa
 Commit: one commit for the group: `system-stats main: sample while shown, fold samples into the snapshot slot`.
 
 ## Proof
+
+Commit 01d1e39b · proof: diff read: contract.ts word for word, slot and channel present, manifests/main list the plugin, FAKE_SESSION_PID gone; worker's typecheck and lint clean, 140 plugin tests pass · concerns: gallery-parts.test.ts fails: its fake document lacks createElementNS under task 04's sparkline (fix dispatched); harness pushSettings added beyond the list

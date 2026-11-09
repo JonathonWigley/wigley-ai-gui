@@ -13,6 +13,7 @@ import { systemStatsManifest } from '../manifest';
 import { addDriveActions } from './drive-actions';
 import { sessionProcesses } from './grouping';
 import { createStatsPoller, type StatsPoller } from './poller';
+import { systemStatsSelfTestScript } from './selftest-script';
 import {
   buildSnapshot,
   emptyHistory,
@@ -27,7 +28,8 @@ type SystemStatsApi = MainApi<typeof systemStatsManifest, SystemStatsChannel>;
 // Registers the layouts and writes `system-stats.snapshot`: null at start and at each show, then a snapshot from
 // each pair of good samples while the page reports the panel shown, the first sample of a show giving only the
 // earlier reading. A rejected sample keeps the last snapshot with its error set, logged once per distinct text. A
-// seed, from a drive run, writes a fixed snapshot and stops sampling for the run.
+// seed, from a drive run or the self-test's script, writes a fixed snapshot and stops sampling for the run. Hands the
+// self-test the panel script.
 export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
   manifest: systemStatsManifest,
   start(api: SystemStatsApi) {
@@ -124,12 +126,13 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       services.log(`seeded ${variant}`);
       return fixture;
     };
+    const current = () => snapshot.get() ?? null;
     if (api.drive !== null) {
-      addDriveActions(api.drive, {
-        snapshot: () => snapshot.get() ?? null,
-        seed,
-      });
+      addDriveActions(api.drive, { snapshot: current, seed });
     }
+    services.selfTest?.run(
+      systemStatsSelfTestScript({ seed, snapshot: current }),
+    );
 
     return { commands: {}, dispose: () => poller?.dispose() };
   },
