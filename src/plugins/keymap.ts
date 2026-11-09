@@ -242,6 +242,8 @@ export const defaultKeymap = {
         'backlog.detail',
         'settings.sections',
         'settings.rows',
+        'settings.leaderGroups',
+        'settings.leaderItems',
         'gallery.gallery',
       ] as const
     ).map((scope) => ({
@@ -675,12 +677,21 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'docs.confirm', command: 'docs.confirmNo' },
 
     // ── Settings ───────────────────────────────────────────────────────────
-    ...(['settings.sections', 'settings.rows'] as const).flatMap((scope) => [
+    ...(
+      [
+        'settings.sections',
+        'settings.rows',
+        'settings.leaderGroups',
+        'settings.leaderItems',
+      ] as const
+    ).flatMap((scope) => [
       { keys: 'j', scope, command: 'settings.down' as const },
       { keys: 'k', scope, command: 'settings.up' as const },
       { keys: 'gg', scope, command: 'settings.top' as const },
       { keys: 'G', scope, command: 'settings.bottom' as const },
       { keys: '<CR>', scope, command: 'settings.open' as const },
+    ]),
+    ...(['settings.sections', 'settings.rows'] as const).flatMap((scope) => [
       { keys: '/', scope, command: 'settings.filter' as const },
       { keys: '<Esc>', scope, command: 'settings.clearFilter' as const },
     ]),
@@ -690,6 +701,30 @@ export const defaultKeymap = {
     { keys: 'd', scope: 'settings.rows', command: 'settings.removeBind' },
     { keys: 'f', scope: 'settings.rows', command: 'settings.cycleKeyFilter' },
     { keys: '?', scope: 'settings.rows', command: 'settings.findByKey' },
+    { keys: 'a', scope: 'settings.leaderGroups', command: 'settings.addBind' },
+    {
+      keys: 'd',
+      scope: 'settings.leaderGroups',
+      command: 'settings.removeBind',
+    },
+    {
+      keys: 'R',
+      scope: 'settings.leaderGroups',
+      command: 'settings.renameGroup',
+    },
+    { keys: 'a', scope: 'settings.leaderItems', command: 'settings.addBind' },
+    { keys: 'c', scope: 'settings.leaderItems', command: 'settings.changeKey' },
+    {
+      keys: 'd',
+      scope: 'settings.leaderItems',
+      command: 'settings.removeBind',
+    },
+    {
+      keys: 'm',
+      scope: 'settings.leaderItems',
+      command: 'settings.moveToGroup',
+    },
+    { keys: 'r', scope: 'settings.leaderItems', command: 'settings.reset' },
     {
       keys: 'l',
       scope: 'settings.sections',

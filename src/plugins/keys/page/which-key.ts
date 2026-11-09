@@ -8,6 +8,7 @@ import {
   formatKeys,
   formatVimToken,
   joinKeys,
+  unnamedGroupName,
   vimTokens,
 } from '../../../shared/key-hints';
 
@@ -179,14 +180,11 @@ function entry(
   if (groupName !== undefined) {
     return { keys, label: groupName, kind: 'prefix' };
   }
-  const groups = new Set<string>();
-  for (const bind of binds) {
-    const group = command(bind.command)?.group;
-    if (group !== undefined) {
-      groups.add(group);
-    }
-  }
-  return { keys, label: [...groups].join(', '), kind: 'prefix' };
+  return {
+    keys,
+    label: unnamedGroupName(binds.map((bind) => command(bind.command)?.group)),
+    kind: 'prefix',
+  };
 }
 
 function mergeNeighbours(entries: WhichKeyEntry[]): WhichKeyEntry[] {

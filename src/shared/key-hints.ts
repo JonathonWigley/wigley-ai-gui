@@ -380,6 +380,20 @@ export function mergeHints(bound: BoundKeys[], label: CommandLabel): KeyHint[] {
   }));
 }
 
+// The name of a leader prefix no `groups` entry names: the distinct defined
+// manifest groups of its commands, in first-seen order, joined by `, `.
+export function unnamedGroupName(
+  commandGroups: Iterable<string | undefined>,
+): string {
+  const groups = new Set<string>();
+  for (const group of commandGroups) {
+    if (group !== undefined) {
+      groups.add(group);
+    }
+  }
+  return [...groups].join(', ');
+}
+
 // Three or more keys ending in consecutive digits after one prefix read as a
 // range, e.g. `1–9` or `Space 1–9`.
 export function joinKeys(keys: string[]): string {

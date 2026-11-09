@@ -57,6 +57,7 @@ const SCHEMA: UserConfigSchema = {
   scopes: [],
   defaultBindLayers: [],
   defaultAccelerators: { app: [], global: [], intercept: [] },
+  defaultGroups: {},
   defaultLeader: '<Space>',
 };
 
@@ -605,7 +606,8 @@ describe('createSettingsView', () => {
       isFilterShown: true,
     },
     {
-      // Sections p, q, Plugins and Keybindings: index 3 is the last.
+      // Sections p, q, Plugins, Keybindings and Leader menu: index 4 is the
+      // last.
       name: 'a sections cursor past the last section',
       saved: {
         sectionsCursor: 9,
@@ -614,7 +616,7 @@ describe('createSettingsView', () => {
         filter: '',
       },
       opened: 'section q',
-      sectionsCursor: 3,
+      sectionsCursor: 4,
       cursorKey: 'q.size',
       isFilterShown: false,
     },
@@ -827,7 +829,13 @@ describe('createSettingsView', () => {
     const sectionTitles = findAll(asFake(view.sideBar), 'ui-row-label').map(
       (label) => label.textContent,
     );
-    expect(sectionTitles).toEqual(['Core', 'P', 'Plugins', 'Keybindings']);
+    expect(sectionTitles).toEqual([
+      'Core',
+      'P',
+      'Plugins',
+      'Keybindings',
+      'Leader menu',
+    ]);
     expect(findAll(sheet, 'mine-row').map((row) => row.textContent)).toEqual([
       'keySequenceTimeoutMs',
     ]);
@@ -939,6 +947,63 @@ describe('createSettingsView', () => {
     view.reread();
     await settle();
 
+    expect(capture.isArmed()).toBe(true);
+  });
+
+  // SCHEMA's sections with a b group holding a, and c at the top level:
+  // p, Plugins, Keybindings, then the Leader menu.
+  const LEADER_INDEX = 3;
+  const LEADER_SCHEMA: UserConfigSchema = {
+    ...SCHEMA,
+    commands: {
+      'p.a': { id: 'p.a', plugin: 'p', label: 'a', group: 'g', runsIn: 'page' },
+      'p.c': { id: 'p.c', plugin: 'p', label: 'c', group: 'g', runsIn: 'page' },
+    },
+    defaultBindLayers: [
+      [
+        { keys: '<Leader>ba', scope: 'any', command: 'p.a' },
+        { keys: '<Leader>c', scope: 'any', command: 'p.c' },
+      ],
+    ],
+  };
+
+  // A view open on the Leader menu with its groups pane focused.
+  async function leaderView() {
+    const shown = await shownView({ schema: LEADER_SCHEMA });
+    shown.view.openSectionAt(LEADER_INDEX);
+    shown.move('right');
+    return shown;
+  }
+
+  it('leaderMenu_Routing_CommandsReachTheView', async () => {
+    const { view, logs, sheet } = await leaderView();
+    const filterShown = () => !only(sheet, 'settings-filter').hidden;
+
+    view.commands.filter();
+    const isShownFromRows = filterShown();
+    view.commands.down();
+    view.commands.renameGroup();
+    view.commands.boxCancel();
+    view.focusSideBar();
+    view.commands.filter();
+
+    expect(isShownFromRows).toBe(false);
+    expect(filterShown()).toBe(false);
+    expect(logs).toContain('leader groups focused');
+    expect(logs).toContain('cursor group <Leader>b');
+    expect(logs).toContain('box open group <Leader>b');
+  });
+
+  it('leaderMenu_Recording_SurvivesRedraw', async () => {
+    const { view, capture, logs } = await leaderView();
+    view.commands.down();
+    view.commands.open();
+    view.commands.changeKey();
+
+    view.reread();
+    await settle();
+
+    expect(logs).toContain('recording item any <Leader>ba');
     expect(capture.isArmed()).toBe(true);
   });
 

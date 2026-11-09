@@ -55,6 +55,9 @@ import type {
   GroupHeaderInput,
   KeyFiltersInput,
   KeyRowInput,
+  LeaderAddRowInput,
+  LeaderGroupRowInput,
+  LeaderItemRowInput,
   LeaderRowInput,
   PluginRowInput,
   ProblemInput,
@@ -72,13 +75,20 @@ import { KEY_FILTERS } from './keymap-rows';
 import { keymapSection, type KeysViewState } from './keymap-view';
 import {
   buildEntry,
+  buildLeaderPanes,
   buildPickerRow,
   buildRow,
   buildRowsPane,
   buildSectionsPane,
   type BuiltRow,
   type BuiltRowsPane,
+  type SettingsKitScope,
 } from './layout/settings-kit';
+import {
+  createLeaderMenuView,
+  type LeaderMenuCommand,
+  type LeaderScope,
+} from './leader-menu-view';
 import { pluginSection } from './plugin-rows-view';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
 import { type PromptAction, rowPromptActions } from './row-prompt';
@@ -97,6 +107,7 @@ const PLUGINS_SECTION = { id: 'plugins', title: 'Plugins' };
 // Its id stays `keymap`: the keys plugin's settings already hold a section
 // `keys`.
 export const KEYS_SECTION = { id: 'keymap', title: 'Keybindings' };
+export const LEADER_SECTION = { id: 'leader', title: 'Leader menu' };
 
 // The key of `?`'s recording, which names no row: every command id holds a
 // dot.
@@ -131,6 +142,9 @@ interface RowInputs {
   keyRow: KeyRowInput;
   leaderRow: LeaderRowInput;
   advancedRow: AdvancedRowInput;
+  leaderGroupRow: LeaderGroupRowInput;
+  leaderItemRow: LeaderItemRowInput;
+  leaderAddRow: LeaderAddRowInput;
 }
 
 // The layout part `P` that draws a row, and its input.
@@ -199,7 +213,8 @@ export interface RowContext {
   boxProblem(box: RowBox, problem: string): void;
   openPicker<T>(request: PickRequest<T>): void;
   commitSettings(layer: Record<string, unknown>, via: CommitVia): void;
-  commitKeymap(layer: UserKeymap, via: CommitVia): void;
+  // `written` runs once the write lands, before the rows redraw with it.
+  commitKeymap(layer: UserKeymap, via: CommitVia, written?: () => void): void;
   toast(text: string, tone: ToastTone): void;
   // Every built-in plugin as the plugin switch last wrote it.
   plugins(): readonly PluginStatus[];
@@ -227,7 +242,7 @@ export interface SettingsViewDeps {
   state: LayoutState;
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;
-  setScope(scope: 'sections' | 'rows'): void;
+  setScope(scope: 'sections' | 'rows' | LeaderScope): void;
   // Hands over the target the focus keys move between the sections and the
   // rows; the view calls it after each `setScope`, since a change of the set
   // scope drops it.
@@ -242,7 +257,7 @@ export interface SettingsViewDeps {
   anchor(
     element: HTMLElement,
     command: SettingsCommand,
-    scope: 'sections' | 'rows',
+    scope: 'sections' | 'rows' | LeaderScope,
     label?: boolean | string,
   ): Disposable;
   // The open section's title, for the title bar.
@@ -275,6 +290,9 @@ export type SettingsCommand =
   | 'clearFilter'
   | 'cycleKeyFilter'
   | 'findByKey'
+  | 'renameGroup'
+  | 'changeKey'
+  | 'moveToGroup'
   | 'boxAccept'
   | 'boxCancel'
   | ListPickerCommand;
@@ -295,8 +313,9 @@ export type SettingsCommand =
 // and when a redraw leaves its row out. In the Keybindings section `f` cycles
 // the filter chips (`key filter <id>`) and `?` records a key to find by
 // (`find by key <keys>`), which Esc clears (`find by key cleared`) before the
-// text filter; opening a section resets both. Each change to the place
-// reaches `placeChanged`.
+// text filter; opening a section resets both. In the Leader menu the
+// leader menu view draws the rows and takes the row commands, and `/` opens no
+// filter. Each change to the place reaches `placeChanged`.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -378,13 +397,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     { [P in keyof RowInputs]: RowDraw<RowInputs[P]> }
   > = parts;
 
-  // Draws a row's `part` with its `input` into `parent`.
+  // Draws a row's `part` with its `input` into `parent`, its kit in `scope`.
   const drawSettingsRow = <P extends keyof RowInputs>(
     { part, input }: RowPartOf<P>,
     parent: HTMLElement,
+    scope: SettingsKitScope = 'rows',
   ): DrawnPart<BuiltRow> =>
     rowParts.draw(part, parent, (draw, rowParent, rollback) =>
-      buildRow(draw, rowParent, input, services, rollback, 'rows', part),
+      buildRow(draw, rowParent, input, services, rollback, scope, part),
     );
 
   const sections = createSectionsView({
@@ -510,10 +530,17 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     ...(schema?.sections ?? []).map(({ id, title }) => ({ id, title })),
     PLUGINS_SECTION,
     KEYS_SECTION,
+    LEADER_SECTION,
   ];
 
+  const isLeaderOpen = () => openSectionId === LEADER_SECTION.id;
+
   const sectionFile = (): ConfigFile =>
-    openSectionId === KEYS_SECTION.id ? 'keymap' : 'settings';
+    openSectionId === KEYS_SECTION.id || isLeaderOpen() ? 'keymap' : 'settings';
+
+  // The drawn row `key` names: the Leader menu's rows live in its view.
+  const drawnRowOf = (key: string): BuiltRow | undefined =>
+    isLeaderOpen() ? leaderMenu.drawnRow(key) : drawnRows.get(key);
 
   const isBroken = (file: ConfigFile) => latest?.[file].state === 'broken';
 
@@ -624,6 +651,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       const drawn = parts.draw('problem', problem, entryBuild(input));
       entryDisposes.push(drawn.dispose);
     }
+    if (isLeaderOpen()) {
+      leaderMenu.draw(rowList);
+      markCursor();
+      return;
+    }
     for (const entry of drawing.entries) {
       if (entry.type === 'row') {
         drawRowEntry(entry.row, rowList);
@@ -652,7 +684,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const isRowGone =
       recording !== null &&
       recording.key !== FIND_KEY &&
-      !rows.some((row) => row.key === recording.key);
+      drawnRowOf(recording.key) === undefined;
     if (isRowGone) {
       recorder.cancel();
     }
@@ -681,10 +713,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     held.box.keepFocusAcross(() => {
       drawAll();
-      const drawn = drawnRows.get(held.box.key);
-      drawn?.box.append(held.box.element);
+      drawnRowOf(held.box.key)?.box.append(held.box.element);
     });
-    const isRowGone = !rows.some((row) => row.key === held.box.key);
+    const isRowGone = drawnRowOf(held.box.key) === undefined;
     if (isRowGone || isBroken(held.file)) {
       closeBox(held.box);
     }
@@ -756,15 +787,20 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   // Each focus change closes an open filter first: `setScope` leaves the
   // filter's pushed scope in force.
+  // The Leader menu's view takes the keys in place of the rows.
   const focusRows = () => {
     if (filterScope !== null) {
       logFilter();
       closeFilter();
     }
     setFocus('rows');
-    deps.setScope('rows');
-    deps.setFocusTarget(focusTarget);
-    rowsSheet.focus();
+    if (isLeaderOpen()) {
+      leaderMenu.focus();
+    } else {
+      deps.setScope('rows');
+      deps.setFocusTarget(focusTarget);
+      rowsSheet.focus();
+    }
     markCursor();
   };
 
@@ -782,6 +818,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       closeFilter();
     }
     setFocus('sections');
+    if (isLeaderOpen()) {
+      leaderMenu.blur();
+    }
     deps.setScope('sections');
     deps.setFocusTarget(focusTarget);
     sections.element.focus();
@@ -799,6 +838,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     if (openBox !== null) {
       openBox.box.focus();
+      return;
+    }
+    if (focus === 'rows' && isLeaderOpen()) {
+      leaderMenu.focus();
       return;
     }
     (focus === 'rows' ? rowsSheet : sections.element).focus();
@@ -831,8 +874,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     if (openBox !== null || latest === null) {
       return;
     }
-    const row = rows.find((each) => each.key === request.key);
-    if (row === undefined) {
+    const drawn = drawnRowOf(request.key);
+    if (drawn === undefined) {
       return;
     }
     const box = createRowBox(request, latest[request.file].text, {
@@ -843,8 +886,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     scope.onBaseChanged(() => closeBox(box));
     openBox = { box, file: request.file, scope };
     markCursor();
-    const drawn = drawnRows.get(row.key);
-    (drawn?.box ?? drawn?.element)?.append(box.element);
+    drawn.box.append(box.element);
     box.focus();
     log(`box open ${request.key}`);
   };
@@ -860,6 +902,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     write: (expectedText: string | null) => Promise<ConfigWriteResult>,
     isUnchanged: boolean,
     via: CommitVia,
+    written?: () => void,
   ) => {
     const box = via !== null && 'box' in via ? via.box : null;
     if (isUnchanged) {
@@ -881,6 +924,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     switch (result.type) {
       case 'written':
         log(`wrote ${name}`);
+        written?.();
         if (box !== null) {
           closeBox(box);
         }
@@ -992,13 +1036,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         ),
       );
     },
-    commitKeymap(layer, via) {
+    commitKeymap(layer, via, written) {
       commitQuietly(
         commit(
           'keymap',
           (expectedText) => channel.invoke('writeKeymap', layer, expectedText),
           isSameJson(keymapLayer ?? {}, layer),
           via,
+          written,
         ),
       );
     },
@@ -1018,12 +1063,38 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     recording: () => recorder.current(),
   };
 
+  const leaderMenu = createLeaderMenuView({
+    context,
+    drawPanes(parent, input) {
+      const drawn = parts.draw('leaderPanes', parent, (panes, at, rollback) =>
+        buildLeaderPanes(panes, at, input, services, rollback),
+      );
+      entryDisposes.push(drawn.dispose);
+      return drawn.built;
+    },
+    drawRow(row, parent, scope) {
+      const drawn = drawSettingsRow(row, parent, scope);
+      entryDisposes.push(drawn.dispose);
+      return drawn.built;
+    },
+    anchor: (element, command, scope, label) =>
+      deps.anchor(element, command, scope, label),
+    setScope: deps.setScope,
+    setFocusTarget: deps.setFocusTarget,
+    redraw: () => draw(),
+    log,
+  });
+
   // The open section's drawing: the Plugins section's plugin rows, a schema
   // section's setting rows, or the Keybindings section's rows, which also
-  // draw for a section id the schema does not hold yet.
+  // draw for a section id the schema does not hold yet. The Leader menu's
+  // rows are its view's, so its drawing holds none.
   const sectionDrawing = (held: UserConfigSchema): SectionDrawing => {
     if (openSectionId === PLUGINS_SECTION.id) {
       return pluginSection(context, query);
+    }
+    if (isLeaderOpen()) {
+      return { entries: [], rows: [] };
     }
     const section =
       openSectionId === KEYS_SECTION.id
@@ -1053,6 +1124,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     filterBox.value = filter;
     filterFrame.hidden = filter.trim() === '';
     openSectionTitle = section.title;
+    if (isLeaderOpen()) {
+      leaderMenu.reset();
+    }
     log(`section ${section.id}`);
     deps.sectionShown(section.title);
     cursorKey = openCursorKey;
@@ -1147,8 +1221,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     markCursor();
   };
 
+  // The Leader menu filters nothing, so `/` opens no box there.
   const openFilter = () => {
-    if (filterScope !== null || openBox !== null) {
+    if (filterScope !== null || openBox !== null || isLeaderOpen()) {
       return;
     }
     const scope = deps.pushScope('box');
@@ -1204,33 +1279,74 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     draw();
   };
 
+  // Whether the Leader menu's view takes the row commands: it is open and
+  // the rows hold the keys.
+  const isLeaderFocused = () => isLeaderOpen() && focus === 'rows';
+
+  // Runs the Leader menu's `command` with no box, picker or recording over
+  // it; an edit refuses while keymap.json is broken.
+  const runLeader = (command: LeaderMenuCommand) => {
+    const isBusy =
+      openBox !== null || picker.isOpen() || recorder.current() !== null;
+    const isMove = ['down', 'up', 'top', 'bottom'].includes(command);
+    if (isBusy || (!isMove && isBroken('keymap'))) {
+      return;
+    }
+    leaderMenu.commands[command]();
+  };
+
+  // `command` on the Leader menu while it holds the keys, else `elsewhere`.
+  const leaderOr =
+    (command: LeaderMenuCommand, elsewhere: () => void) => () => {
+      if (isLeaderFocused()) {
+        runLeader(command);
+        return;
+      }
+      elsewhere();
+    };
+
+  // `command` on the Leader menu while it holds the keys; nothing elsewhere.
+  const notOutsideLeader = (command: LeaderMenuCommand) =>
+    leaderOr(command, () => undefined);
+
+  // Does nothing while the Leader menu holds the keys.
+  const notInLeader = (run: () => void) => () => {
+    if (!isLeaderFocused()) {
+      run();
+    }
+  };
+
   filterBox.addEventListener('input', () => {
     query = filterBox.value;
     draw();
   });
 
   const commands: Record<SettingsCommand, () => void> = {
-    down: () =>
+    down: leaderOr('down', () =>
       move(
         () => sectionsCursor + 1,
         (index) => index + 1,
       ),
-    up: () =>
+    ),
+    up: leaderOr('up', () =>
       move(
         () => sectionsCursor - 1,
         (index) => index - 1,
       ),
-    top: () =>
+    ),
+    top: leaderOr('top', () =>
       move(
         () => 0,
         () => 0,
       ),
-    bottom: () =>
+    ),
+    bottom: leaderOr('bottom', () =>
       move(
         (count) => count - 1,
         (_index, count) => count - 1,
       ),
-    open() {
+    ),
+    open: leaderOr('open', () => {
       if (focus === 'sections') {
         openSection(sectionsCursor);
         deps.sectionPicked();
@@ -1238,16 +1354,19 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         return;
       }
       runQuietly('open', true)();
-    },
+    }),
     openKeepingFocus() {
       if (focus === 'sections') {
         openSection(sectionsCursor);
       }
     },
-    edit: runQuietly('edit', true),
-    reset: runQuietly('reset', false),
-    addBind: runQuietly('addBind', true),
-    removeBind: runQuietly('removeBind', true),
+    edit: notInLeader(runQuietly('edit', true)),
+    reset: leaderOr('reset', runQuietly('reset', false)),
+    addBind: leaderOr('addBind', runQuietly('addBind', true)),
+    removeBind: leaderOr('removeBind', runQuietly('removeBind', true)),
+    renameGroup: notOutsideLeader('renameGroup'),
+    changeKey: notOutsideLeader('changeKey'),
+    moveToGroup: notOutsideLeader('moveToGroup'),
     filter: openFilter,
     cycleKeyFilter,
     findByKey,

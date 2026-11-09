@@ -7,6 +7,7 @@ import type {
 } from '../../../contracts/keymap';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
+import { normalVimKeys } from '../../../shared/key-hints';
 import {
   isJsonObject,
   isSameJson,
@@ -206,6 +207,26 @@ export function withLeader(
     result.leader = leader;
   }
   return tidied(result);
+}
+
+// `layer` with the `groups` name of `prefix` set to `name`, or removed for
+// null; an entry spelling the same keys another way is replaced. An emptied
+// `groups` drops.
+export function withGroupName(
+  layer: UserKeymap | null,
+  prefix: string,
+  name: string | null,
+): UserKeymap {
+  const normal = normalVimKeys(prefix);
+  const groups = Object.fromEntries(
+    Object.entries(layer?.groups ?? {}).filter(
+      ([keys]) => normalVimKeys(keys) !== normal,
+    ),
+  );
+  if (name !== null) {
+    groups[prefix] = name;
+  }
+  return tidied({ ...layer, groups });
 }
 
 // The advanced box's text: the layer's remaps, app, intercept and global binds and its accelerator unbind entries, as 2-space JSON.

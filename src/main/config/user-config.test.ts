@@ -737,6 +737,59 @@ describe('createUserConfig', () => {
     ]);
   });
 
+  it('schema_DefaultGroups_LaterLayerNameWins', async () => {
+    const namingPlugin = definePlugin({
+      id: 'naming',
+      label: 'naming',
+      description: 'A test plugin.',
+      dependsOn: { main: [], page: [] },
+      reads: { main: [], page: [] },
+      commands: {},
+      scopes: {},
+      keys: { groups: { '<Leader>x': 'plugin x' } },
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    });
+    const deps = {
+      ...CHECK_DEPS,
+      defaultKeymap: {
+        ...DEFAULT_KEYMAP,
+        groups: { '<Leader>x': 'core x', '<Leader>y': 'core y' },
+      },
+      manifests: [namingPlugin],
+    };
+    const files = createMemoryFiles();
+    const store = await loadConfigStore({
+      ...deps,
+      files,
+      folder: FOLDER,
+      platform: fakePlatform('macos'),
+      homeDir: HOME,
+      appInstance: {
+        id: 'wigley-ai-gui-dev',
+        displayName: 'Auri Dev',
+        isDev: true,
+      },
+      runMode: 'live',
+      log: () => undefined,
+    });
+
+    const schema = createUserConfig({
+      ...deps,
+      files,
+      folder: FOLDER,
+      store,
+      settingInfo: {},
+      applied: NONE_APPLIED,
+    }).schema();
+
+    expect(schema.defaultGroups).toEqual({
+      '<Leader>x': 'plugin x',
+      '<Leader>y': 'core y',
+    });
+  });
+
   it('throws on a plugin setting with no declaration', async () => {
     const store = await loadConfigStore({
       ...CHECK_DEPS,

@@ -34,6 +34,7 @@ function schema(
     scopes: [],
     defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app, global: [], intercept },
+    defaultGroups: {},
     defaultLeader: '<Space>',
   };
 }

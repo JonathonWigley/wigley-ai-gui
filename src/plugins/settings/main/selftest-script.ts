@@ -21,6 +21,7 @@ export interface SettingsSelfTestDeps {
 
 // Relative to the self-test's temp home, as `writeFile` takes it.
 const SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
+const KEYMAP_FILE = '.config/wigley-ai-gui/keymap.json';
 
 // A key no default binds, added to the help command and removed again.
 const ADDED_KEYS = '<Leader>zh';
@@ -45,12 +46,12 @@ const SIDE_BAR_STEPS: SelfTestStep[] = [
     why: "Option+h at the rows' left edge reaches the side bar through the mode's focusSideBar.",
   },
   { keys: ['<A-l>'], expect: '[settings] rows focused' },
-  { keys: ['<A-h>', 'G', 'l'], expect: '[settings] section keymap' },
+  { keys: ['<A-h>', 'G', 'k', 'l'], expect: '[settings] section keymap' },
   {
     keys: ['g', 'g', 'Enter'],
     expect: '[settings] section core',
     alsoExpect: [/^\[settings\] rows focused$/],
-    why: 'l kept focus in the sections, so G and gg moved the sections cursor; Enter opens Core and focuses its rows.',
+    why: 'l kept focus in the sections, so G, k and gg moved the sections cursor; Enter opens Core and focuses its rows.',
   },
   { keys: [' ', 'k', ','], expect: '[page] side bar hidden' },
   {
@@ -137,7 +138,7 @@ const THEME_PICKER_STEPS: SelfTestStep[] = [
 
 const KEYMAP_STEPS: SelfTestStep[] = [
   {
-    keys: ['Escape', '<A-h>', 'G', 'Enter'],
+    keys: ['Escape', '<A-h>', 'G', 'k', 'Enter'],
     expect: '[settings] section keymap',
     checksFit: true,
     screenshot: 'keymap',
@@ -214,6 +215,97 @@ const KEYMAP_STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[settings] find by key cleared' },
 ];
 
+const LEADER_GROUPS_STEPS: SelfTestStep[] = [
+  {
+    keys: ['<A-h>', 'G', 'Enter'],
+    expect: '[settings] section leader',
+    alsoExpect: [/^\[settings\] leader groups focused$/],
+    checksFit: true,
+    screenshot: 'leader-menu',
+  },
+  { keys: ['a'], expect: '[settings] recording group top' },
+  { keys: ['b'], expect: '[settings] record refused b: group' },
+  { keys: ['q'], expect: '[settings] box open group top' },
+  {
+    keys: [...'quick', 'Enter'],
+    expect: '[settings] wrote keymap.json',
+    alsoExpect: [/^\[settings\] cursor group <Leader>q$/],
+  },
+  { keys: ['R'], expect: '[settings] box open group <Leader>q' },
+  { keys: [...'quiet', 'Enter'], expect: '[settings] wrote keymap.json' },
+  {
+    keys: ['d'],
+    expect: '[settings] wrote keymap.json',
+    why: 'The empty group loses its only entry, leaving keymap.json empty.',
+  },
+  { keys: ['g', 'g', 'j'], expect: '[settings] cursor group <Leader>a' },
+  { keys: ['d'], expect: '[settings] group has items <Leader>a' },
+  { keys: ['j', 'R'], expect: '[settings] box open group <Leader>b' },
+  { keys: [...'sessions', 'Enter'], expect: '[settings] wrote keymap.json' },
+  {
+    keys: ['R', 'Backspace', 'Enter'],
+    expect: '[settings] wrote keymap.json',
+    why: 'An empty name removes the user entry, leaving keymap.json empty.',
+  },
+];
+
+const LEADER_ITEMS_STEPS: SelfTestStep[] = [
+  {
+    keys: ['Enter'],
+    expect: '[settings] leader items focused',
+    alsoExpect: [/^\[settings\] cursor item any <Leader>bd$/],
+  },
+  { keys: ['c'], expect: '[settings] recording item any <Leader>bd' },
+  {
+    keys: ['n'],
+    expect: '[settings] record refused n: taken',
+    screenshot: 'leader-key-taken',
+  },
+  {
+    keys: ['q'],
+    expect: '[config] applied a new config',
+    alsoExpect: [/^\[settings\] cursor item any <Leader>bq set$/],
+  },
+  { keys: ['r'], expect: '[config] applied a new config' },
+  { keys: ['g', 'g'], expect: '[settings] cursor item any <Leader>bd' },
+  { keys: ['m'], expect: '[settings] picker shown: Group' },
+  {
+    keys: ['Enter'],
+    expect: '[settings] recording item any <Leader>bd',
+    why: 'Top level is the first group listed.',
+  },
+  {
+    keys: ['q'],
+    expect: '[config] applied a new config',
+    alsoExpect: [/^\[settings\] cursor item any <Leader>q set$/],
+  },
+  {
+    keys: ['d'],
+    expect: '[config] applied a new config',
+    why: 'Clearing the moved user bind leaves the unbind of Space b d behind.',
+  },
+  {
+    writeFile: { path: KEYMAP_FILE, text: '{}' },
+    keys: [],
+    expect: '[settings] redrawn',
+    why: 'An outside write empties keymap.json again.',
+  },
+  { keys: ['a'], expect: '[settings] recording add <Leader>' },
+  { keys: ['q'], expect: '[settings] picker shown: Action' },
+  {
+    keys: ['Escape', 'G'],
+    expect: '[settings] cursor add <Leader>',
+    why: 'Esc closes the action picker writing nothing; G reaches the add row.',
+  },
+  { keys: ['<A-h>'], expect: '[settings] leader groups focused' },
+  { keys: ['<A-h>'], expect: '[settings] sections focused' },
+  {
+    keys: ['<A-l>'],
+    expect: '[settings] leader groups focused',
+    why: 'Alt+l from the side bar returns to the pane last focused.',
+  },
+];
+
 const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
   { keys: ['<A-h>', 'g', 'g', 'Enter'], expect: '[settings] section core' },
   {
@@ -222,10 +314,10 @@ const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
   },
 ];
 
-// Plugins sits just above Keybindings, the last section.
+// Plugins sits two above the last section, the Leader menu.
 const PLUGIN_SWITCH_STEPS: SelfTestStep[] = [
   {
-    keys: ['Escape', '<A-h>', 'G', 'k', 'Enter'],
+    keys: ['Escape', '<A-h>', 'G', 'k', 'k', 'Enter'],
     expect: '[settings] section plugins',
     checksFit: true,
     screenshot: 'plugins',
@@ -292,6 +384,16 @@ const GROUPS: SelfTestGroup[] = [
     name: 'keymap',
     why: 'In the Keybindings section, a records and Tab types a key for the help command under a picked scope, d removes it and r finds nothing to reset; Enter records a new key in place, refusing the leader and naming the bind it moves; f cycles the filter chips and ? finds the commands a key runs.',
     steps: KEYMAP_STEPS,
+  },
+  {
+    name: 'leader groups',
+    why: 'In the Leader menu, a adds a named empty group and d removes it, R renames a group and an empty name removes the entry, and d refuses a group with items.',
+    steps: LEADER_GROUPS_STEPS,
+  },
+  {
+    name: 'leader items',
+    why: "On session's items, c changes a key, refusing one the group holds, r resets it, m moves an item to the top level and d clears it, a records a new item's key and opens the action picker, and Alt+h and Alt+l move between the panes and the side bar.",
+    steps: LEADER_ITEMS_STEPS,
   },
   {
     name: 'timeout reset',

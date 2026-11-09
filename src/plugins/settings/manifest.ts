@@ -49,6 +49,17 @@ export const settingsManifest = definePlugin({
       runsIn: 'page',
     },
     findByKey: { label: 'find by key', group: 'settings', runsIn: 'page' },
+    renameGroup: {
+      label: 'rename the group',
+      group: 'settings',
+      runsIn: 'page',
+    },
+    changeKey: { label: 'change the key', group: 'settings', runsIn: 'page' },
+    moveToGroup: {
+      label: 'move to another group',
+      group: 'settings',
+      runsIn: 'page',
+    },
     boxAccept: { label: 'save the value', group: 'box', runsIn: 'page' },
     boxCancel: { label: 'cancel the edit', group: 'box', runsIn: 'page' },
     ...LIST_PICKER_COMMANDS,
@@ -68,6 +79,8 @@ export const settingsManifest = definePlugin({
   scopes: {
     sections: 'In settings sections',
     rows: 'In settings',
+    leaderGroups: 'In the leader menu groups',
+    leaderItems: 'In the leader menu items',
     box: 'In a settings box',
     picker: 'In a settings list',
   },

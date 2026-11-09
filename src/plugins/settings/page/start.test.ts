@@ -35,6 +35,7 @@ const SCHEMA: UserConfigSchema = {
   scopes: [],
   defaultBindLayers: [],
   defaultAccelerators: { app: [], global: [], intercept: [] },
+  defaultGroups: {},
   defaultLeader: '<Space>',
 };
 

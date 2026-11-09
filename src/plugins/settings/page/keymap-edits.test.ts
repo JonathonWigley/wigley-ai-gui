@@ -6,6 +6,7 @@ import {
   withAddedBind,
   withAdvanced,
   withCommandReset,
+  withGroupName,
   withMovedBind,
   withRemovedBind,
 } from './keymap-edits';
@@ -18,6 +19,7 @@ function schema(defaultBinds: KeyBind[] = []): UserConfigSchema {
     scopes: [],
     defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app: [], global: [], intercept: [] },
+    defaultGroups: {},
     defaultLeader: '<Space>',
   };
 }
@@ -308,5 +310,46 @@ describe('withCommandReset with an argument', () => {
       binds: [layer.binds[1]],
       unbind: [layer.unbind[1]],
     });
+  });
+});
+
+describe('withGroupName', () => {
+  it.each<{
+    case: string;
+    layer: UserKeymap | null;
+    prefix: string;
+    name: string | null;
+    expected: UserKeymap;
+  }>([
+    {
+      case: 'set on no layer',
+      layer: null,
+      prefix: '<Leader>q',
+      name: 'quick',
+      expected: { groups: { '<Leader>q': 'quick' } },
+    },
+    {
+      case: 'replace',
+      layer: { leader: ',', groups: { '<Leader>q': 'quick' } },
+      prefix: '<Leader>q',
+      name: 'quiet',
+      expected: { leader: ',', groups: { '<Leader>q': 'quiet' } },
+    },
+    {
+      case: 'remove one of two',
+      layer: { groups: { '<Leader>q': 'quick', '<Leader>w': 'wide' } },
+      prefix: '<leader>q',
+      name: null,
+      expected: { groups: { '<Leader>w': 'wide' } },
+    },
+    {
+      case: 'remove the last',
+      layer: { leader: ',', groups: { '<Leader>q': 'quick' } },
+      prefix: '<Leader>q',
+      name: null,
+      expected: { leader: ',' },
+    },
+  ])('withGroupName_$case', ({ layer, prefix, name, expected }) => {
+    expect(withGroupName(layer, prefix, name)).toEqual(expected);
   });
 });

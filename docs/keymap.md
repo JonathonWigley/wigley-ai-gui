@@ -71,7 +71,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
   take the key from vim's insert-mode completion. In every other main view (Sessions with nothing
   shown, the Sessions list, the Chat tab, its session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog
-  homes, list and detail, the Settings sections and rows, the gallery) **Ctrl+n** opens the new-session prompt with only its
+  homes, list and detail, the Settings sections, rows and Leader menu panes, the gallery) **Ctrl+n** opens the new-session prompt with only its
   folder and profile steps, bound per scope since a key cannot sit in `any` beside a scope's bind.
   A new main view adds its scope to that list in `src/plugins/keymap.ts`. While a box's completion popup is open,
   both keys move the popup's selection instead, ahead of every bind.

@@ -184,3 +184,62 @@
 .settings-group-header {
   padding: var(--wg-space-3) var(--wg-space-2) 0;
 }
+
+/* The Leader menu: the groups column beside the selected group's items. */
+.settings-leader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--wg-space-3);
+  align-items: start;
+  list-style: none;
+}
+
+.settings-leader-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A narrow column's header wraps its edges rather than its title. */
+.settings-leader-column > .settings-head {
+  flex-wrap: wrap;
+  white-space: nowrap;
+}
+
+.settings-leader-groups,
+.settings-leader-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  outline: none;
+}
+
+/* A group row, indented one step per nested level. */
+.settings-leader-groups > .settings-leader-row {
+  padding-left: calc(
+    var(--wg-space-2) + var(--settings-leader-depth, 0) * var(--wg-space-4)
+  );
+}
+
+.settings-row-label.is-unnamed,
+.settings-leader-count,
+.settings-leader-command,
+.settings-leader-free {
+  color: var(--wg-fg-tertiary);
+}
+
+.settings-leader-count {
+  margin-left: auto;
+  font-size: var(--wg-text-12);
+}
+
+.settings-leader-command,
+.settings-leader-free {
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+}
+
+.settings-leader-row .ui-kbd.is-struck {
+  color: var(--wg-fg-tertiary);
+  text-decoration: line-through;
+}

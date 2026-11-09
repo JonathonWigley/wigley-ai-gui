@@ -36,6 +36,7 @@ function schema(defaultBinds: KeyBind[], app: AcceleratorBind[]) {
     scopes: [{ id: 'p.s', title: 'In p', plugin: 'p' }],
     defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app, global: [], intercept: [] },
+    defaultGroups: {},
     defaultLeader: '<Space>',
   } satisfies UserConfigSchema;
 }

@@ -4,6 +4,7 @@ import type {
   AcceleratorBind,
   InterceptBind,
   KeyBind,
+  KeyGroups,
   UserKeymap,
 } from './keymap';
 import type { CommandInfo, ScopeInfo } from './plugin';
@@ -41,6 +42,7 @@ export interface SettingSection {
 // merges them (`defaultBindLines`).
 // `defaultAccelerators`: the same layers' `app`, `global` and `intercept` binds merged, a later layer's replacing an
 // earlier one on the same chord; main commands run on them.
+// `defaultGroups`: the same layers' `groups` names, a later layer's name replacing an earlier one's on the same prefix.
 export interface UserConfigSchema {
   sections: readonly SettingSection[];
   commands: Readonly<Record<CommandId, CommandInfo>>;
@@ -51,6 +53,7 @@ export interface UserConfigSchema {
     global: readonly AcceleratorBind[];
     intercept: readonly InterceptBind[];
   };
+  defaultGroups: KeyGroups;
   defaultLeader: string;
 }
 

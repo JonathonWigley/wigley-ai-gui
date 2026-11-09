@@ -19,8 +19,8 @@ export interface SettingsPane {
   element: HTMLElement;
 }
 
-// The open section's pane: its id (`core`, a plugin id, `plugins`, or `keymap` for the Keybindings section) and its
-// title.
+// The open section's pane: its id (`core`, a plugin id, `plugins`, `keymap` for the Keybindings section, or `leader`
+// for the Leader menu) and its title.
 export interface RowsInput {
   sectionId: string;
   title: string;
@@ -132,6 +132,44 @@ export interface PickerRowInput {
   keys: string | null;
 }
 
+// The Leader menu: `focused` the pane last focused, `itemsTitle` the selected group's title (`Top level`, `b — session`).
+export interface LeaderPanesInput {
+  focused: 'groups' | 'items';
+  itemsTitle: string;
+}
+// A group of the Leader menu's groups pane: `prefix` its keys in vim notation (`<Leader>b`), `key` its last key printed
+// for the platform (empty on Top level), `name` its `groups` name, or unnamed (`isNamed` false) its commands' manifest
+// groups; `isSet` while the user's `groups` names it; `depth` 0 for Top level and its children, one more per nested
+// level; `count` its entries; `recording` the key recording on it (adding a group under it), null while none.
+export interface LeaderGroupRowInput {
+  prefix: string;
+  key: string;
+  name: string;
+  isNamed: boolean;
+  isSet: boolean;
+  depth: number;
+  count: number;
+  recording: RecordingInput | null;
+}
+// An entry of the Leader menu's items pane: a `command` bind or a nested `group`. `key` its key printed for the platform
+// (`<Leader>` prints as the leader); `label` the command's label capitalised, or the nested group's name; `command` the
+// qualified id with its argument, null on a group row; `tags` the scope's title unless `any`, `in a box` when only its
+// box half fires, `Set` for a user bind; `recording` the key recording on it (changing or moving its key).
+export interface LeaderItemRowInput {
+  kind: 'command' | 'group';
+  key: string;
+  label: string;
+  command: string | null;
+  tags: readonly string[];
+  recording: RecordingInput | null;
+}
+// The items pane's last row, which adds an item: the group's free keys printed for the platform, and the key recording
+// on it.
+export interface LeaderAddRowInput {
+  freeKeys: readonly string[];
+  recording: RecordingInput | null;
+}
+
 // The kit every settings part draws with: the base kit, naming settings' commands by their short names. `default`
 // adds `settings-edge settings-edge--<side>` to each `edge` it draws.
 export interface SettingsKit extends BaseKit {}
@@ -162,6 +200,17 @@ export interface RowKit extends SettingsKit {
   rowActions(parent: HTMLElement): HTMLElement;
   // A `div` the app fills with the row's open box.
   box(parent: HTMLElement): HTMLElement;
+}
+export interface LeaderPanesKit extends SettingsKit {
+  // The base kit in the groups pane's and the items pane's scope: an edge or hint drawn with one shows only while its
+  // pane holds the keys.
+  groupsKit: SettingsKit;
+  itemsKit: SettingsKit;
+  // `ol.settings-leader-groups` and `ol.settings-leader-items`: the app replaces their children with the group rows,
+  // and the selected group's item rows then its add row, on each draw, and marks each `is-pane-inactive` while the
+  // other pane or the side bar holds the keys.
+  groupRows(parent: HTMLElement): HTMLElement;
+  itemRows(parent: HTMLElement): HTMLElement;
 }
 export interface PickerRowKit extends SettingsKit {
   // The app's element for the end of the cursor row, or null on every other row; pass it as
@@ -231,6 +280,30 @@ export interface SettingsLayout {
     parent: HTMLElement,
     input: ProblemInput,
     kit: SettingsKit,
+  ): HTMLElement;
+  // The Leader menu, drawn into `rowList` on each draw of its rows: the groups pane beside the selected group's items.
+  leaderPanes?(
+    parent: HTMLElement,
+    input: LeaderPanesInput,
+    kit: LeaderPanesKit,
+  ): SettingsPane;
+  // One per group, into `groupRows`.
+  leaderGroupRow?(
+    parent: HTMLElement,
+    input: LeaderGroupRowInput,
+    kit: RowKit,
+  ): HTMLElement;
+  // One per entry of the selected group, into `itemRows`.
+  leaderItemRow?(
+    parent: HTMLElement,
+    input: LeaderItemRowInput,
+    kit: RowKit,
+  ): HTMLElement;
+  // The last row of `itemRows`.
+  leaderAddRow?(
+    parent: HTMLElement,
+    input: LeaderAddRowInput,
+    kit: RowKit,
   ): HTMLElement;
   // One per item of the open list picker, into the picker's list, on each draw of the picker.
   pickerRow?(

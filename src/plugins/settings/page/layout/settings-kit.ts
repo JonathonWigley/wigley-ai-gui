@@ -12,6 +12,8 @@ import {
 import { keyStack } from '../../../../shared/page/ui/key-anchors';
 import type {
   CompleteSettingsLayout,
+  LeaderPanesInput,
+  LeaderPanesKit,
   PickerRowInput,
   PickerRowKit,
   RowKit,
@@ -23,7 +25,12 @@ import type {
 import { settingsManifest } from '../../manifest';
 
 // The settings scope a part's keys fire in.
-export type SettingsKitScope = 'sections' | 'rows' | 'picker';
+export type SettingsKitScope =
+  | 'sections'
+  | 'rows'
+  | 'leaderGroups'
+  | 'leaderItems'
+  | 'picker';
 
 // The kit one part draw builds with: the base kit in the settings `scope`,
 // naming settings' own commands by their short names. Each anchor it names is
@@ -49,6 +56,14 @@ export interface BuiltRowsPane {
   element: HTMLElement;
   problem: HTMLElement;
   rowList: HTMLElement;
+}
+
+// A drawn Leader menu: its root, and the group and item row slots the app
+// fills on each draw.
+export interface BuiltLeaderPanes {
+  element: HTMLElement;
+  groupRows: HTMLElement;
+  itemRows: HTMLElement;
 }
 
 // A drawn row: its root, and the slots for the cursor prompt and the open
@@ -84,7 +99,7 @@ export function buildSectionsPane(
 // Draws the open section's pane with `rows`, placing `filterFrame` in its
 // filter box slot; a slot it leaves out is appended at the end of its root.
 // The filter hint's anchors name the `filter` command in the sections and
-// rows scopes.
+// rows scopes; the hint is hidden in the Leader menu.
 export function buildRowsPane(
   rows: Builder<'rows'>,
   parent: HTMLElement,
@@ -109,6 +124,8 @@ export function buildRowsPane(
       const hint = appended(slotParent, keyStack('settings-filter-hint', []));
       sectionsKit.keyHint(hint, 'filter', { label: 'filter' });
       settingsKit.keyHint(hint, 'filter', { label: 'filter' });
+      // The Leader menu filters nothing.
+      hint.hidden = input.sectionId === 'leader';
       return hint;
     },
     filterBox: (slotParent) => filterBoxSlot.place(slotParent),
@@ -122,7 +139,39 @@ export function buildRowsPane(
   return { element: root, problem, rowList };
 }
 
-// Draws a setting, key, leader or advanced row with `draw`, in the kit of
+// Draws the Leader menu with `leaderPanes`, its row slots focusable; a slot it
+// leaves out is appended at the end of its root.
+export function buildLeaderPanes(
+  leaderPanes: Builder<'leaderPanes'>,
+  parent: HTMLElement,
+  input: LeaderPanesInput,
+  services: OwnerKitServices,
+  rollback: RollbackDeps,
+): BuiltLeaderPanes {
+  const groupRows = element('ol', 'settings-leader-groups');
+  const itemRows = element('ol', 'settings-leader-items');
+  groupRows.tabIndex = -1;
+  itemRows.tabIndex = -1;
+  const slots = [
+    appSlot(groupRows, 'groupRows', rollback),
+    appSlot(itemRows, 'itemRows', rollback),
+  ] as const;
+  const [groupRowsSlot, itemRowsSlot] = slots;
+  const kit: LeaderPanesKit = {
+    ...createSettingsKit(services, 'rows', rollback),
+    groupsKit: createSettingsKit(services, 'leaderGroups', rollback),
+    itemsKit: createSettingsKit(services, 'leaderItems', rollback),
+    groupRows: (slotParent) => groupRowsSlot.place(slotParent),
+    itemRows: (slotParent) => itemRowsSlot.place(slotParent),
+  };
+  const root = paneRoot(leaderPanes(parent, input, kit), parent, 'leaderPanes');
+  for (const slot of slots) {
+    slot.placeIfLeftOut(root);
+  }
+  return { element: root, groupRows, itemRows };
+}
+
+// Draws a setting, plugin, key, leader, advanced or Leader menu row with `draw`, in the kit of
 // `scope`; a slot it leaves out is appended at the end of its root.
 export function buildRow<I>(
   draw: (parent: HTMLElement, input: I, kit: RowKit) => HTMLElement,

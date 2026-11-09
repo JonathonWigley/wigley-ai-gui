@@ -57,6 +57,55 @@ function recordingSpan(parent, kit, recording) {
   return span;
 }
 
+/**
+ * A recording's note under its row: what the keys move from, or why a press
+ * was refused.
+ * @param {HTMLElement} row
+ * @param {import('../layout').RowKit} kit
+ * @param {import('../layout').RecordingInput | null} recording
+ */
+function recordingNote(row, kit, recording) {
+  if (recording === null || recording.note === null) {
+    return;
+  }
+  const note = kit.el(row, 'div', 'settings-row-note', recording.note);
+  note.classList.toggle('is-refused', recording.isRefused);
+}
+
+/**
+ * One Leader menu column: its header with `drawEdges`' edge prompts, then the
+ * rows slot `rows` places.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').SettingsKit} kit
+ * @param {string} title
+ * @param {(head: HTMLElement) => void} drawEdges
+ * @param {(column: HTMLElement) => HTMLElement} rows
+ */
+function leaderColumn(parent, kit, title, drawEdges, rows) {
+  const column = kit.el(parent, 'div', 'settings-leader-column');
+  const head = kit.sectionHeader(column, title);
+  head.classList.add('settings-head');
+  drawEdges(head);
+  rows(column);
+  return column;
+}
+
+/**
+ * An edge prompt drawn by `kit` into `head`, on the `side` the move goes.
+ * @param {HTMLElement} head
+ * @param {import('../layout').SettingsKit} kit
+ * @param {string} command
+ * @param {{ side: 'start' | 'end', chevron?: string, label?: string }} options
+ */
+function leaderEdge(head, kit, command, options) {
+  const edge = kit.edge(head, command, options);
+  edge.classList.add('settings-edge', `settings-edge--${options.side}`);
+  if (options.side === 'start') {
+    head.prepend(edge);
+  }
+  return edge;
+}
+
 /** @type {import('../layout').CompleteSettingsLayout} */
 const layout = {
   sections(parent, kit) {
@@ -157,13 +206,7 @@ const layout = {
           separated(recordingSpan(binds, kit, recording));
         }
       },
-      drawUnder(row) {
-        if (recording === null || recording.note === null) {
-          return;
-        }
-        const note = kit.el(row, 'div', 'settings-row-note', recording.note);
-        note.classList.toggle('is-refused', recording.isRefused);
-      },
+      drawUnder: (row) => recordingNote(row, kit, recording),
     });
   },
   keyFilters(parent, input, kit) {
@@ -223,6 +266,92 @@ const layout = {
     const card = kit.card(parent, 'ui-card--error');
     card.textContent = `${input.file} has a problem: ${input.problem}`;
     return card;
+  },
+  leaderPanes(parent, input, kit) {
+    const root = kit.el(parent, 'li', 'settings-leader');
+    leaderColumn(
+      root,
+      kit,
+      'Groups',
+      (head) => {
+        leaderEdge(head, kit.groupsKit, 'panes.focusLeft', {
+          side: 'start',
+          chevron: '‹ sections',
+        });
+        leaderEdge(head, kit.groupsKit, 'panes.focusRight', {
+          side: 'end',
+          label: 'items',
+        });
+      },
+      (column) => kit.groupRows(column),
+    );
+    leaderColumn(
+      root,
+      kit,
+      input.itemsTitle,
+      (head) =>
+        leaderEdge(head, kit.itemsKit, 'panes.focusLeft', {
+          side: 'start',
+          chevron: '‹ groups',
+        }),
+      (column) => kit.itemRows(column),
+    );
+    return { element: root };
+  },
+  leaderGroupRow(parent, input, kit) {
+    const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
+    row.style.setProperty('--settings-leader-depth', String(input.depth));
+    const head = kit.el(row, 'div', 'settings-row-head');
+    if (input.key !== '') {
+      kit.kbd(head, input.key);
+    }
+    const name = kit.el(head, 'span', 'settings-row-label', input.name);
+    name.classList.toggle('is-unnamed', !input.isNamed);
+    if (input.isSet) {
+      kit.tag(head, 'Set');
+    }
+    if (input.recording !== null) {
+      recordingSpan(head, kit, input.recording);
+    }
+    kit.el(head, 'span', 'settings-leader-count', String(input.count));
+    kit.rowActions(head);
+    recordingNote(row, kit, input.recording);
+    kit.box(row);
+    return row;
+  },
+  leaderItemRow(parent, input, kit) {
+    const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
+    const head = kit.el(row, 'div', 'settings-row-head');
+    const key = kit.kbd(head, input.key);
+    key.classList.toggle('is-struck', input.recording !== null);
+    if (input.recording !== null) {
+      recordingSpan(head, kit, input.recording);
+    }
+    const label = input.kind === 'group' ? `${input.label} ›` : input.label;
+    kit.el(head, 'span', 'settings-row-label', label);
+    if (input.command !== null) {
+      kit.el(head, 'span', 'settings-leader-command', input.command);
+    }
+    for (const text of input.tags) {
+      kit.tag(head, text);
+    }
+    kit.rowActions(head);
+    recordingNote(row, kit, input.recording);
+    kit.box(row);
+    return row;
+  },
+  leaderAddRow(parent, input, kit) {
+    const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
+    const head = kit.el(row, 'div', 'settings-row-head');
+    kit.el(head, 'span', 'settings-row-label', 'add…');
+    if (input.recording !== null) {
+      recordingSpan(head, kit, input.recording);
+    }
+    kit.el(head, 'span', 'settings-leader-free', input.freeKeys.join(' '));
+    kit.rowActions(head);
+    recordingNote(row, kit, input.recording);
+    kit.box(row);
+    return row;
   },
   pickerRow(parent, input, kit) {
     const row = kit.row(parent, {
