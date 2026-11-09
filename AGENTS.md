@@ -948,7 +948,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
   set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
   `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`, both with Chromium's HTTP and code
-  caches off, since each start serves the page's modules from a fresh dev server URL; a drive run points its Claude
+  caches off, since no run reuses them (a dev start serves the page's modules from a fresh dev server URL); a drive run points its Claude
   sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows (`app.setName` at start,
   for the Mac app menu's items): the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
   the Dock label of an unbundled app.

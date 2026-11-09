@@ -1247,8 +1247,8 @@ function startApp() {
     // The page loads hundreds of modules from the dev server, and Chromium
     // wrote each one into the profile's HTTP and code caches on every start:
     // about 2,300 files a run, 1.5 GB kept, and Spotlight indexing the churn.
-    // A run reuses none of it, since the dev server's port and module URLs
-    // change between starts. The code cache goes off once the app is ready
+    // A run reuses none of it: a dev start's server port and module URLs
+    // change between starts, and a packaged drive run's profile is new. The code cache goes off once the app is ready
     // (`disableCodeCache`).
     app.commandLine.appendSwitch('disable-http-cache');
   }
