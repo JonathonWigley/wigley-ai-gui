@@ -1,6 +1,6 @@
 # 15 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 14
 Plan: [plan.md](plan.md)
@@ -79,3 +79,5 @@ prints at least `1`.
 Commit:    one commit: "Docs match the landed runtime plugin loader".
 
 ## Proof
+
+Commit 152e2c8f · proof: diff read: Plugins row look in DESIGN.md and settings design, settings-view comments, practice-plan stale line; worker ran step 3 grep (only expected survivors), _types/plugin count 1, lint clean · concerns: layouts/default @import path ../../../_types derived, not used in a fixture; settings/design.md:35 side-bar 'in manifest order' not re-checked against catalog order
