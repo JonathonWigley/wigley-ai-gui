@@ -371,6 +371,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `plan.py`'s `plan-runs/<row>.json` in the endpoint folder or its own `set_workflow_plan` tool, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
                  the countdown, the preview samples), layouts/ (the built-in `default` layout); Large's workflow: the
                  `wigley:feature` run, make, review, fix and close
+  workflow-spike/ manifest.ts, contract.ts, stages/<stage>/ (interview, build, check, land, done; build, check and
+                 interview re-enter per ask), main/ (its self-test script), page/, layouts/ (the built-in `default`
+                 layout); claims `wigley:spike`
   workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
                  script), page/, layouts/ (the built-in `default` layout); claims `wigley:small`
   workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
@@ -1017,7 +1020,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
