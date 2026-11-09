@@ -65,11 +65,15 @@ plan is written from them. A decision here stands unless the user changes it.
 
 ## Plugins section
 
-- One row per plugin, in manifest order: its label, its one-line description (both declared in the plugin's manifest),
+- One row per plugin, in catalog order, then each plugin that failed its first load: its label, its one-line description (both declared in the plugin's manifest),
   and at the end its state, `true` or `false`, with the shared list picker as the control (Enter or `i`). The
   `default` layout draws it as the `pluginRow` part.
 - The state comes from the `core.plugins` slot, which says what runs now, and not from `settings.json`, which says what
   the user asked for. The row redraws when the slot changes, so a refused switch-off keeps showing `true`.
+- The row's end holds, in this order: an error Tag `failed` (only when the row has a problem), a neutral origin Tag
+  (`user`, or `replaces built-in`; none for a built-in plugin), the lock Tag below, then the state. The state `true`
+  or `false` says whether a version of the plugin runs. The problem shows as a `status-error` line under the
+  description, wrapped whole. A plugin that failed its first load has a row labelled with its id and no description.
 - A plugin that running plugins depend on carries a `Needed by <label>, <label>` Tag before its state and cannot be
   switched off; the user switches those plugins off first. Settings' own row carries `Edit settings.json to turn off`,
   since switched off from its own section it could come back only by a hand edit.

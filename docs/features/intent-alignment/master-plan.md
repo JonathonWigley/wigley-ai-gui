@@ -31,8 +31,8 @@ When an item lands, tick its box here and remove it from `followups.md`, in the 
 Plans: Waves 0, 2 and 3 have landed and their plan folders are gone. The settled design is
 `plugin-framework/design.md` § Commands and state. Wave 4 steps 1 and 2 have landed and their plan folder is gone; the
 design is `plugin-framework/design.md` § Hot reload (Wave 4). Wave 1's plan folder is gone too. Step 3, the runtime
-loader, is planned in `plugin-framework/plan-runtime-loader/`; its design is `plugin-framework/design.md` § Runtime
-loader (Wave 4 step 3).
+loader, has landed and its plan folder is gone; its design is `plugin-framework/design.md` § Runtime loader
+(Wave 4 step 3).
 
 ## Order
 
@@ -108,7 +108,7 @@ Checkpoint, after the items above:
    - [x] Layout access to the raw bridge [plan]
    - [x] Replaceable core services decision [plan]
 2. [x] PluginHost stop and reload, with a live enable switch [plan]
-3. [ ] Runtime plugin loader [plan]
+3. [x] Runtime plugin loader [plan]
 
 ## Lane H: harness seams
 

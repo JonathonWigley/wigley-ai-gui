@@ -295,8 +295,7 @@ landed. The runtime plugin loader (step 3) has its own section below.
 
 ## Runtime loader (Wave 4 step 3)
 
-Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-alignment/master-plan.md`. Plan folder
-`plan-runtime-loader/`.
+Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-alignment/master-plan.md`, and landed.
 
 - **User-folder plugins only.** A plugin in `~/.config/wigley-ai-gui/plugins/<id>/` (`manifest.json`, an optional
   `main.js`, an optional `page.js`, plain ES modules that each export a named `start(api)`) loads at start and reloads with new code. Both the stable and the
@@ -305,8 +304,8 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
 - **One seam for both kinds.** A `PluginSource` hands the catalog its plugins: the built-in source over the compiled
   lists, and the user-folder source over the folder. The catalog is the one live list the host, the switch, the config
   schema and the `core.plugins` slot read, so the fixed lists and `requireListed` are no longer read anywhere else.
-- **Reload on save and by command.** A save under a plugin's folder reloads it once the edits settle, skipping editor
-  swap and lock files, as a layout reloads. The `core.reloadPlugin` command, unbound by default and a drive action,
+- **Reload on save and by command.** A save under a plugin's folder reloads it once the edits settle, skipping the plugin's `layouts/` folder (the layout registry reloads those)
+  and editor swap and lock files. The `core.reloadPlugin` command, unbound by default and a drive action,
   reloads a plugin with no change. A reload stops the plugin's dependents too, as a restart does, so a dependent never
   holds the old run's exports.
 - **A bad load keeps the last good version.** A manifest that fails its checks, a module that throws on import, or a
@@ -325,7 +324,7 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
   stops it and clears its slots, as a switch-off does.
 - **Main imports from a per-revision copy.** Node caches every module by URL, so main copies the plugin folder for each
   revision and imports `main.js` from the copy; a relative import then reloads with it. Each old revision stays in
-  memory until quit. The page imports `page.js` on the `wigley-plugin:` scheme with the revision in the path, as a
+  memory until quit, and its folder stays on disk (`docs/features/followups.md`). The page imports `page.js` on the `wigley-plugin:` scheme with the revision in the path, as a
   layout loads on `wigley-layout:`.
 - **`manifest.json`, not a module.** Main reads what a plugin declares without running its code. The app writes a JSON
   Schema for it, and `validateManifest` runs at load the checks `definePlugin` makes at compile time for a built-in.

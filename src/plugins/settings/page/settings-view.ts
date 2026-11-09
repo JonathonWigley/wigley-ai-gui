@@ -180,7 +180,8 @@ export interface RowContext {
   commitSettings(layer: Record<string, unknown>, via: CommitVia): void;
   commitKeymap(layer: UserKeymap, via: CommitVia): void;
   toast(text: string, tone: ToastTone): void;
-  // Every built-in plugin as the plugin switch last wrote it.
+  // Every plugin row as the plugin switch last wrote it: each catalog plugin,
+  // then each plugin that failed its first load.
   plugins(): readonly PluginStatus[];
   // The reason turning `pluginId` off would be refused now, or null. A
   // rejection is logged and toasted before it rejects.
@@ -229,7 +230,8 @@ export interface SettingsViewDeps {
   // Hears the place after each change to the cursors, the open section or the
   // filter.
   placeChanged(place: SettingsPlace): void;
-  // Every built-in plugin as the plugin switch last wrote it.
+  // Every plugin row as the plugin switch last wrote it: each catalog plugin,
+  // then each plugin that failed its first load.
   plugins(): readonly PluginStatus[];
 }
 

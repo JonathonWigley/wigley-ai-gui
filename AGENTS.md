@@ -86,11 +86,14 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
                  record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
                  readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
+                 `plugin-catalog.ts`: `CatalogEntry`, `PluginSource` and the `PluginCatalog` the host, the plugin switch
+                 and the config read;
                  `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
+                 theme variables, `plugin-url.ts`: the `wigley-plugin:` URLs of a user plugin's files and the path each
+                 serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
@@ -101,6 +104,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
                  newest of them, both read by workflow-large and backlog)
+  plugin-catalog/ `validateManifest` and the manifest JSON Schema: the checks a user plugin's manifest meets at load →
+                 pure, no I/O
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
@@ -157,8 +162,12 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
                  module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
+  plugin-catalog/ the plugin catalog: the one live list of plugins over a built-in source and a user-folder source (a
+                 load copies a user plugin to a revision folder and imports it by file URL through `import-module.ts`,
+                 main's one dynamic import), and `plugin-types.ts`, which writes the contract types to
+                 `plugins/_types/`
   plugins/       the main-side plugin API: per-plugin channel routing and services; `plugin-switch.ts`: the live
-                 switch over `plugins.disabled`; `applied-plugins.ts`: the applied disabled list, the plugins whose
+                 switch over `plugins.disabled` and the catalog; `applied-plugins.ts`: the applied disabled list, the plugins whose
                  parts do not run, which the served config carries as `plugins.disabled`
   page-parts.ts  asks the page's plugin host to stop, start or check its parts, over `bridge:plugin-parts`
   quit-wait.ts   the quit's hold in every mode and its `quit is waiting on …` log
@@ -194,7 +203,7 @@ src/main/        core main process; main.ts is its composition root
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
                  `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, the `wigley-layout:`
-                 scheme serving the layouts folder, and the `wigley-visual:` scheme serving each visual the page hands
+                 scheme serving the layouts folder, the `wigley-plugin:` scheme serving each user plugin's revision copy, and the `wigley-visual:` scheme serving each visual the page hands
                  over (`visual-documents.ts`: kept in memory by source hash, with its bootstrap script and a no-network
                  CSP header); `window.ts` refuses any frame navigation off that scheme; `docs/features/visuals/design.md`
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
@@ -432,7 +441,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
   DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
 - **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list applies
-  live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list. A switch-off sets the applied
+  live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list and follows the plugin
+  catalog: a plugin that arrives starts, one that leaves stops as a switch-off does, and one with a new entry reloads
+  with its dependents (A user plugin, below). A switch-off sets the applied
   list and pushes the served config before it stops any part, so a disabled plugin's binds leave while their handlers
   still exist; it then stops the page parts (the page answers over `bridge:plugin-parts`), then the main parts, and
   clears the owners' slots. A switch-on starts the main parts, sets the applied list, then starts the page parts. A
@@ -449,14 +460,22 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   plugins).
 - **A user plugin** is a folder in `~/.config/wigley-ai-gui/plugins/<id>/`: `manifest.json`, an optional `main.js`
   and an optional `page.js`, plain ES modules that each export a named `start(api)`, typed with `// @ts-check` against the `.d.ts` files and
-  `manifest.schema.json` the app writes to `plugins/_types/` at start, and an optional `layouts/default/`. The plugin
+  `manifest.schema.json` the app writes to `plugins/_types/` at start, and an optional `layouts/default/`. From
+  `main.js` or `page.js` the types come in with
+  `/** @import { UserMainApi, UserMainStart } from '../_types/plugin' */` (`UserPageApi` and `UserPageStart` for the
+  page), a dependency's contract with
+  `/** @import { ChatMainExports } from '../_types/plugins/chat/contract' */`, and the manifest's type with
+  `/** @import { PluginManifest } from '../_types/contracts/plugin' */`; `manifest.json` names its schema with
+  `"$schema": "../_types/manifest.schema.json"`. The relative path follows the file's depth: a `.js` under
+  `layouts/default/` reaches `_types` by `../../../_types`. The plugin
   catalog (`src/main/plugin-catalog/`) is the one live list of plugins: it merges the built-in source and the
   user-folder source, a user plugin with a built-in's id replacing the whole built-in, and the host, the switch, the
   config schema and the `core.plugins` slot read it. `validateManifest` runs at load the checks `definePlugin` makes at
   compile time. Main imports `main.js` from a per-revision copy of the folder; the page imports `page.js` on the
-  `wigley-plugin:` scheme. A save reloads the plugin once the edits settle, and `core.reloadPlugin` reloads it with no
-  change; a reload stops its dependents too. A load that fails keeps the last good version and shows the error as a
+  `wigley-plugin:` scheme. A save reloads the plugin once the edits settle, and `core.reloadPlugin` (no default key)
+  reloads it with no change; a reload stops its dependents too. A load that fails keeps the last good version and shows the error as a
   config problem and on its Settings row. Settings and binds under a plugin that is not loaded are kept and ignored.
+  Each load copies the folder to `<userData>/plugin-code/<id>/<revision>/` and no step deletes an old revision.
   A user plugin draws only through its layout kit and bundles its own packages
   (`docs/features/plugin-framework/design.md` § Runtime loader (Wave 4 step 3)).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
@@ -488,7 +507,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only reads a slot or hears
   an event lists its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a
   moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`,
-  `core.plugins` (each built-in plugin's label, whether it runs and what depends on it) and the two runtime command
+  `core.plugins` (each catalog plugin's label, origin, whether it runs, what depends on it and its load problem, then each plugin that failed its first load) and the two runtime command
   catalogs (`src/contracts/core-state.ts`) (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
@@ -831,7 +850,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
-  fresh. The scheme serves plugin data only: layouts load on their own `wigley-layout:` scheme.
+  fresh. The scheme serves plugin data only: layouts load on their own `wigley-layout:` scheme and a user plugin's code on `wigley-plugin:`
+  (`wigley-plugin://<id>/~<revision>/<path>`, served from the plugin's revision copy under
+  `<userData>/plugin-code/<id>/<revision>/`, which the page's CSP also allows for scripts and styles).
 - **A layout** is an owner's user-editable look; the owner is a plugin or the shell. Layouts live in the user config
   folder, `layouts/<owner>/<name>/layout.js` with an optional `layout.css`, shared by the stable and dev apps; each
   owner's built-in `default` is read live from the repo clone (`docs/features/layouts/design.md` § Live defaults).
@@ -851,7 +872,10 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   its own name and restyles nothing another layout drew; the default's CSS is one link of its own, ahead of them. A
   loaded layout stays available while its revision is current, so a round naming one another round loaded draws with it
   at once. A view that needs agent data to show anything has a preview sample under `Space z l` for iterating its layout
-  in place. `docs/features/layouts/design.md` lists every owner and its surfaces.
+  in place. A user plugin's `default` layout is `layouts/default/` in its own folder, which its main part registers
+  with `api.layouts.register` and which the page reads live, as the clone's `default` is read; its page part draws a
+  part through its layout kit with the show's `draw(part, parent, input)`, the way a built-in page part does.
+  `docs/features/layouts/design.md` lists every owner and its surfaces.
   - **A part a layout leaves out** (not defined, or set to `undefined`) draws with `default`. A part may add only its
     root to its parent: one that leaves another node beside it falls back like one that throws.
   - **A list picker draws a layout's rows** (`drawRow`): the picker owns a drawn row's click, its `ui-row--action`
@@ -913,7 +937,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   contracts of the plugins it depends on or reads. `src/shared/paths` and `src/shared/followups` are allowed in every
   plugin root, `main/` and `page/`, and the four page kits (`src/shared/page` and its `ui`, `layout-host` and `file-drop`
   folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
-  `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or
+  `PLUGIN_EXTRAS` table in `check-layers.mts`. The core layers `src/main/plugin-catalog` (node and file access, for loading a user plugin) and
+  `src/shared/plugin-catalog` (pure manifest checks) are rules of their own. The script also fails when `src/plugins/main.ts`, `page.ts` or
   `manifests.ts` misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a
   `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin contract's
   `contract.test-support.ts`, the fixtures of its records (sessions' `sessionRow`), belongs to that contract's layer,

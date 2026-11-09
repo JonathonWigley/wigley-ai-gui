@@ -15,23 +15,6 @@ headings): the Backlog plugin reads it as one follow-up per top-level list item.
 
 Core seams that most items below assume.
 
-- **Visual reads chat's focused entry through a slot** — *agent-ready*: `ChatPageExports.focusedEntry` and
-  `focusedBlock` hand visual an `HTMLElement`, which a plugin from a user folder cannot read across a reload. Publish
-  the focused entry's id and the cursor's block as a page slot in chat's `contract.ts`, and let visual find the
-  element from it. Left over from the plugin state registry, which landed without it.
-- **A restart leaves a page part's keys with no handler** — *agent-ready*: a restart stops a plugin's page part and
-  starts it again, and the part's binds stay in the keymap between the two, so a key pressed in that gap runs a command
-  with no handler. Take the binds out at the page stop and put them back at the page start, as the switch-off does
-  through the served config. The restart is drive-only today, so the gap shows when the loader's reload makes it a user
-  action.
-- **A page part started live gets no restore window** — *needs a feature plan*: restores stay per page load, so a page
-  part that a restart or switch-on starts live restores nothing (its slots were cleared on a switch-off, and a restart
-  is drive-only). Re-arm restores per live start when a user-run reload makes a part restart with state to return.
-  The same gap shows on a live restart of sessions or chat: the page parts' `ready()` prunes places (`sessions.place`,
-  `chat.place` and its drafts, `docs.place`) before chat's async restore reopens the rows, so the prune drops the places
-  of rows not yet reopened. A restart of sessions also leaves the app in Gallery mode, because the re-added Sessions mode
-  is added hidden. The root cause is that `ready()` cannot tell a page load from a live start. Options: give `ready` a
-  context saying which, or hold the prune until the restore settles.
 - **A throwing `ready` is silent in the part harness** — *agent-ready*: the host logs `ready of <id> failed: <error>`
   under `plugin-host`, not under the plugin's id, and the part harness's host has no log, so a test whose `ready` throws
   passes in silence. Give the harness host a log, and log under the plugin's id.
@@ -76,6 +59,12 @@ Core seams that most items below assume.
   that expects `[sessions] activated Layout preview` after a send (`src/plugins/primer/main/selftest-script.ts`),
   because the Layout preview session it falls back to is opened by forms' script. It passes as `forms,primer`. Open
   that session in the primer script, or drop the expectation when forms did not run.
+- **Built-in plugin hot reload** — *needs a feature plan*: built-ins still need a rebuild to change. Reloading one
+  with new code compiles TypeScript inside the running app, so a compiler ships with it (a third-party ask). The
+  runtime loader's `PluginSource` seam and `reload` are the base: a third source over the repo clone.
+- **Old plugin code revisions stay on disk** — *agent-ready*: each load copies a user plugin into
+  `<userData>/plugin-code/<id>/<rev>/` (`src/main/plugin-catalog/user-folder-source.ts`), and no step deletes old
+  revision folders. A cleanup keeps the revisions the running process imported and deletes the rest.
 
 ## Bugs seen in use
 
@@ -390,14 +379,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **View and interaction behaviours as switchable plugins** — *needs a feature plan*: behaviours such as
   `chat.completionDescriptions` and `keys.showHints` could ship as plugins the user switches on and off, rather than as
   settings inside the plugin they change. The live enable switch exists, so the split costs only the plugin boundary.
-- **Runtime plugin loader** — *needs a feature plan*: a `PluginSource` seam (built-in list and a user folder of
-  `manifest.json`, `main.js`, `page.js`); main `import()`s from disk and the page through `dataUrl`, and a
-  `validateManifest` gives every plugin the checks `definePlugin` makes at compile time. `requireListed` and the static
-  lists in `src/plugins/{main,page,manifests}.ts` are what block it. It builds on a host that starts, stops and restarts
-  parts live (`PluginHost.start`, `stop`, `restart`, and the enable switch in `src/main/plugins/plugin-switch.ts`) and
-  on the closed bridge (`window.wigley.claim()`). It also adds `reload(id, part)` (`src/shared/plugin-host.ts`), a
-  reload with new code: stop the part and its dependents, import the new module, start them again, so no dependent
-  keeps the old run's exports. Planned in `docs/features/plugin-framework/plan-runtime-loader/`.
 - **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
   and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /

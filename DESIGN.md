@@ -493,9 +493,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows, each a
   label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the user set
   carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame, its check
-  message under it in `status-error`. A Plugins row ends in the plugin's state, and a plugin that running plugins need,
-  or Settings itself, carries a neutral Tag with the reason before it, ellipsized when the row is too narrow and whole
-  in its tooltip. A file that fails its check shows an error Card at the section's top.
+  message under it in `status-error`. A Plugins row ends, in this order, in an error Tag `failed` (only
+  when the row has a problem), a neutral origin Tag (`user`, or `replaces built-in`; none for a built-in plugin), a
+  neutral Tag with the reason when running plugins need the plugin or it is Settings itself (ellipsized when the row is
+  too narrow and whole in its tooltip), and the plugin's state, `true` or `false`, which says whether a version of the
+  plugin runs. The problem shows under the description as a `status-error` line, wrapped whole. A plugin that failed its
+  first load has a row labelled with its id and no description. A file that fails its check shows an error Card at the section's top.
 - **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Small's, Medium's or Large's
   own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (S, M
   or L) in the plugin token `--wg-workflow-small-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)

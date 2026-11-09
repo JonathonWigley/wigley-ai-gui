@@ -37,7 +37,7 @@ Decisions:
   undefined. Every read of `tab.handle?.isVisible()` (426, 546, 586, 785) reads `tab.host.isVisible()`.
   `otherSessionShown` still fires when the shown tab's session differs from `lastShown`'s, so a mount shown after a
   Sessions tab (or the reverse) closes the reason box, confirm, control picker and image viewer (start.ts 227-231,
-  301-304) as a session switch does. Chat commands, `focusedEntry`, `focusedBlock`, the hub keys and `fillComposer`
+  301-304) as a session switch does. Chat commands, the `chat.focus` slot (`chatFocusSlot`), the hub keys and `fillComposer`
   need no change: they go through `visibleSessionId()` / `session(id)`.
 - **A shown mount takes the chat keys** through the existing `view.shown` body (466-481): `takeKeys(tab, 'chat')`
   sets scope `chat`, the tab's own `focusTarget` (`movePane`, 881) and the hub divider or null as resize target.
