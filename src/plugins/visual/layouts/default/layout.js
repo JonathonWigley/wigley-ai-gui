@@ -2,9 +2,9 @@
 
 // The built-in visual look: a running dot and a line of text while the block
 // streams, then the frame in a clipped, rounded box as wide as its column
-// over a bar holding the widen and expand controls, their `w` and `v` hints on
-// a chat entry's first visual only; the overlay shows the frame in a sheet filling the window, with
-// its place under it when there is more than one.
+// over a bar holding the widen and expand controls, their `w` and `v` hints
+// on a chat entry's first visual only; the overlay shows the frame in a sheet
+// filling the window, with its place under it when there is more than one.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {

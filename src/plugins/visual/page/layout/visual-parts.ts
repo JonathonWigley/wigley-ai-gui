@@ -47,8 +47,8 @@ export interface VisualPartsDeps {
 // also places an expand button whose click runs `actions.expand`, where the
 // part calls `kit.expand`, and a widen button whose click runs
 // `actions.widen`, where it calls `kit.widen`, else each at its root's end
-// after the frame, expand first. `card` and `overlay`
-// anchor keys in no scope and the overlay's scope, `visual` in chat's.
+// after the frame, expand first. `card` and `overlay` anchor keys in no scope
+// and the overlay's scope, `visual` in chat's.
 // `setLayouts` only stores the set; the fence and the overlay draw again.
 export interface VisualParts {
   card(parent: HTMLElement): Drawn;

@@ -4,9 +4,10 @@
 const WIDE_CLASS = 'is-wide';
 
 // `<meta name="visual-width" content="wide">`, its attributes in either
-// order and quoted or not: the agent's mark for a visual that needs room.
+// order and quoted or not, each name and value whole: the agent's mark for a
+// visual that needs room.
 const WIDE_MARK =
-  /<meta\b(?=[^>]*\bname\s*=\s*["']?visual-width\b)(?=[^>]*\bcontent\s*=\s*["']?wide\b)[^>]*>/i;
+  /<meta\b(?=[^>]*\sname\s*=\s*["']?visual-width(?=["'\s/>]))(?=[^>]*\scontent\s*=\s*["']?wide(?=["'\s/>]))[^>]*>/i;
 
 // Whether `source` carries the agent's wide mark.
 export function marksWide(source: string): boolean {

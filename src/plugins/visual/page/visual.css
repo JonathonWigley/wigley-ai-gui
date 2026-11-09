@@ -20,9 +20,10 @@
   display: contents;
 }
 
-/* A wide visual's block, and a forms or primer card holding one, drops the
-   reading width, so the visual takes its column's whole width. */
-.md > :has(> .visual-host.is-wide),
+/* The top-level block holding a wide visual, a list or quote around it
+   included, and a forms or primer card holding one, drops the reading width,
+   so the visual takes its column's whole width. */
+.md > :has(.visual-host.is-wide),
 :where(.form-tab) .round-main > :has(.visual-host.is-wide),
 .primer-tab .primer-card > :has(.visual-host.is-wide) {
   max-width: none;

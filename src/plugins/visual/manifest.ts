@@ -7,9 +7,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // and the full-size overlay, which `v` opens on the focused chat entry's
 // visuals and each visual's expand control on that visual. A visual takes the
 // reading width until its agent marks it wide, or `w` or its widen control
-// flips it. Its main part
-// registers that layout contract and hands chat the session note that tells
-// agents about visuals.
+// flips it. Its main part registers that layout contract and hands chat the
+// session note that tells agents about visuals.
 export const visualManifest = definePlugin({
   id: 'visual',
   label: 'Visuals',

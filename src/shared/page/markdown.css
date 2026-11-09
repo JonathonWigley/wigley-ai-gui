@@ -5,7 +5,10 @@
 }
 
 /* The reading width holds block by block, so one block (a wide visual) can
-   take the column's whole width while the prose around it keeps the measure. */
+   take the column's whole width while the prose around it keeps the measure.
+   A table's own `max-width: 100%` below outranks this rule, so a top-level
+   table spreads past the measure; a forms or primer card's own cap still
+   holds it. */
 .md > * {
   max-width: var(--wg-prose-measure);
 }

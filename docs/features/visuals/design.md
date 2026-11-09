@@ -89,8 +89,9 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **Reading width by default, wide on the agent's mark or the user's flip.** A visual's frame takes its
   block's width, and prose keeps the reading width (`prose-measure`) block by block, so a visual that fits its
   panes to its width drew squeezed. The app cannot tell such a visual is wide from inside it, so the agent says so:
-  `<meta name="visual-width" content="wide">` in the document opens it at the column's whole width. Each visual's
-  widen control and `w` on the focused chat entry flip any visual either way, at the same visual `v` opens at. The
+  `<meta name="visual-width" content="wide">` in the document opens it at the column's whole width, a visual in a
+  list or quote widening the whole block around it. `w` on the focused chat entry flips the visual `v` opens at, and
+  each visual's widen control flips that visual. The
   width lives on the visual's host for the view's life: a redraw keeps it, a page reload goes back to the mark.
   Letting the whole column take the pane's width was tried and dropped: every line of prose ran the full pane.
 - **Focus.** A click gives the visual the user's clicks and typing; `Esc` inside it hands focus back to the page.

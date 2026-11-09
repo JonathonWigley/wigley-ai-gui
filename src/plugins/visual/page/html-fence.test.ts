@@ -196,6 +196,16 @@ describe('createHtmlFence', () => {
       wide: false,
     },
     {
+      name: 'a longer value',
+      source: '<meta name="visual-width" content="wide-screen"><p>x</p>',
+      wide: false,
+    },
+    {
+      name: 'another attribute ending in name',
+      source: '<meta data-name="visual-width" content="wide"><p>x</p>',
+      wide: false,
+    },
+    {
       name: 'another meta',
       source: '<meta name="viewport" content="wide"><p>x</p>',
       wide: false,

@@ -159,7 +159,8 @@ means something.
 - **Prose** (rendered markdown wherever it renders: chat, docs, forms cards): `text-prose`,
   `leading-prose`, each block at most `prose-measure` wide. A markdown `h3` is `text-prose` too. No
   surface overrides it; only a wide visual's block, and the forms or primer card holding it, takes
-  its column's whole width (`docs/features/visuals/design.md` § Decisions).
+  its column's whole width (`docs/features/visuals/design.md` § Decisions). A table outside a forms
+  or primer card may spread past the measure, up to its column's width.
 - **Numbers that change** (counts, timers, costs, line numbers) use tabular numerals, so they do
   not jitter.
 - The user's `fonts` settings, when set, override the theme's font families and base sizes:
@@ -475,9 +476,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   A user turn shows its sent images
   as thumbnails under its text.
 - **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
-  `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
-  `radius-md` box that clips it, over a bar holding the small expand icon button at its end, the button's `v` hint on
-  a chat entry's first visual only. The full-size overlay sits over the `scrim` with `space-8` padding: the overlay
+  `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame at the reading width, or
+  its column's whole width when wide, in a `radius-md` box that clips it, over a bar holding the small widen and expand
+  icon buttons at its end, their `w` and `v` hints on a chat entry's first visual only. The full-size overlay sits over the `scrim` with `space-8` padding: the overlay
   body fills it, a `radius-lg` sheet on `transcript-background` that scrolls a visual taller than the window, with the
   count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
 - **Docs:** in Docs mode the tree is the side bar; in the optional `docs-session-tab` plugin's session Docs tab it is the left pane of a

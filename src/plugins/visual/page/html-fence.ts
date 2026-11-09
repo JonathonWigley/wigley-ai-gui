@@ -25,10 +25,10 @@ export interface HtmlFenceDeps {
 // `visual` part around a frame opened on its source, its host held in the
 // registry under that source until the view's dispose, logged as
 // `visual mounted: <title>`. A closed view opens wide when its source carries
-// the agent's wide mark, and its widen control flips it. `redraw` draws every live view's part again with
-// the layouts last set, moving each view's frame into the new part: it stays
-// loaded only when its host is in the document and the part places it in an
-// element already there. `dispose` disposes every live view; a view's second
+// the agent's wide mark, and its widen control flips it. `redraw` draws every
+// live view's part again with the layouts last set, moving each view's frame
+// into the new part: it stays loaded only when its host is in the document and
+// the part places it in an element already there. `dispose` disposes every live view; a view's second
 // `dispose` does nothing, so its markdown owner may still call it.
 export interface HtmlFence {
   contribution: FenceContribution;

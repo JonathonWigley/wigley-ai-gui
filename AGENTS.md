@@ -364,8 +364,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
-                 visual on the page; `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
-                 focused entry, opening at the first visual in the cursor's block, `h`/`l` between visuals and `Esc` to close),
+                 visual on the page; `visual-width.ts` a visual's width, the agent's wide mark and its flip;
+                 `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
+                 focused entry, opening at the first visual in the cursor's block, `h`/`l` between visuals and `Esc` to
+                 close, and the `w` key flipping that same visual's width),
                  layouts/ (the visual Layout contract and the built-in `default` layout);
                  `docs/features/visuals/design.md`
 ```
