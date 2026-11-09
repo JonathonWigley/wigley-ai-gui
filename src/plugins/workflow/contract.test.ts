@@ -38,30 +38,63 @@ function stageWith(
 describe('shownRowActivity', () => {
   it.each([
     {
+      name: 'paused idle',
       status: 'paused',
       rowActivity: undefined,
       busy: IDLE,
       shown: { word: 'needs you', rank: 18 },
     },
-    { status: 'paused', rowActivity: undefined, busy: TURN, shown: null },
-    { status: 'paused', rowActivity: undefined, busy: SUBAGENT, shown: null },
-    { status: 'running', rowActivity: undefined, busy: IDLE, shown: null },
-    { status: 'done', rowActivity: undefined, busy: IDLE, shown: null },
-    { status: null, rowActivity: undefined, busy: IDLE, shown: null },
     {
+      name: 'paused turn',
+      status: 'paused',
+      rowActivity: undefined,
+      busy: TURN,
+      shown: null,
+    },
+    {
+      name: 'paused subagent',
+      status: 'paused',
+      rowActivity: undefined,
+      busy: SUBAGENT,
+      shown: null,
+    },
+    {
+      name: 'running',
+      status: 'running',
+      rowActivity: undefined,
+      busy: IDLE,
+      shown: null,
+    },
+    {
+      name: 'done',
+      status: 'done',
+      rowActivity: undefined,
+      busy: IDLE,
+      shown: null,
+    },
+    {
+      name: 'no status',
+      status: null,
+      rowActivity: undefined,
+      busy: IDLE,
+      shown: null,
+    },
+    {
+      name: 'ready with own label',
       status: 'ready',
       rowActivity: STAGE_LABEL,
       busy: IDLE,
       shown: { word: 'ready to make', rank: 15 },
     },
     {
+      name: 'paused with own label',
       status: 'paused',
       rowActivity: STAGE_LABEL,
       busy: IDLE,
       shown: { word: 'ready to make', rank: 15 },
     },
   ] as const)(
-    'shownRowActivity_StatusAndRowActivity_TheRowsActivity status $status',
+    'shownRowActivity_StatusAndRowActivity_TheRowsActivity $name',
     ({ status, rowActivity, busy, shown }) => {
       const flow = { ...newFlow('a', '/p'), ...busy };
 
