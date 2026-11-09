@@ -202,7 +202,7 @@ owner's layout (`AGENTS.md` § Intent).
 - [x] [Which-key shelf and leader search](03-which-key-shelf.md) — after 02
 
 ### Wave 3
-- [ ] [Settings Keybindings section](04-settings-keys.md) — after 01, 03 (both edit `keymap.ts`)
+- [x] [Settings Keybindings section](04-settings-keys.md) — after 01, 03 (both edit `keymap.ts`)
 
 ### Wave 4
 - [ ] [Settings Leader menu](05-settings-leader-menu.md) — after 01, 04
@@ -219,14 +219,20 @@ Review base: a42ed9f9
 - 01 · 1fbe1a66 · diff read (captureKey, capture hooks, keyCapture, capturedKeys all present) + typecheck clean · concerns: capturedKeys spells Esc as <Esc> if called directly; engine capture() leaves pending keys to createPageApi; an onCancel that re-arms is overwritten
 - 02 · bacb7c95 · diff read (tree matches docs/keymap.md § Leader groups) + typecheck clean; worker's filtered selftest passes every moved-key step · concerns: forms 'cancelled preview' group fails 3 steps (<D-w> never logs activated Codex session) — same 3 fail on base; unit tests building their own binds left as is
 - 03 · fcf91837 · diff read (keys.searchLeader, <Leader>/ bind, WhichKeyModel.name present) + typecheck clean; screenshots forms-which-key-shelf.png and forms-leader-search.png read; 98 keys tests pass per worker · concerns: new keys.picker binds not yet through the every-key-placed check (full selftest only); label 'Search leader actions' capitalised against the lower-case keys labels
+- 04 · 484703ff · diff read (withMovedBind, KEYS_SECTION, buildRow scope arg, scopeTitle, openScopePicker, ScopePickRequest, key-recorder exports present) + typecheck clean; settings selftest passes per worker; settings-key-recording.png read · concerns: row-prompt.ts edited outside Files; a box/both bind reassigned onto a chord is refused at write with a toast, not during recording; find scrolls chips and header off the top (visual check for 07); recording row wraps to two lines at selftest width
 ### Contract changes
 - Leader picker commands and binds: six hand-named commands and hand-written binds → the shared LIST_PICKER_COMMANDS / listPickerCommands / LIST_PICKER_SCOPES pattern keyboard-reach added, gg/G included (ListPicker now has top/bottom) · why: keyboard-reach landed the shared pattern · consumers: 06 (the 'every list picker takes gg/G' doc line now holds) · group 03
 - headerEnd filter hint: planned → dropped · why: the core pluginPicker already anchors a / filter hint for a filter: true list · consumers: none · group 03
+- createKeyRecorder deps: unnamed → exported as KeyRecorderDeps, same shape · why: a named type for the deps · consumers: 05 · group 04
+- SectionDrawing: + optional emptyQuery · why: the find query's empty state names the keys pressed · consumers: none (05 may ignore) · group 04
 ### Rulings
 - captureKey_PluginStops_DisarmsTheCapture landed as a row in page-api.test.ts RECORDED_ROWS — that table owns part-stop disposal — none · group 01 · group 01
 - chordTokenFor returns null when its token fails parseChord — never spells a chord the matcher rejects — none · group 01 · group 01
 - sweep hits beyond the task list (chat PERMISSION_CARD_STEPS and hub-keys, forms SECOND_SESSION_STEPS, sessions rename why) moved the same way — the task says treat new hits alike — none · group 02 · group 02
 - WhichKeyModel.name is groupName(pending.keys, groups) ?? null — same prefixes as entries — none · group 03 · group 03
 - leaderActions leaves out keys.searchLeader by qualified id — none · group 03 · group 03
+- Enter/Tab matched as normalVimKeys('<CR>')/('<Tab>') — normalVimKeys spells <Enter> — none · group 04 · group 04
+- a chip or find-query change moves the cursor to the first match — the cursor was left on the last row after ? then j — a test covers it · group 04 · group 04
+- the Tab box on reassign takes the keep no-op guard — typing the line's own keys writes nothing — none · group 04 · group 04
 ### Review rounds
 ### Test gate

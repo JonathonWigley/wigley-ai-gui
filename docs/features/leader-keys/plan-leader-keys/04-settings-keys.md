@@ -1,6 +1,6 @@
 # 04 — Settings Keybindings section
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 03
 Plan: [plan.md](plan.md)
@@ -330,3 +330,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 484703ff · proof: diff read (withMovedBind, KEYS_SECTION, buildRow scope arg, scopeTitle, openScopePicker, ScopePickRequest, key-recorder exports present) + typecheck clean; settings selftest passes per worker; settings-key-recording.png read · concerns: row-prompt.ts edited outside Files; a box/both bind reassigned onto a chord is refused at write with a toast, not during recording; find scrolls chips and header off the top (visual check for 07); recording row wraps to two lines at selftest width
